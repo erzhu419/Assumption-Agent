@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d7686ba752a432ea0c9b8e92495f619",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:16:02.737754+00:00",
+  "ended_at_utc": "2026-11-28T14:16:39.150912+00:00",
+  "request_sha256": "c1767a27cc5dc1db8050a5f7ccb1a780a930ab5d063223c51a4bd52ea0b9edfb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36698,
+    "cached_tokens": 12672,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^if __name__/,$d' /tmp/graph.py | sed '/^def pool/,$d' > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _scalar(b, y, n):\\n    from itertools import combinations, combinations_with_replacement\\n    h = aff(b)\\n    cols = [np.prod(b[:, j], axis=1) for j in combinations_with_replacement(range(4), 2)]\\n    q = np.column_stack(cols)\\n    base = np.column_stack((h, q))\\n    models = [h, base]\\n    for k in (3,4):\\n        z = np.column_stack([np.prod(b[:, j], axis=1) for j in combinations_with_replacement(range(4), k)])\\n        models.append(np.column_stack((models[-1],z)))\\n    for i,j in combinations(range(4),2):\\n        for k in (.22,.5,1,2):\\n            for w in (b[:,i]+b[:,j], b[:,i]-b[:,j], b[:,i]*b[:,j]):\\n                models.append(np.column_stack((base,h[:,1:]/(1+k*w[:,None]**2))))\\n    best = (np.inf,None)\\n    for a in models:\\n        aa=a[:n]; p=np.linalg.pinv(aa); c=p@y\\n        loo=(y-aa@c)/np.maximum(.001,1-np.sum(aa*p.T,axis=1))\\n        score=np.mean(np.abs(loo))*(1+.003*a.shape[1])\\n        if score<best[0]: best=(score,a[n:]@c)\\n    return best[1]\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']; n=len(tr['x']); x=np.r_[tr['x'],study['test']['x']]\\n    _, inv, op, _, _=maps(study)\\n    b=op(inv(x)); h=aff(b)\\n    state=h[n:]@fit(h[:n],tr['traj']); y=_scalar(b,tr['y'],n)\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\ncat >/tmp/sc.py <<'PY'\\nfrom graph import *\\nimport pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; f,inv,op,c,d=maps(s); z=inv(t['x']); b=op(z); u=np.cos(2.6*z); H=aff(b)\\nfor label,W in [('b',b),('u',u),('z',z),('c(z)',c(z)),('d(z)',d(z)),('c(b)',c(b)),('d(b)',d(b))]:\\n    print(label)\\n    P=[]; names=[]\\n    for j in range(2,5):\\n        for i in itertools.combinations_with_replacement(range(4),j):P.append(np.prod(W[:,i],axis=1)); names.append(i)\\n    P=np.array(P).T\\n    R=[]; A=H.copy()\\n    for i in range(8):\\n        cv=fit(A[:52],y[:52]); r=y[:52]-A[:52]@cv; L=P[:52]-A[:52]@fit(A[:52],P[:52]); sc=abs(r@L)/np.maximum(1e-8,np.linalg.norm(L,axis=0));j=np.argmax(sc); A=np.c_[A,P[:,j]]; cv=fit(A[:52],y[:52]);R.append((names[j],round(np.std(y[:52]-A[:52]@cv),5),round(np.mean(abs(y[52:]-A[52:]@cv)),5)))\\n    print(R)\\n    for k in (1,2,3,4):\\n        A=np.c_[H,W,P[:,[len(j)<=k for j in names]]];cv=fit(A[:52],y[:52]); print(k,round(np.std(y[:52]-A[:52]@cv),5),round(np.mean(abs(y[52:]-A[52:]@cv)),5),end='; ')\\n    print()\\nprint('b linear',fit(H[:52],y[:52])); A=np.c_[H,np.column_stack([b[:,i]*b[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])]; print('b quadratic',fit(A[:52],y[:52])); print('pair',[(ij,round(np.mean(abs(y[52:]-np.c_[H,b[:,ij[0]]*b[:,ij[1]]][52:]@fit(np.c_[H,b[:,ij[0]]*b[:,ij[1]]][:52],y[:52]))),5)) for ij in itertools.combinations_with_replacement(range(4),2)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sc.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived panel composition) → H2 (inverse cubic calibration, cosine panel B, and separate sparse readouts); 52/20 MAE is 0.00421 for trajectory and 0.07622 for the quadratic scalar baseline.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"Save the recovered trajectory graph now and use sparse polynomial and rational readout comparisons to isolate the remaining scalar term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7bac39ecaabbbaa1c6fda34055b012ddd9321f932bb3bd2574f7b0501cd4eccb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36411.64,
+      "usage_known": true,
+      "prompt_tokens": 36698,
+      "cached_tokens": 12672,
+      "completion_tokens": 1411
+    }
+  ]
+}

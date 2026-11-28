@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "629278df91b748369a1dd4944e3de2bd",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:35.579891+00:00",
+  "ended_at_utc": "2026-11-28T13:16:13.480711+00:00",
+  "request_sha256": "f3247da812b174f0124681e87f5ee37aceab4857e706207df951692d157f9dc2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65321,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41996,
+    "cached_tokens": 12672,
+    "completion_tokens": 1669
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/m.py <<'PY'\\nfrom h import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations\\nR=np.linalg.svd(T[:n],full_matrices=False)[2][:3]; Z=np.c_[y,T@R.T];\\nprint('z correlations',np.corrcoef(Z.T)); print('singular joint',np.linalg.svd(Y[:n],compute_uv=False));print('linear y on traj',metrics(A(T@R.T))[:,0]); print('calibrated ranges',q.min(0),q.max(0));\\nxs={'q':q,'Bq':z,'Cq':C(q),'Dq':D(q),'CBq':C(z),'DBq':D(z),'DCq':D(C(q)),'CDq':C(D(q))};\\ndef eval(f):\\n if len(f)!=72:return None\\n tr=f[:n]; U,sv,V=np.linalg.svd(tr,full_matrices=False); good=sv>sv[0]*1e-9; U=U[:,good]; sv=sv[good]; V=V[good]; e=U@(U.T@Y[:n])-Y[:n]; h=(U**2).sum(1); l=np.mean(abs(e/np.maximum(1-h,1e-10)[:,None]),0); v=np.mean(abs(f[n:]@(V.T@((U.T@Y[:n])/sv[:,None]))-Y[n:]),0); return np.array([l[0],l[1:].mean(),v[0],v[1:].mean()]);\\nGs=[];Fs=[]\\nfor k,p in xs.items():\\n Fs.extend([(k,A(p)),(k+'2',poly(p,2))]);\\n v=np.c_[p,np.sum(p,1),np.prod(p,1),np.linalg.norm(p,axis=1),*[p[:,i]+sgn*p[:,j] for i,j in combinations(range(4),2) for sgn in (-1,1)],*[p[:,i]*p[:,j] for i,j in combinations(range(4),2)]]; Gs.extend([(k,i,g) for i,g in enumerate(v.T)]);\\nfor k,l in combinations(xs,2):\\n a,b0=xs[k],xs[l];Fs.append((k+l,A(np.c_[a,b0])));Fs.append((k+l+'dot',A(np.c_[a,b0,(a*b0).sum(1)])));\\nfor i in range(4): Gs.append(('preBprod',i,q[:,i]*z[:,i]));\\nout=[]\\nfor k,i,g in Gs:\\n for cut in [0.,-.22,.22,.7,1.25,*np.quantile(g[:n],[.25,.50,.75])]:\\n  h=g>cut\\n  if min(sum(h[:n]),sum(~h[:n]))<9:continue\\n  for name,p in Fs:\\n   if p.shape[1]>9:continue\\n   f=np.c_[p,h[:,None]*p];l0=eval(f);out.append((l0,(k,i,cut,name,'hard')))\\n   f=np.c_[p,np.maximum(g-cut,0),np.maximum(g-cut,0)[:,None]*p[:,1:]];l0=eval(f);out.append((l0,(k,i,cut,name,'hinge')))\\nfor j in range(2):\\n print('gates',j,sorted(out,key=lambda o:o[0][j])[:5]);\\n# GPs with coordinate length scales, combinations of panel kernels and polynomial trends.\\nfor kind in ('se','m32','m52'):\\n for space in ('q','Bq','qCq','qDq','qCqDq'):\\n  p=np.c_[tuple(xs[k] for k in ['q','Cq','Dq'] if k in space)] if space!='Bq' else z\\n  p=(p-p[:n].mean(0))/p[:n].std(0); base=p[:,:4]; d=(p[:,None,:]-p[None,:,:])**2; W=np.c_[y,T[:,-1]]; W=(W-W[:n].mean(0))/W[:n].std(0); m=2\\n  for mode in ('single','ard','group'):\\n   k=1 if mode=='single' else p.shape[1] if mode=='ard' else p.shape[1]//4\\n   def calc(v,pr=False):\\n    w=np.exp(v[:k]); w=np.repeat(w,4) if mode=='group' else w; dist=np.sqrt(np.maximum(0,d@w)); K=np.exp(-dist**2/2) if kind=='se' else (1+dist)*np.exp(-dist) if kind=='m32' else (1+dist+dist**2/3)*np.exp(-dist);K+=np.exp(v[-3])*(1+base@base.T/4)+np.exp(v[-2])*(1+base@base.T/4)**2\\n    a=K[:n,:n]+np.exp(v[-1])*np.eye(n); L=np.linalg.cholesky(a); alpha=np.linalg.solve(L.T,np.linalg.solve(L,W[:n]));\\n    if pr:\\n     pred=K[n:,:n]@alpha;E=abs(pred-W[n:])*np.c_[y,T[:,-1]][:n].std(0);loo=alpha/np.sum(np.linalg.inv(L)**2,axis=0)[:,None];print(kind,space,mode,'val',E.mean(0),'loo',np.mean(abs(loo),0),'param',np.round(v,2))\\n    return (alpha*W[:n]).sum()/2+m*np.log(np.diag(L)).sum()+.01*np.sum(v*v)\\n   v=minimize(calc,np.r_[np.zeros(k),-2,-2,-4],method='L-BFGS-B',bounds=[(-8,5)]*k+[(-12,5)]*3,options={'maxiter':100}).x;calc(v,True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (global panel readout) -> H2 (switched or nonstationary readout); the best recent ridge baseline has 52/20 MAEs of 0.306 for y and 0.261 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[],\"rationale\":\"Test whether gate-conditioned operators explain the errors left by global readouts, and establish a regularized kernel comparison using training-only model selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "445f7ff91760038a810c19ff3711040164ef7f762c2cab8390896704b25223da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37898.66,
+      "usage_known": true,
+      "prompt_tokens": 41996,
+      "cached_tokens": 12672,
+      "completion_tokens": 1669
+    }
+  ]
+}

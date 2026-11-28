@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf3e22e44d4a4b4081af36047da9868d",
+  "call_seq": 2,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:54:59.254254+00:00",
+  "ended_at_utc": "2026-11-28T13:55:38.086228+00:00",
+  "request_sha256": "ab82ae59e74643ec61ee9460cb10cc5361bf1626342dc888fe5a0edce314319b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12291,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17898,
+    "cached_tokens": 12672,
+    "completion_tokens": 708
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json /holdout_task/public_asset_index.json; for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$f; cat \\\"$f\\\"; done > /tmp/archive_all.txt; grep -nE '^===|^def |^[[:space:]]*#' /tmp/archive_all.txt; cat > /tmp/explore.py <<'PY'\\nimport glob,importlib.util,copy,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; q=copy.deepcopy(s); q['train']={k:v[:52] if k!='summary' else np.array([t['y'][:52].mean(),t['y'][:52].std(),t['traj'][:52,-1].mean(),t['traj'][:52,-1].std()]) for k,v in t.items()}; q['test']={'x':t['x'][52:]}\\nfor k,v in s.items():\\n print(k, {a:(b.shape,np.round(b.reshape(-1)[:8],4)) for a,b in v.items()} if isinstance(v,dict) else v)\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('candidate',f); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); o=m.solve_batch(copy.deepcopy(q)); print(f.split('/')[-1],*[np.mean(abs(o[a]-t[b][52:])) for a,b in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(f,e)\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; A=np.c_[np.ones(len(u)),u];\\n for key,v in p.items():\\n  if key=='u':continue\\n  residual=v-A@np.linalg.lstsq(A,v,rcond=None)[0]; print(k,key,'OLS RMS',np.sqrt(np.mean(residual**2)), 'row errors',np.round(np.linalg.norm(residual,axis=1),3))\\nprint('trajectory sv',np.linalg.svd(t['traj'],compute_uv=False)); print('trajectory sample',np.round(t['traj'][:5],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: Archived graph families provide transfer baselines; public 52/20 scalar and trajectory MAEs are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Run each archived solver on the same split and inspect panel residuals and trajectory rank to distinguish transferable structure from campaign-specific operators.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "5f9f70a66883a5a22d27ff8971bac569ceb55f9d94599efc2d5b82d7b9f2f329",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38831.12,
+      "usage_known": true,
+      "prompt_tokens": 17898,
+      "cached_tokens": 12672,
+      "completion_tokens": 708
+    }
+  ]
+}

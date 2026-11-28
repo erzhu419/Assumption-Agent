@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93f41ff846334f548b78f876c6c2016e",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:09:24.721178+00:00",
+  "ended_at_utc": "2026-11-28T13:09:57.518917+00:00",
+  "request_sha256": "421d06f47ddcfee240057da041cf44071d3a03fb405f5110b1f2a2348970cd1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83079,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 48625,
+    "cached_tokens": 0,
+    "completion_tokens": 1329
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/shared.py <<'PY'\\nexec(open('/tmp/grammar.py').read().split('rows=[]')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cwr\\nnp.set_printoptions(precision=4,suppress=True)\\nN=52\\nfor key in ('x','a','a1'):\\n z=trans[key][:72]; P=np.column_stack([np.prod(z[:,j],axis=1) for k in range(4) for j in cwr(range(4),k)]); W=fit(P[:N],Y[:N]); print(key, list(zip([j for k in range(4) for j in cwr(range(4),k)],W.round(3))))\\nS=s['train']; Q=Q if 'Q' in globals() else -np.expm1(-s['eval_times'][:,None]*[.392,1.857]);\\nfolds=[np.arange(N,72),*np.array_split(np.arange(72),4),*[np.argsort(S['x'][:,j])[-15:] for j in range(4)]]\\nrows=[]\\ndef poly(z,d): return np.column_stack([np.prod(z[:,j],axis=1) for k in range(d+1) for j in cwr(range(4),k)])\\ndef score(F,reg,it,iv):\\n f=F[it]; mu=f.mean(0); sd=np.maximum(f.std(0),1e-7); f=(f-mu)/sd; g=(F[iv]-mu)/sd; w=np.linalg.solve(f@f.T+reg*np.eye(len(f)),Y[it]-Y[it].mean(0)); return g@f.T@w+Y[it].mean(0)\\ndef metrics(y,iv):return [np.mean(abs(y[:,0]-Y[iv,0])),np.mean(abs(y[:,1:]@Q.T-S['traj'][iv]))]\\ntrans0={k:trans[k][:72] for k in ['a','ba','Ba','a1','a0']};\\nfor k,z in list(trans0.items()):\\n if k not in ['a','ba','Ba']:continue\\n v=cs[1](z); w=fit(bias(z),v); u=z+(v-bias(z)@w)@np.linalg.inv(w[1:]); delta=u-z\\n for g in [-2,-1,-.5,.22,.5,1,1.5,2,3]:trans0[k+'blend'+str(g)]=z+g*delta\\n for g in [-1,-.5,.22,.5,1]:trans0[k+'exp'+str(g)]=z+g*np.expm1(-.296*z*z)\\nfor k,z in trans0.items():\\n for d in [2,3,4]:\\n  for k2 in ['','mix','tri','sat']:\\n   F=poly(z,d)[:,1:];\\n   if k2=='mix':F=np.c_[F,poly(trans0['a' if k!='a' else 'a1'],d)[:,1:]]\\n   if k2=='tri':F=np.c_[F,np.sin(z),np.cos(z),np.sin(2*z),np.cos(2*z)]\\n   if k2=='sat':F=np.c_[F,poly(np.tanh(z),d)[:,1:]]\\n   for reg in [.001,.015,.08,.3,1]:\\n    err=np.array([metrics(score(F,reg,np.setdiff1d(np.arange(72),iv),iv),iv) for iv in folds]); rows.append((k,d,k2,reg,err))\\nfor j in range(2):\\n print('target',j)\\n for rank in [lambda e:e[1:5,j].mean()+.35*e[5:,j].max(),lambda e:e[0,j]+.25*e[1:5,j].max()+.2*e[5:,j].max()]:\\n  for k,d,k2,r,e in sorted(rows,key=lambda a:rank(a[-1]))[:8]:print(k,d,k2,r,e[:,j].round(4))\\nnp.save('/tmp/shared_rows.npy',np.array(rows,dtype=object),allow_pickle=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: two exponential modes → H2: shared panel-informed coordinate deformation; the current solver posts 0.0331 scalar and 0.0336 trajectory MAE on the prescribed split, but 0.2253 trajectory MAE on its worst axis holdout.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a separately fitted rational denominator\",\"rejected_reason\":\"The fits reduced in-sample error without reliably improving held-out scalar or fast-mode prediction.\"}],\"rationale\":\"Test whether the panel nonlinearities are partial coordinate corrections rather than complete replacements, and screen regularized readouts across both block and axis-extreme holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9b9a0719d3f70f6ff03c9e65b782e7a9b7ab4d9658c53ab3705530e5656404ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32795.71,
+      "usage_known": true,
+      "prompt_tokens": 48625,
+      "cached_tokens": 0,
+      "completion_tokens": 1329
+    }
+  ]
+}

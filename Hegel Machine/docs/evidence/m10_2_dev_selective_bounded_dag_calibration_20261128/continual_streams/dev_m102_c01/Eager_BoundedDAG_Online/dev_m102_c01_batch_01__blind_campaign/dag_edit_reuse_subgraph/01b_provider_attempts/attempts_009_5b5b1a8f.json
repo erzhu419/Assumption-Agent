@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b5b1a8fdb984e9eaed5ac759381c5bc",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:22.208894+00:00",
+  "ended_at_utc": "2026-11-28T13:16:49.278642+00:00",
+  "request_sha256": "cd5fb8ab27005220f99bd17bea144fb58461f0d7daebb0a7fac91a2cad10d7e6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48270,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31968,
+    "cached_tokens": 5504,
+    "completion_tokens": 907
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nroot = '/holdout_task/'\\npre = load('pre', root + '_frozen_nodes/node_00.py')\\nnew = load('new', root + 'node_01.py')\\nold = load('old', '/tmp/.hegel_candidate_archive/v01_a6d1aefa/node_01.py')\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor i, item in enumerate(batch):\\n    s = item['study']\\n    x, y = (np.asarray(s['train'][k]) for k in ('x', 'y'))\\n    idx = np.arange(len(x))\\n    rng = np.random.default_rng(371)\\n    n = max(1, len(x)//6)\\n    blocks = {'random': list(np.array_split(rng.permutation(len(x)), 6)), 'radius': [np.argsort(np.linalg.norm(x, axis=1))[-n:]], 'axis': [np.argsort(sign*x[:, j])[-n:] for j in range(x.shape[1]) for sign in [-1, 1]], 'diagonal': [np.argsort(x @ d)[-n:] for d in rng.normal(size=(12, x.shape[1]))]}\\n    for name, folds in blocks.items():\\n        scores = []\\n        for te in folds:\\n            if not len(te):\\n                continue\\n            tr = np.setdiff1d(idx, te)\\n            train = dict(s['train'])\\n            for key in ('x', 'y', 'traj'):\\n                train[key] = np.asarray(train[key])[tr]\\n            p = pre({'__input__': dict(s, train=train, test=dict(s['test'], x=x[te]))})\\n            preds = [np.asarray(fn({'node_00': p})['y_hat']) for fn in [old, new]]\\n            assert all(a.shape == y[te].shape and np.isfinite(a).all() for a in preds)\\n            scores.append([np.mean(np.abs(a-y[te])) for a in preds])\\n        print(i, name, 'old/new mean', np.mean(scores, axis=0), 'old/new worst', np.max(scores, axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated quadratic ridge → bounded angular interaction kernel; public scalar MAE is 0.029091, trajectory MAE is 0.016417, and the initial worst-slice scalar proxy is 0.07408.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public validator output alone\",\n      \"rejected_reason\": \"The stress harness indexed metadata as if it were sample-aligned, so the command failed and the verification receipt was not bound.\"\n    }\n  ],\n  \"rationale\": \"Slice only the three sample arrays used by frozen preprocessing, preserve metadata, and rerun the stress comparison and isolated public validator without changing the candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "eb934dcb56104cc2a0942e5c33f30af50154867e4c92e0999ebcf6105310fb9b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27067.86,
+      "usage_known": true,
+      "prompt_tokens": 31968,
+      "cached_tokens": 5504,
+      "completion_tokens": 907
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e172a58b91b140408352d57fa3fcc4b5",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:46:05.465340+00:00",
+  "ended_at_utc": "2026-11-28T13:46:41.217881+00:00",
+  "request_sha256": "e5db20acfb85e5fc64f4ad0f1a3253013af132660141f4af4999d08ecf0b0cc0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31602,
+    "cached_tokens": 12672,
+    "completion_tokens": 1562
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/opposite11.py <<'PY'\\nexec(open('/tmp/probe11.py').read().split(\\\"a=s['panel_a']\\\")[0])\\na=s['panel_a']; u,v=a['u'],a['v']; good=np.max(abs(u-v),axis=1)<3; u,v=u[good],v[good]; j=np.arange(4)\\nF={'sin':np.sin,'tanh':np.tanh,'oddRat':lambda a:a/(1+a*a),'soft':lambda a:a/(1+abs(a)),'cub':lambda a:a**3,'atan':np.arctan}\\nfits=[]\\nfor name,fn in F.items():\\n for own in ['cub','sin','tanh','oddRat','soft','atan']:\\n  def g(z,k):\\n   o=np.roll(z,2,axis=1); return np.stack([np.ones_like(z),z,F[own](k[0]*z),fn(k[1]*o)],axis=-1)\\n  def fit(k):\\n   f=g(u,k); w=np.array([ls(f[:,i],v[:,i]) for i in j]); return (np.einsum('njd,jd->nj',f,w)-v).ravel(),w\\n  opt=min([least_squares(lambda p:fit(p)[0],[.8,k],bounds=([.01,.01],[6,6]),ftol=1e-10) for k in [.5,1.2,2.15,3.]],key=lambda x:x.cost)\\n  fits.append((np.std(opt.fun),name,own,opt.x,fit(opt.x)[1]))\\nfor z in sorted(fits,key=lambda a:a[0])[:12]:print(z)\\n_,name,own,k,w=min(fits,key=lambda a:a[0]);\\ndef forward(z):return w[:,0]+w[:,1]*z+w[:,2]*F[own](k[0]*z)+w[:,3]*F[name](k[1]*np.roll(z,2,axis=1))\\nz=np.array([least_squares(lambda z:forward(z[None,:])[0]-x,(x-w[:,0])/w[:,1],gtol=1e-12).x for x in tr['x']]); print('inverse',np.max(abs(forward(z)-tr['x'])),z.min(0),z.max(0))\\ncs=s['panel_c']; u=cs['u']; ops=[]\\nfor key,fn,k0 in [('v1',lambda x,k:x/(1+k*abs(x)),.83),('v2',lambda x,k:np.log1p(k*x*x),.36)]:\\n v=cs[key]\\n def fit(k):\\n  f=D(u,fn(u,k)); return (f@ls(f,v)-v).ravel()\\n k=least_squares(fit,[k0],bounds=(.01,4)).x; w=ls(D(u,fn(u,k)),v); print(key,k,np.round(w,5)); ops.append(D(z,fn(z,k))@w)\\np,r=ops; dot=np.sum(p*r,axis=1); off=np.column_stack([p[:,i]*r[:,j] for i in range(4) for j in range(4) if i!=j]); cross=(p[:,:,None]*r[:,None,:]).reshape(len(z),-1)\\ndef tm(p):return -np.expm1(-t[:,None]*p)\\nrates=least_squares(lambda p:(tm(p)@ls(tm(p),tr['traj'][:52].T)-tr['traj'][:52].T).ravel(),[1.8,.5],bounds=([.8,.02],[8,.79])).x\\nbasis=np.linalg.qr(tm(rates))[0]; scores=tr['traj']@basis; print('time',t,rates,np.std(scores@basis.T-tr['traj'])); np.savez('/tmp/sp11.npz',z=z,p=p,r=r,t=t)\\nfor name,f in [('z',D(z)),('pr',D(p,r)),('common',D(p,r,dot)),('common+off',D(p,r,dot,off)),('common+xyz',D(p,r,dot,z,prod(z,3))),('full',D(p,r,z,prod(z,3),cross)),('common+zquad',D(p,r,dot,z,z*z,prod(z,2))),('z cubic',D(z,z*z,z**3,prod(z,2),prod(z,3)))]:\\n yp=f@ls(f[:52],tr['y'][:52]); sp=(f@ls(f[:52],scores[:52]))@basis.T; print(name,np.round([np.mean(abs(yp[:52]-tr['y'][:52])),np.mean(abs(yp[52:]-tr['y'][52:])),np.mean(abs(sp[:52]-tr['traj'][:52])),np.mean(abs(sp[52:]-tr['traj'][52:]))],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/opposite11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 nearest-neighbor cubic inverse → H2 opposite-channel nonlinear calibration followed by independently fitted dual panel operators; best prior 52/20 MAEs are 0.09583 scalar and 0.04886 trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived nearest-neighbor cubic grammar explains the present calibration.\",\"empirical_witness\":\"Nearest-neighbor fits leave channel residual SDs of 0.20–0.23. The unrestricted fit instead finds opposite-channel linear coefficients of −0.66 to −0.70 and opposite-channel cubic coefficients of +0.42 to +0.47.\",\"causal_blanket_diagnosis\":\"The dominant coupling acts between opposite channels; an unconstrained inverse fitted to the wrong topology can also corrupt downstream feature tests.\",\"sublated_pivot\":\"Fit a shared opposite-channel nonlinear law, invert it, and compare the same readouts on the required held-out split.\",\"risk_kind\":\"calibration topology and nonlinear basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full cubic calibration directly\",\"rejected_reason\":\"A negative linear and positive cubic pair suggests a compact nonlinear coupling; truncating it can distort extrapolation and inversion.\"}],\"rationale\":\"Identify the dominant calibration law before judging whether the scalar and time-mode readouts actually need more interaction terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f53a6a0c786ad72c54f6343f0591e3f045621010ea30fc3403b02af5744420c7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35750.61,
+      "usage_known": true,
+      "prompt_tokens": 31602,
+      "cached_tokens": 12672,
+      "completion_tokens": 1562
+    }
+  ]
+}

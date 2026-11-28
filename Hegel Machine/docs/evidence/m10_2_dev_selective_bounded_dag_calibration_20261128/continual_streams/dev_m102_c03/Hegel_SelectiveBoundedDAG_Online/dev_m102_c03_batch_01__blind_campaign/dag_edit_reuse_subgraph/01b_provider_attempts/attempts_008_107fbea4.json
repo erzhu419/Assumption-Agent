@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "107fbea4f97441488356beb7bd802902",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:17.598940+00:00",
+  "ended_at_utc": "2026-11-28T13:15:49.092763+00:00",
+  "request_sha256": "66d26e168477b0c3a3a31087aedb6738709e819be149f7be7b3ffb60cc263745",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35777,
+    "cached_tokens": 5504,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; grep -A35 'def _panel_pred' /tmp/hegel_continual_archive/*solver.py; cat >/tmp/grammar.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('res=[]')[0])\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import ARDRegression,Lasso,ElasticNet\\nfrom itertools import combinations\\n\\ndef features(z,extended=False):\\n s,g=arc['_features'](z); f=np.column_stack(s+g+[np.prod(z[:,j],axis=1) for j in combinations(range(4),3)])[:,1:]; cols=[q for q in f.T]; names=[str(i) for i in range(f.shape[1])];\\n def add(n,v):names.append(n);cols.append(v)\\n if extended:\\n  for i in range(4):\\n   u=z[:,i]\\n   for c in (.5,1,1.5,2,2.5,3):\\n    for n,fn in [('sin',np.sin),('cos',np.cos),('tan',np.tanh),('rat',lambda u:u/(1+u*u)),('abs',np.abs)]:add((i,n,c),fn(c*u))\\n  for i,j in combinations(range(4),2):\\n   u,v=z[:,i],z[:,j]\\n   for c in (.25,1,1.5,2):add((i,j,'ratio',c),u*v/(1+c*(u*u+v*v)))\\n   for d in (-2,-1,-.5,.5,1,2):\\n    w=u+d*v\\n    for n,fn in [('sin',np.sin),('cos',np.cos),('tan',np.tanh),('ss',lambda u:u/(1+abs(u))),('sym',np.abs)]:add((i,j,d,n),fn(w))\\n return np.column_stack(cols),names\\n\\ndef cal(mask=None):\\n p=st['panel_a'];u=p['u'];v=p['v'];h=np.c_[np.ones(len(u)),u]; keep=np.ones(len(u),bool)\\n for _ in range(4):\\n  f=np.linalg.lstsq(h[keep],v[keep],rcond=None)[0];r=np.linalg.norm(v-h@f,axis=1);keep=r<max(1e-3,4*np.median(r))\\n return (x-f[0])/f[1:].diagonal()\\n\\ndef mode(a):\\n t=st['eval_times']; T=Y[a,1:].T\\n def q(r):return -np.expm1(-t[:,None]*np.exp(r))\\n def r(r):\\n  h=q(r);return (h@np.linalg.lstsq(h,T,rcond=None)[0]-T).ravel()\\n o=least_squares(r,np.log([.4,1.8]));h=q(o.x);return np.c_[Y[a,0],np.linalg.lstsq(h,T,rcond=None)[0].T],h\\nif __name__=='__main__':\\n for zi,z in enumerate([x,cal()]):\\n  for ex in (False,True):\\n   f,names=features(z,ex);allscore=[]\\n   for threshold in (3000,10000,30000,100000):\\n    ss=[]\\n    for a,b,_ in folds+[(np.arange(len(x)),np.arange(len(x)),None)]:\\n     u=(f-f[a].mean(0))/np.maximum(f[a].std(0),1e-9);A,Q=mode(a);P=[];SUP=[]\\n     for j in range(3):\\n      m=ARDRegression(threshold_lambda=threshold);m.fit(u[a],A[:,j]);P.append(m.predict(u[b]));SUP.append([(names[k],round(m.coef_[k],3)) for k in np.argsort(-abs(m.coef_))[:12] if abs(m.coef_[k])>.008]);\\n     P=np.array(P).T;E=abs(np.c_[P[:,0],P[:,1:]@Q.T]-Y[b]);ss.append([E[:,0].mean(),E[:,1:].mean()]);\\n    print(zi,ex,threshold,np.round(ss[0],4),np.max(ss[:-1],axis=0).round(4),np.mean(ss[:-1],axis=0).round(4),np.round(ss[-1],4));\\n    if threshold==10000:print(SUP)\\nPY\\npython3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed generic blend -> calibrated sparse latent-mode response; prior standalone worst-split scalar and trajectory MAEs were 0.0642 and 0.0454.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare compact and expanded feature grammars with fold-local trajectory rates, and inspect stable support to distinguish physical response terms from interchangeable basis functions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f1d26848e868f2c6014091fc9acc09b6ba2b1ceaa808da5842db6fe26fd68907",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31491.88,
+      "usage_known": true,
+      "prompt_tokens": 35777,
+      "cached_tokens": 5504,
+      "completion_tokens": 1316
+    }
+  ]
+}

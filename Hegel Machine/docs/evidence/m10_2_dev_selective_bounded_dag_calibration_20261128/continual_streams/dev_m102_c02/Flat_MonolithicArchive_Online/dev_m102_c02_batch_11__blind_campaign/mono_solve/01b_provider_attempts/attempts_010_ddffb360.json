@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ddffb360967544ffbffc1ac0f35d44b6",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:03:16.757750+00:00",
+  "ended_at_utc": "2026-11-28T14:03:56.115306+00:00",
+  "request_sha256": "45c6b07bcb695b7a2e0fa67760013028d5700e9fc99b2069750ec1975503309d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34762,
+    "cached_tokens": 12672,
+    "completion_tokens": 1682
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/*_10_solver.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\ndef _panel_map(panel, key, fn, start, bounds, z):\\n    u, v = panel['u'], panel[key]\\n    def residual(p):\\n        h = _aff(fn(u, p))\\n        return (h @ _fit(h, v) - v).ravel()\\n    p = least_squares(residual, start, bounds=bounds, gtol=1e-12).x\\n    return _aff(fn(z, p)) @ _fit(_aff(fn(u, p)), v)\\n\\n\\ndef _maps(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    pb, pc = study['panel_b'], study['panel_c']\\n    b = _aff(z) @ _fit(_aff(pb['u']), pb['v'])\\n    az = np.concatenate((z, b))\\n    c1, b1 = np.split(_panel_map(pc, 'v1', lambda x,p:x/(1+p[0]*abs(x)**p[1])**p[2], [.62,1.07,1.57], ([0,.1,.1],[5,5,5]), az), 2)\\n    c2, b2 = np.split(_panel_map(pc, 'v2', lambda x,p:np.logaddexp(0,p[0]*x+p[1]), [2.2,0], ([.1,-3],[8,3]), az), 2)\\n    c = _panel_map(pc, 'v1', lambda x,p:np.logaddexp(0,p[0]*x+p[1]), [2.15,0], ([.1,-4],[10,4]), z)\\n    d = _panel_map(pc, 'v2', lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1], [.22,1.25], ([0,.25],[.8,4]), z)\\n    return z,b,c1,c2,b1,b2,c,d\\n\\n\\ndef _designs(study, x):\\n    z,b,c1,c2,b1,b2,c,d = _maps(study, x)\\n    a = float(study['telemetry_vec'][0])\\n    pair = np.sum(b[:,:2]*b[:,2:],axis=1)\\n    h0 = np.column_stack((_aff(b), pair, c, d, c/(1+a*z*z)))\\n    h1 = np.column_stack((h0, np.sum(b*d,axis=1)))\\n    h2 = np.column_stack((h0, c/(1+a*b*b)))\\n    h3 = np.column_stack((_aff(z), c1*b1, c1*c2, c1/(1+a*z*z)))\\n    h4 = np.column_stack((_aff(z), c1*b1, c1*b, c1/(1+a*z*z)))\\n    return _aff(b), (h1,h2,h3,h4)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr, te = study['train'],study['test']\\n    n = len(tr['x'])\\n    h, hs = _designs(study, np.concatenate((tr['x'],te['x'])))\\n    yy = [q[n:] @ _fit(q[:n],tr['y']) for q in hs]\\n    y = np.mean(yy,axis=0)\\n    state = _trajectory(h[:n],h[n:],tr['traj'],np.asarray(study['eval_times']))\\n    terminal = state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),terminal.mean(),terminal.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/stress.py <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=[tr[k] for k in ['x','y','traj']]; h,hs=m['_designs'](s,x); z=m['_maps'](s,x)[0]; n=len(x); rng=np.random.default_rng(1)\\nsplits=[np.arange(52,72)]+[rng.choice(n,20,replace=False) for _ in range(30)]+[np.argsort(q)[-20:] for q in [np.linalg.norm(z,axis=1),*z.T,*(-z.T)]]\\nE=[]\\nfor ts in splits:\\n ix=np.setdiff1d(np.arange(n),ts); Q=np.array([hh[ts]@m['_fit'](hh[ix],y[ix]) for hh in hs]); st=m['_trajectory'](h[ix],h[ts],T[ix],s['eval_times']); E.append(np.r_[np.mean(abs(Q-y[ts]),axis=1),np.mean(abs(Q.mean(0)-y[ts])),np.mean(abs(st-T[ts])),np.mean(abs(h[ts]@m['_fit'](h[ix],T[ix])-T[ts]))]);\\nE=np.array(E); print('public',E[0]); print('random mean',E[1:31].mean(0),'random max',E[1:31].max(0)); print('directional',E[31:]); print('z extent',z.min(0),z.max(0)); print('times',s['eval_times']); print('traj sv',np.linalg.svd(T,compute_uv=False));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress.py\\nsed -n '/def _trajectory/,/def _panel_map/p' batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine trajectory dynamics -> H2 complementary nonlinear scalar readouts; best previously measured 52/20 MAEs are 0.030557 for scalar and 0.004095 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the lowest training LOO rational basis\",\"rejected_reason\":\"Its 0.00833 LOO MAE did not transfer to the prescribed holdout, where it reached 0.07209.\"}],\"rationale\":\"Build a self-contained candidate from complementary bases that passed individually, then measure whether their ensemble stabilizes predictions on random and directional holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9b9bd68b2159570a4ace3b7955192cdc1231191f340dfdbd01102de59f219f80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39356.38,
+      "usage_known": true,
+      "prompt_tokens": 34762,
+      "cached_tokens": 12672,
+      "completion_tokens": 1682
+    }
+  ]
+}

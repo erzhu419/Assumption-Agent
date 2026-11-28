@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c13a146899845f79794ed4d73c30cad",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:14:48.884029+00:00",
+  "ended_at_utc": "2026-11-28T13:15:15.321446+00:00",
+  "request_sha256": "2baf8b612840c62a884e073e93849d8716aebcc45feb893c294f394561b7f72a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39768,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29631,
+    "cached_tokens": 5504,
+    "completion_tokens": 1113
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/mix_probe.py <<'PY'\\nexec(open('/tmp/scalar_probe.py').read().split('models=')[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nD=np.maximum(0.,K.diagonal()[:,None]+K.diagonal()[None,:]-2*K)\\nS=st@st.T\\nY=poly(sy,2)@poly(sy,2).T\\nfolds += [np.argsort(x[:,j])[:12] for j in range(4)] + [np.argsort(x[:,j])[-12:] for j in range(4)]\\ndef test(g,r,ic):\\n out=[]\\n for te in folds:\\n  tr=np.setdiff1d(np.arange(N),te); mu=y[tr].mean(); A=cho_factor(g[np.ix_(tr,tr)]+r*np.eye(len(tr))); a=cho_solve(A,y[tr]-mu)\\n  if ic:\\n   b=cho_solve(A,np.ones(len(tr))); z=a.sum()/b.sum(); a-=z*b; mu+=z\\n  out.append(np.mean(abs(mu+g[np.ix_(te,tr)]@a-y[te])))\\n return np.array(out)\\nconfigs=[('arch',K+.3*sy@sy.T,.001,False),('stq',K+30*S,.0001,False),('kd',K+3*np.exp(-D/12),.003,False)]\\nfor s0 in [0,3,30]:\\n for l in [12,24,48]:\\n  for a in [.3,3]:\\n   for b in [0,.1]:\\n    for r in [.0001,.0003,.001,.003]:\\n     for ic in [False,True]:configs.append(((s0,l,a,b),K+s0*S+a*np.exp(-D/l)+b*Y,r,ic))\\nres=[]\\nfor k,g,r,ic in configs:\\n o=test(g,r,ic); m=np.array([o[0],o[1:7].mean(),max(o[1:7]),o[7],o[8:].mean(),max(o[8:])]); res.append((m,k,r,ic))\\nfor row in res[:3]:print(row)\\nfor row in sorted([r for r in res if r[0][0]<.038],key=lambda r:r[0][1]+.2*r[0][3]+.5*r[0][4]+.2*r[0][5])[:18]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mix_probe.py\\ncat >/holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Scalar regression on the shared spatial and calibrated interaction kernels.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    st, qt = p['st'], p['qt']\\n    k = p['K'] + 30.0 * (st @ st.T)\\n    kq = p['Kq'] + 30.0 * (qt @ st.T)\\n    weights = solve(k + 1e-4 * np.eye(len(k)), p['y_centered'], assume_a='pos')\\n    return {'y_hat': kq @ weights + p['y_mean']}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived scalar weighting → calibrated quadratic augmentation; the proposed baseline has public proxy MAE 0.03602 and outer-radius MAE 0.06358 versus 0.04318 and 0.09259 archived.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted training-only LOO selection among all probed kernels\",\"rejected_reason\":\"It selected a model with outer-radius MAE 0.09584, worse than the archived 0.09259.\"}],\"rationale\":\"Install the candidate that improves both measured bottlenecks, then compare conservative kernel mixtures on additional directional extrapolation slices before promoting a challenger.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "676f537d20e8fa873df1b6d09c97945cf901488b335f480ef190e5e3f992e83e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26436.44,
+      "usage_known": true,
+      "prompt_tokens": 29631,
+      "cached_tokens": 5504,
+      "completion_tokens": 1113
+    }
+  ]
+}

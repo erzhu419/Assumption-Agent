@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b50a7f6f50f4772b079d27521609ae2",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:13.834262+00:00",
+  "ended_at_utc": "2026-11-28T13:16:41.324009+00:00",
+  "request_sha256": "96f78c1e3b2fb35716d3a0657ea8731bf95f4be58e8d431d492f4575a8439abc",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 62358,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36232,
+    "cached_tokens": 0,
+    "completion_tokens": 1108
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\na,b,c,d=[runpy.run_path(p)['run_node'] for p in ('node_00.py','_frozen_nodes/node_01.py','node_02.py','_frozen_nodes/node_03.py')]\\ntr=s['train']; n=len(tr['x']); ix=np.arange(n); spread=np.linalg.norm(tr['x']-np.median(tr['x'],axis=0),axis=1)\\ndef run(valid, panel_a=None, panel_b=None):\\n    keep=np.setdiff1d(ix,valid)\\n    study=dict(s,train={k:tr[k][keep] for k in ('x','y','traj')},test={'x':tr['x'][valid]})\\n    for p,i in [('panel_a',panel_a),('panel_b',panel_b)]:\\n        if i is not None: study[p]={k:np.delete(v,i,axis=0) for k,v in s[p].items()}\\n    na=a({'__input__':study}); nb=b({'__input__':study,'node_00':na}); nc=c({'node_01':nb}); out=d({'node_01':nb,'node_02':nc})\\n    y=np.abs(out['y_hat']-tr['y'][valid]).mean(); err=np.abs(out['state_pred']-tr['traj'][valid]); t=nb['t']; f=nb['fitted']\\n    def proj(lr):\\n        m=-np.expm1(-np.exp(lr)[:,None]*t)\\n        return np.linalg.pinv(m)@m\\n    r=least_squares(lambda lr:(f@proj(lr)-f).ravel(),np.log([1.,5.]),bounds=(np.log([.01,.02]),np.log([15.,35.])))\\n    kin=np.abs(nb['new_design']@nb['beta']@proj(r.x)-tr['traj'][valid]).mean()\\n    return np.array([y,err.mean(),err.mean(0).max(),kin])\\nfolds={f'block_{j}':v for j,v in enumerate(np.array_split(ix,4))}\\nfolds.update({f'axis_{j}_{sign}':np.argsort(sign*tr['x'][:,j])[-14:] for j in range(tr['x'].shape[1]) for sign in (-1,1)})\\nfolds['largest_radius']=np.argsort(spread)[-16:]\\nrows=[]\\nfor name,v in folds.items():\\n    r=run(v); rows.append(r); print(name,np.round(r,6))\\nworst=np.max(rows,axis=0); print('worst_slice [readout, trajectory, single_horizon, kinetic_challenger]',worst)\\nassert np.all(worst[:3]<.038)\\nv=ix[-20:]\\nfor p in ('panel_a','panel_b'):\\n    worst=np.max([run(v,**{p:i}) for i in range(len(s[p]['u']))],axis=0)\\n    print('worst_jackknife',p,worst); assert np.all(worst[:3]<.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived affine calibration and fixed rate bounds → H2 nonlinear panel calibration and learned rank-two projection; accepted public holdout MAE is 0.009694 for readout and 0.008356 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the rank-two projection immediately with fitted exponential rise modes\",\n      \"rejected_reason\": \"The rise modes explain the measured time basis, but their held-out prediction benefit has not yet been established.\"\n    }\n  ],\n  \"rationale\": \"The exact candidate passed the public gate. Stress-test both branches on blocked, extreme-coordinate, reference-panel jackknife, and single-horizon slices, and compare the kinetic challenger without modifying the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3b23de15a94a90b87ae0699fc1abab8aaf3531ebef05d851d771acfb6ae5a779",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27486.97,
+      "usage_known": true,
+      "prompt_tokens": 36232,
+      "cached_tokens": 0,
+      "completion_tokens": 1108
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7721c2b4c2f049aab44cb19495c7b8c6",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:48:27.807214+00:00",
+  "ended_at_utc": "2026-11-28T13:48:49.103430+00:00",
+  "request_sha256": "3a7465072330824b1dde8406c165ba64badba5063a2518f165613a681e788113",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28877,
+    "cached_tokens": 12672,
+    "completion_tokens": 804
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp node_01.py /tmp/node_01_archived_baseline.py\\ncat > node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    \\\"\\\"\\\"Fit the scalar readout independently of the trajectory branch.\\\"\\\"\\\"\\n    p = inputs['node_00']\\n    kernel, cross_kernel = p['K'], p['Kq']\\n    train, query = p['sy'], p['qy']\\n    scale = np.median(np.diag(kernel))\\n    # Use one training-derived scale for both blocks of the squared kernel.\\n    gram = kernel + 0.30 * (train @ train.T) + (kernel / scale)**2\\n    cross = cross_kernel + 0.30 * (query @ train.T) + (cross_kernel / scale)**2\\n    gram.flat[::len(gram) + 1] += 0.008\\n    y = p['y_centered']\\n    # Profile an unpenalized intercept by solving for both right-hand sides.\\n    u, v = solve(gram, np.column_stack((y, np.ones_like(y))), assume_a='pos').T\\n    offset = u.sum() / v.sum()\\n    return {'y_hat': (p['y_mean'] + offset) + cross @ (u - offset * v)}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /holdout_task/test_dag_candidate.py\\nsed \\\"s|base=load('baseline','/holdout_task/node_01.py')|base=load('baseline','/tmp/node_01_archived_baseline.py'); candidate=load('candidate','/holdout_task/node_01.py')|; s|for e,z in zip(errs,pred):|np.testing.assert_allclose(candidate.run_node({'node_00':q})['y_hat'],pred[1],rtol=1e-11,atol=1e-12)\\\\n for e,z in zip(errs,pred):|\\\" /tmp/check_readout.py > /tmp/verify_readout_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/verify_readout_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Add a squared spatial kernel and profiled intercept; the fixed challenger reduced worst axis MAE from 0.097423 to 0.076944 and worst oblique MAE from 0.090800 to 0.075077.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the cubic interaction\",\n      \"rejected_reason\": \"Its small advantage on axis tails did not carry over to oblique, radial, or random holdouts.\"\n    }\n  ],\n  \"rationale\": \"The fixed squared interaction improved mean and worst MAE in all four stress groups. Promote it, rerun the isolated public validator, and check that the saved node reproduces the tested predictions on every stress split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "71367f073c7bb8488fbcb0cf015c81f10de211e9df1ba7bcfe2b486dc44e83c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21294.76,
+      "usage_known": true,
+      "prompt_tokens": 28877,
+      "cached_tokens": 12672,
+      "completion_tokens": 804
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0f2fb3c0ffd4031ab6ed006d68b1615",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:12:56.298686+00:00",
+  "ended_at_utc": "2026-11-28T13:13:27.448200+00:00",
+  "request_sha256": "91086a492e71721e0f7810babe58cd0ce5c55bad12293f4e99e0f1a45a72fe71",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30090,
+    "cached_tokens": 0,
+    "completion_tokens": 1339
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/gp.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rows=[]')[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\nrng=np.random.default_rng(91); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(8)]\\nfor key in ['x','A-','A-B','A-Bi','A-v1','A-v2','A-Bv1','A-Bv2']:\\n z=Q[key]; f=p(z,3); W=np.linalg.lstsq(f,Y,rcond=None)[0]; print(key,'poly2',np.round(np.linalg.lstsq(f[:,:15],Y,rcond=None)[0].T,3)); print('cubic',np.round(W[15:].T,3))\\nI,J=np.triu_indices(4)\\ndef covparts(z):\\n dot=z@z.T; t2=z[:,I]*z[:,J]; return [dot,t2@t2.T]\\nD=(x[:,None,:]-x[None,:,:])**2\\nK0=np.ones((72,72)); K1,K2=covparts(Q['A-']); Kb1,Kb2=covparts(Q['A-B']); Kc1,Kc2=covparts(Q['A-Bv1']); Kd1,Kd2=covparts(Q['A+Bv2']);\\nfor setid,parts in enumerate([[K0,K1,K2],[K0,K1,K2,Kb2,Kc1,Kc2,Kd1,Kd2],[K0,K1,K2,K1**3,K1**4,Kb2,Kc1,Kc2,Kd1,Kd2]]):\\n parts=np.array(parts); lp=len(parts)\\n for criterion in ['nll','loo']:\\n  errors=[]\\n  for ix in splits:\\n   a,b=ix[:52],ix[52:]; ee=[]\\n   Pa=parts[:,a][:,:,a]; Da=D[a][:,a]; Pb=parts[:,b][:,:,a]; Db=D[b][:,a]; eye=np.eye(len(a))\\n   for yy in [y,tt]:\\n    v=yy[a]\\n    def make(P,D,h):\\n     h=np.exp(h); g=np.exp(-np.einsum('ijk,k->ij',D,h[lp:lp+4])); return np.einsum('k,kij->ij',h[:lp],P)+h[-2]*g,g\\n    def fun(h):\\n     K,g=make(Pa,Da,h); h0=np.exp(h); K+=h0[-1]*eye\\n     C=cho_factor(K); al=cho_solve(C,v); inv=cho_solve(C,eye)\\n     dK=np.concatenate([Pa*h0[:lp,None,None],-g[None,:,:]*Da.transpose(2,0,1)*h0[lp:lp+4,None,None]*h0[-2],(g*h0[-2])[None],(eye*h0[-1])[None]])\\n     if criterion=='nll':\\n      loss=v@al/2+np.log(np.diag(C[0])).sum(); G=(inv-np.outer(al,al))/2\\n     else:\\n      d=inv.diagonal(); r=al/d; loss=np.mean(r*r); A=inv@(2*r/d/len(a)); G=(inv*(2*r*r/d/len(a)))@inv-np.outer(A,al)\\n     return loss,np.einsum('ij,kij->k',G,dK)\\n    init=np.r_[np.repeat(-3.,lp),np.repeat(-1.,4),-1.,-9.]; res=minimize(fun,init,jac=True,method='L-BFGS-B',bounds=[(-16,5)]*lp+[(-6,2)]*4+[(-12,5),(-14,-3)],options={'maxiter':220}); h=res.x\\n    K,_=make(Pa,Da,h); Kb,_=make(Pb,Db,h); pred=Kb@cho_solve(cho_factor(K+np.exp(h[-1])*eye),v); ee.append(np.mean(abs(yy[b]-pred)))\\n    if len(errors)==0: print(setid,criterion,'params',np.round(h,2),'MAE',ee[-1]);\\n   errors.append(ee)\\n  print(setid,criterion,'metrics',errors[0],np.mean(errors,0),np.max(errors,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp.py | grep -E 'tanh|rat|poly2|cubic|metrics|params'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: fixed archive kernel → H2: anisotropic interaction kernel with separate readouts; archived 52/20 MAEs are 0.043185 for y and 0.016417 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a low-order polynomial in one panel-derived coordinate system\",\"rejected_reason\":\"The best mean scalar MAE across the measured splits was 0.05888, above the gate.\"}],\"rationale\":\"Inspect interaction coefficients for compact structure while testing whether fold-local kernel learning can close the scalar error margin.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c8a82336da610361f9dc35a12e0102f965cce100eb1fd0135f6c8fbea9ad281e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31148.21,
+      "usage_known": true,
+      "prompt_tokens": 30090,
+      "cached_tokens": 0,
+      "completion_tokens": 1339
+    }
+  ]
+}

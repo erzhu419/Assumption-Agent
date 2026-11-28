@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d49c71a33b4420984777eb236fb254d",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:07:17.523360+00:00",
+  "ended_at_utc": "2026-11-28T14:07:47.362913+00:00",
+  "request_sha256": "f719e95e509e7479aaf7000ceaa8c54d68278bfc620f555a6262b4d6007b3aaa",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54557,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34500,
+    "cached_tokens": 12672,
+    "completion_tokens": 1125
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, re\\nfrom pathlib import Path\\nimport numpy as np\\nroot=Path('/holdout_task')\\ndef load(i):\\n    p=(root if i==0 else root/'_frozen_nodes')/f'node_{i:02}.py'\\n    spec=importlib.util.spec_from_file_location(p.stem,p)\\n    m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=[load(i) for i in range(4)]\\ns=pickle.load(open(root/'public_batch.pkl','rb'))[0]['study']\\nkeys=re.findall(r'''out_cv\\\\[['\\\"]([^'\\\"]+)['\\\"]\\\\]''',(root/'test_dag_candidate.py').read_text()); print('Public evaluator output keys:',keys)\\ndef run(st):\\n    a=m[0].run_node({'__input__':st}); b=m[1].run_node({'__input__':st,'node_00':a}); c=m[2].run_node({'node_01':b}); return m[3].run_node({'node_01':b,'node_02':c})\\ntr=s['train']; n=len(tr['x']); groups=[]\\nfor seed in range(5):\\n    groups.extend((f'shuffle{seed}_{j}',g) for j,g in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),6)))\\norder=np.argsort(np.max(abs(tr['x']),axis=1)); groups += [('largest_coordinate',order[-12:]),('smallest_coordinate',order[:12])]\\nreport=[]\\nfor name, held in groups:\\n    keep=np.setdiff1d(np.arange(n),held); st=dict(s,train={k:v[keep] if isinstance(v,np.ndarray) and len(v)==n else v for k,v in tr.items()},test=dict(x=tr['x'][held])); out=run(st)\\n    target=tr['y'][held]; options=[k for k in dict.fromkeys(keys+list(out)) if k in out and np.asarray(out[k]).size==target.size]; assert options, list(out)\\n    y=np.asarray(out[options[0]]).reshape(target.shape); t=np.asarray(out['state_pred']); assert t.shape==tr['traj'][held].shape and np.isfinite(y).all() and np.isfinite(t).all()\\n    report.append((name,float(np.mean(abs(y-target))),float(np.mean(abs(t-tr['traj'][held])))))\\nprint('worst readout and trajectory slices:',max(report,key=lambda r:r[1]),max(report,key=lambda r:r[2])); print('coordinate extremes:',report[-2:]); print('mean slice MAEs:',np.mean([r[1:] for r in report],axis=0))\\nbase=m[0].run_node({'__input__':s})\\nfor panel in ('panel_a','panel_b'):\\n    changes=[]\\n    for j in range(len(s[panel]['u'])):\\n        st=dict(s); st[panel]={k:np.delete(v,j,axis=0) for k,v in s[panel].items()}; alt=m[0].run_node({'__input__':st}); assert all(np.isfinite(alt[k]).all() for k in base); changes.append(float(np.mean(abs(alt['query']-base['query']))))\\n    print(panel,'worst single-row deletion mean query-coordinate change:',max(changes))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine transfer → coupled sinusoidal inversion and nonlinear panel-B mapping; official public CV MAEs are 0.015948 for readout and 0.010710 for trajectory, with alternate slices pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the accepted candidate after the stress-script error\",\n      \"rejected_reason\": \"The error was an incorrect output key in the diagnostic script, not a failure of the candidate.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged, read the evaluator’s output keys, and complete the alternate-split and calibration-row deletion checks in a clean Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1805b8fb98271b3ce4bf29386c5967f0f24208df1f46a5eacf053a91c9d19e38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29838.25,
+      "usage_known": true,
+      "prompt_tokens": 34500,
+      "cached_tokens": 12672,
+      "completion_tokens": 1125
+    }
+  ]
+}

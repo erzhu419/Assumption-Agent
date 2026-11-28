@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7a3d5aba7f445c48ba2c3338c75bbfa",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:26:28.477553+00:00",
+  "ended_at_utc": "2026-11-28T13:27:00.481180+00:00",
+  "request_sha256": "af17f1eba72be1c44a8917c75aef7edbf9de6728e45a5b9072de776643731e4c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42133,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30836,
+    "cached_tokens": 12672,
+    "completion_tokens": 1115
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('for d in range')[0])\\naff=lambda z:np.c_[np.ones(len(z)),z]\\nU=s['panel_c']['u']; V=s['panel_c']['v1']; W=s['panel_c']['v2']; c1=lambda z:np.array([z[:,i]*z[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]).T\\nw1=ls(aff(c1(U)),V,rcond=None)[0]\\nF1=lambda z:aff(c1(z))@w1\\nB=s['panel_b']; bw=ls(aff(B['u']),B['v'],rcond=None)[0]\\nBf=lambda z:aff(z)@bw\\nBi=lambda z:(z-bw[0])@np.linalg.inv(bw[1:])\\nH=-np.expm1(-t[:,None]*[1.795,.42]); Z=np.c_[y,ls(H,T.T,rcond=None)[0].T]\\n# Panel C2 uses a common coefficient on the even-to-linear ratio.\\ndef de(z,k,c):return aff(z+c*z*z/(1+k*z*z))\\ndef err(kc):\\n F=de(U,*kc); return (F@ls(F,W,rcond=None)[0]-W).ravel()\\nres=least_squares(err,[.16,.54]); print('C2 shared k, ratio, SD',res.x,np.std(res.fun)); w2=ls(de(U,*res.x),W,rcond=None)[0]\\nF2=lambda z:de(z,*res.x)@w2\\nframes={'raw':x,'Ainv':q,'A':p,'B(Ainv)':Bf(q),'B(raw)':Bf(x),'Bi(Ainv)':Bi(q),'Bi(raw)':Bi(x)}\\ndef metrics(F):\\n w=ls(F[:52],Z[:52],rcond=1e-9)[0]; e=F@w-Z\\n return np.array([np.mean(abs(e[:52,0])),np.mean(abs(e[52:,0])),np.mean(abs(e[:52,1:]@H.T)),np.mean(abs(e[52:,1:]@H.T))])\\nrows=[]\\nfor a,za in frames.items():\\n for b,zb in frames.items():\\n  P,R=F1(za),F2(zb); D=np.einsum('ni,nj->nij',P,R).reshape(-1,16)\\n  F=aff(np.c_[P,R]); fields={'main':F,'dot':np.c_[F,D[:,::5].sum(1)],'diag':np.c_[F,D[:,::5]],'full':np.c_[F,D],'raw+full':np.c_[F,zb,D],'crossInput':np.c_[F,np.einsum('ni,nj->nij',P,zb).reshape(-1,16)]}\\n  for h,G in fields.items():rows.append((metrics(G),a,b,h))\\nfor row in sorted(rows,key=lambda r:max(r[0][1],r[0][3]))[:35]:print(row)\\nfor a in ['raw','Ainv','A']:\\n P,R=F1(frames[a]),F2(frames[a]); F=aff(np.c_[P,R]); w=ls(F[:52],Z[:52],rcond=None)[0]; print('main residual',a,metrics(F)); print(w)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained cubic → H2 sparse quadratic C1 composed with rational C2 and two time modes; cubic 52/20 MAE is 0.04075 for y and 0.03662 for trajectories with temporal projection.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use a cubic fit for panel C1\",\"rejected_reason\":\"The cubic basis interpolates the panel; four pair products already explain it to measurement precision without interpolation.\"}],\"rationale\":\"The dominant response terms align with the four products identified in C1. Test whether C1 and C2 interactions explain the cubic residuals, and test whether panel B improves the composition or is inactive.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fecc5f378fe628e0bd39e78ba59e9839d3971226ca1c8e2906349ee59401b445",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32002.44,
+      "usage_known": true,
+      "prompt_tokens": 30836,
+      "cached_tokens": 12672,
+      "completion_tokens": 1115
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d2861694b2949d1a40184416ea10586",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:21:06.260253+00:00",
+  "ended_at_utc": "2026-11-28T13:21:37.921218+00:00",
+  "request_sha256": "92c622e8bbc892b41f77e055a13c82fd501f9df48050d6638a2ca46df5c12b83",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51366,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35419,
+    "cached_tokens": 12672,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/structure.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom adaptive import coords\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; Z=coords(s,x); n=len(y); rng=np.random.default_rng(735)\\nfolds=[(np.arange(52),np.arange(52,n))];\\nfor _ in range(4):\\n i=rng.permutation(n);folds.append((i[:52],i[52:]))\\n\\ndef fit(z,q,y,k,typ,seed=0,quadratic=False):\\n rng=np.random.default_rng(seed); n,d=z.shape; Z=np.r_[z,q]; base=np.c_[np.ones(len(Z)),Z];\\n if quadratic:base=np.c_[base,np.array([Z[:,i]*Z[:,j] for i in range(d) for j in range(i,d)]).T]\\n Q=np.linalg.qr(base[:n])[0]; yy=y-Q@(Q.T@y);\\n def calc(p,jac=False):\\n  H=Z@p.reshape(k,d+1)[:,:d].T+p.reshape(k,d+1)[:,d];\\n  if typ=='sin':f=np.sin(H);g=np.cos(H)\\n  if typ=='tanh':f=np.tanh(H);g=1-f*f\\n  if typ=='rat':f=H/(1+H*H);g=(1-H*H)/(1+H*H)**2\\n  if typ=='even':f=1/(1+H*H);g=-2*H*f*f\\n  X=f[:n]-Q@(Q.T@f[:n]); inv=np.linalg.pinv(X,rcond=1e-9); b=inv@yy; r=X@b-yy\\n  if jac:\\n   J=(np.c_[Z[:n],np.ones(n)][:,None,:]*g[:n,:,None]).reshape(n,-1); J-=Q@(Q.T@J); J1=J*np.repeat(b,d+1);return J1-X@(inv@J1)-inv.T[:,np.repeat(np.arange(k),d+1)]*(r@J)\\n  return r,f,b\\n best=None\\n for j in range(13):\\n  if j<4: W=np.roll(np.eye(d),j,axis=0)[:k]*1.15; a=rng.normal(0,.15,k)\\n  else: W=rng.normal(0,.75,(k,d));a=rng.uniform(-1.5,1.5,k)\\n  opt=least_squares(lambda p:calc(p)[0],np.c_[W,a].ravel(),jac=lambda p:calc(p,True),bounds=(-5,5),max_nfev=95)\\n  r,f,b=calc(opt.x); score=np.mean(r*r)\\n  if best is None or score<best[0]:\\n   pred=f@b+base@np.linalg.lstsq(base[:n],y-f[:n]@b,rcond=None)[0];best=(score,pred[n:],opt.x.reshape(k,d+1),b)\\n return best\\nif __name__=='__main__':\\n i,j=folds[0]; z=Z[1]; logs=[]\\n for typ in ['sin','tanh','rat','even']:\\n  for k in [1,2,3,4]:\\n   for quad in [False,True]:\\n    sc,p,h,w=fit(z[i],z[j],y[i],k,typ,quadratic=quad); l=(np.mean(abs(p-y[j])),np.sqrt(sc),typ,k,quad); logs.append(l); print(l,np.round(h,3),np.round(w,4),flush=True)\\n print('best',sorted(logs)[:12])\\n print('range',np.round(np.c_[z.min(0),z.max(0)],3),s['telemetry_vec'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 learned anisotropic kernels → H2 small projected nonlinear basis; fixed isotropic scalar MAE remains 0.04272 on the required split and 0.05125 on the worst tested split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the learned full-metric GP\",\"rejected_reason\":\"Its scalar MAE worsened on the specified split, while its trajectory fit remained useful.\"}],\"rationale\":\"Test whether a few projected sinusoidal or rational responses plus low-order interactions explain the scalar more accurately than a generic kernel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "596da2a6b921521821b38fb0f59411d89a56f30907724c02e182d1981f2dec01",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31659.79,
+      "usage_known": true,
+      "prompt_tokens": 35419,
+      "cached_tokens": 12672,
+      "completion_tokens": 1240
+    }
+  ]
+}

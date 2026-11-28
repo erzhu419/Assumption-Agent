@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e643077c93bd4975add0f41b16703774",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:35:50.284141+00:00",
+  "ended_at_utc": "2026-11-28T13:36:18.400065+00:00",
+  "request_sha256": "1990439c912f9ad24e371742873486289ebda7514bae7c18a2035f014fa3f51e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63119,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37446,
+    "cached_tokens": 12672,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; export OPENBLAS_NUM_THREADS=1; mv /tmp/struct.py /tmp/structure_probe.py; python3 /tmp/kernelprobe.py > /tmp/kr; grep -A8 'best by' /tmp/kr; tail -8 /tmp/kr; cp /tmp/hegel_continual_archive/dev_m102_c01_batch_01_solver.py /holdout_task/batch_solver.py; cat >>/holdout_task/batch_solver.py <<'PY'\\n\\n_state_baseline = solve_batch\\n\\ndef _lifted_readout(study, settings):\\n    n = len(study['train']['x'])\\n    x = np.vstack((study['train']['x'], study['test']['x']))\\n    g,h = _calibration(study['panel_a'])\\n    b,c = study['panel_b'],study['panel_c']\\n    def affine(u,v):\\n        return np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]\\n    B,C = affine(b['u'],b['v']),affine(c['u'],c['v1'])\\n    target = study['train']['y']\\n    yy=[]\\n    for coord,op,base,feature,p,reg in settings:\\n        z = {'x':x,'uncal':(x-h)/g,'forward':x*g+h}[coord]\\n        w = {'none':lambda:z,'B':lambda:(z-B[0])@np.linalg.pinv(B[1:]),'C':lambda:(z-C[0])@np.linalg.pinv(C[1:]),'b':lambda:z@B[1:]+B[0],'c':lambda:z@C[1:]+C[0]}[op]()\\n        K=1+z@z.T\\n        if base=='poly': K=K+(z@z.T)**2/4\\n        if base.startswith('rbf'): K=K+np.exp(-cdist(z,z,'sqeuclidean')/float(base[3:]))\\n        if feature!='null':\\n            for name in ('sin','tanh','atan','rat'):\\n                if feature.startswith(name): k=float(feature[len(name):]); break\\n            if name=='sin': f=np.c_[np.sin(k*w),np.cos(k*w)]\\n            elif name=='tanh': f=np.tanh(k*w)\\n            elif name=='atan': f=np.arctan(k*w)\\n            else: f=np.c_[w/(1+k*w*w),w*w/(1+k*w*w)]\\n            K=K+3*((1+f@f.T/4)**p-1)\\n        yy.append(K[n:,:n] @ cho_solve(cho_factor(K[:n,:n]+reg*np.eye(n)),target))\\n    return np.mean(yy,axis=0)\\n\\ndef solve_batch(study):\\n    old=_state_baseline(study)\\n    state=old['state_pred']\\n    y=_lifted_readout(study,_READOUT)\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\npython3 - <<'PY'\\nimport ast\\np='/holdout_task/batch_solver.py'; lines=open('/tmp/kr').read().splitlines(); j=lines.index('best by')\\nrows=[ast.literal_eval(s) for s in lines[j:] if s.startswith('(')]; best=min(rows,key=lambda r:r[1]); print('provisional',best)\\nwith open(p,'a') as f: f.write('\\\\n_READOUT = '+repr([best[-1]])+'\\\\n')\\nPY\\npython3 -I /holdout_task/validate_public_schema.py; python3 /tmp/structure_probe.py > /tmp/str_results; head -38 /tmp/str_results\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived readout and trajectory) -> H2 (lifted readout with archived trajectory); exploratory 52/20 MAEs are 0.02709 for readout and 0.01207 for the archived trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save the provisional gate-passing readout and established state model, then rerun the interrupted structural probe without shadowing Python’s standard library.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8f79468f789255c3190015baa6509519b18c659fb50a13be954431e89969a06a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28114.78,
+      "usage_known": true,
+      "prompt_tokens": 37446,
+      "cached_tokens": 12672,
+      "completion_tokens": 1186
+    }
+  ]
+}

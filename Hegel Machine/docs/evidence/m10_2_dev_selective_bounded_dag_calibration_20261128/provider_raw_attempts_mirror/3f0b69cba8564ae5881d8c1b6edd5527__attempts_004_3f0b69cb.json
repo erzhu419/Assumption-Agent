@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3f0b69cba8564ae5881d8c1b6edd5527",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:44:39.984813+00:00",
+  "ended_at_utc": "2026-11-28T13:45:23.064959+00:00",
+  "request_sha256": "412276cf7d2d3f2d9b0a0890511294d84238f4c35b572f4dc1d86541833ca3e7",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24477,
+    "cached_tokens": 12672,
+    "completion_tokens": 1888
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np,itertools as it\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import Lasso,OrthogonalMatchingPursuit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; T=tr['traj']; t=s['eval_times']; y=tr['y']; rng=np.random.default_rng(4)\\ndef design(u):return np.c_[np.ones(len(u)),u]\\np=s['panel_a']; h=design(p['u']); v=p['v']; print('panel A row residuals and fits')\\nfor diagonal in (True,False):\\n best=None\\n for k in range(180):\\n  ii=rng.choice(len(h),5,replace=False); w=np.zeros((5,4))\\n  for j in range(4):\\n   jj=[0,j+1] if diagonal else list(range(5)); w[jj,j]=np.linalg.lstsq(h[ii][:,jj],v[ii,j],rcond=None)[0]\\n  e=np.linalg.norm(h@w-v,axis=1); val=np.sum(np.minimum(e,.10)**2)\\n  if best is None or val<best[0]:best=(val,e,w)\\n keep=best[1]<.10; w=best[2];\\n for j in range(4):\\n  jj=[0,j+1] if diagonal else list(range(5)); w[jj,j]=np.linalg.lstsq(h[keep][:,jj],v[keep,j],rcond=None)[0]\\n print(diagonal,keep.sum(),w.round(5),np.sort(np.linalg.norm(h@w-v,axis=1)).round(4))\\n if not diagonal: A=w\\np=s['panel_b']; B=np.linalg.lstsq(design(p['u']),p['v'],rcond=None)[0]; print('B singular',np.linalg.svd(B[1:],compute_uv=False))\\ndef basis(r):return -np.expm1(-t[:,None]*np.sort(r))\\nfor k in (1,2,3):\\n def er(r):\\n  q=basis(r); return (np.linalg.lstsq(q,T.T,rcond=None)[0].T@q.T-T).ravel()\\n opt=least_squares(er,np.geomspace(.25,2.5,k),bounds=(.015,15),max_nfev=300); print('rates',opt.x,'mae',np.mean(abs(opt.fun)))\\n if k==3: q=basis(opt.x)\\nY=np.column_stack([y,np.linalg.lstsq(q,T.T,rcond=None)[0].T]); print('Y std',Y.std(0)); print('corr',np.corrcoef(Y.T).round(2))\\nz=(x-A[0])@np.linalg.inv(A[1:]); coords={'raw':x,'A':z,'AB':design(z)@B,'AiB':(z-B[0])@np.linalg.inv(B[1:]),'B':design(x)@B,'iB':(x-B[0])@np.linalg.inv(B[1:])}; print('ranges',[(a,b.min(0).round(2),b.max(0).round(2)) for a,b in coords.items()]); folds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(rng.permutation(72),4)]\\ndef lib(z, size):\\n terms=[(f'{i}',u) for i,u in enumerate(z.T)]\\n for deg in range(2,4):\\n  terms.extend(('*'.join(map(str,ii)),np.prod(z[:,ii],axis=1)) for ii in it.combinations_with_replacement(range(4),deg))\\n if size==0:return terms\\n args=terms[:4].copy()\\n for i,j in it.combinations(range(4),2):\\n  u,v=z[:,i],z[:,j]; args.extend([(f'{i}+{j}',u+v),(f'{i}-{j}',u-v)])\\n  terms.extend([(f'{i}{j}/norm',u*v/(1+u*u+v*v)),(f'{i}{j}/sum',u*v/(1+(u+v)**2)),(f'{i}{j}/diff',u*v/(1+(u-v)**2))])\\n  for k in (.25,.5,1,2):\\n   for a,b,p,r in ((i,j,u,v),(j,i,v,u)): terms.append((f'{a}/(1+{k}*{b}^2)',p/(1+k*r*r)))\\n for name,u in args:\\n  for k in (.5,1,1.5,2,3):\\n   for f in (np.tanh,np.sin,np.cos,np.arctan):terms.append((f'{f.__name__}({k}*{name})',f(k*u)))\\n  terms.extend([(f'sat{name}',u/(1+abs(u))),(f'abs{name}',abs(u))])\\n return terms\\nfor nm,Z in coords.items():\\n for size in (0,1):\\n  terms=lib(Z,size); A0=np.column_stack([v for _,v in terms]); scores=[]\\n  for method,vals in [('ridge',[.001,.03,.2,1,5]),('omp',[5,9,14,21]),('lasso',[.0005,.002,.008,.03])]:\\n   for reg in vals:\\n    err=[]\\n    for a,b in folds:\\n     F=(A0-A0[a].mean(0))/np.maximum(A0[a].std(0),1e-9); avg=Y[a].mean(0); r=Y[a]-avg\\n     if method=='ridge': p=F[b]@F[a].T@np.linalg.solve(F[a]@F[a].T+reg*np.eye(len(a)),r)+avg\\n     else:\\n      M=OrthogonalMatchingPursuit(n_nonzero_coefs=reg) if method=='omp' else Lasso(alpha=reg,max_iter=4000,tol=.0003)\\n      p=np.column_stack([M.fit(F[a],u).predict(F[b]) for u in Y[a].T]);\\n     e=np.abs(p[:,0]-y[b]).mean(),np.abs(p[:,1:]@q.T-T[b]).mean();err.append(e)\\n    scores.append((np.mean(err,0).sum(),method,reg,np.round(err[0],4),np.round(np.mean(err[1:],0),4),np.round(np.max(err[1:],0),4)))\\n  print(nm,size,sorted(scores,key=lambda k:k[0])[:4],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: ordinary affine calibration and fixed two-mode dynamics → H2: robust panel alignment and a data-estimated modal basis; panel A’s ordinary affine fit has coordinate RMS up to 1.510.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived feature support unchanged\",\n      \"rejected_reason\": \"The archived gate failed both metrics, and the current trajectory spectrum suggests a third measurable component.\"\n    }\n  ],\n  \"rationale\": \"Measure robust calibration, compare alternative panel coordinate maps, and screen polynomial, symmetric and rational readouts across the public split and shuffled slices. The modal fit in this exploratory screen uses all training trajectories; refit it inside each fold before verification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6acabcc8c0d743154e8541bb10207cb156241ed8addff55a4792e7573c0c1252",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43079.15,
+      "usage_known": true,
+      "prompt_tokens": 24477,
+      "cached_tokens": 12672,
+      "completion_tokens": 1888
+    }
+  ]
+}

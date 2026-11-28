@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d992d0035734e84b600dadd3b2bb377",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:23:14.968770+00:00",
+  "ended_at_utc": "2026-11-28T13:23:43.368415+00:00",
+  "request_sha256": "225562740ca61b715b1b5fe21e52116109a1118d233fe09c25858c609f33c987",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55745,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36433,
+    "cached_tokens": 12672,
+    "completion_tokens": 1139
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -63 /holdout_task/batch_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'exponential relaxation variable projection' | head -12; cat > /tmp/stress.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _calibration,_panel_operators,_affine as aff,_ls as ls,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; q=_calibration(s['panel_a'])(x); f,g=_panel_operators(s['panel_c']); p,r=f(q),g(q); A=aff(np.c_[p,r,np.sum(p*r,axis=1)]); O=np.column_stack([p[:,i]*r[:,j] for i in range(4) for j in range(4) if i!=j]); pairs=[(i,j) for i in range(4) for j in range(4) if i!=j]\\nrng=np.random.default_rng(42); order=np.argsort(np.linalg.norm(q,axis=1)); folds=[np.arange(52,72),order[-20:],order[:20:]]+[a for a in np.array_split(rng.permutation(72),4)]\\nallerr=[]\\nfor J in folds:\\n I=np.setdiff1d(np.arange(len(x)),J); Ai=A[I]; zz=O[I]-Ai@ls(Ai,O[I]); ty=T[I]-Ai@ls(Ai,T[I]); idx=np.argmax(np.sum((zz.T@ty)**2,axis=1)/np.sum(zz**2,axis=0)); B=np.c_[A,O[:,idx]]; Bi=B[I]; weights=ls(Bi,T[I]); fitted=Bi@weights\\n pred=solve_batch(dict(s,train={k:v[I] if k in ('x','y','traj') else v for k,v in s['train'].items()},test={'x':x[J]})); maes=[np.mean(abs(pred['y_hat']-y[J])),np.mean(abs(pred['state_pred']-T[J])),np.mean(abs(A[J]@ls(Ai,y[I])-y[J])),np.mean(abs(B[J]@weights-T[J]))]\\n for kind in ('rates','rates_const'):\\n  def basis(k):\\n   E=-np.expm1(-t[:,None]*k)\\n   return E if kind=='rates' else np.c_[E,np.ones(len(t))]\\n  def err(k):\\n   E=basis(k);return (E@ls(E,fitted.T)-fitted.T).ravel()\\n  rate=least_squares(err,[1.8,.42],bounds=([.8,.03],[8,.79])).x; E=basis(rate); pred=B[J]@ls(Bi,T[I]@np.linalg.pinv(E.T))@E.T\\n  maes.append(np.mean(abs(pred-T[J]))); print(kind,rate,end='; ')\\n allerr.append(maes);print('holdout',len(J),'interaction',pairs[idx],'MAEs',np.round(maes,6))\\nprint('worsts archive-y,archive-state,compact-y,unconstrained-state,projected-state,projected+constant-state',np.max(allerr,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared archived feature set) -> H2 (separate scalar and trajectory features with joint time-rate fitting); prescribed-split MAE is 0.004030 for the scalar and 0.001711 for the compact trajectory challenger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a second off-diagonal interaction\",\n      \"rejected_reason\": \"Its small gain on one split is not enough to justify the added term; first test whether the single-interaction model holds across folds.\"\n    }\n  ],\n  \"rationale\": \"Select the trajectory interaction and estimate the relaxation rates inside each training fold, then compare scalar and trajectory errors separately on the prescribed holdout, calibration-radius extremes, and random folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9159e810d8143e79f79d752d13ea93334385d6ff5d3fdf7c83aa45d78e3213da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28398.56,
+      "usage_known": true,
+      "prompt_tokens": 36433,
+      "cached_tokens": 12672,
+      "completion_tokens": 1139
+    }
+  ]
+}

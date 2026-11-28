@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3425fc5389794bd9bbedb4f36e2b4b9b",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:08:34.162219+00:00",
+  "ended_at_utc": "2026-11-28T13:09:11.653548+00:00",
+  "request_sha256": "7e1955a48d3060d8c2ef3df2da785c57e25fe245a77ce152b1c43a47a4192257",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74654,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44769,
+    "cached_tokens": 12672,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rat.py <<'PY'\\nexec(open('/tmp/grammar.py').read().split('rows=[]')[0])\\nfrom scipy.optimize import least_squares\\nN=52; it=np.arange(N); va=np.arange(N,72)\\nnp.set_printoptions(precision=4,suppress=True)\\ndef polynomial(z,d):return np.column_stack([np.prod(z[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(4),k)])\\ndef rr(F,j):\\n X=F[it]; P=np.linalg.pinv(X); r=Y[it,j]-X@(P@Y[it,j]); lev=np.sum(X*P.T,1); return np.mean(abs(r)),np.mean(abs(r)/(1-lev)),np.mean(abs(F[va]@(P@Y[it,j])-Y[va,j]))\\nrows=[]\\nfor key in ['x','a','a0','a1','x0','x1','ba','ba1','Ba','Ba1']:\\n z=trans[key][:72]; p=[polynomial(z,d) for d in range(4)]; v=[('norm',np.sum(z*z,1)),('sum',np.sum(z,1)**2),('l1',np.sum(abs(z),1)),('norm4',np.sum(z**4,1))]; v.extend((str(i),z[:,i]**2) for i in range(4)); v.extend((str((i,j,sign)),(z[:,i]+sign*z[:,j])**2) for i,j in combinations(range(4),2) for sign in [-1,1]); v.extend((str((i,j)),z[:,i]**2+z[:,j]**2) for i,j in combinations(range(4),2))\\n for j in range(3):\\n  for d in [1,2,3]:\\n   for name,w in v:\\n    for q in [.11,.22,.44,.8,1.2]:\\n     den=(1+q*w)[:,None]\\n     for mode in [0,1]:\\n      F=p[d]/den if not mode else np.column_stack((p[1],p[d]/den)); rows.append((*rr(F,j),j,key,d,name,q,mode))\\nfor j in range(3):\\n r=[r for r in rows if r[3]==j];print('j',j,'fixed best',*sorted(r,key=lambda x:x[1])[:8],sep='\\\\n')\\nrows=[]\\nfor key in ['x','a','a1','ba','ba1','Ba','Ba1']:\\n z=trans[key][:72]; p=[polynomial(z,d) for d in range(4)]\\n for d in [2,3]:\\n  for mode in ['rad','diag','center','ridge','full']:\\n   def den(q):\\n    if mode=='rad':return 1+q[0]*np.sum(z*z,1)\\n    if mode=='diag':return 1+(z*z)@q\\n    if mode=='center':return 1+((z-q[4:])**2)@q[:4]\\n    if mode=='ridge':return 1+(z@q[:4]+q[4])**2\\n    return 1+np.sum((z@q.reshape(4,4))**2,1)\\n   q0={'rad':[.22],'diag':[.22]*4,'center':[.22]*4+[0]*4,'ridge':[.46]*4+[0],'full':(.46*np.eye(4)).ravel()}[mode]\\n   for cols in [[0,1,2],[0],[1],[2]]:\\n    yy=Y[it][:,cols]; std=yy.std(0)\\n    def ob(q):\\n     F=p[d][it]/den(q)[it,None];return ((F@fit(F,yy)-yy)/std).ravel()\\n    lb=np.full(len(q0),-3.);ub=np.full(len(q0),3.);\\n    if mode in ('rad','diag','center'):lb[:min(4,len(q0))]=0\\n    o=least_squares(ob,q0,bounds=(lb,ub),max_nfev=75); F=p[d]/den(o.x)[:,None];\\n    for j in cols:rows.append((*rr(F,j),j,key,d,mode,cols,o.x))\\nfor j in range(3):\\n r=[r for r in rows if r[3]==j];print('j',j,'profile best',*sorted(r,key=lambda x:x[1]*(1+len(x[-1])/35))[:8],sep='\\\\n');print('tail diagnostic',*sorted(r,key=lambda x:x[2])[:3],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rat.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: two exponential modes → H2: rational spatial readouts; the sparse baseline passes the prescribed tail at 0.0331 scalar and 0.0336 trajectory MAE, but reaches 0.2253 trajectory MAE on an axis-extreme holdout.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the sparse baseline unchanged\",\"rejected_reason\":\"Its prescribed-tail pass does not address the substantially worse block and extrapolation errors.\"}],\"rationale\":\"Screen low-degree rational laws with shared or separate denominators. Test 0.22 as a candidate coefficient, not an assumed mechanism.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ff3bb5b90ab870cfaa2c5c427c5229fea4ae5b5f9f5d3a0a3da5be29b6a83b62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37489.88,
+      "usage_known": true,
+      "prompt_tokens": 44769,
+      "cached_tokens": 12672,
+      "completion_tokens": 1416
+    }
+  ]
+}

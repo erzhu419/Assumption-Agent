@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d5405f99369f41b9846119a9ce68661a",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:34.369935+00:00",
+  "ended_at_utc": "2026-11-28T13:17:55.133751+00:00",
+  "request_sha256": "c8e774752f43bb223e85a159489053e98e9cc0e5d47659ea61219b4f04a9ef50",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36302,
+    "cached_tokens": 0,
+    "completion_tokens": 796
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport numpy as np, pickle, runpy\\nbase='/holdout_task/'\\na,b,c=[runpy.run_path(base+f)['run_node'] for f in ('_frozen_nodes/node_00.py','node_01.py','_frozen_nodes/node_02.py')]\\ns=pickle.load(open(base+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x'])\\ndef predict(st):\\n    inp={'__input__':st}\\n    out=c({'node_00':a(inp),'node_01':b(inp)})\\n    yh, q=out['y_hat'],out['state_pred']; assert all(np.isfinite(v).all() for v in out.values())\\n    np.testing.assert_allclose(out['diagnostics_vec'],[yh.mean(),yh.std(),q[:,-1].mean(),q[:,-1].std()]); return yh,q\\ndef fold(j, panel=None):\\n    i=np.setdiff1d(np.arange(n),j)\\n    st=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':tr['x'][j]})\\n    if panel is not None: st['panel_a']=panel\\n    yh,q=predict(st); return [np.abs(yh-tr['y'][j]).mean(),np.abs(q-tr['traj'][j]).mean()]\\nfolds=[np.arange(n-20,n)]+list(np.array_split(np.random.default_rng(12).permutation(n),4)); scores=np.array([fold(j) for j in folds]); print('official and four additional folds:',scores.round(6).tolist()); print('worst fold:',scores.max(0).round(6).tolist())\\np=s['panel_a']; jk=np.array([fold(folds[0],{k:np.delete(p[k],j,0) for k in ('u','v')}) for j in range(len(p['u']))]); print('worst leave-one-calibration-row-out:',jk.max(0).round(6).tolist()); assert (scores[0]<=.038).all() and (jk.max(0)<=.038).all()\\nyp,qp=predict(s); assert yp.shape==(len(s['test']['x']),) and qp.shape==(len(yp),len(s['eval_times']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The calibrated complementary readout passes the official gate at 0.035047 scalar MAE and 0.016639 trajectory MAE; stress-test the exact artifact across additional splits and calibration-row deletions.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official test verified the saved artifact and execution contract. These additional checks measure split sensitivity and dependence on individual calibration rows without changing the candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ec9869161658acf9d2d0f81c88d9372f5ecd9614f09b66f20086c29318df5eda",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20761.89,
+      "usage_known": true,
+      "prompt_tokens": 36302,
+      "cached_tokens": 0,
+      "completion_tokens": 796
+    }
+  ]
+}

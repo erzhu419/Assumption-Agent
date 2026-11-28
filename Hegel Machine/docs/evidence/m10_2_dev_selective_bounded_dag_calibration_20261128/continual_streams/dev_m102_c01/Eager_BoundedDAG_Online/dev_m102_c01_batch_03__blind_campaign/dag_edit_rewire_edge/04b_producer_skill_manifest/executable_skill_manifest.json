@@ -1,0 +1,171 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m102_c01_batch_03_7f870cc0fdd5",
+    "source_hash": "7f870cc0fdd5f4892aaddc942703f014323bda368b528dce0ae2ca9e7b076460",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_rewire_edge",
+    "task_id": "dev_m102_c01_batch_03__blind_campaign__rewire_edge",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe_decode.py",
+        "archived_relpath": "producers/tmp__probe_decode.py",
+        "bytes": 629,
+        "sha256": "b481affc7b17db6203d6637e8ebf9867226bfe5adde20ef4669f5bdcf4c5822e"
+      },
+      {
+        "container_path": "/tmp/probe_grammar.py",
+        "archived_relpath": "producers/tmp__probe_grammar.py",
+        "bytes": 3130,
+        "sha256": "d318901f57d0255bdfc153821fe86b036dc8a15d016b8b8cf0e5f6a5d6dbb39d"
+      },
+      {
+        "container_path": "/tmp/probe_kernel.py",
+        "archived_relpath": "producers/tmp__probe_kernel.py",
+        "bytes": 1798,
+        "sha256": "0c8fa284e88a42b64a857d849b6b932b3566391bd7681448c28f5770fa444690"
+      },
+      {
+        "container_path": "/tmp/probe_metric.py",
+        "archived_relpath": "producers/tmp__probe_metric.py",
+        "bytes": 1946,
+        "sha256": "82eea3dbfe9b206fed6e1d29f9e34148a89b031a795d2619e72a2249bceeb44f"
+      },
+      {
+        "container_path": "/tmp/probe_shrink.py",
+        "archived_relpath": "producers/tmp__probe_shrink.py",
+        "bytes": 1829,
+        "sha256": "0259e5d58da30b7902021da478b02115eee4cdbc0b20059a2410ac078ca4ff0f"
+      },
+      {
+        "container_path": "/tmp/probe_struct.py",
+        "archived_relpath": "producers/tmp__probe_struct.py",
+        "bytes": 3246,
+        "sha256": "60a6063e723775b1d28880c082cf0083b5d35027c87e01b1e913a540ceb0493c"
+      },
+      {
+        "container_path": "/tmp/scalar_probe.py",
+        "archived_relpath": "producers/tmp__scalar_probe.py",
+        "bytes": 1681,
+        "sha256": "807bd930354279b41a7fd7731952b5ddf683ce65055cab3d2c095106ac347d47"
+      },
+      {
+        "container_path": "/tmp/test_reconstruction.py",
+        "archived_relpath": "producers/tmp__test_reconstruction.py",
+        "bytes": 641,
+        "sha256": "3d174fb9b6023483cb9f1a9dab594c839ec73f575d69cc69c0cf35dffb424201"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c01_batch_00_solver.py",
+        "bytes": 3143,
+        "sha256": "3ec9bffe4b5f00c7c33bc22378f70ab30b848253125cdda356a50c18aa3245d2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json && for f in _frozen_nodes/*.py; do echo \"=== $f\"; cat \"$f\"; done && cat test_dag_candidate.py && cat public_asset_index.json; echo '=== archive'; find /tmp/hegel_continual_archive -maxdepth 4 -type f | head -100; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\ndef show(p,k='',d=0):\n if isinstance(p,dict):\n  for a,b in p.items():show(b,k+'/'+str(a),d+1)\n elif isinstance(p,np.ndarray):print(k,p.shape,p.dtype,p.reshape(-1)[:12])\n elif isinstance(p,(tuple,list)):\n  print(k,type(p).__name__,len(p));\n  if p ",
+      "cat /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; sed -n '85,190p' /holdout_task/test_dag_candidate.py; cat > /tmp/scalar_probe.py <<'PY'\nimport sys,pickle,numpy as np\nfrom itertools import combinations_with_replacement\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\nimport node_00,node_02\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef fold(tr,va):\n    t=s['train']; sub=dict(s,train={**t,**{k:t[k][tr] for k in ['x','y','traj']}},test={'x':t['x'][va]})\n    p=node_00.run_node({'__input__':",
+      "tail -23 /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling nonlinear variable projection' || true; cat > /tmp/probe_kernel.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.linalg import solve\n\ndef grid(tr,va):\n p,state,y,q,t,x,xq=fold(tr,va); a,b=p['scores'],state@p['modes'].T; sy,qy=p['sy'],p['qy']; st,qt=p['st'],p['qt']; m,r=len(tr),len(va); results=[]\n for label,f,g in [('sy',sy,qy),('st',st,qt),('x',x,xq),('both',np.c_[sy,st],np.c_[qy",
+      "cat > /tmp/probe_struct.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.linalg import cho_factor,cho_solve\nfrom scipy.optimize import minimize,least_squares\nfrom scipy.spatial.distance import cdist\n\ndef gp(p,state,y,what):\n a,b=p['scores'],state@p['modes'].T\n sy,qy=p['sy'],p['qy']; st,qt=p['st'][:,:4],p['qt'][:,:4]\n K,Kq=p['K'],p['Kq']; U,L,_=np.linalg.svd(K-K.mean(0)-K.mean(1)[:,None]+K.mean()); h=U[:,:4]*L[:4]**.5; hq=(Kq-K.mean(0)-Kq.mean(1)[:,None]+K.mean())@(U[:,:4]/L[:4]**.5)\n coords=[(sy,qy),(st,qt),(h,hq),(a,b)]; D=[]; Q=[]\n for x,z in coords:\n  x,z=(x-x.mean(0))/x.std(0),(z-x.mean(0))",
+      "cat > /tmp/probe_grammar.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.linalg import solve\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\n\ndef mapping(x,q):\n sl,off=node_00._calibration(s['panel_a']); u=s['panel_b']['u']; W=np.linalg.lstsq(np.c_[np.ones(len(u)),u],s['panel_b']['v'],rcond=None)[0]; c=s['panel_c']; c1=node_00._operator(c['u'],c['v1'],'tanh',(.3,3)); c2=node_00._operator(c['u'],c['v2'],'rational',(.015,.8)); out={}\n for k,(v,z) in enumerate([(x,q),((x-off)/sl,(q-off)/sl),(x*sl+off,q*sl+off)]):\n  for j,(f,g) in enumerate([(v,z),(v@W[1:]+W[0],z@",
+      "tail -48 /holdout_task/_frozen_nodes/node_00.py; cat /holdout_task/_frozen_nodes/node_02.py /holdout_task/_frozen_nodes/node_03.py; ls -R /tmp/hegel_continual_archive | head -60; cat > /tmp/probe_metric.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.optimize import minimize\nfrom scipy.linalg import cho_factor,cho_solve\n\ndef fit(x,z,a,b,y,kind=0):\n mu=x.mean(0); sd=x.std(0); x,z=(x-mu)/sd,(z-mu)/sd; n,d=x.shape; I=np.eye(n); dx=x[:,None]-x; dz=z[:,None]-x; aa=a@a.T; ba=b@a.T\n i,j=np.tril_indices(d); diag=i==j\n def cov(p,u,v,D,S,train=False):\n  l=np.zeros((d,d)); l[i,j]=np.where(diag,np.exp(p[:",
+      "sed -n '1,37p' /holdout_task/_frozen_nodes/node_00.py; sed -n '125,173p' /holdout_task/test_dag_candidate.py; cat > /tmp/probe_decode.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.spatial.distance import cdist\nfrom scipy.optimize import brentq\nfrom probe_metric import fit\np,state,y,v,t,x,q=fold(np.arange(52),np.arange(52,72)); sl,off=node_00._calibration(s['panel_a']); print('calibration',sl,off); K,Kq=p['K'],p['Kq']; print('kernel diagonal range',K.diagonal().min(),K.diagonal().max());\nD=cdist(x/sl,x/sl,'sqeuclidean'); E=cdist(x,x,'sqeuclidean'); print('range',D.max(),E.max());\nfor label,A ",
+      "cat > /holdout_task/node_01.py <<'PY'\n\"\"\"Reconstruct the frozen spatial kernel's coordinates and fit a joint readout.\"\"\"\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve\nfrom scipy.optimize import least_squares, minimize\n\n\ndef _kernel(x, z, w):\n    d = x-z\n    dot = (x*z).sum(-1)\n    r = 1.5*np.exp(-(d*d).sum(-1)/6)\n    s = 1.5*np.exp(-(d*d*w).sum(-1)/6)\n    val = 1+dot+.15*(dot*dot+((x*z)**2).sum(-1))+r+s\n    dx = (1+.30*dot[...,None])*z+.30*x*z*z-d*(r[...,None]+s[...,None]*w)/3\n    dz = (1+.30*dot[...,None])*x+.30*z*x*x+d*(r[...,None]+s[...,None]*w)/3\n    dw = -s[...,None]*d",
+      "tail -16 /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat > /tmp/probe_shrink.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.linalg import cho_factor,cho_solve\nfrom scipy.optimize import minimize\nimport importlib.util\nsp=importlib.util.spec_from_file_location('candidate','/holdout_task/node_01.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\ndef fit(x,z,a,b,y,mode):\n u,v=np.c_[x,a],np.c_[z,b]; scale=np.maximum(u.std(0),1e-8); u,v=(u-u.mean(0))/scale,(v-u.mean(0))/scale\n n,d=u.shape; I=np.eye(n); S=a@a.T; Sq=b@a.T\n def prep(g):\n  delta=(g[:,None]-u)**2\n  d"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_struct.py",
+      "primary_producer_container_path": "/tmp/probe_struct.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 3773,
+        "sha256": "0be84daf497e14402c1ff3296644253f74105fbb042c96c7b2371a8ed921a257",
+        "content_addressed_ref": "content_addressed_blobs/0be84daf497e14402c1ff3296644253f74105fbb042c96c7b2371a8ed921a257.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "nonlinear",
+      "fit",
+      "gp",
+      "profile",
+      "expand"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7f870cc0fdd5f4892aaddc942703f014323bda368b528dce0ae2ca9e7b076460",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "tail -16 /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat > /tmp/probe_shrink.py <<'PY'\nfrom scalar_probe import *\nfrom scipy.linalg import cho_factor,cho_solve\nfrom scipy.optimize import minimize\nimport importlib.util\nsp=i",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7f870cc0fdd5f4892aaddc942703f014323bda368b528dce0ae2ca9e7b076460",
+        "expected_candidate_sha256": "7f870cc0fdd5f4892aaddc942703f014323bda368b528dce0ae2ca9e7b076460",
+        "computed_candidate_sha256": "7f870cc0fdd5f4892aaddc942703f014323bda368b528dce0ae2ca9e7b076460",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 3773
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_7f870cc0"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "nonlinear",
+        "code": "def nonlinear(x, q, F, G, y, kind, units):\n    from scipy.optimize import least_squares\n    mu = x.mean(0)\n    sd = x.std(0)\n    x = (x - mu) / sd\n    q = (q - mu) / sd\n    d = x.shape[1]\n    Q = np.linalg.qr(F, mode='reduced')[0]\n    ry = y - Q @ (Q.T @ y)\n\n    def fun(x, w):\n        v = x @ w.reshape(d + 1, units)[:-1] + w.reshape(d + 1, units)[-1]\n        if kind == 'tanh':\n            return np.tanh(v)\n        if kind == 'sin':\n            return np.c_[np.sin(v), np.cos(v)]\n        return 1 / (1 + v * v)\n\n    def res(w):\n        h = fun(x, w)\n        h -= Q @ (Q.T @ h)\n        return ry - h @ np.linalg.lstsq(h, ry, rcond=1e-09)[0]\n    rng = np.random.default_rng(2026)\n    best = None\n    for i in range(14):\n        init = rng.normal(0, 0.5 if i < 9 else 1.2, (d + 1) * units)\n        o = least_squares(res, init, max_nfev=140, bounds=(-6, 6))\n        key = np.sqrt(np.mean(o.fun ** 2))\n        if best is None or key < best[0]:\n            best = (key, o.x)\n    (key, w) = best\n    beta = np.linalg.lstsq(np.c_[F, fun(x, w)], y, rcond=1e-09)[0]\n    return (np.c_[G, fun(q, w)] @ beta, key, w, beta)"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(x, z, a, b, y, kind=0):\n    from scipy.linalg import cho_factor\n    from scipy.linalg import cho_solve\n    from scipy.optimize import minimize\n    mu = x.mean(0)\n    sd = x.std(0)\n    (x, z) = ((x - mu) / sd, (z - mu) / sd)\n    (n, d) = x.shape\n    I = np.eye(n)\n    dx = x[:, None] - x\n    dz = z[:, None] - x\n    aa = a @ a.T\n    ba = b @ a.T\n    (i, j) = np.tril_indices(d)\n    diag = i == j\n\n    def cov(p, u, v, D, S, train=False):\n        l = np.zeros((d, d))\n        l[i, j] = np.where(diag, np.exp(p[:len(i)]), p[:len(i)])\n        vpar = np.exp(p[len(i):])\n        T = D @ l\n        d2 = (T * T).sum(-1)\n        K = vpar[0] * np.exp(-d2)\n        G = u @ v.T / d\n        L = vpar[1] * (1 + G) ** 2\n        C = vpar[2] * S\n        H = K + L + C + vpar[3]\n        if not train:\n            return H\n        jac = np.empty((len(p), n, n))\n        jac[:len(i)] = (-2 * K[:, :, None] * D[:, :, i] * T[:, :, j] * np.where(diag, l[i, j], 1)).transpose(2, 0, 1)\n        jac[len(i):] = [K, L, C, np.full_like(K, vpar[3]), vpar[4] * I]\n        return (H + vpar[4] * I, jac)\n\n    def loss(p):\n        (H, J) = cov(p, x, x, dx, aa, True)\n        F = cho_factor(H)\n        al = cho_solve(F, y)\n        E = cho_solve(F, I) - np.outer(al, al)\n        penalty = 0.05 * np.sum(p[:len(i)] ** 2)\n        reg = np.r_[0.1 * p[:len(i)], np.zeros(5)]\n        return (0.5 * y @ al + np.log(np.diag(F[0])).sum() + penalty, 0.5 * np.einsum('ij,kij->k', E, J) + reg)\n    rng = np.random.default_rng(0)\n    result = []\n    for k in range(6):\n        ini = np.r_[np.where(diag, -1.5, 0) + rng.normal(0, 0.25 * k / 5, len(i)), 0, -3, -1, -1, -9]\n        opt = minimize(loss, ini, jac=True, method='L-BFGS-B', bounds=[(-5, 1) if t else (-3, 3) for t in diag] + [(-16, 5)] * 4 + [(-14, -3)], options={'maxiter': 180})\n        result.append(opt)\n    p = min(result, key=lambda o: o.fun).x\n    (H, _) = cov(p, x, x, dx, aa, True)\n    F = cho_factor(H)\n    c = cho_solve(F, y)\n    return (cov(p, z, x, dz, ba) @ c, p, loss(p)[0])"
+      },
+      {
+        "name": "gp",
+        "code": "def gp(p, state, y, what):\n    from scipy.linalg import cho_factor\n    from scipy.linalg import cho_solve\n    from scipy.optimize import minimize\n    (a, b) = (p['scores'], state @ p['modes'].T)\n    (sy, qy) = (p['sy'], p['qy'])\n    (st, qt) = (p['st'][:, :4], p['qt'][:, :4])\n    (K, Kq) = (p['K'], p['Kq'])\n    (U, L, _) = np.linalg.svd(K - K.mean(0) - K.mean(1)[:, None] + K.mean())\n    h = U[:, :4] * L[:4] ** 0.5\n    hq = (Kq - K.mean(0) - Kq.mean(1)[:, None] + K.mean()) @ (U[:, :4] / L[:4] ** 0.5)\n    coords = [(sy, qy), (st, qt), (h, hq), (a, b)]\n    D = []\n    Q = []\n    for (x, z) in coords:\n        (x, z) = ((x - x.mean(0)) / x.std(0), (z - x.mean(0)) / x.std(0))\n        D.append((x[:, None, :] - x) ** 2)\n        Q.append((z[:, None, :] - x) ** 2)\n    m = len(y)\n    A = np.eye(m)\n    basis = [K, np.ones_like(K), a @ a.T]\n    query = [Kq, np.ones_like(Kq), b @ a.T]\n\n    def mat(w, Ds, B):\n        z = np.exp(w)\n        mats = [r * z[i] for (i, r) in enumerate(B)]\n        jac = list(mats)\n        j = len(B)\n        for i in what:\n            d = Ds[i]\n            k = d.shape[-1]\n            q = d * z[j + 1:j + 1 + k]\n            f = z[j] * np.exp(-q.sum(-1))\n            mats.append(f)\n            jac.extend([f, *np.moveaxis(-f[:, :, None] * q, -1, 0)])\n            j += k + 1\n        return (sum(mats), jac)\n\n    def obj(w):\n        (H, jac) = mat(w, D, basis)\n        N = np.exp(w[-1]) * A\n        C = cho_factor(H + N)\n        c = cho_solve(C, y)\n        I = cho_solve(C, A)\n        E = I - np.outer(c, c)\n        val = 0.5 * y @ c + np.log(np.diag(C[0])).sum()\n        grad = 0.5 * np.einsum('ij,kij->k', E, np.array([*jac, N]))\n        return (val, grad)\n    init = [0, 0, 0]\n    bounds = [(-20, 5)] * 3\n    for i in what:\n        init.extend([0] + [-2] * D[i].shape[-1])\n        bounds.extend([(-20, 6)] + [(-12, 3)] * D[i].shape[-1])\n    init.append(-9)\n    bounds.append((-15, -3))\n    w = minimize(obj, init, jac=True, bounds=bounds, method='L-BFGS-B', options={'maxiter': 180}).x\n    (H, _) = mat(w, D, basis)\n    C = cho_factor(H + np.exp(w[-1]) * A)\n    c = cho_solve(C, y)\n    pred = mat(w, Q, query)[0] @ c\n    loo = np.mean(np.abs(c / np.diag(cho_solve(C, A))))\n    return (pred, loo, obj(w)[0])"
+      },
+      {
+        "name": "profile",
+        "code": "def profile(f, g, a, b, y, kind):\n    from scipy.optimize import least_squares\n    rng = np.random.default_rng(42)\n    (n, m) = f.shape\n    sd = f.std(0)\n    mu = f.mean(0)\n    (f, g) = ((f - mu) / sd, (g - mu) / sd)\n    F = np.c_[np.ones(n), f, a]\n    G = np.c_[np.ones(len(g)), g, b]\n    R = np.linalg.qr(F, mode='reduced')[0]\n    ry = y - R @ (R.T @ y)\n\n    def funcs(u):\n        if kind == 'sin':\n            return np.c_[np.sin(u), np.cos(u)]\n        if kind == 'tanh':\n            return np.tanh(u)[:, None]\n        if kind == 'rat':\n            return (1 / (1 + u * u))[:, None]\n\n    def residual(v):\n        h = funcs(f @ v[:m] + v[-1])\n        h -= R @ (R.T @ h)\n        return ry - h @ np.linalg.lstsq(h, ry, rcond=1e-08)[0]\n    best = None\n    for i in range(10):\n        ini = rng.normal(0, 0.55, m + 1)\n        o = least_squares(residual, ini, max_nfev=100, bounds=(-5, 5))\n        val = np.linalg.norm(o.fun)\n        if best is None or val < best[0]:\n            best = (val, o.x)\n    (val, v) = best\n    w = np.linalg.lstsq(np.c_[F, funcs(f @ v[:m] + v[-1])], y, rcond=1e-08)[0]\n    return (np.c_[G, funcs(g @ v[:m] + v[-1])] @ w, val / np.sqrt(n), np.round(v, 2))"
+      },
+      {
+        "name": "expand",
+        "code": "def expand(z, d):\n    from itertools import combinations_with_replacement\n    return np.column_stack([np.prod(z[:, i], axis=1) for i in combinations_with_replacement(range(z.shape[1]), d)])"
+      }
+    ]
+  }
+}

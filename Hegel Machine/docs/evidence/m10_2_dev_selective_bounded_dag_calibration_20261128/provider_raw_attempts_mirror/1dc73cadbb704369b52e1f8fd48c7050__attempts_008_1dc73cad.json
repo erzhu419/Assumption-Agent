@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1dc73cadbb704369b52e1f8fd48c7050",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:13:27.028467+00:00",
+  "ended_at_utc": "2026-11-28T14:13:50.550342+00:00",
+  "request_sha256": "b6f9937caa2eb317c7a32773c89ad7c17168eb51cb8b9bbc6c9426cd1a2ee2ba",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 53559,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32880,
+    "cached_tokens": 12672,
+    "completion_tokens": 862
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\nscope = {}\\np = Path('/holdout_task/test_dag_candidate.py')\\nexec(compile(p.read_text().split('\\\\nst = pickle.load(', 1)[0], str(p), 'exec'), scope)\\nimport copy, pickle\\nimport numpy as np\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\na = s['train']; x = a['x']; n = len(x)\\norders = [np.random.default_rng(seed).permutation(n) for seed in range(40)]\\norders += [np.argsort(sign * x[:, k]) for k in range(x.shape[1]) for sign in (-1, 1)]\\nworst = np.zeros(2)\\nfor order in orders:\\n    i, j = order[:-20], order[-20:]\\n    f = copy.deepcopy(s)\\n    f['train'] = {k: a[k][i] for k in ('x', 'y', 'traj')}\\n    y, tr = a['y'][i], a['traj'][i, -1]\\n    f['train']['summary'] = np.array([y.mean(), y.std(), tr.mean(), tr.std()])\\n    f['test'] = {'x': x[j]}\\n    out, counts = scope['run_dag'](f)\\n    assert counts and all(k == 1 for k in counts.values())\\n    assert out['y_hat'].shape == a['y'][j].shape and out['state_pred'].shape == a['traj'][j].shape\\n    yh, sp = out['y_hat'], out['state_pred']\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\\n    err = np.array([np.mean(abs(yh-a['y'][j])), np.mean(abs(sp-a['traj'][j]))])\\n    assert np.all(err <= .038), err\\n    worst = np.maximum(worst, err)\\nprint('Worst MAE across 40 random and 8 channel-extreme holdouts (scalar, trajectory):', worst.tolist())\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial calibration and fixed SVD → H2 shared cosine calibration and fitted relaxation modes; the exact candidate passed official public CV at 0.003382 scalar MAE and 0.003998 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add batch_solver.py for the legacy schema validator\",\n      \"rejected_reason\": \"The task permits edits to only two DAG nodes, and the official DAG evaluator already checks output schema and execution.\"\n    }\n  ],\n  \"rationale\": \"The official DAG test passed, but the combined verification command exited nonzero when the legacy validator looked for a monolithic solver. Verify the unchanged artifacts across random and channel-extreme slices, then finish with the official DAG evaluator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7aeed2908490f8ce3295696fcb41af13fc45f5ec9a58bc8e32aac5267efda3cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23520.35,
+      "usage_known": true,
+      "prompt_tokens": 32880,
+      "cached_tokens": 12672,
+      "completion_tokens": 862
+    }
+  ]
+}

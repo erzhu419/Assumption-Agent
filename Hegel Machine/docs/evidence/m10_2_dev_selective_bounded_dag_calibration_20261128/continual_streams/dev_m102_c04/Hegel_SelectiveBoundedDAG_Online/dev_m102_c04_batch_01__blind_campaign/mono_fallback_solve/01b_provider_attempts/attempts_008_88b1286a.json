@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88b1286a47664d9e830c1dec0af05552",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:14:24.110017+00:00",
+  "ended_at_utc": "2026-11-28T13:14:51.585432+00:00",
+  "request_sha256": "1c08c8b2b861ebfbdb9f3997b1447a17e992ce81a453cd2ee334e5bc6c7bc687",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55553,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38163,
+    "cached_tokens": 5504,
+    "completion_tokens": 1152
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/d.py | head -29; cat >/tmp/j.py <<'PY'\\nfrom h import *\\nfrom scipy.linalg import qr\\nfrom itertools import combinations_with_replacement as cw\\nbase={'q':q,'z':z,'Cq':C(q),'Cz':C(z),'Dq':D(q),'Dz':D(z),'DCq':D(C(q)),'DCz':D(C(z)),'CDq':C(D(q)),'CDz':C(D(z))}\\nfor k,p in list(base.items()):\\n if k in ('q','z','Cq','Cz','Dq','Dz'):\\n  base['B'+k]=B(p)\\n\\ndef terms(p,i):return np.column_stack([np.prod(p[:,j],axis=1) for j in cw(range(p.shape[1]),i)])\\nV=Y[:52]; U,sv,R=np.linalg.svd(T[:52],full_matrices=False);print('temporal SVD',sv,'basis',R[:4]); print('summary check',Y.mean(0)[[0,-1]],Y.std(0)[[0,-1]])\\nres=[]\\ndef add(n,f):\\n m=metrics(f);res.append((n,m))\\nfor k,p in base.items():\\n g=[terms(p,i) for i in range(1,6)];\\n for i,j in [(1,3),(2,3),(2,4),(1,4),(0,3),(0,4),(0,5),(2,5)]:add((k,i,j),A(np.column_stack(g[i:j])))\\n for l,r in base.items():\\n  if l==k:continue\\n  # Full cross interaction, with within-vector linear/quadratic terms as separate options.\\n  F=(p[:,:,None]*r[:,None,:]).reshape(-1,16)\\n  for extra in [p,r,np.c_[p,r],np.c_[poly(p,2)[:,1:],r],np.c_[p,poly(r,2)[:,1:]]]:add((k,l,'bilin',extra.shape[1]),A(np.c_[extra,F]))\\n  for a in (.22,1.25,2.4):\\n   for lab,h in [('div',p/(1+a*r*r)),('addcos',np.cos(a*(p+r))),('subcos',np.cos(a*(p-r))),('sindiff',np.sin(a*(p-r))),('cosprod',np.cos(a*p*r)),('divsum',p/(1+a*np.sum(r*r,1)[:,None])),('divdot',p/(1+a*np.sum(p*r,1)[:,None]**2)),('divprod',p/(1+a*(p*r)**2))]:\\n    add((k,l,lab,a),A(np.c_[p,r,h]));add((k,l,lab,a,'quadratic'),A(np.c_[poly(p,2)[:,1:],r,h]))\\nfor j in [0,1]:\\n print('TOP',j);print(*[(p,m[:,j].round(4)) for p,m in sorted(res,key=lambda kv:kv[1][1,j])[:16]],sep='\\\\n')\\n# Characterize shared constant-rate dynamics versus input-dependent rates.\\nfor k in range(1,5):\\n def tb(rate):return -np.expm1(-t[:,None]*rate)\\n def fun(rate):\\n  f=tb(rate);return (f@ls(f,T[:52].T)-T[:52].T).ravel()\\n o=least_squares(fun,np.geomspace(.15,2.5,k),bounds=(.0001,12),max_nfev=300);print('rates',o.x,'MAE',np.mean(abs(o.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/j.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine readouts of panel compositions) -> H2 (bilinear or rational interactions and shared temporal modes); the quadratic 52/20 baseline is 0.458 for y and 0.287 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[],\"rationale\":\"Test complete branch interactions and isolate the temporal dynamics from the spatial readout before selecting features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "969f93396d7ec86767eb1a9591917d942a2286ddfa78680d8c0650eea359555b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27474.09,
+      "usage_known": true,
+      "prompt_tokens": 38163,
+      "cached_tokens": 5504,
+      "completion_tokens": 1152
+    }
+  ]
+}

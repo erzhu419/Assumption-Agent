@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "34899ca8198c4b878dbb1e6dcbfbd946",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:18:25.453424+00:00",
+  "ended_at_utc": "2026-11-28T13:18:45.312881+00:00",
+  "request_sha256": "b11af0634c0e42d182f6e49ce73f10af77a53abf8b9201d292cf4e6110179efc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20954,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20877,
+    "cached_tokens": 5504,
+    "completion_tokens": 741
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '31,160p' /tmp/hegel_continual_archive/*solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -12; cat > /tmp/readout_probe.py <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['c']; y=s['train']['y']; panel=s['panel_c']; n=len(y)\\npairs=list(itertools.combinations_with_replacement(range(4),2)); base=np.column_stack((np.ones(n),c)); q=np.array([c[:,i]*c[:,j] for i,j in pairs]).T\\nprint('coord means/ranges',c.mean(0),np.ptp(c,axis=0)); print('terms',pairs)\\ndef fit(X):\\n b=np.linalg.lstsq(X[:52],y[:52],rcond=None)[0]; e=abs(X@b-y); return np.mean(e[52:]),np.mean(e[:52]),b\\nfor name,Q in [('linear',q[:,:0]),('archive',(q[:,2]+q[:,6])[:,None]),('full',q)]: print(name,fit(np.c_[base,Q]))\\nfor k in range(1,5):\\n scores=[]\\n for ix in itertools.combinations(range(10),k):\\n  a,b,coef=fit(np.c_[base,q[:,ix]]); scores.append((a,b,tuple(pairs[i] for i in ix),coef[5:]))\\n print('best',k,*sorted(scores,key=lambda item:item[1])[:4],sep='\\\\n')\\nfor key in ('v1','v2'):\\n u=panel['u']; v=panel[key]; X=np.c_[np.ones(len(u)),u]; coef=np.linalg.lstsq(X,v,rcond=None)[0]; print('panel',key,'affine max err',np.max(abs(X@coef-v)), 'coef',coef)\\nPY\\npython3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived paired-product readout → identify the changed quadratic interaction in calibrated coordinates; prior scalar/trajectory MAE: 0.051827/0.006544.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the archived scalar readout unchanged\",\"rejected_reason\":\"The reported scalar MAE exceeds the 0.038 tolerance; the trajectory fit does not need replacement.\"}],\"rationale\":\"Probe the complete quadratic basis and rank sparse supports by training residual to distinguish a changed interaction from noise without selecting on the scored rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "9c4b5ab4eaaa9b425d02da6c736f062de307cb0660ec4b78951ec336332968a1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19857.67,
+      "usage_known": true,
+      "prompt_tokens": 20877,
+      "cached_tokens": 5504,
+      "completion_tokens": 741
+    }
+  ]
+}

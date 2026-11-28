@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c913e471ddf04b06bdf06432f522fdbe",
+  "call_seq": 1,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__init_decomp_dev_m102_c04_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:11:22.873183+00:00",
+  "ended_at_utc": "2026-11-28T13:12:12.466192+00:00",
+  "request_sha256": "ac0615cfcf02394ba448227416bc363073654a79041368ec620ec83252756d84",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 6018,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14612,
+    "cached_tokens": 0,
+    "completion_tokens": 2112
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The spatial feature and response fit is independent of the temporal basis fit. The sink combines their numerical outputs to select an interaction, predict trajectories, and assemble diagnostics. The split preserves the source formulas, thresholds, and regularization, and computes the shared spatial features only once. The blind statistics show a shift but do not identify which stage caused the failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_02\"], [\"node_01\", \"node_02\"]],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    a = _affine(u)\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        w = _ls(a[mask], v[mask])\\n        e = np.linalg.norm(a @ w - v, axis=1)\\n        new = e <= max(1e-10, 4 * np.median(e))\\n        if new.sum() < 8 or np.array_equal(mask, new):\\n            break\\n        mask = new\\n    d = np.array([_ls(a[mask][:, [0, j+1]], v[mask, j]) for j in range(4)]).T\\n    if np.median(np.linalg.norm((u*d[1]+d[0]-v)[mask], axis=1)) <= 1.35*np.median(e[mask])+1e-10:\\n        return d[0], np.diag(d[1])\\n    return w[0], w[1:]\\n\\n\\ndef _panel_operators(panel):\\n    u = panel['u']\\n    def design(x, k, j):\\n        if j == 1:\\n            h = x / (1 + k * np.abs(x))\\n        else:\\n            h = x*x / (1 + k*x*x)\\n        return np.column_stack((_affine(x), h))\\n    def fit(j, initial):\\n        v = panel[f'v{j}']\\n        def residual(k):\\n            f = design(u, k[0], j)\\n            return (f @ _ls(f, v) - v).ravel()\\n        k = least_squares(residual, [initial], bounds=(0.01, 5.)).x[0]\\n        w = _ls(design(u, k, j), v)\\n        return lambda x: design(x, k, j) @ w\\n    return fit(1, 0.8), fit(2, 0.16)\\n\\n\\ndef _features(p, r):\\n    common = np.column_stack((p, r, np.einsum('ij,ij->i', p, r)))\\n    offdiag = np.column_stack([p[:, i]*r[:, j] for i in range(4)\\n                               for j in range(4) if i != j])\\n    return common, offdiag\\n\\n\\ndef _ridge(f, target, query, penalty):\\n    fm, ym = f.mean(axis=0), target.mean(axis=0)\\n    a = f-fm\\n    w = np.linalg.solve(a.T @ a + penalty*np.eye(f.shape[1]), a.T @ (target-ym))\\n    return (query-fm) @ w + ym\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    offset, matrix = _calibration(study['panel_a'])\\n    q = np.linalg.solve(matrix.T, (np.concatenate((x, xt))-offset).T).T\\n    p_op, r_op = _panel_operators(study['panel_c'])\\n    common, offdiag = _features(p_op(q), r_op(q))\\n    n = len(x)\\n    y = _ridge(common[:n], train['y'], common[n:], 1e-6)\\n    return {'common': common, 'offdiag': offdiag, 'y_hat': y}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _temporal_basis(times, trajectories):\\n    t = np.asarray(times)\\n    def basis(rates):\\n        return -np.expm1(-t[:, None]*rates)\\n    def err(rates):\\n        f = basis(rates)\\n        return (f @ _ls(f, trajectories.T) - trajectories.T).ravel()\\n    opt = least_squares(err, [1.8, .43], bounds=([.8, .03], [8., .79]), max_nfev=80)\\n    return np.linalg.qr(basis(opt.x), mode='reduced')[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    trajectories = study['train']['traj']\\n    basis = _temporal_basis(study['eval_times'], trajectories)\\n    return {'basis': basis, 'scores': trajectories @ basis}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _select_interaction(common, offdiag, target):\\n    a = _affine(common)\\n    residual = target - a @ _ls(a, target)\\n    orthogonal = offdiag - a @ _ls(a, offdiag)\\n    energy = np.sum(orthogonal**2, axis=0)\\n    gain = np.sum((orthogonal.T @ residual)**2, axis=1) / np.maximum(energy, 1e-20)\\n    best = int(np.argmax(gain))\\n    return best if gain[best] > 0.15*np.sum(residual**2) else None\\n\\n\\ndef _ridge(f, target, query, penalty):\\n    fm, ym = f.mean(axis=0), target.mean(axis=0)\\n    a = f-fm\\n    w = np.linalg.solve(a.T @ a + penalty*np.eye(f.shape[1]), a.T @ (target-ym))\\n    return (query-fm) @ w + ym\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    spatial = inputs['node_00']\\n    temporal = inputs['node_01']\\n    common, offdiag, y = spatial['common'], spatial['offdiag'], spatial['y_hat']\\n    basis, scores = temporal['basis'], temporal['scores']\\n    n = len(common) - len(y)\\n    j = _select_interaction(common[:n], offdiag[:n], scores)\\n    f = common if j is None else np.column_stack((common, offdiag[:, j]))\\n    state = _ridge(f[:n], scores, f[n:], 1e-6) @ basis.T\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "9c53b48219e6058e5e80b7e9b1b049bb6ace9fb98378dfd7edb08c4b4e59cbb6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49590.88,
+      "usage_known": true,
+      "prompt_tokens": 14612,
+      "cached_tokens": 0,
+      "completion_tokens": 2112
+    }
+  ]
+}

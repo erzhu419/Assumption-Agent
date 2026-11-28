@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f4e588b22f3d47c5bb8b76271d97f874",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:20:07.048094+00:00",
+  "ended_at_utc": "2026-11-28T13:20:26.728250+00:00",
+  "request_sha256": "0e3c284e8bf951b3b359a5bebe47368dd0acd9039b7420a721acf30919d338ac",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29560,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24192,
+    "cached_tokens": 17792,
+    "completion_tokens": 759
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '43,140p' /tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,importlib.util\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; load=lambda p: __import__('runpy').run_path(p)\\nfor name in ('panel_a','panel_b','panel_c'):\\n p=s[name]; u=p['u']; h=np.c_[np.ones(len(u)),u]; print(name)\\n for k,v in p.items():\\n  if k=='u':continue\\n  w=np.ones(len(u),bool)\\n  for i in range(10):\\n   c=np.linalg.lstsq(h[w],v[w],rcond=None)[0]; r=np.linalg.norm(v-h@c,axis=1)\\n   if k=='v' and name=='panel_a':w=r<min(3,2.5*np.median(r))\\n  print(k,'linear',np.round(c,4),'sorted residual',np.round(np.sort(r),3))\\n  print('against identity',np.round(np.sort(np.linalg.norm(v-u,axis=1)),3))\\ntr=s['train']; inds=np.arange(len(tr['x'])); a=load('/tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py'); f=load('_frozen_nodes/node_00.py')['run_node'];\\nfor i,j in [(inds[:52],inds[52:]),(inds[20:],inds[:20]),(inds[inds%4!=0],inds[inds%4==0]),(inds[inds%4!=1],inds[inds%4==1])]:\\n ss=dict(s,train={k:tr[k][i] for k in ['x','y','traj']},test={'x':tr['x'][j]});\\n for key,o in [('frozen',f({'__input__':ss})),('archive',a['solve_batch'](ss))]:\\n  print(j[:3],key,[(round(float(np.abs(o[k]-tr[t][j]).mean()),6),round(float(np.abs(o[k]-tr[t][j]).max()),6)) for k,t in [('y_hat','y'),('state_pred','traj')]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived sparse and panel readouts -> H2 robustly calibrated response basis; split MAEs for both baselines are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure the frozen branch’s contribution to both errors and distinguish removable panel outliers from smooth calibration structure before selecting a readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d91cc35e6454b5955f3d0039ca298fea7e6a866c16be8ab9dd35377f2afa47c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19678.67,
+      "usage_known": true,
+      "prompt_tokens": 24192,
+      "cached_tokens": 17792,
+      "completion_tokens": 759
+    }
+  ]
+}

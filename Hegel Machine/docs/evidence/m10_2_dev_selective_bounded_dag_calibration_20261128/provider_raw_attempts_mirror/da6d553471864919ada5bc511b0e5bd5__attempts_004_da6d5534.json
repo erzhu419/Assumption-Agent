@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da6d553471864919ada5bc511b0e5bd5",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:28:58.150778+00:00",
+  "ended_at_utc": "2026-11-28T13:29:30.085443+00:00",
+  "request_sha256": "02a29398a592209e68796e6dbb6048d738e1a01cf0ca29fe9c9a3980c462d018",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31086,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25345,
+    "cached_tokens": 12672,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal_probe.py <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\nu,v=[s['panel_a'][z] for z in ('u','v')]; n,d=u.shape\\nA=lambda z:np.column_stack([np.ones(len(z)),z])\\nX=A(u); rng=np.random.default_rng(485)\\nbest=(np.inf,None)\\nfor _ in range(3000):\\n ix=rng.choice(n,5,replace=False); b=np.linalg.lstsq(X[ix],v[ix],rcond=None)[0]; r=np.linalg.norm(v-X@b,axis=1); score=np.median(r)\\n if score<best[0]: best=(score,b)\\nb=best[1]\\nfor k in range(4):\\n r=np.linalg.norm(v-X@b,axis=1); ix=np.argsort(r)[:36]; b=np.linalg.lstsq(X[ix],v[ix],rcond=None)[0]\\nr=np.linalg.norm(v-X@b,axis=1); ix=np.argsort(r)[:36]; print('A affine',b,'sorted residual',np.sort(r));\\nD={'1':np.ones(n)}\\nfor j in range(d):\\n t=u[:,j]; D[f'x{j}']=t\\n for name,w in [('q',t*t),('cube',t**3),('tanh',np.tanh(1.25*t)),('sin',np.sin(1.25*t)),('rat',t/(1+1.25*t*t))]:D[f'{name}{j}']=w\\nfor j,k in itertools.combinations(range(d),2):\\n a,b=u[:,j],u[:,k]; D[f'prod{j}{k}']=a*b\\n for name,w in [('sin+',np.sin(a+b)),('sin-',np.sin(a-b)),('tanh+',np.tanh(a+b)),('tanh-',np.tanh(a-b)),('r',a/(1+b*b)),('R',b/(1+a*a))]: D[f'{name}{j}{k}']=w\\nnames=list(D); T=np.column_stack(list(D.values()))[ix];\\nfor j in range(d):\\n inds=[names.index(k) for k in ['1','x0','x1','x2','x3']]; y=v[ix,j]; print('A target',j,end=' ')\\n for _ in range(5):\\n  Z=T[:,inds]; Q=np.linalg.qr(Z)[0]; W=T-Q@(Q.T@T); r=y-Z@np.linalg.lstsq(Z,y,rcond=None)[0]; c=np.abs(r@W)/np.maximum(np.linalg.norm(W,axis=0),1e-7); c[inds]=0; i=np.argmax(c); inds.append(i); Z=T[:,inds]; b=np.linalg.lstsq(Z,y,rcond=None)[0]; print(names[i],round(b[-1],5),round(np.sqrt(np.mean((y-Z@b)**2)),6),end='; ')\\n print()\\nu,v=[s['panel_b'][z] for z in ('u','v')];\\nfor name,fn in [('tanh',lambda a:np.tanh(a*u)),('sin',lambda a:np.sin(a*u)),('atan',lambda a:np.arctan(a*u)),('rat',lambda a:u/(1+a*u*u)),('sat',lambda a:u/np.sqrt(1+a*u*u)),('cubic',lambda a:u-a*u**3),('exp',lambda a:u*np.exp(-a*u*u))]:\\n for add in [False,True]:\\n  def loss(a,summary=False):\\n   Z=A(fn(a)); Z=np.c_[Z,u] if add else Z; b=np.linalg.lstsq(Z,v,rcond=None)[0]; r=v-Z@b\\n   if summary:return np.sqrt(np.mean(r*r)),np.sqrt(np.mean((r/(1-np.sum(np.linalg.qr(Z)[0]**2,axis=1))[:,None])**2))\\n   return np.mean(r*r)\\n  res=minimize_scalar(loss,bounds=(0.02,5),method='bounded'); print('B',name,add,'scale',res.x,'rms/loo',loss(res.x,True),'at1.25',loss(1.25,True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust cyclic panel-A inversion plus a shared panel-B saturation map -> frozen downstream prediction; the prior solver's worst public CV MAE was 0.156652.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unrestricted nonlinear calibration to all panel rows.\",\n      \"rejected_reason\": \"Panel A has large residuals consistent with contaminated references, and panel B has only 24 rows; testing robust, low-dimensional laws first provides a better basis for extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Separate panel-A contamination from cyclic structure and compare candidate panel-B saturation laws using both fit residuals and leave-one-row-out prediction error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d19eff9f54575e6e3170cd98118d266902d1d7311286238c6d1953d8b48fc87b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31933.59,
+      "usage_known": true,
+      "prompt_tokens": 25345,
+      "cached_tokens": 12672,
+      "completion_tokens": 1319
+    }
+  ]
+}

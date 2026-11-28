@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "91eabe91b6d6499b9cece9cf257829b0",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:19:48.636277+00:00",
+  "ended_at_utc": "2026-11-28T13:20:12.203984+00:00",
+  "request_sha256": "adec9de23a6d8fbde21dc7327bf4849ff7c56fdbdbc5098a145758b10dce7975",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71194,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41734,
+    "cached_tokens": 12672,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -i 's/yh = \\\\.8\\\\*yp\\\\[:4\\\\].mean(axis=0) + \\\\.2\\\\*yp\\\\[4:\\\\].mean(axis=0)/yh = .6*yp[:4].mean(axis=0) + .4*yp[4:].mean(axis=0)/; s/traj = \\\\.80\\\\*tp + \\\\.20\\\\*archive/traj = .35*tp + .65*archive/' /holdout_task/batch_solver.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); scalar=[]; traj=[]; last=[]\\ndef checked(st):\\n o=m.solve_batch(st); y=o['y_hat']; p=o['state_pred']; d=o['diagnostics_vec']; k=len(st['test']['x']); assert y.shape==(k,) and p.shape==(k,len(st['eval_times'])) and d.shape==(4,); assert all(np.isfinite(v).all() for v in (y,p,d)); np.testing.assert_array_equal(d,[y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()]); return y,p\\nchecked(s)\\nfor ix in [np.arange(n)]+[np.random.default_rng(i+177).permutation(n) for i in range(16)]+[np.random.default_rng(i+420).permutation(n) for i in range(8)]:\\n a,b=ix[:52],ix[52:]; ss={**s,'train':{**t,**{k:t[k][a] for k in ('x','y','traj')}},'test':{'x':t['x'][b]}}; y,p=checked(ss); scalar.append(abs(y-t['y'][b]).mean()); e=abs(p-t['traj'][b]); traj.append(e.mean());last.append(e.mean(0).max())\\nfor k,e in [('scalar',scalar),('trajectory',traj),('worst horizon by split',last)]: print(k,'52/20',e[0],'mean',np.mean(e),'worst',max(e),'fresh worst',max(e[-8:]))\\nassert scalar[0]<=.038 and traj[0]<=.038\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: raw-warp-heavy ensemble → H2: more weight on panel-warp predictions; the current blend scores 0.03620 on the required scalar split and 0.06206 on its worst tested split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Equal scalar blend weights\",\n      \"rejected_reason\": \"It improves worst-split MAE but misses the required 52/20 gate at 0.03819.\"\n    }\n  ],\n  \"rationale\": \"Increase the weight of the complementary panel-warp models without crossing the fixed gate, then verify the exact artifact in an isolated Python process, including eight additional splits and the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2d141df09b253bdc05414058921b1b73b11cd0124e16e5d5b9c246dfaf9cafad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23565.61,
+      "usage_known": true,
+      "prompt_tokens": 41734,
+      "cached_tokens": 12672,
+      "completion_tokens": 915
+    }
+  ]
+}

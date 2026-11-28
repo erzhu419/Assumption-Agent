@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed0c7424584f483996f33324e514f1fa",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:22:21.303748+00:00",
+  "ended_at_utc": "2026-11-28T13:22:43.027878+00:00",
+  "request_sha256": "021c2b9dbf22ceb547917ae92eec36d0a9340f9f68f0a8dd4baf980b5a298d0d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40489,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29228,
+    "cached_tokens": 12672,
+    "completion_tokens": 821
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | head -34; cat >/tmp/ratprobe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): from probe import *\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nidx=np.arange(72); splits=[(idx[:52],idx[52:])]+[(np.setdiff1d(idx,k),k) for k in np.array_split(np.random.default_rng(74).permutation(72),4)]\\nfor col in range(3):\\n yy=target[:,col]; rows=[]\\n for name,v in coords.items():\\n  for m in (2,3,4,5):\\n   for dd in (0,1,2):\\n    F=PolynomialFeatures(m).fit_transform(v); Q=PolynomialFeatures(max(dd,1)).fit_transform(v)[:,1:] if dd else v[:,:0]; P=np.c_[F,-yy[:,None]*Q];\\n    for r in (.0001,.003,.03,.3):\\n     sc=np.maximum(np.linalg.norm(P,axis=0),1e-6); R=P/sc; K=R@R.T; es=[]; ds=[]\\n     for i,j in splits:\\n      w=(R[i].T@solve(K[np.ix_(i,i)]+r*np.eye(len(i)),yy[i],assume_a='pos'))/sc; den=1+Q[j]@w[F.shape[1]:]; yh=(F[j]@w[:F.shape[1]])/np.maximum(.2,den); es.append(np.mean(abs(yh-yy[j]))); ds.append(min(den))\\n     rows.append((np.mean(es[1:]),es[0],max(es),name,m,dd,r,min(ds)))\\n print('rat',col,sorted(rows)[:12]); print('gate',sorted(rows,key=lambda v:v[1])[:6])\\nprint('archived direct',end=' ')\\nfrom arc import solve_batch\\nfor i,j in splits:\\n ss=dict(s,train={k:v[i] if k!='summary' else v for k,v in tr.items()},test={'x':x[j]}); out=solve_batch(ss); print([np.mean(abs(out[k]-a[j])) for k,a in [('y_hat',y),('state_pred',t)]],end=' ')\\nprint()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ratprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coordinatewise panel features -> H2 rational multivariate readout with independent temporal validation; archived gate y MAE is 0.060375.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the best coordinatewise warp from the initial screen\",\"rejected_reason\":\"The reported errors remain above the scalar gate and do not establish a stable operator path.\"}],\"rationale\":\"Compare multivariate rational bases against the archived solver on the mandated gate and additional fixed splits, with separate errors for the scalar and temporal modes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "37535e45e20342df3cb363d71ca9111f152c3ba414e9b62f1709206c17ff8562",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21722.85,
+      "usage_known": true,
+      "prompt_tokens": 29228,
+      "cached_tokens": 12672,
+      "completion_tokens": 821
+    }
+  ]
+}

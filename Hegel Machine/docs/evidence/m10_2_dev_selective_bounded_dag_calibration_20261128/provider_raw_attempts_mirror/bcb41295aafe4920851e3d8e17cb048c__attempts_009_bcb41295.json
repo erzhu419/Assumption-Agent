@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcb41295aafe4920851e3d8e17cb048c",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:22:33.283438+00:00",
+  "ended_at_utc": "2026-11-28T13:23:10.177403+00:00",
+  "request_sha256": "1a9205205da916bb39948beec20ca8c3acd7ee367122b886f30d01b9b1d9a754",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63083,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40919,
+    "cached_tokens": 12672,
+    "completion_tokens": 1590
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/mixing.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom adaptive import coords\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; T=s['train']['traj']; Z=coords(s,s['train']['x']); u=s['panel_c']['u']; v=s['panel_c']['v1']; w=s['panel_c']['v2']; n=len(y)\\nF=lambda z:np.c_[np.ones(len(z)),z]\\ndef pf(h,v):return np.linalg.lstsq(h,v,rcond=None)[0]\\nops={}\\nfor j in range(2):\\n for name,init,fun in [('oddrat',[2.],lambda x,p:x/(1+p[0]*x*x)),('rational',[2.,.2],lambda x,p:x/(1+p[0]*x*x+p[1]*x**4)),('root',[2.,.6],lambda x,p:x/(1+p[0]*x*x)**p[1]),('atan',[2.],lambda x,p:np.arctan(x*p[0])),('tanh',[2.],lambda x,p:np.tanh(x*p[0])),('even',[.16,.54],lambda x,p:x+p[1]*x*x/(1+p[0]*x*x)),('gauss',[1.],lambda x,p:x*np.exp(-p[0]*x*x))]:\\n  for lin in [0,1]:\\n   H=lambda x,p:np.c_[F(x),fun(x,p)] if lin else F(fun(x,p)); v0=[v,w][j]; obj=lambda p:(H(u,p)@pf(H(u,p),v0)-v0).ravel(); opt=least_squares(obj,init,bounds=(.0001,12),max_nfev=150); print(j,name,lin,np.std(opt.fun),opt.x,flush=True)\\n   if j==1 and name=='even' and not lin or j==0 and name in ('oddrat','root','atan','rational') and lin:\\n    a=opt.x.copy(); h=lambda x,p,fun=fun,lin=lin:np.c_[F(x),fun(x,p)] if lin else F(fun(x,p)); c=pf(h(u,a),v0); ops[str(j)+name]=lambda x,h=h,a=a,c=c:h(x,a)@c\\nrng=np.random.default_rng(821); folds=[(np.arange(52),np.arange(52,n))];\\nfor _ in range(12):\\n i=rng.permutation(n);folds.append((i[:52],i[52:]))\\ndef calc(K,r):\\n P=[]\\n for i,j in folds: P.append(K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+r*np.eye(len(i)),y[i],assume_a='pos'))\\n return np.array(P)\\ndef score(p):\\n E=abs(p-np.array([y[j] for _,j in folds])).mean(1);return np.mean(E),E[0],max(E)\\nres=[]; pool=[]\\nfor k,z in enumerate(Z):\\n dd=cdist(z,z,'sqeuclidean'); l=z@z.T\\n for name,g in ops.items():\\n  q=g(z); D=cdist(q,q,'sqeuclidean'); ll=q@q.T\\n  for kind in ['sum','warp','features','augment']:\\n   for f in [.08,.3,1,3,10]:\\n    for scale in [.14,.23,.34,.47]:\\n     if kind=='sum': C=1+.4*l+np.exp(-scale*dd)+f*np.exp(-scale*D)\\n     if kind=='warp': C=1+.4*l+np.exp(-scale*(dd+f*D))\\n     if kind=='features': C=1+.4*l+np.exp(-scale*dd)+f*(1+ll)**2\\n     if kind=='augment':\\n      J=np.c_[z,q,np.einsum('ni,nj->nij',z,q).reshape(n,-1)];C=1+.4*l+np.exp(-scale*dd)+f*(J@J.T)\\n     for r in [3e-6,4e-5,.00025]:\\n      p=calc(C,r); res.append((score(p),(k,name,kind,f,scale,r),p))\\n for scale in [.14,.2,.25,.32,.43]:\\n  for r in [3e-6,4e-5,.00025]:\\n   p=calc(1+.4*l+np.exp(-scale*dd),r);res.append((score(p),(k,'base','base',0,scale,r),p))\\nfor elt in sorted(res,key=lambda e:e[0][0])[:12]:print('mean',elt[:2]);\\nfor elt in sorted(res,key=lambda e:e[0][1])[:12]:print('gate',elt[:2]);\\nfor subset in [lambda e:True,lambda e:e[1][1]=='base',lambda e:e[1][1]=='1even',lambda e:e[1][1].startswith('0')]:\\n for k in [12,40,100]:\\n  top=sorted(filter(subset,res),key=lambda e:np.mean(abs(e[2][1:]-np.array([y[j] for _,j in folds[1:]]))))[:k]; print('avg',k,score(np.mean([e[2] for e in top],0)),top[0][1]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixing.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 standalone spatial or algebraic kernels → H2 calibrated coordinates with additive panel operators; the best algebraic candidate reaches 0.04087 on the required scalar split but 0.06242 on its worst tested split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best trigonometric kernel\",\"rejected_reason\":\"It misses the required 0.038 threshold and worsens the worst tested split.\"}],\"rationale\":\"Panel C’s second output has proportional linear and even-term coefficients, suggesting a shared scalar warp. Recover that warp from calibration data and test whether it improves predictions when retained alongside the original coordinates rather than replacing them.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c0d3dd994fc8d0611dcda78128514e88c6da718f2377a3ca6436f8df6fe7d49a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36892.15,
+      "usage_known": true,
+      "prompt_tokens": 40919,
+      "cached_tokens": 12672,
+      "completion_tokens": 1590
+    }
+  ]
+}

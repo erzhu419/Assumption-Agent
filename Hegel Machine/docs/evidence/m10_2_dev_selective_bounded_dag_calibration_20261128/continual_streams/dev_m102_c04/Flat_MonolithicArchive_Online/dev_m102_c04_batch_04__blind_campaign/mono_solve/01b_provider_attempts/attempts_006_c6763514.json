@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6763514b29f43fe931080e5779c000b",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:27:01.876934+00:00",
+  "ended_at_utc": "2026-11-28T13:27:19.702638+00:00",
+  "request_sha256": "e4cb30ccb27ea5ac6522c165dd39946910af56d6ab956afd8d2c7fa0f3408f9e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44386,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32604,
+    "cached_tokens": 12672,
+    "completion_tokens": 630
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/sparse.py <<'PY'\\nexec(open('/tmp/graph.py').read().split('rows=[]')[0])\\nfrom itertools import combinations\\nP,R=F1(q),F2(q); D=np.einsum('ni,nj->nij',P,R).reshape(-1,16)\\nG=aff(np.c_[P,R]); F=np.c_[G,D]; print('full weights: main then products'); print(ls(F[:52],Z[:52],rcond=None)[0]);\\nK=np.c_[D[:,::5].sum(1),D]; ids=['dot']+[(i,j) for i in range(4) for j in range(4)]\\nfor j in range(3):\\n for mode,main in [('both',G),('P',aff(P)),('R',aff(R))]:\\n  for size in range(4):\\n   def calc(idx):\\n    f=np.c_[main,K[:,idx]]; w=ls(f[:52],Z[:52,j],rcond=None)[0]; e=f@w-Z[:,j]; return np.sqrt(np.mean(e[:52]**2)),np.mean(abs(e[52:])),w\\n   best=min(combinations(range(17),size),key=lambda idx:calc(idx)[0]); out=calc(best); print(j,mode,size,[ids[i] for i in best],np.round(out[:2],6),np.round(out[2],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse.py | tail -67\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full bilinear readouts → H2 sparse, mode-specific interactions; full-model 52/20 MAE is 0.00533 for y and approximately 0.005 for measured trajectories, pending direct scoring.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Include panel B in the forward path\",\"rejected_reason\":\"The tested panel B compositions did not match the inverse-calibrated C1/C2 graph.\"}],\"rationale\":\"The full interaction model comfortably passes for y. Select sparse interaction terms on the first 52 rows to reduce extrapolation error and distinguish the two trajectory modes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3f533e5271093b1d4efc6116f3889efd04f168d8c6d20d371d9071a8ea9dd296",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17824.74,
+      "usage_known": true,
+      "prompt_tokens": 32604,
+      "cached_tokens": 12672,
+      "completion_tokens": 630
+    }
+  ]
+}

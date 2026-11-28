@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e45e9e851df4b11af3b1b00d3022ee0",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_03__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:19:02.747203+00:00",
+  "ended_at_utc": "2026-11-28T13:19:27.843691+00:00",
+  "request_sha256": "b3d82417a517789a0d3a741697e41fd243a687e633c719a6647a30cb488552d2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20983,
+    "cached_tokens": 12672,
+    "completion_tokens": 998
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; sed -n '85,190p' /holdout_task/test_dag_candidate.py; cat > /tmp/scalar_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00,node_02\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef fold(tr,va):\\n    t=s['train']; sub=dict(s,train={**t,**{k:t[k][tr] for k in ['x','y','traj']}},test={'x':t['x'][va]})\\n    p=node_00.run_node({'__input__':sub}); state=node_02.run_node({'node_00':p})['state_pred']; return p,state,t['y'][tr],t['y'][va],t['traj'][va],t['x'][tr],t['x'][va]\\ndef expand(z,d):\\n    return np.column_stack([np.prod(z[:,i],axis=1) for i in combinations_with_replacement(range(z.shape[1]),d)])\\nif __name__=='__main__':\\n for tr,va in [(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20))]:\\n    p,state,y,q,t,x,xq=fold(tr,va); m=p['modes']; a,b=p['scores'],state@m.T; sy,qy=p['sy'],p['qy']; st,qt=p['st'],p['qt']; print('trajectory mae',np.abs(t-state).mean(axis=0));\\n    for name,f,g in [('sy',sy,qy),('x',x,xq),('st',st,qt),('state',a,b),('sy+state',np.c_[sy,a],np.c_[qy,b]),('sy+st',np.c_[sy,st],np.c_[qy,qt]),('sy+state+st',np.c_[sy,a,st],np.c_[qy,b,qt]),('sy+state+state2',np.c_[sy,a,expand(a,2)],np.c_[qy,b,expand(b,2)]),('sy+state quad',np.c_[sy,a,expand(np.c_[sy,a],2)],np.c_[qy,b,expand(np.c_[qy,b],2)]),('sy degree 2',np.c_[sy,expand(sy,2)],np.c_[qy,expand(qy,2)]),('x degree 3',np.c_[x,expand(x,2),expand(x,3)],np.c_[xq,expand(xq,2),expand(xq,3)])]:\\n      f=np.c_[np.ones(len(f)),f]; g=np.c_[np.ones(len(g)),g]; w=np.linalg.lstsq(f,y,rcond=None)[0]; print(name,'train/cv/max',*[round(v,6) for v in (np.abs(y-f@w).mean(),np.abs(q-g@w).mean(),np.abs(q-g@w).max())], 'coef',np.round(w,3) if len(w)<15 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (scalar-panel features alone) -> H2 (a low-order trajectory-conditioned readout); held-out scalar error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare additive, quadratic, and cross-branch readouts on disjoint train/test splits, using only the frozen trajectory prediction for validation rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "089956b66b3b8aaeffc7f1695cc92968dda47018b88dd699fcd0d7f5049d4bb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25095.03,
+      "usage_known": true,
+      "prompt_tokens": 20983,
+      "cached_tokens": 12672,
+      "completion_tokens": 998
+    }
+  ]
+}

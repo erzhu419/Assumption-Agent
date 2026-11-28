@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e9f6f54dd1141f6896003c10974f95f",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:21:25.290303+00:00",
+  "ended_at_utc": "2026-11-28T13:21:50.553857+00:00",
+  "request_sha256": "28dbd1677384ddcc8dded67e6d90de062ed323751b7573224fa4bd0d003842b6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55325,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32277,
+    "cached_tokens": 12672,
+    "completion_tokens": 1026
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nfrom pathlib import Path\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\ndef load(i):\\n    name = f'node_{i:02}'\\n    path = (root if i == 1 else root / '_frozen_nodes') / (name + '.py')\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module.run_node\\n\\nn0, n1, n2, n3 = [load(i) for i in range(4)]\\nstudy = pickle.loads((root / 'public_batch.pkl').read_bytes())[0]['study']\\ntrain = study['train']\\nids = np.arange(len(train['x']))\\nslices = [('public_tail', ids[-20:])]\\nslices.extend((f'random_{i}', te) for i, te in enumerate(np.array_split(np.random.default_rng(117).permutation(ids), 6)))\\nfor j in range(train['traj'].shape[1]):\\n    assert np.isfinite(train['traj'][:, j]).all()\\nworst = np.zeros(2)\\nworst_time = 0.\\nfor name, te in slices:\\n    tr = np.setdiff1d(ids, te)\\n    s = dict(study, train={k: train[k][tr] for k in ('x','y','traj')}, test={'x': train['x'][te]})\\n    p = n1({'__input__': s, 'node_00': n0({'__input__': s})})\\n    out = n3({'node_01': p, 'node_02': n2({'node_01': p})})\\n    yr = abs(out['y_hat'] - train['y'][te]); dr = abs(out['state_pred'] - train['traj'][te])\\n    metrics = np.array([yr.mean(), dr.mean()]); worst = np.maximum(worst, metrics)\\n    worst_time = max(worst_time, dr.mean(axis=0).max())\\n    print(name, 'readout_mae', round(metrics[0], 6), 'trajectory_mae', round(metrics[1], 6), 'worst_time_mae', round(dr.mean(axis=0).max(), 6))\\n    assert metrics.shape == (2,) and np.all(metrics <= .038)\\nprint('worst_fold_maes', worst.round(6), 'worst_fold_time_mae', round(worst_time, 6))\\nassert worst_time <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived affine–bilinear readout -> H2 mixed linear–arctangent readout retaining the bilinear term; official public MAEs are 0.008491 for readout and 0.006544 for trajectory, and the worst readout probe fold MAE is 0.019323.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official holdout result alone\",\n      \"rejected_reason\": \"Prior probes tested the readout and affine projection separately; one isolated run can verify both outputs through the exact final DAG on every fold and at each trajectory time.\"\n    }\n  ],\n  \"rationale\": \"The saved candidate clears both official thresholds without changing the trajectory projection. Stress-test the unchanged artifact end to end before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "27487e8c8caa1afa96411b9a314feb5118c5f3ecdf78c004977530b06b97f824",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25262.21,
+      "usage_known": true,
+      "prompt_tokens": 32277,
+      "cached_tokens": 12672,
+      "completion_tokens": 1026
+    }
+  ]
+}

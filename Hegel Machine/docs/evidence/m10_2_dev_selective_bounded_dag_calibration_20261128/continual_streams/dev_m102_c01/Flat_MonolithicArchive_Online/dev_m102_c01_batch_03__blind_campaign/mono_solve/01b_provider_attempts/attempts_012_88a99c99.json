@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88a99c9995974f52bdfdacf820058b9b",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:28:31.371193+00:00",
+  "ended_at_utc": "2026-11-28T13:29:02.994226+00:00",
+  "request_sha256": "b61c42c87c93bb2a0061cde77e00224fcea54d6bb4ce4a7ec367337455c85e83",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74552,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44295,
+    "cached_tokens": 12672,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/finalprobe.py <<'PY'\\nimport sys,io,contextlib\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch,_fit\\nwith contextlib.redirect_stdout(io.StringIO()): from pathprobe import *\\nfrom scipy.linalg import solve\\nrows=[]\\nbase=[]\\nfor i,j in splits:\\n ss=dict(s,train={k:v[i] if k!='summary' else v for k,v in s['train'].items()},test={'x':x[j]}); base.append(solve_batch(ss)['y_hat'])\\nfor nm in ['z','Bz','Iz']:\\n v=D[nm]; eye=np.eye(4); a,b=np.triu_indices(4,1)\\n for sign in (1,-1,0):\\n  f=v@np.c_[eye,(eye[:,a]+sign*eye[:,b])/np.sqrt(2)] if sign else v\\n  for scale in [0.9,1.2,1.5,1.8,2.1,2.4]:\\n   r=f*scale\\n   for key in ('spectral','tanh','atan'):\\n    F=np.c_[np.sin(r),np.cos(r)] if key=='spectral' else (np.tanh(r) if key=='tanh' else np.arctan(r)); U=F@F.T/f.shape[1]\\n    for order in (1,2,3):\\n     for h in (4,10):\\n      E=cdist(D['z'],D['z'],'sqeuclidean'); Z=D['z']; K=(1+U)**order+np.exp(-E/h)+1+Z@Z.T/4\\n      for noise in (1e-6,.0001,.001):\\n       P=[]; L=[]\\n       for i,j in splits:\\n        ids=np.r_[i,j]; p,e=_fit(K[np.ix_(ids,ids)],len(i),y[i],noise); P.append(p); L.append(np.mean(abs(e)))\\n       rows.append(((nm,sign,scale,key,order,h,noise),P,L))\\ndef err(p): return np.array([np.mean(abs(a-y[j])) for a,(_,j) in zip(p,splits)])\\nprint('base',err(base)); out=[]\\nfor par,P,_ in rows:\\n for alpha in (.5,.65,.8,1.):\\n  es=err([alpha*p+(1-alpha)*b for p,b in zip(P,base)]); out.append((es,par,alpha))\\nfor e,pa,a in sorted([r for r in out if r[0][0]<=.038],key=lambda r:r[0].max()+.3*r[0].mean())[:16]:print('single',np.round(e,5),pa,a)\\nfor nm,sign,key in [('Iz',1,'spectral'),('Iz',-1,'tanh'),('Iz',-1,'atan'),('z',1,'spectral')]:\\n cand=[(P,L) for (n,s,g,k,o,h,r),P,L in rows if n==nm and s==sign and k==key and ((key=='spectral' and 1.5<=g<=2.1 and o<=2) or (key!='spectral' and 1.2<=g<=1.5 and o>=2)) and r<=.0001];\\n for a in (0,.2,.4):\\n  P=[(1-a)*np.average(np.array([p[i] for p,l in cand]),axis=0,weights=np.exp(-np.array([l[i] for _,l in cand])/.01))+a*base[i] for i in range(5)]; print('family',nm,sign,key,a,err(P));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/finalprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic kernel ensemble → H2 structured projection kernels; the saved solver has scalar 52/20 MAE 0.04598, while a spectral candidate reaches 0.03447 on that split and 0.05393 worst across five splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the lowest 52/20 MAE candidate immediately\",\"rejected_reason\":\"Its other validation splits are materially worse; compare gate-passing blends for worst-split robustness first.\"}],\"rationale\":\"Compare the nearby structured kernels and baseline blends against both the required scalar threshold and the additional validation splits before replacing the saved scalar predictor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "043b30e7500f6078149aa45897d37586b23f9ae587c9b11b29bff7fbff1fce15",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31621.84,
+      "usage_known": true,
+      "prompt_tokens": 44295,
+      "cached_tokens": 12672,
+      "completion_tokens": 1202
+    }
+  ]
+}

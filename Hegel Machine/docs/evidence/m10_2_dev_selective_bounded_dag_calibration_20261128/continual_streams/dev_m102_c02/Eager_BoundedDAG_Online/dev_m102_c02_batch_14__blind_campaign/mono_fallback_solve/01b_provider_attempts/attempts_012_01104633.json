@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "011046337099465ca7909f1e7966bfb9",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_14__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:38:31.898711+00:00",
+  "ended_at_utc": "2026-11-28T14:38:58.690756+00:00",
+  "request_sha256": "8a0675d6fb6503d4de6dc0d37fd90dc0b91c14e7eeb1675e6b7952cdfff1db93",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44964,
+    "cached_tokens": 12672,
+    "completion_tokens": 1057
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('import numpy as np','import numpy as np\\\\nfrom scipy.optimize import least_squares')\\ns=s.replace('def solve_batch(study):','''def _scalar(a, b, y):\\n    n=len(y)\\n    scale=np.maximum(b[:n].std(axis=0), 1e-8)\\n    b=b/scale\\n    ab=a[:n]\\n    rng=np.random.default_rng(1)\\n    starts=np.r_[np.zeros((1,4)),np.eye(4),rng.normal(0,.5,(8,4))]\\n    predictions=[]\\n    for link in (np.sin,np.tanh):\\n        def design(p, q, base):\\n            return np.column_stack((base,link(p[0]+q@p[1:])))\\n        def residual(p):\\n            d=design(p,b[:n],ab)\\n            return np.r_[d@_ls(d,y)-y,.008*p]\\n        options=[least_squares(residual,np.r_[.1,start],max_nfev=120) for start in starts]\\n        fit=min(options,key=lambda opt:opt.cost)\\n        d=design(fit.x,b,a)\\n        predictions.append(d[n:]@_ls(d[:n],y))\\n    return np.mean(predictions,axis=0)\\n\\n\\ndef solve_batch(study):''').replace('_,_,a=_build(study,x)\\\\n    y_hat=a[n:]@_ls(a[:n],train[\\\\'y\\\\'])','_,b,a=_build(study,x)\\\\n    y_hat=_scalar(a,b,train[\\\\'y\\\\'])')\\nopen(p,'w').write(s)\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); solve=m['solve_batch']; s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; rng=np.random.default_rng(42)\\nfor name,order in [('official',np.arange(72)),('random1',rng.permutation(72)),('random2',rng.permutation(72)),('random3',rng.permutation(72)),('high-radius',np.argsort(np.linalg.norm(t['x'],axis=1)))]:\\n i,j=order[:52],order[52:]; p=solve({**s,'train':{k:t[k][i] for k in ['x','y','traj']},'test':{'x':t['x'][j]}}); e=abs(p['y_hat']-t['y'][j]); f=abs(p['state_pred']-t['traj'][j]); print(name,'MAE',e.mean(),f.mean(),'max horizon MAE',f.mean(0).max(),flush=True)\\n if name=='official': assert max(e.mean(),f.mean())<=.038\\np=solve(s); q=p['state_pred'][:,-1]; y=p['y_hat']; np.testing.assert_allclose(p['diagnostics_vec'],[y.mean(),y.std(),q.mean(),q.std()]); assert all(np.isfinite(v).all() for v in p.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear scalar readout → H2 additive nonlinear ridge term; single-link 52/20 scalar MAE is 0.0242, and the interaction-based trajectory MAE is 0.0105 before final verification.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t11\"]},\"considered_alternatives\":[{\"option\":\"Sparse expanded polynomial scalar readout\",\"rejected_reason\":\"Its best observed 52/20 MAE was 0.0314, versus 0.0242 for the additive sine term.\"}],\"rationale\":\"Retain calibrated cross-stage products for trajectory prediction and average the two similarly validated scalar links. Verify the exact artifact on the prescribed split, random splits, and a high-radius extrapolation slice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "cd45cd5caad8498e90262f8b6476267a37c808dbb1729df7fb572b7f45706fcf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26790.8,
+      "usage_known": true,
+      "prompt_tokens": 44964,
+      "cached_tokens": 12672,
+      "completion_tokens": 1057
+    }
+  ]
+}

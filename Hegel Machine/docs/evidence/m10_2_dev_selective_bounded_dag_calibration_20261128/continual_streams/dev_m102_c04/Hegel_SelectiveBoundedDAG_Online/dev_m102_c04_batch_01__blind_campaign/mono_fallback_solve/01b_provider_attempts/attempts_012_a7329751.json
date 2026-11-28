@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a73297511e6a48a2a3a10144ed165af0",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:22.080357+00:00",
+  "ended_at_utc": "2026-11-28T13:17:53.030542+00:00",
+  "request_sha256": "4c1c2efeec57ab7aed72790a65a4499f45fbe371f3ee59e9512d5e1397d060d2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77650,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44993,
+    "cached_tokens": 12672,
+    "completion_tokens": 1273
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ridgeprobe.py <<'PY'\\nfrom h import *\\nfrom scipy.optimize import least_squares\\nrng=np.random.default_rng(301)\\nR=np.linalg.svd(T[:n],full_matrices=False)[2][:3]; yy=np.c_[y,T@R.T]; sd=yy[:n].std(0); V=yy[:n]/sd; V[:,2:]*=.58; sd[2:]/=.58\\nstuff={'q':q,'z':z,'C':C(q),'D':D(q),'CB':C(z),'DB':D(z),'qCD':np.c_[q,C(q),D(q)],'CD':np.c_[C(q),D(q)],'CBD':np.c_[C(z),D(z)]}\\ndef report(f):\\n U,S,W=np.linalg.svd(f[:n],full_matrices=False); m=S>1e-8*S[0]; U,S,W=U[:,m],S[m],W[m]; E=U@(U.T@V)-V; H=f[n:]@(W.T@((U.T@V)/S[:,None])); L=E/(1-(U*U).sum(1))[:,None]*sd; H=H*sd-yy[n:];return np.array([np.abs(L[:,0]).mean(),np.abs(L[:,1:]@R).mean(),np.abs(H[:,0]).mean(),np.abs(H[:,1:]@R).mean()])\\nresults=[]\\nfor key,p in stuff.items():\\n p=(p-p[:n].mean(0))/p[:n].std(0); dim=p.shape[1]\\n for basekey,f in [('lin',A(q)),('quad',poly(q,2)),('pan',A(np.c_[q,C(q),D(q)]))]:\\n  if dim>4 and basekey=='quad':continue\\n  uf,sf,wf=np.linalg.svd(f[:n],full_matrices=False); uf=uf[:,sf>1e-8*sf[0]]; f=f@wf[sf>1e-8*sf[0]].T\\n  def resid(v):return v-uf@(uf.T@v)\\n  W=resid(V)\\n  for act in ('cos','tanh','rat','gauss'):\\n   def fun(a,p0):\\n    h=p0@a[:,:dim].T+a[:,dim];\\n    if act=='cos':return np.cos(h)\\n    if act=='tanh':return np.tanh(h)\\n    if act=='rat':return 1/(1+h*h)\\n    return np.exp(-h*h)\\n   def opt(a):\\n    h=resid(fun(a.reshape(-1,dim+1),p[:n])); c=ls(h,W);return (h@c-W).ravel()\\n   best=None\\n   for _ in range(6):\\n    a=rng.normal(size=(2,dim+1))*.8\\n    o=least_squares(opt,a.ravel(),max_nfev=85,bounds=(-7,7)); e=np.linalg.norm(o.fun)\\n    if best is None or e<best[0]:best=(e,o.x.reshape(2,-1))\\n   a=best[1]; F=np.c_[f,fun(a,p)]; m=report(F); results.append((best[0],key,basekey,act,m,a));\\nfor e,k,b0,a,m,v in sorted(results,key=lambda o:o[0])[:16]:print(round(e,4),k,b0,a,m,np.round(v,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridgeprobe.py; sed -e \\\"s/w=np.exp(v\\\\[:k\\\\]); w=/w=np.exp(v[:k]); w=np.repeat(w,p.shape[1]) if mode=='single' else w; w=/\\\" /tmp/m.py >/tmp/m2.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/m2.py | grep ' val ' | head -45\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (calibrated kernel interpolation) -> H2 (learn shared nonlinear projections and compare anisotropic kernels); current 52/20 MAEs are 0.1970 for y and 0.1666 for trajectories, with worst horizon MAE 0.2154.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether a small number of shared projections explains the scalar and temporal modes before replacing the verified fallback. Fit projections on the first 52 rows only.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "27f45893522472b3e608f8078a566a1efc2c7cba64bbd2683fb390631ec1dcc7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30947.3,
+      "usage_known": true,
+      "prompt_tokens": 44993,
+      "cached_tokens": 12672,
+      "completion_tokens": 1273
+    }
+  ]
+}

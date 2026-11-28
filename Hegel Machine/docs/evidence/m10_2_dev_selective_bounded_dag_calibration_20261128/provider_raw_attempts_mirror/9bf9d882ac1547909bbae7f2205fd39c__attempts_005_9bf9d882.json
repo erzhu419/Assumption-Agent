@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9bf9d882ac1547909bbae7f2205fd39c",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:30:40.131262+00:00",
+  "ended_at_utc": "2026-11-28T14:31:10.373453+00:00",
+  "request_sha256": "355928398670c3327dd0b170fdfe5df648841f7d9ff4f5d15b47cc5a0a6e8a53",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37249,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27735,
+    "cached_tokens": 12672,
+    "completion_tokens": 1198
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '1,73p' /tmp/hegel_continual_archive/dev_m102_c02_batch_10_solver.py; sed -n '1,62p' /tmp/hegel_continual_archive/dev_m102_c02_batch_12_solver.py; cat >/tmp/probe15.py <<'PY'\\nimport numpy as np,pickle,glob,importlib.util,warnings\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=52\\ntr=s['train']; yc=tr['y'][n:]; tc=tr['traj'][n:]; sc={**s,'train':{k:v[:n] if k!='summary' else v for k,v in tr.items()},'test':{'x':tr['x'][n:]}}\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef fit(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\nfor file in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  with warnings.catch_warnings():\\n   warnings.simplefilter('ignore'); spec=importlib.util.spec_from_file_location('m',file); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); o=m.solve_batch(sc)\\n  print(file.split('/')[-1],np.mean(abs(yc-o['y_hat'])),np.mean(abs(tc-o['state_pred'])),flush=True)\\n except Exception as e:print(type(e).__name__,str(e),flush=True)\\nfor pan,keys in [('panel_b',['v']),('panel_c',['v1','v2'])]:\\n for key in keys:\\n  u,v=s[pan]['u'],s[pan][key]; out=[]\\n  for name,f,p,lo,hi in [('lin',lambda x,p:x,[1],[0],[2]),('tanh',lambda x,p:np.tanh(p[0]*x+p[1]),[1,0],[.01,-4],[8,4]),('cos',lambda x,p:np.cos(p[0]*x+p[1]),[2.2,0],[.1,-4],[6,4]),('soft',lambda x,p:np.logaddexp(0,p[0]*x+p[1]),[2.2,0],[.05,-5],[8,5]),('threshold',lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1],[.3,1.5],[0,.2],[.85,5]),('rat',lambda x,p:x/(1+p[0]*abs(x)**p[1]),[.5,2],[0,.2],[8,6]),('atan',lambda x,p:x+p[0]*np.arctan(p[1]*x),[.3,2],[0,.05],[3,8])]:\\n   def err(p):\\n    a=aff(f(u,p));return (a@fit(a,v)-v).ravel()\\n   for pp in ([p,[4,0],[1,0]] if name=='cos' else [p]):\\n    o=least_squares(err,pp);out.append((np.std(o.fun),name,o.x))\\n  print(pan,key,sorted(out,key=lambda q:q[0])[:8])\\nt=s['eval_times']; Y=tr['traj'][:n]; exp=lambda r:-np.expm1(-r*t)\\nfor label,b,p in [('linear+exp',lambda p:np.array([t,exp(p[0])]),[1.5]),('two exp',lambda p:np.array([exp(p[0]),exp(p[1])]),[.4,1.5]),('exp two + constant',lambda p:np.array([np.ones_like(t),exp(p[0]),exp(p[1])]),[.4,1.5])]:\\n def er(p):\\n  F=b(p);return (F.T@fit(F.T,Y.T)-Y.T).ravel()\\n o=least_squares(er,p,bounds=(.001,15)); print(label,o.x,np.std(o.fun))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 rank-two temporal structure -> H2 shared relaxation and nonlinear panel operators; prior 52/20 MAEs were 0.685078 for y and 0.578427 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each trajectory horizon separately\",\"rejected_reason\":\"The first two singular values are 16.01 and 2.07, while the third is only 0.048, so a shared temporal model is worth testing first.\"}],\"rationale\":\"Measure direct archive transfer, identify each auxiliary panel’s transfer function independently, and test whether two shared relaxation modes explain the trajectories to measurement precision.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "38936fed1a8f5c12522fb20565ed45fef53ffde34178767d83df24220f767410",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30240.95,
+      "usage_known": true,
+      "prompt_tokens": 27735,
+      "cached_tokens": 12672,
+      "completion_tokens": 1198
+    }
+  ]
+}

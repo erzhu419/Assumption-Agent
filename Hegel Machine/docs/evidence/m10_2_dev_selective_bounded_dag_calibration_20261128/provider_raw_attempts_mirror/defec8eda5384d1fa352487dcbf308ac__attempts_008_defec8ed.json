@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "defec8eda5384d1fa352487dcbf308ac",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:43:07.194183+00:00",
+  "ended_at_utc": "2026-11-28T13:44:07.192245+00:00",
+  "request_sha256": "a46e7f8fc37011dfb7866016c5f5c2851896229c455c9603120f18f5247e76d3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48343,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33013,
+    "cached_tokens": 0,
+    "completion_tokens": 1626
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/search06.py <<'PY'\\nfrom graph06 import *\\nimport sys\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nfrom dev_m102_c02_batch_04_solver import _calibration\\nx=np.r_[s['train']['x'],s['test']['x']]; z=_calibration(s['panel_a'],x)\\nbp=s['panel_b'];cp=s['panel_c'];B=op(**bp,fn=soft,p=[.35,1.5],lim=([0,.1],[.8,8]));C=op(cp['u'],cp['v1'],power,[.9,1,1.25],([0,.1,.1],[8,8,8]));\\nfor fn,p,lo,hi in [(lambda x,p:x+p[0]*x*x,[.45],[-2],[2]),(lambda x,p:x+p[0]*x*x/(1+p[1]*x*x),[.45,.1],[-2,0],[2,8]),(lambda x,p:x+p[0]*x*x+p[1]*x**3,[.45,0],[-2,-2],[2,2]),(lambda x,p:(x+p[0]*x*x)/(1+p[1]*x*x),[.45,.1],[-2,0],[2,8])]:\\n D=op(cp['u'],cp['v2'],fn,p,(lo,hi))\\nY=np.c_[s['train']['y'],s['train']['traj']];print('t',s['eval_times'],'Y corr',np.round(np.corrcoef(Y.T)[0],4),'y range',Y[:,0].min(),Y[:,0].max());\\nprint('B',fit(af(soft(bp['u'],[.35,1.5])),bp['v'])); print('C',fit(af(power(cp['u'],[.912,.966,1.276])),cp['v1']));\\nb=B(z);c=C(b);d=D(b);q=C(z);r=D(z);a=soft(z,[.35,1.5]);\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nres=[]\\ndef sc(n,H,typ='lin'):\\n if typ=='lin':\\n  k=H[:52]; m=k.mean(0); sd=k.std(0)+1e-9; U=af((H-m)/sd); P=U[52:72]@fit(U[:52],Y[:52]); e=np.mean(abs(P-Y[52:]),axis=0);res.append((e[0],e[1:].mean(),n,typ));return\\n K=H[:52];sd=K.std(0)+1e-6; ds=cdist(H[:72]/sd,H[:52]/sd,'sqeuclidean')/H.shape[1];\\n for l in [.2,.4,.8,1.6,3.2,6.4]:\\n  E=np.exp(-ds/l); U=np.sqrt(ds)/l; F=(1+U+U*U/3)*np.exp(-U)\\n  for name,J in [('rbf',E),('mat',F)]:\\n   for reg in [1e-6,.0001,.003,.03]:\\n    m=Y[:52].mean(0);P=J[52:]@solve(J[:52]+reg*np.eye(52),Y[:52]-m,assume_a='pos')+m;e=np.mean(abs(P-Y[52:]),axis=0);res.append((e[0],e[1:].mean(),n,(name,l,reg)))\\nfor n,h in dict(x=x,z=z,a=a,b=b,c=c,d=d,q=q,r=r,ab=np.c_[a,b],bc=np.c_[b,c],bd=np.c_[b,d],cd=np.c_[c,d],bcd=np.c_[b,c,d],bq=np.c_[b,q],br=np.c_[b,r],zc=np.c_[z,c],za=np.c_[z,a],abc=np.c_[a,b,c]).items():\\n sc(n,h,'kernel');sc(n,h)\\n for j in [0,1,2,3]:\\n  if h.shape[1]!=4:continue\\n  p=np.roll(h,j,axis=1);o=h*p;sc(n+'pair'+str(j),np.c_[h,o]);sc(n+'triple'+str(j),np.c_[h,o,o*np.roll(p,1,axis=1)])\\n  sc(n+'quot'+str(j),np.c_[h,h/(1+.22*p*p),h*p/(1+.22*p*p)])\\nfor th in [0,.1,.22,.3,.35,.4,.45,.5,.6,.7]:\\n for pp in [1,1.25,1.5,2,3]:\\n  h=soft(z,[th,pp]);sc(f'warp {th} {pp}',h,'kernel');sc(f'warp {th} {pp}',h);sc(f'warpquad {th} {pp}',terms(h,2)[0]);\\nprint(*sorted(res,key=lambda p:p[0]+p[1])[:24],sep='\\\\n');print('linear',*sorted([r for r in res if r[-1]=='lin'],key=lambda p:p[0]+p[1])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: retain the identified cyclic calibration and test missing nonlinear response terms after panel B; best current 52/20 MAE is 0.1501 scalar and 0.0884 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Use an unconstrained higher-degree readout\",\"rejected_reason\":\"The cubic fits already extrapolate poorly on the held-out measurements.\"}],\"rationale\":\"The cyclic calibration recovers 45 of 48 rows to below 0.00032, and B-based features improve both outputs. Compare compact nonlinear terms and regularized smooth models to locate what the current response graph is missing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f699b28b80fbfb63f051c2082f307f1c17ed79d1c1b8e52ef93dcfd65f2039f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 59996.86,
+      "usage_known": true,
+      "prompt_tokens": 33013,
+      "cached_tokens": 0,
+      "completion_tokens": 1626
+    }
+  ]
+}

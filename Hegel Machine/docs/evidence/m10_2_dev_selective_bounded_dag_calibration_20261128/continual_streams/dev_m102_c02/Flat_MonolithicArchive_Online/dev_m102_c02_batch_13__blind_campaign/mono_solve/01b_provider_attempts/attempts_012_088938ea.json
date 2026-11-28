@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "088938ea5a9e4c2692fb2929f716e691",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:16:41.499648+00:00",
+  "ended_at_utc": "2026-11-28T14:17:31.682168+00:00",
+  "request_sha256": "9c31e8673eaf9b2389eab4ef5fdda34c3690b7700ef8bb6854550dd1bd27183c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64397,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38782,
+    "cached_tokens": 12672,
+    "completion_tokens": 2117
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/scalar_search.py <<'PY'\\nfrom graph import *\\nimport itertools as it,pickle\\nfrom scipy.linalg import qr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; f,iv,op,c,d=maps(s); z=iv(t['x']); b=op(z); u=np.cos(2.6*z); H=aff(b); n=52; q=np.linalg.qr(H[:n])[0]; r=y[:n]-q@(q.T@y[:n]); pairs=list(it.combinations(range(4),2)); cols=[]; names=[]\\ndef add(name,w):\\n if np.ndim(w)==1 and np.isfinite(w).all():names.append(name);cols.append(w)\\nfor k,x in [('b',b),('u',u),('c',c(b)),('d',d(b))]:\\n base=[(f'{k}[:,{i}]',x[:,i]) for i in range(4)]; sums=base.copy(); prods=[]\\n for i,j in pairs:\\n  a,A=base[i];h,B=base[j];prods.append((f'({a}*{h})',A*B));\\n  for sign in (1,-1):sums.append((f'({a}+({sign})*{h})',A+sign*B))\\n prods+= [(f'({k}[:,{i}]*{k}[:,{j}]*{k}[:,{l}])',x[:,i]*x[:,j]*x[:,l]) for i,j,l in it.combinations_with_replacement(range(4),3)]\\n for i,j,l,m in ((0,1,2,3),(0,2,1,3),(0,3,1,2)):\\n  for sign in (-1,1):prods.append((f'({k}[:,{i}]*{k}[:,{j}]+({sign})*{k}[:,{l}]*{k}[:,{m}])',x[:,i]*x[:,j]+sign*x[:,l]*x[:,m]))\\n for a,A in sums+prods:\\n  add(a,A)\\n  for pow in (2,3):add(f'({a}**{pow})',A**pow)\\n  for j in (.22,.35,.5,.65,.8,1.,1.25,1.5,2.,2.15,2.5,3.):\\n   for fun,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh)]:add(f'np.{fun}({j}*{a})',fn(j*A))\\n for a,A in base+prods:\\n  for h,B in sums+prods:\\n   for j in (.1,.22,.35,.5,.75,1.25):add(f'({a}/(1+{j}*{h}**2))',A/(1+j*B**2))\\nA=np.array(cols).T.copy(); L=A[:n]-q@(q.T@A[:n]); l=np.linalg.norm(L,axis=0); L/=np.maximum(l,1e-10); cor=r@L; order=np.argsort(-abs(cor)); print('best singles:');\\nfor j in order[:12]:\\n h=np.c_[H,A[:,j]]; co=fit(h[:n],y[:n]);print(names[j],np.std(y[:n]-h[:n]@co),abs(y[n:]-h[n:]@co).mean(),co[-1])\\nprint('best pairs:'); res=[]\\nfor j in order[:200]:\\n v=L[:,j]@L; sc=(cor-v*cor[j])**2/np.maximum(1-v*v,1e-8); m=np.argmax(sc); res.append((cor[j]**2+sc[m],j,m))\\nfor _,j,k in sorted(res,reverse=True)[:15]:\\n h=np.c_[H,A[:,[j,k]]];co=fit(h[:n],y[:n]);print(names[j],names[k],np.std(y[:n]-h[:n]@co),abs(y[n:]-h[n:]@co).mean(),co[-2:])\\n# Estimate hierarchical polynomial shrinkage using training-only PRESS.\\nimport re\\nmodels=[]\\nfor X,N in [(b,'b'),(u,'u')]:\\n for cen in [0,1]:\\n  xx=X.copy();\\n  if cen:xx-=xx[:n].mean(0)\\n  xx/=xx[:n].std(0)\\n  for deg in [2,3,4,5,6]:\\n   B=np.column_stack([np.prod(xx[:,i],axis=1) for k in range(2,deg+1) for i in it.combinations_with_replacement(range(4),k)]); degrees=np.array([k for k in range(2,deg+1) for _ in it.combinations_with_replacement(range(4),k)]); B/=np.maximum(B[:n].std(0),1e-9)\\n   for scale in [.08,.15,.3,.5,.8,1.]:\\n    W=B*scale**(degrees-2); wr=W[:n]-q@(q.T@W[:n]); U,S,V=np.linalg.svd(wr,full_matrices=False)\\n    for lam in [.00001,.0001,.001,.01,.05,.1,.3,1.,3.]:\\n     d0=S*S/(S*S+lam); cv=(r-U@(d0*(U.T@r)))/(1-(q*q).sum(1)-(U*U)@d0); cc=V.T@(S/(S*S+lam)*(U.T@r)); yh=H[n:]@fit(H[:n],y[:n]-W[:n]@cc)+W[n:]@cc; models.append((abs(cv).mean(),abs(yh-y[n:]).mean(),N,cen,deg,scale,lam))\\nprint('ridge best',sorted(models)[:15]);\\n# Profile a single rational or elementary nonlinear correction of a learned direction.\\nfrom scipy.optimize import least_squares\\nrows=[]\\nfor X,N in [(b,'b'),(u,'u')]:\\n for form in ('sin','tanh','rat','ratlin','ratquad','cos','power','soft'):\\n  def F(X,p):\\n   z=p[0]+X@p[1:5];\\n   if form=='sin':return np.sin(z)[:,None]\\n   if form=='cos':return np.cos(z)[:,None]\\n   if form=='tanh':return np.tanh(z)[:,None]\\n   if form=='soft':return np.logaddexp(0,z)[:,None]\\n   if form=='rat':return (1/(1+z*z))[:,None]\\n   if form=='power':return (z*np.abs(z)**1.25)[:,None]\\n   if form=='ratlin':return aff(X)/(1+z*z)[:,None]\\n   if form=='ratquad':return np.column_stack([X[:,i]*X[:,j] for i,j in it.combinations_with_replacement(range(4),2)])/(1+z*z)[:,None]\\n  def calc(p):\\n   a=np.c_[H,F(X,p)];co=fit(a[:n],y[:n]);return a@co-y\\n  for p in np.r_[np.c_[np.zeros(4),np.eye(4)],np.random.default_rng(9).normal(size=(9,5))]:\\n   opt=least_squares(lambda p:calc(p)[:n],p,bounds=(-12,12),max_nfev=90); e=calc(opt.x);rows.append((np.std(e[:n]),abs(e[n:]).mean(),N,form,np.round(opt.x,4).tolist()))\\nprint('profile',sorted(rows)[:18]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar_search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic quadratic scalar readout) → H2 (sparse nonlinear correction to the cosine-panel readout); current 52/20 MAEs are 0.08479 scalar and 0.00421 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the existing solver\",\"rejected_reason\":\"Its scalar MAE fails the required public gate.\"}],\"rationale\":\"Keep the verified trajectory structure and test sparse products, quotients, and nonlinear scalar corrections alongside polynomial shrinkage.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9141f506a30469c70f7c09f0a4c0488c00a0eddab2b28c47b43f0d66733c9cc4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50181.29,
+      "usage_known": true,
+      "prompt_tokens": 38782,
+      "cached_tokens": 12672,
+      "completion_tokens": 2117
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e58eea1465f94f90a47b2c43992913ef",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:38:27.358019+00:00",
+  "ended_at_utc": "2026-11-28T13:39:06.383873+00:00",
+  "request_sha256": "380bb3cae5999aee73d60b5a606d075a1a0e6d94828155515cd77b3958c66aa2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 66244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39100,
+    "cached_tokens": 12672,
+    "completion_tokens": 1728
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/deep.py <<'PY'\\nimport pickle,numpy as np,importlib.util\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfrom scipy.linalg import subspace_angles\\n\\ndef load(path):\\n sp=importlib.util.spec_from_file_location('m',path);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m);return m\\nn=load('/holdout_task/node_00.py'); f=load('/holdout_task/_frozen_nodes/node_01.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,t=[s['train'][k] for k in ('x','y','traj')]; z=n._invert(x,n._fit_sensor(s['panel_a'])); np.set_printoptions(precision=4,suppress=True); print('first z and targets',np.c_[z,y,t[:,-1]][:10]); print('study keys',list(s));\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(a):return np.c_[np.ones(len(a)),a]\\ndef rat(x,p):return x/(1+np.exp(p)*x*x)\\ndef poly(x,j):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for k in range(1,j+1) for ix in combinations_with_replacement(range(4),k)])\\ndef evaluate(q):\\n vals=[]\\n for j,i in [(np.arange(52),np.arange(52,72)),(np.arange(18,72),np.arange(18)),(np.r_[0:18,36:72],np.arange(18,36))]:\\n  vals.append([np.mean(abs(f._scalar_readout(q[j],q[i],y[j])-y[i])),np.mean(abs(f._trajectory(q[j],q[i],t[j],s['eval_times'])-t[i]))]);\\n return np.array(vals).round(4).tolist()\\nprint('poly predictions');\\nfor base in [z,x]:\\n for k in range(1,5):\\n  d=poly(base,k); r=np.c_[y,t]-d@fit(d,np.c_[y,t]); print(k,np.std(r,axis=0)[[0,1,-1]],np.mean(abs(np.c_[y,t][52:]-d[52:]@fit(d[:52],np.c_[y,t][:52])),axis=0)[[0,1,-1]])\\nfor panel,key in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[panel]['u'],s[panel][key]; print(panel,key,'baseline',evaluate(z));\\n for U,V in [(u,v),(v,u)]:\\n  sc,W=n._fit_coordinates({'u':U,'v':V}); print('rat affine',sc,'err',np.std(n._design(U,sc)@W-V),evaluate(n._design(z,sc)@W)); print('rat coefficients',W)\\n  for k in [2,3]: print('poly',k,evaluate(poly(z,k)@fit(poly(U,k),V)))\\n # Linear mixing before a monotone coordinatewise squashing, variable projection.\\n for form in ['out_sqrt','out_cubic','out_atanh','out_plusrat','in_mixrat','in_mixrat_shared']:\\n  if form.startswith('out_'):\\n   def target(p):\\n    ctr=p[:4]; d=V0-ctr; h=np.exp(p[4:8]);\\n    if form=='out_sqrt': return d/(np.sqrt(np.maximum(1-h*d*d,1e-6)))\\n    if form=='out_cubic':return d+h*d**3\\n    if form=='out_atanh':return np.arctanh(np.clip(d*h,-.9999,.9999))/h\\n    return d+p[8:]*rat(d,p[4:8]);\\n   V0=v; A=aff(u); P=np.linalg.pinv(A); ini=np.r_[np.zeros(4),np.full(4,-2.),np.ones(4)] if form=='out_plusrat' else np.r_[np.zeros(4),np.full(4,-2.)];\\n   try:\\n    o=least_squares(lambda p:(A@(P@target(p))-target(p)).ravel(),ini,bounds=(-4,4),max_nfev=120); print(form,np.std(o.fun))\\n   except Exception as e:print(e)\\n  else:\\n   # Sum of four output-specific ridge terms added to affine output.\\n   A=aff(u); P=np.linalg.pinv(A); out=[]; q=[]\\n   for j in range(4):\\n    def D(U,w):\\n     h=U@w[:4]+w[4];return np.c_[aff(U),h/(1+h*h)]\\n    opts=[]\\n    for k in range(4):\\n     w=np.zeros(5);w[k]=.8\\n     def r(w):\\n      d=D(u,w);return d@fit(d,v[:,j])-v[:,j]\\n     opts.append(least_squares(r,w,bounds=(-4,4),max_nfev=110));\\n    o=min(opts,key=lambda a:a.cost);out.append(np.std(o.fun));q.append(D(z,o.x)@fit(D(u,o.x),v[:,j]));\\n   print(form,out,evaluate(np.array(q).T)); break\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/deep.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 forward panel compositions → H2 test map direction and nonlinear placement; the best screened forward route still has 0.19893 mean scalar MAE across eight held-out slices.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refine the cyclic inverse\",\"rejected_reason\":\"Its measured forward round-trip residual is already below 2e-12.\"}],\"rationale\":\"Check the supported nonlinear map directions, and measure how much of each held-out target is explainable from the recovered coordinates before choosing the final node.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e7a31b947f508f19064e93a505efd66d95c9cd631981878c409f1ba4328f771a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39024.34,
+      "usage_known": true,
+      "prompt_tokens": 39100,
+      "cached_tokens": 12672,
+      "completion_tokens": 1728
+    }
+  ]
+}

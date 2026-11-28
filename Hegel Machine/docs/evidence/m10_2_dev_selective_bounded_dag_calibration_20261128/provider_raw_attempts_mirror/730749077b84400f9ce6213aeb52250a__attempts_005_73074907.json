@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "730749077b84400f9ce6213aeb52250a",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:32:47.262064+00:00",
+  "ended_at_utc": "2026-11-28T13:33:20.326933+00:00",
+  "request_sha256": "f1f3302f0cd9d7137c5dd658e1ce8c0c59b9ddbcc6e3a62a646b3ab28eeb6d6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38900,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27645,
+    "cached_tokens": 12672,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | head -24; sed -n '55,150p' /tmp/hegel_continual_archive/dev_m102_c01_batch_01_solver.py; cat > /tmp/kernelprobe.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('res=[]')[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_solve,cho_factor\\nfrom itertools import product\\nn=52\\nB=fit(ext(b['u']),b['v']); C=fit(ext(c['u']),c['v1']);\\nfor name,(u,v) in {'b':(b['u'],b['v']),'c1':(c['u'],c['v1']),'c2':(c['u'],c['v2'])}.items():\\n w=fit(ext(u),v); print(name,'matrix',w.round(3),'singular',np.linalg.svd(w[1:],compute_uv=False).round(4))\\nres=[]; results={}\\nfor label,z in list(coords.items())[:3]:\\n for name,w in [('none',z),('B',(z-B[0])@np.linalg.pinv(B[1:])),('b',ext(z)@B),('C',(z-C[0])@np.linalg.pinv(C[1:])),('c',ext(z)@C)]:\\n  F={}\\n  for k in (.4,.7,1.,1.4,1.9,2.5,3.2):\\n   F['sin'+str(k)]=np.c_[np.sin(k*w),np.cos(k*w)]\\n   F['tanh'+str(k)]=np.tanh(k*w)\\n   F['atan'+str(k)]=np.arctan(k*w)\\n   F['rat'+str(k)]=np.c_[w/(1+k*w*w),w*w/(1+k*w*w)]\\n  K0=1+z@z.T\\n  for bas,kg in [('lin',K0),('poly',K0+(z@z.T)**2/4),('rbf12',K0+np.exp(-cdist(z,z,'sqeuclidean')/12)),('rbf3',K0+np.exp(-cdist(z,z,'sqeuclidean')/3))]:\\n   for f,G in list(F.items())+[('null',np.zeros((len(z),1)))]:\\n    for p in (1,2):\\n     if p==2 and f=='null':continue\\n     K=kg+((1+G@G.T/4)**p-1)*3\\n     for l in (1e-6,1e-4,.002,.015):\\n      H=cho_solve(cho_factor(K[:n,:n]+l*np.eye(n)),np.eye(n)); Y=np.c_[y,T]; a=H@Y; e=a/np.diag(H)[:,None]; q=K[n:,:n]@a; cv=np.mean(abs(q-Y[n:]),axis=0); tr=np.mean(abs(e),axis=0)\\n      res.append((tr[0],cv[0],np.mean(tr[1:]),np.mean(cv[1:]),(label,name,bas,f,p,l))); results[res[-1][-1]]=q\\nfor j in range(4):\\n print('best by',j,*sorted(res,key=lambda e:e[j])[:7],sep='\\\\n')\\nfor j in [0,2]:\\n best=sorted(res,key=lambda e:e[j]);\\n for m in (3,10,30,100):\\n  q=np.mean([results[r[-1]] for r in best[:m]],axis=0); print('ensemble',j,m,np.mean(abs(q[:,0]-y[n:])),np.mean(abs(q[:,1:]-T[n:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernelprobe.py | tail -58\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (low-order panel-coordinate features) -> H2 (nonlinear lifted panel coordinates); the archived 52/20 readout MAE is 0.045024 against the 0.038 gate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare periodic, saturating, and rational features in forward and inverse panel coordinates, using leave-one-out error on the first 52 rows to rank candidates independently of the 20-row validation slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "544b590ab0e03692af22349400d6e867cf1101e566fb842fc3da99b7ef860d73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33063.97,
+      "usage_known": true,
+      "prompt_tokens": 27645,
+      "cached_tokens": 12672,
+      "completion_tokens": 1172
+    }
+  ]
+}

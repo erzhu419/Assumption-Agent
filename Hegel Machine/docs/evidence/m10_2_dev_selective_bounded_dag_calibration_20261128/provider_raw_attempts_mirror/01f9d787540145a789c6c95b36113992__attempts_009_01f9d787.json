@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01f9d787540145a789c6c95b36113992",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_02__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_02__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:22:57.473802+00:00",
+  "ended_at_utc": "2026-11-28T13:23:31.470141+00:00",
+  "request_sha256": "7d320114b74c21c325d3249a6a84b4afaf8004aab37851be867534f105375105",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61666,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38538,
+    "cached_tokens": 12672,
+    "completion_tokens": 1272
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\n\\n\\ndef _fit(x,y):\\n    return np.linalg.lstsq(x,y,rcond=1e-10)[0]\\n\\n\\ndef _coordinates(study,x):\\n    a=study['panel_a']; u=np.asarray(a['u']); v=np.asarray(a['v'])\\n    i,j=np.triu_indices(len(u),1)\\n    du=u[i]-u[j]; dv=v[i]-v[j]\\n    g=np.nanmedian(np.divide(dv,du,out=np.full_like(du,np.nan),where=abs(du)>1e-9),axis=0)\\n    o=np.median(v-u*g,axis=0)\\n    for k in range(x.shape[1]):\\n        r=abs(v[:,k]-u[:,k]*g[k]-o[k]); keep=r<max(.002,5*np.median(r))\\n        if keep.sum()>=3:\\n            o[k],g[k]=_fit(np.c_[np.ones(keep.sum()),u[keep,k]],v[keep,k])\\n    return (x-o)/g\\n\\n\\ndef _library(z):\\n    v=np.cos(2.4*z); s=z/(1+.83*abs(z))\\n    blocks=[z,s,v,z*z,np.sin(2.4*z),np.abs(z)]\\n    for i,j in combinations(range(4),2):\\n        a,b=z[:,i],z[:,j]; c,d=s[:,i],s[:,j]; e,f=v[:,i],v[:,j]\\n        blocks += [a*b,c*d,e*f,a*f,b*e,c*f,d*e,a*b/(1+.5*(a*a+b*b)),a*b/(1+(a+b)**2),a*b/(1+(a-b)**2)]\\n        for sign in (-1,1):\\n            w=a+sign*b\\n            blocks += [.4*np.sin(w),.4*np.cos(w),.4*np.tanh(w)]\\n    for ids in combinations(range(4),3):\\n        blocks += [np.prod(z[:,ids],axis=1)]\\n    blocks += [z*v,s*v,z*s]\\n    return np.column_stack(blocks)\\n\\n\\ndef _predict(study):\\n    tr=study['train']; n=len(tr['x']); z=_coordinates(study,np.r_[tr['x'],study['test']['x']]); t=np.asarray(study['eval_times']); traj=np.asarray(tr['traj'])\\n    def basis(r): return -np.expm1(-t[:,None]*r)\\n    def profile(r):\\n        q=basis(r); return (q@_fit(q,traj.T)-traj.T).ravel()\\n    q=basis(least_squares(profile,[.4125,1.81],bounds=([.05,.9],[.89,5.])).x)\\n    y=np.c_[tr['y'],_fit(q,traj.T).T]; f=_library(z); f-=f[:n].mean(0); k=f@f[:n].T\\n    pred=y.mean(0)+k[n:]@solve(k[:n]+.025*np.eye(n),y-y.mean(0),assume_a='pos')\\n    return np.c_[pred[:,0],pred[:,1:]@q.T]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study=inputs['__input__']; offset=inputs['node_00']\\n    base=np.column_stack((offset['y_hat'],offset['state_pred']))\\n    pred=_predict(study)\\n    return {'panel_pred':base+(pred-base)/np.r_[.5,np.full(base.shape[1]-1,.65)]}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/mixed_probe.py | grep -E '^(all|LSVC|base_prods) ' | cut -c1-410; cat /tmp/hegel_continual_archive/archive_manifest.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Separate nonlinear channels -> joint calibrated readout with explicit frozen offsets; previous block CV MAEs were 0.1820 for y and 0.1217 for the fast amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save and test a runnable offset-corrected candidate, then use the mixed-channel results to diagnose the remaining accuracy gap.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "94c6498ee4f9251ebc59a130660ad3e6a3da50c4a228ec1ab5adff7954677187",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33995.06,
+      "usage_known": true,
+      "prompt_tokens": 38538,
+      "cached_tokens": 12672,
+      "completion_tokens": 1272
+    }
+  ]
+}

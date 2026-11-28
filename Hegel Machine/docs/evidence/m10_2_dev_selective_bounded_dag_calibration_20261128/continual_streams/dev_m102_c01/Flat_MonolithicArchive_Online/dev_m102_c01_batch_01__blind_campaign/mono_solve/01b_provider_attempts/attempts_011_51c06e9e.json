@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51c06e9eefdf4d3aa5133cb7b0ac3d3d",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:18:58.466153+00:00",
+  "ended_at_utc": "2026-11-28T13:19:43.535698+00:00",
+  "request_sha256": "3abd9aa868b665422bb47f4f42e75273b6138b192c3717b8a360fef93ccfbb79",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66450,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40521,
+    "cached_tokens": 12672,
+    "completion_tokens": 1900
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/*_solver.py /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\n\\n\\ndef _gp(parts, n, y):\\n    p = np.asarray(parts)\\n    a = p[:, :n, :n].copy()\\n    b = p[:, n:, :n].copy()\\n    E = np.eye(n)\\n    k = len(a)\\n    def objective(h):\\n        w = np.exp(h)\\n        cov = np.einsum('i,ijk->jk', w[:-1], a) + w[-1]*E\\n        c = cho_factor(cov)\\n        alpha = cho_solve(c, y)\\n        G = (cho_solve(c, E) - np.outer(alpha, alpha))*0.5\\n        return y@alpha/2 + np.log(np.diag(c[0])).sum(), w*np.r_[np.einsum('ij,kij->k', G, a), np.trace(G)]\\n    h = minimize(objective, np.r_[np.full(k, -3.), -8.], jac=True, method='L-BFGS-B', bounds=[(-15,5)]*k+[(-11,-4)], options={'maxiter':155}).x\\n    w = np.exp(h)\\n    cov = np.einsum('i,ijk->jk', w[:-1], a) + w[-1]*E\\n    return np.einsum('i,ijk->jk', w[:-1], b) @ cho_solve(cho_factor(cov), y)\\n\\n\\ndef _warps(study):\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.vstack([train['x'], study['test']['x']])\\n    slope, off = _calibration(study['panel_a'])\\n    z = (x-off)/slope\\n    panel = study['panel_b']\\n    u = panel['u']\\n    B = np.linalg.lstsq(np.c_[np.ones(len(u)),u],panel['v'],rcond=None)[0]\\n    coords = (z, B[0]+z@B[1:], (z-B[0])@np.linalg.pinv(B[1:]))\\n    d = cdist(z,z,'sqeuclidean')\\n    i,j = np.triu_indices(z.shape[1]); gram = lambda f:f@f.T\\n    base = [np.ones_like(d),gram(z),gram(z[:,i]*z[:,j])]+[np.exp(-d/h) for h in (1,2,4,8,16,32)]\\n    def parts(idx,h,kind):\\n        v = coords[idx].copy()\\n        v /= np.maximum(1e-12, np.sqrt(np.mean(v[:n]**2,axis=0)))\\n        if kind == 'rat': w=v/(1+h*v*v)\\n        elif kind == 'root': w=v/np.sqrt(1+h*v*v)\\n        elif kind == 'soft': w=v/(1+h*abs(v))\\n        else: w=np.tanh(h*v)\\n        w /= np.maximum(1e-12, np.sqrt(np.mean(w[:n]**2,axis=0)))\\n        return base+[gram(w),gram(w[:,i]*w[:,j]),gram((v[:,:,None]*w[:,None,:]).reshape(len(w),-1))]\\n    return n, base, parts\\n\\n\\n_archive_solve = solve_batch\\n\\n\\ndef _components(study):\\n    train = study['train']\\n    y, t = map(np.asarray, (train['y'], train['traj']))\\n    n, base, parts = _warps(study)\\n    specs = [(0,.4,'rat'), (0,.8,'rat'), (0,1.5,'root'), (0,.8,'soft'), (2,1.5,'soft'), (2,2.5,'root'), (1,.4,'tanh')]\\n    yp = np.array([_gp(parts(*s),n,y) for s in specs])\\n    mode = np.linalg.svd(t,full_matrices=False)[2][0]\\n    tp = _gp(base,n,t@mode)[:,None]*mode\\n    return yp, tp, _archive_solve(study)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    yp, tp, archive = _components(study)\\n    yh = .8*yp[:4].mean(axis=0) + .2*yp[4:].mean(axis=0)\\n    traj = .80*tp + .20*archive['state_pred']\\n    return {'y_hat':yh, 'state_pred':traj,\\n            'diagnostics_vec':np.array([yh.mean(),yh.std(),traj[:,-1].mean(),traj[:,-1].std()])}\\nPY\\ncat >/tmp/solver_gate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); ps=[]; truths=[]; times=[]; traces=[]\\nfor ix in [np.arange(n)]+[np.random.default_rng(i+177).permutation(n) for i in range(16)]:\\n a,b=ix[:52],ix[52:]; ss={**s,'train':{**t,**{k:t[k][a] for k in ('x','y','traj')}},'test':{'x':t['x'][b]}}; yp,tp,old=m._components(ss); ps.append(np.r_[yp,old['y_hat'][None,:]]); truths.append(t['y'][b]); times.append([tp,old['state_pred']]); traces.append(t['traj'][b]);\\np=np.array(ps); y=np.array(truths); T=np.array(times); t=np.array(traces)\\nprint('scalar components 52/20',np.mean(abs(p-y[:,None,:]),axis=-1)[0]);\\nfor w in (0,.1,.2,.3,.5,1):\\n pred=(1-w)*p[:,:4].mean(1)+w*p[:,4:7].mean(1); e=np.mean(abs(pred-y),axis=1); print('scalar blend',w,e[0],e.mean(),e.max());\\nfor w in (0,.2,.5,1):\\n e=abs((1-w)*T[:,0]+w*T[:,1]-t); a=e.mean((1,2)); print('trajectory blend',w,a[0],a.mean(),a.max(),'worst horizon',e.mean(1).max());\\nnp.savez('/tmp/gate_preds.npz',p=p,y=y,T=T,t=t)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/solver_gate.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: a single warp kernel → H2: a calibrated kernel ensemble; the strongest chronological component scored 0.03356 scalar MAE, while the best measured single-warp worst split was 0.04828.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy one inverse-panel warp\",\"rejected_reason\":\"It improves worst-split error but misses the required chronological gate at 0.04329.\"}],\"rationale\":\"Save the standalone solver now, then measure whether averaging the complementary coordinate models clears the fixed gate and improves robustness. Check the trajectory and output schema independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ed527675d5265f3bed3c707f5675667f7b698947987968abaaf4c92a973d2cb0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45067.81,
+      "usage_known": true,
+      "prompt_tokens": 40521,
+      "cached_tokens": 12672,
+      "completion_tokens": 1900
+    }
+  ]
+}

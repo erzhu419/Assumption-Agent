@@ -1,0 +1,294 @@
+{
+  "task_id": "dev_m102_c02_batch_01__blind_campaign",
+  "short_name": "dev_m102_c02_batch_01",
+  "benchmark": "Hegel_M10_1_UnknownCut_DAG_Discovery",
+  "wave": "m10_2_selective_bounded_dag_discovery_h16",
+  "scientific_domain": "blind_multi_stage_scientific_computation_graph",
+  "wormhole_family": "m102_blind_dag",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": false,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 9,
+  "max_turns": 14,
+  "final_candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+  "validated_incumbent_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "29120ed2f79e602e96990cd4893587fca1c489f986ae00cfea75d71a24d2d71b",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrate the inputs, then learn the readout and shared relaxation modes.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "29120ed2f79e602e96990cd4893587fca1c489f986ae00cfea75d71a24d2d71b",
+        "expected_candidate_sha256": "29120ed2f79e602e96990cd4893587fca1c489f986ae00cfea75d71a24d2d71b",
+        "computed_candidate_sha256": "29120ed2f79e602e96990cd4893587fca1c489f986ae00cfea75d71a24d2d71b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 3193
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_29120ed2"
+    },
+    {
+      "candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\ncd /holdout_task\nsed -i \"s/y_form='quadratic', traj_form='linear'/y_form='sparse', traj_form='linear'/\" batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+        "expected_candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+        "computed_candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 3190
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a1490627"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": false,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t04",
+      "turn_idx": 4,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "operator misspecification",
+      "candidate_sha256": null,
+      "resolved": false,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "Affine panel composition and an affine/bilinear readout suffice for this campaign.",
+      "empirical_witness": "The archived composition gives 52/20 MAEs of 0.207759 and 0.112290; panel C v2 also has reproducible quadratic curvature, with affine LOO RMSE above 0.10 in every coordinate.",
+      "causal_blanket_diagnosis": "The coordinatewise calibration remains near-exact after removing three outliers, but downstream nonlinear operators cannot be represented by an affine map.",
+      "sublated_pivot": "Keep robust calibration and low-rank dynamics; test compact nonlinear panel maps and sparse cubic readouts on the prescribed split.",
+      "pending_resolution_proposed_at_turn": 9,
+      "agent_claimed_probe": {
+        "turn": 8,
+        "command_preview": "set -e\ncd /holdout_task\nsed -i \"s/y_form='quadratic', traj_form='linear'/y_form='sparse', traj_form='linear'/\" batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys,pickle,numpy as np\n",
+        "stdout_preview": "52/20 gate max [y MAE, trajectory MAE, timestamp MAE]: [0.00607842 0.00497099 0.00606087]\nrandom 52/20 max [y MAE, trajectory MAE, timestamp MAE]: [0.00862463 0.00677152 0.00897142]\ncoordinate/joint tails max [y MAE, trajectory MAE, timesta"
+      },
+      "probe_support_status": "supported_on_public_schema_only_scientific_witness_pending",
+      "public_schema_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "public_schema_receipt",
+        "probe_protocol_version": "hegel_host_public_schema_v3",
+        "candidate_bundle_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "6ed28d59a2e02e70a872b407ada2c8358beb94bef30e2d6f75b0521e91365b25",
+          "/holdout_task/public_batch.pkl": "9d30b6e8f9433c0b1d15177a0c45c78346eeb539b6e7c91a1fd61096540f122e",
+          "/holdout_task/validate_public_schema.py": "96501d2ed407157b3284125d83f99a309e31e1dfcfb540b76241c837a2832499"
+        },
+        "public_setup_files_sha256_reverified": true,
+        "verified_scope": "public_delivery_schema",
+        "supported_risk_kinds": [
+          "interface_schema",
+          "output_format",
+          "schema_contract"
+        ],
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "result": "supported_on_public_schema_validator"
+      }
+    }
+  ],
+  "nogood_resolution_events": [],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_dev_m102_c02_batch_01_a14906271827",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 6,
+    "exported_pure_functions": [
+      "scoring",
+      "loss",
+      "_affine",
+      "_panel_maps",
+      "_coordinates",
+      "_readout",
+      "_trajectory",
+      "solve_batch"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 0,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 0,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 0,
+    "search_skill_query_count": 2,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 0,
+    "describe_skill_queries": [],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "a149062718279e72f85826fcaca4a8049ba73ac85bc28d6eb54530de4652c875",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_batch"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "batch_solver.py",
+          "final_file_sha256": "c835660fd197d46f03944418839d56bf2ed3bd3a3d1d9d9c5f2c56183cb0461f",
+          "public_entrypoints": [
+            "solve_batch"
+          ],
+          "effective_entrypoints": [
+            "solve_batch"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "batch_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_batch.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_asset_index.json": "6ed28d59a2e02e70a872b407ada2c8358beb94bef30e2d6f75b0521e91365b25",
+      "/holdout_task/public_batch.pkl": "9d30b6e8f9433c0b1d15177a0c45c78346eeb539b6e7c91a1fd61096540f122e",
+      "/holdout_task/validate_public_schema.py": "96501d2ed407157b3284125d83f99a309e31e1dfcfb540b76241c837a2832499"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5289,
+    "initial_user_payload_chars": 2975,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 14871
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 9,
+    "logical_agent_decision_calls": 9,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 9,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_88b6c7e6.json",
+      "attempts_002_0edf4e67.json",
+      "attempts_003_c5a09d82.json",
+      "attempts_004_88955d52.json",
+      "attempts_005_c08e5d02.json",
+      "attempts_006_8806ba9f.json",
+      "attempts_007_602e9964.json",
+      "attempts_008_c869afee.json",
+      "attempts_009_2bd48502.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 24,
+  "prompt_tokens": 265928,
+  "cached_tokens": 76032,
+  "completion_tokens": 10727,
+  "total_tokens": 276655,
+  "token_cost_proxy": 219631,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 219631,
+  "wall_ms": 300351.83,
+  "provenance_verified": true,
+  "terminal_record_sha256": "1b6824da88391e5e2dc9778492ad9746fb6ecd5c34240b903fa1092596d8d983"
+}

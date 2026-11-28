@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c1670065bdd4b2c9c2397035047d7de",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:53.059830+00:00",
+  "ended_at_utc": "2026-11-28T13:14:22.797126+00:00",
+  "request_sha256": "ef5805420a62710e7183781616f3aa60a75628108e8e83e41bb42a7ca1d37b36",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27978,
+    "cached_tokens": 5504,
+    "completion_tokens": 1145
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; python3 /tmp/panel_probe.py | tail -16; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat >/tmp/readout_probe.py <<'PY'\\nimport numpy as np,pickle,runpy,glob\\nfrom itertools import combinations_with_replacement\\nfrom scipy.spatial.distance import cdist\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=st['train'];x=tr['x'];Y=np.c_[tr['y'],tr['traj']]; sparse=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; arc=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]);\\nfolds=[]\\nfor b in [np.arange(52,72),np.arange(20),np.arange(20,40),np.arange(40,60),*np.array_split(np.random.default_rng(443).permutation(len(x)),4)]:\\n a=np.setdiff1d(np.arange(len(x)),b);s=dict(st,train={k:v[a] for k,v in tr.items() if k!='summary'},test={'x':x[b]});d=sparse({'__input__':s});folds.append((a,b,np.c_[d['y_hat'],d['state_pred']]))\\nw=np.r_[.5,np.repeat(.65,8)]\\ndef score(pred):\\n out=[]\\n for a,b,sp in folds:\\n  v=np.abs(w*pred(a,b)+(1-w)*sp-Y[b]);out.append([v[:,0].mean(),v[:,1:].mean(),v[:,1:].mean(0).max()]);\\n return np.array(out)\\ndef pol(x,deg):return np.column_stack([np.prod(x[:,c],axis=1) for d in range(1,deg+1) for c in combinations_with_replacement(range(4),d)])\\ndef ridge(f,lam):\\n def p(a,b):\\n  u=(f-f[a].mean(0))/np.maximum(f[a].std(0),1e-10); return Y[a].mean(0)+u[b]@u[a].T@np.linalg.solve(u[a]@u[a].T+lam*np.eye(len(a)),Y[a]-Y[a].mean(0))\\n return p\\nres=[]\\ndef append(name,p):\\n s=score(p);res.append((max(s[:,:2].max(0)),name,s))\\nfor deg in range(1,6):\\n for l in (1e-8,1e-4,.003,.03,.3,1):append(('poly',deg,l),ridge(pol(x,deg),l))\\nd=cdist(x,x,'sqeuclidean')\\nfor scale in (.08,.18,.35,.65,1.3,3,8):\\n for lam in (1e-7,1e-5,.0003,.003,.03):\\n  for power in (0,1,2):\\n   t=np.sqrt(d*scale); K=(np.exp(-t*t) if power==0 else (1+t+(t*t/3 if power==2 else 0))*np.exp(-t))\\n   def p(a,b):return Y[a].mean(0)+K[np.ix_(b,a)]@np.linalg.solve(K[np.ix_(a,a)]+lam*np.eye(len(a)),Y[a]-Y[a].mean(0))\\n   append(('kernel',scale,lam,power),p)\\nfor v in sorted(res,key=lambda v:v[0])[:14]:print(v[1],v[2].round(4).tolist())\\nfor v in sorted(res,key=lambda v:v[2][0,:2].max())[:5]:print('gate best',v[1],v[2].round(4).tolist())\\nPY\\npython3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived calibration -> independently verify the saturation law and benchmark polynomial and smooth readouts on eight held-out splits; panel C v2 calibration residual is 0.00024 RMS.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use telemetry value 1.25 directly as the exponential saturation coefficient\",\"rejected_reason\":\"Its paired-measurement residual is 0.01276 RMS, versus 0.00024 for a fitted coefficient near 0.294.\"}],\"rationale\":\"The paired measurements distinguish calibration strength from saturation shape. Measure the readout bottleneck separately for the scalar and every trajectory horizon before editing the node.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c1955919229c8b57924a265f0e5a47448069fb5d99b81acd58787dcdd4b8bf7e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29735.81,
+      "usage_known": true,
+      "prompt_tokens": 27978,
+      "cached_tokens": 5504,
+      "completion_tokens": 1145
+    }
+  ]
+}

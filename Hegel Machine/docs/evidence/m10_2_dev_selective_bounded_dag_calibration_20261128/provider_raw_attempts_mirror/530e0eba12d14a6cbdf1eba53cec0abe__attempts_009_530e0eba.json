@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "530e0eba12d14a6cbdf1eba53cec0abe",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:20:31.442687+00:00",
+  "ended_at_utc": "2026-11-28T14:20:59.934296+00:00",
+  "request_sha256": "b11776383f3d5884a310b022cfe4d1fba8cb2141ca5bd1a9257ffb0eb2895598",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 65843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39014,
+    "cached_tokens": 5504,
+    "completion_tokens": 980
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location(path.rsplit('/',1)[1][:-3], '/holdout_task/'+path)\\n    module=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module.run_node\\n\\nn0,n1,n2,n3=map(load,['node_00.py','node_01.py','_frozen_nodes/node_02.py','_frozen_nodes/node_03.py'])\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=st['train']; ix=np.arange(len(t['x']))\\nworst=np.zeros(3)\\nrows=[]\\ndef evaluate(label,v):\\n    global worst\\n    tr=np.setdiff1d(ix,v)\\n    s=dict(st, train={k:t[k][tr] for k in ('x','y','traj')},test={'x':t['x'][v]})\\n    a=n0({'__input__':s}); b=n1({'__input__':s,'node_00':a}); c=n2({'node_01':b}); o=n3({'node_01':b,'node_02':c})\\n    assert set(o)=={'y_hat','state_pred','diagnostics_vec'}\\n    ey=np.abs(o['y_hat'].reshape(-1)-t['y'][v].reshape(-1)); et=np.abs(o['state_pred']-t['traj'][v]);\\n    assert ey.shape==(len(v),) and et.shape==t['traj'][v].shape and o['diagnostics_vec'].shape==(4,)\\n    assert all(np.isfinite(x).all() for x in o.values())\\n    np.testing.assert_allclose(o['diagnostics_vec'],[o['y_hat'].mean(),o['y_hat'].std(),o['state_pred'][:,-1].mean(),o['state_pred'][:,-1].std()])\\n    metrics=np.array([ey.mean(),et.mean(),et.mean(axis=0).max()]); worst=np.maximum(worst,metrics)\\n    rows.append((label,*metrics))\\nfor seed in range(3):\\n    for j,v in enumerate(np.array_split(np.random.default_rng(seed).permutation(ix),4)):\\n        evaluate(f'random-{seed}-{j}',v)\\nfor j,v in enumerate(np.array_split(ix,4)):\\n    evaluate(f'blocked-{j}',v)\\nx=t['x']; dev=(x-x.mean(0))/x.std(0); evaluate('large-sensor-norm', np.argsort(np.linalg.norm(dev,axis=1))[-18:])\\nfor j in range(x.shape[1]):\\n    ii=np.argsort(x[:,j]); evaluate(f'sensor-{j}-tails', np.r_[ii[:8],ii[-8:]])\\nfor name,y,tr,h in rows: print(f'{name}: y={y:.6f} traj={tr:.6f} worst_horizon={h:.6f}')\\nprint('Worst across stress slices: y=%.6f traj=%.6f worst_horizon=%.6f'%tuple(worst))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the sparse coupled sensor inverse, mixed cosine map, and nonlinear readout pass public CV at 0.017410 readout MAE and 0.004079 trajectory MAE; additional stress slices are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Verify the unchanged accepted bundle in an isolated Python process and test random, contiguous, and sensor-tail holdouts, reporting both endpoints and the worst trajectory horizon separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1268d2f51fa55dc57fd0f87a4d0c7eaa81337d6d7fd17cc5a6a1eaa6b38e16a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28490.29,
+      "usage_known": true,
+      "prompt_tokens": 39014,
+      "cached_tokens": 5504,
+      "completion_tokens": 980
+    }
+  ]
+}

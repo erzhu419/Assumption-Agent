@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ed28577c7cb442aa2afbc803a1bc3df",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:32:16.853820+00:00",
+  "ended_at_utc": "2026-11-28T13:32:45.023691+00:00",
+  "request_sha256": "0a6857343edd95625237a314be3c478795b00a6728a47719e712fc606e442837",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24131,
+    "cached_tokens": 12672,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '/_sparse =/,$p' /tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py; cat > /tmp/probe_hegel.py <<'PY'\\nimport numpy as np,pickle,importlib.util\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; n=52\\nnp.set_printoptions(precision=6,suppress=True)\\ndef load(p):\\n spec=importlib.util.spec_from_file_location('mod',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load('/holdout_task/_frozen_nodes/node_00.py'); a=load('/tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py'); sub=dict(s,train={k:v[:n] if k!='summary' else v for k,v in tr.items()},test={'x':x[n:]})\\nfor label,p in [('frozen',m.run_node({'__input__':sub})),('archive',a.solve_batch(sub))]: print(label,np.abs(p['y_hat']-y[n:]).mean(),np.abs(p['state_pred']-T[n:]).mean(axis=0))\\nprint('svd',np.linalg.svd(T,compute_uv=False)); print('diff svd',np.linalg.svd(np.diff(T,axis=1),compute_uv=False));\\nfor kind in ('expm1','exp','damped','polyexp'):\\n for k in (1,2,3,4):\\n  def basis(r):\\n   E=np.exp(-t[:,None]*r)\\n   if kind=='expm1': return 1-E\\n   if kind=='exp': return np.column_stack([np.ones(len(t)),E])\\n   if kind=='damped': return np.column_stack([t,1-E])\\n   return np.column_stack([t]+[t**j*E for j in (1,2)])\\n  def err(r):\\n   B=basis(r); return (B@np.linalg.lstsq(B,T.T,rcond=1e-11)[0]-T.T).ravel()\\n  r=least_squares(err,np.geomspace(.35,2,k),bounds=(.00001,20),max_nfev=2000).x\\n  print(kind,k,r,np.sqrt(np.mean(err(r)**2)))\\nB=np.column_stack([np.ones(len(x)),x]); print('linear coefficients',np.linalg.lstsq(B,np.column_stack([y,T[:,0],T[:,-1]]),rcond=None)[0]); print('linear absolute error',abs(B@np.linalg.lstsq(B,np.column_stack([y,T[:,0],T[:,-1]]),rcond=None)[0]-np.column_stack([y,T[:,0],T[:,-1]])).mean(0))\\nfor k in ('panel_a','panel_b','panel_c'):\\n u=s[k]['u']; B=np.column_stack([np.ones(len(u)),u]);\\n for v in s[k].keys()-{'u'}:\\n  o=s[k][v]; c=np.linalg.lstsq(B,o,rcond=None)[0]; print(k,v,c,'row residual quantiles',np.quantile(np.linalg.norm(o-B@c,axis=1),[0,.25,.5,.75,.9,1])); print('row paired error quantiles',np.quantile(np.linalg.norm(o-u,axis=1),[0,.25,.5,.75,.9,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_hegel.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived readout -> H2 recalibrate the scalar and trajectory readouts separately; baseline validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure the archived and frozen baselines, identify the temporal basis by variable projection, and check whether the reference panels support a common coordinate map.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "40c2e93dcdfdc342b9a129791d53b04b9c702e58a3a7f2e5538ce6872f483052",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28167.17,
+      "usage_known": true,
+      "prompt_tokens": 24131,
+      "cached_tokens": 12672,
+      "completion_tokens": 1009
+    }
+  ]
+}

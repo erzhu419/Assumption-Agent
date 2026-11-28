@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b44a68f95f3497d8db3b3a544d88e82",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:25.900412+00:00",
+  "ended_at_utc": "2026-11-28T13:17:02.332741+00:00",
+  "request_sha256": "7c29567b637025af11b21972f913d5ad6386cea325513f95166bf5507d0174eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65993,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40351,
+    "cached_tokens": 12672,
+    "completion_tokens": 1580
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline10.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('from scipy.linalg import solve','from scipy.linalg import solve\\\\nfrom scipy.optimize import minimize_scalar')\\ni=s.index('def solve_batch')\\ns=s[:i]+'''def _rational_panel(panel):\\n    u, v = (np.asarray(panel[key], dtype=float) for key in ('u', 'v2'))\\n\\n    def features(x, width):\\n        xx = x*x\\n        return np.c_[np.ones(len(x)), x, xx/(1. + width*xx)]\\n\\n    def loo_error(width):\\n        q, _ = np.linalg.qr(features(u, width), mode='reduced')\\n        residual = v - q @ (q.T @ v)\\n        leverage = np.sum(q*q, axis=1, keepdims=True)\\n        return np.mean((residual/np.maximum(1. - leverage, 1e-8))**2)\\n\\n    width = minimize_scalar(loo_error, bounds=(.02, 2.), method='bounded').x\\n    coef = np.linalg.lstsq(features(u, width), v, rcond=None)[0]\\n    return lambda x: features(x, width) @ coef\\n\\n\\ndef _auxiliary_kernel(op, x, n):\\n    z = op(x)\\n    z -= z[:n].mean(axis=0)\\n    ip = z @ z.T\\n    spread = 2.*np.sum(z[:n]**2)/n\\n    return ip + .2*ip**2 + np.exp(-.72*cdist(z,z,'sqeuclidean')/max(spread, 1e-12))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.vstack([train['x'], study['test']['x']])\\n    n = len(train['x'])\\n    z = _coordinates(study, x)\\n    op = _rational_panel(study['panel_c'])\\n    cf = _auxiliary_kernel(op, z['bf'], n)\\n    ci = _auxiliary_kernel(op, z['bi'], n)\\n    smooth = _kernel(z['bf'], .18)\\n    Y = np.asarray(train['y'])\\n    y = .6*_predict(smooth + .5*cf, n, Y, .001) + .4*_predict(smooth + .1*cf, n, Y, .001)\\n    T = np.asarray(train['traj'])\\n    _, _, vt = np.linalg.svd(T, full_matrices=False)\\n    mode = vt[0]\\n    a = T @ mode\\n    poly = (z['forward'] @ z['forward'].T)**2\\n    k = _kernel(z['bf'], .18, .2) + .3*poly\\n    amp = .5*_predict(k + .5*ci, n, a, .004) + .5*_predict(k + .1*ci, n, a, .004)\\n    state = np.outer(amp, mode) + _predict(_kernel(z['x'], .25), n, T - np.outer(a, mode), .1)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\n'''\\nopen(p,'w').write(s)\\nPY\\ncat > /tmp/exactcheck.py <<'PY'\\nimport sys, pickle, importlib.util, numpy as np\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=st['train']; x=tr['x']; n=len(x); ids=np.arange(n)\\nsplits=[(ids[:52],ids[52:])]+[(j[:52],j[52:]) for j in (np.random.default_rng(i).permutation(n) for i in range(32))]+[(np.setdiff1d(ids,j),j) for j in np.array_split(np.argsort(np.linalg.norm(x,axis=1)),4)]\\nfor p in sys.argv[1:]:\\n spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n errs=[]; ts=[]\\n for a,b in splits:\\n  out=m.solve_batch(dict(st,train={k:v[a] for k,v in tr.items() if k!='summary'},test={'x':x[b]})); dt=np.abs(out['state_pred']-tr['traj'][b]); ts.append(dt.mean(0)); errs.append([np.mean(np.abs(out['y_hat']-tr['y'][b])),dt.mean(),dt[:,-1].mean()])\\n e=np.array(errs); print(p, 'prescribed',e[0], 'random mean',e[1:33].mean(0),'random worst',e[1:33].max(0),'radial worst',e[33:].max(0),'prescribed per-time',ts[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/exactcheck.py /tmp/baseline10.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single-metric kernels -> H2 rational panel-C augmentation; the challenger grid reached 0.02743 prescribed y MAE and 0.05157 worst radial-slice MAE, pending exact-artifact verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the spatial readouts with panel-C outputs\",\n      \"rejected_reason\": \"Standalone auxiliary coordinates performed worse; adding the fitted rational operator to the baseline kernel improved both prediction heads.\"\n    }\n  ],\n  \"rationale\": \"Panel C's second output fits a rational operator with leave-one-out RMSE below 0.00030. Promote that operator as a complementary feature, fit kernel centering on training rows only, and compare the exact artifact against the verified baseline on the prescribed, random, and radial splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "27b5ff57f8657555cafead550c67cad30f4aea2f8fcb262ab94181b1341cc269",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36430.92,
+      "usage_known": true,
+      "prompt_tokens": 40351,
+      "cached_tokens": 12672,
+      "completion_tokens": 1580
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c32ee5ea63b43a3852c6a8346a8fd5e",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:07:03.823471+00:00",
+  "ended_at_utc": "2026-11-28T14:07:18.565264+00:00",
+  "request_sha256": "7b26d9a9851f3f8f3e9dc25b30ce5bbceb4aef14238233dfbbdb45b0e19afc68",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28888,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24400,
+    "cached_tokens": 12672,
+    "completion_tokens": 497
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -nE 'def |least_squares|poly|expm1|tanh|sin\\\\(|cos\\\\(|sqrt|log1p|z\\\\*|interaction|panel_b' \\\"$f\\\"; done; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,glob,importlib.util\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];print('TIMES',s['eval_times'],'TELEM',s['telemetry_vec'],'SUMMARY',t['summary']); print('SVD',np.linalg.svd(t['traj'],compute_uv=False));n=52;s['test']={'x':t['x'][n:]};s['train']={k:v[:n] if k!='summary' else v for k,v in t.items()};\\nfor f in glob.glob('/tmp/hegel_continual_archive/*solver.py'):\\n try:\\n  q=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(q);q.loader.exec_module(m);p=m.solve_batch(s); print(f[-12:],np.mean(abs(p['y_hat']-t['y'][n:])),np.mean(abs(p['state_pred']-t['traj'][n:])))\\n except Exception as e: print(f[-12:],e)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archive transfer -> H2 identify the current calibration and response graph; pre-LLM 52/20 MAEs are 0.10605 for y and 0.10943 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Benchmark the transferable solvers on the prescribed split and use the trajectory singular spectrum to constrain the temporal model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f4997765d459823df98cdf1dc0e5d6a1b0f66bcdfae84392947223ad5108e81b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 14740.4,
+      "usage_known": true,
+      "prompt_tokens": 24400,
+      "cached_tokens": 12672,
+      "completion_tokens": 497
+    }
+  ]
+}

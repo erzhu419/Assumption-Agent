@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "277871fe8573467795ca9810656604dc",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T12:59:45.861724+00:00",
+  "ended_at_utc": "2026-11-28T13:00:10.457415+00:00",
+  "request_sha256": "9f15a8e679b43a472f5c810c9960b08132c5d873a75226303ae217e083aca7ad",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21310,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21838,
+    "cached_tokens": 0,
+    "completion_tokens": 921
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py | sed '/sorted by y:/,$d'; tail -13 validate_public_schema.py; cat >/tmp/readout.py <<'PY'\\nexec(open('/tmp/explore.py').read().split('for k in')[0]); d=s['train']; x,y,z=d['x'],d['y'],d['traj']; from scipy.optimize import least_squares; from sklearn.preprocessing import PolynomialFeatures\\nsplits=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(0).permutation(72),4)]; opt=[]\\nfor k in (1,2,3,4):\\n P=PolynomialFeatures(k).fit_transform(x)\\n for ridge in (0,.001,.02,.1,1):\\n  opt.append((f'poly{k}/{ridge}',lambda i,j,P=P,ridge=ridge: P[j]@np.linalg.lstsq(np.r_[P[i],np.sqrt(ridge)*np.eye(P.shape[1])],np.r_[y[i],np.zeros(P.shape[1])],rcond=None)[0]))\\nX=np.c_[np.ones(len(x)),x];\\nfor link in ['tanh','atan','sin','softsign','sqrt','cubic']:\\n for extra in [0,1,2]:\\n  U=[np.zeros((len(x),0)),x,PolynomialFeatures(2,include_bias=False).fit_transform(x)][extra]\\n  f={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'softsign':lambda t:t/(1+abs(t)), 'sqrt':lambda t:t/np.sqrt(1+t*t),'cubic':lambda t:t-t**3/3}[link]\\n  def pred(i,j,U=U,f=f):\\n   b=np.linalg.lstsq(X[i],y[i],rcond=None)[0]; p0=np.r_[2,0,b/2,np.zeros(U.shape[1])]; fn=lambda p,k:p[0]*f(X[k]@p[2:7])+p[1]+U[k]@p[7:]; p=least_squares(lambda p:np.r_[fn(p,i)-y[i],.02*p[7:]],p0,max_nfev=250).x; return fn(p,j)\\n  opt.append((f'{link}/{extra}',pred))\\nfor name,fit in opt:\\n m=np.array([np.mean(abs(fit(i,j)-y[j])) for i,j in splits]); print(name,np.round(m,5),np.round(m.mean(),5))\\nb=np.linalg.lstsq(X,y,rcond=None)[0]; print('linear',b); q=X@b; print(np.c_[q,y,y-q][np.argsort(q)][::2]); print('trajectory linear',np.linalg.lstsq(X,z,rcond=None)[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"Linear rank-two state map → nonlinear scalar readout; designated scalar baseline MAE 0.04910, worst trajectory horizon MAE 0.00507.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Predict the scalar from trajectory alone\",\"rejected_reason\":\"Designated MAE 0.491 indicates the scalar depends on input information lost by the trajectory map.\"}],\n  \"rationale\":\"Compare sparse saturating links and polynomial bases on the designated split and independent partitions, while recovering the panel operators and the trajectory basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e76f9bfba1ccbfbe0b95ef278da64a80ed318185dbbf11adbf4d6e3c4d145b4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24593.8,
+      "usage_known": true,
+      "prompt_tokens": 21838,
+      "cached_tokens": 0,
+      "completion_tokens": 921
+    }
+  ]
+}

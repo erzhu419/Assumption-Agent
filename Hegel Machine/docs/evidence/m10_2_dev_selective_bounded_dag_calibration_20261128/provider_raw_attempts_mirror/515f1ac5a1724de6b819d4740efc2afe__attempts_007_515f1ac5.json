@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "515f1ac5a1724de6b819d4740efc2afe",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:11:13.255140+00:00",
+  "ended_at_utc": "2026-11-28T14:11:55.864763+00:00",
+  "request_sha256": "9b612d32be60332b602769a8e5b4c9f55608c3341af7661ffb7965c4f80505d5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49248,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33084,
+    "cached_tokens": 12672,
+    "completion_tokens": 1826
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout13.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\ndef aff(a):return np.c_[np.ones(len(a)),a]\\ndef cyc(a):return a*np.roll(a,-1,axis=1)\\ndef poly(a,d):return np.column_stack([np.prod(a[:,p],axis=1) for p in combinations_with_replacement(range(a.shape[1]),d)])\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef operators(s,x):\\n p=s['panel_a']; u=p['u']; v=p['v']; co=[]\\n for j in range(4):\\n  a=aff(u[:,j:j+1]); e=abs(a@ls(a,v[:,j])-v[:,j]); keep=e<max(.001,4*np.median(e)); co.append(ls(a[keep],v[keep,j]))\\n off,gain=np.array(co).T; z=(x-off)/gain\\n p=s['panel_b']; B=ls(aff(p['u']),p['v']); w=aff(z)@B\\n p=s['panel_c']; u=p['u']; fs=[]\\n for k in [1,2]:\\n  v=p['v'+str(k)]\\n  def design(a,r):\\n   if k==1:return np.c_[aff(a),a**3,a/(1+r*abs(a))]\\n   return np.c_[aff(a),cyc(a),a**3,np.tanh(a*r)]\\n  def coef(r):return ls(design(u,r),v)\\n  r=least_squares(lambda r:(design(u,r)@coef(r)-v).ravel(),[.66 if k==1 else 1.2],bounds=(.1,3),gtol=1e-12).x\\n  c=coef(r); fs.append(lambda a,design=design,r=r,c=c,k=k: (np.c_[aff(a),a**3,a/(1+r*abs(a))] if k==1 else np.c_[aff(a),cyc(a),a**3,np.tanh(a*r)])@c)\\n  print('branch',k,r, np.sqrt(np.mean((design(u,r)@c-v)**2)),c.round(3))\\n return z,w,fs\\n\\ndef time(s,ids):\\n tr=s['train']['traj'][ids]; t=s['eval_times']; modes=lambda r:-np.expm1(-t[:,None]*r)\\n r=least_squares(lambda r:(modes(r)@ls(modes(r),tr.T)-tr.T).ravel(),[.4,1.85],bounds=([.1,.9],[.85,4])).x\\n return modes(r)\\n\\ndef designs(z,w,fs):\\n D={}\\n for name,a in [('z',z),('w',w)]:\\n  b,c=[f(a) for f in fs]; x=cross(b,c); pair=np.sum(b*c,axis=1); u=np.c_[b,c]; v=np.c_[a,u]\\n  for k,f in {'a':a,'bc':u,'pair':np.c_[u,pair],'diag':np.c_[u,b*c],'allcross':np.c_[u,x],'bpoly':np.c_[b,poly(b,2)],'cpoly':np.c_[c,poly(c,2)],'bcquad':np.c_[u,poly(u,2)],'abc':v,'abc_cross':np.c_[v,x],'abc_quad':np.c_[v,poly(v,2)],'apoly2':np.c_[a,poly(a,2)],'apoly3':np.c_[a,poly(a,2),poly(a,3)],'apoly4':np.c_[a,poly(a,2),poly(a,3),poly(a,4)],'abc_pair':np.c_[v,pair],'abc_pair_poly':np.c_[v,pair,poly(a,2),poly(a,3)],'abc_cross_poly':np.c_[v,x,poly(a,2),poly(a,3)]}.items():D[name+'_'+k]=f\\n b,c=fs[0](z),fs[1](w); u=np.c_[b,c]; D['mixed']=u; D['mixed_pair']=np.c_[u,np.sum(b*c,axis=1)]; D['mixed_cross']=np.c_[u,cross(b,c)]; D['mixed_quad']=np.c_[u,poly(u,2)]\\n b,c=fs[0](w),fs[1](z); u=np.c_[b,c]; D['rev']=u; D['rev_pair']=np.c_[u,np.sum(b*c,axis=1)]; D['rev_cross']=np.c_[u,cross(b,c)]; D['rev_quad']=np.c_[u,poly(u,2)]\\n return D\\n\\ndef experiments():\\n t=s['train']; ids=np.arange(52); j=np.arange(52,72); z,w,fs=operators(s,t['x']); D=designs(z,w,fs); q=time(s,ids); Y=np.c_[t['y'],t['traj']]\\n for name,X in D.items():\\n  a=aff((X-X[ids].mean(0))/np.maximum(X[ids].std(0),1e-9)); A=a[ids]; U,E,V=np.linalg.svd(A,full_matrices=False); results=[]\\n  for r in [0,1e-6,1e-5,1e-4,.001,.01,.1,1]:\\n   filt=np.where(E>1e-8,E/(E**2+max(r,1e-20)),0); W=(V.T*filt)@(U.T@Y[ids]); p=a[j]@W; p[:,1:]=(p[:,1:]@q)@np.linalg.inv(q.T@q)@q.T; er=np.mean(abs(p-Y[j]),axis=0); inn=np.sqrt(np.mean((A@W-Y[ids])**2,axis=0)); results.append((er[0],er[1:].mean(),r,inn[0],inn[1:].mean()))\\n  print(name, np.round(results[0],5),np.round(min(results,key=lambda x:x[0]),5),np.round(min(results,key=lambda x:x[1]),5))\\nif __name__=='__main__':experiments()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: direct archived graph transfer -> H2: calibrated soft-saturation and cyclic branches feeding a sparse rank-two readout; best prior 52/20 MAEs are 0.05340 for y and 0.05086 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the accurate panel-B operator as necessarily active\",\n      \"rejected_reason\": \"Its panel residual identifies the affine map, not its position or use in the forward graph. Test both native and transformed inputs.\"\n    }\n  ],\n  \"rationale\": \"Panel fits now reach roughly 0.0001 RMSE. Test whether their outputs and symmetric or full pairwise couplings explain both readouts on the prescribed split, while retaining the independently supported two-mode time law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "22c44e063ffb1826cf3901353aabe8436f0e39892450182b6bdd1a66741c11ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42608.37,
+      "usage_known": true,
+      "prompt_tokens": 33084,
+      "cached_tokens": 12672,
+      "completion_tokens": 1826
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af2cf720def24a60aecafc76e0f3c088",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:59:40.790466+00:00",
+  "ended_at_utc": "2026-11-28T14:00:16.649887+00:00",
+  "request_sha256": "4748dd378acb46e8c4c42aed984fd53bff47ce7a04940a69e7707956619110e6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35115,
+    "cached_tokens": 12672,
+    "completion_tokens": 1386
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('def _time_basis(')\\nend = s.index('def solve_batch(', start)\\ns = s[:start] + '''def _predict_state(times, traj, common, r, cross):\\n    \\\"\\\"\\\"Fit both temporal rates jointly, profiling out spatial coefficients.\\\"\\\"\\\"\\n    n, nt = traj.shape\\n    target = traj.ravel()\\n    best_score = np.inf\\n    for j in range(cross.shape[1]):\\n        fast = np.column_stack((common, cross[:, j]))\\n        slow = _aff(r, cross[:, j])\\n\\n        def design(rates, rows):\\n            basis = -np.expm1(-times[:, None] * rates)\\n            return np.concatenate((fast[rows, None, :] * basis[None, :, 0, None],\\n                                   slow[rows, None, :] * basis[None, :, 1, None]),\\n                                  axis=2).reshape(-1, fast.shape[1] + slow.shape[1])\\n\\n        def residual(rates):\\n            a = design(rates, slice(None, n))\\n            return a @ _ls(a, target) - target\\n\\n        fit = least_squares(residual, [1.8, .43], bounds=([.8, .03], [8., .79]))\\n        if fit.cost < best_score:\\n            best_score = fit.cost\\n            a = design(fit.x, slice(None, n))\\n            pred = (design(fit.x, slice(n, None)) @ _ls(a, target)).reshape(len(r)-n, nt)\\n    return pred\\n\\n\\n''' + s[end:]\\na = s.index('    spatial = _aff(')\\nb = s.index('    last =', a)\\ns = s[:a] + \\\"    state = _predict_state(study['eval_times'], train['traj'], scalar, r, cross)\\\\n\\\" + s[b:]\\np.write_text(s)\\nPY\\ncat > /tmp/verify_final.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; idx = np.arange(len(t['x'])); rng = np.random.default_rng(90827)\\nz = m['_calibrate'](s['panel_a'], t['x'])\\nsplits = [('public', idx[52:])] + [(f'corner{j}', np.argsort(v)[-20:]) for j,v in enumerate([*z.T,*(-z).T,np.linalg.norm(z,axis=1)])] + [(f'random{j}',rng.permutation(idx)[52:]) for j in range(20)]\\ndef check(study):\\n    out = m['solve_batch'](study)\\n    y, h, d = (out[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    n = len(study['test']['x']); nt = len(study['eval_times'])\\n    assert all(isinstance(a,np.ndarray) and np.isfinite(a).all() for a in (y,h,d))\\n    assert (y.shape,h.shape,d.shape) == ((n,),(n,nt),(4,))\\n    assert np.allclose(d,[y.mean(),y.std(),h[:,-1].mean(),h[:,-1].std()])\\n    return y,h\\ncheck(s); rows = []\\nfor name, te in splits:\\n    tr = np.setdiff1d(idx, te)\\n    y,h = check(dict(s, train=dict(x=t['x'][tr], y=t['y'][tr], traj=t['traj'][tr], summary=t['summary']), test={'x':t['x'][te]}))\\n    e = np.abs(h-t['traj'][te]); rows.append([np.mean(np.abs(y-t['y'][te])),e.mean(),e.mean(axis=0).max()])\\nrows = np.array(rows)\\nprint('52/20 public MAEs [scalar, trajectory, worst timestamp]:', rows[0])\\nprint('30-split worst MAEs:', rows.max(axis=0), [splits[j][0] for j in rows.argmax(axis=0)])\\nassert rows.max() <= .038\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense bilinear modes → one shared directional interaction selected within each fit; the challenger reduced worst-slice trajectory MAE from 0.01003 to 0.00427 across 30 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the dense bilinear baseline\",\n      \"rejected_reason\": \"Its worst timestamp MAE was 0.01862 versus 0.00669 for the compact graph.\"\n    },\n    {\n      \"option\": \"Hard-code the selected directional interaction\",\n      \"rejected_reason\": \"Selecting it from fitting rows reproduced the fixed interaction's validation metrics without baking in the public split choice.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact graph for its substantially better extreme-slice trajectory accuracy, then verify the exact delivered solver in an isolated Python process and against the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "72393f4a011f427cb15453df7d2c389e66a7e8cd345238551a2558e2eb31d353",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35858.0,
+      "usage_known": true,
+      "prompt_tokens": 35115,
+      "cached_tokens": 12672,
+      "completion_tokens": 1386
+    }
+  ]
+}

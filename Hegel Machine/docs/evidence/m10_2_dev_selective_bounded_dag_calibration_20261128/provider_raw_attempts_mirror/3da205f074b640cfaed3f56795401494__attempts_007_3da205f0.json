@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3da205f074b640cfaed3f56795401494",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:03:24.629096+00:00",
+  "ended_at_utc": "2026-11-28T13:04:03.422546+00:00",
+  "request_sha256": "6ecbbd874db16b02e098b8a68f1447b5d794626dc4ee3003c260728a9f38eed2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54466,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36483,
+    "cached_tokens": 12672,
+    "completion_tokens": 1594
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/anova.py <<'PY'\\nexec(open('/tmp/grammar.py').read().split('rows=[]')[0])\\nfrom scipy.linalg import qr\\nfrom sklearn.linear_model import lars_path\\nnp.set_printoptions(precision=4,suppress=True)\\np=s['panel_b']; print('B residual',np.mean(abs(b(p['u'])-p['v'])), 'telemetry',s['telemetry_vec']); print('train summary',s['train']['summary'])\\nN=52;Yt=Y[:N];\\nfor name,z in list(trans.items()):\\n terms=[j for k in range(4) for j in combinations_with_replacement(range(4),k)]; P=np.column_stack([np.prod(z[:,j],axis=1) for j in terms]); W=fit(P[:N],Yt)\\n if name in ('a','a0','a1','ba','ba0','ba1'): print('cubic',name,np.mean(abs(P[:N]@W-Yt),0))\\nrows=[]\\nfor name in ('a','x','a0','a1','ba','ba0','ba1','Ba','Ba0','Ba1'):\\n z=trans[name]; z=(z-z[:N].mean(0))/z[:N].std(0); S=[bias(z)]; groups=[]\\n for j in range(4):\\n  u=z[:,j:j+1]; S.extend([u**2,u**3,u**4,np.tanh(u),np.arctan(u),u/(1+abs(u)),np.exp(-u*u/2)])\\n for i,j in combinations(range(4),2):\\n  u,v=z[:,i:i+1],z[:,j:j+1]; G=[u*v,u*u*v,u*v*v,u*u*v*v,u**3*v,u*v**3,u*v/(1+.5*(u*u+v*v))];\\n  for sg in [-1,1]:\\n   w=(u+sg*v)/1.4;G += [np.sin(w),np.cos(w),np.tanh(w),w/(1+abs(w)),np.exp(-w*w/2)]\\n  groups.append(np.column_stack(G))\\n for target in [0,1,2]:\\n  y=Y[:,target];\\n  for trang in ['id','asinh','sinh'] if target==0 else ['id']:\\n   fun,inv={'id':(lambda a:a,lambda a:a),'asinh':(np.arcsinh,np.sinh),'sinh':(np.sinh,np.arcsinh)}[trang]; center=y[:N].mean(); yy=fun(y-center)\\n   for ngrp in [0,1,2,3,6]:\\n    scans=[()] if ngrp==0 else list(combinations(range(6),ngrp));\\n    for g in scans:\\n     F=np.column_stack(S+[groups[j] for j in g]);F/=np.maximum(np.linalg.norm(F[:N],axis=0),1e-8);K=F@F[:N].T\\n     vals,vec=np.linalg.eigh(K[:N]); VY=vec.T@yy[:N]\\n     for reg in [1e-7,1e-5,1e-3,.02]:\\n      D=1/(vals+reg);w=vec@(D*VY); loo=yy[:N]-w/(vec**2@D); pred=K[N:72]@w\\n      elo=np.mean(abs(inv(loo)+center-y[:N])); eva=np.mean(abs(inv(pred)+center-y[N:])); rows.append((target,elo,eva,name,trang,g,reg))\\n   F=np.column_stack(S+groups+[np.prod(z[:,j],axis=1)[:,None] for j in combinations(range(4),3)]); F=F[:,1:];mu=F[:N].mean(0);sd=F[:N].std(0); F=(F-mu)/sd; ym=yy[:N].mean();_,active,C=lars_path(F[:N],yy[:N]-ym,method='lasso',max_iter=120)\\n   for step in range(4,C.shape[1]):\\n    ids=np.flatnonzero(abs(C[:,step])>1e-10); G=bias(F[:,ids]); Wi=np.linalg.pinv(G[:N]); w=Wi@yy[:N];h=np.sum(G[:N]*Wi.T,axis=1);loo=yy[:N]-(yy[:N]-G[:N]@w)/np.maximum(1-h,1e-9); pred=G[N:72]@w\\n    if np.max(abs(loo))>20 or np.max(abs(pred))>20:continue\\n    rows.append((target,np.mean(abs(inv(loo)+center-y[:N])),np.mean(abs(inv(pred)+center-y[N:])),name,trang,tuple(ids),'lars'))\\nfor target in [0,1,2]:\\n r=[z[1:] for z in rows if z[0]==target]; print('target',target,'internal',*sorted(r,key=lambda z:z[0])[:5],sep='\\\\n');print('target',target,'tail',*sorted(r,key=lambda z:z[1])[:4],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/anova.py 2>/tmp/anova_stderr\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: rank-two exponential trajectories → H2: a small subset of pairwise or saturating spatial terms; the best screened shared dictionary still gives tail MAEs of 0.052 for y and 0.049 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the same spatial basis for all three readouts\",\"rejected_reason\":\"The cubic coefficients differ substantially between the scalar and the two amplitudes, so each readout needs its own structure check.\"}],\"rationale\":\"Screen sparse coordinate interactions and invertible scalar links using only the first 52 rows for ranking; report the held-out performance of each trajectory amplitude separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6c5e49b8739a4fbdb3754f2802949b3bd5c6e5034c065e52089117834b909289",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38791.75,
+      "usage_known": true,
+      "prompt_tokens": 36483,
+      "cached_tokens": 12672,
+      "completion_tokens": 1594
+    }
+  ]
+}

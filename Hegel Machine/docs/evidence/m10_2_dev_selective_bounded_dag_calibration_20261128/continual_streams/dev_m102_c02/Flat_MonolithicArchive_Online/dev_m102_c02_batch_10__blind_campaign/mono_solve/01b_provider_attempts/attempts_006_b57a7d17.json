@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b57a7d17e77b4785b2bd4304298ddfd1",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:56:41.558732+00:00",
+  "ended_at_utc": "2026-11-28T13:57:19.880836+00:00",
+  "request_sha256": "23460c14c93a66042843e41a1824b25ebad226c80677665cf0b05999bab964af",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44332,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30949,
+    "cached_tokens": 12672,
+    "completion_tokens": 1604
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m102_c02_batch_{04,06,07}_solver.py; cat > /tmp/probe10.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nimport cal10 as m\\ns=m.s\\nu,v=m.u,m.v\\nls=m.ls\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef calibration(f, start):\\n def H(x,p):return np.stack([np.ones_like(x), f(x,p[:-1]),np.sin(p[-1]*np.roll(x,2,axis=1))],axis=2)\\n def fit(p):return m.fit(H(u,p))\\n p=least_squares(lambda p:fit(p)[0].ravel(),start,max_nfev=200).x\\n r,c=fit(p);print('cal',np.std(r),p,c.T)\\n return np.std(r),lambda z:np.einsum('ijk,jk->ij',H(z,p),c)\\ncals=[calibration(f,start) for f,start in [(lambda x,p:x+p[0]*np.tanh(p[1]*x),[.22,2.15,2.4]),(lambda x,p:x+p[0]*np.arctan(p[1]*x),[.22,2.15,2.4]),(lambda x,p:x+p[0]*np.sin(p[1]*x),[.22,2.15,2.4]),(lambda x,p:x/(1+p[0]*abs(x)**p[1]),[.22,1.25,2.4]),(lambda x,p:x+p[0]*x/(1+p[1]*x*x),[.22,2.15,2.4]),(lambda x,p:x+p[0]*x/(1+p[1]*abs(x)**p[2]),[.22,2.15,1.25,2.4]),(lambda x,p:x+p[0]*m.erf(p[1]*x),[.22,2.15,2.4])]]\\nf=min(cals,key=lambda t:t[0])[1]\\nz=np.array([least_squares(lambda z:f(z[None])[0]-x,x,gtol=1e-12).x for x in np.r_[s['train']['x'],s['test']['x']]])\\nprint('z ranges',z.min(0),z.max(0),'max inverse error',np.max(abs(f(z)-np.r_[s['train']['x'],s['test']['x']])))\\nrat=lambda x,p:np.sign(x)*abs(x)**p[0]/(1+p[1]*abs(x)**p[2]); soft=lambda x,p:np.logaddexp(0,p[0]*x+p[1]); dead=lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1]\\ndef panel(k,j,forms):\\n u,v=s[k]['u'],s[k][j]; fits=[]\\n for f,p,bounds in forms:\\n  def calc(p):\\n   h=aff(f(u,p)); c=ls(h,v);return (h@c-v).ravel(),c\\n  p=least_squares(lambda p:calc(p)[0],p,bounds=bounds,max_nfev=400).x; r,c=calc(p); print('operator',k,j,np.std(r),p); fits.append((np.std(r),aff(f(z,p))@c))\\n return min(fits,key=lambda t:t[0])[1]\\nb=panel('panel_b','v',[(dead,[.35,1.5],([0,.2],[.8,12])),(rat,[7,30,5],([.1,.001,.1],[20,10000,20])),(lambda x,p:np.sign(x)*abs(x)**p[0],[2],([.1],[20])),(lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1]/(1+p[2]*abs(x)**2),[.2,2,.2],([0,.2,0],[.8,12,10]))]); c=panel('panel_c','v1',[(rat,[1,.9,1.25],([.1,.001,.1],[5,30,7]))]); d=panel('panel_c','v2',[(soft,[2.2,0],([.1,-5],[10,5]))]); np.savez('/tmp/f10.npz',z=z,b=b,c=c,d=d)\\ny=s['train']['y']; t=s['train']['traj']; print('y versus traj',ls(aff(t),y),np.std(aff(t)@ls(aff(t),y)-y)); print('summary',s['train']['summary']); print('y/traj stats',y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std());\\ndef error(h,Y):\\n pred=h[52:72]@ls(h[:52],Y[:52]);return np.mean(abs(pred-Y[52:]),axis=0)\\nfor n,x in [('raw',np.r_[s['train']['x'],s['test']['x']]),('z',z),('b',b),('c',c),('d',d)]:\\n pair=np.array([x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]).T\\n for name,H in [('lin',x),('pair',np.c_[x,x[:,0]*x[:,2]+x[:,1]*x[:,3]]),('quad',np.c_[x,pair])]:\\n  print('cv',n,name,round(error(aff(H),y),5),np.round(error(aff(H),t),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe10.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear panels) -> H2 (sinusoidal cross-coordinate calibration with a sparse readout); prior 52/20 worst-output MAE is 0.170752.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Identify the remaining calibration nonlinearity and test each recovered operator on both outputs before searching composed readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "fc69f6866b98674d615f2061625277b5f3d35a7c0e7e2e6ced8281cb285d18be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38320.82,
+      "usage_known": true,
+      "prompt_tokens": 30949,
+      "cached_tokens": 12672,
+      "completion_tokens": 1604
+    }
+  ]
+}

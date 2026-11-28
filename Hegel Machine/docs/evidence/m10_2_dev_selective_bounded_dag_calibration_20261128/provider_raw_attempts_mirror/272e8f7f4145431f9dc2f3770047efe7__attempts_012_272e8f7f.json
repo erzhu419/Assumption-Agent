@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "272e8f7f4145431f9dc2f3770047efe7",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:27.838553+00:00",
+  "ended_at_utc": "2026-11-28T13:17:00.408744+00:00",
+  "request_sha256": "8229a4f23cda0eaf48b19012d95c63d969fa85608f24bf347b0c782f4146f647",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72914,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43814,
+    "cached_tokens": 12672,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/final_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.model_selection import ShuffleSplit\\nfrom scipy.linalg import cho_factor,cho_solve\\nsys.path.insert(0,'/holdout_task'); from batch_solver import calibrate,temporal\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; o,g=calibrate(s); z=(tr['x']-o)/g; y=tr['y']; Y=tr['traj']; t=s['eval_times']; n=len(z)\\npairs=np.array(list(combinations(range(4),2))); c=z[:,pairs[:,0]]*z[:,pairs[:,1]]; C=c[:,[0,2,3,5]]; l=z@z.T; L=1+l; Q=L+c@c.T+(z*z)@(z*z).T; ck=C@C.T; d=cdist(z,z); H=np.sqrt(5)*d/2; M=(1+H+H*H/3)*np.exp(-H); I=np.eye(n)\\nS=np.column_stack([z*z/np.sqrt(1+.39*z*z),np.tanh(z),z/(1+.22*z*z)]); D=S@S.T\\np=s['panel_c']; u=p['u']; F=np.c_[np.ones(len(u)),u[:,pairs[[0,2,3,5],0]]*u[:,pairs[[0,2,3,5],1]]]; print('C coefficients',np.linalg.lstsq(F,p['v1'],rcond=None)[0]);\\nsplits=[(np.arange(52),np.arange(52,72)),*ShuffleSplit(24,train_size=52,random_state=11).split(z)]\\nR={}; predictions={}; specs={}\\ndef add(name,K):\\n vals=[]; ps=[]\\n for a,b in splits:\\n  T=np.c_[y,Y]; C0=cho_factor(K[np.ix_(a,a)]); p=K[np.ix_(b,a)]@cho_solve(C0,T[a]); e=p-T[b]; vals.append([np.mean(abs(e[:,0])),np.mean(abs(e[:,1:])),np.mean(abs(e[:,-1]))]); ps.append(p)\\n R[name]=np.array(vals); predictions[name]=ps\\nfor alpha in [.04,.15,.45]:\\n for ridge in [.002,.006,.018]:\\n  for mi in [0.,.25,1.]:\\n   for sep in [0.,.4]:\\n    name=(alpha,ridge,mi,sep); add(name,Q+alpha*ck*(L**2+mi*4*M)+sep*D+ridge*I)\\nadd('cycle',Q+ck*M+.002*I); add('poly',Q+.03*l**3+.003*l**4+.002*I)\\nfor j in range(3):\\n print('metric',j)\\n for name,r in sorted(R.items(),key=lambda kv:.65*np.mean(kv[1][:,j])+.35*np.max(kv[1][:,j]))[:8]:print(name,np.round([r[0,j],r[:,j].mean(),r[:,j].max()],5))\\nfor name2 in ['cycle','poly']:\\n for wt in [.15,.3,.5]:\\n  r=[]\\n  for (a,b),p1,p2 in zip(splits,predictions[.15,.002,0.,0.],predictions[name2]):\\n   e=(1-wt)*p1+wt*p2-np.c_[y,Y][b];r.append([np.mean(abs(e[:,0])),np.mean(abs(e[:,1:])),np.mean(abs(e[:,-1]))]);\\n  print('blend',name2,wt,np.round([r[0],np.mean(r,0),np.max(r,0)],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/final_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 isotropic interpolation -> H2 cycle-modulated polynomial covariance; across 13 splits, worst scalar and trajectory MAEs fell from 0.08361 and 0.06228 to 0.04477 and 0.04133.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the isotropic solver because it has the lowest designated scalar MAE.\",\n      \"rejected_reason\": \"Its worst resplit scalar error is nearly twice that of the cycle-modulated model, which still passes the designated gate.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the leading cycle kernel against regularization and modest smooth corrections before saving the final artifact. Check endpoint error separately from average trajectory error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a8b68124c53dbb22aedadaf263073c9a6e0ab93c2944358ebc6a49ab614bddaf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32568.29,
+      "usage_known": true,
+      "prompt_tokens": 43814,
+      "cached_tokens": 12672,
+      "completion_tokens": 1300
+    }
+  ]
+}

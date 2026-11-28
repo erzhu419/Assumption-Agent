@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab5c5044fc4d4dbab7bc7c430bc83683",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_14__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:36:35.902477+00:00",
+  "ended_at_utc": "2026-11-28T14:37:08.803203+00:00",
+  "request_sha256": "670eda9098b0fa2098b56caa5bffb56199a09d083979383b597f36cb1ef72e9f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61104,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38289,
+    "cached_tokens": 12672,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations,product\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; F=np.load('/tmp/coords.npz'); z,b,c,d,V=[F[k] for k in ('z','b','c','d','V')]; n=52\\nls=lambda X,Y:np.linalg.lstsq(X,Y,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(q):return PolynomialFeatures(2).fit_transform(q)\\ndef metric(E):return np.mean(abs(E[:,0])),np.mean(abs(E[:,1:]))\\nfun={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'atan':np.arctan,'r':lambda x:x/(1+x*x),'h':lambda x:x/np.sqrt(1+x*x)}\\ncoords={'z':z,'b':b,'c':c,'d':d}; rows=[]\\ndef evaluate(A,name):\\n B=ls(A[:n],V[:n]); E=A@B-V; rows.append((*metric(E[n:]),*metric(E[:n]),name))\\nfor nam,q in coords.items():\\n for gn,g in fun.items():\\n  for k in [.22,1,1.25,1.8,2.15,2.4,2.85,3.5,4.3]:\\n   u=g(k*q); evaluate(np.c_[poly(q),u],(nam,gn,k,'add')); evaluate(poly(u),(nam,gn,k,'transform')); evaluate(np.c_[poly(q),u,u*q],(nam,gn,k,'local'))\\n for nam2,q2 in coords.items():\\n  if nam2!=nam:\\n   for typ,D in [('lin',q2),('quad',poly(q2)[:,1:]),('prod',(q[:,:,None]*q2[:,None,:]).reshape(len(q),16))]:evaluate(np.c_[poly(q),D],(nam,nam2,typ))\\nprint('fixed y',sorted(rows)[:10]); print('fixed t',sorted(rows,key=lambda a:a[1])[:10],flush=True)\\nrows=[]\\nW=V[:,[0,-1]]\\nfor name,q in coords.items():\\n for fn,g in fun.items():\\n  for mode in range(5):\\n   P=poly(q)\\n   def feat(a):\\n    h=g(a[0]*q+a[1]);\\n    if mode==0:return np.c_[P,h]\\n    if mode==1:return poly(q+a[2]*h)\\n    if mode==2:return poly(h)\\n    if mode==3:return np.c_[P,h,h*q]\\n    return np.c_[aff(q),h,poly(q+a[2]*h)[:,5:]]\\n   def f(a):\\n    A=feat(a)[:n];return (A@ls(A,W[:n])-W[:n]).ravel()\\n   for k in [1.1,2.2,3.5]:\\n    for h in ([.4,-.4] if mode in (1,4) else [0]):\\n     o=least_squares(f,[k,0,h],max_nfev=90,bounds=([.12,-3.2,-5],[7,3.2,5]));evaluate(feat(o.x),(name,fn,mode,o.x))\\nprint('profiled y',sorted(rows)[:14]);print('profiled t',sorted(rows,key=lambda a:a[1])[:14]);print('profiled train',sorted(rows,key=lambda a:a[2])[:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic readout on calibrated panel B → H2 compact nonlinear readout or auxiliary interaction; best measured 52/20 MAEs are 0.116 for y and 0.070 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the apparent zero-error auxiliary inverse links\",\n      \"rejected_reason\": \"Those fits use an identity link scaled almost to zero, which collapses the response rather than identifying a physical operator.\"\n    }\n  ],\n  \"rationale\": \"The corrected calibration is reliable, and panel B gives the strongest forward coordinates so far. Fit nonlinear readout parameters on the first 52 examples only and score scalar and trajectory predictions separately on the last 20.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "444406fa963e18c57bc4324d73475b7fa9f9a7feff5cd73c36ee3c7d601d7192",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32899.39,
+      "usage_known": true,
+      "prompt_tokens": 38289,
+      "cached_tokens": 12672,
+      "completion_tokens": 1224
+    }
+  ]
+}

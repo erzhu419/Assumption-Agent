@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46256cc0270844d1b8ec78c9d2ef216e",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:59:11.522972+00:00",
+  "ended_at_utc": "2026-11-28T13:59:46.473595+00:00",
+  "request_sha256": "c53c45a2a31d8c4efd029bc90bfa941547d15cdb69aac5a08c3c57e656cf0cf1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60416,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36570,
+    "cached_tokens": 14720,
+    "completion_tokens": 1499
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/passed_solver.py; cat >/tmp/refine.py <<'PY'\\nimport passed_solver as m\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train']; x=np.r_[t['x'],s['test']['x']];z0=m._calibrate(s['panel_a'],x);p=s['panel_a'];u,v=p['u'],p['v'];w=np.roll(u,2,axis=1);A=m._aff(u);e=np.linalg.norm(v-A@m._ls(A,v),axis=1);keep=e<max(3*np.median(e),.2)\\ndef des(x,r,linear=False):\\n w=np.roll(x,2,axis=-1);g=np.zeros(x.shape+(11 if linear else 10,)); i=np.arange(4);g[...,i,i]=1;g[...,i,i+4]=x;g[...,8]=x**3;g[...,9]=np.sin(r*w)\\n if linear:g[...,10]=w\\n return g\\nzs={'base':z0}\\nfor lin in [False,True]:\\n def coeff(r):return m._ls(des(u[keep],r,lin).reshape(-1,10+lin),v[keep].ravel())\\n def rr(r):return (des(u[keep],r,lin)@coeff(r)-v[keep]).ravel()\\n r=minimize_scalar(lambda r:np.std(rr(r)),bounds=(1.4,3.5),method='bounded').x;c=coeff(r); print('compact cal',lin,r,np.std(rr(r)),c.round(5));zs[str(lin)]=np.array([least_squares(lambda z:des(z,r,lin)@c-y,g).x for y,g in zip(x,z0)])\\np=s['panel_c'];u=p['u'];B=s['panel_b']; ls=m._ls; aff=m._aff; cross=m._cross\\nrng=np.random.default_rng(18);folds=[np.arange(72)]+[rng.permutation(72) for _ in range(12)]\\ndef errors(F):\\n total=[]\\n for ids in folds:\\n  a,b=ids[:52],ids[52:];Q=m._basis(s['eval_times'],t['traj'][a]);target=np.c_[t['y'][a],t['traj'][a]@Q];pred=m._readout(F[ids],target,len(a));e=abs(pred[:,1:]@Q.T-t['traj'][b]);total.append([np.mean(abs(pred[:,0]-t['y'][b])),e.mean(),e.mean(0).max()])\\n total=np.array(total);return np.r_[total[0],total.mean(0),total.max(0)].round(5)\\nfor zn,z in zs.items():\\n c=m._branch(p,z);b=aff(z)@ls(aff(B['u']),B['v']);gs={}\\n for typ,func,start in [('cos',np.cos,2.15),('gauss',lambda p:np.exp(-p*p),.88)]:\\n  for lev in [0,1,2]:\\n   def d(x,r):return np.c_[aff(x),func(r*x),*( [x*x] if lev>=1 else []),*( [x**3] if lev>=2 else [])]\\n   def res(r):\\n    f=d(u,r);return np.std(f@ls(f,p['v2'])-p['v2'])\\n   r=minimize_scalar(res,bounds=(start*.65,start*1.35),method='bounded').x\\n   if zn=='base':print('v2',typ,lev,r,res(r))\\n   gs[typ+str(lev)]=d(z,r)@ls(d(u,r),p['v2'])\\n gs['raw_g']=np.exp(-.877**2*z*z);gs['raw_c']=np.cos(2.15*z)\\n for tag,g in gs.items():\\n  for mode in [0,1,2]:\\n   if mode==0:f=np.c_[c,g,cross(c,g),cross(z,c),cross(z,g),z]\\n   if mode==1:f=np.c_[c,g,cross(c,g),cross(z,c),cross(z,g),z,cross(z,z)]\\n   if mode==2:f=np.c_[c,g,cross(c,g),z,cross(z,z),np.sum(c*g,axis=1)]\\n   print(zn,tag,mode,errors(f))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py > /tmp/refine.log; head -10 /tmp/refine.log; grep -E '^base raw_g 0|^False raw_g 0|^True raw_g 0' /tmp/refine.log; python3 - <<'PY'\\nr=[]\\nfor l in open('/tmp/refine.log'):\\n p=l.split('['); a=''.join(p[1:]).replace(']','').split();\\n if len(a)==9:r.append((float(a[7]),float(a[1]),l.strip()))\\nfor x in sorted(r)[:15]:print(x[-1])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: The interaction baseline passes at 0.01314 scalar and 0.03394 trajectory MAE; test whether shared calibration coefficients and measured even-panel terms reduce the worst shuffled trajectory MAE of 0.03535.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Replace the passing solver immediately\",\"rejected_reason\":\"The current solver meets the gate; a replacement should first show lower trajectory error across splits.\"}],\"rationale\":\"Preserve the verified solver while testing simpler calibration and measured panel features against the remaining trajectory bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "360f49da995df1b999e81210d261585da4c2fc7038fdd5d298f44a6e8db4620f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34949.24,
+      "usage_known": true,
+      "prompt_tokens": 36570,
+      "cached_tokens": 14720,
+      "completion_tokens": 1499
+    }
+  ]
+}

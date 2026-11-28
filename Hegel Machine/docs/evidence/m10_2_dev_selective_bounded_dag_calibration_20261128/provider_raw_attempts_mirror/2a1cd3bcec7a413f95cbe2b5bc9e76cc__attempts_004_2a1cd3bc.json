@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2a1cd3bcec7a413f95cbe2b5bc9e76cc",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:10:23.210664+00:00",
+  "ended_at_utc": "2026-11-28T14:10:58.107022+00:00",
+  "request_sha256": "92892108a883b89fed2174bd3e26a0c23d28e985c00d8e8a16a445e80924a96a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30479,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24646,
+    "cached_tokens": 12672,
+    "completion_tokens": 1284
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,65p' /tmp/hegel_continual_archive/*08_solver.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.linalg import svd\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for e in range(1,d+1) for ix in itertools.combinations_with_replacement(range(4),e)])\\ndef check(D,Y):\\n b=np.linalg.lstsq(D,Y,rcond=None)[0]; R=Y-D@b; h=np.sum(D*np.linalg.pinv(D).T,axis=1); return np.round(np.mean(abs(R),axis=0),5),np.round(np.mean(abs(R/np.maximum(1e-12,1-h[:,None])),axis=0),5)\\na=s['panel_a']; U,V=a['u'],a['v']; ii,jj=np.triu_indices(len(U),1); dx=U[jj]-U[ii]; a1=np.array([np.median(((V[jj]-V[ii])[:,k]/dx[:,k])[abs(dx[:,k])>.1*np.ptp(U[:,k])]) for k in range(4)]); a0=np.median(V-U*a1,axis=0); R=V-U*a1-a0; print('A maps',a0,a1,'resid quantiles',np.quantile(abs(R),[0,.25,.5,.75,.85,.9,.95,.99,1],axis=0)); print('A row medres',np.sort(np.median(abs(R),axis=1)))\\nfor k in range(4):\\n keep=abs(R[:,k])<6*np.median(abs(R[:,k])); a0[k],a1[k]=np.linalg.lstsq(aff(U[keep,k]),V[keep,k],rcond=None)[0]\\nX=s['train']['x']; Z=(X-a0)/a1; Y=np.c_[s['train']['y'],s['train']['traj']]; print('A final',a0,a1,'Z range',Z.min(0),Z.max(0),'singular values traj',svd(Y[:,1:],compute_uv=False))\\ndef forms(u):\\n yield 'aff',aff(u)\\n for deg in [2,3,4,5,6,7]: yield 'sep'+str(deg),np.c_[aff(u),*[u**e for e in range(2,deg+1)]]\\n for deg in [2,3]: yield 'poly'+str(deg),poly(u,deg)\\n for e in [2,3,5]: yield 'pow'+str(e),np.c_[aff(u),u**e]\\n for a in [.125,.25,.5,1,1.25,2,4]:\\n  yield 'rat'+str(a),aff(u)/(1+a*np.sum(u*u,axis=1,keepdims=True))\\n  yield 'seprat'+str(a),np.c_[aff(u),u/(1+a*u*u)]\\n  yield 'tanh'+str(a),np.c_[aff(u),np.tanh(a*u)]\\n  yield 'sin'+str(a),np.c_[aff(u),np.sin(a*u)]\\nfor p,t in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[p]['u'],s[p][t]; rows=[]\\n for n,d in forms(u):\\n  if d.shape[1]>=len(u)-2:continue\\n  f,l=check(d,v); rows.append((np.mean(l),n,f,l))\\n print(p,t,sorted(rows,key=lambda x:x[0])[:9]); b=np.linalg.lstsq(aff(u),v,rcond=None)[0]; print('affine row resid',np.sort(np.linalg.norm(v-aff(u)@b,axis=1)))\\nprint('LABELS')\\nfor n,d in list(forms(Z))+[('x',aff(X))]:\\n if d.shape[1]>=45:continue\\n b=np.linalg.lstsq(d[:52],Y[:52],rcond=None)[0]; er=np.mean(abs(Y[52:]-d[52:]@b),axis=0); print(n,np.round([er[0],er[1:].mean(),er[-1]],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel B → H2 robust or nonlinear calibration; panel-B affine leave-one-out MAE is 0.116–0.159 across outputs.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Interpolate all 24 panel-B rows with full cubic monomials\",\"rejected_reason\":\"The cubic basis is underdetermined; near-zero training residual cannot establish predictive calibration.\"}],\"rationale\":\"Separate sparse calibration corruption from missing map terms and test whether low-order nonlinear features explain trajectory variation that an invertible affine map cannot change.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "988cd3ca52623927a4b0094d23f0007a968132c1d82d4403834b2343ce72103b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34894.44,
+      "usage_known": true,
+      "prompt_tokens": 24646,
+      "cached_tokens": 12672,
+      "completion_tokens": 1284
+    }
+  ]
+}

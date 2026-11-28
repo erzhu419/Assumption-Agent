@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "edd31c0c78954e4889957c1f1a3c0a68",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:00:27.019745+00:00",
+  "ended_at_utc": "2026-11-28T14:00:50.841005+00:00",
+  "request_sha256": "1f2dc2357d1879600d489ceffeaa56254236d46cdcc38f3b0c6a1d62e953dce2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37458,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27121,
+    "cached_tokens": 14720,
+    "completion_tokens": 954
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_10_solver.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; x=tr['x']; t=s['eval_times']; n=52\\nm=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c02_batch_10_solver.py'); aff=m['_aff']; fit=m['_fit']; a=s['panel_a']; z=m['_calibrate'](a,x)\\nprint('calibration error',np.sort(np.linalg.norm(m['_calibrate'](a,a['v'])-a['u'],axis=1)))\\ncache={'x':x,'z':z}\\ndef score(h,Y):\\n q=h[n:]@fit(h[:n],Y[:n]); return np.mean(abs(q-Y[n:])),np.sqrt(np.mean((h[:n]@fit(h[:n],Y[:n])-Y[:n])**2))\\nfor pn,vn in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u=s[pn]['u']; v=s[pn][vn]; ranks=[]\\n models=[('linear',lambda x,p:x,[],[]),('dead',lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1],[.22,1.25],([0,.25],[.8,4])),('soft',lambda x,p:np.logaddexp(0,p[0]*x+p[1]),[2.15,0],([.1,-4],[10,4])),('power',lambda x,p:np.sign(x)*abs(x)**p[0],[1.25],([.25],[4])),('sat',lambda x,p:x/(1+p[0]*abs(x)**p[1])**p[2],[.22,2.15,.5],([0,.2,.1],[5,5,2])),('tanh',lambda x,p:np.tanh(p[0]*x+p[1]),[1,0],([.05,-4],[8,4]))]\\n for nam,op,p,bd in models:\\n  def err(p):\\n   h=aff(op(u,p)); return (h@fit(h,v)-v).ravel()\\n  if len(p):p=least_squares(err,p,bounds=bd,gtol=1e-12).x\\n  e=np.sqrt(np.mean(err(p)**2)); ranks.append((e,nam,p)); cache[pn+vn+nam]=aff(op(z,p))@fit(aff(op(u,p)),v)\\n print(pn,vn,sorted(ranks,key=lambda a:a[0]))\\nfor k,W in cache.items():\\n i,j=np.triu_indices(4); pair=W[:,0]*W[:,2]+W[:,1]*W[:,3]\\n print(k,'linear',score(aff(W),y),'pair',score(np.c_[aff(W),pair],y),'quad',score(np.c_[aff(W),W[:,i]*W[:,j]],y),'T',score(aff(W),T))\\nnp.savez('/tmp/cached.npz',**cache)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived transfer -> H2 identify the active panel maps and scalar readout; best archived 52/20 MAE is 0.074564 for y and 0.007179 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit competing operator grammars directly to panel observations before testing scalar and trajectory feature families on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2453f2e68a2393dd9e3510114133e419daef76db3afbe4ccf7d27a4489820840",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23820.19,
+      "usage_known": true,
+      "prompt_tokens": 27121,
+      "cached_tokens": 14720,
+      "completion_tokens": 954
+    }
+  ]
+}

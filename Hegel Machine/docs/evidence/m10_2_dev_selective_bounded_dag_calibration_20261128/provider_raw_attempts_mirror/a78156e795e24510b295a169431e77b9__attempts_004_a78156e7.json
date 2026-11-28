@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a78156e795e24510b295a169431e77b9",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:49:00.234772+00:00",
+  "ended_at_utc": "2026-11-28T13:49:24.713878+00:00",
+  "request_sha256": "81842af8a6dab1fdca6324d772dcce1da2d8d5e230143cc116ddca49431fb75e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24252,
+    "cached_tokens": 12672,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']\\nsp=importlib.util.spec_from_file_location('a','/tmp/hegel_continual_archive/dev_m102_c02_batch_06_solver.py'); a=importlib.util.module_from_spec(sp);sp.loader.exec_module(a)\\nz=a._calibration(s['panel_a'],tr['x'])\\ndef aff(u):return np.c_[np.ones(len(u)),u]\\ndef fit(h,v):return np.linalg.lstsq(h,v,rcond=None)[0]\\nforms={ 'lin':(lambda u,p:u,[]),'pow':(lambda u,p: np.sign(u)*abs(u)**p[0],[2]),'hinge':(lambda u,p: np.sign(u)*np.maximum(abs(u)-p[0],0)**p[1],[.25,2]),'rational':(lambda u,p: u/(1+p[0]*u**2),[.22]),'cubic':(lambda u,p:u+p[0]*u**3,[.22]),'sat':(lambda u,p:np.tanh(p[0]*u),[2]),'powered_rat':(lambda u,p:np.sign(u)*abs(u)**p[0]/(1+p[1]*abs(u)**p[2]),[2,.22,2]),'sine':(lambda u,p:np.sin(p[0]*u),[2]),'blend_sin':(lambda u,p:u+p[0]*np.sin(p[1]*u),[.22,2]),'blend_tanh':(lambda u,p:u+p[0]*np.tanh(p[1]*u),[.22,2])}\\nif __name__=='__main__':\\n print('calib',z[:4],z.min(0),z.max(0)); print('svd',np.linalg.svd(tr['traj'])[1]); print('y/traj correlation',np.corrcoef(np.c_[tr['y'],tr['traj']].T)[0]);\\n for pn,k in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  u,v=s[pn]['u'],s[pn][k]; print(pn,k)\\n  for name,(fn,p0) in forms.items():\\n   def fun(p):\\n    h=aff(fn(u,p)); return (h@fit(h,v)-v).ravel()\\n   p=least_squares(fun,p0,max_nfev=150,bounds=([0]*len(p0),[20]*len(p0))).x if p0 else []\\n   print(name,np.round(p,5),np.sqrt(np.mean(fun(p)**2)))\\n  for h in [aff(np.c_[u,u**2,u**3]),aff(np.c_[u,a._quad(u)]),aff(np.c_[u,a._quad(u),u**3]),aff(np.c_[u,u*np.roll(u,-1,axis=1),u**3])]:\\n   print('poly',h.shape[1],np.sqrt(np.mean((h@fit(h,v)-v)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ====; grep -E 'return |telemetry' \\\"$f\\\" | head -23; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived shallow graph -> identify panel-specific nonlinearities and temporal rank; archived 52/20 MAEs are 0.143114 for y and 0.085359 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit competing discrete operator families directly to the calibration measurements and inspect trajectory rank before searching for the downstream composition.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6e972da00977070cd67d9e8e49e0733d9121658d36bc2eab7d5c260047917fc6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24478.18,
+      "usage_known": true,
+      "prompt_tokens": 24252,
+      "cached_tokens": 12672,
+      "completion_tokens": 983
+    }
+  ]
+}

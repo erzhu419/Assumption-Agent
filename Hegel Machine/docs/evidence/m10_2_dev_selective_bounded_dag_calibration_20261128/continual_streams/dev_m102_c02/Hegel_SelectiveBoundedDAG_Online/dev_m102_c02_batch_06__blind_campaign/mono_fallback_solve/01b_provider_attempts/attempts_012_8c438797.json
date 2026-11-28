@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c438797da194166a8c33f88e128e201",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:49:59.943659+00:00",
+  "ended_at_utc": "2026-11-28T13:50:53.570990+00:00",
+  "request_sha256": "1fe600d23768517ec483bad8b79f6a5b5e695f721163427ce9a42f79065dec4f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83408,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 49503,
+    "cached_tokens": 12672,
+    "completion_tokens": 2449
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/lastprobe.py <<'PY'\\nfrom graph import *\\nfrom scipy.linalg import solve\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nx=Amap(s['panel_a'])[1](s['train']['x']); raw=s['train']['x']; y=s['train']['y']; tr=s['train']['traj']; rng=np.random.default_rng(45); folds=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(72) for _ in range(4)]]; a,b=np.triu_indices(4); c,d=np.triu_indices(4,1)\\ndef fun(n,u):\\n if n==0:return np.tanh(u)\\n if n==1:return np.arctan(u)\\n if n==2:return u/np.sqrt(1+u*u)\\n if n==3:return erf(u)\\n if n==4:return np.sin(u)\\n if n==5:return u/(1+abs(u))\\n if n==6:return np.clip(u,-1,1)\\n if n==7:return u/(1+u*u)\\ndef feat(x,n,q,mode):\\n z=fun(n,q*x); ZZ=z[:,a]*z[:,b]; XZ=(x[:,:,None]*z[:,None,:]); B=np.c_[np.ones(len(x)),x,z,ZZ];\\n if mode==0:return B\\n if mode==1:return np.c_[B,XZ.reshape(-1,16)]\\n if mode==2:return np.c_[B,x*z]\\n if mode==3:return np.c_[B,XZ[:,c,d]+XZ[:,d,c],x*z]\\n if mode==4:return np.c_[B,XZ[:,c,d]-XZ[:,d,c],x*z]\\n if mode==5:return np.c_[B,x*z,XZ[:,c,d]+XZ[:,d,c], .3*(XZ[:,c,d]-XZ[:,d,c])]\\n if mode==6:return np.c_[B,.15*XZ.reshape(-1,16), x*z, (x-z/q)**2, z**3]\\n if mode==7:return np.c_[B,x*z,XZ[:,c,d], z**3]\\n if mode==8:return np.c_[B,x*z,XZ[:,d,c], z**3]\\n if mode==9:return np.c_[B,x*z,(z[:,c]*z[:,d])*(x[:,c]+x[:,d]),z**3]\\n if mode==10:return np.c_[B,x*z,(z[:,c]*z[:,d])*(x[:,c]-x[:,d]),z**3]\\n if mode==11:return np.c_[B,x*z, (x-z/q)[:,c]*(x-z/q)[:,d], (x-z/q)**2]\\n if mode==12:return np.c_[np.ones(len(x)),x,z,ZZ[:,a!=b], x*z,XZ[:,c,d]+XZ[:,d,c]]\\n if mode==13:return np.c_[B,x*z, np.sin(z[:,c]+z[:,d]),np.sin(z[:,c]-z[:,d])]\\n if mode==14:return np.c_[B,x*z,fun(n,q*(x[:,c]+x[:,d])),fun(n,q*(x[:,c]-x[:,d]))]\\nR=[]; preds=[]\\nfor n in range(8):\\n for q in np.linspace(.7,2.5,19):\\n  for mode in range(15):\\n   F=feat(x,n,q,mode)\\n   for reg in [.0002,.002,.01,.04]:\\n    for f in [0,1,2,3,4]:\\n     k=[0,.18,.45,1.,2.][f]; E=[];P=[]\\n     for i,j in folds:\\n      Y=np.arcsinh(k*y[i])/k if k else y[i]; W=F[i]; B=solve(W.T@W+reg*np.eye(W.shape[1]),W.T@Y,assume_a='pos'); pred=F[j]@B; pred=np.sinh(np.clip(k*pred,-10,10))/k if k else pred;E.append(np.mean(abs(pred-y[j])));P.append(pred)\\n     R.append((np.mean(E),E[0],max(E),n,q,mode,reg,k));preds.append(P)\\nprint('Dict AVG',sorted(R)[:10],flush=True); print('Dict WORST',sorted(R,key=lambda r:r[2])[:7],flush=True)\\ninds=sorted(range(len(R)),key=lambda k:R[k][0]);\\nfor count in [5,15,50,150]:\\n idx=inds[:count]; p=np.mean([preds[k] for k in idx],0); print('ensemble',count,[np.mean(abs(w-y[j])) for w,(i,j) in zip(p,folds)],flush=True)\\n# Search for a rational denominator of a low-dimensional latent coordinate, with variable projection.\\nRR=[]\\nfor n,q in [(0,1.6),(1,1.55),(2,1.25),(3,1.5)]:\\n z=fun(n,q*x); Hs=[z,x,np.c_[z,x]]\\n for mode in [0,2,3,5,11]:\\n  F=feat(x,n,q,mode)\\n  for h,H in enumerate(Hs):\\n   for kind in [0,1,2,3]:\\n    i,j=folds[0]; reg=.001\\n    def design(p):\\n     a=H@p[:-1]+p[-1];\\n     if kind==0:return F/(1+a[:,None]**2)\\n     if kind==1:return np.c_[F,1/(1+a*a)]\\n     if kind==2:return np.c_[F,z/(1+a[:,None]**2)]\\n     return np.c_[F,F[:,5:9]*np.tanh(a[:,None]),np.tanh(a)]\\n    def fitr(p):\\n     W=design(p); V=W[i]; m=solve(V.T@V+reg*np.eye(V.shape[1]),V.T@y[i],assume_a='pos'); return W@m,m\\n    def res(p):\\n     v,m=fitr(p);return np.r_[v[i]-y[i],np.sqrt(reg)*m,.035*p]\\n    best=None\\n    for start in [rng.normal(0,.45,H.shape[1]+1) for _ in range(4)]:\\n     o=least_squares(res,start,max_nfev=65,bounds=(-4,4)); val=np.linalg.norm(o.fun);\\n     if best is None or val<best[0]:best=(val,np.mean(abs(fitr(o.x)[0][j]-y[j])),o.x)\\n    RR.append((best[1],best[0],n,q,mode,h,kind,best[2]))\\nprint('Rat',sorted(RR,key=lambda r:r[0])[:15],flush=True)\\n# Inspect the panel-B odd scalar map by recovering scaled column directions and residual basis.\\nu=s['panel_b']['u'];v=s['panel_b']['v']; U=np.c_[np.ones(len(u)),u,u**3]; M=fit(U,v); print('B cubic',M,'resnorm',np.linalg.norm(U@M-v,axis=1)); print('B coefs collinearity',np.sum(M[1:5]*M[5:],axis=1)/np.sum(M[5:]**2,axis=1));\\nfor kind in range(6):\\n def ga(q):\\n  if kind==0:return u**3/(1+q[0]*u*u)\\n  if kind==1:return np.tanh(q[0]*u**3)\\n  if kind==2:return u**3/(1+q[0]*abs(u)**q[1])\\n  if kind==3:return erf(q[0]*u**3)\\n  if kind==4:return np.tanh(q[0]*u)-q[1]*u\\n  return u**3/np.sqrt(1+q[0]*u**4)\\n for add in [False,True]:\\n  def r(q):\\n   Z=np.c_[np.ones(len(u)),u,ga(q)] if add else np.c_[np.ones(len(u)),ga(q)];return (Z@fit(Z,v)-v).ravel()\\n  o=least_squares(r,[.5,1.5],bounds=([.01,-5],[10,6]),max_nfev=120); print('B alt',kind,add,o.x,np.std(o.fun));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/lastprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic saturated interactions → H2 parity-constrained interactions or a low-dimensional rational readout; best fixed-split y MAE is 0.05292 and the saved candidate scores 0.06385.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the saved solver\",\"rejected_reason\":\"The public validator reports that its y MAE exceeds the 0.038 threshold.\"}],\"rationale\":\"Keep the trajectory model separate and test whether symmetric interactions, a readout link, or a rational denominator can lower the remaining y error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "39bcd74126b7b2221193d5bcc72e1fbf90fc2f1d01b7fac2032cc642cf027d71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53625.13,
+      "usage_known": true,
+      "prompt_tokens": 49503,
+      "cached_tokens": 12672,
+      "completion_tokens": 2449
+    }
+  ]
+}

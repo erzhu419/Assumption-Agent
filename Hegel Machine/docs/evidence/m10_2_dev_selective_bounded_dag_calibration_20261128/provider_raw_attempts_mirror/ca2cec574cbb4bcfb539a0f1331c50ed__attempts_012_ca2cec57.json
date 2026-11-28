@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca2cec574cbb4bcfb539a0f1331c50ed",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:40:06.240520+00:00",
+  "ended_at_utc": "2026-11-28T13:40:56.092375+00:00",
+  "request_sha256": "d3aae223dc2baaaeb56a8d4b97e036497550d039cfc2798be93fe8984a421943",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 86786,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 48333,
+    "cached_tokens": 12672,
+    "completion_tokens": 1703
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cp node_01.py /tmp/press_candidate.py; python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('node_01.py'); s=p.read_text(); a=s.index('    records=[]'); b=s.index('\\\\n\\\\ndef run_node',a); s=s[:a]+'''    # Select readouts on repeated blocked folds, not on in-sample PRESS after\\n    # response-dependent feature selection. Penalize extrapolation explicitly.\\n    rng=np.random.default_rng(3502)\\n    folds=[]\\n    for order in [np.arange(n),rng.permutation(n),np.argsort(c[:n,0]),rng.permutation(n)]:\\n        folds.extend(np.array_split(order,5))\\n    scale=np.maximum(np.mean(abs(target-target.mean(0)),axis=0),.02)\\n    records=[]\\n    def assess(K, penalties):\\n        K=(K[:n,:]+K[:n,:].T)*.5 if K.shape[0]==n else K\\n        S,U=np.linalg.eigh((K[:n]+K[:n].T)*.5)\\n        S=np.maximum(S,0); UY=U.T@target\\n        for a in penalties:\\n            inv=1/(S+a)\\n            dual=U@(inv[:,None]*UY)\\n            fold_err=[]\\n            for ids in folds:\\n                B=U[ids]; P=(B*inv)@B.T\\n                e=np.linalg.solve(P,dual[ids]); fold_err.append(np.mean(abs(e),axis=0))\\n            es=np.asarray(fold_err)/scale\\n            # Averaged error plus the upper-tail penalty on blocked folds.\\n            rank=.8*es.mean(0)+.2*np.quantile(es,.85,axis=0)\\n            records.append((rank,K@dual))\\n    def linear(F):\\n        mu=F[:n].mean(0); sigma=np.maximum(F[:n].std(0),.015)\\n        F=np.column_stack((np.ones(len(F)),(F-mu)/sigma)); return F@F[:n].T\\n    pairs={key:np.column_stack((c,z)) for key,z in coords.items() if key.startswith('C')}\\n    pairs['both']=np.column_stack((c,coords['C00_u'],coords['C10_u']))\\n    for name,z in {**coords,**{'pair_'+key:v for key,v in pairs.items()}}.items():\\n        for d in (1,2,3) if z.shape[1]<=4 else (1,2):\\n            assess(linear(_poly(z,d)),(.015,.15,1.5,8) if d>1 else (.005,.2,2))\\n        w=(z-z[:n].mean(0))/np.maximum(z[:n].std(0),.03)\\n        L=linear(z); D=cdist(w,w[:n],'sqeuclidean')/z.shape[1]\\n        if z.shape[1]<=8:\\n            for h in (.4,.75,1.2,2.):\\n                r=np.sqrt(3*D)/h\\n                for K in (np.exp(-D/(2*h*h)),(1+r)*np.exp(-r),1/(1+D/(2*h*h))):\\n                    assess(L+3*K,(.003,.03,.2))\\n        if name in ('c','B0','B1','rot'):\\n            for h in (.5,1.,2.,4.):\\n                for g in (z/(1+h*z*z),z*np.exp(-h*z*z),np.tanh(h*z)):\\n                    for F in (_poly(z+g,2),np.column_stack((_poly(z,2),g))):\\n                        assess(linear(F),(.02,.25,2.))\\n    def blend(scores, columns):\\n        order=np.argsort(scores)[:20]; ss=np.asarray(scores)[order]; w=np.exp(-16*(ss/ss[0]-1)); w/=w.sum()\\n        return sum(wi*records[i][1][:,columns] for wi,i in zip(w,order))\\n    return blend([r[0][0] for r in records],0),blend([r[0][1:].mean() for r in records],slice(1,None))\\n'''+s[b:]; s=s.replace('Calibrated multi-response readout with training-only PRESS selection.','Calibrated multi-response readout with blocked training-fold selection.'); p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path[:0]=['/holdout_task','/holdout_task/_frozen_nodes']; import node_00,node_01,node_02\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['train']\\nfor idx in [np.arange(52),np.arange(20,72),np.random.default_rng(555).permutation(72)[:52]]:\\n q=np.setdiff1d(np.arange(72),idx); v=dict(s,train={k:a[k][idx] for k in ('x','y','traj')},test={'x':a['x'][q]}); out=node_01.run_node({'__input__':v,'node_00':node_00.run_node({'__input__':v})}); t=node_02.run_node({'node_01':out})['state_pred']; print('slice MAE',np.mean(abs(out['y_hat']-a['y'][q])),np.mean(abs(t-a['traj'][q])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 adaptive PRESS selection → H2 blocked-fold selection over fixed, regularized features; H1 reached worst-slice scalar/trajectory MAEs of 9.665528/0.487823, and H2 is unverified.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the current artifact\",\n      \"rejected_reason\": \"It passes execution and edge checks but fails both required MAE thresholds.\"\n    }\n  ],\n  \"rationale\": \"Remove response-dependent feature search, which made PRESS optimistic, and test regularized readouts on blocked folds. Run the official acceptance test and alternate splits through the frozen rank-two node; acceptance has not yet been demonstrated.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5cb0c04d457ed6d74e44a28d7d1740792cd6c6b41969b4b71c933b6f835161ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49850.42,
+      "usage_known": true,
+      "prompt_tokens": 48333,
+      "cached_tokens": 12672,
+      "completion_tokens": 1703
+    }
+  ]
+}

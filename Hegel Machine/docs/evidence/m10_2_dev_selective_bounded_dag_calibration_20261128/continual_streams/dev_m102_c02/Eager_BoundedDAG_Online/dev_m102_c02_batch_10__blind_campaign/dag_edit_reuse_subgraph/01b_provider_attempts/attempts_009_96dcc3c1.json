@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96dcc3c14c8e4704a0b9c4ad121944a2",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:06:50.158648+00:00",
+  "ended_at_utc": "2026-11-28T14:07:15.733727+00:00",
+  "request_sha256": "cee20d2bfba45b354ed1db86fc7ebfa7652af3009f14361c7b03d4ab1444d18b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36048,
+    "cached_tokens": 12672,
+    "completion_tokens": 1047
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot=Path('/holdout_task')\\ndef load(i):\\n    p=(root if i==0 else root/'_frozen_nodes')/f'node_{i:02}.py'\\n    spec=importlib.util.spec_from_file_location(p.stem,p)\\n    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module\\nm=[load(i) for i in range(4)]\\ns=pickle.load(open(root/'public_batch.pkl','rb'))[0]['study']\\ndef run(study):\\n    a=m[0].run_node({'__input__':study}); b=m[1].run_node({'__input__':study,'node_00':a}); c=m[2].run_node({'node_01':b}); return m[3].run_node({'node_01':b,'node_02':c})\\ntrain=s['train']; n=len(train['x']); groups=[]\\nfor seed in range(5):\\n    groups.extend((f'shuffle{seed}_{j}',g) for j,g in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),6)))\\norder=np.argsort(np.max(np.abs(train['x']),axis=1)); groups.append(('largest_coordinate',order[-12:])); groups.append(('smallest_coordinate',order[:12]))\\nreport=[]\\nfor name,held in groups:\\n    keep=np.setdiff1d(np.arange(n),held); tr={k:v[keep] if isinstance(v,np.ndarray) and len(v)==n else v for k,v in train.items()}; st=dict(s,train=tr,test=dict(x=train['x'][held])); out=run(st)\\n    y=np.asarray(out['y_pred']).reshape(train['y'][held].shape); t=np.asarray(out['state_pred']); assert t.shape==train['traj'][held].shape and np.isfinite(y).all() and np.isfinite(t).all(); report.append((name,float(np.mean(abs(y-train['y'][held]))),float(np.mean(abs(t-train['traj'][held])))))\\nprint('worst 12-row readout slice',max(report,key=lambda x:x[1]));print('worst 12-row trajectory slice',max(report,key=lambda x:x[2])); print('mean slice MAEs',np.mean([r[1:] for r in report],axis=0));\\nfor panel in ('panel_a','panel_b'):\\n    base=m[0].run_node({'__input__':s}); changes=[]\\n    for j in range(len(s[panel]['u'])):\\n        st=dict(s); st[panel]={k:np.delete(v,j,axis=0) for k,v in s[panel].items()}; variant=m[0].run_node({'__input__':st}); assert all(np.isfinite(variant[k]).all() for k in base); changes.append(float(np.mean(abs(variant['query']-base['query']))))\\n    print(panel,'worst query mean coordinate change on row deletion',max(changes))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine transfer → coupled sinusoidal inversion and nonlinear panel-B mapping; the verified public CV MAEs are 0.015948 for readout and 0.010710 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The official split passes, but coordinate-extreme slices and calibration-row deletions have not yet been checked.\"\n    }\n  ],\n  \"rationale\": \"Keep the hash-verified candidate unchanged and test both frozen output paths across alternate splits, including the largest measured coordinates. Check calibration sensitivity separately by deleting one paired measurement at a time.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "48a5f190eecb657d300322bbece21f09c32f129996cdea7335c80e09e6a74911",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25573.86,
+      "usage_known": true,
+      "prompt_tokens": 36048,
+      "cached_tokens": 12672,
+      "completion_tokens": 1047
+    }
+  ]
+}

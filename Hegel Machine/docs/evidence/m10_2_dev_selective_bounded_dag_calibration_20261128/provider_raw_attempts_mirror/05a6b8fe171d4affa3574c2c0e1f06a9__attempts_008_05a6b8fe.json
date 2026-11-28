@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "05a6b8fe171d4affa3574c2c0e1f06a9",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:02:46.624207+00:00",
+  "ended_at_utc": "2026-11-28T14:03:09.430169+00:00",
+  "request_sha256": "a6163dba8d46a4a40c499fdc98b38f9c4e122328da5c4203cac882c1e00bb3d2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47708,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31881,
+    "cached_tokens": 12672,
+    "completion_tokens": 920
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module.run_node\\n\\nfrozen = load('frozen', '_frozen_nodes/node_00.py')\\nsink = load('sink', 'node_01.py')\\nstudy = pickle.loads(Path('public_batch.pkl').read_bytes())[0]['study']\\nx = np.asarray(study['train']['x']); y = np.asarray(study['train']['y']); traj = np.asarray(study['train']['traj']); idx = np.arange(len(x))\\nfolds = [np.arange(52,len(x)), *np.array_split(np.random.default_rng(127).permutation(len(x)),6)]\\nfor j in range(x.shape[1]):\\n    order = np.argsort(x[:,j]); folds.extend((order[:12], order[-12:]))\\nmetrics = []\\nfor va in folds:\\n    tr = np.setdiff1d(idx, va)\\n    s = dict(study, train=dict(study['train'], x=x[tr], y=y[tr], traj=traj[tr]), test=dict(study['test'], x=x[va]))\\n    feats = frozen({'__input__':s})\\n    out = sink({'__input__':s, 'node_00':feats})\\n    a,b = out['y_hat'],out['state_pred']; end = b[:,-1]\\n    assert a.shape == y[va].shape and b.shape == traj[va].shape\\n    assert np.isfinite(a).all() and np.isfinite(b).all()\\n    np.testing.assert_allclose(out['diagnostics_vec'],[a.mean(),a.std(),end.mean(),end.std()])\\n    err = np.abs(b-traj[va]); metrics.append([np.abs(a-y[va]).mean(),err.mean(),err.mean(axis=0).max()])\\n    if len(metrics)==1:\\n        h = feats['ht']; base = h[len(tr):] @ np.linalg.lstsq(h[:len(tr)],np.column_stack((y[tr],traj[tr])),rcond=None)[0]\\n        be = np.abs(base-np.column_stack((y[va],traj[va])))\\n        print('matched public ablation without calibrated coordinate/cubic block:', be[:,0].mean(),be[:,1:].mean())\\nprint('public scalar, trajectory, worst horizon:',np.round(metrics[0],6))\\nprint('worst over 15 splits (public, random, and coordinate tails):',np.round(np.max(metrics,axis=0),6))\\nassert np.max(metrics) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bilinear readout → H2 calibrated cyclic cubic readout with square-root and relaxation modes; official public MAEs are 0.006286 and 0.004297, with prior worst-slice MAE 0.01022.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact artifact passed official acceptance. Run it unchanged on coordinate-tail holdouts and compare against the bilinear readout on the same public split to verify extrapolation and the structural correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4c10f27911a60109415b7fb70ef027a77120ea7e59927dff4ecd2b15337739fa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22804.58,
+      "usage_known": true,
+      "prompt_tokens": 31881,
+      "cached_tokens": 12672,
+      "completion_tokens": 920
+    }
+  ]
+}

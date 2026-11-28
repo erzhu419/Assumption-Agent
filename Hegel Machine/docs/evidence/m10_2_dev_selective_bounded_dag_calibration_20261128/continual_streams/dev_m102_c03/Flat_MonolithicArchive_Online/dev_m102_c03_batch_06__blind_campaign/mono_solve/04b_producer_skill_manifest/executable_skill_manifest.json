@@ -1,0 +1,185 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m102_c03_batch_06_231975798de4",
+    "source_hash": "231975798de4b218b2f797885335d74602532c21a0f1d9de8db2c3c52a554d2d",
+    "parent_ids": [],
+    "source_episode_id": "mono_solve",
+    "task_id": "dev_m102_c03_batch_06__blind_campaign",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/expanded.py",
+        "archived_relpath": "producers/tmp__expanded.py",
+        "bytes": 2033,
+        "sha256": "f2003e4243179aac2e98b4769ec9cadad281a79ab436a838e3e8a245566835a4"
+      },
+      {
+        "container_path": "/tmp/finalcheck.py",
+        "archived_relpath": "producers/tmp__finalcheck.py",
+        "bytes": 713,
+        "sha256": "efc82b1861184cfcb9dca5a33f1008ca36179b64b75bc3d6a7c296d3f420d4de"
+      },
+      {
+        "container_path": "/tmp/grammar.py",
+        "archived_relpath": "producers/tmp__grammar.py",
+        "bytes": 3006,
+        "sha256": "6b8f92ef4c665ea2f0fe13c346aebed90253c18d698ae161b99f07d95e6d0009"
+      },
+      {
+        "container_path": "/tmp/modes.py",
+        "archived_relpath": "producers/tmp__modes.py",
+        "bytes": 2582,
+        "sha256": "1b72772b0def77f6e6684f62e3eb5b58c4f7d5bb5838616c29835cc3b0f92ea6"
+      },
+      {
+        "container_path": "/tmp/panel_probe.py",
+        "archived_relpath": "producers/tmp__panel_probe.py",
+        "bytes": 1659,
+        "sha256": "25a97d4b9fc7788a2d26edad0a1a036c3923d05dd801ab8e03ee076cf2bd8188"
+      },
+      {
+        "container_path": "/tmp/probe_graph.py",
+        "archived_relpath": "producers/tmp__probe_graph.py",
+        "bytes": 2432,
+        "sha256": "a768ae1e4840d0821b13b30516fd0e777bb0d1d31918b3be3b0dc64ed923ab78"
+      },
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 2151,
+        "sha256": "fa411da6765f41c1e2407ff3a9205dd5f77ad1257911f78348538a62db90ced0"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_00_solver.py",
+        "bytes": 3634,
+        "sha256": "f4bf8df664a4a3d67615f0e61dfe0f2df6cee7113879777306455aa3cdec2dca"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_01_solver.py",
+        "bytes": 1826,
+        "sha256": "d3b4cf0216a791970f5ff0c6d2237d666c844b5aa40141a33319678240ded933"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_02_solver.py",
+        "bytes": 3787,
+        "sha256": "a5f2f6883922c6fdf4a26ebfcee15ac5111eae124b9b530a67b3735ec1bb9b40"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_03_solver.py",
+        "bytes": 2936,
+        "sha256": "a8869a936b6e1a93498f8cbe94cd0458d6e67f2d182916c761da00e94ec02793"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_04_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_04_solver.py",
+        "bytes": 3054,
+        "sha256": "245f95fc1a70c2c18542f1a803f822d057bfa33695149d82a6ce7e23f036428d"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c03_batch_05_solver.py",
+        "bytes": 3694,
+        "sha256": "946f64c4e9bef0debd74a11748609f1b650ef0bda402c89bd5098aca9afd9d99"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /tmp/hegel_continual_archive; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine reference-panel calibration ridge nuisance profiling' 2>&1 | head -40; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -nE '^(def |class |from |import )' \"$f\"; done; cd /holdout_task; cat validate_public_schema.py; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\nfor k,v in s.items():\n for j,a in (v.item",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport glob,runpy,pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a=s['train']; print('telemetry',s['telemetry_vec']); print('traj singular values',np.linalg.svd(a['traj'],compute_uv=False));\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\n try:\n  g=runpy.run_path(f)['solve_batch']; print(f.split('/')[-1],end=' ')\n  for i in [52,0]:\n   tr=slice(None,52) if i else slice(20,None); va=slice(52,None) if i else slice(None,20); d=dict(s,train={k:v[tr] if k!='summary' else v for k,v in a.item",
+      "cat /tmp/hegel_continual_archive/dev_m102_c03_batch_02_solver.py; cat /tmp/hegel_continual_archive/dev_m102_c03_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection exponentials' | head -10; cat > /tmp/panel_probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations\nfrom scipy.optimize import minimize_scalar\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nfit=lambda a,b: np.linalg.lstsq(a,b,rcond=1e-9)[0]\naff=lambda x: np.column_stack([np.ones(len(x)),x])\nfor key,outs in [('panel_b',[",
+      "OPENBLAS_NUM_THREADS=1 python3 /tmp/panel_probe.py | grep '^panel' | cut -c1-730; cat > /tmp/probe_graph.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom itertools import combinations,combinations_with_replacement\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; Y=np.c_[tr['y'],tr['traj']]; n=52\nz=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py')['_calibrate'](s['panel_a'],tr['x'])\nfit=lambda a,b: np.linalg.lstsq(a,b,rcond=1e-9)[0]; aff=lambda q:np.c_[np.ones(len(q)),q]\ncyc=lambda q:q*np.r",
+      "cd /holdout_task; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; tail -57 /tmp/hegel_continual_archive/dev_m102_c03_batch_02_solver.py; cat > /tmp/readout_probe.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom itertools import combinations,combinations_with_replacement\nD=dict(np.load('/tmp/graph_data.npz')); Y=D.pop('Y'); z=D['z']; n=52\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; print('time',t)\nf=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-8)[0]\nu=s['panel_b']['u'];print('b co',f(np.c_[np.ones(len(u)),",
+      "cat > /tmp/expanded.py <<'PY'\nimport pickle,numpy as np,runpy\nfrom itertools import combinations\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52; t=s['eval_times']; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-9)[0]; aff=lambda x:np.c_[np.ones(len(x)),x]; cyc=lambda x:x*np.roll(x,-1,axis=1)\nz=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py')['_calibrate'](s['panel_a'],tr['x']); pb=s['panel_b']; B=fit(aff(pb['u']),pb['v']); p=s['panel_c']; C=fit(aff(cyc(p['u'])),p['v1']); D=fit(aff(n",
+      "sed -i 's/,B=B,\\*\\*base/,Bcoef=B,**base/' /tmp/expanded.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/expanded.py >/tmp/expanded.log; cat > /tmp/grammar.py <<'PY'\nimport numpy as np,itertools as it\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nD=dict(np.load('/tmp/expanded.npz')); Y=D['Y']; Q=D['Q']; z=D['z']; C=D['C']; H=D['D']; n=52\nf=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-8)[0]; aff=lambda x:np.c_[np.ones(len(x)),x]; cyc=lambda x:x*np.roll(x,-1,axis=1)\nfeatures={}; groups={}\ndef add(k,a,solo=True):\n a=np.asarray(a).reshape(len(z),-1); groups[k]=a\n if solo:\n  f",
+      "cat /tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py; cat > /tmp/modes.py <<'PY'\nimport numpy as np,itertools as it,pickle\nfrom scipy.optimize import least_squares\nD=dict(np.load('/tmp/expanded.npz')); z=D['z']; Y=D['Y']; Q=D['Q']; n=52\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']['traj']; t=s['eval_times']; aff=lambda x:np.c_[np.ones(len(x)),x]; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-9)[0]; cy=lambda x:x*np.roll(x,-1,axis=1)\nc=aff(cy(z))@D['C']; d=aff(np.cos(2.4*z))@D['D']; p=cy(z); h=np.cos(2.4*z); zz=np.stack([z[:,i]*z[:,j] for i,j in",
+      "cd /holdout_task; sed '/^def _basis/,$d' /tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py > batch_solver.py; cat >> batch_solver.py <<'PY'\nfrom itertools import combinations_with_replacement\n\n\ndef _prune(x, y, tolerance):\n    keep = list(range(x.shape[1]))\n    while len(keep) > 2:\n        a = x[:, keep]\n        b = _fit(a, y)\n        residual = y-a@b\n        rss = np.sum(residual**2)\n        inv = np.diag(np.linalg.pinv(a.T@a, rcond=1e-12))\n        increase = np.sum(b*b, axis=1)/np.maximum(inv, 1e-30)\n        increase[0] = np.inf\n        idx = np.argmin(increase)\n        if rss+inc"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m102_c03_batch_02_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m102_c03_batch_02_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4513,
+        "sha256": "0bacaa95d33dd9d7e3a04c76ec5c1be823f33643797cda554a421841aefe0782",
+        "content_addressed_ref": "content_addressed_blobs/0bacaa95d33dd9d7e3a04c76ec5c1be823f33643797cda554a421841aefe0782.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_features",
+      "solve_batch",
+      "_panel_pred"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "231975798de4b218b2f797885335d74602532c21a0f1d9de8db2c3c52a554d2d",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task; sed '/^def _basis/,$d' /tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py > batch_solver.py; cat >> batch_solver.py <<'PY'\nfrom itertools import combinations_with_replacement\n\n\ndef _prune(x, y, tolerance):\n    ke",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "231975798de4b218b2f797885335d74602532c21a0f1d9de8db2c3c52a554d2d",
+        "expected_candidate_sha256": "231975798de4b218b2f797885335d74602532c21a0f1d9de8db2c3c52a554d2d",
+        "computed_candidate_sha256": "231975798de4b218b2f797885335d74602532c21a0f1d9de8db2c3c52a554d2d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4513
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_23197579"
+    }
+  },
+  "structure": {
+    "full_producer_count": 13,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_features",
+        "code": "def _features(z):\n    from itertools import combinations\n    s = [np.ones(len(z)), z]\n    for j in range(4):\n        u = z[:, j:j + 1]\n        s.extend([u ** 2, u ** 3, u ** 4, np.tanh(u), np.arctan(u), u / (1 + abs(u)), np.exp(-u * u / 2)])\n    groups = []\n    for (i, j) in combinations(range(4), 2):\n        (u, v) = (z[:, i:i + 1], z[:, j:j + 1])\n        g = [u * v, u * u * v, u * v * v, u * u * v * v, u ** 3 * v, u * v ** 3, u * v / (1 + 0.5 * (u * u + v * v))]\n        for sign in (-1, 1):\n            w = (u + sign * v) / 1.4\n            g.extend([np.sin(w), np.cos(w), np.tanh(w), w / (1 + abs(w)), np.exp(-w * w / 2)])\n        groups.append(np.column_stack(g))\n    return (s, groups)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study):\n    from itertools import combinations\n    tr = study['train']\n    x = np.asarray(tr['x'])\n    xt = np.asarray(study['test']['x'])\n    n = len(x)\n    z = (np.vstack([x, xt]) - x.mean(0)) / np.maximum(x.std(0), 1e-12)\n    q = -np.expm1(-np.asarray(study['eval_times'])[:, None] * np.array([0.392, 1.857]))\n    a = np.linalg.lstsq(q, tr['traj'].T, rcond=None)[0].T\n    (s, g) = _features(z)\n    f = np.column_stack(s + g + [np.prod(z[:, j], axis=1) for j in combinations(range(4), 3)])[:, 1:]\n    ys = (2, 5, 10, 14, 16, 23, 24, 26, 33, 35, 40, 50, 51, 52, 54, 61, 63, 64, 65, 67, 77, 78, 85, 87, 92, 93, 96, 101, 102, 104, 106, 111, 119, 128, 132, 137)\n    fs = (7, 9, 10, 24, 30, 31, 35, 36, 39, 40, 51, 54, 61, 68, 71, 72, 85, 86, 96, 101, 104, 106, 111, 112, 123, 127, 128, 134)\n\n    def ols(ids, y):\n        mat = np.column_stack([np.ones(len(z)), f[:, ids]])\n        return mat[n:] @ np.linalg.lstsq(mat[:n], y, rcond=None)[0]\n    m = np.column_stack(s + [g[j] for j in (0, 1, 3)])\n    m = m / np.maximum(np.linalg.norm(m[:n], axis=0), 1e-08)\n    slow = m[n:] @ m[:n].T @ np.linalg.solve(m[:n] @ m[:n].T + 0.02 * np.eye(n), a[:, 0])\n    y = ols(ys, tr['y'])\n    pred = np.column_stack([slow, ols(fs, a[:, 1])]) @ q.T\n    return {'y_hat': y, 'state_pred': pred, 'diagnostics_vec': np.array([y.mean(), y.std(), pred[:, -1].mean(), pred[:, -1].std()])}"
+      },
+      {
+        "name": "_panel_pred",
+        "code": "def _panel_pred(study, blend, reg, kind):\n    tr = study['train']\n    n = len(tr['x'])\n    xx = np.vstack([tr['x'], study['test']['x']])\n    p = study['panel_a']\n    u = np.asarray(p['u'])\n    v = np.asarray(p['v'])\n    h = np.column_stack([np.ones(len(u)), u])\n    av = np.linalg.lstsq(h, v, rcond=None)[0]\n    r = np.linalg.norm(v - h @ av, axis=1)\n    keep = r < 3\n    gains = []\n    offsets = []\n    for j in range(4):\n        c = np.linalg.lstsq(h[keep][:, [0, j + 1]], v[keep, j], rcond=None)[0]\n        offsets.append(c[0])\n        gains.append(c[1])\n    z = (xx - offsets) / gains\n    if kind == 'sat':\n        p = study['panel_c']\n        u = np.asarray(p['u'])\n        v = np.asarray(p['v2'])\n        h = np.column_stack([np.ones(len(u)), u])\n        b = np.linalg.lstsq(h, v, rcond=None)[0]\n        pz = np.column_stack([np.ones(len(u)), u, np.expm1(-0.2962 * u * u)])\n        w = np.linalg.lstsq(pz, v, rcond=None)[0]\n        v = np.column_stack([np.ones(len(z)), z, np.expm1(-0.2962 * z * z)]) @ w\n        z = z + blend * ((v - np.column_stack([np.ones(len(z)), z]) @ b) @ np.linalg.inv(b[1:]))\n        t = np.tanh(z)\n    else:\n        z = z + blend * np.expm1(-0.2962 * z * z)\n        t = None\n\n    def quad(a):\n        return [a] + [a[:, i] * a[:, j] for i in range(4) for j in range(i, 4)]\n    f = np.column_stack(quad(z) + (quad(t) if t is not None else [np.sin(z), np.cos(z), np.sin(2 * z), np.cos(2 * z)]))\n    f = (f - f[:n].mean(0)) / np.maximum(f[:n].std(0), 1e-07)\n    y = np.column_stack([tr['y'], tr['traj']])\n    ym = y.mean(0)\n    return f[n:] @ f[:n].T @ np.linalg.solve(f[:n] @ f[:n].T + reg * np.eye(n), y - ym) + ym"
+      }
+    ]
+  }
+}

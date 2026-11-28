@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70a5a08bcb154e49a7e9ddf65215d358",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:59:06.590414+00:00",
+  "ended_at_utc": "2026-11-28T13:59:33.722923+00:00",
+  "request_sha256": "d0e12df9e60a29ba1c6e136f31d115e1443581bd2e36b12f055584afcef0d2a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56020,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35125,
+    "cached_tokens": 12672,
+    "completion_tokens": 1121
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/stress.py <<'PY'\\nimport pickle, numpy as np, runpy\\nfrom scipy.optimize import least_squares, minimize_scalar\\nm=runpy.run_path('/holdout_task/batch_solver.py'); A=m['_aff']; L=m['_ls']; s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']; n=len(T['x']); y=T['y']; q=T['traj']; tt=s['eval_times']; z=m['_calibrate'](s['panel_a'],T['x']); p,r=m['_operators'](s['panel_c'],z); common=A(p,r,np.sum(p*r,axis=1)); cross=(p[:,:,None]*r[:,None,:]).reshape(n,16); dense=A(p,r,cross); idx=np.arange(n); rng=np.random.default_rng(90827)\\nsplits=[('public',idx[52:])]+[(f'corner{j}',np.argsort(v)[-20:]) for j,v in enumerate([*z.T,*(-z).T,np.linalg.norm(z,axis=1)])]+[(f'random{j}',rng.permutation(n)[52:]) for j in range(20)]\\nfor name in ('current','compact','compact_sparse','compact_noint'):\\n results=[]\\n for label,te in splits:\\n  tr=np.setdiff1d(idx,te); ay=common[te]@L(common[tr],y[tr]); t=m['_time_basis'](tt,q[tr]); amps=L(t,q[tr].T).T\\n  if name=='current': h=(dense[te]@L(dense[tr],amps))@t.T\\n  else:\\n   cand=[]\\n   for j in (range(16) if name=='compact_sparse' else [1]):\\n    fast=np.c_[common,cross[:,j]] if name!='compact_noint' else common; slow=A(r,cross[:,j]);\\n    def F(k,ind):\\n     b=-np.expm1(-tt[:,None]*k); return np.concatenate((fast[ind,:,None]*b[:,0],slow[ind,:,None]*b[:,1]),1).transpose(0,2,1).reshape(len(ind)*len(tt),-1)\\n    def res(k):\\n     f=F(k,tr); return f@L(f,q[tr].ravel())-q[tr].ravel()\\n    k=least_squares(res,[1.8,.43],bounds=([.8,.03],[8.,.79])).x; f=F(k,tr); h0=(F(k,te)@L(f,q[tr].ravel())).reshape(len(te),-1); cand.append((np.mean(res(k)**2),j,k,h0))\\n   _,j,k,h=min(cand,key=lambda v:v[0]);\\n  e=np.abs(h-q[te]); results.append([np.mean(abs(ay-y[te])),e.mean(),e.mean(0).max()]);\\n  if label=='public': print(name,label,np.round(results[-1],7), ('j, rates, traj fit RMSE',j,k,np.sqrt(min(v[0] for v in cand))) if name!='current' else '')\\n v=np.array(results); print(name,'mean',v.mean(0),'worst',v.max(0),'worst slice',[splits[i][0] for i in v.argmax(0)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Dense bilinear state modes → test a shared directional coupling and jointly fit the two temporal rates; prior public-split worst-output MAE is 0.00432.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Freeze the schema-valid baseline\",\"rejected_reason\":\"Mode-specific fits identify a candidate shared coupling; stress-test both graphs before choosing.\"}],\"rationale\":\"Measure the written baseline directly and compare it against compact mode-specific challengers on public, random, and extreme-coordinate holdouts; report the worst individual timestamp separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "792af4c695a96404b2565d412089af023801644916af6c8ec3716f0958e37c59",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27131.33,
+      "usage_known": true,
+      "prompt_tokens": 35125,
+      "cached_tokens": 12672,
+      "completion_tokens": 1121
+    }
+  ]
+}

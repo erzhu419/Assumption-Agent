@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "179d1aa6134b439f885e7d74a3e08023",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:10.474448+00:00",
+  "ended_at_utc": "2026-11-28T13:34:30.696610+00:00",
+  "request_sha256": "e04be946de160f525f1e4267e333ae707d4a499278ad917625b65f4d4e126bea",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20976,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20678,
+    "cached_tokens": 12672,
+    "completion_tokens": 677
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -19 /holdout_task/_frozen_nodes/node_01.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/panel_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=4,suppress=True,linewidth=160)\\nfor p in ['panel_a','panel_b','panel_c']:\\n a=s[p]; u=a['u']; print('\\\\n',p,'u range',u.min(0),u.max(0));\\n for k in a:\\n  if k=='u': continue\\n  v=a[k]; d=np.c_[np.ones(len(u)),u]; q=np.column_stack([np.prod(u[:,j],axis=1) for j in combinations_with_replacement(range(4),2)]); w=np.linalg.lstsq(d,v,rcond=None)[0]; r=v-d@w; H=np.linalg.pinv(d); rq=v-np.c_[d,q]@np.linalg.lstsq(np.c_[d,q],v,rcond=None)[0]; print(k,'range',v.min(0),v.max(0),'affine coeff\\\\n',w,'aff RMS',np.mean(r*r,0)**.5,'quadratic rms',np.mean(rq*rq,0)**.5); print('ordered abs affine residual\\\\n',np.sort(np.abs(r),axis=0)[[0,5,10,15,21,-3,-2,-1]]); print('corr quadratic\\\\n', ((q-d@H@q).T@r)/np.linalg.norm(q-d@H@q,axis=0)[:,None]/np.linalg.norm(r,axis=0));\\nprint('observed x train/test',*[np.quantile(s[p]['x'],[0,.05,.5,.95,1],axis=0) for p in ('train','test')]); print('trajectory singular values',np.linalg.svd(s['train']['traj'],compute_uv=False))\\nPY\\npython3 /tmp/panel_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel alignment -> H2 coupled calibration; panel and downstream validation errors are not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit directly to downstream labels\",\"rejected_reason\":\"Reference panels identify calibration independently and avoid leakage into downstream validation.\"}],\"rationale\":\"Measure affine and coupled polynomial residuals by panel to distinguish deterministic cross-coordinate structure from noise and outliers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2940252a05e652a214b592e786292e3165ba760b0483bb1afd5b3cb022c71c23",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20220.9,
+      "usage_known": true,
+      "prompt_tokens": 20678,
+      "cached_tokens": 12672,
+      "completion_tokens": 677
+    }
+  ]
+}

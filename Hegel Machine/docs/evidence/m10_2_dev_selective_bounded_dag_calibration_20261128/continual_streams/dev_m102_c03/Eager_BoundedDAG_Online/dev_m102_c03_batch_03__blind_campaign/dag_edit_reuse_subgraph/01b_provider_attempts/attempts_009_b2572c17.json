@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2572c17e1b04e35b4b1b73781189cca",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:29:35.748373+00:00",
+  "ended_at_utc": "2026-11-28T13:30:12.008613+00:00",
+  "request_sha256": "5bff84c038093670631506ac01aefd494259e7789d53c8d8bc90760b55b166bd",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59419,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31762,
+    "cached_tokens": 5504,
+    "completion_tokens": 1538
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cp /holdout_task/node_01.py /tmp/node01_baseline.py\\npython3 - <<'PY'\\np='/holdout_task/node_01.py'\\ns=open(p).read(); a=s.index('def _predict'); b=s.index('def run_node',a)\\ns=s[:a]+'''def _temporal_basis(times, traj):\\n    # Variable projection: optimize rates, solving amplitudes exactly at each step.\\n    t = np.asarray(times)[:, None]\\n    rates = np.array([.408, 1.815])\\n    def profile(r):\\n        q = -np.expm1(-t*r)\\n        return q, (q@_fit(q,traj.T)-traj.T).ravel()\\n    q, r = profile(rates)\\n    for _ in range(10):\\n        h = 1.e-4\\n        J = np.column_stack([(profile(rates+d)[1]-profile(rates-d)[1])/(2*h) for d in h*np.eye(2)])\\n        step = np.clip(_fit(J,r), -.35, .35)\\n        if np.linalg.norm(step) < 1.e-8:\\n            break\\n        for shrink in (1., .5, .25, .125):\\n            cand = np.clip(rates-shrink*step, [.1,1.], [.9,4.])\\n            qq, rr = profile(cand)\\n            if rr@rr < r@r:\\n                rates, q, r = cand, qq, rr\\n                break\\n        else:\\n            break\\n    return q\\n\\n\\ndef _predict(study):\\n    tr = study['train']\\n    n = len(tr['x'])\\n    x = np.vstack((tr['x'],study['test']['x']))\\n    z = _warp(_latent(x,study['panel_a']),study['panel_c'])\\n    f = np.column_stack((_poly(z,3), np.tanh(4*z)))\\n    f = (f-f[:n].mean(0))/np.maximum(f[:n].std(0),1e-8)\\n    traj = np.asarray(tr['traj'])\\n    q = _temporal_basis(study['eval_times'],traj)\\n    y = np.column_stack((tr['y'], _fit(q,traj.T).T))\\n    mu = y.mean(0)\\n    a = f[:n]\\n    g = a.T@a+.003*np.eye(a.shape[1])\\n    rhs = a.T@(y-mu)\\n    coef = np.linalg.solve(g,rhs)\\n    scale = np.sqrt(np.diag(np.linalg.solve(g,np.eye(len(g)))))\\n    pred = []\\n    for k in range(y.shape[1]):\\n        ix = np.argsort(np.abs(coef[:,k])/scale)[-28:]\\n        pred.append(f[n:,ix]@np.linalg.solve(g[np.ix_(ix,ix)],rhs[ix,k])+mu[k])\\n    return pred[0], np.column_stack(pred[1:])@q.T\\n\\n\\n'''+s[b:];open(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/stress01.py <<'PY'\\nimport numpy as np, pickle, runpy\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x)\\nb=runpy.run_path('/tmp/node01_baseline.py'); c=runpy.run_path('/holdout_task/node_01.py');\\nz=c['_latent'](x,s['panel_a']); groups={}\\nrng=np.random.default_rng(56)\\ngroups['fresh random']=[rng.permutation(n)[-20:] for _ in range(24)]\\ngroups['coordinate tails']=[np.argsort(sign*z[:,a])[-12:] for a in range(4) for sign in (-1,1)]\\ngroups['largest radius']=[np.argsort(np.linalg.norm(z,axis=1))[-14:]]\\nfor name,S in groups.items():\\n for tag,m in [('baseline',b),('challenger',c)]:\\n  E=[]\\n  for j in S:\\n   i=np.setdiff1d(np.arange(n),j); study=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[j]})\\n   p,t=m['_predict'](study); assert p.shape==tr['y'][j].shape and t.shape==tr['traj'][j].shape and np.isfinite(p).all() and np.isfinite(t).all()\\n   E.append([np.mean(abs(p-tr['y'][j])),np.mean(abs(t-tr['traj'][j]))])\\n  print(name,tag,'mean',np.mean(E,0),'max',np.max(E,0))\\nu,v=[s['panel_a'][k] for k in ('u','v')]; h=np.c_[np.ones(len(u)),u]; keep=np.linalg.norm(v-h@c['_fit'](h,v),axis=1)<2\\nprint('Cubic inverse panel inlier recovery median/max',np.quantile(np.linalg.norm(c['_latent'](v[keep],s['panel_a'])-u[keep],axis=1),[.5,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress01.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 dense warped ridge -> H2 output-specific compact ridge with fold-local rate fitting; the challenger prototype reached public MAEs of 0.033617 and 0.022200 and a worst development-split MAE of 0.037429.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\n  \"considered_alternatives\":[{\"option\":\"Keep the dense readout for its lower public y MAE\",\"rejected_reason\":\"The compact challenger stayed within both public tolerances in development and materially improved the worst split; fresh splits will test whether the improvement holds.\"}],\n  \"rationale\":\"Verify the exact challenger artifact in a clean process and compare it against the archived baseline on fresh random splits and latent-coordinate tails. The cubic calibration remains intact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "549b935f2e86a4ca45a5d7f3ec1a3b97d3b112508c594d10b214a533e0c229ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36259.18,
+      "usage_known": true,
+      "prompt_tokens": 31762,
+      "cached_tokens": 5504,
+      "completion_tokens": 1538
+    }
+  ]
+}

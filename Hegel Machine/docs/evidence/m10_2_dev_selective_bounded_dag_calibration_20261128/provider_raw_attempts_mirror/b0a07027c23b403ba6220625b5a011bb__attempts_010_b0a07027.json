@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0a07027c23b403ba6220625b5a011bb",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:56:36.005314+00:00",
+  "ended_at_utc": "2026-11-28T13:57:06.446640+00:00",
+  "request_sha256": "5befe7002d4c5d9de942d1e9e3395023d79ad576fef0144d82a81df756d4edba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58323,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34337,
+    "cached_tokens": 12672,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/witness.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']; x=T['x']; z=T['traj']; y=T['y']; ix=np.arange(len(x)); rng=np.random.default_rng(2851)\\nfolds=[(ix[:52],ix[52:])]\\nfor _ in range(12):\\n j=rng.permutation(ix); folds.append((j[:52],j[52:]))\\nfor v in [*x.T,np.linalg.norm(x,axis=1),y,z[:,-1]]:\\n j=np.argsort(v); folds.extend([(j[:52],j[52:]),(j[20:],j[:20])])\\na=s['panel_a']; u,v=a['u'],a['v']; d=np.linalg.norm(v-u,axis=1); u,v=u[d<max(4.,4.*np.median(d))],v[d<max(4.,4.*np.median(d))]; W=m._fit(m._affine(u),v)\\npanel_errors=[]\\nfor j in range(len(u)):\\n tr=np.arange(len(u))!=j\\n baseline=(m._affine(u[j:j+1])@m._fit(m._affine(u[tr]),v[tr]))[0]\\n challenger=m._operator(u[tr],v[tr],lambda q,k:np.sin(k*q),(1.5,3.))(u[j:j+1])[0]\\n panel_errors.append([np.mean(abs(baseline-v[j])),np.mean(abs(challenger-v[j]))])\\nq=m._coordinates(a,x); p,r=m._operators(s['panel_c'],q); f=m._affine(np.c_[p,r,np.sum(p*r,axis=1)])\\nqa=np.linalg.solve(W[1:].T,(x-W[0]).T).T; pa,ra=m._operators(s['panel_c'],qa); fa=m._affine(np.c_[pa,ra,np.sum(pa*ra,axis=1)])\\nres=[]\\nfor tr,te in folds:\\n st=dict(s,train={**T,**{k:T[k][tr] for k in ('x','y','traj')}},test={'x':x[te]}); o=m.solve_batch(st); pred=o['state_pred']; yp=o['y_hat']; ed=abs(pred-z[te]); B=np.linalg.svd(z[tr],full_matrices=False)[2][:2]\\n dot=f[te]@m._fit(f[tr],z[tr]@B.T)@B\\n ya=fa[te]@m._fit(fa[tr],y[tr]); end=pred[:,-1]\\n assert np.allclose(o['diagnostics_vec'],[yp.mean(),yp.std(),end.mean(),end.std()],rtol=0,atol=1e-12)\\n res.append([np.mean(abs(yp-y[te])),ed.mean(),ed.mean(0).max(),np.mean(abs(ya-y[te])),np.mean(abs(dot-z[te]))])\\nres=np.asarray(res); panel_errors=np.asarray(panel_errors)\\nprint('ng_t04 calibration LOO affine/nonlinear mean:',panel_errors.mean(0).tolist(),'worst:',panel_errors.max(0).tolist())\\nprint('columns: candidate y, candidate state, worst time, affine calibration y, dot-only state')\\nprint('ordered',res[0].tolist(),'random worst',res[1:13].max(0).tolist(),'edge worst',res[13:].max(0).tolist())\\nassert res[:,:3].max()<.038 and panel_errors.mean(0)[1]<.1*panel_errors.mean(0)[0] and res[:,1].max()<res[:,4].max()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/witness.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine calibration and dot-only state) -> H2 (nonlinear inverse calibration and one fold-selected off-diagonal term); verified worst edge MAEs are 0.00915 for y and 0.00768 for state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the verified solver again\",\n      \"rejected_reason\": \"Both outputs have substantial tolerance margin, and the sparse interaction already improves the worst state slice.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified artifact unchanged and directly test each outstanding structural claim through paired ablations on measured rows, including a new random split seed and independent checks of diagnostics and per-timestamp error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f65f771c45a0b46f30f54cf0889dc7e06991fdd63ce0f0cf055bbd43f933a15b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30440.08,
+      "usage_known": true,
+      "prompt_tokens": 34337,
+      "cached_tokens": 12672,
+      "completion_tokens": 1276
+    }
+  ]
+}

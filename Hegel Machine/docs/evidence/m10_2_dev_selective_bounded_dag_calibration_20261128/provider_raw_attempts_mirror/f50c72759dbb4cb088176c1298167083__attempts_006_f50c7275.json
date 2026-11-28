@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f50c72759dbb4cb088176c1298167083",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:14:24.403868+00:00",
+  "ended_at_utc": "2026-11-28T13:14:53.917295+00:00",
+  "request_sha256": "e7bb9936f465a389de673b89c2d2f89070d70df0e879ecc24aa8a05e64584e4c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44649,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31078,
+    "cached_tokens": 12672,
+    "completion_tokens": 1211
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cd /holdout_task; cat public_asset_index.json; cat _frozen_nodes/node_00.py; python3 - <<'PY'\\nimport pickle,numpy as np\\nst=pickle.load(open('public_batch.pkl','rb'))[0]['study']; print(st.keys()); print('times',st['eval_times']);\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=st[k]; print(k,[(q,np.shape(a)) for q,a in p.items()]);print(np.column_stack(list(p.values()))[:8].round(4));\\n if k=='panel_a':\\n  H=np.c_[np.ones(len(p['u'])),p['u']];v=p['v'];r=np.linalg.norm(v-H@np.linalg.lstsq(H,v,rcond=None)[0],axis=1);g=r<3; print('clean',np.linalg.lstsq(H[g],v[g],rcond=None)[0]);print('res',np.quantile(np.linalg.norm(v[g]-H[g]@np.linalg.lstsq(H[g],v[g],rcond=None)[0],axis=1),[0,.5,1]))\\nprint('len',len(st['train']['x']))\\nPY\\ncat >/tmp/sparseprobe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('res=[]')[0])\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import ARDRegression, OrthogonalMatchingPursuit\\nfrom itertools import combinations\\nqtime=st['eval_times']; T=tr['traj'];o=least_squares(lambda r:(lambda q:(q@np.linalg.lstsq(q,T.T,rcond=None)[0]-T.T).ravel())(-np.expm1(-qtime[:,None]*np.exp(r))),np.log([.39,1.86]));rt=np.exp(o.x);Q=-np.expm1(-qtime[:,None]*rt); A=np.c_[Y[:,0],np.linalg.lstsq(Q,T.T,rcond=None)[0].T];print('rates',rt,'rms',np.sqrt(np.mean(o.fun**2)))\\ndef tst(f,kind):\\n a0=[]\\n for a,b,sp in folds:\\n  u=(f-f[a].mean(0))/np.maximum(f[a].std(0),1e-9); pred=[]\\n  for j in range(3):\\n   m=ARDRegression(threshold_lambda=kind) if kind>99 else OrthogonalMatchingPursuit(n_nonzero_coefs=kind,tol=None); m.fit(u[a],A[a,j]);pred.append(m.predict(u[b]))\\n  pred=np.array(pred).T;p=np.c_[pred[:,0],pred[:,1:]@Q.T];v=abs(p-Y[b]);a0.append([v[:,0].mean(),v[:,1:].mean()]);\\n return np.array(a0)\\np=st['panel_a'];u=p['u'];v=p['v'];h=np.c_[np.ones(len(u)),u];keep=np.linalg.norm(v-h@np.linalg.lstsq(h,v,rcond=None)[0],axis=1)<3; aff=np.linalg.lstsq(h[keep],v[keep],rcond=None)[0]; z0=(x-aff[0])@np.linalg.inv(aff[1:]);z1=(x-aff[0])/aff[1:].diagonal()\\nfor z in (x,z0,z1):\\n for z in (z,):\\n  f,g=arc['_features'](z); f=np.column_stack(f[1:]+g+[pol(z,3)]); fs=[f,pol(z,3)]\\n  for idx,f in enumerate(fs):\\n   for j in (6,12,1e3,1e4):\\n    s=tst(f,j);print(idx,j,s[0].round(4),s.max(0).round(4),s.mean(0).round(4))\\nPY\\nPYTHONWARNINGS=ignore python3 /tmp/sparseprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Generic interpolation -> latent-coordinate sparse laws and two shared trajectory modes; best tested generic blend still has worst scalar MAE above 0.21.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the frozen blend and replace the panel readout with a generic kernel\",\"rejected_reason\":\"The gate scalar MAE remains at least 0.168 on the tested broad families, far above 0.038.\"}],\"rationale\":\"Identify the actual coordinate transform and compare compact target grammars independently of the frozen contribution; its isolated scalar error at the public split is 0.3866.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "be6e2fb60f3a5d20acf9ef7e65f6f73d7a37a138e300ee09cb1182bdbff2e766",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29512.01,
+      "usage_known": true,
+      "prompt_tokens": 31078,
+      "cached_tokens": 12672,
+      "completion_tokens": 1211
+    }
+  ]
+}

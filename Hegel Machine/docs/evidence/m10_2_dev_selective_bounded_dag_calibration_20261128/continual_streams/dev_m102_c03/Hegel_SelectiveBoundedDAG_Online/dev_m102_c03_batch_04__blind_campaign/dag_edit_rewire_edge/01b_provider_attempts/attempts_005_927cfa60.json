@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "927cfa60f7eb460592d15b9fd32b3eb7",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_04__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:35.351965+00:00",
+  "ended_at_utc": "2026-11-28T13:35:22.138902+00:00",
+  "request_sha256": "f5786052d4cb81f80cb92070ccc0dc3e60577d97c9943ba5a8f0fe90782e7002",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39490,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27962,
+    "cached_tokens": 12672,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,runpy,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; t=s['eval_times']; q=-np.expm1(-t[:,None]*[.4247,1.8321]); Y=np.column_stack([tr['y'],np.linalg.lstsq(q,tr['traj'].T,rcond=None)[0].T]); n=52\\nfrozen=runpy.run_path('_frozen_nodes/node_00.py')['run_node']; fold={**s,'train':{**tr,**{k:tr[k][:n] for k in ('x','y','traj')}},'test':{'x':x[n:]}}; b=frozen({'__input__':fold}); print('frozen', abs(b['y_hat']-tr['y'][n:]).mean(),abs(b['state_pred']-tr['traj'][n:]).mean())\\np=s['panel_a']; u=p['u'];v=p['v']; A=np.column_stack([np.ones(len(u)),u]); fit=least_squares(lambda c:(A@c.reshape(5,4)-v).ravel(),np.linalg.lstsq(A,v,rcond=None)[0].ravel(),loss='cauchy',f_scale=.015).x.reshape(5,4); print('A',fit, 'residual norms',np.sort(np.linalg.norm(A@fit-v,axis=1)).round(4));\\nB=np.linalg.lstsq(np.column_stack([np.ones(24),s['panel_b']['u']]),s['panel_b']['v'],rcond=None)[0]; print('B',B)\\nprint('x ranges',np.percentile(x,[0,10,50,90,100],axis=0)); print('Y rows\\\\n',np.round(np.column_stack([x,Y])[:18],4))\\ncomb=[j for d in range(1,7) for j in itertools.combinations_with_replacement(range(4),d)];\\nfor name,z in [('raw',x),('A',(x-fit[0])@np.linalg.inv(fit[1:])),('Bdirect',x@B[1:]+B[0]),('Binv',(x-B[0])@np.linalg.inv(B[1:])),('AB',((x-fit[0])@np.linalg.inv(fit[1:])-B[0])@np.linalg.inv(B[1:]))]:\\n F=np.column_stack([np.prod(z[:,j],axis=1) for j in comb]); C=np.corrcoef(np.column_stack([Y,F]).T)[:3,3:]; print(name, [[(comb[i],round(C[k,i],3)) for i in np.argsort(abs(C[k]))[-5:][::-1]] for k in range(3)]);\\n for deg in (2,3,4,6):\\n  M=F[:,[len(j)<=deg for j in comb]]; M=(M-M[:n].mean(0))/M[:n].std(0); ym=Y[:n].mean(0); G=M[:n]@M[:n].T\\n  print(deg,[(r,np.round(abs(M[n:]@M[:n].T@np.linalg.solve(G+r*np.eye(n),Y[:n]-ym)+ym-Y[n:]).mean(0),3).tolist()) for r in (.01,1,20)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw sparse readout → H2 panel-calibrated spatial amplitudes; two-mode temporal projection MAE is 0.00340, with spatial holdout error pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure the frozen node on the current split and compare raw and calibrated coordinates to see whether the missing signal is explained by low-order interactions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5def93432b2935d391d921989847aa94d1e24222f874f363da36273b86a230e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46785.92,
+      "usage_known": true,
+      "prompt_tokens": 27962,
+      "cached_tokens": 12672,
+      "completion_tokens": 1062
+    }
+  ]
+}

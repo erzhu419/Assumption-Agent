@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "03dbef43ffc54fd5a19f933b226ce84e",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:59:54.005292+00:00",
+  "ended_at_utc": "2026-11-28T14:00:29.817101+00:00",
+  "request_sha256": "de2ff29660f231eece20990cfcbcc56020c7185910fc1fa38d87f1a8fd0adf96",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62978,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37583,
+    "cached_tokens": 12672,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); lo=s.index('def _calibrate'); hi=s.index('def _branch',lo)\\ns=s[:lo]+'''def _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    a = _aff(u)\\n    err = np.linalg.norm(v-a @ _ls(a, v), axis=1)\\n    keep = err < max(3*np.median(err), .2)\\n    if keep.sum() < 20:\\n        keep = err <= np.quantile(err, .85)\\n    # Coordinate-specific offsets and gains; shared cubic and opposite-channel coupling.\\n    def design(z, rate):\\n        d = np.zeros(z.shape + (10,))\\n        j = np.arange(4)\\n        d[..., j, j] = 1\\n        d[..., j, j+4] = z\\n        d[..., 8] = z**3\\n        d[..., 9] = np.sin(rate*np.roll(z, 2, axis=-1))\\n        return d\\n    def fit(rate):\\n        d = design(u[keep], rate).reshape(-1, 10)\\n        coef = _ls(d, v[keep].ravel())\\n        return coef, np.mean((d @ coef-v[keep].ravel())**2)\\n    rate = minimize_scalar(lambda r: fit(r)[1], bounds=(1.4, 3.5), method='bounded').x\\n    coef = fit(rate)[0]\\n    affine = _ls(a[keep], v[keep])\\n    init = _ls(affine[1:].T, (x-affine[0]).T).T\\n    return np.array([least_squares(lambda z: design(z, rate) @ coef-row,\\n                                   z0, gtol=1e-11).x for row, z0 in zip(x, init)])\\n\\n\\ndef _even_branch(panel, z):\\n    u, v = panel['u'], panel['v2']\\n    def design(x, rate):\\n        return np.column_stack((_aff(x), x*x, np.exp(-(rate*x)**2)))\\n    def objective(rate):\\n        d = design(u, rate)\\n        return np.mean((d @ _ls(d, v)-v)**2)\\n    rate = minimize_scalar(objective, bounds=(.572, 1.188), method='bounded').x\\n    return design(z, rate) @ _ls(design(u, rate), v)\\n\\n\\n'''+s[hi:]\\ns=s.replace('b = np.exp(-.877**2*z*z)\\\\n    features = np.column_stack((a, b, _cross(a, b), _cross(z, a), _cross(z, b), z))','b = _even_branch(study[\\\\'panel_c\\\\'], z)\\\\n    features = np.column_stack((a, b, _cross(a, b), z, _cross(z, z), np.sum(a*b, axis=1)))');p.write_text(s)\\nPY\\ncat > /tmp/final_stress.py <<'PY'\\nimport pickle, importlib.util, numpy as np\\nf='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('solver',f); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as fp: s=pickle.load(fp)[0]['study']\\nt=s['train']; x=t['x']; rng=np.random.default_rng(12328)\\ndef score(ids):\\n a,b=ids[:52],ids[52:]; tr={k:t[k][a] for k in ('x','y','traj')}; tr['summary']=np.array([tr['y'].mean(),tr['y'].std(),tr['traj'][:,-1].mean(),tr['traj'][:,-1].std()]); o=m.solve_batch(dict(s,train=tr,test={'x':x[b]})); y,H=o['y_hat'],o['state_pred']; assert y.shape==(20,) and H.shape==(20,8) and np.isfinite(H).all() and np.isfinite(y).all(); np.testing.assert_allclose(o['diagnostics_vec'],[y.mean(),y.std(),H[:,-1].mean(),H[:,-1].std()]); E=abs(H-t['traj'][b]); return np.array([np.mean(abs(y-t['y'][b])),E.mean(),E.mean(0).max()])\\npub=score(np.arange(72)); rnd=np.array([score(rng.permutation(72)) for i in range(40)]); radial=score(np.argsort(np.linalg.norm(x-x.mean(0),axis=1))); edges=np.array([score(np.argsort(sign*x[:,j])) for j in range(4) for sign in (1,-1)]); print('52/20 scalar, trajectory, worst time:',pub); print('40 new shuffled splits max:',rnd.max(0)); print('highest-radius holdout:',radial); print('coordinate-tail holdouts max:',edges.max(0)); assert max(pub[:2])<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_stress.py && (cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py)\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: Replace the raw even feature with the measured dual-panel branch and compact calibration; exploratory worst shuffled trajectory MAE drops from 0.03535 to 0.00960.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Add cubic terms to the even-panel fit\",\"rejected_reason\":\"They slightly reduce panel residuals but do not materially improve held-out prediction over the smaller model.\"}],\"rationale\":\"Promote the measured-panel model after it improves both outputs, then verify the exact artifact in an isolated process on the prescribed split, fresh shuffled splits, and input-tail holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6b333c56a932fe6985d58a7cd351a8ec24a458ffe6af1ea1d198d91bae79652e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35810.51,
+      "usage_known": true,
+      "prompt_tokens": 37583,
+      "cached_tokens": 12672,
+      "completion_tokens": 1511
+    }
+  ]
+}

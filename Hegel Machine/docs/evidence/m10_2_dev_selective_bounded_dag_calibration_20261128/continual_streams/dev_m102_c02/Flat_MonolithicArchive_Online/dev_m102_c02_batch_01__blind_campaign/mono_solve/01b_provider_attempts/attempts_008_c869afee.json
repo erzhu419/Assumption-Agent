@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c869afeeb7ea42ffb5b8d2120cd6ba18",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:32.577028+00:00",
+  "ended_at_utc": "2026-11-28T13:16:00.923740+00:00",
+  "request_sha256": "1d994a0413e03f7438691958367b3054fb2c33bc10e7ffebd25b83c128bb2808",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62526,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40078,
+    "cached_tokens": 12672,
+    "completion_tokens": 968
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -i \\\"s/y_form='quadratic', traj_form='linear'/y_form='sparse', traj_form='linear'/\\\" batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch, _calibrate\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,t=(tr[k] for k in ('x','y','traj'))\\nb,g=_calibrate(s['panel_a']); z=(x-b)/g\\n\\ndef check(study):\\n    r=solve_batch(study); a,p=r['y_hat'],r['state_pred']; n=len(study['test']['x'])\\n    assert a.shape==(n,) and p.shape==(n,len(s['eval_times']))\\n    assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in r.values())\\n    np.testing.assert_array_equal(r['diagnostics_vec'],[a.mean(),a.std(),p[:,-1].mean(),p[:,-1].std()])\\n    return a,p\\n\\ndef score(ix, panels=None):\\n    fit=np.setdiff1d(np.arange(len(x)),ix)\\n    a,p=check(dict(s if panels is None else panels,train=dict(tr,x=x[fit],y=y[fit],traj=t[fit]),test={'x':x[ix]}))\\n    et=abs(p-t[ix]); return np.array([abs(a-y[ix]).mean(),et.mean(),et.mean(0).max()])\\n\\ncheck(s)\\ngate=np.arange(52,72)\\nsets={'52/20 gate':[score(gate)],'random 52/20':[score(np.random.default_rng(k).permutation(72)[:20]) for k in range(12)],'coordinate/joint tails':[score(np.argsort(abs(z[:,k]))[-12:]) for k in range(4)]+[score(np.argsort(np.linalg.norm(z,axis=1))[-15:]) ]}\\nfor panel in ('panel_a','panel_b'):\\n    d=s[panel]\\n    sets[panel+' leave-one-row-out']=[score(gate,dict(s,**{panel:{k:np.delete(v,i,axis=0) for k,v in d.items()}})) for i in range(len(d['u']))]\\nfor name,E in sets.items():\\n    worst=np.max(E,axis=0); print(name,'max [y MAE, trajectory MAE, timestamp MAE]:',worst)\\n    assert np.all(worst<=.038)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full quadratic readout → two bilinear terms with linear relaxation amplitudes; the challenger has 52/20 MAEs of 0.00608 for y and 0.00497 for trajectories, with a worst stress-slice timestamp MAE of 0.00897.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the full quadratic readout\",\n      \"rejected_reason\": \"Its worst tail-split y MAE is 0.01835, versus 0.00819 for the sparse readout.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler readout because it improves both the prescribed split and tail performance. Verify the final public entry point in isolation and measure sensitivity to deleting individual calibration and operator panel rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9b497e8b972bc13b08b2c173bbc4b81ef711b7a2dbc7099cd271339dcf23a2b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28344.52,
+      "usage_known": true,
+      "prompt_tokens": 40078,
+      "cached_tokens": 12672,
+      "completion_tokens": 968
+    }
+  ]
+}

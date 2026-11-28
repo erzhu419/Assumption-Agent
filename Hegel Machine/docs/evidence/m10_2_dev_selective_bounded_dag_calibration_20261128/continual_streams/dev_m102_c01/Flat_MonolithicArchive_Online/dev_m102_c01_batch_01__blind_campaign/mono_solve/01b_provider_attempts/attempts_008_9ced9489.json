@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9ced9489d84f4877b6bd0766e9514bd2",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:36.840838+00:00",
+  "ended_at_utc": "2026-11-28T13:16:14.880366+00:00",
+  "request_sha256": "5faedb743fe54888514c33898af2380572ec15f153180373723893e5985ea4a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52600,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35991,
+    "cached_tokens": 12672,
+    "completion_tokens": 1666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rational.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rows=[]')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom itertools import combinations\\nu=c['u']; v=c['v1']; rrs=[]\\nfor nm,fn in [('root',lambda z:z/np.sqrt(1+z*z)),('soft',lambda z:z/(1+abs(z))),('rat',lambda z:z/(1+z*z)),('erf',__import__('scipy').special.erf),('tanhlin',lambda z:np.tanh(z)),('atanlin',np.arctan)]:\\n for extra in (0,1):\\n  def feats(z,k,fn=fn,extra=extra):return np.c_[np.ones(len(z)),z,fn(k*z)] if extra else np.c_[np.ones(len(z)),fn(k*z)]\\n  def fit(k):\\n   F=feats(u,k); W=np.linalg.lstsq(F,v,rcond=None)[0];return np.std(v-F@W),W\\n  k=minimize_scalar(lambda k:fit(k)[0],bounds=(.03,6),method='bounded').x; er,W=fit(k); print('C1',nm,extra,k,er); rrs.append((er,lambda z,k=k,W=W,feats=feats:feats(z,k)@W))\\ncb=min(rrs,key=lambda r:r[0])[1]; cb2=maps['v2']; bi=maps['Bi']; bmap=maps['B']; al=lambda z:(z-off)/sl\\nfor nm,z in [('BiA',al(bi(x))),('BA',al(bmap(x))),('A-Bi',Q['A-Bi']),('A-B',Q['A-B']),('A-',Q['A-']),('x',x),('A+Bi',Q['A+Bi'])]:\\n Q[nm]=z; Q[nm+'c']=cb(z); Q[nm+'d']=cb2(z)\\nprint('Bmatrix',B,'C1 fit',min(rrs,key=lambda r:r[0])[0])\\nsp=[np.arange(72)]+[np.random.default_rng(i+254).permutation(72) for i in range(5)]\\nrows=[]\\nfor key in ['x','A-','A-B','A-Bi','BiA','BA','A+Bi']+[k+c for k in ['A-','A-B','A-Bi','BiA','BA','A+Bi'] for c in 'cd']:\\n z=Q[key]; P=p(z,2); L=P[:,:5]; PQ=P[:,5:]; T3=p(z,3)[:,15:]; ij=np.array(list(combinations(range(4),2))); H=np.c_[z,z[:,ij[:,0]]+z[:,ij[:,1]],z[:,ij[:,0]]-z[:,ij[:,1]]]; P2=H**2\\n for j in (0,1):\\n  yy=Y[:,j]; ys=yy.std(); yy=yy/ys\\n  for typ in ('rank1','diag','full','axis','cubic','free'):\\n   ee=[]\\n   for ix in sp:\\n    a,b=ix[:52],ix[52:]; pp=P; ll=L; dims=5; penalty=.018\\n    if typ=='cubic': pp=np.c_[P,T3]; penalty=.06\\n    if typ in ('axis','diag','full'): dims={'axis':16,'diag':4,'full':16}[typ]; penalty=.055\\n    if typ=='free':dims=14; penalty=.09\\n    def den(h):\\n     if typ in ('rank1','cubic'):return 1+(ll@h)**2\\n     if typ=='diag':return 1+(z*z)@(h*h)\\n     if typ=='axis':return 1+P2@(h*h)\\n     if typ=='full':return 1+np.sum((z@h.reshape(4,4))**2,axis=1)\\n     return np.exp(np.clip(P[:,1:]@h,-3,3))\\n    if typ=='axis':dims=H.shape[1]\\n    def fit(h):\\n     F=pp/den(h)[:,None]; ff=F[a]; reg=np.r_[np.full(P.shape[1],.0001),np.full(pp.shape[1]-P.shape[1],.20)]; W=solve(ff.T@ff+np.diag(reg),ff.T@yy[a],assume_a='pos');return np.r_[F[a]@W-yy[a],penalty*h,np.sqrt(reg)*W],F@W\\n    k=None\\n    for sd in range(3 if typ in ('rank1','cubic') else 1):\\n     h=np.random.default_rng(100+sd).normal(0,.3,dims); rr=least_squares(lambda h:fit(h)[0],h,max_nfev=85)\\n     if k is None or rr.cost<k.cost:k=rr\\n    e=abs(fit(k.x)[1]-yy)*ys;ee.append([e[a].mean(),e[b].mean()])\\n   ee=np.array(ee);rows.append((j,key,typ,ee[0],ee.mean(0),ee.max(0)))\\nfor j in (0,1):\\n for r in sorted([r for r in rows if r[0]==j],key=lambda r:r[4][1])[:12]:print(r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py | sed -n '/^C1/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independent nonlinear features → H2: a shared rational denominator in panel-calibrated coordinates; the best simple GP reached 0.05109 scalar MAE on its worst split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the first panel's arctangent fit as exact\",\n      \"rejected_reason\": \"Its RMS residual is 0.00518, well above the second operator's 0.000177 residual.\"\n    }\n  ],\n  \"rationale\": \"Test alternative first-panel nonlinearities against the panel measurements and fit rational denominators inside each fold, keeping scalar and trajectory errors separate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "321c57d19c93b988ce04b3daa27543d066172584e1e3944bc65a5f18acd7c0f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38036.05,
+      "usage_known": true,
+      "prompt_tokens": 35991,
+      "cached_tokens": 12672,
+      "completion_tokens": 1666
+    }
+  ]
+}

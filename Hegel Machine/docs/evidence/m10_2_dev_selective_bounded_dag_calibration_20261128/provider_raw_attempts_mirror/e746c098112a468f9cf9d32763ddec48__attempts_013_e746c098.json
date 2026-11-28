@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e746c098112a468f9cf9d32763ddec48",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:04.251064+00:00",
+  "ended_at_utc": "2026-11-28T13:17:38.902462+00:00",
+  "request_sha256": "088ee90be30447e00cdee0b7dd3b8bc2363acce7ac7cb201739d8747b719a797",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74739,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43675,
+    "cached_tokens": 12672,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated regression with a cycle-interaction covariance.\\\"\\\"\\\"\\nimport numpy as np\\n\\n_PAIRS = np.array([(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)])\\n_CYCLE = [0, 2, 3, 5]\\n\\n\\ndef _calibrate(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(6):\\n        us, vs = u[keep], v[keep]\\n        um, vm = us.mean(axis=0), vs.mean(axis=0)\\n        centered = us - um\\n        gain = np.sum(centered * (vs - vm), axis=0) / np.sum(centered**2, axis=0)\\n        offset = vm - um * gain\\n        error = np.linalg.norm(v - offset - u * gain, axis=1)\\n        keep = error <= max(.001, 3 * np.median(error))\\n    return offset, gain\\n\\n\\ndef _products(z):\\n    return z[:, _PAIRS[:, 0]] * z[:, _PAIRS[:, 1]]\\n\\n\\ndef _kernels(left, right):\\n    a, b = _products(left), _products(right)\\n    linear = 1 + left @ right.T\\n    quadratic = linear + a @ b.T + (left**2) @ (right**2).T\\n    cycle = a[:, _CYCLE] @ b[:, _CYCLE].T\\n    state = quadratic + .04 * cycle * linear**2\\n    d = (np.sqrt(5) / 2) * np.linalg.norm(left[:, None, :] - right[None, :, :], axis=-1)\\n    matern = (1 + d + d**2 / 3) * np.exp(-d)\\n    return state + .04 * cycle * matern, state\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    offset, gain = _calibrate(study['panel_a'])\\n    z = (np.asarray(train['x']) - offset) / gain\\n    test = (np.asarray(study['test']['x']) - offset) / gain\\n    ky, ks = _kernels(z, z)\\n    cy, cs = _kernels(test, z)\\n    ridge = .002 * np.eye(len(z))\\n    y = cy @ np.linalg.solve(ky + ridge, np.asarray(train['y']))\\n    state = cs @ np.linalg.solve(ks + ridge, np.asarray(train['traj']))\\n    endpoint = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), endpoint.mean(), endpoint.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom sklearn.model_selection import ShuffleSplit\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; Y=tr['traj']\\ndef check(study):\\n p=m.solve_batch(study); yp,sp,dp=(p[k] for k in ('y_hat','state_pred','diagnostics_vec')); n=len(study['test']['x']); assert yp.shape==(n,) and sp.shape==(n,len(study['eval_times'])) and dp.shape==(4,); assert all(np.isfinite(v).all() for v in p.values()); assert np.allclose(dp,[yp.mean(),yp.std(),sp[:,-1].mean(),sp[:,-1].std()]); return yp,sp\\ncheck(s)\\ndef validate(a,b):\\n yp,sp=check(dict(s,train=dict(tr,x=x[a],y=y[a],traj=Y[a]),test={'x':x[b]})); err=abs(sp-Y[b]); return np.r_[np.mean(abs(yp-y[b])),err.mean(),err[:,-1].mean(),err.mean(0).max()]\\na=np.arange(52); b=np.arange(52,72); fixed=validate(a,b); assert np.max(fixed)<.038; print('designated y / trajectory / endpoint / worst timestamp MAE:',fixed)\\nfor seed in (11,2027):\\n r=np.array([validate(a,b) for a,b in ShuffleSplit(24,train_size=52,random_state=seed).split(x)]); print('resplits',seed,'mean:',r.mean(0),'worst:',r.max(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 isotropic interpolation -> H2 calibrated cycle-interaction covariance; selected components yielded worst 25-split MAEs of 0.04169 for y, 0.03347 for trajectories, and 0.03755 at the endpoint.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the same smooth correction for both outputs\",\n      \"rejected_reason\": \"It marginally reduced worst scalar error but increased worst trajectory and endpoint errors.\"\n    }\n  ],\n  \"rationale\": \"Add the higher-order cycle interactions missing from the quadratic basis, with a modest smooth correction only for the scalar target. Verify the exact saved solver against the public schema, the designated gate, and additional resplits in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "a4fe01e9f13ca3aca5a8e3c7f5d1550998b00abdf46a9d3d08cc37fb4109da43",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34649.35,
+      "usage_known": true,
+      "prompt_tokens": 43675,
+      "cached_tokens": 12672,
+      "completion_tokens": 1511
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2442790818449cc867399f39a8665cb",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:11:57.234113+00:00",
+  "ended_at_utc": "2026-11-28T14:12:39.132033+00:00",
+  "request_sha256": "d50f59bbfb7549a7f19fbbb4d5eec2db9344b2e2b24d01eeec673685ee78d690",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36985,
+    "cached_tokens": 12672,
+    "completion_tokens": 1863
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Robust affine calibration, two panel-identified branches, and exponential state modes.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = map(np.asarray, (panel['u'], panel['v']))\\n    coef = []\\n    for j in range(u.shape[1]):\\n        a = _aff(u[:, j:j+1])\\n        e = np.abs(a @ _ls(a, v[:, j]) - v[:, j])\\n        keep = e < max(.001, 4*np.median(e))\\n        for _ in range(3):\\n            fit = _ls(a[keep], v[keep, j])\\n            e = np.abs(a @ fit - v[:, j])\\n            good = e < max(.001, 4*np.median(e))\\n            if good.sum() >= 3:\\n                keep = good\\n        coef.append(_ls(a[keep], v[keep, j]))\\n    bias, gain = np.asarray(coef).T\\n    return (x-bias)/gain\\n\\n\\ndef _branches(panel, z):\\n    u = np.asarray(panel['u'])\\n    out = []\\n    for k, initial in [(1, .66), (2, 1.2)]:\\n        v = np.asarray(panel[f'v{k}'])\\n\\n        def design(a, rate):\\n            if k == 1:\\n                return np.column_stack((_aff(a), a**3, a/(1+rate*np.abs(a))))\\n            return np.column_stack((_aff(a), a*np.roll(a, -1, axis=1), a**3, np.tanh(rate*a)))\\n\\n        def residual(rate):\\n            a = design(u, rate)\\n            return (a @ _ls(a, v) - v).ravel()\\n\\n        rate = least_squares(residual, [initial], bounds=(.1, 3), gtol=1e-12).x\\n        out.append(design(z, rate) @ _ls(design(u, rate), v))\\n    return out\\n\\n\\ndef _modes(times, trajectories):\\n    def basis(rates):\\n        return -np.expm1(-times[:, None]*rates)\\n\\n    def residual(rates):\\n        q = basis(rates)\\n        return (q @ _ls(q, trajectories.T) - trajectories.T).ravel()\\n\\n    rates = least_squares(residual, [.4, 1.85], bounds=([.1, .9], [.85, 4])).x\\n    return basis(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    n = len(train['x'])\\n    z = _calibrate(study['panel_a'], x)\\n    b, c = _branches(study['panel_c'], z)\\n    interactions = (b[:, :, None]*c[:, None, :]).reshape(len(x), -1)\\n    y_design = _aff(np.column_stack((b, c, np.sum(b*c, axis=1))))\\n    state_design = _aff(np.column_stack((b, c, interactions)))\\n    q = _modes(np.asarray(study['eval_times']), np.asarray(train['traj']))\\n    y_hat = y_design[n:] @ _ls(y_design[:n], train['y'])\\n    amplitudes = _ls(q, np.asarray(train['traj']).T).T\\n    state_pred = state_design[n:] @ _ls(state_design[:n], amplitudes) @ q.T\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), state_pred[:, -1].mean(), state_pred[:, -1].std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\ncat >/tmp/check13.py <<'PY'\\nimport numpy as np, pickle, runpy\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); ids=np.arange(n); rng=np.random.default_rng(42)\\norders=[ids,ids[::-1]]+[rng.permutation(n) for _ in range(25)]\\nfor z in [t['x'],m['_calibrate'](s['panel_a'],t['x'])]:\\n for order in [np.argsort(np.linalg.norm(z,axis=1))]+[np.argsort(z[:,j]) for j in range(z.shape[1])]: orders.extend([order,order[::-1]])\\nE=[]\\nfor o in orders:\\n a,b=o[:52],o[52:]; v=m['solve_batch'](dict(s,train={k:(val[a] if k!='summary' else val) for k,val in t.items()},test={'x':t['x'][b]})); ey=np.abs(v['y_hat']-t['y'][b]); et=np.abs(v['state_pred']-t['traj'][b]); E.append(np.r_[ey.mean(),et.mean(),et.mean(0),ey.max(),et.max()]);\\nE=np.array(E);print('prescribed',E[0]);print('random maxima',E[:27].max(0));print('extreme extrapolation maxima',E[27:].max(0));print('worst indices',E.argmax(0));\\nz=m['_calibrate'](s['panel_a'],t['x']); b,c=m['_branches'](s['panel_c'],z); q=m['_modes'](s['eval_times'],t['traj']); F=m['_aff'](np.c_[b,c,(b[:,:,None]*c[:,None,:]).reshape(n,-1)]); Y=np.c_[t['y'],m['_ls'](q,t['traj'].T).T]; fit=m['_ls'](F,Y); print('coefs',fit.round(4)); print('condition',np.linalg.cond(F)); print('simple y coefs',m['_ls'](m['_aff'](np.c_[b,c,np.sum(b*c,axis=1)]),t['y']));\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/check13.py && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: additive branch outputs -> H2: native calibrated branches with a dot product for y and full bilinear interactions for state; exploratory 52/20 MAEs are 0.00451 and 0.00416, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Route both branches through panel B\",\"rejected_reason\":\"The transformed-input bilinear fit gives 0.10836 y MAE and 0.08183 state MAE, versus 0.00755 and 0.00416 for native calibrated inputs.\"}],\"rationale\":\"Write the two validated readouts and check their exact implementation on the prescribed split, randomized splits, and deliberately extrapolative slices before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7c71fb90069248cb4d4338730f007d4a59b0d267f89ce36fb631bdcb803eed65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41896.72,
+      "usage_known": true,
+      "prompt_tokens": 36985,
+      "cached_tokens": 12672,
+      "completion_tokens": 1863
+    }
+  ]
+}

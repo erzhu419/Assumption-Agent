@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "616bb88a4b68453494ea754d534ffb99",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:55:35.397807+00:00",
+  "ended_at_utc": "2026-11-28T13:56:04.723056+00:00",
+  "request_sha256": "0ef4791654bd4a499b2105f1909563cc32ed40ea5ed27acc0fff344634dbcfb8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39837,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29006,
+    "cached_tokens": 12672,
+    "completion_tokens": 1238
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/*05_solver.py /tmp/ops.py; cat >/tmp/cv.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nfrom ops import _branches,_one,_fit,_calibration,_inverse\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; T=tr['traj']; y=tr['y']; n=52\\nx=tr['x']; z=_inverse(x,_calibration(s['panel_a'])); c,d=_branches(s,x)\\np=s['panel_b']; bmat=_fit(_one(p['u']),p['v']); b=_one(z)@bmat\\nC=_fit(_one(s['panel_c']['u']*np.roll(s['panel_c']['u'],-1,axis=1)),s['panel_c']['v1']); D=_fit(_one(np.cos(2.4*s['panel_c']['u'])),s['panel_c']['v2']);\\ndef branches(z):return _one(z*np.roll(z,-1,axis=1))@C,_one(np.cos(2.4*z))@D\\nprint('inverse max residual',np.max(abs(x-(_calibration(s['panel_a'])[:,0]+_calibration(s['panel_a'])[:,1]*z+_calibration(s['panel_a'])[:,2]*np.roll(z,-1,axis=1)+_calibration(s['panel_a'])[:,3]*z*np.roll(z,-1,axis=1)+_calibration(s['panel_a'])[:,4]*z**3))))\\ndef modes(r):return -np.expm1(-t[:,None]*r)\\ndef res(r):\\n q=modes(r);return (q@_fit(q,T[:n].T)-T[:n].T).ravel()\\nr=least_squares(res,[.39,1.8,4.8]).x; q=modes(r); A=_fit(q,T.T).T; print('rates',r)\\ndef score(name,h,verbose=False):\\n h=_one(h); by=_fit(h[:n],y[:n]); bt=_fit(h[:n],T[:n]); ey=h@by-y; et=h@bt-T; print(name,h.shape[1],*[round(np.mean(abs(e[sl])),5) for sl in [slice(0,n),slice(n,None)] for e in [ey,et]],'amp',np.mean(abs((h@_fit(h[:n],A[:n])-A)[n:]),0).round(4));\\n if verbose: print('y weights',by.round(3)); print('mode weights',_fit(h[:n],A[:n]).round(3))\\nouter=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nfor name,u in [('z',z),('b',b),('x',x),('invb',(z-bmat[0])@np.linalg.inv(bmat[1:]))]:\\n c,d=branches(u); dot=np.sum(c*d,axis=1); h=np.c_[c,d,dot];\\n for nm,f in [('base',h),('base+cross01',np.c_[h,c[:,0]*d[:,1]]),('base+u',np.c_[h,u]),('all cross',np.c_[c,d,outer(c,d)]),('squares and all cross',np.c_[c,d,outer(c,d),c*c,d*d]),('tanh',np.c_[h,np.tanh(c),np.tanh(d)]),('all quadratics',np.c_[c,d,outer(c,d),*[g[:,i]*g[:,j] for g in (c,d) for i in range(4) for j in range(i,4)]])]: score(name+' '+nm,f,nm=='base+cross01')\\nfor name,g in [('c',branches(z)[0]),('d',branches(z)[1]),('b',b),('c+d',sum(branches(z))),('c*d',np.prod(branches(z),axis=0)),('cz',branches(z)[0]*z),('dz',branches(z)[1]*z)]:\\n print(name,'correlations',np.corrcoef(np.c_[y[:n],A[:n],g[:n]].T)[:4,4:].round(2))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived dual-branch graph -> H2: calibrated edge and cosine branches with a third component; three-mode trajectory reconstruction RMSE is 0.00410, with spatial holdout MAE not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The panels identify the cubic calibration, cyclic products, and cosine operator to measurement precision. Compare plausible graph placements and cross-branch interactions on the required split, scoring y and trajectories separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6c2267227f6af18eb95d1067105af53e4ae110efbba4cbecc38de9336fd0bc76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29323.81,
+      "usage_known": true,
+      "prompt_tokens": 29006,
+      "cached_tokens": 12672,
+      "completion_tokens": 1238
+    }
+  ]
+}

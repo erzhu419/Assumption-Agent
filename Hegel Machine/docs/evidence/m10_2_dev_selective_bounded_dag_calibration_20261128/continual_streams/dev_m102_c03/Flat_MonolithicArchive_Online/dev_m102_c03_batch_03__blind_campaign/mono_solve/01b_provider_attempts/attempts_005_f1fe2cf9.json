@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1fe2cf975ef45578f09ad04857010e3",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:26:54.825773+00:00",
+  "ended_at_utc": "2026-11-28T13:27:27.778805+00:00",
+  "request_sha256": "ec2abd962046ca34511f6c9a599e7e54a61b8c474af9f2aa4b922cd7c06d4672",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28903,
+    "cached_tokens": 12672,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/models.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; n=52\\nnp.set_printoptions(precision=5,suppress=True)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef af(x): return np.c_[aff(x),np.roll(x,-1,axis=1)*x,x**3]\\nu=s['panel_a']['u']; v=s['panel_a']['v']; h=af(u); k=np.linalg.norm(v-aff(u)@np.linalg.lstsq(aff(u),v,rcond=None)[0],axis=1)<3\\nb=np.linalg.lstsq(h[k],v[k],rcond=None)[0]; print('A matrix',b,'sd',np.std(h[k]@b-v[k],axis=0))\\nz=np.array([least_squares(lambda w:(af(w[None,:])@b).ravel()-a,a).x for a in x]); print('inverse max',np.max(abs(af(z)@b-x)), np.min(z,axis=0),np.max(z,axis=0))\\np=s['panel_b']; B=aff(z)@np.linalg.lstsq(aff(p['u']),p['v'],rcond=None)[0]\\ndef panel(k,fun,init,bounds):\\n u=s['panel_c']['u']; v=s['panel_c'][k];\\n def project(p,out=False):\\n  F=fun(u,p); b=np.linalg.lstsq(F,v,rcond=1e-10)[0]; return fun(z,p)@b if out else (F@b-v).ravel()\\n o=least_squares(project,np.array(init)*np.ones(4),bounds=bounds,max_nfev=100); return np.sqrt(np.mean(o.fun**2)),o.x,project(o.x,1)\\nfuncs={'soft':(lambda a,p:a/(1+abs(a*p)),.8,(.02,5)), 'tanh':(lambda a,p:np.tanh(a*p),1.,(.1,6)), 'sin':(lambda a,p:np.sin(a*p),2.,(.1,6)), 'cos':(lambda a,p:np.cos(a*p),2.,(.1,6)), 'exp':(lambda a,p:np.exp(a*p),1.,(.02,4)), 'oddquot':(lambda a,p:a/(1+(a*p)**2),1.,(.02,5)), 'gauss':(lambda a,p:np.exp(-(a*p)**2),1.,(.02,5))}\\ncs=[]\\nfor key in ['v1','v2']:\\n out=[]\\n for name,(g,i,lim) in funcs.items():\\n  for use_a in [0,1]:\\n   f=lambda a,p:np.c_[aff(a),g(a,p)] if use_a else aff(g(a,p))\\n   e,r,c=panel(key,f,i,lim); out.append((e,name,use_a,r,c))\\n out.sort(key=lambda q:q[0]); print(key,[(e,name,use_a,r) for e,name,use_a,r,c in out[:6]]); cs.append(out[0][-1])\\nC,D=cs\\nq=-np.expm1(-t[:,None]*[.4029,1.8123]); a=np.linalg.lstsq(q,T.T,rcond=None)[0].T\\nY=np.c_[y,a]\\ndef F(a):return np.c_[aff(a),*[a[:,i]*a[:,j] for i in range(4) for j in range(i,4)]]\\ndef score(name,f):\\n b=np.linalg.lstsq(f[:n],Y[:n],rcond=1e-8)[0]; e=f@b-Y; print(name,f.shape[1],np.mean(abs(e[:n]),0),np.mean(abs(e[n:]),0),np.mean(abs(e[n:,1:]@q.T)))\\nfor name,w in [('x',x),('z',z),('B',B),('C',C),('D',D)]:\\n score(name+' linear',aff(w));score(name+' quadratic',F(w));score(name+' with tanh',np.c_[F(w),F(np.tanh(w))[:,1:]])\\nfor i,j in combinations(range(4),2):\\n w=[z,B,C,D]; f,g=w[i],w[j]; score(f'{i} {j} mix',np.c_[aff(z),f,g,np.einsum('ni,nj->nij',f,g).reshape(-1,16)]);score(f'{i} {j} quad',np.c_[F(f),F(g)[:,1:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/models.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 cyclic cubic calibration followed by branch-specific readouts; two-mode reconstruction RMSE is 0.00430, and predictive gate MAE has not yet improved on 0.143102.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Invert the measured calibration, compare auxiliary panel nonlinearities, and screen readout structures on the 52/20 split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e48951b91677755901845461c8aaff4086516767a6dd21ebe68e5e096497f688",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32951.91,
+      "usage_known": true,
+      "prompt_tokens": 28903,
+      "cached_tokens": 12672,
+      "completion_tokens": 1353
+    }
+  ]
+}

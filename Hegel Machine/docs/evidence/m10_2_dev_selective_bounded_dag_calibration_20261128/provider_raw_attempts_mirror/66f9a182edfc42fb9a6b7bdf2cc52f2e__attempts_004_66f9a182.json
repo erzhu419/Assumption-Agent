@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "66f9a182edfc42fb9a6b7bdf2cc52f2e",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:24.787399+00:00",
+  "ended_at_utc": "2026-11-28T13:13:51.528411+00:00",
+  "request_sha256": "472a7d867fae74756884c05effdaf820c617a963c48714f6c8b672c86a7a22a1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29152,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24067,
+    "cached_tokens": 5504,
+    "completion_tokens": 1054
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat >/tmp/panel_probe.py <<'PY'\\nimport numpy as np,pickle,runpy,glob\\nfrom scipy.optimize import minimize_scalar\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=st['train']\\narc=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); sparse=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; sink=runpy.run_path('/holdout_task/_frozen_nodes/node_02.py')['run_node']\\ndef fold(a,b):\\n return dict(st,train={k:v[a] for k,v in tr.items() if k!='summary'},test={'x':tr['x'][b]})\\ndef err(p,b): return np.mean(abs(p-np.column_stack([tr['y'],tr['traj']])[b]),axis=0)\\nfor key in ('panel_a','panel_b','panel_c'):\\n p=st[key]; u=p['u']; h=np.c_[np.ones(len(u)),u];print(key,'u range',u.min(0),u.max(0))\\n for name,v in p.items():\\n  if name=='u':continue\\n  af=np.linalg.lstsq(h,v,rcond=None)[0]; r=np.linalg.norm(v-h@af,axis=1); print(name,'affine',af.round(3),'residual quantiles',np.quantile(r,[0,.5,.9,.95,1]).round(4))\\n  for lab,fn in [('negexp',lambda u,a:-np.expm1(-a*u*u)),('tanh',lambda u,a:np.tanh(a*u)),('atan',lambda u,a:np.arctan(a*u)),('rational',lambda u,a:u*u/(1+a*u*u)),('softsign',lambda u,a:u/(1+a*abs(u)))]:\\n   def obj(a):\\n    mat=np.c_[h,fn(u,a)]; e=v-mat@np.linalg.lstsq(mat,v,rcond=None)[0]; return np.sqrt(np.mean(e**2))\\n   o=minimize_scalar(obj,bounds=(.002,8),method='bounded');print(lab,round(o.x,4),round(o.fun,5),'fixed',[(a,round(obj(a),5)) for a in (.22,.2962,1.25)])\\nfor b in [np.arange(52,72),np.arange(20),np.arange(20,40),np.arange(40,60)]:\\n a=np.setdiff1d(np.arange(72),b);s=fold(a,b); d=sparse({'__input__':s}); dp=np.c_[d['y_hat'],d['state_pred']]; p=arc['_panel_pred'](s,1,.3,'sat');bl=sink({'node_00':d,'node_01':{'panel_pred':p}});print('fold',b[0], 'sparse',err(dp,b).round(4),'panel',err(p,b).round(4),'blend',err(np.c_[bl['y_hat'],bl['state_pred']],b).round(4))\\nprint('target ranges',np.column_stack([tr['y'],tr['traj']]).min(0),np.column_stack([tr['y'],tr['traj']]).max(0));print('trajectory sv',np.linalg.svd(tr['traj'],compute_uv=False));print('x range',tr['x'].min(0),tr['x'].max(0),st['test']['x'].min(0),st['test']['x'].max(0))\\nPY\\npython3 /tmp/panel_probe.py\\nsed -n '1,90p' /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived fixed saturation -> fit and compare paired-panel response laws; baseline fold errors will be measured by output and horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure the panel response independently of the target labels, and separate the frozen branch’s error from the calibration readout’s error across multiple held-out blocks.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "1497e802235141c19adb6688ab08f89fbcac73971d74a97c88a7fa92cdceb49a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26739.66,
+      "usage_known": true,
+      "prompt_tokens": 24067,
+      "cached_tokens": 5504,
+      "completion_tokens": 1054
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "398256b1491b470c94f3331561ead702",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:30.491218+00:00",
+  "ended_at_utc": "2026-11-28T13:14:15.219208+00:00",
+  "request_sha256": "760285002b6575eefd759875101f0cb27e852f5a082ac2ef7d36d289fb762f93",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43523,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31752,
+    "cached_tokens": 5504,
+    "completion_tokens": 978
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rows=[]')[0])\\nfrom scipy.optimize import least_squares\\nF=p(Q['A-'],2); rng=np.random.default_rng(601); splits=[np.arange(len(x))]+[rng.permutation(len(x)) for _ in range(5)]\\nprint('Y extrema/std:',Y.min(0),Y.max(0),Y.std(0)); print('svd:',np.linalg.svd(t,compute_uv=False)); print('T basis:',sv[:3]); print('raw cubic',np.linalg.lstsq(p(Q['A-'],3),Y,rcond=None)[0].T)\\nfun={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'rat':lambda a:a/np.sqrt(1+a*a),'log':lambda a:np.arcsinh(a),'soft':lambda a:a/(1+abs(a)),'cub':lambda a:a**3}\\nrows=[]\\nfor j in (0,1):\\n yy=Y[:,j]; scale=np.std(yy); yy=yy/scale\\n for deg in (1,2):\\n  F=p(Q['A-'],deg)\\n  for name,f in fun.items():\\n   for lin in (0,1,2):\\n    L=p(Q['A-'],lin); L=L[:,:1] if lin==0 else L\\n    def predict(par,F,L):return par[0]*f(F@par[1:1+F.shape[1]])+L@par[1+F.shape[1]:]\\n    es=[]; ps=[]\\n    for i in splits:\\n     a,b=i[:52],i[52:]; best=None\\n     for gain in (.75,1.5,3):\\n      beta=np.linalg.lstsq(F[a],yy[a],rcond=None)[0]/gain\\n      r=least_squares(lambda w:predict(w,F[a],L[a])-yy[a],np.r_[gain,beta,np.zeros(L.shape[1])],max_nfev=140)\\n      if best is None or r.cost<best.cost:best=r\\n     es.append([np.mean(abs(best.fun))*scale,np.mean(abs(predict(best.x,F[b],L[b])-yy[b]))*scale]);ps.append(best.x)\\n    rows.append((j,deg,name,lin,np.round(es[0],5),np.round(np.mean(es,0),5),np.round(np.max(es,0),5),np.round(ps[0],4)))\\nfor j in (0,1):\\n for row in sorted([r for r in rows if r[0]==j],key=lambda r:r[5][1])[:10]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | sed -n '/Y extrema/,$p'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: anisotropic interpolation → H2: a saturating readout of a low-order latent interaction; the best simple GP averaged 0.03331 scalar MAE but reached 0.05109 on the worst measured split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the GP selected by its chronological split MAE\",\"rejected_reason\":\"Its 0.03659 chronological MAE clears the gate, but its 0.05651 worst-split MAE leaves little confidence in generalization.\"}],\"rationale\":\"Test whether a compact nonlinear readout explains the failure of unregularized cubic regression and reduces held-out error for both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "20da79822b0654f866c5c0e3878ca37c2c9ba727bf31d2869d9990b96dcb0942",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44726.86,
+      "usage_known": true,
+      "prompt_tokens": 31752,
+      "cached_tokens": 5504,
+      "completion_tokens": 978
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc2505484f184803a65cd46826721c50",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:01:16.332688+00:00",
+  "ended_at_utc": "2026-11-28T14:01:47.246200+00:00",
+  "request_sha256": "24f06eeec2b5705f82701b19ee35196964315795b5e58aa52132418228fd63c3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50199,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32872,
+    "cached_tokens": 12672,
+    "completion_tokens": 1162
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\ndef load(i):\\n    name = f'node_{i:02}'\\n    path = root + ('_frozen_nodes/' if i else '') + name + '.py'\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nmods = [load(i) for i in range(4)]\\ns = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\\njack = []\\nfor i in range(len(u)):\\n    mask = np.arange(len(u)) != i\\n    f, b = mods[0]._fit_sensor(u[mask], v[mask])\\n    if np.max(abs(v[i])) < 3:\\n        inv = mods[0]._invert(v[i:i+1], f, b)\\n        jack.append(float(np.max(abs(inv-u[i]))))\\nprint('panel A censored-gross-fault jackknife: clean held-out rows', len(jack), 'worst coordinate absolute error', max(jack))\\nassert len(jack) >= 40 and max(jack) < 0.003\\n\\nf, b = mods[0]._fit_sensor(u, v)\\nxa, xb = (s[k]['x'] for k in ('train', 'test'))\\nxx = np.vstack((xa, xb))\\nz = mods[0]._invert(xx, f, b)\\nback = b[:4] + b[4:8]*z + b[8]*np.tanh(f[0]*z) + b[9]*np.sin(f[1]*np.roll(z, 2, axis=1))\\nprint('train/test inversion worst forward residual', np.max(abs(back-xx)))\\nassert np.max(abs(back-xx)) < 1e-9\\n\\ndef evaluate(tr, te):\\n    case = dict(s, train={k:s['train'][k][tr] for k in ('x','y','traj')}, test={'x':xa[te]})\\n    c = mods[0].run_node({'__input__':case})\\n    p = mods[1].run_node({'__input__':case, 'node_00':c})\\n    q = mods[2].run_node({'node_01':p})\\n    return [np.mean(abs(p['y_hat']-s['train']['y'][te])), np.mean(abs(q['state_pred']-s['train']['traj'][te]))]\\n\\nrng = np.random.default_rng(761)\\nn = len(xa)\\nk = max(n//4,1)\\nscores = []\\nfor _ in range(20):\\n    ids = rng.permutation(n)\\n    scores.append(evaluate(ids[k:], ids[:k]))\\ntails = []\\nfor col in range(xa.shape[1]):\\n    ids = np.argsort(xa[:,col])\\n    tails.extend([evaluate(ids[k:], ids[:k]), evaluate(ids[:-k], ids[-k:])])\\nprint('worst across 20 random holdouts (y, traj):', np.max(scores, axis=0))\\nprint('worst across 8 channel-tail holdouts (y, traj):', np.max(tails, axis=0))\\nassert np.max(scores) < 0.038 and np.max(tails) < 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent affine channels → H2 paired tanh–sine calibration; verified public CV MAEs are 0.005066 for y and 0.004048 for trajectory, with channel-tail checks pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official public split alone\",\n      \"rejected_reason\": \"The acceptance test passes with margin, but pooled MAE does not show whether calibration remains accurate at channel extremes.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged. Jackknife the calibration panel, check inversion on all supplied coordinates, and measure both prediction errors on held-out channel tails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7dde510e2395aab4fc2530050636e5a9591d54641b82843b08a86981ec61aa40",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30912.43,
+      "usage_known": true,
+      "prompt_tokens": 32872,
+      "cached_tokens": 12672,
+      "completion_tokens": 1162
+    }
+  ]
+}

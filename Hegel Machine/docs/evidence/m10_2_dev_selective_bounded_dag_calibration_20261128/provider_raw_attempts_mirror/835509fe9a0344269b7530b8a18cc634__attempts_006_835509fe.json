@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "835509fe9a0344269b7530b8a18cc634",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:57.749136+00:00",
+  "ended_at_utc": "2026-11-28T13:48:31.543999+00:00",
+  "request_sha256": "b1ed6cd89baf6afd8febf49e0cdb86976eacf557b0bae94f1774c2e98b188ec0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29395,
+    "cached_tokens": 12672,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\n\\ndef one(x):return np.column_stack((np.ones(len(x)),x))\\ndef fit(h,v):return np.linalg.lstsq(h,v,rcond=None)[0]\\ndef calmat(z,j):\\n u=z[:,j];v=z[:,(j+1)%4];return one(np.c_[u,v,u*v,u**3])\\ndef cross(u):return one(u*np.roll(u,-1,axis=1))\\ndef operators(s):\\n p=s['panel_a'];u=p['u'];v=p['v'];h=one(u);r=np.linalg.norm(h@fit(h,v)-v,axis=1); good=r<np.median(r)*4; ca=np.stack([fit(calmat(u[good],j),v[good,j]) for j in range(4)])\\n def inv(x):\\n  z=(x-ca[:,0])/ca[:,1];i=np.arange(len(x));j=np.arange(4);k=(j+1)%4\\n  for _ in range(10):\\n   w=np.roll(z,-1,axis=1);r=ca[:,0]+ca[:,1]*z+ca[:,2]*w+ca[:,3]*z*w+ca[:,4]*z**3-x\\n   d=np.zeros((len(x),4,4));d[:,j,j]=ca[:,1]+ca[:,3]*w+3*ca[:,4]*z**2;d[:,j,k]=ca[:,2]+ca[:,3]*z\\n   z-=np.linalg.solve(d,r[...,None])[...,0]\\n  return z\\n p=s['panel_b']; b=fit(one(p['u']),p['v']); B=lambda u:one(u)@b\\n p=s['panel_c'];u=p['u'];v=p['v2'];c=fit(cross(u),p['v1']); C=lambda u:cross(u)@c\\n best=None\\n for name,F in [('cos',lambda u,g:np.cos(u*g)),('sin2',lambda u,g:np.sin(u*u*g)),('tanh2',lambda u,g:np.tanh(u*u*g)),('rat',lambda u,g:u*u/(1+g*u*u)),('exp',lambda u,g:np.exp(-g*u*u))]:\\n  for g0 in [.2,.7,1.4,2.5,4.]:\\n   def err(g):\\n    h=one(F(u,g));return (h@fit(h,v)-v).ravel()\\n   g=least_squares(err,[g0],bounds=(.00001,8)).x;e=np.std(err(g));\\n   if best is None or e<best[0]:best=(e,name,F,g)\\n  print(name,g,e) if __name__=='__main__' else None\\n e,name,F,g=best; vb=fit(one(F(u,g)),v);D=lambda u:one(F(u,g))@vb\\n if __name__=='__main__': print('cal',ca,'panel rms',e,name,g,'C',c,'D',vb)\\n return inv,B,C,D\\n\\nif __name__=='__main__':\\n import pickle\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; inv,B,C,D=operators(s)\\n x=s['train']['x'];T=s['train']['traj'];y=s['train']['y'];t=s['eval_times']; z=inv(x)\\n def q(p):return -np.expm1(-t[:,None]*p)\\n p=least_squares(lambda p:(q(p)@fit(q(p),T[:52].T)-T[:52].T).ravel(),[.4,1.8]).x\\n Y=np.c_[y,fit(q(p),T.T).T]\\n fr={'z':z,'Bz':B(z),'Cz':C(z),'Dz':D(z),'CBz':C(B(z)),'DBz':D(B(z)),'BCz':B(C(z)),'BDz':B(D(z)),'Craw':C(x),'Draw':D(x),'CBraw':C(B(x)),'DBraw':D(B(x))}\\n for k,u in fr.items():\\n  U=one(u);R=U[52:]@fit(U[:52],Y[:52])-Y[52:];print(k,'linear',np.mean(abs(R),0).round(4),'st',np.mean(abs(R[:,1:]@q(p).T)).round(4))\\n keys=list(fr)\\n for j in range(3):\\n  out=[]\\n  for n in range(1,4):\\n   for kk in combinations(keys,n):\\n    U=one(np.column_stack([fr[k] for k in kk])); w=fit(U[:52],Y[:52,j]);r=U@w-Y[:,j];out.append((np.mean(abs(r[52:])),np.mean(abs(r[:52])),kk))\\n  print('BEST LINEAR',j,sorted(out)[:8])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Invert cyclic cubic calibration and test compositions of recovered panel operators; prior 52/20 MAEs were 0.3677 for y and 0.2933 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use an unrestricted polynomial for panel C v2\",\"rejected_reason\":\"Quadratic leave-one-out error is large, and cubic interpolation is underdetermined with 24 panel rows.\"}],\"rationale\":\"Panel A has a sparse cyclic cubic law, and C v1 has a bilinear law. Recover both, fit candidate even-function laws for C v2, and test which compositions explain the scalar target and temporal amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ac49f9f1932ce3422e5421184a1c13d10630690608229ca4cd831b5bd31719e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33793.5,
+      "usage_known": true,
+      "prompt_tokens": 29395,
+      "cached_tokens": 12672,
+      "completion_tokens": 1416
+    }
+  ]
+}

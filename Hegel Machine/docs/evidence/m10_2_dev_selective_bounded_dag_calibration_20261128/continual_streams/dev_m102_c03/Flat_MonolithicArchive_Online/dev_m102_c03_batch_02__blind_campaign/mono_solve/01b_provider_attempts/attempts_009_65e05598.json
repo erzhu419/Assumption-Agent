@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "65e05598c9f6401cb1b38540127eb892",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:22:14.794092+00:00",
+  "ended_at_utc": "2026-11-28T13:22:55.130272+00:00",
+  "request_sha256": "44b98941439da79607558341130b5d23e661dc311d6390e7a5ef86c431df9c44",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53216,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36971,
+    "cached_tokens": 12672,
+    "completion_tokens": 1738
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover the calibrated dual-branch response and its two relaxation modes.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(6):\\n        um, vm = u[keep].mean(axis=0), v[keep].mean(axis=0)\\n        du = u[keep] - um\\n        gain = np.sum(du * (v[keep] - vm), axis=0) / np.sum(du**2, axis=0)\\n        offset = vm - gain * um\\n        err = np.linalg.norm(v - offset - u * gain, axis=1)\\n        new_keep = err <= max(0.001, 4 * np.median(err))\\n        if new_keep.sum() < 8 or np.array_equal(new_keep, keep):\\n            break\\n        keep = new_keep\\n    return offset, gain\\n\\n\\ndef _branches(panel, z):\\n    u, v1, v2 = (np.asarray(panel[k], dtype=float) for k in ('u', 'v1', 'v2'))\\n\\n    def odd(x, freq):\\n        q = x * freq\\n        return np.column_stack((_affine(x), q / (1.0 + np.abs(q))))\\n\\n    def even(x, freq):\\n        return _affine(np.cos(x * freq))\\n\\n    def project(feature, target, start, bounds):\\n        def linear(f):\\n            return np.linalg.lstsq(feature(u, f), target, rcond=1e-10)[0]\\n\\n        def residual(f):\\n            return (feature(u, f) @ linear(f) - target).ravel()\\n\\n        f = least_squares(residual, np.full(u.shape[1], start), bounds=bounds).x\\n        return feature(z, f) @ linear(f)\\n\\n    return project(odd, v1, 0.83, (0.2, 3.0)), project(even, v2, 2.4, (1.5, 3.2))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.vstack((train['x'], study['test']['x']))\\n    times = np.asarray(study['eval_times'], dtype=float)\\n    trajectories = np.asarray(train['traj'], dtype=float)\\n    offset, gain = _calibration(study['panel_a'])\\n    z = (x - offset) / gain\\n    u, v = _branches(study['panel_c'], z)\\n    main = np.column_stack((_affine(z), u, v))\\n    # The scalar response uses the exchange-symmetric diagonal contraction.\\n    scalar_features = np.column_stack((main, np.sum(u * v, axis=1)))\\n    y_hat = scalar_features[n:] @ np.linalg.lstsq(scalar_features[:n], train['y'], rcond=1e-9)[0]\\n\\n    # The temporal channels can also use off-diagonal branch products.\\n    state_features = np.column_stack((main, (u[:, :, None] * v[:, None, :]).reshape(len(z), -1)))\\n\\n    def basis(log_rates):\\n        return -np.expm1(-np.exp(log_rates)[:, None] * times)\\n\\n    def residual(log_rates):\\n        q = basis(log_rates)\\n        return (trajectories - trajectories @ np.linalg.pinv(q) @ q).ravel()\\n\\n    q = basis(least_squares(residual, np.log([0.4, 1.8]), max_nfev=120).x)\\n    amplitudes = trajectories @ np.linalg.pinv(q)\\n    state_pred = (state_features[n:] @ np.linalg.lstsq(state_features[:n], amplitudes, rcond=1e-9)[0]) @ q\\n    diagnostics_vec = np.array([y_hat.mean(), y_hat.std(), state_pred[:, -1].mean(), state_pred[:, -1].std()])\\n    return dict(y_hat=y_hat, state_pred=state_pred, diagnostics_vec=diagnostics_vec)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/check_batch.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['x']); rng=np.random.default_rng(102)\\norders=[np.arange(N),np.arange(N)[::-1]]+[rng.permutation(N) for _ in range(24)]\\nfor j in range(4): orders += [np.argsort(tr['x'][:,j]),np.argsort(-tr['x'][:,j])]\\nerrs=[]\\nfor k,order in enumerate(orders):\\n fit,val=order[:52],order[52:]; pred=m.solve_batch({**s,'train':{**tr,**{key:tr[key][fit] for key in ('x','y','traj')}},'test':{'x':tr['x'][val]}})\\n ey=np.abs(pred['y_hat']-tr['y'][val]); et=np.abs(pred['state_pred']-tr['traj'][val]); errs.append([ey.mean(),et.mean(),et.mean(axis=0).max(),ey.max(),et.mean(axis=1).max()]);\\n if k==0: print('52/20 scalar, trajectory, worst horizon, worst scalar row, worst trajectory row',errs[-1]); print('per horizon',et.mean(axis=0))\\nprint('random/reversed maxima',np.max(errs[:26],axis=0)); print('coordinate tail holdouts',np.asarray(errs[26:]));\\np=m.solve_batch(s); assert all(np.isfinite(a).all() for a in p.values()); print('public diagnostics',p['diagnostics_vec']);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: use the recovered dual-branch product law and two relaxation modes; exploratory 52/20 MAE was 0.00480 for the scalar and 0.00250 for the trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Unrestricted polynomial or cosine-only readout\",\"rejected_reason\":\"It omits measured branch interactions and missed the public error gate.\"}],\"rationale\":\"Implement the panel-calibrated model, then verify both outputs on the prescribed split, randomized splits, and coordinate-tail holdouts in a clean Python process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2a95a84b2dfd9e994ad9292a0808f066d5e35279e0c00cd8ccf2309a1ec83dec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40335.0,
+      "usage_known": true,
+      "prompt_tokens": 36971,
+      "cached_tokens": 12672,
+      "completion_tokens": 1738
+    }
+  ]
+}

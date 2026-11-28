@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0009fdbe58a4434b3ac8272bfcb8359",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:20:38.621681+00:00",
+  "ended_at_utc": "2026-11-28T13:21:06.284121+00:00",
+  "request_sha256": "bb9be5fd7866a2c0b3e91f54140f05b4fc01afd358fd71ae5819eacca4528a33",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31666,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24673,
+    "cached_tokens": 0,
+    "completion_tokens": 1157
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/modelprobe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c04_batch_00_solver.py'); np.set_printoptions(precision=5,suppress=True)\\na,ls=m['_affine'],m['_ls']; ridge=m['_ridge']; A,B,C=(s['panel_'+k] for k in 'abc'); tr=s['train']; x=tr['x']; y=tr['y']; traj=tr['traj']; n=52\\nfrozen=runpy.run_path('/holdout_task/_frozen_nodes/node_02.py')['run_node']; temporal=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']({'__input__':{'eval_times':s['eval_times'],'train':{'traj':traj[:n]}}});\\no,M=m['_calibration'](A); bo,*bm=ls(a(B['u']),B['v']); bm=np.array(bm); print('A',o,M,'err',np.sort(np.linalg.norm(A['u']@M+o-A['v'],axis=1))); print('B sv',np.linalg.svd(bm)[1]); q=np.linalg.solve(M.T,(x-o).T).T\\nfuncs={'satabs':lambda x,k:x/(1+k*abs(x)), 'satsq':lambda x,k:x*x/(1+k*x*x), 'ratodd':lambda x,k:x/(1+k*x*x), 'tanh':lambda x,k:np.tanh(k*x),'sin':lambda x,k:np.sin(k*x),'atan':lambda x,k:np.arctan(k*x),'square':lambda x,k:x*x,'abs':lambda x,k:abs(x)}\\nops=[]\\nfor j in [1,2]:\\n u=C['u'];v=C['v'+str(j)]; fits=[]\\n for name,g in funcs.items():\\n  for aff in [False,True]:\\n   def d(z,k):return np.c_[a(z) if aff else np.ones(len(z)),g(z,k)]\\n   def e(k):\\n    f=d(u,k[0]);return (f@ls(f,v)-v).ravel()\\n   k=least_squares(e,[.4],bounds=(.01,5),ftol=1e-11,gtol=1e-11).x[0]; w=ls(d(u,k),v); fits.append((np.sqrt(np.mean(e([k])**2)),name,aff,k,w))\\n fits.sort(key=lambda z:z[0]); print('C',j,[(r,name,aff,k) for r,name,aff,k,w in fits[:12]]); ops.append(fits)\\npop,rop=m['_panel_operators'](C)\\ndef metric(common,offdiag):\\n yy=ridge(common[:n],y[:n],common[n:],1e-6); out=frozen({'node_00':dict(common=common,offdiag=offdiag,y_hat=yy),'node_01':temporal});return np.mean(abs(yy-y[n:])),np.mean(abs(out['state_pred']-traj[n:]))\\ncoords={'x':x,'q':q,'qB':q@bm+bo,'qBinv':np.linalg.solve(bm.T,(q-bo).T).T,'xB':x@bm+bo,'xBinv':np.linalg.solve(bm.T,(x-bo).T).T}\\nfor pn,pq in coords.items():\\n for rn,rq in coords.items():\\n  print(pn,rn,*np.round(metric(*m['_features'](pop(pq),rop(rq))),5))\\nprint('poly baselines')\\nfor name,z in coords.items():\\n i,j=np.triu_indices(4); c=np.c_[z,z[:,i]*z[:,j]]; d=c[:,4:]; print(name,metric(c,d))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modelprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration and rational operators → H2 test whether the measured secondary alignment belongs in the spatial map; panel B affine residual norms are below 0.0003, while downstream CV is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the spatial map with generic polynomial regression immediately\",\"rejected_reason\":\"The measured panel maps give a more constrained and testable starting point; keep polynomial features as a comparison.\"}],\"rationale\":\"Fit the panel operators against direct measurements, then compare plausible coordinate compositions independently for y and for the frozen trajectory sink.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "07a719497bba417eddfdbb3eea20abd86a1fe4ec98d7352d8250f6545c13a93d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27661.46,
+      "usage_known": true,
+      "prompt_tokens": 24673,
+      "cached_tokens": 0,
+      "completion_tokens": 1157
+    }
+  ]
+}

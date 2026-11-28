@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf5849def0254cabadad272df46af4fa",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:30:29.833707+00:00",
+  "ended_at_utc": "2026-11-28T13:31:03.245705+00:00",
+  "request_sha256": "040581117e20e754d5cf09b46626f364a2c53220b7330d9cd0a738a546d1c55e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46229,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31955,
+    "cached_tokens": 0,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c02_batch_02_solver.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py | grep -E '^(B |C |D |BC |BD )'; cat > /tmp/refine.py <<'PY'\\nfrom operators import *\\nfrom itertools import combinations\\nfrom scipy.linalg import qr\\n\\ndef fitop(u,v,kind):\\n def transform(x,p):\\n  a,b=p\\n  return {'tanh':lambda:x+a*np.tanh(b*x),'atan':lambda:x+a*np.arctan(b*x),'rational':lambda:x+a*x/(1+b*x*x),'sin':lambda:x+a*np.sin(b*x),'asinh':lambda:x+a*np.arcsinh(b*x),'soft':lambda:x+a*x/np.sqrt(1+b*x*x),'sat':lambda:x+a*x/(1+b*abs(x)),'quint':lambda:x+a*x**3+b*x**5}[kind]()\\n def res(p):\\n  H=aff(transform(u,p));return (H@L(H,v,rcond=None)[0]-v).ravel()\\n sols=[least_squares(res,[a,b],bounds=([-12,.001],[12,12]),max_nfev=150) for a,b in product([-.95,-.65,-.3,.3],[.6,1.4,2.5])];p=min(sols,key=lambda q:q.cost).x;H=aff(transform(u,p));W=L(H,v,rcond=None)[0];return np.sqrt(np.mean(res(p)**2)),p,lambda x:aff(transform(x,p))@W,lambda x:transform(x,p)\\n\\ndef checks(z):\\n V=np.c_[s['train']['y'],s['train']['traj']];t=s['eval_times'];print('times',t,'y range',np.min(V[:,0]),np.max(V[:,0]));\\n def modes(p):return -np.expm1(-np.exp(p)[:,None]*t)\\n def r(p):\\n  H=modes(p);return (V[:52,1:]-(V[:52,1:]@np.linalg.pinv(H))@H).ravel()\\n p=least_squares(r,np.log([.22,1.25])).x;print('rates',np.exp(p),'rms',np.sqrt(np.mean(r(p)**2)),'telemetry rms',np.sqrt(np.mean(r(np.log([.22,1.25]))**2)))\\n bank={}\\n for label,pk,vk in [('B','panel_b','v'),('C','panel_c','v1'),('D','panel_c','v2')]:\\n  u,v=s[pk]['u'],s[pk][vk]; rows=[]\\n  for kind in ['tanh','atan','rational','sin','asinh','soft','sat','quint']:\\n   e,p,f,g=fitop(u,v,kind);rows.append((e,kind,p,f,g))\\n  for e,kind,p,_,_ in sorted(rows)[:5]:print(label,kind,e,p)\\n  for e,kind,p,f,g in sorted(rows)[:2]: bank[label+kind]=f(z);bank[label+kind+'pre']=g(z)\\n  for kind in ['blend','sq','atan']: bank[label+kind+'old']=op(u,v,kind)[3](z)\\n bank['Z']=z;bank['tanhZ']=np.tanh(z)\\n def score(H):\\n  W=L(H[:52],V[:52],rcond=None)[0];e=np.mean(abs(H[52:]@W-V[52:]),0);ein=np.sqrt(np.mean((H[:52]@W-V[:52])**2,0));return np.r_[e[0],e[1:].mean(),e[-1],ein[0],ein[1:].mean()]\\n results=[]\\n for name,a in bank.items():\\n  opp=(a[:,:2]*a[:,2:]).sum(1);cyc=(a*np.roll(a,-1,axis=1)).sum(1)\\n  kinds={'aff':aff(a),'opp':np.c_[aff(a),opp],'cyc':np.c_[aff(a),cyc],'quad':mon(a,2),'cubdiag':np.c_[aff(a),a**3], 'acub':np.c_[a,a**3], 'a':a, 'affZ':np.c_[aff(a),z],'tanh':aff(np.tanh(a))}\\n  for n,H in kinds.items():results.append((name,n,score(H)))\\n for metric in [0,1]:\\n  for nam,n,e in sorted(results,key=lambda v:v[2][metric])[:15]:print(nam,n,e)\\nif __name__=='__main__':checks(calibrate()(s['train']['x']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated tanh-polynomial baseline → compact auxiliary pretransform and independently fitted relaxation modes; current 52/20 readout MAE is 0.03616 and terminal trajectory MAE is 0.03197.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use full quadratic maps for all panels\",\"rejected_reason\":\"The panel leave-one-out errors favor lower-dimensional separable transforms, with different transforms for each panel.\"}],\"rationale\":\"Panel B's linear and tanh coefficient blocks are nearly proportional, which motivates a shared nonlinear pretransform. Fit that structure from panel measurements and check whether it improves both outputs independently; also test whether telemetry specifies the observed temporal rates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5fa41c2fdc83ef647d02c7a943008c0c661012db8b8948047c7e0b333f0f4de8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33410.27,
+      "usage_known": true,
+      "prompt_tokens": 31955,
+      "cached_tokens": 0,
+      "completion_tokens": 1418
+    }
+  ]
+}

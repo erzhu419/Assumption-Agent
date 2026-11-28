@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2880c8321187402c9e532baf4dae7e70",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:24:58.054914+00:00",
+  "ended_at_utc": "2026-11-28T13:25:27.840632+00:00",
+  "request_sha256": "73f8b5bb12b30eda22f93dca2e86fd16c90800bf6a6976afeb0447b86a9c59ed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39561,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30039,
+    "cached_tokens": 12672,
+    "completion_tokens": 1095
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/branches.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('u,v=')[0])\\nfrom scipy.optimize import least_squares, minimize_scalar\\nz=np.load('/tmp/coords.npy'); q=s['panel_c']['u']; t=s['telemetry_vec']; B=ls(aff(s['panel_b']['u']),s['panel_b']['v']); w=aff(z)@B\\nodd={'tanh':lambda x,k:np.tanh(k*x), 'sin':lambda x,k:np.sin(k*x), 'atan':lambda x,k:np.arctan(k*x), 'rat':lambda x,k:x/(1+k*x*x), 'erf':lambda x,k:__import__('scipy').special.erf(k*x), 'asinh':lambda x,k:np.arcsinh(k*x)}\\neven={'cos':lambda x,k:np.cos(k*x),'rat2':lambda x,k:x*x/(1+k*x*x),'log1p':lambda x,k:np.log1p(k*x*x),'cosh':lambda x,k:np.cosh(k*x),'exp':lambda x,k:np.exp(-k*x*x),'logcosh':lambda x,k:np.log(np.cosh(k*x)), 'sqrt':lambda x,k:np.sqrt(1+k*x*x)}\\ncs=[]\\nfor j,out in enumerate(['v1','v2']):\\n target=s['panel_c'][out]; results=[]\\n for name,f in {**odd,**even}.items():\\n  for mode in ('only','lin','quad'):\\n   def design(u,k):\\n    h=f(u,k); return aff(h) if mode=='only' else np.c_[aff(u),h] if mode=='lin' else np.c_[aff(u),u*u,h]\\n   def score(k):\\n    h=design(q,k);return np.mean((h@ls(h,target)-target)**2)\\n   grid=np.geomspace(.04,5,60); i=np.argmin([score(k) for k in grid]); opt=minimize_scalar(score,bounds=(grid[max(0,i-1)],grid[min(len(grid)-1,i+1)]),method='bounded'); k=opt.x; h=design(q,k); beta=ls(h,target); results.append((opt.fun**.5,name,mode,k,design(z,k)@beta,design(w,k)@beta))\\n results.sort(key=lambda a:a[0]); print(out,[r[:4] for r in results[:10]]); cs.append(results[0]);\\nfor idx, (name,b) in enumerate([('z',z),('w',w),('c1z',cs[0][4]),('c2z',cs[1][4]),('c1w',cs[0][5]),('c2w',cs[1][5]),('sumz',cs[0][4]+cs[1][4]),('sumw',cs[0][5]+cs[1][5])]):\\n i,j=np.triu_indices(4); print(name)\\n for label,h in [('lin',aff(b)),('tanh',aff(np.tanh(b))),('lin+tanh',np.c_[aff(b),np.tanh(b)]),('quad',np.c_[aff(b),b[:,i]*b[:,j]]),('quad+tanh',np.c_[aff(b),b[:,i]*b[:,j],np.tanh(b)])]:\\n  yp=h[52:72]@ls(h[:52],Y[:52]); e=np.mean(abs(yp-Y[52:]),0); print(label,round(e[0],5),round(e[1:].mean(),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branches.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse cyclic cubic calibration → test separable panel-C operators and their downstream placement; best measured 52/20 MAEs are 0.04308 for y and 0.03980 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The sparse calibration inverts all public inputs consistently. Profile compact operator families against panel C before testing which branches improve held-out scalar and trajectory predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c21b141fcd8e1400adfbbd0f72633969c5a24dab88d59f058ad642b4b2894d8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29784.75,
+      "usage_known": true,
+      "prompt_tokens": 30039,
+      "cached_tokens": 12672,
+      "completion_tokens": 1095
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c590d9b2b0234126a7da50d510766061",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:20:08.786154+00:00",
+  "ended_at_utc": "2026-11-28T13:20:42.651147+00:00",
+  "request_sha256": "7b3a4c6b2cdb8953db97ee0feb9b737828ebe71ab461b5e0207213b1b0949ac7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46723,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33435,
+    "cached_tokens": 12672,
+    "completion_tokens": 1442
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/refine.py <<'PY'\\nexec(open('/tmp/explore.py').read().split('ops={}')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\np=s['panel_b']; w=aff(z)@lstsq(aff(p['u']),p['v'])[0]; W=aff(w); P=w[:,:2]*w[:,2:]; ix=np.arange(52); jx=np.arange(52,72)\\nfs={'rational':lambda h:h**3/(1+h*h),'tanh':lambda h:h-np.tanh(h),'atan':lambda h:h-np.arctan(h),'erf':lambda h:h-np.sqrt(np.pi)/2*erf(h),'sqrt':lambda h:h-h/np.sqrt(1+h*h),'sinhinv':lambda h:h-np.arcsinh(h)}\\nrng=np.random.default_rng(780); splits=[(ix,jx)]+[(r[:52],r[52:]) for r in (rng.permutation(len(y)) for _ in range(16))]\\nfor name,f in fs.items():\\n for pair in [P,P.sum(axis=1,keepdims=True)]:\\n  for robust in [0,.008]:\\n   def fit(ii,jj):\\n    def design(q):return np.c_[W,pair,f(W@q)]\\n    def fun(q):\\n     A=design(q)[ii];return A@lstsq(A,y[ii])[0]-y[ii]\\n    a=lstsq(W[ii],y[ii])[0]; a[0]=0\\n    res=min([least_squares(fun,a*h,loss='soft_l1' if robust else 'linear',f_scale=robust or 1,max_nfev=120) for h in (.25,.55,.95)],key=lambda r:r.cost)\\n    A=design(res.x); b=lstsq(A[ii],y[ii])[0]; e=A@b-y\\n    return [np.mean(abs(e[ii])),np.mean(abs(e[jj])),max(abs(e[jj]))],res.x,b,e\\n   rr, q,b,e=fit(ix,jx); rr2=np.array([fit(ii,jj)[0] for ii,jj in splits[1:]]);print(name,pair.shape[1],robust,np.round(rr,5),'rand mean/max',np.round(rr2.mean(0),5),np.round(rr2.max(0),5),'params',q,b)\\n   if name=='rational' and pair.shape[1]==2 and not robust:\\n    I=np.argsort(abs(e))[-15:];print('largest residuals: row, observed, residual, projection',np.c_[I,y[I],e[I],(W@q)[I]])\\nT=s['eval_times'];print('traj bases')\\nfor kind in ('free2','free3','linear1','linear2','telemetry'):\\n def phi(q):\\n  if kind=='telemetry': return np.stack([-np.expm1(-r*T) for r in [.22,1.25]])\\n  F=-np.expm1(-np.exp(q)[:,None]*T)\\n  return np.vstack([T,F]) if kind.startswith('linear') else F\\n A=w\\n def prof(q):\\n  F=phi(q); return A@lstsq(A,t[ix]@np.linalg.pinv(F) if len(A)==len(ix) else t@np.linalg.pinv(F))[0]@F-t\\n n=int(kind[-1]) if kind!='telemetry' else 0\\n def run(ii,jj):\\n  def fit(q):\\n   F=phi(q); C=lstsq(A[ii],t[ii]@np.linalg.pinv(F))[0];return A@C@F-t,C\\n  q=least_squares(lambda q:fit(q)[0][ii].ravel(),np.log(np.geomspace(.35,1.5,n)),bounds=(-6,3),max_nfev=100).x if n else []\\n  e,c=fit(q);return np.mean(abs(e[ii])),np.mean(abs(e[jj])),np.exp(q),c\\n r=run(ix,jx);print(kind,r,'rand worst',max(run(ii,jj)[1] for ii,jj in splits[1:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bilinear readout → H2 panel-B bilinear readout plus a saturating projection; the rational form achieves 0.008262 on the required split, and the tanh form has worst MAE 0.01983 across five additional splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a purely cubic projection\",\n      \"rejected_reason\": \"Its worst repeated-split MAE is 0.03872, compared with 0.01983 for the saturating tanh projection.\"\n    }\n  ],\n  \"rationale\": \"Initialize the nonlinear projection from the training-only linear fit to reduce sensitivity to local minima. Check whether tied bilinear terms improve transfer, and fit the trajectory independently using shared temporal modes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2863ba3e61659cdbba43efa71a1d70a5ba70273de906736e782f85ba5004c6c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33863.72,
+      "usage_known": true,
+      "prompt_tokens": 33435,
+      "cached_tokens": 12672,
+      "completion_tokens": 1442
+    }
+  ]
+}

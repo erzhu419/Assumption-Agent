@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c908391b316d441b9b04602efb29fa4d",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:27:29.567565+00:00",
+  "ended_at_utc": "2026-11-28T13:28:12.742452+00:00",
+  "request_sha256": "537c9ee1bc4e3d87ad18ccd938dcda61c3aeb792b92c272cd5490e4235caacd0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42197,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30234,
+    "cached_tokens": 12672,
+    "completion_tokens": 1796
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Identify the cyclic calibration, two nonlinear branches and relaxation readout.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    a = _aff(u)\\n    r = np.linalg.norm(v - a @ np.linalg.lstsq(a, v, rcond=None)[0], axis=1)\\n    keep = r < max(3*np.median(r), 1e-3)\\n    def design(z, j):\\n        w = z[:, j]\\n        p = z[:, (j+1)%4]\\n        return np.column_stack((np.ones(len(z)), w, p, w*p, w**3))\\n    def estimate(mask):\\n        return np.column_stack([np.linalg.lstsq(design(u[mask], j), v[mask, j], rcond=None)[0] for j in range(4)])\\n    def forward(z, b):\\n        return np.column_stack([design(z, j) @ b[:, j] for j in range(4)])\\n    b = estimate(keep)\\n    r = np.linalg.norm(v - forward(u, b), axis=1)\\n    keep = r < max(5*np.median(r), .001)\\n    b = estimate(keep)\\n    lin = np.diag(b[1]); lin[(np.arange(4)+1)%4, np.arange(4)] = b[2]\\n    z0 = np.linalg.solve(lin.T, (x-b[0]).T).T\\n    return np.array([least_squares(lambda z: forward(z[None,:], b)[0]-row, init, gtol=1e-12).x for row, init in zip(x,z0)])\\n\\n\\ndef _branch(panel, z, key, kind):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u',key))\\n    if kind == 'soft':\\n        fun = lambda x,p: x/(1+np.abs(x*p))\\n        start, bounds = .84, (.1, 4.)\\n    else:\\n        fun = lambda x,p: np.exp(-(x*p)**2)\\n        start, bounds = .54, (.1, 2.)\\n    def design(x,p):\\n        return np.column_stack((_aff(x), fun(x,p)))\\n    def profile(p, predict=False):\\n        a = design(u,p)\\n        b = np.linalg.lstsq(a,v,rcond=1e-10)[0]\\n        return design(z,p) @ b if predict else (a @ b-v).ravel()\\n    p = least_squares(profile, np.full(4,start), bounds=bounds, gtol=1e-11).x\\n    return profile(p, True)\\n\\n\\ndef _design(z,c,d):\\n    return np.column_stack((_aff(z), c, d, (c[:,:,None]*d[:,None,:]).reshape(len(z),16)))\\n\\n\\ndef _time(t, p):\\n    return -np.expm1(-t[:,None]*np.exp(p))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']; n = len(train['x'])\\n    z = _calibrate(study['panel_a'], np.vstack((train['x'],study['test']['x'])))\\n    c = _branch(study['panel_c'],z,'v1','soft'); d = _branch(study['panel_c'],z,'v2','gauss')\\n    f = _design(z,c,d)\\n    t = np.asarray(study['eval_times']); traj = np.asarray(train['traj'])\\n    def residual(p):\\n        q = _time(t,p)\\n        return (traj.T - q @ np.linalg.lstsq(q,traj.T,rcond=None)[0]).ravel()\\n    rates = least_squares(residual, np.log([.4,1.8]), bounds=(np.log([.12,1.0]),np.log([.9,4.]))).x\\n    q = _time(t,rates)\\n    a = np.linalg.lstsq(q,traj.T,rcond=None)[0].T\\n    pred = f[n:] @ np.linalg.lstsq(f[:n], np.column_stack((train['y'],a)),rcond=1e-9)[0]\\n    yh, state = pred[:,0], pred[:,1:] @ q.T\\n    last = state[:,-1]\\n    return dict(y_hat=yh,state_pred=state,diagnostics_vec=np.array([yh.mean(),yh.std(),last.mean(),last.std()]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/stress.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; rng=np.random.default_rng(114)\\ndef score(a,b):\\n p=m.solve_batch(dict(s,train={k:v[a] for k,v in tr.items() if k!='summary'},test={'x':x[b]})); y=np.abs(tr['y'][b]-p['y_hat']); t=np.abs(tr['traj'][b]-p['state_pred']); return y.mean(),t.mean(),y.max(),*t.mean(0)\\ncal=m._calibrate(s['panel_a'],x)\\nfor desc,idx in [('required',np.arange(72)), *[(f'random {i}',rng.permutation(72)) for i in range(6)], ('radial tail',np.argsort(np.linalg.norm(cal,axis=1))), *[(f'axis {i} tail',np.argsort(abs(cal[:,i]))) for i in range(4)]]:\\n print(desc,np.round(score(idx[:52],idx[52:]),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent branch polynomials → H2 bilinear coupling of calibrated panel C branches; measured 52/20 MAEs are 0.00474 for y and 0.00404 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Separate branch quadratics without cross terms\",\n      \"rejected_reason\": \"The observed 52/20 y MAE was 0.04176, above the gate.\"\n    }\n  ],\n  \"rationale\": \"The measured bilinear branch design clears both gate thresholds with margin. Save it as a standalone solver and test whether the improvement holds on random, extrapolative, and per-horizon slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "06379c05de7ba85659d09401f6d5520c1ee9da9f82cfc780da00ce685a5d439a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43173.81,
+      "usage_known": true,
+      "prompt_tokens": 30234,
+      "cached_tokens": 12672,
+      "completion_tokens": 1796
+    }
+  ]
+}

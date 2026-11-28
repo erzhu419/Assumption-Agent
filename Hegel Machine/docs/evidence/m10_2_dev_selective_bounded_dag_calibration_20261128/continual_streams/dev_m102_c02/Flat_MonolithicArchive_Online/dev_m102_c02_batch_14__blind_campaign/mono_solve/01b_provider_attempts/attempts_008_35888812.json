@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "35888812d918479ebeab3ac084a9ef52",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:22:51.831812+00:00",
+  "ended_at_utc": "2026-11-28T14:23:24.999852+00:00",
+  "request_sha256": "20beb1211a3da27f03820c56e2f31294104a1a7bb3e6276bab0896d61bac12c5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33460,
+    "cached_tokens": 12672,
+    "completion_tokens": 1377
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph14.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom fit14 import maps,aff,fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; Y=np.c_[t['y'],t['traj']]; tt=s['eval_times']; M=maps(s,t['x']); z=M['z']\\ndef basis(p):return -np.expm1(-np.exp(p[:,None])*tt)\\ndef err(p):\\n h=basis(p);return (Y[:,1:]@fit(h.T,Y[:,1:].T).T*0).ravel() if False else (fit(h.T,Y[:,1:].T).T@h-Y[:,1:]).ravel()\\np=least_squares(err,np.log([.45,2.]),bounds=(np.log([.015,.1]),np.log([3,15]))).x\\nH=basis(p); A=fit(H.T,Y[:,1:].T).T\\nprint('modes',np.exp(p),np.std(err(p)), 'y from A',np.mean(abs(aff(A)@fit(aff(A)[:52],Y[:52,0])-Y[:,0])),flush=True)\\nY=np.c_[Y[:,0],A,Y[:,-1]]\\nops={}\\nfor name,k,l,fn in [('B','panel_b','v',lambda x:np.sign(x)*np.maximum(abs(x)-.35,0)**1.5),('C','panel_c','v1',lambda x:x/(1+.62*abs(x)**1.07)**1.57),('D','panel_c','v2',lambda x:np.logaddexp(0,2.2*x))]:\\n u,v=s[k]['u'],s[k][l]; co=fit(aff(fn(u)),v); print(name,'op',np.round(co,3));ops[name]=lambda x,fn=fn,co=co: aff(fn(x))@co\\nblocks={'z':z}; scales=[.22,.35,1.,1.25,2.15]\\ndef add(k,x):\\n if np.max(np.abs(x))<1e5 and np.all(np.isfinite(x)):blocks[k]=x\\nfor a,f in ops.items():add(a,f(z))\\nbase=list(blocks.items())\\nfor a,x in base:\\n for b,y in base:\\n  if a==b:continue\\n  for c,f in ops.items():\\n   add(f'{c}({a})',f(x)); add(f'{c}({a}*{b})',f(x*y));\\n   for i in [0,1,2,3]:\\n    q=np.roll(y,i,axis=1)\\n    for sc in [.22,1.,1.25,2.15]:\\n     add(f'{c}({a}/(1+{sc}{b}r{i}²))',f(x/(1+sc*q*q)));add(f'{c}({a}+{sc}{b}r{i})',f(x+sc*q));add(f'{c}({a}-{sc}{b}r{i})',f(x-sc*q))\\nfor a,x in list(blocks.items()):\\n if len(a)<=4:\\n  for b,y in list(blocks.items()):\\n   if len(b)>4:continue\\n   for i in range(4):\\n    q=np.roll(y,i,axis=1)\\n    for sc in scales:\\n     add(f'{a}/(1+{sc}{b}r{i}²)',x/(1+sc*q*q));add(f'{a}*tanh({sc}{b}r{i})',x*np.tanh(sc*q))\\n    add(f'{a}*{b}r{i}',x*q)\\n  for c,f in ops.items():add(f'{c}({a})',f(x))\\nprint('blocks',len(blocks),flush=True)\\n# rank each block by held-in fit on first 52, keeping held-out for reporting only\\nfor key,b in [('-',None),*base]:\\n scores=[]\\n for k,x in blocks.items():\\n  h=aff(x if b is None else np.c_[b,x]); er=abs(h@fit(h[:52],Y[:52])-Y);scores.append((k,er[:52].mean(0),er[52:].mean(0)))\\n for j in range(4):\\n  print(key,j,[(k,round(a[j],5),round(b[j],5)) for k,a,b in sorted(scores,key=lambda s:s[1][j])[:6]],flush=True)\\nnp.savez('/tmp/blocks14.npz',**blocks,A=A,Y=Y)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: direct panel gates miss the shared latent readouts → H2: search ordered operator compositions and two-mode trajectory amplitudes; current 52/20 MAEs are 0.1512 for y and 0.1174 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The trajectory spectrum suggests two dominant time modes. Profile them and use their amplitudes to test ordered panel compositions while reserving the final 20 rows for validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "71f31efaa2f189b5144ab56c000b50f00d2a525add805eed9b8bf452728beec2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33166.84,
+      "usage_known": true,
+      "prompt_tokens": 33460,
+      "cached_tokens": 12672,
+      "completion_tokens": 1377
+    }
+  ]
+}

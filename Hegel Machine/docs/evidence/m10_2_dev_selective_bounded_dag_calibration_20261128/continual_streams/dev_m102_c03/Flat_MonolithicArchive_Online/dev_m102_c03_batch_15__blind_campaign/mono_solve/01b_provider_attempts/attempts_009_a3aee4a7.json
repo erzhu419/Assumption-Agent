@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3aee4a7b0ae4a6886f4dbb6d097071b",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:26:02.581535+00:00",
+  "ended_at_utc": "2026-11-28T14:26:37.830171+00:00",
+  "request_sha256": "937bcf5dc56f181ac2c9303a6647db590bcd5e5226f2b32588d312712be9b2de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33556,
+    "cached_tokens": 12672,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/structured15.py <<'PY'\\nexec(open('/tmp/compact15.py').read().split('q=lambda')[0])\\nfrom scipy.optimize import least_squares\\ncross=(c[:,:,None]*d[:,None,:]).reshape(len(x),-1); dot=(c*d).sum(1); one=np.ones(len(x)); q=lambda r:-np.expm1(-t[:,None]*r)\\nscalar=[('diag',np.c_[one,c,d,c*d]),('tied-dot',np.c_[one,z,c,d,dot]),('tied-both',np.c_[one,z,c.sum(1)+d.sum(1),dot])]\\nfor name,F in scalar:\\n e=[abs(F[b]@ls(F[a],y[a])-y[b]).mean() for a,b in splits]; print('scalar',name,e[0],max(e[1:21]),max(e[21:]))\\nfor name,L,R in [('strict',np.c_[one,d,cross[:,1]],np.c_[one,c,dot]),('linear-z',np.c_[one,z,d,cross[:,1]],np.c_[one,z,c,dot]),('all-affine',np.c_[one,z,c,d,cross[:,1]],np.c_[one,z,c,d,dot]),('full',f,f)]:\\n E=[]; rates=[]; costs=[]\\n for a,b in splits:\\n  def matrix(ix,r):\\n   waves=q(r)\\n   return np.c_[(L[ix,None,:]*waves[None,:,0,None]).reshape(len(ix)*len(t),-1),(R[ix,None,:]*waves[None,:,1,None]).reshape(len(ix)*len(t),-1)]\\n  def res(r):\\n   g=matrix(a,r); val=T[a].ravel(); return g@ls(g,val)-val\\n  r=least_squares(res,[.42,1.81],bounds=([.12,1],[.9,4])).x\\n  rates.append(r); G=matrix(a,r); B=ls(G,T[a].ravel()); costs.append(np.mean(res(r)**2)**.5); er=abs((matrix(b,r)@B).reshape(len(b),-1)-T[b]); E.append([er.mean(),er.mean(0).max(),er.max()]);\\n  if len(E)==1: print('coeffs',name,r,np.round(B,5))\\n E=np.array(E); print('traj',name,'train RMSE',costs[0], 'official,random,tails',np.round(E[0],5),np.round(E[1:21].max(0),5),np.round(E[21:].max(0),5),'rate spread',np.std(rates,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/structured15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: both relaxation modes share an unrestricted bilinear basis -> H2: the slow mode uses one off-diagonal interaction and the fast mode uses the diagonal sum; the verified baseline reaches 0.04457 MAE at its worst coordinate-tail horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply the same diagonal-only basis to both relaxation modes\",\"rejected_reason\":\"It omits the dominant off-diagonal term in the slow mode and exceeds the trajectory gate.\"}],\"rationale\":\"The slow-mode fit has one dominant off-diagonal coefficient, while the fast mode has four nearly equal diagonal coefficients. Test those distinct supports with rates fitted inside each split, and assess the scalar readout separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "33a34101431546ab032d693da29f002198412b03304974d7dacae9ebdeda9db7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35247.31,
+      "usage_known": true,
+      "prompt_tokens": 33556,
+      "cached_tokens": 12672,
+      "completion_tokens": 983
+    }
+  ]
+}

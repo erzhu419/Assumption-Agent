@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4362df609b374e0b868892895a778721",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:02:04.991676+00:00",
+  "ended_at_utc": "2026-11-28T13:02:48.680133+00:00",
+  "request_sha256": "08fc011c89f619205ebc1c6ee20c75b457ee244391bae204ae96b47d9532aef1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49400,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33405,
+    "cached_tokens": 0,
+    "completion_tokens": 1956
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    a = _affine(u)\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        w = _ls(a[mask], v[mask])\\n        e = np.linalg.norm(a @ w - v, axis=1)\\n        new = e <= max(1e-10, 4 * np.median(e))\\n        if new.sum() < 8 or np.array_equal(mask, new):\\n            break\\n        mask = new\\n    d = np.array([_ls(a[mask][:, [0, j+1]], v[mask, j]) for j in range(4)]).T\\n    if np.median(np.linalg.norm((u*d[1]+d[0]-v)[mask], axis=1)) <= 1.35*np.median(e[mask])+1e-10:\\n        return d[0], np.diag(d[1])\\n    return w[0], w[1:]\\n\\n\\ndef _panel_operators(panel):\\n    u = panel['u']\\n    def design(x, k, j):\\n        if j == 1:\\n            h = x / (1 + k * np.abs(x))\\n        else:\\n            h = x*x / (1 + k*x*x)\\n        return np.column_stack((_affine(x), h))\\n    def fit(j, initial):\\n        v = panel[f'v{j}']\\n        def residual(k):\\n            f = design(u, k[0], j)\\n            return (f @ _ls(f, v) - v).ravel()\\n        k = least_squares(residual, [initial], bounds=(0.01, 5.)).x[0]\\n        w = _ls(design(u, k, j), v)\\n        return lambda x: design(x, k, j) @ w\\n    return fit(1, 0.8), fit(2, 0.16)\\n\\n\\ndef _features(p, r):\\n    return np.column_stack((p, r, (p[:, :, None]*r[:, None, :]).reshape(len(p), 16), np.tanh(p), np.tanh(r)))\\n\\n\\ndef _temporal_basis(times, trajectories):\\n    t = np.asarray(times)\\n    def basis(rates):\\n        return -np.expm1(-t[:, None]*rates)\\n    def err(rates):\\n        f = basis(rates)\\n        return (f @ _ls(f, trajectories.T) - trajectories.T).ravel()\\n    opt = least_squares(err, [1.8, .43], bounds=([.8, .03], [8., .79]), max_nfev=80)\\n    return np.linalg.qr(basis(opt.x), mode='reduced')[0]\\n\\n\\ndef _ridge(f, target, query, penalty):\\n    fm, ym = f.mean(axis=0), target.mean(axis=0)\\n    a = f-fm\\n    w = np.linalg.solve(a.T @ a + penalty*np.eye(f.shape[1]), a.T @ (target-ym))\\n    return (query-fm) @ w + ym\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    offset, matrix = _calibration(study['panel_a'])\\n    q = np.linalg.solve(matrix.T, (np.concatenate((x, xt))-offset).T).T\\n    p_op, r_op = _panel_operators(study['panel_c'])\\n    f = _features(p_op(q), r_op(q))\\n    n = len(x)\\n    basis = _temporal_basis(study['eval_times'], train['traj'])\\n    y = _ridge(f[:n], train['y'], f[n:], 0.00025)\\n    state = _ridge(f[:n], train['traj'] @ basis, f[n:], 0.001) @ basis.T\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/stress.py <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x);\\ndef run(i,j,panel=None,k=None):\\n st=copy.deepcopy(s); st['train']={a:tr[a][i] for a in ('x','y','traj')}; st['test']={'x':x[j]}\\n if panel is not None:\\n  st[panel]={key:np.delete(val,k,axis=0) for key,val in st[panel].items()}\\n o=m.solve_batch(st); y=abs(o['y_hat']-tr['y'][j]); z=abs(o['state_pred']-tr['traj'][j]); return np.r_[y.mean(),z.mean(),z.mean(0)]\\nsplit=(np.arange(52),np.arange(52,n)); print('Specified split:',np.round(run(*split),6)); rng=np.random.default_rng(671)\\nE=[]\\nfor _ in range(30):\\n a=rng.permutation(n); E.append(run(a[:52],a[52:]));\\nprint('Random 52/20 worst:',np.round(np.max(E,axis=0),6)); E=[]\\nfor q in [*x.T,np.linalg.norm(x,axis=1)]:\\n for direction in (-1,1):\\n  a=np.argsort(direction*q); E.append(run(a[:52],a[52:]));\\nprint('Coordinate tails worst:',np.round(np.max(E,axis=0),6));\\nE=[run(*split,p,k) for p in ('panel_a','panel_c') for k in range(len(s[p]['u']))]; print('Single panel-row deletion worst:',np.round(np.max(E,axis=0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent generic regressions) -> H2 (calibrated dual-panel interactions with two temporal modes); the precursor achieved worst-split MAEs of 0.01127 for y and 0.01105 for trajectories across nine splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a generic kernel on raw coordinates\",\n      \"rejected_reason\": \"Dual-panel interaction features yielded lower worst-split error and can be fitted from independently measured panel operators.\"\n    }\n  ],\n  \"rationale\": \"Build the solver around the shared feature set that predicts both outputs, while fitting the temporal basis and readouts only on training rows. Verify the exact artifact on the required split, random splits, coordinate tails, and panel-row deletions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ec8e8cf2df5ad9774f30122b24c729ccfc333eb16fb921e397b373f62bd9b3e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43687.03,
+      "usage_known": true,
+      "prompt_tokens": 33405,
+      "cached_tokens": 0,
+      "completion_tokens": 1956
+    }
+  ]
+}

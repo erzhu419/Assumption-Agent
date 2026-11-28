@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5edbc65d6e98454d93dc02f3b648700d",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:00:23.956270+00:00",
+  "ended_at_utc": "2026-11-28T14:01:05.530577+00:00",
+  "request_sha256": "d9754de7da653c6252fedebfbe116078ee419c9684441487038e5b3a189f3628",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69413,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41963,
+    "cached_tokens": 12672,
+    "completion_tokens": 1810
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated operator features for the scalar and temporal readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import root, minimize_scalar\\nfrom scipy.linalg import solve\\n\\n\\ndef _lin(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-9)[0]\\n\\n\\ndef _cal(p, points):\\n    u, v = (np.asarray(p[k], float) for k in ('u', 'v'))\\n    w = np.roll(u, -1, axis=1)\\n    d = np.c_[_lin(u), u*w, u**3]\\n    error = np.linalg.norm(v-d@_ls(d,v),axis=1)\\n    keep = np.argsort(error)[:-3]\\n    coeff = np.array([_ls(np.c_[np.ones(len(u)),u[:,j],w[:,j],u[:,j]*w[:,j],u[:,j]**3][keep],v[keep,j]) for j in range(4)])\\n    def forward(z):\\n        w = np.roll(z,-1)\\n        return coeff[:,0]+coeff[:,1]*z+coeff[:,2]*w+coeff[:,3]*z*w+coeff[:,4]*z**3\\n    return np.array([root(lambda z:forward(z)-x,x).x for x in points])\\n\\n\\ndef _op(p,k,z,mode):\\n    u,v = np.asarray(p['u'],float),np.asarray(p[k],float)\\n    def design(x,a):\\n        if mode=='b':\\n            return np.c_[_lin(x/(1+a*x*x)),x]\\n        return np.c_[_lin(np.arctan(a*x)),x,x**3]\\n    def error(a):\\n        d=design(u,a)\\n        h=np.sum(np.linalg.qr(d,mode='reduced')[0]**2,axis=1)\\n        return np.mean(np.abs((v-d@_ls(d,v))/(1-h[:,None])))\\n    a=minimize_scalar(error,bounds=(.15,4),method='bounded').x\\n    return design(z,a)@_ls(design(u,a),v)\\n\\n\\ndef _cross(a,b):\\n    return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\n\\n\\ndef _ridge(a,y,q,r):\\n    scale=np.maximum(a.std(0),1e-4)\\n    scale[0]=1\\n    p=np.eye(a.shape[1]);p[0,0]=0\\n    return (q/scale)@_ls(np.r_[a/scale,r*p],np.r_[y,np.zeros((a.shape[1],)+y.shape[1:])])\\n\\n\\ndef _kernel(f, b, y, n, ell, reg):\\n    b=b/np.maximum(b[:n].std(0),1e-8)\\n    k=np.exp(-np.mean((b[:,None]-b[None,:n])**2,axis=2)/(2*ell**2))\\n    a=f[:n]; m=a.shape[1]\\n    g=solve(k[:n]+reg*np.eye(n),np.c_[a,y],assume_a='pos')\\n    beta=_ls(a.T@g[:,:m],a.T@g[:,m:])\\n    return f[n:]@beta+k[n:]@(g[:,m:]-g[:,:m]@beta)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']; x=np.asarray(tr['x'],float); q=np.asarray(study['test']['x'],float); n=len(x)\\n    z=_cal(study['panel_a'],np.r_[x,q]); b=_op(study['panel_b'],'v',z,'b'); c=_op(study['panel_c'],'v1',z,'c')\\n    f=_lin(np.c_[b,c,_cross(b,c)])\\n    y=np.asarray(tr['y'],float)[:,None]\\n    y_hat=(.75*_kernel(f,b,y,n,2.,.001)+.25*_kernel(f,b,y,n,1.,.03)).ravel()\\n    sf=_lin(np.c_[z,b,_cross(z,b)])\\n    state=_ridge(sf[:n],np.asarray(tr['traj'],float),sf[n:],.08)\\n    return {'y_hat':y_hat,'state_pred':state,'diagnostics_vec':np.array([y_hat.mean(),y_hat.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nhead -68 /tmp/readout.out | tail -36\\ncat >/tmp/smoke.py <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];rg=np.random.default_rng(550);splits=[np.arange(len(t['x']))]+[rg.permutation(len(t['x'])) for _ in range(8)]\\nfor p in splits:\\n a,b=p[:52],p[52:];out=solve_batch(dict(s,train={k:v[a] if k in ('x','y','traj') else v for k,v in t.items()},test={'x':t['x'][b]}));ey=np.abs(out['y_hat']-t['y'][b]);et=np.abs(out['state_pred']-t['traj'][b]);print('split',ey.mean(),et.mean(),np.round(et.mean(0),4), 'y max',ey.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/smoke.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 bilinear branches alone → H2 smooth scalar residual correction and a calibrated B interaction for trajectories; component 52/20 MAEs were 0.03097 and 0.01109, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Choose the smallest scalar error on the prescribed split\",\"rejected_reason\":\"The B-only kernel corrected readout was more stable across the other 52/20 splits than the B+C kernel.\"}],\"rationale\":\"Save a solver that separates the scalar and trajectory estimators, then check the prescribed split and quantify alternate-split error on the actual artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c080407f0521805856d5b8f77132dfeb11a5ce6768e74617cfd8bc1941ef7ec2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41572.59,
+      "usage_known": true,
+      "prompt_tokens": 41963,
+      "cached_tokens": 12672,
+      "completion_tokens": 1810
+    }
+  ]
+}

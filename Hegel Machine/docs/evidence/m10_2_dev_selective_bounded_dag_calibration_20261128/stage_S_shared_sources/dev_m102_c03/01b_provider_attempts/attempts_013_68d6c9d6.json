@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "68d6c9d6a3ac4998883ff59bc4e6f542",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:10:42.409028+00:00",
+  "ended_at_utc": "2026-11-28T13:10:58.473767+00:00",
+  "request_sha256": "baf08f5ff9b72d98d3c76e2c96fb3cc31d6bc593dbfc5d2a713efd477c48c666",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 91418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 51297,
+    "cached_tokens": 12672,
+    "completion_tokens": 585
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/sparse_baseline.py /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\n\\ndef solve_batch(study):\\n    \\\"\\\"\\\"Blend sparse two-mode predictions with a calibrated ridge readout.\\\"\\\"\\\"\\n    sparse = _sparse(study)\\n    panel = _panel_pred(study, 1.0, 0.3, 'sat')\\n    y = 0.5 * sparse['y_hat'] + 0.5 * panel[:, 0]\\n    state = 0.35 * sparse['state_pred'] + 0.65 * panel[:, 1:]\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: sparse two-mode readouts → H2: a calibrated ridge blend; the blend screen gives prescribed-tail MAEs of 0.02985 for y and 0.02503 for trajectory, with worst-axis MAEs of 0.09597 and 0.08852.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the sparse baseline alone\",\n      \"rejected_reason\": \"It has higher prescribed-tail errors and its worst-axis trajectory MAE is 0.2253 versus 0.0885 for the blend.\"\n    }\n  ],\n  \"rationale\": \"Promote the blend because it improves both required tail metrics and reduces the worst axis error for both outputs. Verify the saved artifact in a clean Python process and recompute terminal and diagnostics checks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e414b91d2797fb24e3271752b5c1a95575a4589c0f68dabc7f99e69af7ce805b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 16062.67,
+      "usage_known": true,
+      "prompt_tokens": 51297,
+      "cached_tokens": 12672,
+      "completion_tokens": 585
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d903fa00751d47a78b5b7ae7547cd8d4",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:55:25.280642+00:00",
+  "ended_at_utc": "2026-11-28T13:55:59.997512+00:00",
+  "request_sha256": "05090c1f0d2b50b8651864229a9749db33e31eff7045484bba666431e8a30950",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31264,
+    "cached_tokens": 12672,
+    "completion_tokens": 1495
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']; x=T['x']; y=T['y']; z=T['traj']; t=s['eval_times']; ix=np.arange(len(x)); rng=np.random.default_rng(1729)\\nfolds=[(ix[:52],ix[52:])];\\nfor _ in range(20):\\n j=rng.permutation(ix); folds.append((j[:52],j[52:]))\\nfor v in [*x.T,np.linalg.norm(x,axis=1),y,z[:,-1]]:\\n j=np.argsort(v); folds.extend([(j[:52],j[52:]),(j[20:],j[:20])])\\nu,v=s['panel_a']['u'],s['panel_a']['v']; ids=np.flatnonzero(np.linalg.norm(v-u,axis=1)<4)\\nfor name,fn,lim in [('affine',None,None),('sin',lambda q,k:np.sin(k*q),(1.5,3)),('rational',lambda q,k:q/(1+k*q*q),(.1,1))]:\\n errors=[]\\n for i in range(5):\\n  te=ids[i::5]; tr=np.setdiff1d(ids,te)\\n  pred=m._affine(u[te])@m._fit(m._affine(u[tr]),v[tr]) if fn is None else m._operator(u[tr],v[tr],fn,lim)(u[te]); errors.append(np.mean(abs(pred-v[te])))\\n print('panel A held-out mean/worst',name,np.mean(errors),np.max(errors))\\nq=m._coordinates(s['panel_a'],x); p,r=m._operators(s['panel_c'],q); J=(p[:,:,None]*r[:,None,:]).reshape(len(x),16); d=np.trace(J.reshape(-1,4,4),axis1=1,axis2=2); off=np.array([i for i in range(16) if i%5]); a=m._affine(np.c_[p,r,d]); full=m._affine(np.c_[p,r,J]); print('study keys/shapes',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in s.items()]); print('telemetry and summary',s['telemetry_vec'],T['summary'])\\ndef sparse(tr,target,k):\\n selected=[]; remaining=list(off)\\n for _ in range(k):\\n  best=min(remaining,key=lambda j: np.linalg.norm((A:=np.c_[a[tr],J[tr][:,selected+[j]]])@m._fit(A,target)-target)); selected.append(best); remaining.remove(best)\\n return np.c_[a,J[:,selected]],tuple(selected)\\nfor tag in ['full','dot','sparse1','sparse2','sparse3','sparse1-exp','sparse2-exp','sparse1-diff','sparse1-rational']:\\n err=[]; selections=[]\\n for tr,te in folds:\\n  if tag.endswith('-exp'):\\n   def basis(k):return -np.expm1(-t[:,None]*k)\\n   def resid(k):\\n    f=basis(k);return (f@m._fit(f,z[tr].T)-z[tr].T).ravel()\\n   B=np.linalg.qr(basis(least_squares(resid,[1.8,.4],bounds=([.8,.03],[8.,.79])).x))[0].T\\n  else: B=np.linalg.svd(z[tr],full_matrices=False)[2][:2]\\n  target=z[tr]@B.T\\n  if tag=='full': f=full\\n  elif tag=='dot': f=a\\n  else:\\n   f,sel=sparse(tr,target,int(tag[6]));selections.append(sel)\\n   if tag.endswith('-diff'):f=np.c_[f,(p[:,0]-p[:,1])*(r[:,0]-r[:,1])]\\n   if tag.endswith('-rational'):\\n    f=min([f]+[np.c_[f,f[:,9:]/(1+k*g[:,None]**2)] for k in (.1,.5,1.) for g in (p[:,0]-p[:,1],r[:,0]-r[:,1],d)],key=lambda F: np.linalg.norm(F[tr]@m._fit(F[tr],target)-target)+(.02 if F.shape[1]>f.shape[1] else 0))\\n  e=np.abs(f[te]@m._fit(f[tr],target)@B-z[te]);err.append([e.mean(),e.mean(0).max()])\\n err=np.asarray(err);print(tag,'ordered',err[0],'random worst',err[1:21].max(0),'edge worst',err[21:].max(0),'selections',[(g,selections.count(g)) for g in sorted(set(selections)) if selections.count(g)>1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted cross-panel state interactions) -> H2 (shared trace plus a small set of off-diagonal terms); verified baseline worst stress-slice MAEs are 0.00915 for y and 0.01969 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply batch centering or relay-mode checks\",\"rejected_reason\":\"The public contract describes one continuous regression study with no batch labels, relay modes, or governing drift equation; the audit checks the available metadata before attributing any errors to those mechanisms.\"}],\"rationale\":\"The fitted state coefficients suggest a shared diagonal weight and one dominant off-diagonal term. Select sparse terms entirely inside each training fold and compare them with the full basis, pairwise differences, and rational attenuation on the same measured edge slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0d99e590b54c25572d829ee495e6b8c8eb1785117ef938381052fa85ed27ce9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34715.67,
+      "usage_known": true,
+      "prompt_tokens": 31264,
+      "cached_tokens": 12672,
+      "completion_tokens": 1495
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3cc2415deba04c3dbabf565affd962cd",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:04:33.190693+00:00",
+  "ended_at_utc": "2026-11-28T14:05:17.553950+00:00",
+  "request_sha256": "30c731f086d5b89f1a9fd401230b1fc0835147d69716cdc2a2b5d6d0d88e722b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69451,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40232,
+    "cached_tokens": 12672,
+    "completion_tokens": 1791
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\ncp batch_solver.py /tmp/batch_v01.py\\ncat >/tmp/select_final.py <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom pathlib import Path\\nm=runpy.run_path('/tmp/batch_v01.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr=s['train']; x,y,T=[tr[k] for k in ('x','y','traj')]; h,hs=m['_designs'](s,x); z=m['_maps'](s,x)[0]\\n\\ndef _scalar_member(h, y, n, penalty, guard):\\n    h = h[:, 1:]\\n    mu, sd = h[:n].mean(0), np.maximum(h[:n].std(0), 1e-9)\\n    a, q = np.split((h-mu)/sd, [n])\\n    u, d, v = np.linalg.svd(a, full_matrices=False)\\n    w = q @ v.T\\n    center = y.mean()\\n    r = u.T @ (y-center)\\n    base = center + w @ (r*d/(d*d+penalty))\\n    if guard:\\n        stable = center + w @ (r*d/(d*d+max(.10, penalty)))\\n        leverage = (w*w/(d*d+penalty)).sum(axis=1)\\n        mix = np.clip((leverage-guard)/np.maximum(leverage, 1e-12), 0., 1.)\\n        base += mix*(stable-base)\\n    return base\\n\\nrng=np.random.default_rng(1); N=len(x)\\nsplits=[np.arange(52,72)]+[rng.choice(N,20,replace=False) for _ in range(30)]+[np.argsort(q)[-20:] for q in [np.linalg.norm(z,axis=1),*z.T,*(-z.T)]]\\nfor j in [0,1,2,3]: splits.append(np.argsort(z[:,j])[:20]) if False else None\\nrecipes=[(p,g,w) for p in [(a,a,b,b) for a in [.0001,.001,.003,.01,.03,.08] for b in [.001,.01,.03,.08]] for g in [0.,.4,.8,1.5] for w in [.35,.5,.65]]\\nerr=[]; ts_err=[]\\nfor va in splits:\\n    ix=np.setdiff1d(np.arange(N),va); order=np.r_[ix,va]; n=len(ix)\\n    pred={}\\n    for p,g,w in recipes:\\n        for j,a in enumerate(p):\\n            k=(j,a,g)\\n            if k not in pred: pred[k]=_scalar_member(hs[j][order],y[ix],n,a,g)\\n    err.append([np.mean(abs((w/2)*(pred[0,p[0],g]+pred[1,p[1],g])+((1-w)/2)*(pred[2,p[2],g]+pred[3,p[3],g])-y[va])) for p,g,w in recipes])\\n    ts_err.append(np.mean(abs(h[va]@m['_fit'](h[ix],T[ix])-T[va])))\\ne=np.array(err); q=np.array(ts_err); eligible=(e[0]<.035)&(e[1:31].mean(0)<.032)&(e[1:31].max(0)<.043)\\nscore=e[31:].max(0)+.4*e[31:].mean(0)+.5*e[1:31].mean(0)\\nj=np.argmin(np.where(eligible,score,np.inf)) if eligible.any() else np.argmin(np.where(e[0]<.0375,score,np.inf))\\np,g,w=recipes[j]; print('retained recipe',p,g,w,'eligible',bool(eligible[j])); print('scalar and trajectory public, random mean/max, directional mean/max:')\\nfor a in (e[:,j],q): print(a[0],a[1:31].mean(),a[1:31].max(),a[31:].mean(),a[31:].max())\\nsrc=Path('/tmp/batch_v01.py').read_text().split('def solve_batch')[0]\\n# Remove unused time-profile and archived operator wrappers.\\nfor first,last in [('def _operator(', 'def _trajectory('),('def _trajectory(', 'def _panel_map(')]:\\n    if first in src: src=src[:src.index(first)]+src[src.index(last):]\\nhelper=Path(__file__).read_text().split('def _scalar_member')[1].split('\\\\nrng=')[0]\\nPath('/holdout_task/batch_solver.py').write_text(src+'def _scalar_member'+helper+f'''\\\\ndef solve_batch(study: dict) -> dict:\\n    \\\"\\\"\\\"Fit panel-calibrated scalar readouts and an affine trajectory map.\\\"\\\"\\\"\\n    tr, te = study['train'], study['test']\\n    n = len(tr['x'])\\n    h, designs = _designs(study, np.concatenate((tr['x'], te['x'])))\\n    members = [_scalar_member(q, tr['y'], n, p, {g!r})\\n               for q, p in zip(designs, {p!r})]\\n    y = ({w!r}/2)*(members[0]+members[1]) + ((1-{w!r})/2)*(members[2]+members[3])\\n    state = h[n:] @ _fit(h[:n], tr['traj'])\\n    terminal = state[:, -1]\\n    return {{'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), terminal.mean(), terminal.std()])}}\\n''')\\nPY\\npython3 /tmp/select_final.py\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unregularized scalar ensemble and projected trajectories -> H2 leverage-stabilized scalar readouts and affine trajectories; baseline directional scalar MAE is 0.164786, while affine trajectories reduce public trajectory MAE from 0.007179 to 0.004096.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the two-rate trajectory projection\",\n      \"rejected_reason\": \"The affine trajectory fit has lower error on the public split and all tested directional slices.\"\n    },\n    {\n      \"option\": \"Replace the scalar ensemble with a generic kernel predictor\",\n      \"rejected_reason\": \"The tested kernel predictors had substantially larger directional errors and generally failed the public gate.\"\n    }\n  ],\n  \"rationale\": \"Constrain scalar stabilization by the public and random-split error margins, optimize the directional stress trade-off, and run both the requested schema validator and an isolated-process check against the written solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ef420301743a966ece240ea6f8d2791a7ae15066e75d20a1b0b8de829e835555",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44361.78,
+      "usage_known": true,
+      "prompt_tokens": 40232,
+      "cached_tokens": 12672,
+      "completion_tokens": 1791
+    }
+  ]
+}

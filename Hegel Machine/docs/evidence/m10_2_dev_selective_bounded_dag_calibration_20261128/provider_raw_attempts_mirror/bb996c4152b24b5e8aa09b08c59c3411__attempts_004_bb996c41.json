@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb996c4152b24b5e8aa09b08c59c3411",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:13:23.808847+00:00",
+  "ended_at_utc": "2026-11-28T14:13:50.675550+00:00",
+  "request_sha256": "feb352f192c35d877b18ab04ac02d79f5ecc22d367261b6c76f735b490c934bc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29251,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24104,
+    "cached_tokens": 12672,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; tail -28 /tmp/hegel_continual_archive/dev_m102_c03_batch_10_solver.py; head -65 /tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py; cat >/tmp/probe.py <<'PY'\\nimport sys,pickle,numpy as np,importlib.util\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_m102_c03_batch_10_solver as a\\nimport dev_m102_c03_batch_00_solver as b\\nss=importlib.util.spec_from_file_location('s','/holdout_task/_frozen_nodes/node_00.py'); m=importlib.util.module_from_spec(ss); ss.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; Y=np.column_stack([tr['y'],tr['traj']]); n=len(x)\\nfor name,p in [('a',s['panel_a']),('b',s['panel_b']),('c',s['panel_c'])]:\\n u=p['u']; print('panel',name, 'range',u.min(),u.max())\\n for key,v in p.items():\\n  if key=='u':continue\\n  for lab,f in [('linear',u),('sat',np.tanh(u)),('saturated',np.tanh(1.75*u)+.3*np.roll(np.sin(2.1*u),1,axis=1)),('cos',np.cos(2.4*u)),('exp',np.exp(-.2962*u*u))]:\\n   f=a._bias(f); print(key,lab, np.round(np.quantile(abs(v-f@a._ls(f,v)),[.5,.9,1]),6))\\nz=a._coordinates(s,x); w=a._panels(s,z); f=a._readout_features(w)\\nprint('ranges',z.min(0),z.max(0),'readout shape',f.shape)\\nfor ii,hi in [(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20)),(np.arange(72)[np.arange(72)%3!=0],np.arange(72)[::3])]:\\n st={**s,'train':{**tr,**{k:tr[k][ii] for k in ('x','y','traj')}},'test':{'x':x[hi]}}; ref=Y[hi]; sp=m.run_node({'__input__':st}); q=np.column_stack([sp['y_hat'],sp['state_pred']]); mult=np.r_[.5,np.full(8,.35)]\\n def score(label,yp):\\n  d=abs(ref-yp);print(label, np.mean(d[:,0]),np.mean(d[:,1:]))\\n score('fixed',q)\\n for mode in ['sat','exp']:\\n  try:\\n   yp=b._panel_pred(st,1.,.3,mode);score('old '+mode,yp);score('old blended '+mode,mult*q+(1-mult)*yp)\\n  except Exception as e: print(e)\\n pp=a.solve_batch(st); yp=np.column_stack([pp['y_hat'],pp['state_pred']]);score('archive10',yp);score('archive10 blended',mult*q+(1-mult)*yp)\\n for nm,g in [('z',a._bias(z)),('f',f),('f_all_quad',a._bias(np.column_stack([w]+[w[:,i]*w[:,j] for i in range(8) for j in range(i,8)]))),('raw_cubic',a._bias(np.column_stack([z,z**2,z**3]+[z[:,i]*z[:,j] for i in range(4) for j in range(i)])))]:\\n  yp=g[hi]@a._ls(g[ii],Y[ii]);score(nm,yp)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived coordinate and readout transfer -> H2 recalibrate only the panel or feature blocks whose residuals fail; candidate CV is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived readouts, panel residuals, and low-order interaction models on three data splits before choosing an edit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a33e577b2b7f22d24097862a2b2a991bca4f22ca58dab6dc0b1541c64bfe5362",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26865.25,
+      "usage_known": true,
+      "prompt_tokens": 24104,
+      "cached_tokens": 12672,
+      "completion_tokens": 1062
+    }
+  ]
+}

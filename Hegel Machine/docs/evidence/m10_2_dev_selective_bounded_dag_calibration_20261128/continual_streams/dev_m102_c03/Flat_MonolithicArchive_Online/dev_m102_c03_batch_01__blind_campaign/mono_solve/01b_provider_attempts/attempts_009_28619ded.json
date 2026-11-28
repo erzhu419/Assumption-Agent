@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28619ded4f39434f9b10388a96837405",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:14:36.227810+00:00",
+  "ended_at_utc": "2026-11-28T13:15:10.174672+00:00",
+  "request_sha256": "05a4b58aa822d4d86bc7d2906f945b5e75a2e9092ef4a2d1fe552315d6d1349b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52752,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34979,
+    "cached_tokens": 12672,
+    "completion_tokens": 1407
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/shared.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.model_selection import ShuffleSplit\\nsys.path.insert(0,'/holdout_task'); from batch_solver import calibrate,temporal,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; b,g=calibrate(s); z=(tr['x']-b)/g; t=s['eval_times']; Y=tr['traj']; y=tr['y']; p=s['panel_c']; u=p['u']; v=p['v2'];\\nlin=lambda z:np.c_[np.ones(len(z)),z]\\ncyc=lambda z:np.column_stack([z[:,i]*z[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]])\\nS=lambda x:x+.55*x*x/np.sqrt(1+.39*x*x)\\nW=np.linalg.lstsq(lin(S(u)),v,rcond=None)[0]; B=np.linalg.lstsq(lin(s['panel_b']['u']),s['panel_b']['v'],rcond=None)[0]; C=np.linalg.lstsq(lin(cyc(u)),p['v1'],rcond=None)[0]; d=lin(S(z))@W; bz=lin(z)@B; cz=lin(cyc(z))@C\\nP=PolynomialFeatures(2).fit_transform(z); E=np.c_[lin(S(z)),cyc(z)]; rng=np.random.default_rng(128)\\nfor train,test in [(np.arange(52),np.arange(52,72)),*list(ShuffleSplit(2,train_size=52,random_state=11).split(z))]:\\n q,a=temporal(t,Y[train]); A=np.linalg.lstsq(q,Y.T,rcond=None)[0].T; T=np.c_[y,A]; st=dict(s,train={k:(v[train] if k!='summary' else v) for k,v in tr.items()},test={'x':tr['x'][test]}); out=solve_batch(st); print('BASE',np.mean(abs(out['y_hat']-y[test])),np.mean(abs(out['state_pred']-Y[test]))); print('rates',-np.log1p(-q[0])/t[0]);\\n for nm,F in [('D',lin(S(z))),('D+C',E),('D+C+Z',np.c_[E,z]),('P+D',np.c_[P,S(z)])]:\\n  fit=F@np.linalg.lstsq(F[train],T[train],rcond=1e-10)[0]; print(nm,np.round(np.mean(abs(fit[test]-T[test]),0),4),np.round(np.std(fit[train]-T[train],0),4));\\n if test[0]!=52: continue\\n for nm,H in [('linear',z),('B',bz),('C',cz),('D',d),('ZC',np.c_[z,cz]),('ZD',np.c_[z,d])]:\\n  for typ in ['tanh','rad','sin','prod','rational']:\\n   F0=E; k=H.shape[1];\\n   def f(par):\\n    h=H@par[:k]+par[k];\\n    if typ=='tanh': w=np.tanh(h)\\n    if typ=='rad': w=h/np.sqrt(1+h*h)\\n    if typ=='sin': w=np.sin(h)\\n    if typ=='prod': w=h*(z@par[k+1:])\\n    if typ=='rational': w=h/(1+(z@par[k+1:])**2)\\n    return np.c_[F0,w]\\n   def calc(par,ret=False):\\n    F=f(par); W=np.linalg.lstsq(F[train],T[train],rcond=1e-9)[0]; return F@W-T\\n   best=None\\n   for i in range(5):\\n    p0=rng.normal(0,.6,k+1+(4 if typ in ('prod','rational') else 0)); opt=least_squares(lambda v:calc(v)[train].ravel(),p0,bounds=(-5,5),max_nfev=100); e=calc(opt.x); score=np.mean(e[train]**2)\\n    if best is None or score<best[0]: best=(score,e,opt.x)\\n   print(nm,typ,np.round(np.mean(abs(best[1][train]),0),4),np.round(np.mean(abs(best[1][test]),0),4),round(np.mean(abs(best[1][test,1:]@q.T)),4),np.round(best[2],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic panel compositions -> H2 shared scalar and fast-mode correction on a calibrated cycle basis; best observed 52/20 MAEs are 0.02147 for y and 0.02255 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test low-dimensional shared nonlinear terms rather than expanding a deep composition dictionary. Refit time constants within each split and measure the current artifact directly for comparison.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "fe578fe18544644704ecd3a183a2530237830863b4d9f23848a44909bbddd913",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33945.86,
+      "usage_known": true,
+      "prompt_tokens": 34979,
+      "cached_tokens": 12672,
+      "completion_tokens": 1407
+    }
+  ]
+}

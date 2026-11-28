@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e630925263d4e32b082c0b6e4bfb0a9",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:17.949425+00:00",
+  "ended_at_utc": "2026-11-28T13:16:45.788490+00:00",
+  "request_sha256": "dfd45ff04fd1d716a867ec02e32b216cf514ad3262e7fd353dca56bbe2a1283a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61032,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38304,
+    "cached_tokens": 5504,
+    "completion_tokens": 1155
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cp /holdout_task/_frozen_nodes/node_00.py /tmp/node01_base.py; sed 's/^def run_node(inputs: dict) -> dict:/def _blend_reference(inputs: dict) -> dict:/' /tmp/node01_base.py > /holdout_task/node_01.py; cat >> /holdout_task/node_01.py <<'PY'\\n\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import ARDRegression\\n\\n\\ndef _latent_coordinates(panel, x):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    h = np.column_stack((np.ones(len(u)), u))\\n    good = np.ones(len(u), dtype=bool)\\n    for _ in range(4):\\n        fit = np.linalg.lstsq(h[good], v[good], rcond=None)[0]\\n        residual = np.linalg.norm(v-h@fit, axis=1)\\n        next_good = residual < max(1e-3, 4*np.median(residual))\\n        if np.count_nonzero(next_good) < h.shape[1]:\\n            break\\n        good = next_good\\n    return (x-fit[0])/np.diag(fit[1:])\\n\\n\\ndef _mode_readout(times, traj):\\n    def basis(log_rates):\\n        return -np.expm1(-times[:, None]*np.exp(log_rates))\\n\\n    def residual(log_rates):\\n        q = basis(log_rates)\\n        return (q@np.linalg.lstsq(q, traj.T, rcond=None)[0]-traj.T).ravel()\\n\\n    opt = least_squares(residual, np.log([.4, 1.8]), max_nfev=60)\\n    q = basis(opt.x)\\n    return np.linalg.lstsq(q, traj.T, rcond=None)[0].T, q\\n\\n\\ndef _predict_features(z, n, targets, threshold):\\n    single, pair = _features(z)\\n    mat = np.column_stack(single + pair + [np.prod(z[:, j], axis=1) for j in combinations(range(4), 3)])[:, 1:]\\n    mat = (mat-mat[:n].mean(0))/np.maximum(mat[:n].std(0), 1e-9)\\n    return np.column_stack([ARDRegression(threshold_lambda=threshold).fit(mat[:n], target).predict(mat[n:]) for target in targets.T])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr = study['train']\\n    n = len(tr['x'])\\n    x = np.vstack((tr['x'], study['test']['x']))\\n    if len(x) == n:\\n        return {'panel_pred': np.empty((0, 1+len(study['eval_times'])))}\\n    z = _latent_coordinates(study['panel_a'], x)\\n    amplitudes, basis = _mode_readout(np.asarray(study['eval_times']), np.asarray(tr['traj']))\\n    targets = np.column_stack((tr['y'], amplitudes))\\n    p = _predict_features(z, n, targets, 30000.)\\n    # Express the independently calibrated estimate in the fixed sink's mixing coordinates.\\n    baseline = _blend_reference({'__input__': study})\\n    return {'panel_pred': np.column_stack((2*p[:, 0]-baseline['y_hat'],\\n            (p[:, 1:]@basis.T-.35*baseline['state_pred'])/.65))}\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fixed blend of independently fitted branches -> calibrated latent-mode readout expressed in sink coordinates; the selected readout had gate MAEs of 0.0311 scalar and 0.0286 trajectory, with stress-split maxima of 0.0728 and 0.0445.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expanded dictionary with independent ARD fits\",\n      \"rejected_reason\": \"The extra basis terms increased worst-split errors without improving the gate trajectory error.\"\n    }\n  ],\n  \"rationale\": \"Save the best measured compact readout now, preserve both frozen files and their interfaces, and verify the composed DAG in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1ff4bc3d7d1ff38f6f262218c7699026ac798cf9f20b1b78e799208fb9dae1f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27837.7,
+      "usage_known": true,
+      "prompt_tokens": 38304,
+      "cached_tokens": 5504,
+      "completion_tokens": 1155
+    }
+  ]
+}

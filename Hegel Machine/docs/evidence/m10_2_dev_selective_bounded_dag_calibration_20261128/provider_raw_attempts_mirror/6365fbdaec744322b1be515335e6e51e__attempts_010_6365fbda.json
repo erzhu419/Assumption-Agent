@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6365fbdaec744322b1be515335e6e51e",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:09:08.251258+00:00",
+  "ended_at_utc": "2026-11-28T14:09:29.120708+00:00",
+  "request_sha256": "6e37b7f44a994123d7257021fc6354a9157516b155ef0e4307f26d650565b379",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62621,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36966,
+    "cached_tokens": 12672,
+    "completion_tokens": 791
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\ns = pickle.load(open(root+'public_batch.pkl', 'rb'))[0]['study']\\nf0 = runpy.run_path(root+'_frozen_nodes/node_00.py')['run_node']\\nf1 = runpy.run_path(root+'node_01.py')['run_node']\\nf2 = runpy.run_path(root+'_frozen_nodes/node_02.py')['run_node']\\ntr = s['train']; x, y, traj = (tr[k] for k in ('x','y','traj'))\\nn = len(x); cut = max(40,n-20); results = {}\\nfor name,p in [('official',np.arange(n))]+[(f'random_{i}',np.random.default_rng(i+100).permutation(n)) for i in range(10)]:\\n    ia,it=p[:cut],p[cut:]\\n    study=dict(s,train={'x':x[ia],'y':y[ia],'traj':traj[ia],'summary':np.array([y[ia].mean(),y[ia].std(),traj[ia,-1].mean(),traj[ia,-1].std()])},test={'x':x[it]})\\n    panel=f1({'__input__':study}); assert panel['panel_pred'].shape==(len(it),1+traj.shape[1])\\n    out=f2({'node_00':f0({'__input__':study}),'node_01':panel})\\n    yh,th=out['y_hat'],out['state_pred']; assert yh.shape==y[it].shape and th.shape==traj[it].shape\\n    ey,et=np.abs(yh-y[it]),np.abs(th-traj[it]); assert np.all(np.isfinite(ey)) and np.all(np.isfinite(et))\\n    np.testing.assert_allclose(out['diagnostics_vec'],[yh.mean(),yh.std(),th[:,-1].mean(),th[:,-1].std()])\\n    results[name]=[float(ey.mean()),float(et.mean())]\\nprint(json.dumps({'official':results['official'],'worst_of_10_repartitions':np.max(list(results.values())[1:],axis=0).tolist(),'splits':results}))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived panel transfer → robust calibration with pairwise response terms; the saved candidate passed official holdout MAE at 0.013063 for y and 0.019242 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official receipt is already bound to the saved artifact. This read-only stress test measures worst-split performance of that exact node through the frozen sink, rather than relying on the precursor model's results.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8744b8a388954916ccdcf2ad1097f99091ed87f02d5e827b692342e0cc647405",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20867.95,
+      "usage_known": true,
+      "prompt_tokens": 36966,
+      "cached_tokens": 12672,
+      "completion_tokens": 791
+    }
+  ]
+}

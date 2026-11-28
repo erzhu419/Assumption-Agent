@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "527e62d3b93e4cb0a5b73c914213377f",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:31:12.634603+00:00",
+  "ended_at_utc": "2026-11-28T13:31:42.241935+00:00",
+  "request_sha256": "b73f230c9aa0900d241922bb35aa35ab3d2b50e8ed36ee1382c0b9ba70cbcee2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63950,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38446,
+    "cached_tokens": 12672,
+    "completion_tokens": 1199
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; tail -52 test_dag_candidate.py; cat > /tmp/kprobe.py <<'PY'\\nfrom readout import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nbases.pop('cz');bases.pop('dz'); bases['ct']=np.arctanh(np.clip(c/2,-.99,.99));\\n# Separate linear, polynomial, and saturated single/pair-coordinate effects.\\ndef kernels(bases):\\n for nm,a in bases.items():\\n  for degree in [1,2,3,4,5,6]:\\n   g=np.c_[np.ones(len(a)),a]/np.sqrt(2); yield nm+'P'+str(degree),(g@g.T)**degree\\n  dis=cdist(a,a,'sqeuclidean')\\n  for scale in [.2,.5,1,2,4,8]:\\n   yield nm+'R'+str(scale),np.exp(-scale*dis)\\n  for scale in [.3,1,3]:\\n   g=(a[:,None,:]-a[None,:,:])**2\\n   for order in [1,2,3]:\\n    yield nm+'A'+str((scale,order)),np.mean([np.exp(-scale*g[:,:,idx].sum(2)) for idx in combinations(range(4),order)],axis=0)\\n  for level in [0,1]:\\n   f,_=feats(a,level); f=(f-f.mean(0))/np.maximum(f.std(0),1e-8); yield nm+'D'+str(level),f@f.T\\n\\ndef norm(K):return K/max(np.mean(K.diagonal())-K.mean(),1e-10)\\nkd={nm:norm(K) for nm,K in kernels(bases)}\\nfor keys in [('z','tanh'),('z','b','c','d'),('z','b','c','d','tanh','raw')]:\\n for typ in ['P','A','R','D','PAR','PARD']:\\n  kd['+'.join(keys)+typ]=np.mean([K for nm,K in list(kd.items()) if '+' not in nm and nm.split(typ[0])[0] in keys and any(nm.startswith(key+tp) for key in keys for tp in typ)] or [K for nm,K in list(kd.items()) if '+' not in nm and any(nm.startswith(key+tp) for key in keys for tp in typ)],axis=0)\\nregs=[1e-7,1e-5,.0002,.002,.015,.07,.25]\\nYall=np.c_[y,Y]\\ndef ridge(K,T,V,a):\\n F=K[np.ix_(T,T)]; P=K[np.ix_(V,T)]; avg=Yall[T].mean(0); F=F-F.mean(0)-F.mean(1)[:,None]+F.mean();P=P-P.mean(1)[:,None]-K[np.ix_(T,T)].mean(0)+K[np.ix_(T,T)].mean();return P@cho_solve(cho_factor(F+a*np.eye(len(T))),Yall[T]-avg)+avg\\nfor j in [0,1]:\\n scores=[]\\n for nm,K in kd.items():\\n  for a in regs:\\n   ee=[]\\n   for T,V in splits:\\n    E=abs(ridge(K,T,V,a)-Yall[V]);ee.append(E[:,0].mean() if j==0 else E[:,1:].mean())\\n   scores.append((np.mean(ee[1:]),ee[0],max(ee[1:]),nm,a))\\n print('HEAD',j,'inner',sorted(scores)[:12]); print('HEAD',j,'outer',sorted(scores,key=lambda p:p[1])[:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single-coordinate sparse readouts → H2 additive and interaction kernels over calibrated views; the best reported scalar probe reached 0.03125 MAE, but no paired readout has passed both gates.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use one sparse dictionary for both outputs\",\"rejected_reason\":\"The scalar and trajectory probes favor different coordinates and regularization.\"}],\"rationale\":\"Compare separate scalar and trajectory readouts across inner folds, testing whether calibrated views contribute complementary structure before encoding the frozen-blend correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1e830df66860c5756104b3746ececb1dea84e013ca8f80bbb45489ccf29f2b4c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29606.07,
+      "usage_known": true,
+      "prompt_tokens": 38446,
+      "cached_tokens": 12672,
+      "completion_tokens": 1199
+    }
+  ]
+}

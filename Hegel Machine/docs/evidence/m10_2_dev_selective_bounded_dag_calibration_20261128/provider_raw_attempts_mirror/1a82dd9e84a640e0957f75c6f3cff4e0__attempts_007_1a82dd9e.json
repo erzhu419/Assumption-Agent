@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a82dd9e84a640e0957f75c6f3cff4e0",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:19.237611+00:00",
+  "ended_at_utc": "2026-11-28T13:15:44.927028+00:00",
+  "request_sha256": "8aa7cf1284154fd4b14454ef08d2b83800b31deb8cee011a5620cad726734ace",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30563,
+    "cached_tokens": 5504,
+    "completion_tokens": 1055
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Scalar kernel ridge regression with calibrated interactions and a residual kernel.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    k, kq = p['K'], p['Kq']\\n    st, qt = p['st'], p['qt']\\n    diag = k.diagonal()\\n    # Kernel-space Gaussian distances need the query squared norms as well.\\n    # Infer those from the calibrated quadratic map only if the exact norms\\n    # are supplied by the shared node; otherwise use the explicit map below.\\n    train_dist = np.maximum(diag[:, None] + diag[None, :] - 2.0 * k, 0.0)\\n    if 'Kqq_diag' in p:\\n        query_dist = np.maximum(p['Kqq_diag'][:, None] + diag[None, :] - 2.0 * kq, 0.0)\\n        gram = k + 3.0 * (st @ st.T) + 3.0 * np.exp(-train_dist / 12.0)\\n        cross = kq + 3.0 * (qt @ st.T) + 3.0 * np.exp(-query_dist / 12.0)\\n        ridge = 0.003\\n    else:\\n        gram = k + 30.0 * (st @ st.T)\\n        cross = kq + 30.0 * (qt @ st.T)\\n        ridge = 0.0001\\n    factor = cho_factor(gram + ridge * np.eye(len(gram)))\\n    return {'y_hat': cross @ cho_solve(factor, p['y_centered']) + p['y_mean']}\\nPY\\n# The shared node supplies no query self-kernel. Restore the verified estimator\\n# and probe a distance-free, contract-compatible nonlinear correction instead.\\ncp /tmp/.hegel_candidate_archive/v01_a6d1aefa/node_01.py /holdout_task/node_01.py 2>/dev/null || find /tmp/.hegel_candidate_archive/v01_a6d1aefa -name node_01.py -exec cp {} /holdout_task/node_01.py \\\\;\\ncat > /tmp/scalar_explicit_probe.py <<'PY'\\nexec(open('/tmp/mix_probe.py').read().split('configs=')[0])\\nr=[]\\nfor name,g in [('base',K),('st',S),('sy',sy@sy.T)]:\\n d=g.diagonal(); g=g/np.median(d)\\n for kind,h in [('quadratic',g*g),('cubic',g**3),('smooth',g*g+.3*g**3),('normalized',(g/np.sqrt(g.diagonal()[:,None]*g.diagonal()[None,:]))**3)]:\\n  for a in [.03,.3,3]:\\n   for b in [0,3,30]:\\n    for lam in [.0001,.0003,.001,.003]:\\n     o=test(K+b*S+a*h,lam,False)\\n     if o[0]<.038:r.append((max(o),o[0],o[1:7].mean(),o[7],max(o[8:]),name,kind,a,b,lam))\\nfor row in sorted(r)[:12]: print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar_explicit_probe.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated quadratic baseline → test nonlinear kernels evaluable from the frozen handoff; verified scalar MAE is 0.036021, with worst directional MAE 0.11266.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the best kernel-space Gaussian mixture\",\"rejected_reason\":\"The frozen interface does not supply query self-kernel values required to compute its distances.\"}],\"rationale\":\"Check whether dot-product corrections can improve directional extrapolation without requiring unavailable query norms; verify the accepted baseline in a clean Python process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a7695d2a7d70dc1936541848eabafe1001c4ececcfbbdba3292cf2d764f4d011",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25687.43,
+      "usage_known": true,
+      "prompt_tokens": 30563,
+      "cached_tokens": 5504,
+      "completion_tokens": 1055
+    }
+  ]
+}

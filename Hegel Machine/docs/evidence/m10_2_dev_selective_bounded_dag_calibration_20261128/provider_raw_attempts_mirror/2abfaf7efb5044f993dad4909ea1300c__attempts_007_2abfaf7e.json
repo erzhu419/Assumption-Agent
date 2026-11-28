@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2abfaf7efb5044f993dad4909ea1300c",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:35:46.283378+00:00",
+  "ended_at_utc": "2026-11-28T13:36:22.665821+00:00",
+  "request_sha256": "1322a38349816254474dc0743c415d3a2fa5514474eac3f9a89bdff4adb5eae5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44540,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30291,
+    "cached_tokens": 12672,
+    "completion_tokens": 1508
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/warp05.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from graph05 import *\\nfrom scipy.linalg import subspace_angles\\nU,V=s['panel_b']['u'],s['panel_b']['v']\\ndef run(name,fun,start=[],lo=[],hi=[]):\\n def fit(p):\\n  B=fun(U,p); H=A(B.reshape(len(U),-1)); return H,F(H,V)\\n def loss(p):\\n  h,c=fit(p);return (h@c-V).ravel()\\n p=least_squares(loss,start,bounds=(lo,hi),gtol=1e-12,max_nfev=500).x if len(start) else []\\n h,c=fit(p); wz=A(fun(z,p).reshape(len(z),-1))@c\\n a=A(wz); pair=wz[:,0]*wz[:,2]+wz[:,1]*wz[:,3]; h=np.c_[a,pair]; r=np.std(loss(p)); print(name,p,round(r,7),score(h), 'traj',np.mean(abs(a[52:72]@F(a[:52],yt[:52])-yt[52:])))\\n return wz,r\\nG={}\\nfor ex in [1,1.25,2,2.5,3,4,5,6,8]:\\n name='fixed cubic '+str(ex);G[name]=run(name,lambda u,p: u**3/(1+.22*abs(u)**ex))\\nfor k in [2,3,4,5]:\\n name='odd poly '+str(k);G[name]=run(name,lambda u,p: sum(co*u**(2*i+1) for i,co in enumerate([*p,1])),[-1]+[0]*(k-2),[-1e4]*(k-1),[1e4]*(k-1))\\nfor kk in [2,3,4,5,6]:\\n for den in [1,2,3,4,6]:\\n  name='shared rational '+str((kk,den));G[name]=run(name,lambda u,p: (u**3+p[0]*u+p[1]*np.sign(u)*abs(u)**kk)/(1+p[2]*abs(u)**den+p[3]*abs(u)**(2*den)),[0,.01,.22,.01],[-10,-10,0,0],[10,10,30,30])\\nfor power in [2,3,4,5,6,8]:\\n name='sum damped '+str(power);G[name]=run(name,lambda u,p:u**3/(1+p[0]*abs(u)**power)+p[1]*u+p[2]*u**3,[.22,0,0],[0,-10,-10],[50,10,10])\\nprint('same-coordinate affine+nonlinear vector weights')\\nfor name,fun in [('cube',lambda x:x**3),('ratcube',lambda x:x**3/(1+.22*x*x)),('ratquart',lambda x:x**3/(1+.22*x**4)),('power25',lambda x:np.sign(x)*abs(x)**2.5)]:\\n H=A(np.c_[U,fun(U)]);C=F(H,V);print(name,np.std(H@C-V),C[1:5],C[5:]);\\nfor name,(d,r) in sorted(G.items(),key=lambda kv:kv[1][1])[:6]:\\n a=A(d); pair=d[:,0]*d[:,2]+d[:,1]*d[:,3]; h=np.c_[a,pair]; q=F(h[:72],y); err=y-h[:72]@q\\n print('candidate',name,'readout',q,'errs',np.std(err))\\n feats=[('linCube',d**3),('cubeZ',z**3),('saturation',d/(1+.22*d*d)),('linZ',z),('C1',w['c1powered']),('C2',w['c2even']),('P*lin',pair[:,None]*d),('T',np.c_[d[:,0]*d[:,1]*d[:,2],d[:,0]*d[:,1]*d[:,3],d[:,0]*d[:,2]*d[:,3],d[:,1]*d[:,2]*d[:,3]])]\\n print([(tag,score(np.c_[h,f])) for tag,f in feats])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/warp05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: a paired readout over an approximate panel-B warp -> H2: identify the warp and missing readout terms; cubic expansion reaches 0.017390 on the public split but 0.063726 on the worst of 25 repeated splits.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived warped panel-B operator plus opposite-channel pair products is sufficient for the scalar readout.\",\"empirical_witness\":\"The archived paired model misses the 0.038 gate, and even a better-fitting powered panel-B warp with paired terms gives 0.039580 MAE; adding cubic terms reduces public MAE to 0.017390.\",\"causal_blanket_diagnosis\":\"Panel-B coordinates explain most trajectory variation, but the tested scalar basis and panel warp leave structured error unresolved.\",\"sublated_pivot\":\"Retain robust diagonal calibration and the panel-B path while testing compact rational warps and targeted higher-order readouts.\",\"risk_kind\":\"operator and scalar-basis misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the unconstrained cubic model\",\"rejected_reason\":\"Its worst repeated-split error is much higher than its public-split error, suggesting weak extrapolation.\"}],\"rationale\":\"Fit candidate warp families on the independent panel measurements, then check whether each improves both scalar and trajectory predictions without requiring a large cubic basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "977e65a3db94c5a295b11c067048c4e2c66df136794bc9cdf5f920aaa3b79404",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36381.41,
+      "usage_known": true,
+      "prompt_tokens": 30291,
+      "cached_tokens": 12672,
+      "completion_tokens": 1508
+    }
+  ]
+}

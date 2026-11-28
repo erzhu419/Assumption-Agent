@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82dbf08cddd740b7906f8d9fc34e56d1",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:32:16.854898+00:00",
+  "ended_at_utc": "2026-11-28T13:32:45.791514+00:00",
+  "request_sha256": "f75a6a00bacff6e7eecc5bf852294edbdad17e522126512d73b4e14969ae628e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23720,
+    "cached_tokens": 12672,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/dev_m102_c01_batch_03_solver.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_m102_c01_batch_01_solver as old\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a,b,c=[s['panel_'+k] for k in 'abc']; x,y,T=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; cal=old._calibration(a); print('calibration',cal); print('temporal SVD',np.linalg.svd(T,compute_uv=False)); print('temporal PCA',np.linalg.svd(T,full_matrices=False)[2][:2]);\\ndef fit(F,Y): return np.linalg.lstsq(F,Y,rcond=None)[0]\\ndef ext(z): return np.c_[np.ones(len(z)),z]\\ndef quad(z):\\n i,j=np.triu_indices(z.shape[1]);return z[:,i]*z[:,j]\\ndef test(f,Y,N=52):\\n w=fit(f[:N],Y[:N]); err=f@w-Y\\n return np.mean(abs(err[:N])),np.mean(abs(err[N:]))\\nops={}\\nfor label,p,k in [('b',b,'v'),('c1',c,'v1'),('c2',c,'v2')]:\\n u,v=p['u'],p[k]; best=[]\\n fs={'linear':lambda z:z,'quadratic':lambda z:np.c_[z,quad(z)],'tanh':lambda z,k:np.tanh(k*z),'sin':lambda z,k:np.sin(k*z),'rational':lambda z,k:np.c_[z,z*z/(1+k*z*z)],'tanhlin':lambda z,k:np.c_[z,np.tanh(k*z)],'linT':lambda z,k:np.arctanh(np.clip(k*z,-.9999,.9999))/k}\\n for n,f in fs.items():\\n  def loo(F,Y):\\n   Q=np.linalg.qr(F)[0];return np.sqrt(np.mean(((Y-Q@(Q.T@Y))/(1-(Q*Q).sum(1))[:,None])**2))\\n  if n in ('linear','quadratic'): q=f; K=0\\n  elif n=='linT':\\n   K=minimize_scalar(lambda k:loo(ext(u),f(v,k)),bounds=(.001,.999/abs(v).max()),method='bounded').x;q=lambda z:z\\n  else:\\n   K=minimize_scalar(lambda k:loo(ext(f(u,k)),v),bounds=(.02,2.8),method='bounded').x;q=lambda z,k=K,f=f:f(z,k)\\n  F=ext(q(u)); score=loo(F,v); w=fit(F,v); best.append((score,n,K)); ops[label+n]=lambda z,q=q,w=w:ext(q(z))@w\\n print(label,sorted(best))\\ncoords={'x':x,'uncal':(x-cal[1])/cal[0],'forward':x*cal[0]+cal[1]}\\nfor n,z in list(coords.items()):\\n for m in ('blinear','btanh','c1linear','c1tanh','c2rational'):\\n  coords[n+'_'+m]=ops[m](z)\\npca=np.linalg.svd(T,full_matrices=False)[2]; A=T@pca[:2].T\\nres=[]\\nfor n,z in coords.items():\\n for k,F in dict(lin=z,tanh=np.tanh(z),quad=np.c_[z,quad(z)],tanhquad=np.c_[np.tanh(z),quad(z)]).items():\\n  res.append((n,k,test(ext(F),y),test(ext(F),T),test(ext(np.c_[F,A]),y)))\\nfor j in [2,3,4]:\\n print('ranking',j);print(*sorted(res,key=lambda e:e[j][1])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic archived graph) -> H2 (calibrated panel operators and shared trajectory modes); archived 52/20 MAEs are 0.045024 for y and 0.012066 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure operator reconstruction error on each panel and test whether those coordinates or the measured trajectory modes explain the readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "263dec0eb645df9d6ee0fca8fafb53747b27985a9512a77926a2dedf08582010",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28934.81,
+      "usage_known": true,
+      "prompt_tokens": 23720,
+      "cached_tokens": 12672,
+      "completion_tokens": 1186
+    }
+  ]
+}

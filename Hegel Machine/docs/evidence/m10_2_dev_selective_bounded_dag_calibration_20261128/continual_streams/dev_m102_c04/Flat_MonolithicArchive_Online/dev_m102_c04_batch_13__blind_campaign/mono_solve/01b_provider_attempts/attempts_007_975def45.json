@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "975def4500dd49619f4314fb018b9e49",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:58:22.912486+00:00",
+  "ended_at_utc": "2026-11-28T13:59:00.584161+00:00",
+  "request_sha256": "276ad5e2f5a4bcefa19bd5a37d7608d26718408054ead20d9c73b80af73d94a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31828,
+    "cached_tokens": 12672,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n_PAIRS = ((0,1),(0,2),(0,3),(1,2),(1,3),(2,3))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _aff(*cols):\\n    return np.column_stack((np.ones(len(cols[0])), *cols))\\n\\n\\ndef _calibrate(panel, observed):\\n    u, v = panel['u'], panel['v']\\n    d = np.max(np.abs(u-v), axis=1)\\n    keep = d < max(0.5, 4*np.median(d))\\n    coef = np.column_stack([_ls(_aff(u[keep, j]), v[keep, j]) for j in range(u.shape[1])])\\n    return (observed-coef[0])/coef[1]\\n\\n\\ndef _operators(panel, z):\\n    u = panel['u']\\n    def first(x, k):\\n        return _aff(x, x/(1+k*np.abs(x)))\\n    def second(x, k):\\n        return _aff(x, np.arctan(k*x), *(x[:,i]*x[:,j] for i,j in _PAIRS if (i,j) not in ((0,2),(1,3))))\\n    outputs = []\\n    for key, basis, interval in [('v1', first, (.3,1.5)), ('v2', second, (.5,1.7))]:\\n        v = panel[key]\\n        def score(k):\\n            a = basis(u,k)\\n            return np.sum((a@_ls(a,v)-v)**2)\\n        k = minimize_scalar(score, bounds=interval, method='bounded', options={'xatol': 1e-9}).x\\n        outputs.append(basis(z,k)@_ls(basis(u,k),v))\\n    return outputs\\n\\n\\ndef _time_basis(times, traj):\\n    def basis(k):\\n        return -np.expm1(-times[:,None]*k)\\n    def residual(k):\\n        a = basis(k)\\n        return (a@_ls(a,traj.T)-traj.T).ravel()\\n    rates = least_squares(residual, [1.8,.43], bounds=([.8,.03],[8.,.79])).x\\n    return basis(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'],study['test']['x']))\\n    p,r = _operators(study['panel_c'],_calibrate(study['panel_a'],x))\\n    dot = np.sum(p*r,axis=1)\\n    scalar = _aff(p,r,dot)\\n    y = scalar[n:]@_ls(scalar[:n],train['y'])\\n    cross = (p[:,:,None]*r[:,None,:]).reshape(len(p),-1)\\n    spatial = _aff(p,r,cross)\\n    temporal = _time_basis(study['eval_times'],train['traj'])\\n    modes = _ls(temporal,train['traj'].T).T\\n    state = (spatial[n:]@_ls(spatial[:n],modes))@temporal.T\\n    last = state[:,-1]\\n    return {'y_hat':y, 'state_pred':state,\\n            'diagnostics_vec':np.array([y.mean(),y.std(),last.mean(),last.std()])}\\nPY\\ncat > /tmp/compact.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _calibrate,_operators,_aff,_ls,_time_basis\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52\\np,r=_operators(s['panel_c'],_calibrate(s['panel_a'],tr['x'])); traj=tr['traj']; a=_time_basis(s['eval_times'],traj[:n]); z=_ls(a,traj.T).T\\ndot=(p*r).sum(1); h=_aff(p,r,dot)\\ncross=np.column_stack([p[:,i]*r[:,j] for i,j in itertools.product(range(4),repeat=2) if i!=j]); labels=[f'p{i}r{j}' for i,j in itertools.product(range(4),repeat=2) if i!=j]\\nfor j in range(2):\\n for name,base in [('p',_aff(p,dot)),('r',_aff(r,dot)),('pr',h),('r_no_dot',_aff(r))]:\\n  best=[]\\n  for k in range(3):\\n   for ids in itertools.combinations(range(len(labels)),k):\\n    X=np.c_[base,cross[:,ids]]; w=_ls(X[:n],z[:n,j]); e=X@w-z[:,j]; best.append((np.sqrt(np.mean(e[:n]**2)),np.mean(abs(e[n:])),[labels[i] for i in ids],w))\\n  print(j,name,sorted(best,key=lambda T:T[0])[:3])\\nprint('slow coefficients no additional terms',_ls(h[:n],z[:n,1]))\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Full quadratic readout → shared dot product for y and bilinear interactions for the two state modes; current 52/20 MAE is 0.00410 for y and 0.00432 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use every quadratic feature\",\"rejected_reason\":\"Group ablations show lower held-out errors with a dot product for y and only cross-panel bilinear terms for state.\"}],\"rationale\":\"Write the passing compact graph, then screen for sparse, mode-specific interactions using only the fitting rows before measuring their holdout error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ba5ef28ac85ebf40c734798d4b1e38ecd3dcb435c07893ee8c4302f175b1d3a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37670.28,
+      "usage_known": true,
+      "prompt_tokens": 31828,
+      "cached_tokens": 12672,
+      "completion_tokens": 1592
+    }
+  ]
+}

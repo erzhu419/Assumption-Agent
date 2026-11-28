@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9350b95a97cc44c89d2e63285d77174b",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:08.532943+00:00",
+  "ended_at_utc": "2026-11-28T13:47:39.586600+00:00",
+  "request_sha256": "e315f9b682a9abfdcd38104e1adb4f4d456e9ee52905346377fc72d9a3b001da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67207,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42368,
+    "cached_tokens": 12672,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/satfit.py <<'PY'\\nfrom graph import *\\nfrom scipy.linalg import solve\\nA,inv=Amap(s['panel_a']); x=inv(s['train']['x']); y=np.c_[s['train']['y'],s['train']['traj']];rng=np.random.default_rng(23); folds=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(72) for _ in range(3)]]; P=poly(x,1)\\nix,jx=np.triu_indices(4); i0,j0=np.triu_indices(4,1)\\ndef features(x,q,fn,mode):\\n z=fn(x*np.exp(q[0:4])+q[4:8]); gamma=np.roll(x,-1,axis=1)\\n F=[np.ones((len(x),1)),z]\\n if mode!=5:F+=[x]\\n if mode in (0,1,2,3,5,6):F += [z[:,ix]*z[:,jx]]\\n if mode==1:F += [x[:,ix]*x[:,jx]]\\n if mode in (2,3):F+=[(x[:,:,None]*z[:,None,:]).reshape(len(x),16)]\\n if mode==3:F+=[x[:,ix]*x[:,jx]]\\n if mode==4:F+=[(x[:,:,None]*z[:,None,:]).reshape(len(x),16)]\\n if mode==6:F+=[z*x,z*gamma,z*np.roll(x,1,axis=1)]\\n return np.column_stack(F)\\nforms={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'soft':lambda w:w/(1+abs(w)),'rat':lambda w:w/(1+w*w),'sat':lambda w:w/np.sqrt(1+w*w),'clip':lambda w:np.clip(w,-1,1),'erf':__import__('scipy.special',fromlist=['erf']).erf}\\ndef run(name,mode,reg,shift,target,fold,starts):\\n i,j=fold;fn=forms[name]; Y=y[:,target]; best=None\\n def mats(q):return features(x,np.r_[q,np.zeros(8-len(q))],fn,mode)\\n def calc(q):\\n  Z=mats(q);mu=Z[i].mean(0); sd=np.maximum(Z[i].std(0),.06); X=(Z-mu)/sd;X[:,0]=1.; W=X[i]; G=W.T@W+np.eye(W.shape[1])*reg; B=solve(G,W.T@Y[i],assume_a='pos');return X@B,B\\n def fun(q):\\n  p,b=calc(q);return np.r_[(p[i]-Y[i]).ravel(),(np.sqrt(reg)*b).ravel(),.008*q]\\n for q in starts:\\n  opt=least_squares(fun,np.r_[np.full(4,q),np.zeros(4)][:4+shift],bounds=(-1.8,1.8),max_nfev=100)\\n  loss=np.linalg.norm(opt.fun)\\n  if best is None or loss<best[0]:\\n   pred,_=calc(opt.x);best=(loss,np.mean(abs(pred[j]-Y[j])),opt.x,np.mean(abs(pred[i]-Y[i])))\\n return best\\nif __name__=='__main__':\\n for target in [0,slice(1,None),slice(None)]:\\n  res=[]\\n  for name in forms:\\n   for mode in range(7):\\n    for shift in [0,4]:\\n     for reg in [.0001,.035]:\\n      b=run(name,mode,reg,shift,target,folds[0],[.15,.55]);res.append((b,(name,mode,reg,shift)))\\n  for b,h in sorted(res,key=lambda w:w[0][1])[:9]:\\n   print(str(target),h,b,'rnd',[round(run(*h,target,f,[.15,.55])[1],5) for f in folds[1:]],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/satfit.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | grep -E 'A exact|mixed power|^panel|^\\\\[\\\\(' | cut -c1-700\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed coordinate saturation → H2 jointly learned coordinate saturation with compact interactions; latest fixed-split MAE is 0.0621 for the readout and about 0.033 for the corresponding trajectory model.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the additive kernel predictor\",\"rejected_reason\":\"Its errors remain larger than those of the compact saturation and interaction dictionary.\"}],\"rationale\":\"Fit the saturation parameters on the training fold rather than fixing their scale, and test whether the same interaction structure predicts both outputs across splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fba2b12e26ab624de9964622a0971c2146f4c154deda48230628ec26f0ad3ce2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31051.91,
+      "usage_known": true,
+      "prompt_tokens": 42368,
+      "cached_tokens": 12672,
+      "completion_tokens": 1316
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d71e38fa2a9e4687aa0adcf1126eec52",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:02:24.248122+00:00",
+  "ended_at_utc": "2026-11-28T14:02:57.653471+00:00",
+  "request_sha256": "726a5a36ef6e052e637d1e1f591099f157909d1be41f8383b29eb40f107a3ab7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49622,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32629,
+    "cached_tokens": 12672,
+    "completion_tokens": 1274
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rat.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.linalg import svd\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; A=np.load('/tmp/composed.npz'); P=dict(A); B=np.load('/tmp/cached.npz'); P.update(cs=B['panel_cv1soft'],dd=B['panel_cv2dead']); n=52\\nmi,mj=np.triu_indices(4)\\nF={}; pairs={}; norms={}\\nfor k,x in P.items():\\n F[k]=x; F[k+'q']=x[:,mi]*x[:,mj]; F[k+'cub']=x**3\\n pairs[k]=np.c_[x[:,0]*x[:,2]+x[:,1]*x[:,3],x[:,0]*x[:,2]-x[:,1]*x[:,3]]\\n norms[k]=np.c_[(x*x).sum(1),x*x,(x[:,0]+x[:,2])**2,(x[:,1]+x[:,3])**2,(x[:,0]-x[:,2])**2,(x[:,1]-x[:,3])**2]\\n F[k+'p']=pairs[k][:,:1]; F[k+'pm']=pairs[k]\\nfor k,l in itertools.product(P,P):\\n if k!=l:F[k+'m'+l]=P[k]*P[l]\\nfor k,l in itertools.product(P,P):\\n for mode in [0,1,2]: F[k+'r'+l+str(mode)]=P[k]/(1+.22*np.roll(P[l],mode,axis=1)**2)\\nfor k in P:\\n for l in P:\\n  F[k+'d'+l]=pairs[k][:,:1]/(1+.22*norms[l]); F[k+'Q'+l]=F[k+'q']/(1+.22*norms[l][:,:1]); F[k+'s'+l]=P[k]/(1+.22*norms[l][:,:1]); F[k+'t'+l]=pairs[k][:,:1]/(1+.22*pairs[l]**2)\\nF['const']=np.ones((len(y),1));\\ndef score(seq):\\n h=np.column_stack([F[k] for k in seq]); X=h[:n]; m=X.mean(0); sd=X.std(0); sd[sd<1e-12]=1; h=(h-m)/sd; U,S,V=svd(h[:n],full_matrices=False); a=U.T@(y[:n]-y[:n].mean()); Q=S[:,None]**2; L=np.array([.0001,.01,.10,.5,1.5,4]); g=Q/(Q+L); er=y[:n,None]-y[:n].mean()-U@(a[:,None]*g); E=np.mean(abs(er/np.maximum(1-1/n-(U*U)@g,1e-8)),0); j=E.argmin(); pred=y[:n].mean()+h[n:]@(V.T@(a*S/(S*S+L[j]))); return E[j],np.mean(abs(pred-y[n:])),L[j],np.std(er[:,j])\\nbeam=[('z',)]; seen=set(beam); out=[]\\nfor dep in range(5):\\n R=[]\\n for seq in beam:\\n  for k in F:\\n   q=tuple(sorted(set(seq+(k,))));\\n   if q in seen:continue\\n   seen.add(q); R.append((score(q),q))\\n R.sort(); out+=R[:25]; beam=[]\\n for stat,q in R:\\n  if any(abs(stat[0]-old[0][0])<1e-8 for old in beam):continue\\n  beam.append((stat,q))\\n  if len(beam)==35:break\\n beam=[q for _,q in beam]; print('depth',dep,*R[:3],flush=True)\\nprint(*sorted(out)[::2][:25],sep='\\\\n'); print('low CV',*sorted(out,key=lambda q:q[0][1])[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rat.py; tail -45 /tmp/hegel_continual_archive/*_10_solver.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine trajectory dynamics -> H2 sparse rational and cross-panel scalar readout; best observed 52/20 MAEs are 0.030557 for scalar and 0.004095 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use arbitrary dense quadratic interactions\",\"rejected_reason\":\"The panel-B quadratic produced 0.08181 held-out MAE; testing shared denominators and paired terms preserves more of the measured operator structure.\"}],\"rationale\":\"Compare regularized pairwise and rational readouts using training-only leave-one-out scores, then check which candidates retain their accuracy on the prescribed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "35a183f6c5d063426b8a7c1f68cb8c53737d72f003c3dbe5f2cfd850bffa429a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33404.03,
+      "usage_known": true,
+      "prompt_tokens": 32629,
+      "cached_tokens": 12672,
+      "completion_tokens": 1274
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45e753e642ea4b1d9a19de1e7e46df62",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:12:59.147704+00:00",
+  "ended_at_utc": "2026-11-28T13:13:33.173918+00:00",
+  "request_sha256": "4912e70297c0c5f8886f5d0f687b572b7fb57f2c10a92f09fa627fa60729410f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41766,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30901,
+    "cached_tokens": 12672,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/challenge.py <<'PY'\\nexec(open('/tmp/models.py').read().split('rows=[]')[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations\\nprint('y corr x/traj',np.corrcoef(np.c_[x,y,T[:,-1]].T)[4]); print('y lin',fit(design(x),y));print('traj lin',fit(design(x),T[:,-1]))\\n# Separate nonlinear primitives instead of requiring every row to pass through a single operator.\\nZ=[base[j] for j in ['X','A-','A+','BX','BA-','BA+']]\\nF=[np.ones((n,1)),x]\\nfor z0 in Z:\\n for k0 in [.5,1.,1.6,2.5]:\\n  F.extend([np.tanh(k0*z0),np.sin(k0*z0),z0*z0/(1+.165*z0*z0),poly(z0,2)[:,4:]])\\nfor key in base:\\n if key[0]=='C': F.extend([base[key],poly(base[key],2)[:,4:]])\\nF=np.column_stack(F); F=F[:,np.r_[True,np.std(F[:,1:],axis=0)>1e-10]]\\nfor lam in [.003,.01,.03,.10,.30,1.]:\\n K=F@F.T; out=check(K,lam); print('library',lam,out[0],out.mean(0),out.max(0))\\nfor coord in ['X','BX','BA-','BA+']:\\n z0=base[coord]; dd=(z0[:,None]-z0[None,:])**2; L=x@x.T; D=poly(x,2)[:,4:]; P=D@D.T\\n for typ in ['iso','ard','ardq','res']:\\n  def make(h):\\n   w=np.exp(h); ds=dd@w[:4]; K=w[4]*np.exp(-ds)+w[5]*L+1.;\\n   if typ=='ardq' or typ=='res': K+=w[6]*P\\n   if typ=='res': K+=w[7]*(poly(z0,3)[:,14:]@poly(z0,3)[:,14:].T)\\n   return K\\n  npar={'iso':6,'ard':6,'ardq':7,'res':8}[typ]; outs=[]; hh=[]\\n  for j,l in splits:\\n   def unpack(h): return np.r_[np.repeat(h[0],4),h[1:]] if typ=='iso' else h\\n   def cost(h):\\n    w=unpack(h[:-1]); K=make(w)[np.ix_(j,j)]+np.exp(h[-1])*np.eye(len(j)); c=cho_factor(K); yy=y[j]; return .5*yy@cho_solve(c,yy)+np.log(c[0].diagonal()).sum()+.015*np.sum(h[:-1]**2)\\n   init=np.r_[[-1.5]*(1 if typ=='iso' else 4),0,0,[-3.]*(npar-6),-7.]\\n   opt=minimize(cost,init,bounds=[(-8,3)]*(len(init)-1)+[(-12,-2)],method='L-BFGS-B'); h=unpack(opt.x[:-1]); K=make(h); p=K[np.ix_(l,j)]@solve(K[np.ix_(j,j)]+np.exp(opt.x[-1])*np.eye(len(j)),y[j],assume_a='pos'); outs.append(np.mean(abs(p-y[l])));hh.append(np.exp(np.r_[h,opt.x[-1]]))\\n  print(coord,typ,np.round([outs[0],np.mean(outs),np.max(outs)],5),np.round(hh[0],5))\\n# Fit a separable tanh plus low-order interaction on the reference panel.\\nfor mode in ['direct','odd','cross','skip','diag','atan','joint']:\\n u=p['u']; v=p['v1']; ii,jj=np.triu_indices(4,1)\\n def ff(h):\\n  k=np.exp(h[:4]); w=u*k\\n  g=np.arctan(w) if mode=='atan' else np.tanh(w)\\n  if mode=='joint': return design(np.tanh(w+h[4:8]))\\n  extra={'direct':[], 'odd':[u**3], 'cross':[u[:,ii]*u[:,jj]], 'skip':[u], 'diag':[u*u], 'atan':[]}[mode]\\n  return np.column_stack([design(g)]+extra)\\n def fun(h): G=ff(h); return (G@fit(G,v)-v).ravel()\\n o=least_squares(fun,np.r_[np.zeros(4)+.45,np.zeros(4) if mode=='joint' else []],bounds=(-2,2)); G=ff(o.x); Q=np.linalg.qr(G)[0]; print('panel',mode,np.std(o.fun),np.std(o.fun.reshape(-1,4)/(1-(Q*Q).sum(1)[:,None])),o.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/challenge.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 transferred kernel -> H2 learned operator-coordinate distance; the best current y challenger has 0.03476 prescribed and 0.03787 worst tested 52/20 MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The broad Gaussian kernel in B-after-calibration coordinates already passes the y gate. Test whether training-only distance estimation or an explicit interaction library lowers the worst split before choosing the final readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d9c3738b20b82b33b270a427776c4e24a20925cd739ef624a0b3257e6dbe7cb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34025.24,
+      "usage_known": true,
+      "prompt_tokens": 30901,
+      "cached_tokens": 12672,
+      "completion_tokens": 1462
+    }
+  ]
+}

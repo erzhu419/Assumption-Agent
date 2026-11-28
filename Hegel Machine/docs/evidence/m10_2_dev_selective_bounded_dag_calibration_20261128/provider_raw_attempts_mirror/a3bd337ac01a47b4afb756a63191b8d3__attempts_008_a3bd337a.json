@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3bd337ac01a47b4afb756a63191b8d3",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:28:17.167572+00:00",
+  "ended_at_utc": "2026-11-28T14:29:00.781091+00:00",
+  "request_sha256": "137389748ad8dd4f2e1ddff1b0b91082bf03fc473ce8d28458b74f845775151e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54536,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35465,
+    "cached_tokens": 12672,
+    "completion_tokens": 1689
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrate the two panel operators and refit their observable readout.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _bias(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _coordinates(calibration, x):\\n    u, v = (np.asarray(calibration[k], dtype=float) for k in ('u', 'v'))\\n    f = _bias(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(7):\\n        coeff = _fit(f[keep], v[keep])\\n        error = np.linalg.norm(f @ coeff - v, axis=1)\\n        updated = error <= max(1e-3, 4 * np.median(error))\\n        if np.count_nonzero(updated) < f.shape[1] + 1 or np.array_equal(keep, updated):\\n            break\\n        keep = updated\\n    coeff = _fit(f[keep], v[keep])\\n    return np.linalg.solve(coeff[1:].T, (x - coeff[0]).T).T\\n\\n\\ndef _panel_design(u, second):\\n    nonlinear = np.arctan(1.078 * u) if second else u / (1 + 0.836 * np.abs(u))\\n    cyclic = u * np.roll(u, 1, axis=1)\\n    return _bias(np.column_stack((u, nonlinear, cyclic)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    sparse = inputs['node_00']\\n    tr = study['train']\\n    x = np.asarray(tr['x'])\\n    n = len(x)\\n    z = _coordinates(study['panel_a'], np.vstack((x, study['test']['x'])))\\n    panel = study['panel_c']\\n    a, b = (_panel_design(z, second) @ _fit(_panel_design(panel['u'], second), panel[key])\\n            for second, key in ((False, 'v1'), (True, 'v2')))\\n    f = np.column_stack((a, b, np.sum(a*b, axis=1), a[:, 0]*b[:, 1]))\\n    mu = f[:n].mean(axis=0)\\n    scale = np.maximum(f[:n].std(axis=0), 1e-8)\\n    train, test = (f[:n]-mu)/scale, (f[n:]-mu)/scale\\n    traj = np.asarray(tr['traj'])\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    target = np.column_stack((tr['y'], traj @ modes.T))\\n    offset = target.mean(axis=0)\\n    coeff = np.linalg.solve(train.T @ train + 0.001 * np.eye(train.shape[1]), train.T @ (target - offset))\\n    readout = test @ coeff + offset\\n    y, state = readout[:, 0], readout[:, 1:] @ modes\\n    # Encode the refitted prediction as a correction to the frozen blend.\\n    sy, ss = sparse['y_hat'], sparse['state_pred']\\n    return {'panel_pred': np.column_stack((sy + (y - sy)/0.5, ss + (state - ss)/0.65))}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/stress_node01.py <<'PY'\\nimport numpy as np, pickle, runpy\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x)\\nf0,f1,f2=[runpy.run_path(root+p)['run_node'] for p in ('_frozen_nodes/node_00.py','node_01.py','_frozen_nodes/node_02.py')]\\ndef check(j, calibration=None):\\n i=np.setdiff1d(np.arange(n),j)\\n st=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[j]})\\n if calibration is not None:\\n  key,ind=calibration; st[key]={k:v[ind] for k,v in s[key].items()}\\n p=f0({'__input__':st}); q=f1({'__input__':st,'node_00':p}); o=f2({'node_00':p,'node_01':q})\\n dy=abs(o['y_hat']-tr['y'][j]); dt=abs(o['state_pred']-tr['traj'][j]); return np.r_[dy.mean(),dt.mean(),dt.mean(0)]\\nfolds=[j for seed in (573,309,615) for j in np.array_split(np.random.default_rng(seed).permutation(n),4)]\\nouter=[np.argsort(k)[-18:] for k in [np.linalg.norm(x-x.mean(0),axis=1),*x.T,*(-x.T)]]\\nfor name,rows in [('random',[check(j) for j in folds]),('coordinate/extreme',[check(j) for j in outer]),('calibration deletion',[check(folds[a%len(folds)],(key,np.delete(np.arange(len(s[key]['u'])),a))) for key in ('panel_a','panel_c') for a in range(len(s[key]['u']))])]:\\n m=np.max(rows,axis=0); print(name,'worst y / trajectory / individual horizon',np.round(np.r_[m[:2],m[2:].max()],6)); assert np.max(m) < 0.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_node01.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic panel fit → H2 calibrated cyclic maps with the archived interaction readout; prototype worst-fold y/trajectory MAE was 0.00631/0.00492.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Full quadratic panel readout\",\"rejected_reason\":\"It had higher worst-fold errors than the compact contraction and directed interaction terms.\"},{\"option\":\"Pass the refitted readout directly to the fixed blend\",\"rejected_reason\":\"The frozen sparse errors degraded both outputs; encode the refit as a correction through the existing interface instead.\"}],\"rationale\":\"Build the NumPy-only node using the best validated panel grammar, then verify the official gate and stress the exact artifact on independent folds, coordinate extremes, and calibration-row deletions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "966893763b24f31c1a752105f2c2b792922583f6851738ac5ff3450c3f26eb37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43612.06,
+      "usage_known": true,
+      "prompt_tokens": 35465,
+      "cached_tokens": 12672,
+      "completion_tokens": 1689
+    }
+  ]
+}

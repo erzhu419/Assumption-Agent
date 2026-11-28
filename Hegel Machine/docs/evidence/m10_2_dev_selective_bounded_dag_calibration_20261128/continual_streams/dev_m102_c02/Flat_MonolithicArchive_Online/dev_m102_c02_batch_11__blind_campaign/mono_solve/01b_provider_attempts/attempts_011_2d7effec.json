@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2d7effec7b2843d8b7f113a406aa9ecc",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:03:59.007651+00:00",
+  "ended_at_utc": "2026-11-28T14:04:30.484193+00:00",
+  "request_sha256": "a098e30e10434ce47dbeb78368b2431b4e9df5330110fca29c5b3f9df788eb1f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36875,
+    "cached_tokens": 12672,
+    "completion_tokens": 1283
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_09_solver.py | tail -70; cat > /tmp/stabilize.py <<'PY'\\nimport runpy,pickle,numpy as np\\nfrom scipy.spatial.distance import cdist\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=[tr[k] for k in ['x','y','traj']]; h,hs=m['_designs'](s,x); z,b,c1,c2,b1,b2,c,d=m['_maps'](s,x); n=len(x); rng=np.random.default_rng(1)\\nsplits=[np.arange(52,72)]+[rng.choice(n,20,replace=False) for _ in range(30)]+[np.argsort(q)[-20:] for q in [np.linalg.norm(z,axis=1),*z.T,*(-z.T)]]\\ndef split_stats(e):\\n e=np.asarray(e); return np.round([e[0],e[1:31].mean(),e[1:31].max(),e[31:].mean(),e[31:].max()],6)\\ndef ridge(H,ix,ts,alpha):\\n q=H[ix]; u=q.mean(0); w=q.std(0); w[w<1e-9]=1.; q=(q-u)/w; yt=y[ix]; yc=yt-yt.mean(); return yt.mean()+((H[ts]-u)/w)@np.linalg.solve(q.T@q+alpha*np.eye(q.shape[1]),q.T@yc)\\nfor reg in [.0001,.001,.003,.01,.03,.1,.3,1.,3.]:\\n P=[]\\n for ts in splits:\\n  ix=np.setdiff1d(np.arange(n),ts); p=np.array([ridge(q[:,1:],ix,ts,reg) for q in hs]); P.append([*np.mean(abs(p-y[ts]),axis=1),np.mean(abs(p.mean(0)-y[ts]))])\\n print('ridge',reg,*[split_stats(e) for e in np.array(P).T],sep='  ')\\nfor rank in [1,2,3,4,5]:\\n E=[]\\n for ts in splits:\\n  ix=np.setdiff1d(np.arange(n),ts); beta=m['_fit'](h[ix],T[ix]); _,_,v=np.linalg.svd(h[ix]@beta,full_matrices=False); vv=v[:rank]; pred=h[ts]@beta@vv.T@vv; E.append(np.mean(abs(pred-T[ts])))\\n print('traj_rank',rank,split_stats(E))\\nfor scale in [.5,1.,1.5,2.5,4.]:\\n W=[z,c1,c2]; D=[cdist(q/q.std(0),q/q.std(0),'sqeuclidean') for q in W]; K=sum((1+np.sqrt(5*d)/scale+5*d/(3*scale**2))*np.exp(-np.sqrt(5*d)/scale) for d in D)/len(D)\\n for reg in [.001,.01,.05,.2]:\\n  E=[]\\n  for ts in splits:\\n   ix=np.setdiff1d(np.arange(n),ts); a=y[ix].mean(); p=a+K[np.ix_(ts,ix)]@np.linalg.solve(K[np.ix_(ix,ix)]+reg*np.eye(len(ix)),y[ix]-a); q=np.mean([ridge(u[:,1:],ix,ts,.03) for u in hs],axis=0); E.append([np.mean(abs(p-y[ts])),np.mean(abs(.25*p+.75*q-y[ts]))]);\\n  print('GP',scale,reg,*[split_stats(e) for e in np.array(E).T]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stabilize.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unregularized nonlinear ensemble and two-rate trajectories -> H2 stabilized scalar coefficients and low-rank affine trajectories; current 52/20 MAEs are 0.027957 and 0.007179, with directional scalar MAE up to 0.164786.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the passing baseline unchanged\",\"rejected_reason\":\"Directional holdouts expose unstable scalar coefficients, and unrestricted affine trajectories already outperform the two-rate projection.\"}],\"rationale\":\"Compare coefficient shrinkage and trajectory rank on the same public, random, and directional splits; retain changes only if they improve the weak slices while preserving the public gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "38e19d0998db1490ddfc1c4541e3840989ea1a5f9de415fb9b02b4293c4b530b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31475.01,
+      "usage_known": true,
+      "prompt_tokens": 36875,
+      "cached_tokens": 12672,
+      "completion_tokens": 1283
+    }
+  ]
+}

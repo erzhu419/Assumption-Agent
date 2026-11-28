@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "67b41f95dea64f3aa69ca23b57153e56",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:25:28.754399+00:00",
+  "ended_at_utc": "2026-11-28T13:26:00.833559+00:00",
+  "request_sha256": "35eb2e8dd6db400af2abb5f0f9975afeee9a8b39cf1df358a5ad8e0f7b915bff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21081,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21422,
+    "cached_tokens": 12672,
+    "completion_tokens": 1328
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c04_batch_03_solver.py; cat /holdout_task/validate_public_schema.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_m102_c04_batch_00_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; ls=np.linalg.lstsq\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\na,M=m._calibration(s['panel_a']); print('times',t,'A',a,M); print('a residual',np.sort(np.linalg.norm(s['panel_a']['u']@M+a-s['panel_a']['v'],axis=1))); p=x@M+a; q=(x-a)@np.linalg.inv(M)\\ndef test(name,F):\\n F=np.c_[np.ones(len(x)), F]; Y=np.c_[y,T]; pred=F@ls(F[:52],Y[:52],rcond=1e-10)[0]; e=np.abs(Y-pred); print(name,F.shape[1],np.round([e[:52,0].mean(),e[52:,0].mean(),e[:52,1:].mean(),e[52:,1:].mean()],5))\\ndef poly(x,d):return np.array([np.prod(x[:,j],axis=1) for k in range(1,d+1) for j in combinations_with_replacement(range(x.shape[1]),k)]).T\\nfor d in range(1,4):test('raw poly'+str(d),poly(x,d))\\nfor n,z in [('x',x),('p',p),('q',q)]:\\n for k in [.16,.22,.5,.8,1.25]:\\n  R=np.c_[z,z/(1+k*abs(z)),z*z/(1+k*z*z)]; test((n,k),R); test((n,k,'+poly'),np.c_[R,poly(x,2)[:,4:]])\\nf1,f2=m._panel_operators(s['panel_c']);\\nfor name,z in [('x',x),('p',p),('q',q)]:\\n u,v=f1(z),f2(z); test((name,'C'),np.c_[z,u,v]); test((name,'C+prod'),np.c_[z,u,v,np.einsum('ni,nj->nij',u,v).reshape(-1,16)]);\\nfor n,z in [('b',s['panel_b']['v']),('c1',s['panel_c']['v1']),('c2',s['panel_c']['v2'])]:\\n u=s['panel_'+n[0]]['u']; print('PANEL',n)\\n for name,fn in [('linear',lambda u,k:u),('oddabs',lambda u,k:u/(1+k*abs(u))),('even',lambda u,k:u*u/(1+k*u*u)),('tanh',lambda u,k:np.tanh(k*u)),('sin',lambda u,k:np.sin(k*u)),('oddsq',lambda u,k:u/(1+k*u*u))]:\\n  def X(k):return np.c_[np.ones(len(u)),u,fn(u,k[0])]\\n  def fun(k):\\n   F=X(k);return (F@ls(F,z,rcond=1e-10)[0]-z).ravel()\\n  opt=least_squares(fun,[.5],bounds=(.01,4)); print(name,opt.x,np.std(opt.fun))\\nfor form in [0,1,2,3]:\\n def B(r):\\n  if form==0:return -np.expm1(-t[:,None]*r)\\n  if form==1:return np.c_[-np.expm1(-t*r[0]),t]\\n  if form==2:return np.c_[-np.expm1(-t*r[0]),t*np.exp(-t*r[1])]\\n  if form==3:return np.c_[-np.expm1(-t*r[0]),np.sin(t*r[1])]\\n def fun(r):\\n  F=B(r);return (F@ls(F,T[:52].T,rcond=1e-10)[0]-T[:52].T).ravel()\\n opt=least_squares(fun,[1.8,.43],bounds=([.01,.001],[25,20])); F=B(opt.x); print('time',form,opt.x,np.std(opt.fun),np.mean(abs(F@ls(F,T[52:].T,rcond=1e-10)[0]-T[52:].T)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived graph transfer → H2 campaign-specific panel transform and two-mode trajectories; archived 52/20 MAE was 0.817331 for y and 0.418268 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each trajectory timestamp independently\",\"rejected_reason\":\"The first two singular values dominate; a common temporal basis can constrain all eight outputs.\"}],\"rationale\":\"Compare forward and inverse calibration, rational panel transforms, interaction terms, and time bases on the prescribed split before fitting a final graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "23f7ab7ba73f299f00c8332acb54bf812e549a85423c8f3e98cdcd66d0178292",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32078.16,
+      "usage_known": true,
+      "prompt_tokens": 21422,
+      "cached_tokens": 12672,
+      "completion_tokens": 1328
+    }
+  ]
+}

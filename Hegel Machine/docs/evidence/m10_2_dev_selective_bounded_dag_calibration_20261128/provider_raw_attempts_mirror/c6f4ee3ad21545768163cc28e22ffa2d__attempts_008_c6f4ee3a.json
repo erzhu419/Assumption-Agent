@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6f4ee3ad21545768163cc28e22ffa2d",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:33:29.241489+00:00",
+  "ended_at_utc": "2026-11-28T14:34:14.369358+00:00",
+  "request_sha256": "2e39aada87699b8aa30424e6c9882ac5e170150a0bd2e8b1ff49ba572b6dcdcc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46653,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32139,
+    "cached_tokens": 12672,
+    "completion_tokens": 1996
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrate the observation and panel operators, then fit the joint readout.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _bias(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    keep = np.linalg.norm(v-u, axis=1) < 3\\n    u, v = u[keep], v[keep]\\n    j = np.arange(4)\\n    def design(z, p):\\n        return np.stack((np.ones_like(z), z, np.tanh(p[0]*z), np.sin(p[1]*np.roll(z, 2, axis=1))), axis=2)\\n    def coeff(f):\\n        return np.array([_ls(f[:, k], v[:, k]) for k in j])\\n    def residual(p):\\n        f = design(u, p)\\n        return (np.einsum('njk,jk->nj', f, coeff(f))-v).ravel()\\n    p = least_squares(residual, [1.8, 2.4], bounds=([.4, 1.4], [3.5, 3.5])).x\\n    b = coeff(design(u,p))\\n    z = x.copy()\\n    for _ in range(40):\\n        f = design(z, p)\\n        r = np.einsum('njk,jk->nj', f, b)-x\\n        if np.max(np.abs(r), initial=0) < 1e-11:\\n            break\\n        jac = np.zeros((len(z),4,4))\\n        jac[:, j, j] = b[:,1]+p[0]*b[:,2]*(1-f[:,:,2]**2)\\n        jac[:, j, (j+2)%4] = p[1]*b[:,3]*np.cos(p[1]*np.roll(z,2,axis=1))\\n        z -= np.clip(np.linalg.solve(jac,r[...,None])[...,0], -.5,.5)\\n    return z\\n\\n\\ndef _first(u, p):\\n    a,b,c = p\\n    return _bias(np.tanh(a*u)+c*np.roll(np.sin(b*u),1,axis=1))\\n\\n\\ndef _second(u):\\n    return _bias(np.column_stack((u,u*np.roll(u,1,axis=1))))\\n\\n\\ndef _panel(study,z):\\n    c = study['panel_c']; u = c['u']; v = c['v1']\\n    def residual(p):\\n        a = _first(u,p)\\n        return (a@_ls(a,v)-v).ravel()\\n    p = least_squares(residual,[1.75,2.1,.3],bounds=([1,1.5,0],[2.5,2.8,.6])).x\\n    a = _first(z,p)@_ls(_first(u,p),v)\\n    b = _second(z)@_ls(_second(u),c['v2'])\\n    return a,b\\n\\n\\ndef _fit(study):\\n    t = study['train']; n = len(t['x'])\\n    z = _coordinates(study, np.vstack((t['x'],study['test']['x'])))\\n    a,b = _panel(study,z)\\n    f = _bias(np.column_stack((a,b,np.sum(a*b,axis=1),a[:,0]*b[:,1])))\\n    y = f[n:,:-1]@_ls(f[:n,:-1],t['y'])\\n    basis = np.linalg.svd(t['traj'],full_matrices=False)[2][:2]\\n    traj = f[n:]@_ls(f[:n],t['traj']@basis.T)@basis\\n    return y,traj\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    y, traj = _fit(inputs['__input__']['study'] if 'study' in inputs['__input__'] else inputs['__input__'])\\n    b = inputs['node_00']\\n    return {'panel_pred': np.column_stack((2*y-b['y_hat'],(traj-.35*b['state_pred'])/.65))}\\nPY\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py; sed -n '137,172p' test_dag_candidate.py; cat >/tmp/probe2.py <<'PY'\\nimport itertools as it,numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/node_01.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['panel_c']; u,v=c['u'],c['v2']; ls=m['_ls']; bias=m['_bias']; prod=u*np.roll(u,1,axis=1); base=bias(np.c_[u,prod]); R=v-base@ls(base,v); print('C2 svd',np.linalg.svd(R,compute_uv=False)); print('base coefs',np.round(ls(base,v),3));\\nfuncs={'id':lambda d,p:d,'cos':lambda d,p:np.cos(p*d),'sin':lambda d,p:np.sin(p*d),'tanh':lambda d,p:np.tanh(p*d),'rat':lambda d,p:d/(1+p*d*d),'square':lambda d,p:d*d,'gauss':lambda d,p:np.exp(-p*d*d)}\\nres=[]\\nfor lag in (1,-1,2):\\n w=np.roll(u,lag,axis=1)\\n for pair,d in [('self',u),('sum',u+w),('diff',u-w),('prod',u*w),('sqsum',u*u+w*w),('dir',u*w*w),('triple',u*w*np.roll(u,2,axis=1))]:\\n  for name,fn in funcs.items():\\n   for kind in ('add','shared','denom','sep'):\\n    for ini in (1,2.15,3.5):\\n     def design(p):\\n      if kind=='add':return np.c_[base,fn(d,p[0])]\\n      if kind=='sep':return bias(np.c_[u,fn(d,p[0])])\\n      if kind=='shared':return bias(u+p[1]*prod+p[2]*fn(d,p[0]))\\n      return bias((u+p[1]*prod)/(1+p[0]*d*d))\\n     def fun(p):\\n      f=design(p);return (f@ls(f,v)-v).ravel()\\n     rr=least_squares(fun,[ini,.3,.25],bounds=([.01,-3,-3],[8,3,3]),max_nfev=45); e=rr.fun.reshape(v.shape); f=design(rr.x); lev=np.sum(f*np.linalg.pinv(f).T,axis=1); res.append((np.std(e),np.sqrt(np.mean((e/(1-lev[:,None]))**2)),lag,pair,name,kind,rr.x))\\nfor rr in sorted(res,key=lambda x:x[1])[:20]:print(rr)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe2.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration -> H2 warm-started tanh/sine inverse with a cyclic-product second panel; calibration A RMSE is 0.0000964, and updated public CV is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Install the recovered observation map and measure the first end-to-end baseline while testing the remaining second-panel terms against held-out calibration rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "89841b7ec9e259176471d5abd88c5aec9387fe6fab4f6b352a76a2e76b82adcf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45125.76,
+      "usage_known": true,
+      "prompt_tokens": 32139,
+      "cached_tokens": 12672,
+      "completion_tokens": 1996
+    }
+  ]
+}

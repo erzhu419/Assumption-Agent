@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b3e92e75de54ecb85145c25d57d7d5d",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:04:53.847571+00:00",
+  "ended_at_utc": "2026-11-28T14:05:39.419132+00:00",
+  "request_sha256": "9dbcab5d3e0abd3611c75f0ebd546b35c08dc1f1524baaadcef853a70a1a67b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49092,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32448,
+    "cached_tokens": 12672,
+    "completion_tokens": 1910
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Invert the calibration and predict from the measured dual branch and its interactions.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel, x):\\n    u, v = panel['u'], panel['v']\\n    a = _aff(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(5):\\n        err = np.linalg.norm(v - a @ _ls(a[keep], v[keep]), axis=1)\\n        keep = err < max(.005, 3*np.median(err))\\n    affine = _ls(a[keep], v[keep])\\n    ident = np.eye(u.shape[1])\\n\\n    def design(z, rate):\\n        eye = np.broadcast_to(ident, (len(z),) + ident.shape)\\n        return np.concatenate((eye, z[:, :, None]*eye, (z**3)[:, :, None],\\n                               np.sin(rate*np.roll(z, 2, axis=1))[:, :, None]), axis=2)\\n\\n    for _ in range(3):\\n        def fit(rate):\\n            d = design(u[keep], rate).reshape(-1, 10)\\n            target = v[keep].ravel()\\n            coef = _ls(d, target)\\n            return np.mean((d@coef-target)**2), coef\\n        rate = minimize_scalar(lambda r: fit(r)[0], bounds=(1.4, 3.5), method='bounded').x\\n        coef = fit(rate)[1]\\n        err = np.linalg.norm(design(u, rate) @ coef-v, axis=1)\\n        new = err < max(.001, 4*np.median(err))\\n        if new.sum() < 20 or np.array_equal(new, keep):\\n            break\\n        keep = new\\n    init = _ls(affine[1:].T, (x-affine[0]).T).T\\n    return np.array([least_squares(lambda z: design(z[None], rate)[0]@coef-row,\\n                                   z0, gtol=1e-11).x for row, z0 in zip(x, init)])\\n\\n\\ndef _features(study, x):\\n    z = _calibration(study['panel_a'], x)\\n    u, v1, v2 = (study['panel_c'][k] for k in ('u','v1','v2'))\\n    def cyc(w):\\n        return _aff(w*np.roll(w,-1,axis=1))\\n    def cos(w, r):\\n        return _aff(np.cos(r*w))\\n    def fit(r):\\n        a = cos(u,r)\\n        b = _ls(a,v2)\\n        return np.mean((a@b-v2)**2), b\\n    r = minimize_scalar(lambda r: fit(r)[0], bounds=(1.8,2.9), method='bounded').x\\n    c = cyc(z)@_ls(cyc(u),v1)\\n    d = cos(z,r)@fit(r)[1]\\n    return np.column_stack((_aff(z), c, d, (c[:,:,None]*d[:,None,:]).reshape(len(z),16)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    a = _features(study, np.vstack((train['x'],study['test']['x'])))\\n    y_hat = a[n:]@_ls(a[:n], train['y'])\\n    traj = train['traj']\\n    vt = np.linalg.svd(traj,full_matrices=False)[2][:2]\\n    state_pred = (a[n:]@_ls(a[:n],traj@vt.T))@vt\\n    last = state_pred[:,-1]\\n    return dict(y_hat=y_hat,state_pred=state_pred,\\n                diagnostics_vec=np.array([y_hat.mean(),y_hat.std(),last.mean(),last.std()]))\\nPY\\ncat > /tmp/check12.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nfrom laws12 import *\\nt=s['train'];N=len(t['x']);rng=np.random.default_rng(9873)\\nfor i in range(12):\\n order=np.arange(N) if not i else rng.permutation(N);a,b=order[:52],order[52:]; inp=dict(s,train={k:v[a] if k!='summary' else v for k,v in t.items()},test={'x':t['x'][b]}); o=m.solve_batch(inp); print(i,*[np.mean(abs(o[k]-t[j][b])) for k,j in [('y_hat','y'),('state_pred','traj')]], 'traj per horizon',np.round(np.mean(abs(o['state_pred']-t['traj'][b]),0),4))\\nG=m._features(s,t['x']);T=t['traj']; tt=s['eval_times'];print('times',tt,'telemetry',s['telemetry_vec']);print('coefs',np.round(ls(G[:52],np.c_[t['y'][:52],T[:52,2],T[:52,-1]]),4));\\nfor mode in ['rise','decay','linear','rise_poly','rise_const']:\\n def basis(r):\\n  g=np.exp(-tt[:,None]*r)\\n  return {'rise':1-g,'decay':g,'linear':np.c_[tt,1-g[:,0]],'rise_poly':np.c_[tt**2,1-g[:,0]],'rise_const':np.c_[1+tt*0,1-g[:,0]]}[mode]\\n def res(r):\\n  g=basis(r);return (g@ls(g,T[:52].T)-T[:52].T).ravel()\\n q=least_squares(res,[.45,2.1] if mode in ['rise','decay'] else [1.2],bounds=(.01,20)); print(mode,q.x,np.sqrt(np.mean(q.fun*q.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check12.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive panel readout → H2 dual-panel bilinear contraction; the prescribed 52/20 MAEs improved from 0.253630 to 0.015876 for y and from 0.189866 to 0.015840 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An additive readout of calibrated coordinates and auxiliary branches is sufficient.\",\"empirical_witness\":\"Adding all 16 cross-products of the two panel C outputs reduces prescribed held-out trajectory MAE from 0.189866 to 0.015840 and scalar MAE from 0.253630 to 0.015876.\",\"causal_blanket_diagnosis\":\"Both outputs depend on an interaction between the cyclic-product and cosine branches; other tested pairwise blocks do not substitute for that interaction.\",\"sublated_pivot\":\"Retain calibrated coordinates and both branch outputs, and add their full bilinear contraction.\",\"risk_kind\":\"missing interaction\",\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Fit all pairwise blocks together\",\"rejected_reason\":\"The broader designs reduce training residual but worsen prescribed held-out MAE.\"}],\"rationale\":\"Save the passing structural candidate, test additional 52/20 splits and each trajectory horizon, and compare physical time bases before attempting further refinement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9e476e53fe8e64fe501635a0836c4589ea102c337a56b855c49c81ca34a0e926",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45569.3,
+      "usage_known": true,
+      "prompt_tokens": 32448,
+      "cached_tokens": 12672,
+      "completion_tokens": 1910
+    }
+  ]
+}

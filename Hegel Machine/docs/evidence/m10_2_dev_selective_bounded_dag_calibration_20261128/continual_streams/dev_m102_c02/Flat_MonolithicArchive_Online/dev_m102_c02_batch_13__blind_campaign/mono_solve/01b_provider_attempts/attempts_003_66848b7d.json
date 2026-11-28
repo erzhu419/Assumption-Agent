@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "66848b7db36a4f6a98fa204417f69ba6",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:12:55.729622+00:00",
+  "ended_at_utc": "2026-11-28T14:13:17.763523+00:00",
+  "request_sha256": "b77bfd047e4162f3d7701614d5c07e13bf3fddc62b298c7a562a5c9094c8fc5d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20385,
+    "cached_tokens": 12672,
+    "completion_tokens": 781
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/compare.py <<'PY'\\nimport copy, glob, importlib.util, pickle, time\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']\\nfor k in ('eval_times','telemetry_vec'): print(k,s[k])\\nfor name in ('panel_a','panel_b','panel_c'):\\n p=s[name]; A=np.c_[np.ones(len(p['u'])),p['u']]; print(name)\\n for k in p:\\n  if k=='u':continue\\n  V=p[k]; C=np.linalg.lstsq(A,V,rcond=None)[0]; print(k,'coefs',np.round(C,3),'residual quantiles',np.round(np.quantile(np.linalg.norm(A@C-V,axis=1),[0,.25,.5,.75,.9,1]),5))\\nprint('train',tr['summary'],'traj svd',np.linalg.svd(tr['traj']-tr['traj'].mean(0),compute_uv=False)); print('traj first',tr['traj'][:4]); print('x stats',tr['x'].min(0),tr['x'].max(0))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  m=importlib.util.module_from_spec(sp:=importlib.util.spec_from_file_location('candidate',f)); sp.loader.exec_module(m); res=[]; t=time.time()\\n  for val in [np.arange(52,72),np.arange(0,20),np.random.default_rng(87).choice(72,20,replace=False)]:\\n   fit=np.setdiff1d(np.arange(72),val); d=copy.copy(s); y=tr['y'][fit]; a=tr['traj'][fit]; d['train']={**{k:tr[k][fit] for k in ('x','y','traj')},'summary':np.array([y.mean(),y.std(),a[:,-1].mean(),a[:,-1].std()])}; d['test']={'x':tr['x'][val]}; o=m.solve_batch(d); e=abs(o['y_hat']-tr['y'][val]); q=abs(o['state_pred']-tr['traj'][val]); res.append(np.round([e.mean(),q.mean(),e.max(),q.mean(axis=0).max()],5).tolist())\\n  print(f.split('/')[-1],res,round(time.time()-t,2),flush=True)\\n except Exception as e: print(f,type(e).__name__,str(e),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived graph reuse) → H2 (identify active operators from panel residuals and held-out predictions); no 52/20 MAE yet measured in this run.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived estimators on three training-only splits and measure panel residuals and trajectory rank to guide structural refinement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "03bbf7d6dd718ecea478bd834517d5a5f547a0c01510393ca9603cec3fe416bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22032.91,
+      "usage_known": true,
+      "prompt_tokens": 20385,
+      "cached_tokens": 12672,
+      "completion_tokens": 781
+    }
+  ]
+}

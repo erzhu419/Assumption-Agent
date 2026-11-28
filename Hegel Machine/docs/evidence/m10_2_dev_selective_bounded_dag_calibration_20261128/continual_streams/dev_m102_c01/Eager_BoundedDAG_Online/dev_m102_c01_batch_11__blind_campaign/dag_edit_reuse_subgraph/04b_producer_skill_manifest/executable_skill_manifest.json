@@ -1,0 +1,159 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m102_c01_batch_11_29a5217009b4",
+    "source_hash": "29a5217009b456465b468142e453cee6ffe1c51fb54efc5ce8096b6d07e32658",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "dev_m102_c01_batch_11__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 2062,
+        "sha256": "e73e23ae7b44c5f5f10104d591c4560738ca4086fcfcdf730708be897ddc22f2"
+      },
+      {
+        "container_path": "/tmp/readout_refine.py",
+        "archived_relpath": "producers/tmp__readout_refine.py",
+        "bytes": 2092,
+        "sha256": "8694525e7f4cfbc6b459995b8bf2f98e79058eecb31c9b2443e49ff0e3e3f110"
+      },
+      {
+        "container_path": "/tmp/verify_readout.py",
+        "archived_relpath": "producers/tmp__verify_readout.py",
+        "bytes": 923,
+        "sha256": "72a1fcfae4f420eb366cef1ae0ef8ececcb1d983c1c5735841819d4861812802"
+      },
+      {
+        "container_path": "/tmp/verify_readout_final.py",
+        "archived_relpath": "producers/tmp__verify_readout_final.py",
+        "bytes": 934,
+        "sha256": "56ee534033c88d326aabad3d52ac3f7574295e37c6f724421c8dbd0496ec15dd"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c01_batch_00_solver.py",
+        "bytes": 3143,
+        "sha256": "3ec9bffe4b5f00c7c33bc22378f70ab30b848253125cdda356a50c18aa3245d2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; cat _dag_spec.json; for f in _frozen_nodes/*.py; do echo \"=== $f\"; cat \"$f\"; done; cat public_asset_index.json; cat test_dag_candidate.py; ls -la /tmp/hegel_continual_archive; find /tmp/hegel_continual_archive -maxdepth 3 -type f | head -80; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))\ndef show(p,k='',d=0):\n if isinstance(p,dict):\n  for a,b in p.items(): show(b,k+'/'+str(a),d+1)\n else:\n  a=np.asarray(p); print(k,type(p),a.shape,a.dtype,repr(a.ravel()[:16]))\nshow(p)\nPY",
+      "cd /holdout_task; grep -nE 'def |cv|fold|train|test|y_hat|assert' test_dag_candidate.py; cat _frozen_nodes/node_02.py _frozen_nodes/node_03.py; tail -85 _frozen_nodes/node_00.py; find /tmp/hegel_continual_archive -maxdepth 3 -type f | head -25; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,k='',d=0):\n if isinstance(x,dict):\n  for a,b in x.items(): show(b,k+'/'+str(a),d+1)\n else:\n  a=np.asarray(x); print(k,a.shape,a.dtype); \n  if a.dtype==object and a.size and d<3: show(a.flat[0],k+'/[0]',d+1)\nshow(p)\nPY",
+      "cd /holdout_task; cat _frozen_nodes/node_03.py; wc -l /tmp/hegel_continual_archive/*; grep -nE '^def |sy|y_hat|ridge|tanh' /tmp/hegel_continual_archive/*solver.py | tail -55; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling reference-panel alignment' 2>&1 | head -20; cat >/tmp/readout_probe.py <<'PY'\nimport sys,pickle,numpy as np\nfrom scipy.linalg import solve\nfrom itertools import combinations_with_replacement\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\nimport node_00 as a,node_02 as b\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study",
+      "cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 2>&1 | head -25; cat > /holdout_task/node_01.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import solve\n\n\ndef run_node(inputs: dict) -> dict:\n    features = inputs['node_00']\n    trajectory = inputs['node_02']['state_pred']\n    scores = features['scores']\n    query_scores = trajectory @ features['modes'].T\n    # A weak trajectory prior augments the calibrated input kernel.\n    weight = 0.01\n    gram = features['K'",
+      "cat >/tmp/readout_refine.py <<'PY'\nimport sys,pickle,numpy as np\nfrom scipy.linalg import solve\nfrom scipy.optimize import minimize_scalar\nfrom scipy.spatial.distance import cdist\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\nimport node_00 as a,node_02 as b\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['y']); ix=np.arange(n)\nsplits=[np.arange(52,n)]+[j for seed in (102,701,208,330,12,718) for j in np.array_split(np.random.default_rng(seed).permutation(n),4)]\nrows=[]\nfor j in splits:\n i=np.setdiff1d(ix,j); p=a.run_node({'__input__':dict(s,trai",
+      "cat > /holdout_task/node_01.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import solve\n\n\ndef run_node(inputs: dict) -> dict:\n    features = inputs['node_00']\n    trajectory = inputs['node_02']['state_pred']\n    scores = features['scores']\n    query_scores = trajectory @ features['modes'].T\n    sy, qy = features['sy'], features['qy']\n\n    # Use matched training/query features for both calibrated corrections.\n    gram = features['K'] + 0.03 * (sy @ sy.T) + 0.01 * (scores @ scores.T)\n    cross = features['Kq'] + 0.03 * (qy @ sy.T) + 0.01 * (query_scores @ scores.T)\n    target = features['y_cente"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m102_c01_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 701,
+        "sha256": "fa7365f4d6c13450a520e9a33fb67f32f82cdf75e0f1157541756a3807e82290",
+        "content_addressed_ref": "content_addressed_blobs/fa7365f4d6c13450a520e9a33fb67f32f82cdf75e0f1157541756a3807e82290.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "poly",
+      "_calibration",
+      "_kernel",
+      "_features",
+      "_operator",
+      "_quadratic",
+      "_predict",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "29a5217009b456465b468142e453cee6ffe1c51fb54efc5ce8096b6d07e32658",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cat > /holdout_task/node_01.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import solve\n\n\ndef run_node(inputs: dict) -> dict:\n    features = inputs['node_00']\n    trajectory = inputs['node_02']['state_pred']\n    scores = features['scores']\n",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "29a5217009b456465b468142e453cee6ffe1c51fb54efc5ce8096b6d07e32658",
+        "expected_candidate_sha256": "29a5217009b456465b468142e453cee6ffe1c51fb54efc5ce8096b6d07e32658",
+        "computed_candidate_sha256": "29a5217009b456465b468142e453cee6ffe1c51fb54efc5ce8096b6d07e32658",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 701
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_29a52170"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "poly",
+        "code": "def poly(x, d):\n    from itertools import combinations_with_replacement\n    return np.column_stack([np.prod(x[:, idx], axis=1) for idx in combinations_with_replacement(range(x.shape[1]), d)])"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    (u, v) = map(np.asarray, (panel['u'], panel['v']))\n    (i, j) = np.triu_indices(len(u), 1)\n    du = u[i] - u[j]\n    slopes = np.median((v[i] - v[j]) / np.where(abs(du) > 1e-12, du, np.inf), axis=0)\n    offsets = np.median(v - u * slopes, axis=0)\n    for _ in range(3):\n        r = np.linalg.norm(v - u * slopes - offsets, axis=1)\n        med = np.median(r)\n        keep = r <= max(6 * med, 0.0005)\n        if keep.sum() < 5:\n            break\n        for k in range(u.shape[1]):\n            (slopes[k], offsets[k]) = np.linalg.lstsq(np.c_[u[keep, k], np.ones(keep.sum())], v[keep, k], rcond=None)[0]\n    return (np.where(abs(slopes) > 1e-06, slopes, 1.0), offsets)"
+      },
+      {
+        "name": "_kernel",
+        "code": "def _kernel(x, q, slope):\n    from scipy.spatial.distance import cdist\n    (i, j) = np.triu_indices(x.shape[1])\n    return 1.0 + x @ q.T + 0.3 * (x[:, i] * x[:, j] @ (q[:, i] * q[:, j]).T) + 1.5 * np.exp(-cdist(x, q, 'sqeuclidean') / 6.0) + 1.5 * np.exp(-cdist(x / slope, q / slope, 'sqeuclidean') / 6.0)"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(z, kind, k):\n    if kind == 'tanh':\n        return np.c_[np.ones(len(z)), np.tanh(k * z)]\n    return np.c_[np.ones(len(z)), z, z * z / (1.0 + k * z * z)]"
+      },
+      {
+        "name": "_operator",
+        "code": "def _operator(u, v, kind, bounds):\n    from scipy.optimize import minimize_scalar\n\n    def loss(k):\n        f = _features(u, kind, k)\n        (U, _, _) = np.linalg.svd(f, full_matrices=False)\n        e = v - U @ (U.T @ v)\n        return np.mean((e / np.maximum(1.0 - (U * U).sum(axis=1, keepdims=True), 1e-08)) ** 2)\n    k = minimize_scalar(loss, bounds=bounds, method='bounded').x\n    w = np.linalg.lstsq(_features(u, kind, k), v, rcond=None)[0]\n    return lambda z: _features(z, kind, k) @ w"
+      },
+      {
+        "name": "_quadratic",
+        "code": "def _quadratic(z):\n    (i, j) = np.triu_indices(z.shape[1])\n    return np.c_[z, z[:, i] * z[:, j]]"
+      },
+      {
+        "name": "_predict",
+        "code": "def _predict(K, Kq, target, ridge):\n    from scipy.linalg import solve\n    mu = target.mean(axis=0)\n    return Kq @ solve(K + ridge * np.eye(len(K)), target - mu, assume_a='pos') + mu"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    x = np.asarray(train['x'], dtype=float)\n    q = np.asarray(study['test']['x'], dtype=float)\n    (y, t) = map(np.asarray, (train['y'], train['traj']))\n    (slope, offset) = _calibration(study['panel_a'])\n    (b, c) = (study['panel_b'], study['panel_c'])\n    u = b['u']\n    w = np.linalg.lstsq(np.c_[np.ones(len(u)), u], b['v'], rcond=None)[0]\n    bmap = lambda z: z @ w[1:] + w[0]\n    c1 = _operator(c['u'], c['v1'], 'tanh', (0.3, 3.0))\n    c2 = _operator(c['u'], c['v2'], 'rational', (0.015, 0.8))\n    (sy, qy) = (c1(bmap((z - offset) / slope)) for z in (x, q))\n    (st, qt) = (_quadratic(c2(bmap(z * slope + offset))) for z in (x, q))\n    (K, Kq) = (_kernel(x, x, slope), _kernel(q, x, slope))\n    yh = _predict(K + 0.3 * (sy @ sy.T), Kq + 0.3 * (qy @ sy.T), y, 0.001)\n    (_, _, modes) = np.linalg.svd(t, full_matrices=False)\n    modes = modes[:2]\n    traj = _predict(K + st @ st.T, Kq + qt @ st.T, t @ modes.T, 0.001) @ modes\n    return {'y_hat': yh, 'state_pred': traj, 'diagnostics_vec': np.array([yh.mean(), yh.std(), traj[:, -1].mean(), traj[:, -1].std()])}"
+      }
+    ]
+  }
+}

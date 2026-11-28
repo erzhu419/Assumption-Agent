@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab2641bd3d4240499ffb94e96c813bd3",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:00:25.441889+00:00",
+  "ended_at_utc": "2026-11-28T13:01:12.097653+00:00",
+  "request_sha256": "2cb542f4fba1ba25938ef63123a4ea6496bc81d40bb3f31b50c51d8e86796c61",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33451,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21504,
+    "cached_tokens": 5504,
+    "completion_tokens": 2017
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/grammar.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nfrom itertools import product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; n=len(x)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef ls(f,v,lam=0):\\n if not lam:return np.linalg.lstsq(f,v,rcond=1e-10)[0]\\n return np.linalg.solve(f.T@f+lam*np.eye(f.shape[1]),f.T@v)\\na=s['panel_a']; mask=np.linalg.norm(aff(a['u'])@ls(aff(a['u']),a['v'])-a['v'],axis=1)<2; da=ls(aff(a['u'][mask]),a['v'][mask]); xa=(x-da[0])/np.diag(da[1:]); xf=aff(x)@da\\nb=s['panel_b']; db=ls(aff(b['u']),b['v']); c=s['panel_c']; u=c['u'];\\nfun={'sin':lambda a,k:np.sin(k*a),'tanh':lambda a,k:np.tanh(k*a),'cos':lambda a,k:np.cos(k*a)-1,'rat':lambda a,k:a/(1+k*a*a),'rat2':lambda a,k:a*a/(1+k*a*a),'cubic':lambda a,k:a**3,'square':lambda a,k:a*a,'abs':lambda a,k:abs(a),'exp':lambda a,k:np.exp(-k*a*a)-1,'soft':lambda a,k:a/np.sqrt(1+k*a*a)}\\nmodels=[]\\nfor j in ('v1','v2'):\\n v=c[j]; print(j,'options:'); scores=[]\\n for key,g in fun.items():\\n  for typ in ('add','only','post','joint'):\\n   if typ in ('post','joint') and key not in ('sin','tanh','rat','soft'): continue\\n   if typ in ('add','only'):\\n    def F(x,k):return np.c_[aff(x),g(x,k)] if typ=='add' else aff(g(x,k))\\n    opt=least_squares(lambda k:(F(u,k[0])@ls(F(u,k[0]),v)-v).ravel(),[.8],bounds=(.01,4),max_nfev=60).x[0]; w=ls(F(u,opt),v); err=np.mean(abs(F(u,opt)@w-v)); predict=lambda q,op=opt,w=w,g=g,typ=typ:(np.c_[aff(q),g(q,op)] if typ=='add' else aff(g(q,op)))@w\\n   else:\\n    w=ls(aff(u),v)\\n    def P(q,p):\\n     m=aff(q)@p[:20].reshape(5,4); k=p[20]; out=g(m,k)\\n     return out if typ=='post' else m+p[21:]*out\\n    ini=np.r_[w.ravel(),.8] if typ=='post' else np.r_[w.ravel(),.8,np.full(4,.15)]; low=np.r_[np.full(20,-np.inf),.01,np.full(len(ini)-21,-np.inf)]; high=np.r_[np.full(20,np.inf),4,np.full(len(ini)-21,np.inf)]\\n    p=least_squares(lambda p:(P(u,p)-v).ravel(),ini,bounds=(low,high),max_nfev=150).x; opt=p[20]; err=np.mean(abs(P(u,p)-v)); predict=lambda q,p=p,g=g,typ=typ:g(aff(q)@p[:20].reshape(5,4),p[20]) if typ=='post' else aff(q)@p[:20].reshape(5,4)+p[21:]*g(aff(q)@p[:20].reshape(5,4),p[20])\\n   scores.append((err,key,typ,opt,predict))\\n scores.sort(key=lambda a:a[0]); print([v[:4] for v in scores[:10]]); models.append(scores[:3]);\\n# empirical temporal basis and candidate analytic shapes\\nfor name,TF in [('exp+exp',lambda p:np.stack([-np.expm1(-t*p[0]),-np.expm1(-t*p[1])],1)),('exp+decay',lambda p:np.stack([-np.expm1(-t*p[0]),t*np.exp(-p[1]*t)],1)),('exp+sin',lambda p:np.stack([-np.expm1(-t*p[0]),np.sin(p[1]*t)],1)),('exp+linear',lambda p:np.stack([-np.expm1(-t*p[0]),t],1)),('exp+t-exp',lambda p:np.stack([-np.expm1(-t*p[0]),t+np.expm1(-t*p[0])/p[0]],1)),('ode',lambda p:np.stack([-np.expm1(-t*p[0]),-np.expm1(-t*p[0])+(np.exp(-t*p[1])-np.exp(-t*p[0]))*p[0]/(p[0]-p[1])],1))]:\\n f=lambda p:(TF(p)@ls(TF(p),z[:52].T)-z[:52].T).ravel(); p=least_squares(f,[1.25,.55],bounds=(.01,6)).x; F=TF(p); print('time',name,p,np.mean(abs(f(p))),np.mean(abs(F@ls(F,z[52:].T)-z[52:].T)))\\n_,_,vv=np.linalg.svd(z[:52],full_matrices=False); target=np.c_[y,z@vv[:2].T]\\ndef report(F,name,output):\\n for lam in (1e-8,1e-4,1e-2):\\n  w=ls(F[:52],target[:52],lam); e=F[52:]@w-target[52:]; output.append((np.mean(abs(e[:,0])),np.mean(abs(e[:,1:]@vv[:2])),name,lam))\\nout=[]\\nfor label,q in [('x',x),('Ainv',xa),('Afwd',xf),('B(x)',aff(x)@db),('B(Ainv)',aff(xa)@db)]:\\n for i,j in product(range(3),repeat=2):\\n  p,r=models[0][i][-1](q),models[1][j][-1](q); dr=f'{label} C{i}{j}'\\n  for tag,F in [('base',np.c_[aff(q),p,r]),('alt',np.c_[aff(q),p,r,np.tanh(p),np.tanh(r),np.sin(q)]),('pair',np.c_[aff(q),p,r,np.tanh(p),p*r,p*p,r*r]),('solo',np.c_[aff(p),r])]:report(F,dr+' '+tag,out)\\n for key,g in fun.items():\\n  for k in (.5,1,1.5,2,3):\\n   h=g(q,k); report(np.c_[aff(q),h,q*q,q*h],f'{label} {key} {k}',out)\\nprint('best y',sorted(out)[:14]);print('best traj',sorted(out,key=lambda e:e[1])[:14]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic nonlinear basis, y MAE 0.04013) -> H2 (recover separable panel operators and fit a shared two-mode temporal basis).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the best cubic sine expansion unchanged\",\"rejected_reason\":\"Its held-out y MAE of 0.04013 exceeds the 0.038 contract.\"}],\"rationale\":\"Test structured nonlinearities against the independent panel measurements and compare reduced temporal laws and feature compositions on both held-out outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "9e54db39ea07ecbf732e020c9753c9e96d47a30511b4ea25af00185e98bcf9c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46654.51,
+      "usage_known": true,
+      "prompt_tokens": 21504,
+      "cached_tokens": 5504,
+      "completion_tokens": 2017
+    }
+  ]
+}

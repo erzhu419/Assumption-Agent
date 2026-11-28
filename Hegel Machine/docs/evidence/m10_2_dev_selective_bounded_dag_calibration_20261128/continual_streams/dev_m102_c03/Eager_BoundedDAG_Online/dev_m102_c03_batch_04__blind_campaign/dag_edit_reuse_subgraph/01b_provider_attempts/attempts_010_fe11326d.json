@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe11326d800f46648431ba51032be85f",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:35:52.123820+00:00",
+  "ended_at_utc": "2026-11-28T13:36:34.723213+00:00",
+  "request_sha256": "42d58156469f2e11469f41b54f755538f17af9e1dbb9fd4365953c1369696d04",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 64189,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38597,
+    "cached_tokens": 12672,
+    "completion_tokens": 1883
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _pairs(z):\\n    return z[:, [0, 0, 1, 2]] * z[:, [1, 3, 2, 3]]\\n\\n\\ndef _panel_features(study, x):\\n    panel = study['panel_a']\\n    u, v = panel['u'], panel['v']\\n    keep = np.max(np.abs(u - v), axis=1) < 1\\n    cal = np.array([np.linalg.lstsq(_affine(u[keep, j]), v[keep, j], rcond=None)[0]\\n                    for j in range(u.shape[1])])\\n    z = (x - cal[:, 0]) / cal[:, 1]\\n\\n    panel = study['panel_c']\\n    u, v1, v2 = panel['u'], panel['v1'], panel['v2']\\n    pair_coef = np.linalg.lstsq(_affine(_pairs(u)), v1, rcond=None)[0]\\n\\n    def cosine_fit(freq):\\n        ref = _affine(np.cos(freq * u))\\n        coef = np.linalg.lstsq(ref, v2, rcond=None)[0]\\n        return np.mean((ref @ coef - v2)**2), coef\\n\\n    freq = minimize_scalar(lambda k: cosine_fit(k)[0], bounds=(1.6, 3.2),\\n                           method='bounded').x\\n    c = _affine(_pairs(z)) @ pair_coef\\n    d = _affine(np.cos(freq * z)) @ cosine_fit(freq)[1]\\n    return np.column_stack((c, d, (c[:, :, None] * d[:, None, :]).reshape(len(x), -1)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    sparse = inputs['node_00']\\n    train = study['train']\\n    n = len(train['x'])\\n    f = _panel_features(study, np.vstack((train['x'], study['test']['x'])))\\n    f = (f - f[:n].mean(axis=0)) / np.maximum(f[:n].std(axis=0), 1e-9)\\n\\n    # Regress the scalar and two shared relaxation amplitudes on the panel features.\\n    times = np.asarray(study['eval_times'])\\n    modes = -np.expm1(-times[:, None] * np.array([0.425, 1.832]))\\n    amplitude = np.linalg.lstsq(modes, train['traj'].T, rcond=None)[0].T\\n    target = np.column_stack((train['y'], amplitude))\\n    mean = target.mean(axis=0)\\n    ridge = np.sqrt(1e-5 * f.shape[1]) * np.eye(f.shape[1])\\n    coef = np.linalg.lstsq(np.vstack((f[:n], ridge)),\\n                           np.vstack((target - mean, np.zeros((f.shape[1], 3)))),\\n                           rcond=None)[0]\\n    pred = f[n:] @ coef + mean\\n\\n    # Express the calibrated readout in the frozen sink's panel coordinates.\\n    y = (pred[:, 0] - 0.5 * sparse['y_hat']) / 0.5\\n    traj = (pred[:, 1:] @ modes.T - 0.35 * sparse['state_pred']) / 0.65\\n    return {'panel_pred': np.column_stack((y, traj))}\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('node', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nbase = '/holdout_task/'\\nf0, f1, f2 = [load(base + p) for p in ['_frozen_nodes/node_00.py', 'node_01.py', '_frozen_nodes/node_02.py']]\\ns = pickle.load(open(base + 'public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']\\nx = tr['x']\\nidx = np.arange(len(x))\\nfolds = [idx[-20:]]\\nfor seed in (134, 428, 913, 1559):\\n    folds.extend(np.array_split(np.random.default_rng(seed).permutation(idx), 4))\\n# Check boundary extrapolation separately from randomly held-out rows.\\nr = np.linalg.norm((x - np.median(x, axis=0)) / x.std(axis=0), axis=1)\\nfolds.append(np.argsort(r)[-12:])\\nerrors = []\\nhorizons = []\\nfor b in folds:\\n    a = np.setdiff1d(idx, b)\\n    train = {k: tr[k][a].copy() for k in ('x', 'y', 'traj')}\\n    y, last = train['y'], train['traj'][:, -1]\\n    train['summary'] = np.array([y.mean(), y.std(), last.mean(), last.std()])\\n    st = dict(s, train=train, test={'x': x[b].copy()})\\n    p0 = f0({'__input__': st})\\n    p1 = f1({'__input__': st, 'node_00': p0})\\n    p = f2({'node_00': p0, 'node_01': p1})\\n    ey = np.abs(p['y_hat'] - tr['y'][b]).mean()\\n    et = np.abs(p['state_pred'] - tr['traj'][b]).mean(axis=0)\\n    errors.append([ey, et.mean()]); horizons.append(et)\\nprint('worst shuffled/public fold scalar and trajectory MAE:', np.max(errors[:-1], axis=0))\\nprint('boundary scalar and trajectory MAE:', errors[-1])\\nprint('worst per-horizon MAE:', np.max(horizons))\\nassert np.max(errors) < .038 and np.max(horizons) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Gaussian panel proxy → H2 calibrated cosine response with cross-channel products; the challenger probe reached worst-fold MAEs of 0.006925 scalar and 0.005000 trajectory across 13 held-out slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the accepted Gaussian baseline\",\n      \"rejected_reason\": \"It fits the calibration panel about 100 times worse in RMS and has a substantially smaller validation margin.\"\n    },\n    {\n      \"option\": \"Fit all within-channel quadratic terms\",\n      \"rejected_reason\": \"The simpler cross-channel readout already predicts both targets well across the held-out folds.\"\n    }\n  ],\n  \"rationale\": \"Promote the independently calibrated cosine model, preserve the frozen sink weights, and verify the exact artifact in isolated Python on the public split, shuffled folds, boundary rows, and each trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b5af14b71ed423f1aac3a5517d3aff914cdef73da39643153b463e4174756be3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42598.18,
+      "usage_known": true,
+      "prompt_tokens": 38597,
+      "cached_tokens": 12672,
+      "completion_tokens": 1883
+    }
+  ]
+}

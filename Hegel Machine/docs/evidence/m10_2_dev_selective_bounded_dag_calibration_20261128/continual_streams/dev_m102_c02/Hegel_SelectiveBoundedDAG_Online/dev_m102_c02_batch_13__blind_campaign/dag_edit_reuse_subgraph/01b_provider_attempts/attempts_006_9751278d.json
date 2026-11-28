@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9751278df0a141229dcd280322346358",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:22:11.463219+00:00",
+  "ended_at_utc": "2026-11-28T14:22:36.401174+00:00",
+  "request_sha256": "9388abb98f41bd6cb8202cd7015670e11609253145706e293a0bf55cddcf86ce",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 36323,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26469,
+    "cached_tokens": 12672,
+    "completion_tokens": 836
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\ncal = load('calibration', '/holdout_task/node_00.py')\\nreadout = load('readout', '/holdout_task/_frozen_nodes/node_01.py')\\nstudy = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntrain = study['train']\\nx, y, traj = (train[k] for k in ('x','y','traj'))\\nidx = np.arange(len(x))\\nfolds = [(f'block_{i}', f) for i, f in enumerate(np.array_split(idx, 4))]\\nfolds += [('largest_sensor_norm', np.argsort(np.linalg.norm(x,axis=1))[-18:])]\\nfolds += [(f'sensor_{j}_{tail}', np.argsort(x[:,j])[sl]) for j in range(x.shape[1]) for tail, sl in [('low',slice(None,18)),('high',slice(-18,None))]]\\nworst = np.zeros(2)\\nfor name, test in folds:\\n    keep = np.setdiff1d(idx,test)\\n    sub = dict(study, train={'x':x[keep], 'y':y[keep], 'traj':traj[keep]}, test={'x':x[test]})\\n    features = cal.run_node({'__input__':sub})\\n    assert features['c'].shape[0] == len(keep) and features['query'].shape[0] == len(test)\\n    pred = readout.run_node({'__input__':sub, 'node_00':features})\\n    metrics = np.array([np.mean(abs(pred['y_hat']-y[test])), np.mean(abs(pred['state_pred']-traj[test]))])\\n    assert np.isfinite(metrics).all()\\n    worst = np.maximum(worst, metrics)\\n    print(name, *np.round(metrics,6))\\nprint('worst scalar / trajectory MAE', *np.round(worst,6))\\nassert (worst <= .038).all()\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single-regime calibration -> H2 coupled cubic sensor inversion followed by a shared-frequency cosine map; official held-out scalar and trajectory MAEs are 0.004806 and 0.008357.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The candidate passed the official gate with substantial margin. Verify the unchanged artifact in an isolated Python process and check blocked and extreme-sensor slices without refitting the model structure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "91b0c54ac39d816d9c304cb12dbf33a5de0ab88162051048818d42873b9d8ea4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24936.74,
+      "usage_known": true,
+      "prompt_tokens": 26469,
+      "cached_tokens": 12672,
+      "completion_tokens": 836
+    }
+  ]
+}

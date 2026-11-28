@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95066814ce4640f1b01d371d7a77f307",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:57:24.863767+00:00",
+  "ended_at_utc": "2026-11-28T13:58:06.308484+00:00",
+  "request_sha256": "def7a2e66ecb0695497051944fd302025e447932a02e542fbee890f116471242",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56563,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37333,
+    "cached_tokens": 12672,
+    "completion_tokens": 1750
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,/^def _branches/{ /^def _branches/!p; }' /tmp/ops.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\n\\ndef _design(study, x):\\n    \\\"\\\"\\\"Calibrated cyclic edges, cosine branch, and cubic edge modulation.\\\"\\\"\\\"\\n    z = _inverse(x, _calibration(study['panel_a']))\\n    p = study['panel_c']\\n    u = np.asarray(p['u'])\\n    c = _one(_edge(z)) @ _fit(_one(_edge(u)), p['v1'])\\n    d = _one(np.cos(2.4*z)) @ _fit(_one(np.cos(2.4*u)), p['v2'])\\n    # Use an independent basis for the products of a coordinate and a cyclic\\n    # edge, rather than fitting 16 redundant cross products.\\n    nxt = np.roll(z, -1, axis=1)\\n    triples = np.column_stack([np.prod(np.delete(z, j, axis=1), axis=1)\\n                               for j in range(4)])\\n    return np.column_stack((_one(z), c, d, np.sum(c*d, axis=1),\\n                            c[:, 0]*d[:, 1], triples, z*z*nxt, z*nxt*nxt))\\n\\n\\ndef _time_basis(t, traj):\\n    \\\"\\\"\\\"Fit three shared relaxation rates by variable projection.\\\"\\\"\\\"\\n    def basis(r):\\n        return -np.expm1(-t[:, None]*r)\\n\\n    def residual(r):\\n        q = basis(r)\\n        return (q @ _fit(q, traj.T) - traj.T).ravel()\\n\\n    rates = least_squares(residual, [.40, 1.8, 4.7],\\n                          bounds=([.05, .9, 3.0], [1.0, 3.0, 12.0]),\\n                          max_nfev=120).x\\n    return basis(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    x = np.asarray(tr['x'], dtype=float)\\n    xt = np.asarray(study['test']['x'], dtype=float)\\n    y = np.asarray(tr['y'], dtype=float)\\n    traj = np.asarray(tr['traj'], dtype=float)\\n    t = np.asarray(study['eval_times'], dtype=float)\\n    h, ht = np.split(_design(study, np.concatenate((x, xt), axis=0)), [len(x)])\\n    y_hat = ht @ _fit(h, y)\\n    q = _time_basis(t, traj)\\n    # Orthogonal projection avoids using ill-conditioned fitted amplitudes\\n    # as independent response variables.\\n    qt, _ = np.linalg.qr(q, mode='reduced')\\n    state_pred = (ht @ _fit(h, traj @ qt)) @ qt.T\\n    end = state_pred[:, -1]\\n    diagnostics_vec = np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics_vec}\\nPY\\ncat batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/check_batch.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']\\nassert len(tr['x'])==72\\n\\ndef check(a,b):\\n    ss=dict(s,train={k:tr[k][a] for k in ('x','y','traj')},test={'x':tr['x'][b]})\\n    out=m.solve_batch(ss)\\n    ey=np.abs(out['y_hat']-tr['y'][b]); et=np.abs(out['state_pred']-tr['traj'][b])\\n    ht=m._design(s,tr['x'][b]); h=m._design(s,tr['x'][a]); raw=np.abs(ht@m._fit(h,tr['traj'][a])-tr['traj'][b]);\\n    return np.array([ey.mean(),et.mean(),et.mean(axis=0).max(),ey.max(),et.max(),raw.mean()])\\nidx=np.arange(72)\\nr=check(idx[:52],idx[52:]); print('52/20 [y MAE, state MAE, worst time MAE, max y error, max state error, raw state MAE]',r)\\nassert max(r[:3])<=.038\\nrng=np.random.default_rng(6271)\\nrs=[]\\nfor _ in range(40):\\n    j=rng.permutation(idx); rs.append(check(j[:52],j[52:]))\\nprint('40 shuffled splits worst',np.max(rs,axis=0))\\nh=m._design(s,tr['x']); ht=m._design(s,s['test']['x']); lev=np.sum((ht@np.linalg.pinv(h))**2,axis=1); print('test leverage',np.quantile(lev,[0,.5,.9,1]))\\nfor v in [np.linalg.norm(tr['x'],axis=1),*[np.abs(tr['x'][:,i]) for i in range(4)],np.sum((h@np.linalg.pinv(h))**2,axis=1)]:\\n    j=np.argsort(v); print('boundary slice',check(j[:52],j[52:]))\\nout=m.solve_batch(s); y=out['y_hat']; z=out['state_pred']; d=out['diagnostics_vec']; assert y.shape==(36,) and z.shape==(36,8) and d.shape==(4,); assert all(np.isfinite(v).all() for v in out.values()); np.testing.assert_array_equal(d,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]);print('isolated schema and diagnostics verified',d)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: linear edge–cosine fusion -> H2: independent cubic edge modulation and three shared time modes; the expanded design previously reached 52/20 MAEs of 0.00619 for y and 0.00700 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\",\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Keep all coordinate-by-edge cross products\",\"rejected_reason\":\"They span the same cubic interactions with redundant columns.\"},{\"option\":\"Regress every time sample independently\",\"rejected_reason\":\"Retain as a validation comparison; the shared three-mode fit removes temporal directions dominated by noise.\"}],\"rationale\":\"Build the identified graph and audit the exact artifact on the required split, shuffled splits, and extrapolation slices. Check both prediction arrays and recompute diagnostics independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9a273f94b434bcc6604d2b9ff28d59d27938c6216cd44858c35b017ab2454238",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41443.4,
+      "usage_known": true,
+      "prompt_tokens": 37333,
+      "cached_tokens": 12672,
+      "completion_tokens": 1750
+    }
+  ]
+}

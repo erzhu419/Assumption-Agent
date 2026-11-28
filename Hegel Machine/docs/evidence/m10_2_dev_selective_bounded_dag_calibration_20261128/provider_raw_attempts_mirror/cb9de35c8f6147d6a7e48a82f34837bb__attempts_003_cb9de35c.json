@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb9de35c8f6147d6a7e48a82f34837bb",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:55:34.900272+00:00",
+  "ended_at_utc": "2026-11-28T13:55:57.856446+00:00",
+  "request_sha256": "5c7e49e8655a33dcc35466e66a2b66c4f820ede469b8aba7e2e1902182d01f75",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21083,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21345,
+    "cached_tokens": 12672,
+    "completion_tokens": 860
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.linalg import lstsq\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef poly(x,d):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in cr(range(x.shape[1]),k)])\\ndef learn(x,y):return lstsq(x,y,cond=1e-10)[0]\\ndef mae(a):return np.mean(abs(a),axis=0)\\nfor name in 'abc':\\n p=s['panel_'+name]; u=p['u']; print('\\\\nPANEL',name)\\n for nm,v in p.items():\\n  if nm=='u':continue\\n  for xf,yf in [(lambda z:z,lambda z:z),(lambda z:z,np.arctanh),(np.tanh,lambda z:z)]:\\n   if yf==np.arctanh and np.max(abs(v))>=1:continue\\n   for d in (1,2):\\n    x=poly(xf(u),d); y=yf(v); b=learn(x,y); e=y-x@b; h=np.sum(np.linalg.qr(x)[0]**2,axis=1); print(nm,xf.__name__,yf.__name__,d,'mae',mae(e),'loo',mae(e/(1-h[:,None])))\\n    if name=='a' and d==1:print(b, '\\\\nres rows',np.sort(np.linalg.norm(e,axis=1)))\\n    if name!='a' and d==2 and yf!=np.arctanh and xf!=np.tanh:print('coefs',b)\\nprint('times',s['eval_times'])\\nt=s['train']; x=t['x']; y=np.c_[t['y'],t['traj']];\\na=s['panel_a']; A=poly(a['u'],1); v=a['v']; keep=np.ones(len(A),bool)\\nfor _ in range(3):\\n b=learn(A[keep],v[keep]); e=np.linalg.norm(A@b-v,axis=1); keep=e<4*np.median(e)\\nc=(x-b[0])@np.linalg.pinv(b[1:]); print('robust A',b,'keep',keep.sum())\\nfor nm,X in [('raw',x),('cal',c)]:\\n for d in (1,2,3,4):\\n  D=poly(X,d); pr=D@learn(D[:52], y[:52]); print(nm,d,mae((pr-y)[:52]),mae((pr-y)[52:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel transfer -> H2 test calibrated polynomial and nonlinear operators; archived 52/20 MAEs were 0.234522 for y and 0.156236 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare panel leave-one-out residuals and independent target errors to identify which nonlinear terms need to be propagated through the graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "d632d7b4ff2e6b038d47ded5b9a1f5dbf84c4d6e3617231cc36681ee7d7eb202",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22955.25,
+      "usage_known": true,
+      "prompt_tokens": 21345,
+      "cached_tokens": 12672,
+      "completion_tokens": 860
+    }
+  ]
+}

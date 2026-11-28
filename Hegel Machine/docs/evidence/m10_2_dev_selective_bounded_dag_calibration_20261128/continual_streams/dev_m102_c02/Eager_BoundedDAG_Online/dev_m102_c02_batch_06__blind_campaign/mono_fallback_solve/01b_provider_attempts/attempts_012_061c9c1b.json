@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "061c9c1b3073406dbbe0c131acc83847",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:20.032918+00:00",
+  "ended_at_utc": "2026-11-28T13:48:01.884415+00:00",
+  "request_sha256": "07fef8a330f5e6c1d78949bac8685121e5f31fc7fb9b6112ef6234a481c9f48d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77392,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43962,
+    "cached_tokens": 12672,
+    "completion_tokens": 1867
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/last.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'/holdout_task');import batch_solver as bs\\nfrom scipy.optimize import least_squares,minimize_scalar\\nfrom scipy.linalg import solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; Y=np.c_[t['y'],t['traj']]; N=52; D=bs._coordinates(s,t['x']); X=D['x']; L=bs._ls; k,h=s['telemetry_vec'][:2]\\ndef report(p):\\n e=np.mean(abs(p-Y[N:]),0); return [round(e[0],5),round(e[1:].mean(),5),round(e[-1],5)]\\n# Fit shared nonlinear panel B coordinates; look for independently identifiable scalar harmonics.\\nu,v=s['panel_b']['u'],s['panel_b']['v']; a=[]\\nfor name,fun in [('sin',lambda x,f:np.sin(f*x)),('tanh',lambda x,f:np.tanh(f*x)),('rat',lambda x,f:x/(1+f*x*x)),('soft',lambda x,f:x/(1+f*abs(x))),('sinh',lambda x,f:np.sinh(f*x)),('gauss',lambda x,f:x*np.exp(-f*x*x))]:\\n for ext in [0,1,2]:\\n  f=lambda x,p:bs._aff(np.c_[x,fun(x,p),x**3] if ext==1 else np.c_[x,fun(x,p),np.sin(h*x)] if ext==2 else np.c_[x,fun(x,p)])\\n  def loss(p):\\n   z=f(u,p); r=v-z@L(z,v); q=np.linalg.qr(z)[0]; return np.mean(abs(r/np.maximum(.001,1-(q*q).sum(1,keepdims=True))))\\n  g=np.linspace(.05,4,80); i=np.argmin([loss(p) for p in g]); p=minimize_scalar(loss,bounds=(g[max(i-1,0)],g[min(i+1,len(g)-1)]),method='bounded').x;a.append((loss(p),name,ext,p))\\nprint('panel B',sorted(a)[:10]);\\n# Anisotropic additive kernels with independent penalization of calibrand blocks and interaction order.\\nks=[]\\nfor nm,z in D.items():\\n z=z/np.maximum(z[:N].std(0),1e-6); dot=z@z.T/4; ds=(z[:,None,:]-z[None,:,:])**2\\n bank={'lin':dot,'quad':(1+dot)**2/4,'cub':(1+dot)**3/8,'add3':np.mean((1+z[:,None,:]*z[None,:,:])**3,axis=2)/8}\\n for l in [.55,1.,2.,4.]:\\n  U=np.exp(-ds/(2*l*l)); A=U.mean(2); B=(U.sum(2)**2-(U*U).sum(2))/12\\n  bank['add'+str(l)]=A;bank['pair'+str(l)]=(A+B)/2;bank['full'+str(l)]=np.prod(U,2)\\n for mode,K in bank.items():ks.append((nm,mode,K/np.mean(np.diag(K)[:N])))\\n# Nested random splits for each composition, plus prescribed split reported separately.\\nrng=np.random.default_rng(110); splits=[(np.setdiff1d(np.arange(N),j),j) for j in np.array_split(rng.permutation(N),4)]; splits.append((np.arange(N),np.arange(N,len(Y))))\\nbase=[(a+':'+b,c) for a,b,c in ks]; d={(a,b):c for a,b,c in ks}; modes=sorted({m for a,m,c in ks}); opts=base.copy()\\nfor pair in [('x','b'),('x','c'),('x','d'),('x','bc'),('b','bc'),('b','c'),('b','d'),('bc','bd')]:\\n for a in modes:\\n  for b in modes:\\n   for w in [.2,.8]: opts.append((str((pair,a,b,w)),w*d[pair[0],a]+(1-w)*d[pair[1],b]))\\nres=[]; I=np.eye(len(Y));\\nfor nm,K in opts:\\n for lam in [1e-6,1e-4,.003,.03]:\\n  E=[]\\n  for i,j in splits:\\n   Mu=Y[i].mean(0); P=K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+lam*I[:len(i),:len(i)],Y[i]-Mu,assume_a='pos')+Mu; E.append(np.mean(abs(P-Y[j]),0))\\n  e=np.array(E);res.append((nm,lam,*e[:-1].mean(0)[[0,8]],*e[-1][[0,8]],e[-1,1:].mean(),K))\\nfor c in [2,3,4,5,6]: print('top',c,[r[:-1] for r in sorted(res,key=lambda r:r[c])[:6]])\\n# Search sparse groups around univariate cubic effects, with separate ridge shrinkage for interactions.\\nfor nm,Z in D.items():\\n if nm not in ['x','b','c','bc','bd']:continue\\n A=np.c_[X,Z] if nm!='x' else X\\n for deg in [3,4,5,6]:\\n  uni=np.c_[*[A**j for j in range(1,deg+1)]]; poly=np.column_stack([A[:,i]*A[:,j] for i in range(A.shape[1]) for j in range(i+1,A.shape[1])]); P=np.c_[uni,poly]; P=(P-P[:N].mean(0))/np.maximum(P[:N].std(0),1e-6)\\n  for u in [.0001,.01,.1,1.]:\\n   K=P@P.T/100; K+=P[:,:uni.shape[1]]@P[:,:uni.shape[1]].T*u; y=Y[:N].mean(0); p=K[N:,:N]@solve(K[:N,:N]+.0005*np.eye(N),Y[:N]-y,assume_a='pos')+y\\n   if report(p)[0]<.105 or report(p)[1]<.06: print('poly',nm,deg,u,report(p))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/last.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test separate univariate and pairwise readout terms instead of shared smoothness across full input blocks; current 52/20 MAE is 0.19457 for y and 0.12335 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The sparse fit points to a strong coordinate-specific cubic effect. Test lower-dimensional additive terms and interactions under inner folds, keeping the prescribed split separate for evaluation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "43f842842c03168c35a771fe9218464f5e32bf3d892884e06672ab025ede24dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41850.11,
+      "usage_known": true,
+      "prompt_tokens": 43962,
+      "cached_tokens": 12672,
+      "completion_tokens": 1867
+    }
+  ]
+}

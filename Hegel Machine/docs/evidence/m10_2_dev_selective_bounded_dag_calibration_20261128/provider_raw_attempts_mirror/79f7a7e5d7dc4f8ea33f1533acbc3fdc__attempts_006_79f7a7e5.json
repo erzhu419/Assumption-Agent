@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79f7a7e5d7dc4f8ea33f1533acbc3fdc",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:28:43.411929+00:00",
+  "ended_at_utc": "2026-11-28T13:29:08.507284+00:00",
+  "request_sha256": "5610249420f6f7daa6c8a8dee3d0db41e18d97ea27686a7d090fc1cfd0ac2598",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40952,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29152,
+    "cached_tokens": 12672,
+    "completion_tokens": 974
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/form_probe.py <<'PY'\\nfrom readout_probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; tmp=copy.deepcopy(s); tmp['test']['x']=x; p=node_00.run_node({'__input__':tmp}); st=p['st'][:,:4]; sy=p['sy']; A=p['scores']; I=np.arange(52); J=np.arange(52,72)\\nprint('correlations x, sy, st, state',np.round(np.corrcoef(np.c_[x,sy,st,A,y].T)[-1,:-1],3))\\nfor name,Z in [('x',x),('xt',np.c_[x,st]),('xs',np.c_[x,sy]),('xta',np.c_[x,st,A]),('all',np.c_[x,st,sy,A])]:\\n F=np.c_[np.ones(len(x)),Z]; ii,jj=np.triu_indices(Z.shape[1]); F2=np.c_[F,Z[:,ii]*Z[:,jj]]\\n for kind,f in [('linear',F),('quadratic',F2)]:\\n  w=np.linalg.lstsq(f[I],y[I],rcond=1e-5)[0]; e=y-f@w; print(name,kind,np.std(e[I]),np.abs(e[J]).mean())\\n R=F2 if name=='x' else F\\n for fn in [np.sin,np.tanh,lambda z:z*z/(1+z*z),np.cos]:\\n  z=(Z-Z.mean(0))/np.maximum(Z.std(0),1e-8); d=z.shape[1]\\n  def fit(b,T=I,ret=False):\\n   g=np.c_[R,fn(z@b[:d]+b[-1])]; w=np.linalg.lstsq(g[T],y[T],rcond=1e-7)[0]; e=y-g@w\\n   return e if ret else e[T]\\n  rng=np.random.default_rng(0); outs=[]\\n  for rep in range(13):\\n   v=least_squares(fit,rng.normal(0,.5,d+1),max_nfev=160); e=fit(v.x,ret=True); outs.append((np.std(e[I]),np.abs(e[J]).mean(),v.x))\\n  e,h,b=min(outs,key=lambda el:el[0]); print(name,getattr(fn,'__name__',''),round(e,5),round(h,5),np.round(b,2))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/form_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (quartic kernel surrogate) -> H2 (explicit low-dimensional nonlinear readout); the verified candidate has 0.037795 public scalar MAE and 0.07480 worst-slice scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified quartic readout immediately\",\n      \"rejected_reason\": \"It passes the official check by only 0.000205, and the coordinate-tail errors leave room for a structurally better readout.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged while testing whether a compact nonlinear basis explains the scalar residual. Raw coordinates are used only for diagnosis; any promoted readout must use the declared frozen inputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6a00527443480acb8a5bc1ed4352aa1bd7b2826a45b4ba43174360d799c0dda0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25094.17,
+      "usage_known": true,
+      "prompt_tokens": 29152,
+      "cached_tokens": 12672,
+      "completion_tokens": 974
+    }
+  ]
+}

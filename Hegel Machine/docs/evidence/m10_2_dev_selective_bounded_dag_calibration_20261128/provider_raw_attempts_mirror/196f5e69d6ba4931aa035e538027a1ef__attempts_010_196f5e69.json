@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "196f5e69d6ba4931aa035e538027a1ef",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:33:14.375159+00:00",
+  "ended_at_utc": "2026-11-28T14:33:57.835712+00:00",
+  "request_sha256": "b0cb71db65c3813c7d3d2387eb40f1a71e6d2ac0eafa29ac81bafc4fb4601cc1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63808,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37731,
+    "cached_tokens": 5504,
+    "completion_tokens": 1713
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/refine15.py | grep -E '^cal|^[012] 3'; cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Paired-coordinate calibration and panel-B scalar and dynamical readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(h, y):\\n    return np.linalg.lstsq(h, y, rcond=1e-10)[0]\\n\\n\\ndef _calibrate(panel, rows):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    norm = np.linalg.norm(v, axis=1)\\n    keep = norm < max(4., 3*np.median(norm))\\n    u, v = u[keep], v[keep]\\n\\n    def design(z, p):\\n        a, power, decay, frequency = p\\n        other = np.roll(z, 2, axis=-1)\\n        return np.stack((np.ones_like(z), z/(1+a*np.abs(z)**power)**decay,\\n                         np.sin(frequency*other)), axis=-1)\\n\\n    def profile(p):\\n        h = design(u, p)\\n        c = np.array([_fit(h[:, j], v[:, j]) for j in range(4)])\\n        return (h*c).sum(axis=-1)-v, c\\n\\n    p = least_squares(lambda p: profile(p)[0].ravel(), [.5,2,.5,2.4],\\n                      bounds=([.001,.3,.01,.5], [8,6,8,6]), gtol=1e-12).x\\n    _, c = profile(p)\\n    return np.array([least_squares(lambda z: (design(z,p)*c).sum(axis=-1)-q,\\n                                   q, gtol=1e-11).x for q in rows])\\n\\n\\ndef _operator(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n\\n    def design(x, f):\\n        return _aff(np.cos(f*x))\\n\\n    def residual(p):\\n        h = design(u, p[0])\\n        return (h@_fit(h,v)-v).ravel()\\n\\n    f = least_squares(residual, [2.6], bounds=([1.8], [3.5]), gtol=1e-12).x[0]\\n    return design(z,f)@_fit(design(u,f),v)\\n\\n\\ndef _trajectory(h, q, y, t):\\n    # Fit rates to the part of the trajectories explained by the spatial map.\\n    amplitudes = _fit(h, y)\\n    projected = (h@amplitudes).T\\n\\n    def temporal(p):\\n        return -np.expm1(-t[:,None]*p)\\n\\n    def residual(p):\\n        f = temporal(p)\\n        return (f@_fit(f, projected)-projected).ravel()\\n\\n    p = least_squares(residual, [.4,1.8], bounds=([.01,.85],[.85,10]),\\n                      gtol=1e-11).x\\n    f = temporal(p)\\n    return q @ _fit(f, amplitudes.T).T @ f.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    z = _calibrate(study['panel_a'], np.concatenate((tr['x'], study['test']['x'])))\\n    b = _operator(study['panel_b'], z)\\n    h = _aff(b)\\n    paired = b[:,0]*b[:,2] + b[:,1]*b[:,3]\\n    s = np.column_stack((h, paired))\\n    y = s[n:] @ _fit(s[:n], tr['y'])\\n    state = _trajectory(h[:n], h[n:], tr['traj'], np.asarray(study['eval_times']))\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat >/tmp/check15.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; rng=np.random.default_rng(6341)\\nsplits=[np.arange(52,72),np.arange(20),np.arange(24,44),np.argsort(np.linalg.norm(x,axis=1))[-20:]]+[rng.choice(72,20,replace=False) for _ in range(6)]\\nworst=np.zeros(3)\\nfor i,te in enumerate(splits):\\n a=np.setdiff1d(np.arange(72),te); st={**s,'train':{k:(v[a] if k!='summary' else v) for k,v in tr.items()},'test':{'x':x[te]}}\\n o=m.solve_batch(st); ey=np.abs(o['y_hat']-tr['y'][te]); et=np.abs(o['state_pred']-tr['traj'][te]); score=np.array([ey.mean(),et.mean(),et.mean(0).max()]); worst=np.maximum(worst,score)\\n print(i, 'y, trajectory, worst horizon',score,'max individual',ey.max(),et.max()); assert np.all(score < .038)\\nprint('worst',worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check15.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted quadratics and horizon regressions -> H2 a symmetric paired-product scalar and two-mode affine trajectory; the precursor reached 52/20 MAEs of 0.00541 and 0.00443.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain all cosine quadratic terms\",\"rejected_reason\":\"The two opposite-coordinate products dominate the fitted quadratic coefficients and have nearly equal weights; the compact form now needs holdout verification.\"}],\"rationale\":\"Implement both independently identified readouts and verify the requested split, worst trajectory horizon, and high-norm extrapolation slice in a clean process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9a7005bc0a1792d89e20dccb1a7a2ec9a55180c05cbab15767126081f44faacb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43459.19,
+      "usage_known": true,
+      "prompt_tokens": 37731,
+      "cached_tokens": 5504,
+      "completion_tokens": 1713
+    }
+  ]
+}

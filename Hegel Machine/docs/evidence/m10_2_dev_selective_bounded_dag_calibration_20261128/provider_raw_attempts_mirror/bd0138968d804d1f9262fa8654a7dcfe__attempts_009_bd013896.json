@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd0138968d804d1f9262fa8654a7dcfe",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:18:12.867163+00:00",
+  "ended_at_utc": "2026-11-28T14:18:47.391221+00:00",
+  "request_sha256": "890dc27d7fa52a05545c47bf8b8e3b0ce29645f39d1802eb911d9c8ef2d93d07",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52425,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32502,
+    "cached_tokens": 12672,
+    "completion_tokens": 1503
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit14.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _features,_calibrate,_aff,_ls,_pairs\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; x=tr['x']; n=len(x); idx=np.arange(n); a,b=_features(s,x); z=_calibrate(s['panel_a'],x); p=s['panel_b']; m=_ls(_aff(p['u']),p['v']); bb=_aff(b)@m\\nprint('provided keys',list(s),'train keys',list(tr),'times',s['eval_times']); print('trajectory sv',np.linalg.svd(T,compute_uv=False)); print('scalar baseline coefficients',_ls(_aff(np.c_[a,b,(a*b).sum(1)]),y)); print('panel B fit RMSE',np.std(_aff(p['u'])@m-p['v']))\\np=s['panel_c']; u,v=p['u'],p['v1']; np.set_printoptions(precision=4,suppress=True)\\nfor name,fun in {'tanh+cubic':lambda w,r:np.c_[_aff(np.tanh(r*w)),w**3],'tanh+linear+cubic':lambda w,r:np.c_[_aff(np.tanh(r*w)),w,w**3],'erf+linear+cubic':lambda w,r:np.c_[_aff(__import__('scipy').special.erf(r*w)),w,w**3],'softsqrt+linear+cubic':lambda w,r:np.c_[_aff(r*w/np.sqrt(1+(r*w)**2)),w,w**3]}.items():\\n def loss(r):\\n  q=np.linalg.qr(fun(u,r))[0]; return np.mean(((v-q@(q.T@v))/(1-(q*q).sum(1))[:,None])**2)\\n opt=minimize_scalar(loss,bounds=(.2,3),method='bounded'); d=fun(u,opt.x); coef=_ls(d,v); print(name,opt.x,np.sqrt(opt.fun),'rms',np.std(d@coef-v),'coefs',coef if name.startswith('tanh') else '')\\nD=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nbase=_aff(np.c_[a,b]); ab=(a*b).sum(1); den=[(a*a).sum(1),(b*b).sum(1),((a-b)**2).sum(1),((a+b)**2).sum(1),ab*ab]; print('pair-difference covariance equivalence',np.max(abs(((a-b)**2).sum(1)-den[0]-den[1]+2*ab)))\\nscalars={'baseline':np.c_[base,ab],'panelB_sum':np.c_[base,(a*bb).sum(1)],'full':np.c_[base,D(a,b)],'pair_sums_differences':np.c_[base,ab,a*a+b*b,a*a-b*b]}; states={'baseline':np.c_[base,D(a,b)],'latent':np.c_[base,D(a,b),z],'pair_sums_differences':np.c_[base,D(a,b),a*a+b*b,a*a-b*b]}\\nfor j,d in enumerate(den):\\n for c in [.03,.1,.3,1.]:\\n  scalars[f'ratio{j}_{c}']=np.c_[base,ab/(1+c*d)]; states[f'ratio{j}_{c}']=np.c_[base,D(a,b)/(1+c*d[:,None])]\\nsplits=[('required',idx[52:])]+[(f'rand{i}',np.random.default_rng(i).permutation(n)[52:]) for i in range(20)]\\nfor j in range(4):\\n order=np.argsort(x[:,j]); splits += [(f'x{j}_tails',np.r_[order[:10],order[-10:]]),(f'x{j}_low',order[:20]),(f'x{j}_high',order[-20:])]\\nsplits += [('joint_x_ood',np.argsort(np.linalg.norm(z,axis=1))[-20:]),('joint_ab_ood',np.argsort(np.linalg.norm(D(a,b),axis=1))[-20:])]\\nfor name,ds,Y in [('y',scalars,y),('traj',states,T)]:\\n rs=[]\\n for key,F in ds.items():\\n  rows=[]\\n  for sl,te in splits:\\n   ti=np.setdiff1d(idx,te); pred=F[te]@_ls(F[ti],Y[ti]); r=np.abs(pred-Y[te]); rows.append((r.mean(),r.mean(0).max(),sl))\\n  rs.append((key,rows[0][0],np.median([r[0] for r in rows]),max(rows),max(rows,key=lambda r:r[1]),float(np.std(F@_ls(F,Y)-Y))))\\n print(name,'baseline:',rs[0]); print(name,'top by worst split:',sorted(rs,key=lambda r:r[3])[:6])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial cross-branch readouts -> H2 retain or revise them after testing rational and sum/difference alternatives; verified worst-slice MAEs are 0.006023 scalar, 0.011201 trajectory, and 0.019196 single horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified artifact without a focused audit\",\n      \"rejected_reason\": \"Joint extrapolation and alternative panel and readout bases have not yet been compared.\"\n    }\n  ],\n  \"rationale\": \"Test competing algebraic terms on real held-out measurements and inspect the available variables for batch, relay, or drift structure before deciding whether a revision is warranted.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "299dcd0538c165e13212e738ab5bad95c8d34b36f10741243e9280fe5519b716",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34521.97,
+      "usage_known": true,
+      "prompt_tokens": 32502,
+      "cached_tokens": 12672,
+      "completion_tokens": 1503
+    }
+  ]
+}

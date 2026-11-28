@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8b8320171a048189bff729008527f5f",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_14__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:39:12.634277+00:00",
+  "ended_at_utc": "2026-11-28T14:39:53.617623+00:00",
+  "request_sha256": "7655a7a9b64dcb4e7a1825990038c45a87a00503289c39b0ad4e49552db2faae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80910,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45167,
+    "cached_tokens": 12672,
+    "completion_tokens": 1753
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cp batch_solver.py /tmp/verified_v02.py; cat > /tmp/stress_scalar.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/batch_solver.py'; m=runpy.run_path(p)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; z,b,a=m['_build'](s,t['x']); y=t['y']; rng=np.random.default_rng(42)\\norders=[np.arange(72),*[rng.permutation(72) for _ in range(3)],np.argsort(np.linalg.norm(t['x'],axis=1))]; orders += [np.argsort(np.linalg.norm(z,axis=1)),np.argsort(np.linalg.norm(b,axis=1))]\\nsrc='''def _shrink_scalar(a,b,y,strength):\\n    n=len(y)\\n    a=a/np.maximum(a[:n].std(0),.08)\\n    b=b/np.maximum(b[:n].std(0),.08)\\n    target=np.r_[y,np.zeros(a.shape[1]+1)]\\n    pen=np.diag(np.r_[0,np.full(4,.06*strength),np.full(a.shape[1]-5,strength),.035*strength])\\n    starts=np.r_[np.eye(4),np.random.default_rng(1).normal(0,.5,(8,4))]\\n    outs=[]\\n    for link in (np.sin,np.tanh):\\n        def design(p,base,q):\\n            return np.column_stack((base,link(p[0]+q@p[1:])))\\n        def residual(p):\\n            mat=np.vstack((design(p,a[:n],b[:n]),pen))\\n            return np.r_[mat@_ls(mat,target)-target,.008*p]\\n        opt=min((least_squares(residual,np.r_[.1,start],max_nfev=100) for start in starts),key=lambda o:o.cost)\\n        pred=design(opt.x,a,b)\\n        outs.append(pred[n:]@_ls(np.vstack((pred[:n],pen)),target))\\n    return np.mean(outs,axis=0)\\n'''\\nexec(src,m); shuffled=[np.r_[o[:52],o[52:]] for o in orders]\\ndef preds(fun):return [fun(a[o],b[o],y[o[:52]]) for o in shuffled]\\ndef errors(pr):return np.array([np.mean(abs(q-y[o[52:]])) for q,o in zip(pr,shuffled)])\\nP=preds(m['_scalar']); baseline=errors(P); print('base',baseline,flush=True); best=(baseline[4:].max(),None)\\nfor strength in (.04,.12,.28,.55,1.):\\n Q=preds(lambda a,b,y:m['_shrink_scalar'](a,b,y,strength))\\n for mix in (.5,1.):\\n  e=errors([(1-mix)*p+mix*q for p,q in zip(P,Q)]); print(strength,mix,e,flush=True)\\n  if max(e[:4])<=.038 and e[:4].mean()<=baseline[:4].mean()+.002 and e[4:].max()<best[0]-.006: best=(e[4:].max(),(strength,mix))\\nif best[1]:\\n strength,mix=best[1]; body=open(p).read(); body=body.replace('def solve_batch(study):',src+'\\\\n\\\\ndef solve_batch(study):').replace(\\\"y_hat=_scalar(a,b,train['y'])\\\",f\\\"y_hat={1-mix}*_scalar(a,b,train['y'])+{mix}*_shrink_scalar(a,b,train['y'],{strength})\\\" if mix!=1 else f\\\"y_hat=_shrink_scalar(a,b,train['y'],{strength})\\\"); open(p,'w').write(body); print('promoted',best,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_scalar.py\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; z,b,_=m['_build'](s,t['x']); rng=np.random.default_rng(42)\\nfor name,o in [('official',np.arange(72)),*[(f'random{i+1}',rng.permutation(72)) for i in range(3)],('measured-radius',np.argsort(np.linalg.norm(t['x'],axis=1))),('calibrated-radius',np.argsort(np.linalg.norm(z,axis=1))),('operator-radius',np.argsort(np.linalg.norm(b,axis=1)))]:\\n i,j=o[:52],o[52:]; pred=m['solve_batch']({**s,'train':{k:t[k][i] for k in ['x','y','traj']},'test':{'x':t['x'][j]}}); e=np.abs(pred['y_hat']-t['y'][j]).mean(); f=np.abs(pred['state_pred']-t['traj'][j]); print(name,e,f.mean(),f.mean(0).max(),flush=True)\\n if name=='official': assert max(e,f.mean())<=.038\\npred=m['solve_batch'](s); y=pred['y_hat']; last=pred['state_pred'][:,-1]; np.testing.assert_allclose(pred['diagnostics_vec'],[y.mean(),y.std(),last.mean(),last.std()]); assert all(np.isfinite(v).all() for v in pred.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained cross-stage scalar coefficients → H2 shrink weakly supported interactions; verified 52/20 MAEs are 0.0243 for y and 0.0090 for trajectories, but measured high-radius y MAE is 0.1685.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the verified candidate unchanged\",\"rejected_reason\":\"The prescribed split passes, but scalar error on the measured-radius slice warrants a bounded comparison before submission.\"}],\"rationale\":\"Keep the trajectory model fixed. Promote scalar shrinkage only if it materially improves the worst radius slice while preserving the prescribed gate and random-split accuracy, then verify the selected artifact in a clean process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "2c196c22b57d00c8fc76a234dc2693eee37ca3b675a4f71091a083211458b6d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40982.01,
+      "usage_known": true,
+      "prompt_tokens": 45167,
+      "cached_tokens": 12672,
+      "completion_tokens": 1753
+    }
+  ]
+}

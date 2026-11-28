@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9fe99d2f9c5b4806ad2cd105f5d3cdac",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:00:25.434574+00:00",
+  "ended_at_utc": "2026-11-28T13:00:58.485639+00:00",
+  "request_sha256": "b924c01b94375c45fef96a03a5b2a3f9f6c44adf5216710532516ee39adbc492",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26686,
+    "cached_tokens": 0,
+    "completion_tokens": 1403
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit a quadratic scalar readout and a rank-two linear trajectory map.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _quadratic(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((_affine(x), x[:, i] * x[:, j]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.asarray(train['x'], dtype=float)\\n    query = np.asarray(study['test']['x'], dtype=float)\\n    y = np.asarray(train['y'], dtype=float)\\n    z = np.asarray(train['traj'], dtype=float)\\n    beta = np.linalg.lstsq(_quadratic(x), y, rcond=None)[0]\\n    y_hat = _quadratic(query) @ beta\\n    design = _affine(x)\\n    weights = np.linalg.lstsq(design, z, rcond=None)[0]\\n    _, _, temporal = np.linalg.svd(design @ weights, full_matrices=False)\\n    modes = temporal[:2]\\n    state_pred = ((_affine(query) @ weights) @ modes.T) @ modes\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\npython3 validate_public_schema.py && python3 -I validate_public_schema.py\\ncat >/tmp/stress.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; x,y,z=(d[k] for k in ('x','y','traj')); n=len(y); idx=np.arange(n); rng=np.random.default_rng(1)\\nslices=[('designated',idx[52:])]+[(f'random{k}',j) for k,j in enumerate(np.array_split(rng.permutation(n),4))]\\nfor k in range(x.shape[1]):\\n order=np.argsort(x[:,k]); slices.extend([(f'coordinate{k}_low',order[:14]),(f'coordinate{k}_high',order[-14:])])\\nslices.append(('radial_edge',np.argsort(np.linalg.norm(x-x.mean(0),axis=1))[-14:]))\\nnp.set_printoptions(precision=6,suppress=True)\\nfor name,j in slices:\\n i=np.setdiff1d(idx,j); tr={k:d[k][i] for k in ('x','y','traj')}; tr['summary']=np.array([y[i].mean(),y[i].std(),z[i,-1].mean(),z[i,-1].std()]); out=m.solve_batch(dict(s,train=tr,test={'x':x[j]})); e=abs(out['state_pred']-z[j]); raw=m._affine(x[j])@np.linalg.lstsq(m._affine(x[i]),z[i],rcond=None)[0]; print(name,round(abs(out['y_hat']-y[j]).mean(),6),'state',round(e.mean(),6),'worst horizon',round(e.mean(0).max(),6),'raw state',round(abs(raw-z[j]).mean(),6))\\nb=np.linalg.lstsq(m._quadratic(x),y,rcond=None)[0]; I,J=np.triu_indices(x.shape[1]); H=np.zeros((x.shape[1],x.shape[1])); H[I,J]=b[5:]; H=(H+H.T)/2; print('quadratic coefficients',b,'eigensystem',np.linalg.eigh(H)); print('projected state singular values',np.linalg.svd(m._affine(x)@np.linalg.lstsq(m._affine(x),z,rcond=None)[0],compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine state with two temporal modes → separate quadratic scalar readout; prior quadratic worst split MAE 0.00566 and affine designated worst-horizon MAE 0.00507.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine scalar readout is sufficient at the required validation tolerance.\",\n    \"empirical_witness\": \"Designated scalar MAE was 0.04910 for the affine model and 0.00556 for the quadratic model; quadratic MAE stayed below 0.00567 across all five measured splits.\",\n    \"causal_blanket_diagnosis\": \"The affine basis omits second-order input dependence; the trajectory alone also does not retain enough information for the scalar readout.\",\n    \"sublated_pivot\": \"Retain an affine trajectory map and fit the scalar directly from a complete second-order input basis.\",\n    \"risk_kind\": \"missing_second_order_terms\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Cubic or quartic scalar basis\",\n      \"rejected_reason\": \"Additional terms worsened held-out error relative to the quadratic basis.\"\n    },\n    {\n      \"option\": \"Single saturating scalar link\",\n      \"rejected_reason\": \"Without quadratic terms, tested links remained near the affine error level.\"\n    }\n  ],\n  \"rationale\": \"Implement the validated output-specific maps, then compare rank-two and unrestricted trajectory predictions on coordinate tails and radial extremes while independently checking the output schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "23a612e20e4b61e5c30b065150cf7b493481633a5dd610edfa44d6b6caa47065",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33049.37,
+      "usage_known": true,
+      "prompt_tokens": 26686,
+      "cached_tokens": 0,
+      "completion_tokens": 1403
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c43242fe65ff4acba69bd238e8b9e791",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:26:40.134546+00:00",
+  "ended_at_utc": "2026-11-28T14:27:09.924285+00:00",
+  "request_sha256": "cf935274958915ba2cb2ec483d5e628223b03353d391352bd30f97c4c5190be6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55885,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35191,
+    "cached_tokens": 12672,
+    "completion_tokens": 953
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /holdout_task/batch_solver.py /tmp/baseline15.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    f = _design(z,c,d)')\\ns = s[:a] + '''    # The scalar readout and fast mode share a symmetric interaction,\\n    # whereas the slow mode has a distinct cross-channel term.\\n    dot = np.sum(c*d, axis=1)\\n    common = _aff(np.column_stack((z, c, d)))\\n    scalar = np.column_stack((common, dot))\\n    slow = np.column_stack((common, c[:, 0]*d[:, 1]))\\n    fast = scalar\\n    yh = scalar[n:] @ np.linalg.lstsq(scalar[:n], train['y'], rcond=1e-9)[0]\\n    t = np.asarray(study['eval_times'], dtype=float)\\n    traj = np.asarray(train['traj'], dtype=float)\\n    target = traj.ravel()\\n\\n    def design(p):\\n        q = _time(t, p)\\n        a = (slow[:n, None, :]*q[None, :, 0, None]).reshape(n*len(t), -1)\\n        b = (fast[:n, None, :]*q[None, :, 1, None]).reshape(n*len(t), -1)\\n        return np.column_stack((a, b))\\n\\n    def residual(p):\\n        g = design(p)\\n        return g @ np.linalg.lstsq(g, target, rcond=1e-9)[0] - target\\n\\n    rates = least_squares(residual, np.log([.42, 1.81]),\\n                          bounds=(np.log([.12, 1.]), np.log([.9, 4.]))).x\\n    beta = np.linalg.lstsq(design(rates), target, rcond=1e-9)[0]\\n    k = slow.shape[1]\\n    amplitude = np.column_stack((slow[n:] @ beta[:k], fast[n:] @ beta[k:]))\\n    state = amplitude @ _time(t, rates).T\\n    last = state[:, -1]\\n    return dict(y_hat=yh, state_pred=state,\\n                diagnostics_vec=np.array([yh.mean(), yh.std(), last.mean(), last.std()]))\\n'''\\np.write_text(s)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit15.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unrestricted interactions in both modes -> H2: a symmetric scalar and fast-mode interaction with a separate slow-mode cross term; the structured probe reduced worst tail-horizon MAE from 0.04457 to 0.00819.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use separate scalar diagonal coefficients\",\n      \"rejected_reason\": \"The official scalar split improves slightly, but the worst tail MAE rises from 0.00550 to 0.00841.\"\n    },\n    {\n      \"option\": \"Remove affine cross-branch terms from the trajectory\",\n      \"rejected_reason\": \"The stricter model has higher official and worst-tail trajectory errors.\"\n    }\n  ],\n  \"rationale\": \"Promote the structured readouts: they reduce the extrapolation bottleneck while retaining a wide margin on the official gate. Verify the exact standalone artifact in an isolated Python process and run the public schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "818346a185d0b844cc741adad3b578685505c64d212507fe8bfd012fad4609f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29788.45,
+      "usage_known": true,
+      "prompt_tokens": 35191,
+      "cached_tokens": 12672,
+      "completion_tokens": 953
+    }
+  ]
+}

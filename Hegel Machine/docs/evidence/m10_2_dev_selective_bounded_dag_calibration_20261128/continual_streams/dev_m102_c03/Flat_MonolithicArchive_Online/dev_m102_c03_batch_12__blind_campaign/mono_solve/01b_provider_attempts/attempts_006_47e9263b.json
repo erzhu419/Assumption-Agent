@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47e9263b2fc74b0c94bb9724346dc55f",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:03:51.080221+00:00",
+  "ended_at_utc": "2026-11-28T14:04:14.025096+00:00",
+  "request_sha256": "2468007c77328c37f4cd1b5f916ef303f26cbdc4c0c9855be0665af6a1c10740",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38929,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28060,
+    "cached_tokens": 12672,
+    "completion_tokens": 918
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp; cat > cal12.py <<'PY'\\nfrom laws12 import *\\nfrom scipy.optimize import minimize_scalar\\nu,v=s['panel_a']['u'],s['panel_a']['v']; _,_,keep=calfit('aff'); u,v=u[keep],v[keep]; A=aff(u)\\nprint('affine',np.round(ls(A,v),4));print('cubic',list(combinations_with_replacement(range(4),3)),np.round(ls(aff(u,mon(u,2),mon(u,3)),v)[15:],3).T)\\nF={'sin':np.sin,'tanh':np.tanh,'sat':lambda q:q/(1+q*q),'soft':lambda q:q/(1+abs(q)),'atan':np.arctan,'exp':lambda q:np.exp(-q*q),'cos':np.cos,'root':lambda q:q/np.sqrt(1+q*q)}\\nfor name,f in F.items():\\n for extra in [False,True]:\\n  def cols(x,k):return aff(x,f(x*k),*( [mon(x,2)] if extra else [] ))\\n  def res(k):\\n   C=cols(u,k);return (C@ls(C,v)-v).ravel()\\n  opt=min([least_squares(res,[k],bounds=(.05,7),max_nfev=90) for k in [.5,1.25,2.15,3.5]],key=lambda o:np.linalg.norm(o.fun)); print(name,extra,opt.x[0],np.sqrt(np.mean(opt.fun**2)))\\nfor j in range(4):\\n y=v[:,j]; b=ls(A,y)[1:]; out=[]\\n for name,f in F.items():\\n  for linear in [True,False]:\\n   def cols(x,p):return aff(*([x] if linear else []),f(x@p[:4]+p[4]))\\n   def res(p):\\n    B=cols(u,p);return B@ls(B,y)-y\\n   opt=min([least_squares(res,np.r_[b*k,off],max_nfev=300,gtol=1e-10) for k in [.5,1.25,2.15] for off in [0,.3]],key=lambda o:np.linalg.norm(o.fun));out.append((np.sqrt(np.mean(opt.fun**2)),name,linear,np.round(opt.x,5)))\\n print('single-index',j,sorted(out,key=lambda z:z[0])[:7])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal12.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ====; sed -n '/^def _calibrat/,/^def /p' \\\"$f\\\" | head -30; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cyclic calibration → H2 recover a nonlinear calibration followed by affine, cyclic-product, and cosine panel operators; leave-one-row-out panel RMSEs are 0.000112–0.000124, while the best archived 52/20 scalar MAE is 0.310579.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full cubic calibration as the final model\",\"rejected_reason\":\"Its median residual is 0.0131 even after outlier rejection; a simpler exact nonlinear map may invert more reliably on test inputs.\"}],\"rationale\":\"The auxiliary panels are reconstructed to their apparent noise floor. Probe nonlinear calibration before selecting spatial readouts, especially because cosine features amplify coordinate errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "36dbe02ecaea7f5d69494d9d49c78f95995c9bbb29d6c2dec9064412ee82847e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22943.61,
+      "usage_known": true,
+      "prompt_tokens": 28060,
+      "cached_tokens": 12672,
+      "completion_tokens": 918
+    }
+  ]
+}

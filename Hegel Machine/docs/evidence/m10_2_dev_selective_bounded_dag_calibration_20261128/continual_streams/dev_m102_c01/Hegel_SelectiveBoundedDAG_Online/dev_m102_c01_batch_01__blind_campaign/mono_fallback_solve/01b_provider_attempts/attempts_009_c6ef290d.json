@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6ef290d19c343a79a9c680c0aa3d0a4",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:50.634077+00:00",
+  "ended_at_utc": "2026-11-28T13:16:19.203799+00:00",
+  "request_sha256": "2eac2e3e84484dcd1a3ef6407e6ddb959d6d58f53bf0b022ddf77639eaca057b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59667,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37416,
+    "cached_tokens": 12672,
+    "completion_tokens": 1187
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/mixed.py <<'PY'\\nexec(open('/tmp/kerneltest.py').read().split('rows=[]')[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.spatial.distance import cdist\\np=s['panel_c']; u=p['u'];\\ndef design(u): return np.c_[np.ones(len(u)),u]\\ndef panel(kind,v):\\n def f(x,k):\\n  if kind=='atan':return design(np.arctan(k*x))\\n  return np.c_[design(x),x*x/(1+k*x*x)]\\n def err(k):\\n  Q=np.linalg.qr(f(u,k))[0]; return np.mean(((v-Q@(Q.T@v))/(1-(Q*Q).sum(1)[:,None]))**2)\\n k=minimize_scalar(err,bounds=(.02,2),method='bounded').x; W=np.linalg.lstsq(f(u,k),v,rcond=None)[0]; print(kind,k,err(k)**.5);return lambda x:f(x,k)@W\\nc1=panel('atan',p['v1']); c2=panel('rat',p['v2']); w=z['bf'];\\nbase_y=_kernel(w,.18); base_t=_kernel(w,.18,.2)+.3*(z['forward']@z['forward'].T)**2\\nfor name,a in z.items():\\n if name in ('b','forward','inverse'): continue\\n for typ,f in [('c1',c1),('c2',c2),('both',lambda x:np.c_[c1(x),c2(x)])]:\\n  q=f(a); q-=q.mean(0); k=q@q.T; d=cdist(q,q,'sqeuclidean'); d*=4/np.mean(d)\\n  for par in [.02,.1,.5,2.]:\\n   for r in [.001,.004,.01]:\\n    extra=par*(k+.2*k*k+np.exp(-.18*d)); py=evaluate(base_y+extra,r); pt=evaluate(base_t+extra,r)\\n    rows=globals().setdefault('rows',[]); rows.append(((name,typ,par,r),score(py),score(pt)))\\nfor i in [1,2]:\\n print('c sorted',i)\\n for row in sorted(rows,key=lambda a:(a[i][1]+.25*a[i][2]+.2*a[i][3]) if i==1 else (a[i][5]+.25*a[i][6]+.2*a[i][7]))[:7]:print(row[0],row[i])\\nrows=[]\\nl=w@w.T; df=cdist(w,w,'sqeuclidean'); d0=cdist(z['forward'],z['forward'],'sqeuclidean');\\nfor dname,d in [('bf',df),('mix',.6*df+.4*.77*d0),('fwd',.77*d0)]:\\n for ww in [.07,.12,.18,.25,.35]:\\n  rr=np.sqrt(ww*d)\\n  for kname,k in [('rbf',np.exp(-rr*rr)),('rq5',(1+rr*rr/5)**-5),('rq1',(1+rr*rr)**-1),('m52',(1+rr+rr**2/3)*np.exp(-rr)),('m72',(1+rr+.4*rr**2+rr**3/15)*np.exp(-rr))]:\\n   for q in [0.,.15,.6]:\\n    for r in [.0003,.001,.003,.008]:\\n     P=evaluate(1+l+q*l*l+2*k,r);rows.append(((dname,ww,kname,q,r),score(P)))\\nfor i in [0,4]:\\n print('stationary',i)\\n for row in sorted(rows,key=lambda a:a[1][i+1]+.25*a[1][i+2]+.2*a[1][i+3])[:10]:print(*row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixed.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single metric per head -> H2 blended calibration metrics or auxiliary operators; the verified baseline has 0.03454 prescribed y MAE, 0.04266 worst random-split MAE, and 0.05750 worst radial-slice MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Keep the passing artifact intact while checking whether calibrated panel C features or less restrictive kernels improve the input-radius bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ed334f84215fcbe56e8a5a3ca7f2a77d2322f601d0adb39b5cd3b03c187faccd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28568.09,
+      "usage_known": true,
+      "prompt_tokens": 37416,
+      "cached_tokens": 12672,
+      "completion_tokens": 1187
+    }
+  ]
+}

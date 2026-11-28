@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "59e8e279082d40dea8b58e566a4467d0",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:07:12.463408+00:00",
+  "ended_at_utc": "2026-11-28T14:07:39.235899+00:00",
+  "request_sha256": "6d3ec0616c86a06cdbf7c3db5b9a9bbcaa6b414d8dadd61c9e6c45947d766f94",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68979,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39511,
+    "cached_tokens": 12672,
+    "completion_tokens": 979
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport time\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntr = study['train']\\ndef check(s):\\n    o = m.solve_batch(s)\\n    y, z, d = (o[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    n = len(s['test']['x'])\\n    assert y.shape == (n,) and z.shape == (n, len(s['eval_times'])) and d.shape == (4,)\\n    assert all(isinstance(a,np.ndarray) and np.isfinite(a).all() for a in (y,z,d))\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()],rtol=1e-12,atol=1e-12)\\n    return y,z\\nt0 = time.perf_counter()\\ncheck(study)\\nprint('Full public inference seconds:', round(time.perf_counter()-t0,4))\\nN = len(tr['x'])\\nrng = np.random.default_rng(9873)\\nsplits = [('prescribed',np.arange(N))]+[(f'random-{i}',rng.permutation(N)) for i in range(29)]\\nfor j in range(tr['x'].shape[1]):\\n    o = np.argsort(tr['x'][:,j])\\n    splits += [(f'axis-{j}-high',o),(f'axis-{j}-low',o[::-1])]\\nrows = []\\nfor name,o in splits:\\n    a,b = o[:52],o[52:]\\n    y,z = check(dict(study, train={k:(v if k=='summary' else v[a]) for k,v in tr.items()}, test={'x':tr['x'][b]}))\\n    ze = np.abs(z-tr['traj'][b])\\n    rows.append((np.mean(np.abs(y-tr['y'][b])),ze.mean(),ze.mean(axis=0).max()))\\nprint('Prescribed y/traj/worst-horizon MAE:',rows[0])\\nfor name,subset,r in [('Random and prescribed',splits[:30],rows[:30]),('Axis-tail',splits[30:],rows[30:])]:\\n    r = np.array(r)\\n    print(name,'worst y/traj/horizon MAE:',r.max(axis=0),'worst fold names:',[subset[i][0] for i in r.argmax(axis=0)])\\nassert np.max(rows) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic calibration and full cross-product readout → H2 saturating calibration and sparse dual-branch contractions; the final candidate’s worst-of-30 MAEs are 0.006679 for y, 0.004887 for trajectory, and 0.006233 for any horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The revised candidate improves both prescribed holdout metrics. Verify the unchanged artifact in an isolated Python process, including output diagnostics and coordinate-tail holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2f3cac01d5a890213cd2a046d67a07bd64a2a58f178565dd76cb9d0ea8d622ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26770.79,
+      "usage_known": true,
+      "prompt_tokens": 39511,
+      "cached_tokens": 12672,
+      "completion_tokens": 979
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e1376320cbe94ef9851f77e32d391fae",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:23:47.347736+00:00",
+  "ended_at_utc": "2026-11-28T13:24:10.728962+00:00",
+  "request_sha256": "5ecb6384ba40e2e5068b8fcf7a3e8045cc2be4c389d24af1de90ae2c730ed7d5",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 44130,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30692,
+    "cached_tokens": 12672,
+    "completion_tokens": 882
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\na=runpy.run_path(root+'node_00.py'); b=runpy.run_path(root+'_frozen_nodes/node_01.py'); c=runpy.run_path(root+'node_02.py')\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x'])\\ndef check(train, test, panel_drop=None):\\n    st=copy.deepcopy(s)\\n    st['train']={k:t[k][train] for k in ('x','y','traj')}\\n    y,z=st['train']['y'],st['train']['traj']; st['train']['summary']=np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); st['test']={'x': t['x'][test]}\\n    if panel_drop is not None:\\n        for p in ('panel_a','panel_c'):\\n            st[p]={k:np.delete(v,panel_drop%len(v),axis=0) for k,v in st[p].items()}\\n    v={'__input__':st}; o=c['run_node']({'node_00':a['run_node'](v),'node_01':b['run_node'](v)})\\n    ey=np.abs(o['y_hat']-t['y'][test]); ez=np.abs(o['state_pred']-t['traj'][test]); return np.r_[ey.mean(),ez.mean(),ez.mean(0).max()]\\ni=np.arange(n); p=np.array_split(i,6)\\nr=np.array([check(np.setdiff1d(i,v),v) for v in p]); print('blocked 6-fold [y MAE, trajectory MAE, worst-time MAE]',np.round(r,6)); print('blocked worst',r.max(0))\\nq=a['_inverse'](t['x'],*a['_calibration'](s['panel_a']['u'],s['panel_a']['v'])); test=np.argsort(np.linalg.norm(q,axis=1))[-12:]; rr=check(np.setdiff1d(i,test),test); print('large latent norm holdout',rr)\\nj=np.arange(n-20); k=np.arange(n-20,n); h=np.array([check(j,k,d) for d in range(len(s['panel_a']['u']))]); print('paired leave-one-calibration-row-out worst',h.max(0))\\nassert np.isfinite(np.r_[r.ravel(),rr,h.ravel()]).all()\\nassert max(r[:,:2].max(),rr[:2].max(),h[:,:2].max())<.038\\nPY\\nrc=$?; test $rc -eq 0 && python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and restricted interactions -> H2 sparse cubic calibration and full bilinear features; verified public MAEs are 0.006096 for y and 0.004388 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact artifact already passes public validation. Before submission, test its margin across blocked folds, the largest latent inputs, individual time points, and calibration-row omissions without changing either node.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e2405c1542f3cc6ada5fc746ad872d4ce4a891090c55e8b8a4a0a02a338d4e4c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23380.16,
+      "usage_known": true,
+      "prompt_tokens": 30692,
+      "cached_tokens": 12672,
+      "completion_tokens": 882
+    }
+  ]
+}

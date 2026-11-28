@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d10d5805b78d4b039d4065a90ec67d60",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:49.116772+00:00",
+  "ended_at_utc": "2026-11-28T13:17:30.627248+00:00",
+  "request_sha256": "af969ab70cb280a04f414a732ef8ad549332708d92cfa2dbfa7a5abfc1136875",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53767,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35609,
+    "cached_tokens": 5504,
+    "completion_tokens": 1808
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrated residual readout for the fixed two-branch combination.\\\"\\\"\\\"\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.interpolate import RBFInterpolator\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(5):\\n        coeff = np.array([np.linalg.lstsq(np.c_[np.ones(keep.sum()), u[keep, j]], v[keep, j], rcond=None)[0] for j in range(u.shape[1])])\\n        r = np.linalg.norm(v - coeff[:, 0] - u * coeff[:, 1], axis=1)\\n        new = r <= max(0.002, 3 * np.median(r))\\n        if new.sum() < max(5, len(u)//2) or np.array_equal(new, keep):\\n            break\\n        keep = new\\n    return (x - coeff[:, 0]) / coeff[:, 1]\\n\\n\\ndef _blend_design(z):\\n    s = [np.ones(len(z)), z]\\n    for u in z.T:\\n        s.extend([u**2, u**3, u**4, np.tanh(u), np.arctan(u), u/(1+abs(u)), np.exp(-u*u/2)])\\n    groups = []\\n    for i, j in combinations(range(4), 2):\\n        u, v = z[:, i], z[:, j]\\n        g = [u*v, u*u*v, u*v*v, u*u*v*v, u**3*v, u*v**3, u*v/(1+.5*(u*u+v*v))]\\n        for sign in (-1, 1):\\n            w = (u+sign*v)/1.4\\n            g.extend([np.sin(w), np.cos(w), np.tanh(w), w/(1+abs(w)), np.exp(-w*w/2)])\\n        groups.append(np.column_stack(g))\\n    f = np.column_stack(s+groups+[np.prod(z[:, j], axis=1) for j in combinations(range(4), 3)])\\n    slow = np.column_stack(s+[groups[j] for j in (0, 1, 3)])\\n    return f, slow\\n\\n\\ndef _residual_readout(x, xt, y, t, panel, times):\\n    n = len(x)\\n    both = np.vstack([x, xt])\\n    z = _calibrate(panel, both)\\n    def warp(v, strength):\\n        return v + strength * np.expm1(-.2962*v*v)\\n\\n    q = -np.expm1(-times[:, None] * np.array([.392, 1.857]))\\n    amps = np.linalg.lstsq(q, t.T, rcond=None)[0].T\\n    target = np.column_stack([y, amps])\\n    configs = [(warp(both,-.25),'inverse_quadratic',3,.25,.0001),\\n               (both,'quintic',2,1.,.005),\\n               (warp(z,-.25),'multiquadric',3,.5,.0001),\\n               (warp(z,-.50),'gaussian',3,.5,.0001)]\\n    pred = []\\n    for v, kernel, degree, eps, reg in configs:\\n        degree = min(degree, 2 if n < 35 else degree)\\n        pred.append(RBFInterpolator(v[:n], target, kernel=kernel, degree=degree, epsilon=eps, smoothing=reg)(v[n:]))\\n    d = pred[0]*np.array([.35,.25,.25]) + pred[1]*np.array([.40,.10,.10]) + pred[2]*np.array([.25,.25,.25]) + pred[3]*np.array([0.,.40,.40])\\n\\n    # Fit the complementary contribution with the fixed branch as an offset.\\n    # Evaluating the offset design locally needs only the declared raw input.\\n    f, slow = _blend_design((both-x.mean(0))/np.maximum(x.std(0),1e-12))\\n    scalar_ids = (2,5,10,14,16,23,24,26,33,35,40,50,51,52,54,61,63,64,65,67,77,78,85,87,92,93,96,101,102,104,106,111,119,128,132,137)\\n    fast_ids = (7,9,10,24,30,31,35,36,39,40,51,54,61,68,71,72,85,86,96,101,104,106,111,112,123,127,128,134)\\n    for col, ids, ratio in ((0, scalar_ids, 1.), (2, fast_ids, .35/.65)):\\n        a = f[:, (0,)+tuple(j+1 for j in ids)]\\n        coeff = np.linalg.lstsq(a[:n], target[:, col], rcond=None)[0]\\n        d[:,col] = (1+ratio)*d[:,col] - ratio*(a[n:]@coeff)\\n    slow = slow / np.maximum(np.linalg.norm(slow[:n], axis=0), 1e-8)\\n    dual = np.linalg.solve(slow[:n]@slow[:n].T+.02*np.eye(n), amps[:,0])\\n    d[:,1] = d[:,1]/.65 - (.35/.65)*(slow[n:]@slow[:n].T@dual)\\n    return np.column_stack([d[:,0], d[:,1:]@q.T])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr = study['train']\\n    x, xt = np.asarray(tr['x']), np.asarray(study['test']['x'])\\n    panel_pred = _residual_readout(x, xt, np.asarray(tr['y']), np.asarray(tr['traj']), study['panel_a'], np.asarray(study['eval_times']))\\n    return {'panel_pred': panel_pred}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Use a calibrated cubic and smooth residual ensemble, expressed as a complement to the fixed sink weights; the strongest single direct model had worst-fold MAEs of 0.0369 and 0.0287.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pass direct predictions unchanged into the sink\",\"rejected_reason\":\"The verified fixed blend substantially degrades scalar accuracy when the panel output is treated as a standalone prediction.\"}],\"rationale\":\"Write the calibrated complementary predictor using only its declared input, preserve the frozen files, and test the exact artifact in an isolated Python process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2dc316b8ef80af36f0b077c97acff57ac06f68747bb8438396d931e945dd5e7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41508.29,
+      "usage_known": true,
+      "prompt_tokens": 35609,
+      "cached_tokens": 5504,
+      "completion_tokens": 1808
+    }
+  ]
+}

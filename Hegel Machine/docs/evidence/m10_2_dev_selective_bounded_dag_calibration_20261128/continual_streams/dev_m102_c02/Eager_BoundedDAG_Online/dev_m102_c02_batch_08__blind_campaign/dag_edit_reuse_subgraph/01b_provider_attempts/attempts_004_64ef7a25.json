@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64ef7a2586b549cbb5683c1d390583b6",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:51:52.706739+00:00",
+  "ended_at_utc": "2026-11-28T13:52:17.059625+00:00",
+  "request_sha256": "ccfff5b419437d8fbed8f31dc8ee8de971a155528c9527ddcd921fd01ecdca17",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27069,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23239,
+    "cached_tokens": 12672,
+    "completion_tokens": 881
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat _frozen_nodes/node_02.py _frozen_nodes/node_03.py; cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; rng=np.random.default_rng(331)\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; n,d=u.shape\\n print(k)\\n for vk,v in p.items():\\n  if vk=='u':continue\\n  models={'lin':np.c_[np.ones(n),u], 'diagquad':np.c_[np.ones(n),u,u*u], 'cyclic':np.c_[np.ones(n),u,u*np.roll(u,-1,axis=1)],'quad':np.c_[np.ones(n),u,*[u[:,i]*u[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)]], 'cubic':np.c_[np.ones(n),u,u**3], 'tanh':np.c_[np.ones(n),np.tanh(u)],'atan':np.c_[np.ones(n),np.arctan(u)]}\\n  for name,a in models.items():\\n   h=len(a.T); b=np.linalg.lstsq(a,v,rcond=None)[0]; r=v-a@b\\n   loo=r/(1-np.sum(a*np.linalg.pinv(a).T,axis=1))[:,None]\\n   print(vk,name,'OLS LOO',np.mean(abs(loo)).round(5),end='; ')\\n   if k=='panel_a' and h<=15:\\n    ids=np.argsort(rng.random((1800,n)),axis=1)[:,:h+1]; bs=np.linalg.pinv(a[ids])@v[ids]; rs=np.abs(a@bs-v); err=np.mean(np.partition(rs,34,axis=1)[:,:35]**2,axis=1); best=bs[np.argmin(err,axis=0),:,np.arange(d)].T\\n    for _ in range(7):\\n     re=np.abs(a@best-v); ix=np.argsort(re,axis=0)[:39]; best=np.stack([np.linalg.lstsq(a[ix[:,j]],v[ix[:,j],j],rcond=None)[0] for j in range(d)],axis=1)\\n    re=np.abs(a@best-v); print('resids',np.quantile(re,[.5,.8,.9,1],axis=0).round(4));\\n    if name in ('lin','diagquad','cyclic','quad'): print(best.round(4)); print('row outliers',np.where(re.max(1)>.6)[0])\\n   else: print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 channelwise calibration -> H2 robust cyclic calibration; panel-A affine residual RMS is 1.397–1.456 and public CV is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Infer coupling from ordinary affine coefficients\",\"rejected_reason\":\"The residual size makes gross panel contamination a plausible source of the apparent off-diagonal terms.\"}],\"rationale\":\"Use trimmed panel fits to separate outliers from genuine coupling and compare nonlinear bases on held-out calibration rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d6126279e97cd868e4a44c10230badd4d80bb5be9a19c2d5a1eb334e23c5b6d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24351.94,
+      "usage_known": true,
+      "prompt_tokens": 23239,
+      "cached_tokens": 12672,
+      "completion_tokens": 881
+    }
+  ]
+}

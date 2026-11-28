@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2540019851a444f380c483e9d1cae712",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:28:29.788842+00:00",
+  "ended_at_utc": "2026-11-28T13:28:57.019065+00:00",
+  "request_sha256": "041dabb726ea6364b166297fb54841fe50cabf6e135ac16b4be169a18e4468b5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42540,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29711,
+    "cached_tokens": 12672,
+    "completion_tokens": 1095
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];x=tr['x'];y=tr['y'];T=tr['traj'];t=s['eval_times'];z=m._calibrate(s['panel_a'],x);c=m._branch(s['panel_c'],z,'v1','soft');d=m._branch(s['panel_c'],z,'v2','gauss');f=m._design(z,c,d)\\nfrom itertools import combinations\\npairs=list(combinations(range(4),2)); R=np.column_stack([a[:,i]/(1+k*a[:,j]**2) for a in [c,d] for i,j in pairs for k in [.5,1.] ]+[np.tanh(a[:,i]+q*a[:,j]) for a in [z,c,d] for i,j in pairs for q in [-1,1]]+[z[:,i]*z[:,j]*z[:,k] for i,j,k in combinations(range(4),3)])\\nrng=np.random.default_rng(114); folds=[np.arange(72),*[rng.permutation(72) for _ in range(6)],np.argsort(np.linalg.norm(z,axis=1)),*[np.argsort(abs(z[:,i])) for i in range(4)]]\\nfor index,idx in enumerate(folds):\\n a,b=idx[:52],idx[52:]; F=f[a]; Y=T[a]; beta=np.linalg.lstsq(F,Y,rcond=None)[0]; Yh=F@beta\\n def profile(p,joint):\\n  q=m._time(t,p); U=Yh if joint else Y\\n  return (U.T-q@np.linalg.lstsq(q,U.T,rcond=None)[0]).ravel()\\n out=[]\\n for joint in [False,True]:\\n  p=least_squares(profile,np.log([.4,1.8]),args=(joint,),bounds=(np.log([.12,1.]),np.log([.9,4.]))).x;q=m._time(t,p); P=np.c_[f[b]@np.linalg.lstsq(F,y[a],rcond=None)[0],f[b]@beta@np.linalg.pinv(q.T)@q.T];out.append((np.exp(p),np.mean(abs(y[b]-P[:,0])),np.mean(abs(T[b]-P[:,1:])),max(np.mean(abs(T[b]-P[:,1:]),0))))\\n fr=R-f@np.linalg.lstsq(F,R[a],rcond=None)[0]; fr/=np.maximum(fr[a].std(0),1e-6); A=fr[a]; yy=np.c_[y,T]; base=f@np.linalg.lstsq(F,yy[a],rcond=None)[0];\\n for reg in [30,300]:\\n  pp=base[b]+fr[b]@np.linalg.solve(A.T@A+reg*np.eye(A.shape[1]),A.T@(yy[a]-base[a])); out.append((reg,np.mean(abs(y[b]-pp[:,0])),np.mean(abs(T[b]-pp[:,1:])),max(np.mean(abs(T[b]-pp[:,1:]),0))))\\n print(index,out)\\nprint('fields',list(s),'samples',len(x),'times',t)\\nprint('calibrated coordinate range train/test',np.max(abs(z),0),np.max(abs(m._calibrate(s['panel_a'],s['test']['x'])),0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 bilinear branch coupling with two shared modes → H2 test missing rational, contrast, and cubic terms and joint rate fitting; current worst scalar and horizon MAEs are 0.01469 and 0.02064.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay, drift-operator, or classification-specific audits\",\"rejected_reason\":\"The study provides continuous paired measurements, not relay modes, a drift equation, or batch-labeled classes.\"}],\"rationale\":\"Compare extensions against the verified baseline on identical held-out slices. Check the coordinates of the actual test inputs against the measured training range.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "eca4f34bce266b53510de4a9107d13e65378f557886fee36bb3a08c2518d2edb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27228.73,
+      "usage_known": true,
+      "prompt_tokens": 29711,
+      "cached_tokens": 12672,
+      "completion_tokens": 1095
+    }
+  ]
+}

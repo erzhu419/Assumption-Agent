@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "607bf3bad66b425f8b3d136aa3bd8ed6",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:23:42.327701+00:00",
+  "ended_at_utc": "2026-11-28T13:24:01.303038+00:00",
+  "request_sha256": "4beac80b8f412011c7c874368807086f9b6dd977164b8ecc1247236b75c38309",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21438,
+    "cached_tokens": 12672,
+    "completion_tokens": 648
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '1,48p' /tmp/hegel_continual_archive/*solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy'; cat > /tmp/probe_cal.py <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_a'][k] for k in ['u','v']); tr=s['train']; print('train x range',tr['x'].min(0),tr['x'].max(0)); print('panel b/c samples');\\nfor key in ('panel_b','panel_c'):\\n p=s[key];print(key, np.round(np.column_stack(tuple(p.values()))[:4],4));\\ngood=np.max(abs(v),axis=1)<4; print('suspect rows',np.where(~good)[0]); u,v=u[good],v[good];\\nfor k in (1,2,3):\\n terms=[()]+[a for d in range(1,k+1) for a in itertools.combinations_with_replacement(range(4),d)]; X=np.column_stack([np.prod(u[:,a],axis=1) for a in terms]); c=np.linalg.lstsq(X,v,rcond=None)[0]; r=v-X@c; h=np.sum(X*np.linalg.pinv(X).T,axis=1); print('degree',k,'rmse',np.mean(r*r,0)**.5,'LOO MAE',np.mean(abs(r/(1-h[:,None])),0));\\n for j in range(4): print(j,[(a,round(c[i,j],5)) for i,a in enumerate(terms) if abs(c[i,j])>0.025]);\\nprint('clean rows');print(np.round(np.c_[u,v],5))\\nPY\\npython3 /tmp/probe_cal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent affine calibration → H2 robust nonlinear calibration; archived public holdout MAEs were 0.134509 for scalar and 0.156918 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit ordinary multivariate affine regression to all rows\",\"rejected_reason\":\"Several paired observations have extreme responses across all channels, making ordinary least squares unable to distinguish contamination from cross-channel terms.\"}],\"rationale\":\"Separate the conspicuous rowwise contamination from clean-panel structure, then compare affine and polynomial leave-one-out errors and recover the archived transformation direction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "b58c644f5c376067b330a9e9b02555ae85cf83646b7bfb0237c483fd60d82608",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18974.31,
+      "usage_known": true,
+      "prompt_tokens": 21438,
+      "cached_tokens": 12672,
+      "completion_tokens": 648
+    }
+  ]
+}

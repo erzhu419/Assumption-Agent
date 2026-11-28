@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71f9a25f957249b193ae742d45af57d4",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:08:16.828071+00:00",
+  "ended_at_utc": "2026-11-28T14:08:56.537372+00:00",
+  "request_sha256": "a47cab4c8580ad8e244d1bdfd5ad2c6e9d126a3bae8931f5a0c95bb20dc21355",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47772,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30514,
+    "cached_tokens": 12672,
+    "completion_tokens": 1639
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/read15.py <<'PY'\\nexec(open('/tmp/explore15.py').read().split('for j in (1,2,3):')[0])\\nfrom scipy.spatial.distance import cdist\\nP=list(it.combinations(range(4),2)); pairs=lambda x:np.column_stack([x[:,i]*x[:,j] for i,j in P]); roll=lambda x:np.roll(x,-1,axis=1)\\nd=lambda x:aff(x,x*roll(x),x**3)\\nw=ls(d(u),v);print('A coef',np.round(w,6)); print('A residual selection',np.sort(np.max(abs(d(s['panel_a']['u'])@w-s['panel_a']['v']),axis=1))[-8:]);w[abs(w)<.001]=0\\nx=tr['x'];z=x.copy();j=np.arange(4)\\nfor _ in range(45):\\n J=np.broadcast_to(w[1:5].T,(len(z),4,4)).copy();J[:,j,j]+=w[5:9].diagonal()*roll(z)+3*w[9:].diagonal()*z*z;J[:,j,(j+1)%4]+=w[5:9].diagonal()*z; z-=np.clip(np.linalg.solve(J,(d(z)@w-x)[:,:,None])[:,:,0],-.4,.4)\\nprint('inv check',abs(d(z)@w-x).max(),z.min(0),z.max(0));\\nU,V,W=s['panel_c'].values();sat=lambda z,k:z/(1+k*abs(z));root=lambda z,k:z/np.sqrt(1+k*z*z)\\nM={}\\nfor key,F,T in [('p',sat,V),('q',root,W)]:\\n def d0(x,k):return aff(x,F(x,k),pairs(x))\\n o=minimize_scalar(lambda k:rm(d0(U,k)@ls(d0(U,k),T)-T),bounds=(.1,2),method='bounded'); ww=ls(d0(U,o.x),T); print(key,o.x,o.fun,np.round(ww,4));M[key]=d0(z,o.x)@ww\\nM['z']=z\\nB,T=s['panel_b'].values(); fs={'sat':sat,'root':root,'tanh':lambda x,k:np.tanh(k*x),'sin':lambda x,k:np.sin(k*x),'cos':lambda x,k:np.cos(k*x),'log':lambda x,k:np.log1p(k*x*x),'rat':lambda x,k:x/(1+k*x*x),'sq':lambda x,k:x*x,'cube':lambda x,k:x**3,'exp':lambda x,k:np.exp(-k*x*x)}\\nout=[]\\nfor nm,F in fs.items():\\n for mode in range(4):\\n  def bf(x,k):return aff(*[(F(x,k),),(x,F(x,k)),(F(x,k),pairs(x)),(x,F(x,k),pairs(x))][mode]);\\n  o=minimize_scalar(lambda k:rm(bf(B,k)@ls(bf(B,k),T)-T),bounds=(.03,5),method='bounded');out.append((o.fun,nm,mode,o.x))\\nprint('B best',sorted(out)[:12]);\\nfor bi,(_,nm,mode,k) in enumerate(sorted(out)[:3]):\\n F=fs[nm]; bf=lambda x:aff(*[(F(x,k),),(x,F(x,k)),(F(x,k),pairs(x)),(x,F(x,k),pairs(x))][mode]);M['b'+str(bi)]=bf(z)@ls(bf(B),T)\\nt=s['eval_times']; Y=tr['traj']; bas=lambda k:-np.expm1(-np.outer(t,k)); opt=least_squares(lambda k:(bas(k)@ls(bas(k),Y[:52].T)-Y[:52].T).ravel(),[1.8,.43],bounds=([.8,.03],[8,.79])); Utime=bas(opt.x);print('rates',opt.x,rm(opt.fun));A=ls(Utime,Y.T).T;R=np.c_[tr['y'],A];\\ndef report(f):\\n pred=f@ls(f[:52],R[:52]);return np.r_[np.mean(abs(pred[52:]-R[52:]),axis=0),np.mean(abs((pred[52:,1:]@Utime.T)-Y[52:])),np.mean(abs(pred[:52]-R[:52]),axis=0)]\\nfeatures=[]\\nfor n,a in M.items():\\n for m,b in M.items():\\n  if m<n:continue\\n  cross=(a[:,:,None]*b[:,None,:]).reshape(len(a),16) if m!=n else np.c_[a*a,pairs(a)];\\n  for mode,c in [('lin',aff(a,b)),('dot',aff(a,b,np.sum(a*b,axis=1))),('all',aff(a,b,cross)),('sq',aff(a,b,cross,a*a,b*b))]:\\n   e=report(c);features.append((max(e[0],e[3]),n,m,mode,np.round(e,5)))\\n  common=aff(a,b,np.sum(a*b,axis=1)); scores=[]\\n  for i in range(cross.shape[1]):\\n   c=np.c_[common,cross[:,i]]; rr=R[:52]-c[:52]@ls(c[:52],R[:52]);scores.append(rm(rr/R[:52].std(0)))\\n  j=np.argmin(scores);e=report(np.c_[common,cross[:,j]]);features.append((max(e[0],e[3]),n,m,'cross'+str(j),np.round(e,5)))\\nprint('readout top');[print(row) for row in sorted(features,key=lambda q:q[0])[:22]]\\nnp.savez('/tmp/dat15.npz',**M,R=R,time=Utime,Y=Y)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/read15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal calibration → H2 cyclic affine–bilinear–cubic calibration; panel-A fit RMSE is 0.000079 and the archived worst-output 52/20 MAE is 0.10943.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Diagonal calibration with coordinatewise nonlinear corrections adequately explains panel A.\",\"empirical_witness\":\"Diagonal variants leave RMSE above 0.17, whereas cyclic bilinear and cubic terms with affine mixing reduce it to 0.000079.\",\"causal_blanket_diagnosis\":\"The residual was dominated by missing cross-coordinate calibration terms, not by measurement noise.\",\"sublated_pivot\":\"Recover the sparse cyclic map, invert it, and compare candidate auxiliary readout interactions.\",\"risk_kind\":\"missing calibration interactions\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Resolve the calibration on independent reference data, then compare bilinear readouts on the prescribed split with the temporal rates fit only on training rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "38b87b4541a95419a8c618772be7330d255f791a1a973b561a9d967622f60d43",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39707.96,
+      "usage_known": true,
+      "prompt_tokens": 30514,
+      "cached_tokens": 12672,
+      "completion_tokens": 1639
+    }
+  ]
+}

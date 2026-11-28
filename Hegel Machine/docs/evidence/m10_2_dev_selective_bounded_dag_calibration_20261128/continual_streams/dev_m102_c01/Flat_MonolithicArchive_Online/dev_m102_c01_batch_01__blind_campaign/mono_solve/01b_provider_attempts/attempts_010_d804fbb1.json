@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d804fbb11da24b2fa6b1002c5f1747be",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:58.611954+00:00",
+  "ended_at_utc": "2026-11-28T13:18:31.961348+00:00",
+  "request_sha256": "775d5b899763973f1214f016bf54d96d373b156d281883775cc1dce4b341a38b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63143,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39953,
+    "cached_tokens": 0,
+    "completion_tokens": 1440
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/mix.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rows=[]')[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nsplits=[np.arange(72)]+[np.random.default_rng(i+177).permutation(72) for i in range(16)]\\nI,J=np.triu_indices(4)\\ndef gram(f):return f@f.T\\nz=Q['A-']; zs=[z,Q['A-B'],Q['A-Bi']]; d2=[cdist(v,v,'sqeuclidean') for v in zs]; lin=gram(z); quad=gram(z[:,I]*z[:,J]); one=np.ones_like(lin); parts0=[one,lin,quad]\\nfor i,z in enumerate(zs):\\n z=z/np.sqrt(np.mean(z*z,axis=0));\\n for k in (.4,.8,1.5,2.5):\\n  for name,w in [('soft',z/(1+k*abs(z))),('tanh',np.tanh(k*z)),('root',z/np.sqrt(1+k*z*z)),('rat',z/(1+k*z*z))]:\\n   w=w/np.sqrt(np.mean(w*w,axis=0)); l=gram(w); q=gram(w[:,I]*w[:,J]); m=gram((z[:,:,None]*w[:,None,:]).reshape(len(z),-1));\\n   parts0.append((i,k,name,l,q,m))\\nbase=parts0[:3]; alt=parts0[3:]; g=[np.exp(-d2[0]/k) for k in (1,2,4,8,16,32)];\\ndef make(parts,noise_bounds=(-11,-4)):\\n P=np.array(parts); npar=len(parts); result=[]; predictions=[]\\n for ix in splits:\\n  a,b=ix[:52],ix[52:]; pa=P[:,a][:,:,a]; pb=P[:,b][:,:,a]; E=np.eye(len(a)); rr=[]; pp=[]\\n  for yy in [y,tt]:\\n   v=yy[a];\\n   def fun(h):\\n    w=np.exp(h); C=cho_factor(np.einsum('i,ijk->jk',w[:-1],pa)+w[-1]*E); al=cho_solve(C,v); inv=cho_solve(C,E); G=(inv-np.outer(al,al))/2; return v@al/2+np.log(np.diag(C[0])).sum(),w*np.r_[np.einsum('ij,kij->k',G,pa),np.trace(G)]\\n   init=np.r_[np.full(npar,-3.),-8.]; r=minimize(fun,init,jac=True,method='L-BFGS-B',bounds=[(-15,5)]*npar+[noise_bounds],options={'maxiter':155}); w=np.exp(r.x); pred=np.einsum('i,ijk->jk',w[:-1],pb)@cho_solve(cho_factor(np.einsum('i,ijk->jk',w[:-1],pa)+w[-1]*E),v); rr.append(np.mean(abs(pred-yy[b]))); pp.append(pred)\\n  result.append(rr); predictions.append(pp)\\n a=np.array(result); return a[0],a.mean(0),a.max(0),np.array(predictions)\\nrows=[]\\nfor name,P in [('base',base+g),('poly',base+[lin**k for k in range(3,8)]),('ANOVA',[one]+[sum((zs[0][:,j,None]*zs[0][None,:,j])**p for j in range(4)) for p in range(1,7)]+[quad]+g)]+[(str((i,k,n)),base+g+[l,q,m]) for i,k,n,l,q,m in alt]:\\n a,b,c,pred=make(P); rows.append((name,a,b,c,pred))\\nfor j in (0,1):\\n print('OUT',j); print(*[r[:4] for r in sorted(rows,key=lambda r:r[2][j])[:14]],sep='\\\\n');\\nfor label,rs in [('all',rows),('warped',rows[3:]),('raw',rows[3:19]),('forward',rows[19:35]),('inverse',rows[35:]),('best',sorted(rows,key=lambda r:r[2][0])[:10])]:\\n pred=np.mean([r[-1] for r in rs],axis=0); truth=np.array([Y[ix[52:]].T for ix in splits]); a=np.mean(abs(pred-truth),axis=2); print('ENSEMBLE',label,a[0],a.mean(0),a.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mix.py | sed -n '/^OUT/,$p'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: free rational cubic → H2: structured interaction kernels with coordinatewise warps; the best rational family reached 0.05414 scalar MAE on its worst measured split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether shrinking structured interaction terms and averaging over uncertain coordinate warps reduces held-out error relative to the unstable free cubic.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8ed0a904168174e49954856d4d40ba3d941330de8caaef43d9087b274397bb29",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33347.57,
+      "usage_known": true,
+      "prompt_tokens": 39953,
+      "cached_tokens": 0,
+      "completion_tokens": 1440
+    }
+  ]
+}

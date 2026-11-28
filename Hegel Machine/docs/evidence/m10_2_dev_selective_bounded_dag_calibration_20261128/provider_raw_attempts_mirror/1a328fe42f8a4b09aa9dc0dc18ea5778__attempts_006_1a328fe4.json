@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a328fe42f8a4b09aa9dc0dc18ea5778",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:30:12.287458+00:00",
+  "ended_at_utc": "2026-11-28T13:30:37.762377+00:00",
+  "request_sha256": "93b8fd25f1b59ea4c036e130e1a63010abf28019626182ccec0def38c7cfc3d2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28805,
+    "cached_tokens": 12672,
+    "completion_tokens": 975
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\ndef load(i):\\n    name=f'node_{i:02d}'\\n    spec=importlib.util.spec_from_file_location(name,root+('' if i==0 else '_frozen_nodes/')+name+'.py')\\n    mod=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nmods=[load(i) for i in range(4)]\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\nx,y,tr=[s['train'][k] for k in ('x','y','traj')]\\nidx=np.arange(len(x))\\ndef check(study,hold):\\n    keep=~np.isin(idx,hold)\\n    z=dict(study,train=dict(study['train'],x=x[keep],y=y[keep],traj=tr[keep]),test=dict(x=x[hold]))\\n    m0=mods[0].run_node({'__input__':z})\\n    m1=mods[1].run_node({'__input__':z,'node_00':m0})\\n    m2=mods[2].run_node({'node_01':m1})\\n    m3=mods[3].run_node({'node_01':m1,'node_02':m2})\\n    assert m3['y_hat'].shape==y[hold].shape and m3['state_pred'].shape==tr[hold].shape\\n    assert all(np.all(np.isfinite(a)) for a in m3.values())\\n    return [np.mean(np.abs(m3['y_hat']-y[hold])),np.mean(np.abs(m3['state_pred']-tr[hold]))]\\nslices={f'fold_{i}':idx[i::6] for i in range(6)}\\nfor j in range(x.shape[1]):\\n    order=np.argsort(x[:,j]); slices[f'ch{j}_low']=order[:12]; slices[f'ch{j}_high']=order[-12:]\\nslices['largest_sensor_norm']=np.argsort(np.linalg.norm(x,axis=1))[-12:]\\nmetrics={k:check(s,h) for k,h in slices.items()}\\nfor k, m in metrics.items(): print(k,*[round(float(v),6) for v in m])\\nfor panel in ('panel_a','panel_b'):\\n    p=s[panel]; vals=[]\\n    for j in range(len(p['u'])):\\n        sp=dict(s); sp[panel]={k:np.delete(v,j,axis=0) for k,v in p.items()}; vals.append(check(sp,slices['largest_sensor_norm']))\\n    metrics[panel+'_jackknife_high_norm']=np.max(vals,axis=0)\\n    print(panel+'_jackknife_high_norm',*[round(float(v),6) for v in metrics[panel+'_jackknife_high_norm']])\\nw=np.max(list(metrics.values()),axis=0)\\nprint('worst scalar and trajectory MAE:',w)\\nassert np.all(w<=0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust cyclic sensor inverse → nonlinear panel-B calibration; verified public CV MAE is 0.012563 for the scalar and 0.008119 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact candidate passed the official validator in isolation. Test both outputs on sensor-tail holdouts and with one reference row removed at a time, without editing the accepted artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c11667ca4e95138ba92f7a9076c2b95e97276116f072af709c4135b80e998f39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25473.6,
+      "usage_known": true,
+      "prompt_tokens": 28805,
+      "cached_tokens": 12672,
+      "completion_tokens": 975
+    }
+  ]
+}

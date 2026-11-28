@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f46fa35875bb42ce97e94d67e2b56f42",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:21:04.902912+00:00",
+  "ended_at_utc": "2026-11-28T13:21:33.289128+00:00",
+  "request_sha256": "47220f7eb6bfe8a68504d1578043d83a3f3a90dd3dc7edc5595123f0bb1ac10b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34915,
+    "cached_tokens": 12672,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\narchive=$(find /tmp/hegel_continual_archive -maxdepth 1 -name '*solver.py' -print -quit)\\nsed -n '/^def _trajectory/,/^def /p' \\\"$archive\\\" | sed '$d' > /tmp/node01_trajectory.py\\ncat /tmp/node01_trajectory.py\\ncat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Scalar and trajectory readouts on the frozen calibrated coordinates.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _scalar_inputs(c):\\n    paired = np.sum(c[:, :2] * c[:, 2:], axis=1)\\n    return np.column_stack((c, paired))\\n\\n\\ndef _scalar_readout(c, query, y):\\n    u, uq = _scalar_inputs(c), _scalar_inputs(query)\\n    x, xq = _affine(u), _affine(uq)\\n\\n    def design(base, z, w):\\n        s = z @ w\\n        return np.column_stack((base, s / (1.0 + s * s)))\\n\\n    def projected_residual(w):\\n        d = design(x, u, w)\\n        return d @ np.linalg.lstsq(d, y, rcond=None)[0] - y\\n\\n    linear = np.linalg.lstsq(x, y, rcond=None)[0][1:]\\n    if np.linalg.norm(linear) < 1e-10:\\n        return xq @ np.linalg.lstsq(x, y, rcond=None)[0]\\n    direction = linear / np.linalg.norm(linear)\\n    optimum = min((least_squares(projected_residual, scale * direction,\\n                                 bounds=(-5., 5.), max_nfev=160, gtol=2e-10)\\n                   for scale in (0.6, 1.2, 2.0)), key=lambda fit: fit.cost)\\n    d = design(x, u, optimum.x)\\n    beta = np.linalg.lstsq(d, y, rcond=None)[0]\\n    return design(xq, uq, optimum.x) @ beta\\n\\n\\nPY\\ncat /tmp/node01_trajectory.py >> /holdout_task/node_01.py\\ncat >> /holdout_task/node_01.py <<'PY'\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    coordinates = inputs['node_00']\\n    c = np.asarray(coordinates['c'], dtype=float)\\n    query = np.asarray(coordinates['query'], dtype=float)\\n    train = study['train']\\n    y_hat = _scalar_readout(c, query, np.asarray(train['y'], dtype=float))\\n    state_pred = _trajectory(c, query, np.asarray(train['traj'], dtype=float),\\n                             np.asarray(study['eval_times'], dtype=float))\\n    final_state = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         final_state.mean(), final_state.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Unstable cubic expansion → rational saturation of a linear-plus-bilinear index; the probe scored 0.004171 public scalar MAE and 0.005654 worst inner-fold scalar MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use a tanh readout\",\"rejected_reason\":\"It has a slightly lower public-split error, but the rational readout has a lower worst inner-fold error at the same parameter count.\"}],\"rationale\":\"Fit the compact readout using only training labels, preserve the archived trajectory calculation, and verify the exact sink artifact against the DAG contract in an isolated process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "30335dbfcf1f5ab3a9a1574fc3428c2eb8a3245d5c8b231eabb2db01fc42007b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28383.26,
+      "usage_known": true,
+      "prompt_tokens": 34915,
+      "cached_tokens": 12672,
+      "completion_tokens": 1070
+    }
+  ]
+}

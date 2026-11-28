@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1dd461b870b409fa12b11c3169a4538",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:14:07.790959+00:00",
+  "ended_at_utc": "2026-11-28T14:14:24.871985+00:00",
+  "request_sha256": "38b4c9410b12e19af755dc4438ec76efea01f05a5701554119562eece7084987",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 52968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31246,
+    "cached_tokens": 5504,
+    "completion_tokens": 535
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I -c '\\nimport ast, pathlib, subprocess, sys, json\\nroot = pathlib.Path(\\\"/holdout_task\\\")\\nfor name in (\\\"node_00.py\\\", \\\"node_02.py\\\"):\\n    p = root / name\\n    tree = ast.parse(p.read_text(), filename=str(p))\\n    assert any(isinstance(n, ast.FunctionDef) and n.name == \\\"run_node\\\" for n in tree.body), name\\n    for n in ast.walk(tree):\\n        if isinstance(n, ast.Import):\\n            assert all(a.name == \\\"numpy\\\" for a in n.names), (name, n.names)\\n        elif isinstance(n, ast.ImportFrom):\\n            assert n.level == 0 and n.module == \\\"scipy.optimize\\\", (name, n.module)\\ncp = subprocess.run([sys.executable, \\\"-I\\\", str(root / \\\"test_dag_candidate.py\\\")], check=True, capture_output=True, text=True)\\nresult = json.loads(cp.stdout)\\nassert result[\\\"accepted\\\"] and not result[\\\"errors\\\"], result\\nassert result[\\\"exec_counts\\\"] == {f\\\"node_{i:02d}\\\": 1 for i in range(4)}, result\\nfor k in (\\\"public_cv_y_mae\\\", \\\"public_cv_traj_mae\\\"):\\n    assert 0 <= result[\\\"cv_metrics\\\"][k] <= 0.038, result\\nprint(cp.stdout, end=\\\"\\\")\\n'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 polynomial calibration and fixed SVD → H2 robust instrument correction, shared cosine calibration, and fitted relaxation modes; worst holdout MAEs were 0.004822 scalar and 0.004698 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\",\"ng_t06\"]},\"considered_alternatives\":[],\"rationale\":\"Verify the unchanged candidate with a strict import allowlist and the official DAG evaluator in a clean subprocess. The evaluator checks exact output shapes, finiteness, diagnostics, edge consumption, and numeric novelty.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e5220dddf66f92dacf4c621cd6da80e90bee61fead565f0661f2e71a644cf8ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17079.56,
+      "usage_known": true,
+      "prompt_tokens": 31246,
+      "cached_tokens": 5504,
+      "completion_tokens": 535
+    }
+  ]
+}

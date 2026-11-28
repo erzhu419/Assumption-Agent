@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "13d6b828a0244b38947bf5a62370b997",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:18:46.119945+00:00",
+  "ended_at_utc": "2026-11-28T13:19:14.636034+00:00",
+  "request_sha256": "cd195390fed238e9891e0cd326240241da78468c117c30b8b8847c5666c1d938",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29591,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23733,
+    "cached_tokens": 12672,
+    "completion_tokens": 1190
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout_probe.py <<'PY'\\nimport importlib.util, itertools as it, pickle\\nimport numpy as np\\nfrom pathlib import Path\\nroot=Path('/holdout_task')\\ndef load(name,path):\\n s=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m\\nstudy=pickle.loads((root/'public_batch.pkl').read_bytes())[0]['study']\\nc=load('n0',root/'_frozen_nodes/node_00.py').run_node({'__input__':study})['c']\\ny=study['train']['y']; traj=study['train']['traj']; n=len(y)\\nA=np.column_stack((np.ones(n),c)); pairs=list(it.combinations_with_replacement(range(c.shape[1]),2)); Q=np.column_stack([c[:,i]*c[:,j] for i,j in pairs]); cross=[pairs.index(p) for p in [(0,2),(0,3),(1,2),(1,3)]]; off=[j for j,(p,q) in enumerate(pairs) if p!=q]; old=Q[:,cross[0]]+Q[:,cross[3]]\\nD={'affine':A,'archived':np.c_[A,old],'cross':np.c_[A,Q[:,cross]],'offdiag':np.c_[A,Q[:,off]],'quadratic':np.c_[A,Q], 'cubic':np.c_[A,Q,np.column_stack([np.prod(c[:,p],axis=1) for p in it.combinations_with_replacement(range(4),3)])]}\\nD.update({f'{pairs[p]} {sgn:+} {pairs[q]}':np.c_[A,Q[:,p]+sgn*Q[:,q]] for p,q in it.combinations(off,2) for sgn in [1,-1]})\\nD.update({str(pairs[p]):np.c_[A,Q[:,p]] for p in range(len(pairs))})\\nfolds=[(np.arange(n-20),np.arange(n-20,n))]+[(np.setdiff1d(np.arange(n),te),te) for te in np.array_split(np.random.default_rng(117).permutation(n),6)]\\ndef pred(d,target,tr,te): return d[te]@np.linalg.lstsq(d[tr],target[tr],rcond=None)[0]\\ndef errors(d, target=y, splits=folds): return np.array([np.mean(np.abs(target[te]-pred(d,target,tr,te))) for tr,te in splits])\\nfor key in ['affine','archived','cross','offdiag','quadratic','cubic']+sorted(set(D)-{'affine','archived','cross','offdiag','quadratic','cubic'},key=lambda k:errors(D[k])[1:].mean())[:10]:\\n d=D[key]; e=errors(d); b=np.linalg.lstsq(d,y,rcond=None)[0]; print(key, 'holdout/oof/worst',np.round([e[0],e[1:].mean(),e.max()],6),'coefficients',b.round(5),'train',np.mean(np.abs(y-d@b)))\\n# Retest the discrete dictionary with motif selection restricted to each training fold.\\nkeys=list(D)\\nfor tr,te in folds:\\n inn=[(np.setdiff1d(tr,va),va) for va in np.array_split(np.random.default_rng(213).permutation(tr),5)]\\n key=min(keys,key=lambda k:errors(D[k],splits=inn).mean()); print('nested',key,round(np.mean(np.abs(y[te]-pred(D[key],y,tr,te))),6))\\nprint('trajectory affine holdout/oof/worst',errors(A,traj)[0],errors(A,traj)[1:].mean(),errors(A,traj).max()); print('pairs',pairs)\\np=study['panel_c']; u=np.c_[np.ones(len(p['u'])),p['u']]; print('panel C affine fits',[(k,np.mean(np.abs(u@np.linalg.lstsq(u,p[k],rcond=None)[0]-p[k]))) for k in ('v1','v2')])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 a shared coefficient on the archived pairwise sum -> H2 identify the changed interaction in calibrated coordinates; prior probe MAEs are 0.051827 for readout and 0.006544 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted polynomial immediately\",\"rejected_reason\":\"Comparing nested held-out performance against individual and symmetric bilinear terms can establish whether the extra terms are needed.\"}],\"rationale\":\"Test the archived sum, alternate pairwise symmetries, and unrestricted interactions on common splits, with motif selection repeated inside each outer fold. Keep the affine trajectory projection separate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "48eb2d4310603486e3e386b59cf28ab674fd7ef35bfb11a983bf66a307b0d9fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28514.79,
+      "usage_known": true,
+      "prompt_tokens": 23733,
+      "cached_tokens": 12672,
+      "completion_tokens": 1190
+    }
+  ]
+}

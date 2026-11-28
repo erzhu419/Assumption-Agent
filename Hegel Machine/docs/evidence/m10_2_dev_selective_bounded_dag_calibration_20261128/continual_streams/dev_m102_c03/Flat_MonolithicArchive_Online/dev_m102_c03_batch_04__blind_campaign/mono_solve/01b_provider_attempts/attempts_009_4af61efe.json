@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4af61efecbf945e79e0b718772e08028",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:05.169729+00:00",
+  "ended_at_utc": "2026-11-28T13:34:36.850514+00:00",
+  "request_sha256": "b431caddaed1ebdaba271666c1b45482ca625d3d99459edb7bc17e27fd7b64ce",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49291,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31354,
+    "cached_tokens": 12672,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact04.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; f=m._design(s,x); fit=m._fit\\nO=f[:,0]; C=f[:,5:9]; E=f[:,9:13]; cross=f[:,13:]; diag=np.array([0,5,10,15]); off=np.setdiff1d(np.arange(16),diag); D=cross[:,diag].sum(1); Fy=np.c_[O,C,E,D]; lv=np.sum(np.linalg.qr(f)[0]**2,axis=1); rng=np.random.default_rng(447)\\nsplits=[('fixed',np.arange(len(x))),('leverage',np.argsort(lv)),('norm',np.argsort(np.linalg.norm(x,axis=1)))]+[(f'x{j}/{sg}',np.argsort(sg*x[:,j])) for j in range(4) for sg in [-1,1]]+[('random',rng.permutation(len(x))) for _ in range(100)]\\nrows=[]; supports=[]\\nfor name,ids in splits:\\n a,b=ids[:52],ids[52:]; q=m._basis(t,T[a]); amp=fit(q,T[a].T).T; full=fit(f[a],amp); p0=f[b]@full@q.T\\n # Select the interaction using only spatial coefficients from the training trajectories.\\n c=fit(f[a],T[a]); j=off[np.argmax(np.linalg.norm(c[13+off],axis=1))]; supports.append(j)\\n G=np.c_[Fy,cross[:,j]]; L=np.c_[G,f[:,1:5]]; U=np.c_[O,C,E,cross[:,diag],cross[:,j]]\\n y0=f[b]@fit(f[a],y[a]); y1=Fy[b]@fit(Fy[a],y[a]); y2=G[b]@fit(G[a],y[a]);\\n def err(yy,tt):\\n  e=np.abs(tt-T[b]); return [np.abs(yy-y[b]).mean(),e.mean(),e.mean(0).max()]\\n R=[err(y0,p0),err(y1,p0),err(y2,p0)]; Q=q@np.linalg.pinv(q)\\n for H in (G,L,U):\\n  P=H[b]@fit(H[a],T[a]); R.append(err(y1,P@Q)); R.append(err(y1,P))\\n rows.append(R)\\n if name in ('fixed','leverage','norm'): print(name,np.round(R,6).tolist())\\nprint('worst:',np.round(np.max(rows,axis=0),6).tolist()); print('mean:',np.round(np.mean(rows,axis=0),6).tolist()); print('supports:',np.unique(supports,return_counts=True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compact04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted bilinear readout) -> H2 (compact scalar readout with independently chosen trajectory support); the audited compact model lowered worst-slice y MAE from 0.01617 to 0.00771 but raised worst-horizon trajectory MAE from 0.01105 to 0.01243.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the jointly constrained trajectory model immediately\",\n      \"rejected_reason\": \"Its fixed-split trajectory MAE was 0.00639 versus 0.00454 for the baseline; the scalar improvement does not require accepting that trajectory regression.\"\n    },\n    {\n      \"option\": \"Add rational and pairwise corrections\",\n      \"rejected_reason\": \"The audited augmentation raised worst-slice scalar MAE to 0.04533, above the 0.038 gate.\"\n    }\n  ],\n  \"rationale\": \"Test the compact scalar readout separately and check whether a shared sparse trajectory support can improve extrapolation without forcing a different temporal basis. Interaction selection stays inside each training fold, and the verified artifact remains unchanged during the comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8456ca1ab14399303fcc209f9a4295aec5c482350077abd116970615274f0ead",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31679.43,
+      "usage_known": true,
+      "prompt_tokens": 31354,
+      "cached_tokens": 12672,
+      "completion_tokens": 1323
+    }
+  ]
+}

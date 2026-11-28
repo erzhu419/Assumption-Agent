@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a6d43d5ea2d14eacb957f0ff785c6416",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:35:26.143501+00:00",
+  "ended_at_utc": "2026-11-28T13:35:45.744771+00:00",
+  "request_sha256": "3af08e49aa9b3c032679e788b421c2814ce72bebaf8dc9e51dd3f97cd6170888",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43059,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29951,
+    "cached_tokens": 12672,
+    "completion_tokens": 715
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    trajectory = inputs['node_02']['state_pred']\\n    scores = features['scores']\\n    query_scores = trajectory @ features['modes'].T\\n    sy, qy = features['sy'], features['qy']\\n\\n    # Use matched training/query features for both calibrated corrections.\\n    gram = features['K'] + 0.03 * (sy @ sy.T) + 0.01 * (scores @ scores.T)\\n    cross = features['Kq'] + 0.03 * (qy @ sy.T) + 0.01 * (query_scores @ scores.T)\\n    target = features['y_centered'] + features['y_mean']\\n    alpha = solve(gram + 0.004 * np.eye(len(gram)), target, assume_a='pos')\\n    return {'y_hat': cross @ alpha}\\nPY\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 -IB /holdout_task/test_dag_candidate.py\\nsed 's/102,701,208/102,701,208,330,12,718/' /tmp/verify_readout.py > /tmp/verify_readout_final.py\\npython3 -IB /tmp/verify_readout_final.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: fixed-ridge input and trajectory kernel -> H2: add a calibrated scalar feature term and reduce shrinkage; worst y MAE fell from 0.040097 to 0.037994 across 25 public slices.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the verified baseline\",\"rejected_reason\":\"Its official MAE is lower, but it exceeds 0.038 on a supplemental slice; the challenger stays below 0.038 on all 25 tested splits.\"},{\"option\":\"Use the squared-kernel extension\",\"rejected_reason\":\"It lowers mean MAE but raises worst-slice MAE above 0.038 and leaves less margin on the official split.\"}],\"rationale\":\"Promote the calibrated correction for its lower worst-slice error, then verify the exact saved artifact in an isolated process against the official DAG contract and all 25 slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "07f6e29db10af3182ef9ee7ca058d56236b0850db3e06e6ebaf32cfe66f0798e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19599.59,
+      "usage_known": true,
+      "prompt_tokens": 29951,
+      "cached_tokens": 12672,
+      "completion_tokens": 715
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9407692992742df8f85a893b4551462",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:27:00.446772+00:00",
+  "ended_at_utc": "2026-11-28T13:27:34.122142+00:00",
+  "request_sha256": "4d15038376f40d4d101e5a0078cb97257944c82610b92488c0227db5c5ca43ba",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37577,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27561,
+    "cached_tokens": 5504,
+    "completion_tokens": 1460
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/explore.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(x)\\ndef des(z,d):return np.column_stack([np.ones(len(z))]+[np.prod(z[:,ix],axis=1) for k in range(1,d+1) for ix in cr(range(4),k)])\\ndef fit(a,b,keep=None):\\n if keep is None:return np.linalg.lstsq(a,b,rcond=None)[0]\\n return np.linalg.lstsq(a[keep],b[keep],rcond=None)[0]\\np=s['panel_a'];u,v=p['u'],p['v']; h=des(u,1);keep=np.linalg.norm(v-h@fit(h,v),axis=1)<2\\nfor d in (1,2,3):\\n h=des(u,d);b=fit(h,v,keep);print('A degree',d,'errors',np.quantile(np.linalg.norm((v-h@b)[keep],axis=1),[0,.5,1]));\\n if d==2: print(b.round(4)); ba=b\\ncal=np.linalg.lstsq(des(u,1)[keep],v[keep],rcond=None)[0]; dd=np.array([fit(des(u,1)[:,[0,j+1]],v[:,j],keep) for j in range(4)])\\ndef inv(x):\\n return np.array([least_squares(lambda z:des(z[None,:],2)[0]@ba-row,(row-cal[0])@np.linalg.inv(cal[1:])).x for row in x])\\ncoords={'raw':x,'diag':(x-dd[:,0])/dd[:,1],'aff':(x-cal[0])@np.linalg.inv(cal[1:]),'qua':inv(x)}\\np=s['panel_b']; B=fit(des(p['u'],1),p['v']);\\np=s['panel_c']; u=p['u'];\\nfor k in ('v1','v2'):\\n v=p[k];bc=fit(des(u,1),v); print(k,'bias',bc[0]);\\n for kind,fn in [('gauss',lambda z,a:np.expm1(-a*z*z)),('tanh',lambda z,a:np.tanh(a*z)),('sin',lambda z,a:np.sin(a*z)),('cos',lambda z,a:np.cos(a*z))]:\\n  def hf(z,a):return np.c_[des(z,1),fn(z,a)]\\n  def er(a):\\n   h=hf(u,a);return (v-h@fit(h,v)).ravel()\\n  a=least_squares(er,[.6],bounds=([.03],[5])).x[0]; h=hf(u,a); w=fit(h,v);print(kind,a,np.std(er(a)))\\n  if kind=='gauss':\\n   print('coef',w.round(4),'ratio', (w[5:]@np.linalg.inv(w[1:5])).round(4));\\n   for key,z in list(coords.items())[:4]:\\n    for mul in (.5,1.,1.25,2.):\\n     coords[(key,k,mul)]=z+mul*fn(z,a)@w[5:]@np.linalg.inv(w[1:5]);\\nfor key,z in list(coords.items()):\\n if isinstance(key,str):coords[key+'B']=z@B[1:]/.88\\nrng=np.random.default_rng(1); splits=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(rng.permutation(n),4)]\\ndef score(f,reg):\\n ans=[]\\n for i,j in splits:\\n  m=f[i].mean(0); sd=np.maximum(f[i].std(0),1e-8); A=(f[i]-m)/sd;D=(f[j]-m)/sd; ym=Y[i].mean(0); E=D@A.T@np.linalg.solve(A@A.T+reg*np.eye(len(i)),Y[i]-ym)+ym-Y[j];ans.append([np.mean(abs(E[:,0])),np.mean(abs(E[:,1:]))]);\\n return np.asarray(ans)\\nR=[]\\nfor key,z in coords.items():\\n for mode, f in [('q',des(z,2)),('c',des(z,3)),('qt',np.c_[des(z,2),des(np.tanh(z),2)]),('ct',np.c_[des(z,3),des(np.tanh(z),2)]),('sin',np.c_[des(z,2),np.sin(z),np.cos(z),np.sin(2*z),np.cos(2*z)])]:\\n  for reg in (.003,.03,.3):\\n   sc=score(f,reg);R.append((max(sc[0]),key,mode,reg,sc[0],sc.max(0),sc.mean(0)))\\nfor r in sorted(R,key=lambda r:r[0])[:20]:print(r)\\nfor k in [4,5]:\\n print('best',k);print(*sorted(R,key=lambda r:max(r[k]))[:5],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 frozen sparse readout -> H2 calibrated latent coordinates plus a two-mode readout; frozen public y and trajectory MAE are 0.115933 and 0.085408.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare raw, calibrated, rotated, and nonlinear panel coordinates. Quantify the calibration residuals independently from the held-out readout errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "528731514cde571ab3e94e26b5b7e6e212239d793a8f8314f335846dc76d1629",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33674.19,
+      "usage_known": true,
+      "prompt_tokens": 27561,
+      "cached_tokens": 5504,
+      "completion_tokens": 1460
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "543f7090d6a7408cb2ca6de70ca1b3a8",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:45:54.914558+00:00",
+  "ended_at_utc": "2026-11-28T13:46:23.344330+00:00",
+  "request_sha256": "05c61ae4e4cc0a1ad2613720adfe1023852de27d838a675e2c7a0efd486f62ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55837,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37320,
+    "cached_tokens": 12672,
+    "completion_tokens": 1145
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/latent.py <<'PY'\\nfrom graph import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import svd\\nA,AI=Amap(s['panel_a']); x=AI(s['train']['x']); t=s['eval_times']; y=s['train']['y']; tr=s['train']['traj']; D,U,V=np.linalg.svd(tr,full_matrices=False);print('t',t,'singular',U,'temporal basis',V[:5], 'summary',s['train']['summary'],'tele',s['telemetry_vec']); print('calibrated sample:'); print(np.c_[x,y,tr][:15]);print('range',x.min(0),x.max(0),'inverse residual',np.max(abs(A(x)-s['train']['x'])));print('y from traj',np.std(poly(tr,1)@fit(poly(tr,1),y)-y));\\nfor n in [1,2,3,4]:\\n def E(p):return -np.expm1(-np.exp(p[:,None])*t)\\n def loss(p):\\n  v=E(p);return (tr@np.linalg.pinv(v)@v-tr).ravel()\\n p=least_squares(loss,np.linspace(-2,1.5,n),bounds=(-6,5),max_nfev=500).x\\n print('modes',n,np.exp(p),np.std(loss(p)))\\nfor k,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[k]['u'],s[k][j]; X=poly(u,1); print(k,j,'ranges',u.min(0),u.max(0));\\n F={'sat3':lambda u,q:u**3/(1+q*u*u),'asin':lambda u,q:np.arcsinh(q*u),'tanh':lambda u,q:np.tanh(q*u),'atan':lambda u,q:np.arctan(q*u),'log2':lambda u,q:np.log1p(q*u*u),'sqrt':lambda u,q:np.sqrt(1+q*u*u),'rat2':lambda u,q:u*u/(1+q*u*u),'sin':lambda u,q:np.sin(q*u),'softsign':lambda u,q:u/(1+q*abs(u)),'cubeabs':lambda u,q:u**3/(1+q*abs(u)),'logcosh':lambda u,q:np.logaddexp(q*u,-q*u),'cubic':lambda u,q:u**3/(1+q*u**4),'sigmoid':lambda u,q:u/(1+q*u**4)}\\n for name,f in F.items():\\n  best=(1e9,)\\n  for rank in [0,1,2]:\\n   def calc(p):\\n    w=f(u,np.exp(p[:4])); Z=np.c_[X,w] if rank!=1 else np.c_[np.ones(len(u)),u+p[4:]*w]; M=fit(Z,v);r=Z@M-v;h=np.sum(Z*np.linalg.pinv(Z).T,axis=1);return r,M,np.std(r/np.maximum(1-h[:,None],.02))\\n   p=least_squares(lambda p:calc(p)[0].ravel(),np.r_[np.zeros(4),np.full(4,.5)] if rank==1 else np.zeros(4),bounds=(-5,5),max_nfev=120).x\\n   r,m,cv=calc(p)\\n   if cv<best[0]:best=(cv,np.std(r),rank,p,m)\\n  print(name,best[:4]);\\n  if best[0]<.0005:print(best[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/latent.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic regression after calibration -> H2 shared temporal modes and identifiable auxiliary nonlinearities; best fixed-split MAE is 0.13174 for y and 0.06466 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure how much trajectory variation shared relaxation modes explain and test whether per-coordinate auxiliary parameters account for the remaining panel residuals.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "33bd39aafb0bf4b032e6cf072200139d30f95bf0194f7e23f958692a3d8a483b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28428.62,
+      "usage_known": true,
+      "prompt_tokens": 37320,
+      "cached_tokens": 12672,
+      "completion_tokens": 1145
+    }
+  ]
+}

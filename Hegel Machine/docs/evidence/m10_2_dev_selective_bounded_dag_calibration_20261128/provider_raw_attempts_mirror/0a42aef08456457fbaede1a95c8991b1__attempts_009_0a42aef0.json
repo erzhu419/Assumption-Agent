@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0a42aef08456457fbaede1a95c8991b1",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:40:53.952574+00:00",
+  "ended_at_utc": "2026-11-28T13:41:34.045251+00:00",
+  "request_sha256": "96f65675dd4064db7c5479609d50a2e73f91877904e6ffd58f2dc1474126dd15",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58407,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37881,
+    "cached_tokens": 12672,
+    "completion_tokens": 1776
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _basis(p, state, kind, scale, mix, trajectory):\\n    k, kq = p['K'], p['Kq']\\n    train_score = p['scores'][:, :1]\\n    query_score = (state @ p['modes'].T)[:, :1]\\n    if kind == 'st':\\n        x, q = p['st'][:, :4], p['qt'][:, :4]\\n    elif kind == 'sy':\\n        x, q = p['sy'], p['qy']\\n    else:\\n        x, q = p['st'], p['qt']\\n    norm = np.maximum(x.std(axis=0), 1e-6)\\n    x, q = x / norm, q / norm\\n    d, dq = cdist(x, x, 'sqeuclidean'), cdist(q, x, 'sqeuclidean')\\n    norm = max(float(train_score.std()), 1e-6)\\n    t, tq = train_score / norm, query_score / norm\\n    dt, dtq = cdist(t, t, 'sqeuclidean'), cdist(tq, t, 'sqeuclidean')\\n    if kind == 'K':\\n        diag = k.diagonal()\\n        d = np.maximum(diag[:, None]+diag[None, :]-2*k, 0)\\n        dq = np.maximum(4+np.median(diag)-4+diag[None, :]-2*kq,0)\\n        # Query norms estimated from the squared input coordinates available in calibration space.\\n        f = np.c_[np.ones(len(x)), p['sy'], p['st']]\\n        fq = np.c_[np.ones(len(q)), p['qy'], p['qt']]\\n        qdiag = fq @ np.linalg.lstsq(f, diag, rcond=1e-7)[0]\\n        dq = np.maximum(qdiag[:, None]+diag[None,:]-2*kq,0)\\n    return (k + mix*np.exp(-scale*d-trajectory*dt) + .02*t@t.T,\\n            kq + mix*np.exp(-scale*dq-trajectory*dtq) + .02*tq@t.T)\\n\\n\\ndef _predict(h, hq, y, ridge, cutoff):\\n    diag = np.full(len(h), ridge)\\n    eye = np.eye(len(h))\\n    for _ in range(4 if cutoff else 1):\\n        c = cho_factor(h + np.diag(diag))\\n        alpha = cho_solve(c, y)\\n        if cutoff:\\n            precision = cho_solve(c, eye).diagonal()\\n            err = np.abs(alpha / np.sqrt(precision))\\n            center = max(np.median(err)*1.4826, 1e-5)\\n            diag = ridge + np.maximum((err/(cutoff*center))**2-1, 0)/precision\\n    return hq @ cho_solve(cho_factor(h+np.diag(diag)), y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    state = inputs['node_02']['state_pred']\\n    h, hq = _basis(p, state, 'st', .12, 10., .005)\\n    return {'y_hat': np.asarray(p['y_mean'] + _predict(h, hq, p['y_centered'], .03, 0))}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/stress9.py <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nfrom importlib.util import spec_from_file_location,module_from_spec\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00,node_02\\nsp=spec_from_file_location('candidate','/holdout_task/node_01.py'); m=module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=len(s['train']['y']); idx=np.arange(n)\\nfolds=[idx[-20:]]+list(np.array_split(idx,4))+[np.random.default_rng(i).permutation(idx)[:20] for i in range(3)]\\ndata=[]\\nfor j in folds:\\n i=np.setdiff1d(idx,j); st=dict(s,train={k:s['train'][k][i] for k in ('x','y','traj')},test={'x':s['train']['x'][j]}); p=node_00.run_node({'__input__':st}); state=node_02.run_node({'node_00':p})['state_pred']; data.append((p,state,s['train']['y'][j]))\\nres=[]\\nfor kind,scale,mix,t in itertools.product(['st','sy','all','K'],[.025,.06,.12,.24],[0,1,10,100],[0,.015,.12]):\\n hh=[(*m._basis(p,q,kind,scale,mix,t),p['y_centered'],p['y_mean'],y) for p,q,y in data]\\n for l,c in itertools.product([.0003,.003,.03,.15],[0,2,3]):\\n  vals=np.array([np.mean(abs(m._predict(h,hq,y,l,c)+mu-truth)) for h,hq,y,mu,truth in hh]); res.append((max(vals),np.mean(vals),vals[0],(kind,scale,mix,t,l,c),vals.round(5)))\\nprint('MINIMAX');\\nfor v in sorted(res,key=lambda r:r[0])[:12]: print(v)\\nprint('OFFICIAL');\\nfor v in sorted(res,key=lambda r:r[2])[:8]: print(v)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress9.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 learned covariance -> H2 trajectory-aware calibrated kernel with optional robust weighting; the best prior fixed kernel had 0.04332 worst-slice MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the marginal-likelihood GP\",\n      \"rejected_reason\": \"It raised official-split MAE to 0.05840.\"\n    }\n  ],\n  \"rationale\": \"Save a runnable node now, then compare kernel and robustness choices on folds that rebuild both frozen upstream nodes from training rows only.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "15d474e92d70b0c14c327e838ef85364eb4517edccc591314995cc9a72e4d066",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40091.49,
+      "usage_known": true,
+      "prompt_tokens": 37881,
+      "cached_tokens": 12672,
+      "completion_tokens": 1776
+    }
+  ]
+}

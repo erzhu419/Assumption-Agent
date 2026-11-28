@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f96c405f7ce04d1c84e28012cbf68feb",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:33.716643+00:00",
+  "ended_at_utc": "2026-11-28T13:47:55.934746+00:00",
+  "request_sha256": "efddfd8e50fc9b34f5b1d042707a4e0d2231106e5eeeb7321de3654b9fde6b56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26810,
+    "cached_tokens": 12672,
+    "completion_tokens": 762
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/pan.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('frames=')[0]); from itertools import combinations\\nfor pn in ['panel_a','panel_c']:\\n pp=s[pn]; u=pp['u']; print(pn)\\n for k,v in pp.items():\\n  if k=='u':continue\\n  k0=keep if pn=='panel_a' else np.ones(len(u),bool); U=u[k0]; V=v[k0];\\n  for d in [1,2,3]:\\n   pf=PolynomialFeatures(d); H=pf.fit_transform(U); B=np.linalg.lstsq(H,V,rcond=None)[0]; Hinv=np.linalg.pinv(H); R=V-H@B; print(k,d,'res RMS',np.sqrt(np.mean(R**2,0)), 'loo RMS', np.sqrt(np.mean((R/np.maximum(1-np.sum(H*Hinv.T,axis=1),1e-10)[:,None])**2,0))); names=pf.get_feature_names_out();\\n   if d<=2 or pn=='panel_a':\\n    for j in range(4): print(j,[(names[i],round(B[i,j],4)) for i in np.argsort(-abs(B[:,j]))[:7]])\\n  if pn=='panel_c':\\n   f=np.c_[U,U**2,U**3,np.sin(U),np.cos(U),np.tanh(U),*[U[:,i]*U[:,j] for i,j in combinations(range(4),2)]]\\n   print('outputs/ranges',V.min(0),V.max(0)); print('top correlations',np.sort(abs(np.corrcoef(np.c_[f,V].T)[:-4,-4:]),axis=0)[-6:]); print('v1-v2',np.corrcoef(np.c_[pp['v1'],pp['v2']].T)[:4,4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Test nonlinear panel operators and shared exponential modes; the best polynomial probes still have 52/20 MAE 0.3677 for y and 0.2933 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine inverse is sufficient to recover the calibration coordinates.\",\"empirical_witness\":\"After removing three gross panel A outliers, the largest retained affine residual norm is still 0.7411.\",\"causal_blanket_diagnosis\":\"The affine model does not explain the reference measurements; a nonlinear calibration term may be distorting features passed downstream.\",\"sublated_pivot\":\"Check sparse nonlinear and cyclic terms in panel A, and identify the dual operators in panel C independently.\",\"risk_kind\":\"operator misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The trajectory projection already fits at RMS 0.00446, so improving the spatial input and operator model is the priority.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "18c2ede990ad914fe8cd16740a810b5208264d5ff5f31d64e048a4545d3e0b4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22216.41,
+      "usage_known": true,
+      "prompt_tokens": 26810,
+      "cached_tokens": 12672,
+      "completion_tokens": 762
+    }
+  ]
+}

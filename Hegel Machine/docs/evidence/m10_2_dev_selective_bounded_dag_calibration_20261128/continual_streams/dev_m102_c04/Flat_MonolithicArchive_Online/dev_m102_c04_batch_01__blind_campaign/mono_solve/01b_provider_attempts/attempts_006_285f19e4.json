@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "285f19e4f10b4f9e90310a76f73e682a",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:21.069545+00:00",
+  "ended_at_utc": "2026-11-28T13:13:55.952349+00:00",
+  "request_sha256": "47a4f05e6eba2354ef0a9b8b280acfd63452e1f00ab69f0220112e59ef021ea3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44240,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34008,
+    "cached_tokens": 12672,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat > /tmp/c2.py <<'PY'\\nfrom bases import *\\nfrom itertools import product\\nu=s['panel_c']['u']; h=s['panel_c']['v2']; q=s['panel_c']['v1']; pairs=[(0,1),(0,3),(1,2),(2,3)]\\ndef qb(z):return np.c_[np.ones(len(z)),*[z[:,i]*z[:,j] for i,j in pairs]]\\nwq=ls(qb(u),q)\\ndef Q(z):return qb(z)@wq\\nmodes={'abs':lambda z,k:abs(z),'ratabs':lambda z,k:abs(z)/(1+k*abs(z)),'ratabssq':lambda z,k:abs(z)/(1+k*z*z),'ratsq':lambda z,k:z*z/(1+k*z*z),'ratlin':lambda z,k:z/(1+k*abs(z)),'softabs':lambda z,k:np.sqrt(z*z+k*k),'expabs':lambda z,k:-np.expm1(-k*abs(z)),'sinhabs':lambda z,k:np.sinh(k*abs(z)),'power':lambda z,k:abs(z)**k,'cos':lambda z,k:np.cos(k*z),'tanh':lambda z,k:np.tanh(k*z)}\\nres=[]\\nfor n,fn in modes.items():\\n for cross in [False,True]:\\n  for shift in [False,True]:\\n   def d(z,k):\\n    a=fn(z-(k[1:] if shift else 0),k[0]); return np.c_[poly(z,1),qb(z)[:,1:] if cross else np.empty((len(z),0)),a]\\n   def er(k):\\n    f=d(u,k); return (f@ls(f,h)-h).ravel()\\n   k0=[1.25]+([0.]*4 if shift else []); opt=least_squares(er,k0,bounds=([.0001]+([-1.]*4 if shift else []),[8.]+([1.]*4 if shift else [])),max_nfev=80)\\n   e=np.std(er(opt.x));res.append((e,n,cross,shift,opt.x))\\nprint('C2 nonlinear hypotheses',*sorted(res,key=lambda v:v[0])[:15],sep='\\\\n'); print('add abs coeffs',ls(np.c_[poly(u,1),abs(u)],h)); print('abs residual',h-np.c_[poly(u,1),abs(u)]@ls(np.c_[poly(u,1),abs(u)],h))\\nfor a in [.22,1.25,1.]:\\n for g in [u,abs(u),u*u]:\\n  for gg in [u,abs(u),u*u]:\\n   for label,f in [('rat',g/(1+a*gg)),('prod',g*(1+a*gg))]:\\n    f=np.c_[poly(u,1),f];e=np.std(f@ls(f,h)-h)\\n    if e<.07:print(a,label,e)\\n# Probe composition paths and sparse readouts. Rank on training only, also print untouched split.\\ndef score(f,b):\\n w=ls(f[:52],b[:52]); e=f@w-b\\n return np.mean(abs(e[:52]),0),np.mean(abs(e[52:]),0)\\nbase=[('raw',x),('A',x*sc+ca[0]),('Ai',(x-ca[0])/sc)]\\nallf=[]\\nfor n,z in base:\\n for n2,zz in [('I',z),('B',poly(z,1)@cb),('Bi',(z-cb[0])@np.linalg.inv(cb[1:]))]:\\n  for n3,a in [('I',zz),('Q',Q(zz)),('Q2',Q(Q(zz))),('QB',poly(Q(zz),1)@cb),('BQ',Q(poly(zz,1)@cb))]:allf.append((n+n2+n3,a))\\nfor col,b in [('y',y[:,None]),('traj',t)]:\\n r=[]\\n for n,z in allf:\\n  for m,fn in [('lin',lambda z:poly(z,1)),('quad',lambda z:poly(z,2)),('abs',lambda z:np.c_[poly(z,1),abs(z)]),('sat',lambda z:np.c_[poly(z,1),z/(1+.22*z*z),z*z/(1+.22*z*z),np.tanh(1.25*z)])]:\\n   for j,f in [('only',fn(z)),('raw+',np.c_[fn(z),x]),('input+',np.c_[fn(z),dict(allf).get(n[:-2]+'I',x)])]:\\n    a,c=score(f,b);r.append((a.mean(),c.mean(),n,m,j))\\n print(col,'composition candidates',*sorted(r)[:14],sep='\\\\n')\\nPY\\npython3 /tmp/c2.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive panel-C readout -> H2 identify the second operator and test explicit compositions; the 52/20 gate remains unmet (best observed y MAE 0.284, trajectory MAE 0.192).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Approximate panel C's second output with a generic quadratic\",\"rejected_reason\":\"Its panel residual is 0.118 RMSE, far above the observed measurement noise floor.\"}],\"rationale\":\"The first panel-C output is recovered from four cross-products. Fit compact candidate grammars for the second output and rank composition paths on training data before inspecting held-out errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "37f9b9614fb37624d5b24b6d7e87be23b5cb5c8f721907b0023109901fe6a2f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34881.43,
+      "usage_known": true,
+      "prompt_tokens": 34008,
+      "cached_tokens": 12672,
+      "completion_tokens": 1439
+    }
+  ]
+}

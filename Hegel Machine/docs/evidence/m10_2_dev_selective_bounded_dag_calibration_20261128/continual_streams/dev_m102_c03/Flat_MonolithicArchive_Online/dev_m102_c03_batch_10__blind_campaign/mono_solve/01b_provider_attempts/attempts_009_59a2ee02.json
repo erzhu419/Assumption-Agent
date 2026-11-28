@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "59a2ee02ba9746ca8f33bc34b98897ff",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:51:48.223513+00:00",
+  "ended_at_utc": "2026-11-28T13:52:20.552203+00:00",
+  "request_sha256": "caf6295e86b4e42774ea5e059db1e063156b0f05711c78f47a6cc4fc545f9483",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54496,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33904,
+    "cached_tokens": 12672,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/stress.py <<'PY'\\nimport pickle,importlib.util,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; u=s['panel_c']['u']; v=s['panel_c']['v1']; t=s['eval_times']; spec=importlib.util.spec_from_file_location('base','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m); fit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]; z=m._calibrate(s['panel_a'],np.r_[tr['x'],s['test']['x']]); print('latent train and test extrema',[(x.min(0),x.max(0)) for x in (z[:72],z[72:])]);\\n\\ndef proj(D, v, p, bounds):\\n def err(p):\\n  a=D(u,p);return (a@fit(a,v)-v).ravel()\\n o=least_squares(err,p,bounds=bounds,gtol=1e-12); a=D(u,o.x); b=fit(a,v);return D(z,o.x)@b,np.sqrt(np.mean(err(o.x)**2)),o.x,b\\n\\nd,err,p,b=proj(lambda x,p:m._aff(np.cos(x*p)),s['panel_c']['v2'],[2.4],(1.5,3.2)); print('cos',err,p)\\nmodels=[('tanh_lin',lambda x,p:np.c_[m._aff(x),np.tanh(x*p)],np.full(4,1.5),(.1,4)),('tanh_135',lambda x,p:np.c_[m._aff(np.tanh(x*p)),x,x**3,x**5],[1.72],(.5,3)),('rat_135',lambda x,p:np.c_[m._aff(x/(1+(x*p)**2)),x,x**3,x**5],[1.09],(.3,2)),('polynomial',lambda x,p:np.c_[m._aff(x),x**3,x**5,x**7,x**9],[1],(.1,2)),('tanh_35',lambda x,p:np.c_[m._aff(np.tanh(x*p)),x**3,x**5],[1.7],(.3,4)),('rat_35',lambda x,p:np.c_[m._aff(x/(1+(x*p)**2)),x**3,x**5],[1.1],(.3,4)),('tanh_15',lambda x,p:np.c_[m._aff(np.tanh(x*p)),x,x**5],[1.7],(.3,4))];\\nslices=[np.arange(52,72),np.arange(20),np.arange(26,46),np.argsort(np.linalg.norm(z[:72],axis=1))[-15:],np.argsort(np.max(abs(z[:72]),axis=1))[-15:]]\\nfor name,D,p,bounds in models:\\n c,e,p,b=proj(D,v,p,bounds); F=m._design(z,c,d); print(name,'panel',e,p); \\n if name=='tanh_135': print('odd coefficients',np.round(b,3))\\n for jj in slices:\\n  ii=np.setdiff1d(np.arange(72),jj); T=tr['traj'][ii]; rates=least_squares(lambda p:(m._time(t,p)@fit(m._time(t,p),T.T)-T.T).ravel(),np.log([.4,1.8]),bounds=(np.log([.12,1.]),np.log([.9,4.]))).x; Q=np.linalg.qr(m._time(t,rates))[0]; yy=tr['y']; Y=np.c_[yy[ii],T@Q]; B=fit(F[ii],Y); P=F[jj]@B; et=abs(P[:,1:]@Q.T-tr['traj'][jj]); print(' ',np.round([np.mean(abs(P[:,0]-yy[jj])),et.mean(),max(et.mean(0)),np.sqrt(np.mean((F[ii]@B-Y)**2))],5),end='')\\n print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: cosine with a generic odd basis -> H2: complete the odd branch with higher powers; current 52/20 MAEs are 0.01123 for y and 0.01106 for trajectory, with worst blocked-slice horizon MAE 0.01376.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the odd transfer law by panel residual alone\",\"rejected_reason\":\"Several expanded laws fit the panel at its noise floor but may diverge beyond the panel input range.\"}],\"rationale\":\"Compare candidate odd laws on the required split, two blocked slices, and two high-amplitude slices before changing the deliverable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1c4921988c0f6b4ca42e7c186e1b531fa19c9c2992a61c25f85618da8527c46b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32327.01,
+      "usage_known": true,
+      "prompt_tokens": 33904,
+      "cached_tokens": 12672,
+      "completion_tokens": 1275
+    }
+  ]
+}

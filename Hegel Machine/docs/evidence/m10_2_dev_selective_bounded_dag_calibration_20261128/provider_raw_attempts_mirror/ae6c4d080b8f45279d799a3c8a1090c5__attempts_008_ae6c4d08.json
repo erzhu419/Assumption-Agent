@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae6c4d080b8f45279d799a3c8a1090c5",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:32:02.370183+00:00",
+  "ended_at_utc": "2026-11-28T14:32:31.299903+00:00",
+  "request_sha256": "6c183cb37df63e9a415302acbe0f9867b0c959ff6e70cf9c05fc7e0bc54882fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53502,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33255,
+    "cached_tokens": 12672,
+    "completion_tokens": 1081
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/dis15.py | cut -c1-260 | tail -22; cat >/tmp/cal15.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; A=s['panel_a']; U,V=A['u'],A['v']; ok=np.linalg.norm(V,axis=1)<5; u,v=U[ok],V[ok]; print('range',u.min(),u.max()); print('archive calibration forms:')\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \\\"$f\\\"); grep -nE 'roll\\\\(|arctan|def forward|def warp|def transfers' \\\"$f\\\" | head -12; done\\ncat >>/tmp/cal15.py <<'PY'\\ndef fit(h,y):return np.linalg.lstsq(h,y,rcond=1e-10)[0]\\ndef prof(h):\\n return np.column_stack([h[:,j]@fit(h[:,j],v[:,j])-v[:,j] for j in range(4)])\\ndef stack(*args):return np.stack((np.ones_like(u),*args),axis=-1)\\ndef cv(h):\\n es=[]\\n for j in range(4):\\n  a=h[:,j]; e=a@fit(a,v[:,j])-v[:,j]; lev=(a*np.linalg.pinv(a).T).sum(1); es.append(e/np.maximum(1-lev,.001))\\n return np.std(es)\\nfor k in (1,2,3):\\n w=np.roll(u,k,axis=1)\\n for nm,f,p,lo,hi in [('sin',lambda x,p:x*0+np.sin(p[0]*x),[2.4],[.5],[8]),('cos',lambda x,p:np.cos(p[0]*x),[2.6],[.5],[8]),('rat',lambda x,p:x/(1+p[0]*abs(x)**p[1]),[.6,1.2],[.001,.3],[5,5]),('atan',lambda x,p:np.arctan(p[0]*x),[2.4],[.3],[8])]:\\n  for mode in range(4):\\n   def h(p):\\n    if mode==0:return stack(u,u**3,w,f(w,p))\\n    if mode==1:return stack(u,u**3,w,u*w,f(w,p),u*f(w,p))\\n    if mode==2:return stack(u,w,u*w,f(u,p),f(w,p))\\n    return stack(u,w,f(u,p),f(w,p),u*f(w,p),w*f(u,p))\\n   o=least_squares(lambda p:prof(h(p)).ravel(),p,bounds=(lo,hi),max_nfev=50)\\n   print(k,nm,mode,round(np.std(o.fun),6),round(cv(h(o.x)),6),o.x)\\nfor deg in range(1,6):\\n from itertools import combinations_with_replacement\\n zz=[np.roll(u,k,axis=1) for k in range(4)]; h=stack(*(np.prod([zz[i] for i in inds],axis=0) for d in range(1,deg+1) for inds in combinations_with_replacement(range(4),d)))\\n print('poly',deg,np.std(prof(h)),cv(h))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal15.py | sort -nk4 | head -33\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate inverse calibration -> H2 cross-coordinate nonlinear calibration; best archived 52/20 MAEs were 0.44454 for y and 0.20799 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune readouts using the affine inverse\",\"rejected_reason\":\"Clean panel-A rows have large structured affine residuals, which can distort both readouts.\"}],\"rationale\":\"Identify panel A’s nonlinear transfer on independent calibration measurements before interpreting the spatial readout screen.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3afe9175a53c1ddd02034998bc0608a6bd380617534c7428171a8cb8d15c0513",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28928.52,
+      "usage_known": true,
+      "prompt_tokens": 33255,
+      "cached_tokens": 12672,
+      "completion_tokens": 1081
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f00bb74a8eba430e817108fdc07bf0b7",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:05.372371+00:00",
+  "ended_at_utc": "2026-11-28T13:47:31.914678+00:00",
+  "request_sha256": "775bf045b375fef9b52637e0ad6b9895663e8e9cbc916c3ffc7745366c4c8a36",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 27159,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23939,
+    "cached_tokens": 12672,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.linear_model import Ridge\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; T=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; one=lambda u:np.c_[np.ones(len(u)),u]\\npa=s['panel_a']; h=one(pa['u']); a=np.linalg.lstsq(h,pa['v'],rcond=None)[0]; keep=np.linalg.norm(h@a-pa['v'],axis=1)<3; a=np.linalg.lstsq(h[keep],pa['v'][keep],rcond=None)[0]; print('A',a,'res',np.linalg.norm(h[keep]@a-pa['v'][keep],axis=1).max()); z=(x-a[0])@np.linalg.inv(a[1:]); zd=(x-a[0])/a[1:].diagonal()\\npb=s['panel_b']; b=np.linalg.lstsq(one(pb['u']),pb['v'],rcond=None)[0]; print('B singulars',np.linalg.svd(b[1:],compute_uv=False))\\ndef q(p):return -np.expm1(-t[:,None]*p)\\ndef amp(p):return np.linalg.lstsq(q(p),T[:52].T,rcond=None)[0].T\\ndef err(p):return (amp(p)@q(p).T-T[:52]).ravel()\\np=least_squares(err,[.35,1.8],bounds=(.01,10),ftol=1e-12).x; AA=np.linalg.lstsq(q(p),T.T,rcond=None)[0].T; Y=np.c_[y,AA]; print('rates',p,'res',np.std(err(p)),'amps std',AA.std(0),'means',AA.mean(0)); print('Y linear corr',np.corrcoef(Y.T))\\nframes={'raw':x,'cal':z,'diag':zd,'Braw':one(x)@b,'Bcal':one(z)@b,'Bdiag':one(zd)@b,'calBinv':(z-b[0])@np.linalg.inv(b[1:])}\\nfor name,U in frames.items():\\n print(name,'range',np.min(U,0).round(2),np.max(U,0).round(2),'corr',np.corrcoef(np.c_[U,Y].T)[:4,4:].round(2).T)\\n for d in [1,2,3,4]:\\n  u=PolynomialFeatures(d).fit_transform(U); sd=np.sqrt(np.mean(u[:52]**2,0)); u/=np.maximum(sd,1e-7)\\n  out=[]\\n  for r in [1e-6,.001,.03,.3,2]:\\n   pred=Ridge(alpha=r,fit_intercept=False).fit(u[:52],Y[:52]).predict(u[52:]); out.append(np.r_[np.mean(abs(pred-Y[52:]),0),np.mean(abs(pred[:,1:]@q(p).T-T[52:]))])\\n  print(d, np.array(out).min(0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the failed archive transfer with robust panel calibration and a rank-two trajectory model; prior 52/20 MAEs are 1.707666 for y and 1.639174 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit each of the eight timestamps independently\",\n      \"rejected_reason\": \"The large gap after the second singular value supports fitting shared temporal modes first.\"\n    }\n  ],\n  \"rationale\": \"Estimate temporal rates from the 52 fitting rows only, then compare raw, calibrated, and operator-transformed features on the held-out rows. This tests whether the clean affine panel improves prediction rather than assuming it is active.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "afcd3cbab31243bb1af980564434440ab197077c620fe1f7d4af3852808705d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26540.97,
+      "usage_known": true,
+      "prompt_tokens": 23939,
+      "cached_tokens": 12672,
+      "completion_tokens": 1109
+    }
+  ]
+}

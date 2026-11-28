@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ad72c28b992435f9e4fa8de278cad33",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:30:37.287136+00:00",
+  "ended_at_utc": "2026-11-28T13:31:14.706747+00:00",
+  "request_sha256": "d16df11b0175b4528d65cbe765e783eb789195bd90b2abacb78cab5406aaf95c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21213,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17624,
+    "cached_tokens": 5504,
+    "completion_tokens": 551
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c01_batch_03_solver.py; cat /tmp/hegel_continual_archive/archive_manifest.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np, pickle,glob,runpy\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; cv={**s,'train':{k:v[:52] if k!='summary' else np.array([np.mean(tr['y'][:52]),np.std(tr['y'][:52]),np.mean(tr['traj'][:52,-1]),np.std(tr['traj'][:52,-1])]) for k,v in tr.items()},'test':{'x':tr['x'][52:]}}\\nfor fn in glob.glob('/tmp/hegel_continual_archive/*.py'):\\n try:\\n  o=runpy.run_path(fn)['solve_batch'](cv); print(fn, np.mean(abs(o['y_hat']-tr['y'][52:])), np.mean(abs(o['state_pred']-tr['traj'][52:])))\\n except Exception as e: print(e)\\np=s['panel_a']; u,v=p['u'],p['v']; keep=np.linalg.norm(v-u,axis=1)<4; print('kept',keep.sum());u,v=u[keep],v[keep];i,j=np.triu_indices(4)\\nfor a in (np.c_[np.ones(len(u)),u], np.c_[np.ones(len(u)),u,u[:,i]*u[:,j]]):\\n w=np.linalg.lstsq(a,v,rcond=None)[0];print(w, np.sqrt(np.mean((a@w-v)**2)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration and archived kernels → H2 outlier-trimmed nonlinear calibration and shared trajectory mode; published 52/20 baseline MAE is 0.045689.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Benchmark all reusable solvers on the specified split and test whether panel A’s large affine residuals persist after trimming gross outliers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6459cd26a00af540519101378c50e8de8317846e87a9469abceda22153c74096",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37417.39,
+      "usage_known": true,
+      "prompt_tokens": 17624,
+      "cached_tokens": 5504,
+      "completion_tokens": 551
+    }
+  ]
+}

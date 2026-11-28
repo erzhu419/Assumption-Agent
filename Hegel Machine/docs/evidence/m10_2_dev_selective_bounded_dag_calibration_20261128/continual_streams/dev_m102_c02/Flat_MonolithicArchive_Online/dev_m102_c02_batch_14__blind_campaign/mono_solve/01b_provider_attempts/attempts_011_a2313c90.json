@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2313c9059854e8fb80fe8d6dcde1d62",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:24:55.602513+00:00",
+  "ended_at_utc": "2026-11-28T14:25:37.319485+00:00",
+  "request_sha256": "fb150fb99ca786a481f06bf51f813c52a4a8bfe750974fea73742fd3a61ca2e4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68348,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41758,
+    "cached_tokens": 12672,
+    "completion_tokens": 1671
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated trajectory and scalar readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _calibrated(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    keep = np.linalg.norm(v, axis=1) < 4\\n    u, v = u[keep], v[keep]\\n    w = np.roll(u, 2, axis=1)\\n\\n    def profile(p, coefficients=False):\\n        h = u + p[0] * np.arctan(p[1] * u)\\n        r = np.sin(p[2] * w)\\n        hc, rc, vc = h - h.mean(0), r - r.mean(0), v - v.mean(0)\\n        denom = (hc**2).sum(0)\\n        g0 = (hc * vc).sum(0) / denom\\n        g1 = (hc * rc).sum(0) / denom\\n        rr = rc - hc * g1\\n        cross = (rr * (vc - hc * g0)).sum() / (rr**2).sum()\\n        gain = g0 - cross * g1\\n        bias = (v - h * gain - cross * r).mean(0)\\n        return (bias, gain, cross) if coefficients else (bias + h * gain + cross * r - v).ravel()\\n\\n    p = least_squares(profile, [.26, 1.75, 2.4],\\n                      bounds=([0, .3, 1], [1, 5, 4]), gtol=1e-13).x\\n    bias, gain, cross = profile(p, True)\\n\\n    def forward(z):\\n        return bias + gain * (z + p[0] * np.arctan(p[1] * z)) + cross * np.sin(p[2] * np.roll(z, 2))\\n\\n    return np.asarray([least_squares(lambda z: forward(z) - row, (row - bias) / gain,\\n                                    gtol=1e-13).x for row in x])\\n\\n\\ndef _operator(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n\\n    def warp(x, p):\\n        return np.sign(x) * np.maximum(np.abs(x) - p[0], 0.)**p[1]\\n\\n    def profile(p):\\n        h = _affine(warp(u, p))\\n        return (h @ _fit(h, v) - v).ravel()\\n\\n    p = least_squares(profile, [.35, 1.5], bounds=([0, .2], [.7, 4]), gtol=1e-13).x\\n    q = warp(z, p)\\n    return q, _affine(q) @ _fit(_affine(warp(u, p)), v)\\n\\n\\ndef _designs(study, x):\\n    z = _calibrated(study['panel_a'], x)\\n    q, b = _operator(study['panel_b'], z)\\n    interaction = np.sum(b * np.roll(z, -1, axis=1), axis=1)\\n    state = _affine(np.column_stack((b, interaction)))\\n    scalar = np.column_stack((state, q / (1 + .5 * z[:, 1:2]**2)))\\n    return scalar, state\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    \\\"\\\"\\\"Fit each readout using only the labeled training rows.\\\"\\\"\\\"\\n    tr = study['train']\\n    n = len(tr['x'])\\n    scalar, state = _designs(study, np.concatenate((tr['x'], study['test']['x'])))\\n    y = scalar[n:] @ _fit(scalar[:n], tr['y'])\\n    trajectory = state[n:] @ _fit(state[:n], tr['traj'])\\n    terminal = trajectory[:, -1]\\n    return {'y_hat': y, 'state_pred': trajectory,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), terminal.mean(), terminal.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/check14.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']\\nfor j,test in enumerate([np.arange(52,72), *np.array_split(np.random.default_rng(11).permutation(72),4), *[np.argsort(x[:,i])[-20:] for i in range(4)], *[np.argsort(x[:,i])[:20] for i in range(4)]]):\\n train=np.setdiff1d(np.arange(len(x)),test); o=mod.solve_batch(dict(s,train={k:v[train] for k,v in tr.items() if k!='summary'},test={'x':x[test]})); ey=abs(y[test]-o['y_hat']); et=abs(t[test]-o['state_pred']); print(j,round(ey.mean(),6),round(et.mean(),6),round(et.mean(0).max(),6),round(et[:,-1].mean(),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: a summed cyclic interaction explains trajectory variation → H2: a rationally gated threshold basis explains the scalar residual; the corresponding exploratory 52/20 scalar MAE is 0.02366.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Long greedy residual expansion\",\n      \"rejected_reason\": \"Additional terms sharply lowered training error without consistently improving 52/20 error.\"\n    }\n  ],\n  \"rationale\": \"Save the compact independently fitted readouts, then verify the exact artifact using the public validator and isolated-process checks on random and coordinate-tail slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "350d3bbfb9342c3dfc4a765aa999bddd17360fd4061067cc1d1dcbefe0a0e74e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41715.3,
+      "usage_known": true,
+      "prompt_tokens": 41758,
+      "cached_tokens": 12672,
+      "completion_tokens": 1671
+    }
+  ]
+}

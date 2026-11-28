@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e10ca0ab47314b1dbc5bc340f860daaf",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:33:20.742163+00:00",
+  "ended_at_utc": "2026-11-28T13:33:45.091136+00:00",
+  "request_sha256": "5fcc3269465ff1d2afa62233eec964b080f898438cf2c4ac1582e1ed3ce2b71f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60991,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36822,
+    "cached_tokens": 12672,
+    "completion_tokens": 987
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\np='/holdout_task/'\\nnode=runpy.run_path(p+'node_00.py'); temporal=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']; sink=runpy.run_path(p+'_frozen_nodes/node_02.py')['run_node']\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']; idx=np.arange(len(x))\\na=s['panel_a']; cal=node['_calibration'](a); c=s['panel_c']; u=c['u']; q,r=node['_panel_features'](c,u)\\nprint('panel C product/cosine MAE',np.mean(abs(q-c['v1'])),np.mean(abs(r-c['v2'])))\\nassert np.mean(abs(q-c['v1'])) < 0.001 and np.mean(abs(r-c['v2'])) < 0.001\\nz=node['_invert'](np.concatenate((x,s['test']['x'])),cal)\\nf=cal[0]+cal[1]*z+(cal[2]+cal[3]*z)*np.roll(z,-1,axis=1)+cal[4]*z**3\\nprint('calibration inversion max residual',np.max(abs(f-np.concatenate((x,s['test']['x'])))))\\nassert np.max(abs(f-np.concatenate((x,s['test']['x'])))) < 1e-7\\nsplits=[('tail',idx[-20:]),('outer_radius',np.argsort(np.linalg.norm(z[:len(x)],axis=1))[-18:])]+[(f'random_{k}',e) for k,e in enumerate(np.array_split(np.random.default_rng(31).permutation(idx),4))]\\nrows=[]\\nfor name,te in splits:\\n i=np.setdiff1d(idx,te); d=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[te]})\\n sp=node['run_node']({'__input__':d}); tp=temporal({'__input__':d}); out=sink({'node_00':sp,'node_01':tp})\\n short=dict(sp,train_features=sp['train_features'][:,:10],test_features=sp['test_features'][:,:10]); baseline=sink({'node_00':short,'node_01':tp})\\n row=[np.mean(abs(out['y_hat']-y[te])),np.mean(abs(out['state_pred']-t[te])),np.mean(abs(baseline['state_pred']-t[te]))]; rows.append(row); print(name,'regression MAE, trajectory MAE, dot-only trajectory MAE',*[round(a,6) for a in row])\\nworst=np.max(rows,axis=0); print('worst',worst); assert np.all(worst[:2] < 0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Diagonal-only design -> inverse cyclic calibration with product/cosine features and off-diagonal trajectory terms; the verified public MAEs are 0.003829 for regression and 0.004278 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The artifact already passes the public contract. Without editing it, stress-test the exact frozen DAG on the largest-radius inputs and reproduce the interaction ablation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0fe7cd7f66eead70d596b240681a12f48d069c8eeda0885a686a4fddafd4e4b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24347.9,
+      "usage_known": true,
+      "prompt_tokens": 36822,
+      "cached_tokens": 12672,
+      "completion_tokens": 987
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef923568bd0440268fc9c26d70ae4456",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:50:09.284950+00:00",
+  "ended_at_utc": "2026-11-28T13:50:38.135686+00:00",
+  "request_sha256": "62947598a2196fb633c62dc8477ecfda7f54fa63c6daa468a7788ad4bb732fdd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42352,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29471,
+    "cached_tokens": 12672,
+    "completion_tokens": 1223
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cp /tmp/hegel_continual_archive/dev_m102_c03_batch_03_solver.py batch_solver.py && cat >/tmp/branch_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; u=s['panel_c']['u']; t=s['eval_times']; n=len(tr['x']); z=m._calibrate(s['panel_a'],np.vstack([tr['x'],s['test']['x']]))\\nfuncs={'soft':lambda x,p:x/(1+abs(x*p)),'tanh':lambda x,p:np.tanh(x*p),'sin':lambda x,p:np.sin(x*p),'cos':lambda x,p:np.cos(x*p),'gauss':lambda x,p:np.exp(-(x*p)**2),'soft2':lambda x,p:x/(1+(x*p)**2),'soft3':lambda x,p:x/np.sqrt(1+(x*p)**2)}\\nfeatures={}\\nfor key,names in [('v1',list(funcs)[:3]+['soft2','soft3']),('v2',['cos','gauss'])]:\\n v=s['panel_c'][key]\\n for name in names:\\n  for joint in (False,True):\\n   if not joint and key=='v1': continue\\n   f=funcs[name]\\n   def des(x,p):return np.c_[m._aff(x),f(x,p)] if joint else m._aff(f(x,p))\\n   def lin(p):return np.linalg.lstsq(des(u,p),v,rcond=1e-10)[0]\\n   best=None\\n   for start in (.6,1.4,2.4):\\n    opt=least_squares(lambda p:(des(u,p)@lin(p)-v).ravel(),np.full(4,start),bounds=(.1,4),gtol=1e-12)\\n    if best is None or opt.cost<best.cost:best=opt\\n   print(key,name,joint,best.x,np.sqrt(2*best.cost/v.size)); features[key,name,joint]=des(z,best.x)@lin(best.x)\\nfor f1 in ('soft','tanh','sin','soft2','soft3'):\\n for f2,j in (('cos',False),('gauss',True)):\\n  c=features['v1',f1,True]; d=features['v2',f2,j]; F=m._design(z,c,d)\\n  print(f1,f2,end=': ')\\n  for ix,jx in [(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20)),(np.r_[0:26,46:72],np.arange(26,46))]:\\n   Y=tr['traj'][ix]; rates=least_squares(lambda p:(m._time(t,p)@np.linalg.lstsq(m._time(t,p),Y.T,rcond=None)[0]-Y.T).ravel(),np.log([.4,1.8]),bounds=(np.log([.12,1.]),np.log([.9,4.]))).x; Q=m._time(t,rates); c0=np.linalg.lstsq(F[ix],np.c_[tr['y'][ix],Y],rcond=1e-9)[0]; pred=F[jx]@c0; P=np.linalg.qr(Q)[0]; e=abs(pred[:,1:]@P@P.T-tr['traj'][jx]); print(np.round([np.mean(abs(pred[:,0]-tr['y'][jx])),e.mean(),max(e.mean(axis=0)),*np.exp(rates)],5),end=' ')\\n  print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch_cv.py && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived softsign–Gaussian readout -> H2: measure whether the panel-supported cosine branch improves extrapolation; archived candidate 52/20 MAE is 0.01599 for y and 0.01924 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the passing archived solver unchanged\",\n      \"rejected_reason\": \"The Gaussian branch passes the response gate but fits the calibration panel much worse than cosine, which could matter beyond the training range.\"\n    }\n  ],\n  \"rationale\": \"Save the passing solver as a baseline, then compare branch reconstructions and refit downstream parameters separately in three held-out slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e2e7fa3e5d3baff8e0d0986265c15ccd6a2de3cd024e899d90bc6ff06eb28678",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28849.37,
+      "usage_known": true,
+      "prompt_tokens": 29471,
+      "cached_tokens": 12672,
+      "completion_tokens": 1223
+    }
+  ]
+}

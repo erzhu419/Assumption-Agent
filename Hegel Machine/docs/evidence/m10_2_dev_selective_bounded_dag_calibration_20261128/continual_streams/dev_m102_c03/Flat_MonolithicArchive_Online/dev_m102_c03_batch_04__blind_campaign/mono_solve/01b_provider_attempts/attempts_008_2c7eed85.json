@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c7eed85afa9493f9e466802dd4e653c",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:33:24.250024+00:00",
+  "ended_at_utc": "2026-11-28T13:33:59.783927+00:00",
+  "request_sha256": "acf1a834aa25ecf04c1297f86247334835b9967716893b4245f814a690a7d955",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45807,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30170,
+    "cached_tokens": 5504,
+    "completion_tokens": 1523
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit04.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; t=s['eval_times']; T=tr['traj']; y=tr['y']; f=m._design(s,x); fit=m._fit\\nprint('study fields:',list(s),'train fields:',list(tr),'times:',t)\\nprint('calibration offsets/gains:',m._calibration(s['panel_a']))\\nD=f[:,[13,18,23,28]].sum(1); C=f[:,5:9]; E=f[:,9:13]; z=f[:,1:5]; O=np.ones(len(x)); cross=f[:,13:]; offdiag=np.setdiff1d(np.arange(16),[0,5,10,15]); extras=[]\\nfor j in range(4):\\n for k in range(j+1,4):\\n  for sg in [-1,1]:\\n   q=z[:,j]+sg*z[:,k]; extras.extend([q**3, np.cos(2.4*q),q/(1+q*q),z[:,j]*z[:,k]/(1+q*q)])\\nextras=np.column_stack(extras)\\nleverage=np.sum(np.linalg.qr(f)[0]**2,axis=1); rng=np.random.default_rng(447)\\nsplits=[('fixed',np.arange(len(x))),('leverage',np.argsort(leverage)),('norm',np.argsort(np.linalg.norm(x,axis=1)))]+[(f'x{j}/{sg}',np.argsort(sg*x[:,j])) for j in range(4) for sg in [-1,1]]+[('random',rng.permutation(len(x))) for _ in range(100)]\\nresults=[]; supports=[]\\nfor name,ids in splits:\\n a,b=ids[:52],ids[52:]; q=m._basis(t,T[a]); amps=fit(q,T[a].T).T\\n full=fit(f[a],np.c_[y[a],amps]); inter=offdiag[np.argmax(abs(full[13+offdiag,1]))]; supports.append(inter)\\n Fy=np.column_stack((O,C,E,D)); A=np.column_stack((O,E,cross[:,inter])); B=np.column_stack((O,C,D));\\n def time(r):return -np.expm1(-t[:,None]*r)\\n def design(a,q):return np.c_[(A[a,:,None]*q[:,0]).transpose(0,2,1).reshape(len(a)*len(t),-1),(B[a,:,None]*q[:,1]).transpose(0,2,1).reshape(len(a)*len(t),-1)]\\n def residual(r):\\n  g=design(a,time(r)); yy=T[a].ravel(); return g@fit(g,yy)-yy\\n opt=least_squares(residual,[.42,1.83],bounds=([.12,1.],[.9,4.])); Q=time(opt.x); sy=Fy[b]@fit(Fy[a],y[a]); st=(design(b,Q)@fit(design(a,Q),T[a].ravel())).reshape(len(b),-1)\\n base=f[b]@full; Y0=base[:,0]; T0=base[:,1:]@q.T\\n # Fit residual augmentations only in the training fold, using mild shrinkage.\\n g=extras/np.maximum(.01,np.std(extras[a],axis=0)); Z=np.c_[f,g]; pen=np.diag(np.r_[np.zeros(f.shape[1]),np.full(g.shape[1],.3)]); aug=Z[b]@fit(np.vstack([Z[a],pen]),np.vstack([np.c_[y[a],amps],np.zeros((len(pen),3))]));\\n def err(yy,tt):\\n  e=abs(tt-T[b]); return [abs(yy-y[b]).mean(),e.mean(),e.mean(0).max()]\\n results.append(np.array([err(Y0,T0),err(sy,st),err(aug[:,0],aug[:,1:]@q.T)]))\\n if name in ('fixed','leverage','norm'): print(name,'inter',inter,'rates',opt.x,'train trajectory MAE',np.mean(abs(opt.fun)),'base/compact/rational-pair',results[-1].tolist())\\nprint('fold maxima:',np.max(results,axis=0)); print('fold means:',np.mean(results,axis=0)); print('fold support counts',np.unique(supports,return_counts=True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted bilinear readout) -> H2 (diagonal contraction and a sparse mode-specific off-diagonal term); current worst stress-slice MAEs are 0.01617 for y and 0.00817 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a drift, relay, or cohort-centered model\",\"rejected_reason\":\"The supplied study is a continuous static-input prediction task with shared relaxation, and the schema identifies no relay modes, PDE drift observations, or per-row cohort labels.\"}],\"rationale\":\"Compare the verified baseline with a compact bilinear readout and a rational/pairwise augmentation on real held-out measurements. Select the off-diagonal term and fit the time rates inside each fold; leave the verified artifact unchanged until the comparison is measured.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "af3e538ba953fdd7055a2d0b692f9670b34fda105849b5ba873a2b7d32493cdd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35531.55,
+      "usage_known": true,
+      "prompt_tokens": 30170,
+      "cached_tokens": 5504,
+      "completion_tokens": 1523
+    }
+  ]
+}

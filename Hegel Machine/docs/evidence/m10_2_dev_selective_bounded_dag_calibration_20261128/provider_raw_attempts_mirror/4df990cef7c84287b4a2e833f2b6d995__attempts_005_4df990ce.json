@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4df990cef7c84287b4a2e833f2b6d995",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:51:00.862660+00:00",
+  "ended_at_utc": "2026-11-28T13:51:26.299396+00:00",
+  "request_sha256": "8d201840af7045b78274cc2a7d4d44b261fb45b83e15daaea44aae09c396b954",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39925,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28026,
+    "cached_tokens": 12672,
+    "completion_tokens": 1016
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c04_batch_08_solver.py; cat > /tmp/forward12.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nfrom dev_m102_c04_batch_11_solver import _calibrate\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; tt=s['eval_times']; n=52\\nD=lambda *a: np.column_stack((np.ones(len(a[0])),*a))\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nz=_calibrate(s['panel_a'],t['x']); b,c=s['panel_b'],s['panel_c']; B=D(z)@ls(D(b['u']),b['v']);\\npairs=list(itertools.combinations(range(4),2)); pp=lambda x: np.column_stack([x[:,i]*x[:,j] for i,j in pairs]); co=ls(D(pp(c['u'])),c['v1']); print('pair weights',co)\\nP=D(pp(z))@co; f=lambda a:D(np.cos(2.4*a)); R=f(z)@ls(f(c['u']),c['v2']);\\nA=t['traj']; H=lambda k:-np.expm1(-tt[:,None]*k); rr=lambda k:(H(k)@ls(H(k),A[:n].T)-A[:n].T).ravel(); opt=least_squares(rr,[1.7,.45],bounds=([.01,.01],[5,5])); h=H(opt.x); Y=np.column_stack((t['y'],ls(h,A.T).T)); print('temporal',opt.x,np.std(opt.fun), 'amp std',Y.std(0));\\nfor name,x in [('B',B),('P',P),('R',R),('z',z),('Bz',D(B,z)),('PR',D(P,R)),('BP',D(B,P)),('BR',D(B,R)),('BPR',D(B,P,R))]:\\n def stats(f):\\n  pred=f@ls(f[:n],Y[:n]); return np.round(np.mean(abs(pred[:n]-Y[:n]),0),5),np.round(np.mean(abs(pred[n:]-Y[n:]),0),5),round(np.mean(abs(pred[n:,1:]@h.T-A[n:])),5)\\n print(name,stats(D(x)))\\n for nam2,w in [('B',B),('P',P),('R',R),('z',z)]:\\n  cross=(x[:,:,None]*w[:,None,:]).reshape(len(x),-1) if x.shape[1]<6 else np.sum(x[:,-4:]*w,axis=1)[:,None]\\n  base=D(x,w); dot=np.sum(x[:,-4:]*w,axis=1); print('  with',nam2,'dot',stats(D(base,dot)), 'cross',stats(D(base,cross)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/forward12.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic archived operators -> H2 calibrated tanh–sine inversion, quadratic and cosine panel maps, and a two-rate readout; current gate baseline worst MAE is 0.487273.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The diagonal or full affine family is sufficient for reference calibration.\",\"empirical_witness\":\"Full affine inlier component residual median is 0.121369; the shared tanh plus shift-two sine model reduces it to 0.0000706.\",\"causal_blanket_diagnosis\":\"Reference outputs depend nonlinearly on both their own coordinate and the opposite coordinate; an affine inversion leaves structured input distortion.\",\"sublated_pivot\":\"Invert the verified coupled calibration and compare auxiliary-panel combinations against scalar and trajectory targets.\",\"risk_kind\":\"coordinate_convention\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select operators by telemetry alone\",\"rejected_reason\":\"Telemetry does not establish which auxiliary outputs enter the scalar or temporal readouts.\"}],\"rationale\":\"Use panel measurements to fix operator maps, then compare forward readout families on the required 52/20 split, including symmetric dot and full cross-product features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "43bbca3cdf8e54462e440c7b81e7264e607e50f744f3e70a642edb446ee5d44b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25435.41,
+      "usage_known": true,
+      "prompt_tokens": 28026,
+      "cached_tokens": 12672,
+      "completion_tokens": 1016
+    }
+  ]
+}

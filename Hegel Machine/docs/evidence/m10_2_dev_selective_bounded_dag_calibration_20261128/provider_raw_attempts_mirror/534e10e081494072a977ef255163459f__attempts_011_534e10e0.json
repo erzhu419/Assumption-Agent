@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "534e10e081494072a977ef255163459f",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_10__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:10:29.923312+00:00",
+  "ended_at_utc": "2026-11-28T14:10:59.593516+00:00",
+  "request_sha256": "f4e9ef4dce6078648984519804c55828584b56a22e20497dd8d4c9dcc2e3fc0d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36829,
+    "cached_tokens": 5504,
+    "completion_tokens": 1180
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch10_dense.py\\npython3 -I - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read()\\na=s.index('def _quadratic('); b=s.index('def solve_batch',a)\\ns=s[:a]+'''def _readout_features(w):\\n    # The channels interact through their matched contraction and one\\n    # additional directed coupling in the trajectory readout.\\n    a, b = w[:, :4], w[:, 4:]\\n    return _bias(np.column_stack((w, np.einsum('ij,ij->i', a, b), a[:, 0]*b[:, 1])))\\n\\n\\n'''+s[b:]\\ns=s.replace('f = _quadratic(w)','f = _readout_features(w)')\\na=s.index('    target ='); b=s.index(\\\"    return {'y_hat'\\\",a)\\ns=s[:a]+'''    y = f[len(x):, :-1] @ _ls(fit[:, :-1], np.asarray(tr['y']))\\n    state = f[len(x):] @ _ls(fit, traj @ basis.T) @ basis\\n'''+s[b:]\\nopen(p,'w').write(s)\\nPY\\ncat >/tmp/stress_batch10.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nold = load('/tmp/batch10_dense.py')\\nnew = load('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr = s['train']; x = tr['x']; y = np.c_[tr['y'],tr['traj']]; w = new._panels(s,new._coordinates(s,x))\\nrng = np.random.default_rng(302)\\nsplits = [('primary',np.arange(len(x)))]+[('random',rng.permutation(len(x))) for _ in range(24)]\\nsplits += [('tail',np.argsort(np.linalg.norm(v,axis=1))) for v in (x,w)]\\nsplits += [('coordinate',np.argsort(sign*x[:,j])) for j in range(x.shape[1]) for sign in (1,-1)]\\nfor module in (old,new):\\n    groups={}\\n    for label, ix in splits:\\n        i,j = ix[:52],ix[52:]\\n        o = module.solve_batch({**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':x[j]}})\\n        d = np.abs(np.c_[o['y_hat'],o['state_pred']]-y[j]); groups.setdefault(label,[]).append([d[:,0].mean(),d[:,1:].mean(),d[:,1:].mean(0).max()])\\n    print(module.__file__, {k:np.max(l,axis=0).tolist() for k,l in groups.items()})\\n    if module is new:\\n        assert np.max(np.concatenate(list(groups.values()))) <= 0.038\\n        o = new.solve_batch(s); a, b = o['y_hat'], o['state_pred'][:,-1]\\n        assert np.allclose(o['diagnostics_vec'],[a.mean(),a.std(),b.mean(),b.std()],rtol=0,atol=1e-12)\\n        print('public-test ranges:',(a.min(),a.max()),(b.min(),b.max()))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch10.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense quadratic readout → H2 matched contraction plus one directed trajectory term; the verified dense baseline’s worst observed scalar MAE was 0.02139 and its worst horizon MAE was 0.01847.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Keep the dense quadratic model\",\"rejected_reason\":\"It passes the gate, but the sparse readout reduced the prescribed split’s trajectory errors to near the observed noise level; compare both implementations on the same extrapolation slices before submitting.\"}],\"rationale\":\"Retain the validated panel operators and remove weakly supported quadratic terms. Verify the exact candidate on the prescribed split, random splits, norm tails, and both tails of each input coordinate, then check the output schema and diagnostics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1f981ac806ef0d1be12cf50359ba582e960d84e8a7f47e22cddf10ca34ea8156",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29668.87,
+      "usage_known": true,
+      "prompt_tokens": 36829,
+      "cached_tokens": 5504,
+      "completion_tokens": 1180
+    }
+  ]
+}

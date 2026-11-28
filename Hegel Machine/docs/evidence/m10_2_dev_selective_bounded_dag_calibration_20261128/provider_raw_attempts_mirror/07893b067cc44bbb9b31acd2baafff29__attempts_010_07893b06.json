@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "07893b067cc44bbb9b31acd2baafff29",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:46:40.003124+00:00",
+  "ended_at_utc": "2026-11-28T13:47:12.096499+00:00",
+  "request_sha256": "151d337d94a923ebf8119390c956acc4902ddb2ba1b00d778f7e2f3d97a6c591",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64341,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40239,
+    "cached_tokens": 12672,
+    "completion_tokens": 1391
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/def score/,$d' /tmp/graph.py > /tmp/combo.py; cat >> /tmp/combo.py <<'PY'\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize_scalar\\nQ=np.linalg.svd(tr[:52],full_matrices=False)[2][:3]; T=np.c_[Y[:,0],tr@Q.T]; mu=T[:52].mean(0); T-=mu; R=[]\\ndef fit(n,F):\\n F=(F-F[:52].mean(0))/np.maximum(F[:52].std(0),1e-7); G=F@F[:52].T\\n for p in [.003,.10,1.]:\\n  E=cho_solve(cho_factor(G[:52]+p*np.eye(52)),np.eye(52)); A=E@T[:52]; r=(A/(E.diagonal()[:,None]-1/(52*p))); e=G[52:]@A-T[52:]; R.append((np.abs(r[:,0]).mean(),np.abs(r[:,1:]@Q).mean(),np.abs(e[:,0]).mean(),np.abs(e[:,1:]@Q).mean(),n,p))\\nP={d:PolynomialFeatures(d,include_bias=False).fit_transform(x) for d in [1,2,3]}\\ndef cr(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(x),-1)\\nfor tag in ['x','z','inv']:\\n a=sets[tag]; opts={'a':a,'b':B(a),'c':C(a),'d':D(a),'e':C(B(a)),'f':D(B(a)),'g':C(D(a)),'h':D(C(a)),'i':B(D(a)),'j':B(C(a)),'k':C((a-wb[0])@np.linalg.inv(wb[1:])),'l':D((a-wb[0])@np.linalg.inv(wb[1:]))}\\n for (ni,i),(nj,j) in it.combinations_with_replacement(opts.items(),2):\\n  base=np.c_[P[2],i,j]; bs=tag+ni+nj\\n  for nm,h in [('none',i),('allprod',cr(i,j)),('diag',i*j),('dot',(i*j).sum(1)[:,None]),('diag3',np.c_[i*i*j,i*j*j])]:fit(bs+nm,np.c_[base,h]);\\n  for k in [.22,1.25,2.4]:\\n   for nm,h in [('ratio',np.c_[i/(1+k*j*j),j/(1+k*i*i)]),('rat2',np.c_[i*i/(1+k*j*j),j*j/(1+k*i*i)]),('divprod',i*j/(1+k*(i*i+j*j))),('dotrat',np.c_[i/(1+k*np.sum(j*j,1)[:,None]),j/(1+k*np.sum(i*i,1)[:,None])]),('trig',np.c_[np.sin(k*(i+j)),np.cos(k*(i-j))]),('sqrt',np.sqrt(.01+(i+j)**2)),('saturation',np.c_[np.tanh(k*(i+j)),np.tanh(k*(i-j))])]:\\n    fit(bs+nm+str(k),np.c_[base,h]);fit(bs+'x'+nm+str(k),np.c_[base,h,cr(x,h)])\\n # Allow both nonlinear branches to receive independently transformed arguments.\\n for ni,i in opts.items():\\n  for nj,j in opts.items():\\n   for mode in range(4):\\n    h=[C(i),D(i)][mode//2]; g=[C(j),D(j)][mode%2]\\n    fit(tag+ni+nj+'nested'+str(mode),np.c_[P[2],h,g,cr(h,g)]);\\n    fit(tag+ni+nj+'nested_diag'+str(mode),np.c_[P[2],h,g,h*g]);\\nfor k in range(5):\\n f=(lambda a:a[0]+a[1]) if k==4 else (lambda a:a[k]);print('RESULT',k,sorted(R,key=f)[:6]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/combo.py | grep RESULT\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single sparse readout) -> H2 (paired branches with coordinatewise gates and independent inputs); recent 52/20 candidates remain above 0.038 on both outputs.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the near-interpolating quartic\",\"rejected_reason\":\"Its apparent leave-one-out advantage does not carry over to the 20-row holdout.\"}],\"rationale\":\"Test paired nonlinear branches, including coordinatewise division and symmetric products that the prior global-denominator and sparse screens did not cover.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f8ad4c8991d3ccfeb60d9d6029adcb8bab514ec29f943f368b9b22a9527d0c0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32092.25,
+      "usage_known": true,
+      "prompt_tokens": 40239,
+      "cached_tokens": 12672,
+      "completion_tokens": 1391
+    }
+  ]
+}

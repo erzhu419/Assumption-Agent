@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c69afcdf11b4b5faf9d19918662140c",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:55:59.188596+00:00",
+  "ended_at_utc": "2026-11-28T13:56:33.214867+00:00",
+  "request_sha256": "97acb4573511e13f9b18d6220a3f268485343db62580163a5721e58c73790ba7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26063,
+    "cached_tokens": 12672,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.linalg import lstsq\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\\ndef lin(x):return np.c_[np.ones(len(x)),x]\\ndef ls(x,y):return lstsq(x,y,cond=1e-10)[0]\\ndef loo(x,y):\\n e=y-x@ls(x,y); h=(np.linalg.qr(x)[0]**2).sum(1);return np.mean(abs(e/(1-h[:,None])))\\ndef powers(x,d):return np.column_stack([np.prod(x[:,i],1) for i in cr(range(4),d)])\\ndef transforms(x):\\n return {'sq':x*x,'cube':x**3,'sqcube':np.c_[x*x,x**3],'abs':abs(x),'pos':np.maximum(x,0),'tanh':np.tanh(x),'sin':np.sin(x),'sin2':np.sin(2*x),'sin3':np.sin(3*x),'cos':np.cos(x),'cos2':np.cos(2*x),'cos3':np.cos(3*x),'rat':x/(1+x*x),'rat2':x/(1+2*x*x),'ssq':x*x/(1+x*x),'atan':np.arctan(x),'quad':powers(x,2),'cyc':x*np.roll(x,1,axis=1),'sumabs':abs(x+np.roll(x,1,axis=1)),'difabs':abs(x-np.roll(x,1,axis=1))}\\ndef fit_panel(name):\\n p=s['panel_'+name]; u=p['u']; out={}\\n for k,v in p.items():\\n  if k=='u':continue\\n  x,y=u,v\\n  if name=='a':\\n   a=lin(x); r=np.linalg.norm(y-a@ls(a,y),axis=1); keep=r<4*np.median(r); x,y=x[keep],y[keep]\\n  tr=transforms(x); LL=[]\\n  for f,z in list(tr.items())+[('lin',np.empty((len(x),0)) )]:\\n   a=np.c_[lin(x),z]; LL.append((loo(a,y),f,ls(a,y)))\\n  print(name,k,'best',[(round(e,5),f) for e,f,b in sorted(LL)[:13]])\\n  for e,f,b in sorted(LL)[:3]: print(f,b)\\n  if name=='a':\\n   a=lin(x); r=y-a@ls(a,y);print('u|residual sample',np.c_[x,r][:15]); print('train/test bounds relative to panel', x.min(0),x.max(0),y.min(0),y.max(0))\\n  out[k]=(x,y,sorted(LL))\\n return out\\npa,pb,pc=map(fit_panel,'abc')\\nX=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; u,v,rr=pa['v']; a=ls(lin(u),v); C=(X-a[0])@np.linalg.inv(a[1:]);\\nfrom scipy.optimize import root\\ncal={'raw':X,'aff':C};\\nfor e,f,b in rr[:4]:\\n if f=='lin':continue\\n def fn(z):\\n  z=z.reshape(-1,4);return (np.c_[lin(z),transforms(z)[f]]@b-X).ravel()\\n sol=root(fn,C.ravel()); print('inverse',f,sol.success,np.mean(abs(fn(sol.x))));\\n if sol.success:cal['inverse_'+f]=sol.x.reshape(-1,4)\\nfor ca,z in cal.items():\\n cand=[]\\n for nf,q in [('x',z)]+list(transforms(z).items()):\\n  for panel,ps in [('b',pb),('c',pc)]:\\n   for k,(u,v,rr) in ps.items():\\n    for e,f,b in rr[:3]:\\n     if q.shape[1]!=4:continue\\n     d=lin(q) if f=='lin' else np.c_[lin(q),transforms(q)[f]]; w=d@b\\n     for g,F in [('w',lin(w)),('xw',np.c_[lin(z),w]),('w2',np.c_[lin(w),powers(w,2)]),('xwprod',np.c_[lin(z),w,z*w]),('w_tanh',np.c_[lin(w),np.tanh(w)])]:\\n      P=F@ls(F[:52],Y[:52]); M=np.mean(abs(P[52:]-Y[52:]),0);cand.append((M[0],M[1:].mean(),nf,panel,k,f,g))\\n print('CAND',ca,'by sum',sorted(cand,key=lambda r:sum(r[:2]))[:8],'by traj',sorted(cand,key=lambda r:r[1])[:5])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration and generic polynomial readout → H2 recover sparse nonlinear panel maps; generic cubic held-out MAEs are 0.191 for y and about 0.137 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase generic polynomial degree\",\"rejected_reason\":\"The quartic interpolates the training set but increases held-out target error.\"}],\"rationale\":\"Remove the obvious calibration outlier rows, then use panel leave-one-out scores to screen nonlinear operators before testing whether they improve either downstream output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "9b88b611d7ae7cda0276bd914904219ba0af2f7bd618c589689fbfc47456020f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34023.91,
+      "usage_known": true,
+      "prompt_tokens": 26063,
+      "cached_tokens": 12672,
+      "completion_tokens": 1439
+    }
+  ]
+}

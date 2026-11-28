@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c4a63045157247db8219caa52b16ed28",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:43:04.575232+00:00",
+  "ended_at_utc": "2026-11-28T13:43:28.836666+00:00",
+  "request_sha256": "61eca8bcfec69fd8cd3db1ead406daec67b214ab79afc8dfcdb547313b318f46",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21460,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22158,
+    "cached_tokens": 12672,
+    "completion_tokens": 955
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; tail -22 /holdout_task/validate_public_schema.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as C\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=4,suppress=True,linewidth=145)\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for i in range(1,d+1) for j in C(range(x.shape[1]),i)])\\ndef fit(X,y):return np.linalg.lstsq(X,y,rcond=1e-10)[0]\\na=s['panel_a']; u,v=a['u'],a['v']; good=np.linalg.norm(v,axis=1)<5\\nfor l,r in [(u,v),(v,u)]:\\n for d in [1,2,3]:\\n  X=poly(l[good],d); M=fit(X,r[good]); print('A',good.sum(),d,np.std(X@M-r[good],axis=0)); print(M if d==1 else '')\\nfor k in ['panel_b','panel_c']:\\n p=s[k];u=p['u'];\\n for j,y in p.items():\\n  if j=='u':continue\\n  for name,X in [('lin',poly(u,1)),('quadr',poly(u,2)),('odd3',np.column_stack((poly(u,1),poly(u,3)[:,15:]))),('lin+sq',np.c_[poly(u,1),u*u]),('lin+cube',np.c_[poly(u,1),u**3])]:\\n   M=fit(X,y); print(k,j,name,'res',np.std(X@M-y,axis=0)); print(M if name in ['lin','lin+sq'] else '')\\nx,y,tr=[s['train'][k] for k in ('x','y','traj')]; z=np.c_[y,tr];print('Y from T',np.std(poly(tr,1)@fit(poly(tr,1)[:52],y[:52])-y)); print('corr',np.corrcoef(np.c_[x,z].T)[0:5]);\\nfor d in [1,2,3,4]:\\n X=poly(x,d);M=fit(X[:52],z[:52]);r=X@M-z;print('raw',d,np.mean(abs(r[:52]),0),np.mean(abs(r[52:]),0));\\nprint('train,test means cov',x.mean(0),s['test']['x'].mean(0),np.cov(x.T))\\nPY\\npython3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived diagonal calibration and affine operator -> H2 robust full calibration and nonlinear operators; archived 52/20 MAE is 0.263448 for y and 0.174137 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived diagonal calibration, affine auxiliary operator, and bilinear readout transfer unchanged to this campaign.\",\"empirical_witness\":\"The archived graph misses the 52/20 gate on both outputs by more than 4×; the auxiliary panel retains substantial residual even after an affine fit.\",\"causal_blanket_diagnosis\":\"The transferred feature map omits campaign-specific terms; it is not yet known which measured panels supply them.\",\"sublated_pivot\":\"Trim calibration outliers before comparing full affine and nonlinear maps, and measure polynomial baselines for both outputs.\",\"risk_kind\":\"model_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Robust calibration and separate operator probes can distinguish missing structure from outlier-induced residuals before choosing a new graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "14e9cc002e354cc16c68d4e761995f30323eec95375131d74e92267ebbfa284b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24260.62,
+      "usage_known": true,
+      "prompt_tokens": 22158,
+      "cached_tokens": 12672,
+      "completion_tokens": 955
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86e3c2dc102e40d4bfcbc2500c53335e",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:47:18.360748+00:00",
+  "ended_at_utc": "2026-11-28T13:47:57.755152+00:00",
+  "request_sha256": "69f2c4b0342cfa3af3f8f1c9fd6c33bb0b13f9052dcc985e60d7bc3a098356b9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68930,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41598,
+    "cached_tokens": 12672,
+    "completion_tokens": 1750
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _aff(q):\\n    return np.column_stack((np.ones(len(q)), q))\\n\\n\\ndef _ls(a,b):\\n    return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\n\\n\\ndef _coordinates(s):\\n    x=np.r_[s['train']['x'],s['test']['x']]\\n    u,v=(s['panel_a'][j] for j in ('u','v'))\\n    g=np.ones(len(u),bool)\\n    for _ in range(6):\\n        ab=np.array([_ls(_aff(u[g,j,None]),v[g,j]) for j in range(4)]).T\\n        e=np.linalg.norm(u*ab[1]+ab[0]-v,axis=1)\\n        g=e<=max(1e-6,5*np.median(e))\\n        if g.sum()<8:\\n            break\\n    q=(x-ab[0])/ab[1]\\n    u,v=(s['panel_b'][j] for j in ('u','v'))\\n    b=_ls(_aff(u),v)\\n    return x,q,b\\n\\n\\ndef _monomials(x,d):\\n    return np.column_stack([np.prod(x[:,i],axis=1) for i in combinations_with_replacement(range(4),d)])\\n\\n\\ndef _cross(x,y):\\n    return (x[:,:,None]*y[:,None,:]).reshape(len(x),-1)\\n\\n\\ndef _dictionary(q,b):\\n    p=q@b[1:]+b[0]\\n    bi=(q-b[0])@np.linalg.pinv(b[1:])\\n    groups=[_monomials(q,d) for d in range(1,5)]\\n    for j in [q,p,bi]:\\n        for k in [1.25,2.4,3.5]:\\n            c=np.cos(k*j); v=np.sin(k*j)\\n            groups.extend((c,v,_cross(q,c),_cross(q,v)))\\n    return groups\\n\\n\\ndef _fit(groups,Y,noise=.015,iterations=180,shared=True):\\n    n=len(Y); mu=Y.mean(0); sc=np.maximum(Y.std(0),1e-8); Z=(Y-mu)/sc\\n    F=np.column_stack(groups); F=F-F[:n].mean(0); F/=np.maximum(F[:n].std(0),1e-9)\\n    a=F[:n]; b=F[n:]; eye=np.eye(n)*noise**2\\n    v=np.ones(a.shape[1])/a.shape[1]\\n    for _ in range(iterations):\\n        w=a*v; c=cho_factor(w@a.T+eye,check_finite=False)\\n        co=w.T@cho_solve(c,Z,check_finite=False)\\n        pr=np.sum(cho_solve(c,a,check_finite=False)*a,axis=0)\\n        delta=np.sqrt(np.mean(co**2,axis=1)/np.maximum(pr,1e-20))\\n        v=np.clip(.35*v+.65*delta,1e-13,10)\\n    return (b@co)*sc+mu\\n\\n\\ndef solve_batch(study):\\n    _,q,b=_coordinates(study)\\n    tr=study['train']; V=np.linalg.svd(tr['traj'],full_matrices=False)[2][:3]; target=np.c_[tr['y'],tr['traj']@V.T]\\n    f=_dictionary(q,b)\\n    p=np.mean([_fit(f[:k],target,s) for k in (7,12,len(f)) for s in (.007,.025)],axis=0)\\n    y=p[:,0]; state=p[:,1:]@V\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py; cat > /tmp/checksolver.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; rng=np.random.default_rng(79325)\\nfor idx in [np.arange(72),*(rng.permutation(72) for _ in range(3))]:\\n a,b=idx[:52],idx[52:]; st=dict(s,train={**tr,**{k:tr[k][a] for k in ('x','y','traj')}},test={'x':tr['x'][b]}); out=solve_batch(st); e=abs(out['state_pred']-tr['traj'][b]); print('CV',np.mean(abs(out['y_hat']-tr['y'][b])),e.mean(),e.mean(0).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/checksolver.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dict.py 2>/dev/null | grep -E '^[01234] [1-6] '\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (individual operator products) -> H2 (ensemble of sparse shared Fourier and polynomial readouts); previous best scalar and trajectory 52/20 MAEs were 0.1344 and 0.1015 in separate models.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a runnable candidate now, measure it across the prescribed and randomized splits, and recover the strongest individual terms to guide a narrower structural test.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9dc266029bf0ba053cfa83d1e0bc1f4db185f0adf2f3de59d4225f0eeb974323",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39392.66,
+      "usage_known": true,
+      "prompt_tokens": 41598,
+      "cached_tokens": 12672,
+      "completion_tokens": 1750
+    }
+  ]
+}

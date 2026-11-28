@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b582a665918c4349bd7586d0d9f08e86",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:29:52.650615+00:00",
+  "ended_at_utc": "2026-11-28T13:30:30.326921+00:00",
+  "request_sha256": "15650832bf06256b8b9d67ecb4be64faa5043eab039c206023c590e637b270da",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29824,
+    "cached_tokens": 12672,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout_challenger.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _center(k, q):\\n    m = k.mean(axis=0)\\n    g = m.mean()\\n    return k - m - m[:, None] + g, q - m - q.mean(axis=1, keepdims=True) + g\\n\\n\\ndef _standardize(x, q):\\n    m = x.mean(axis=0)\\n    s = np.maximum(x.std(axis=0), 1e-10)\\n    return (x - m) / s, (q - m) / s\\n\\n\\ndef _poly(x, q, degree):\\n    d = x.shape[1]\\n    return _center((1 + (x @ x.T) / d) ** degree,\\n                   (1 + (q @ x.T) / d) ** degree)\\n\\n\\ndef _radial(dx, dq, width):\\n    return _center(np.exp(-dx / width), np.exp(-dq / width))\\n\\n\\ndef _distances(x, q):\\n    return cdist(x, x, 'sqeuclidean'), cdist(q, x, 'sqeuclidean')\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    state = inputs['node_02']['state_pred']\\n    k, q = _center(p['K'], p['Kq'])\\n    values, vectors = np.linalg.eigh(k)\\n    d = p['sy'].shape[1]\\n    rank = min(d, len(values))\\n    root = np.sqrt(np.maximum(values[-rank:], 1e-10))\\n    vectors = vectors[:, -rank:]\\n    x, xq = _standardize(vectors * root, (q @ vectors) / root)\\n    t, tq = _standardize(p['st'][:, :d], p['qt'][:, :d])\\n    s, sq = _standardize(p['sy'], p['qy'])\\n    a, aq = _standardize(p['scores'], state @ p['modes'].T)\\n    dt, dtq = _distances(t, tq)\\n    for w, (kt, qt) in (\\n        (.0003852, _poly(x, xq, 3)),\\n        (.0561139, _poly(x, xq, 4)),\\n        (.6507786, _radial(*_distances(x, xq), 8.)),\\n        (.0047207, _radial(dt, dtq, 4.)),\\n        (.9814442, _radial(dt, dtq, 8.)),\\n        (.084672, _poly(t, tq, 2)),\\n        (.0009055, _poly(s, sq, 3)),\\n        (.0085005, _poly(a, aq, 1)),\\n    ):\\n        k += w * kt\\n        q += w * qt\\n    alpha = solve(k + 4.7e-6 * np.eye(len(k)), p['y_centered'], assume_a='pos')\\n    return {'y_hat': np.asarray(p['y_mean'] + q @ alpha)}\\nPY\\ncat >/tmp/stress_readout.py <<'PY'\\nfrom readout_probe import *\\nimport importlib.util\\n\\ndef load(name, path):\\n spec=importlib.util.spec_from_file_location(name,path)\\n mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod.run_node\\n\\nbase=load('baseline','/holdout_task/node_01.py')\\nnew=load('challenger','/tmp/readout_challenger.py')\\ndef score(ds):\\n e=[]\\n for p,pr,y,tr in ds:\\n  a={'node_00':p,'node_02':{'state_pred':pr}}\\n  e.append([np.abs(fn(a)['y_hat']-y).mean() for fn in (base,new)]+[np.abs(pr-tr).mean()])\\n e=np.asarray(e);print(np.round(e,6)); print('mean',e.mean(0),'worst',e.max(0)); return e\\nprint('DEVELOPMENT: baseline/challenger/trajectory'); score(batches())\\nx=s['train']['x']; groups=np.concatenate([np.argsort(x[:,j])[:14][None,:] for j in range(x.shape[1])]); random=np.array_split(np.random.default_rng(372).permutation(n),6)\\ndef holdouts(indices):\\n for I in indices:\\n  J=np.setdiff1d(np.arange(n),I); z=copy.deepcopy(s);z['train']={k:v[J] if len(v)==n else v for k,v in s['train'].items()};z['test']['x']=x[I]\\n  p=node_00.run_node({'__input__':z}); pr=node_02.run_node({'node_00':p})['state_pred'];yield p,pr,s['train']['y'][I],s['train']['traj'][I]\\nprint('ALTERNATE RANDOM');score(holdouts(random))\\nprint('LOW COORDINATE TAILS');score(holdouts(groups))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (quartic augmentation) -> H2 (mixed operator and kernel-coordinate readout); development worst-slice scalar MAE improved from 0.07480 to 0.05795 and official-split MAE from 0.037795 to 0.03500, pending alternate-slice checks.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted readout immediately\",\n      \"rejected_reason\": \"The challenger weights were selected on the development splits, so their gains need to be checked on alternate random partitions and the opposite coordinate tails.\"\n    }\n  ],\n  \"rationale\": \"Test the exact challenger implementation against the verified artifact without modifying the deliverable. Compare scalar errors separately from the unchanged frozen trajectory.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "60152a0ee7233ccf5784ec054c5608da601d574ec1e10b033dbe4250c02ccb59",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37675.15,
+      "usage_known": true,
+      "prompt_tokens": 29824,
+      "cached_tokens": 12672,
+      "completion_tokens": 1533
+    }
+  ]
+}

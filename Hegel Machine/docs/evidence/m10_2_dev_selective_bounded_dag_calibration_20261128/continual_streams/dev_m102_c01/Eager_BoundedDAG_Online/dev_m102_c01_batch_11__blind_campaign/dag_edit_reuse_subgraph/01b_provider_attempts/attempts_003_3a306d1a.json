@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a306d1aa9884a40a88cd8d595c6dd12",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:33:38.163659+00:00",
+  "ended_at_utc": "2026-11-28T13:34:05.477533+00:00",
+  "request_sha256": "3318337a8a75d194838bbcb0557ff37ab90b3728408693b7f004929e6aef80d9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21471,
+    "cached_tokens": 12672,
+    "completion_tokens": 1118
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat _frozen_nodes/node_03.py; wc -l /tmp/hegel_continual_archive/*; grep -nE '^def |sy|y_hat|ridge|tanh' /tmp/hegel_continual_archive/*solver.py | tail -55; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling reference-panel alignment' 2>&1 | head -20; cat >/tmp/readout_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.linalg import solve\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00 as a,node_02 as b\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; tr=s['train']['traj']; n=len(y)\\nfull=a.run_node({'__input__':dict(s,test={'x':s['train']['x']})})\\nprint('feature spectra',[(k, np.linalg.svd(full[k],compute_uv=False).round(3)) for k in ['sy','st']]);print('y std',y.std())\\ndef poly(x,d):\\n return np.column_stack([np.prod(x[:,idx],axis=1) for idx in combinations_with_replacement(range(x.shape[1]),d)])\\ndef fold(i,j):\\n p=a.run_node({'__input__':dict(s,train={k:s['train'][k][i] for k in ('x','y','traj')},test={'x':s['train']['x'][j]})}); pred=b.run_node({'node_00':p})['state_pred']; d={}; z,q=p['sy'],p['qy']; yy=y[i]; one=np.ones((len(i),1)); oq=np.ones((len(j),1));\\n def test(name,f,g,K=None,Q=None):\\n  if K is None: K=f@f.T;Q=g@f.T\\n  for r in [1e-6,1e-4,.001,.01,.1,1.]:\\n   w=solve(K+r*np.eye(len(i)),yy,assume_a='pos'); d[name,r]=np.mean(abs(Q@w-y[j]))\\n test('sy',np.c_[one,z],np.c_[oq,q]);test('sy2',np.c_[one,z,poly(z,2)],np.c_[oq,q,poly(q,2)]);test('sy3',np.c_[one,z,poly(z,2),poly(z,3)],np.c_[oq,q,poly(q,2),poly(q,3)]);test('kernel',None,None,p['K'],p['Kq']);\\n for sk in [1,10,100,1000]: test('combined'+str(sk),None,None,p['K']+sk*(z@z.T),p['Kq']+sk*(q@z.T));\\n for f,g,key in [(tr[i]@p['modes'].T,pred@p['modes'].T,'scores'),(p['st'],p['qt'],'st')]:\\n  test(key,np.c_[one,z,f],np.c_[oq,q,g]);test(key+'sy2',np.c_[one,z,poly(z,2),f],np.c_[oq,q,poly(q,2),g]);\\n print('slice',j[0],np.mean(abs(pred-tr[j])),sorted(d.items(),key=lambda kv:kv[1])[:8]); return d\\nsplits=[(np.arange(52),np.arange(52,72))]; rng=np.random.default_rng(102); splits += [(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(rng.permutation(n),4)]; ds=[fold(i,j) for i,j in splits]; print('by worst and mean:');\\nfor s in sorted([(max(d[k] for d in ds),np.mean([d[k] for d in ds]),k,[round(d[k],5) for d in ds]) for k in ds[0]])[:30]:print(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: a calibrated linear readout explains y -> H2: add structured nonlinear or trajectory terms only if held-out error improves; prior probe y MAE 0.038788.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare calibrated, polynomial, kernel, and trajectory-assisted readouts on the official split and four disjoint validation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e4ff26c7e6f96729e17c8b5c7048fc007738400cd958ba2792e938316bf56c1c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27312.74,
+      "usage_known": true,
+      "prompt_tokens": 21471,
+      "cached_tokens": 12672,
+      "completion_tokens": 1118
+    }
+  ]
+}

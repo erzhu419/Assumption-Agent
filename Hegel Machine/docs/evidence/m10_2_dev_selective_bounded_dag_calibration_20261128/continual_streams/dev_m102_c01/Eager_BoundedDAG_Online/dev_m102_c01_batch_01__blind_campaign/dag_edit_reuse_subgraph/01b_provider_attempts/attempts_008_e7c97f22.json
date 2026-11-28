@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e7c97f22a99e4fbd84f6101eaa1985e5",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:48.986800+00:00",
+  "ended_at_utc": "2026-11-28T13:16:19.773240+00:00",
+  "request_sha256": "764349bdb1188251c23e91e7c8eaeca9733eb84e97ffe799ad48670224ec9d73",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44630,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31440,
+    "cached_tokens": 5504,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Scalar kernel ridge regression on the frozen spatial and operator features.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\n\\n\\ndef _unit_rows(features):\\n    norms = np.linalg.norm(features, axis=1, keepdims=True)\\n    return np.divide(features, norms, out=np.zeros_like(features, dtype=float), where=norms > 0.0)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    st, qt = p['st'], p['qt']\\n    train_unit, query_unit = _unit_rows(st), _unit_rows(qt)\\n    gram = p['K'] + 3.0 * (st @ st.T) + 0.3 * (train_unit @ train_unit.T) ** 3\\n    cross = p['Kq'] + 3.0 * (qt @ st.T) + 0.3 * (query_unit @ train_unit.T) ** 3\\n    weights = solve(gram + 0.001 * np.eye(len(gram)), p['y_centered'], assume_a='pos')\\n    return {'y_hat': cross @ weights + p['y_mean']}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nroot = '/holdout_task/'\\npre = load('pre', root + '_frozen_nodes/node_00.py')\\nnew = load('new', root + 'node_01.py')\\nold = load('old', '/tmp/.hegel_candidate_archive/v01_a6d1aefa/node_01.py')\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    s = item['study']\\n    x, y = s['train']['x'], s['train']['y']\\n    all_idx = np.arange(len(x))\\n    rng = np.random.default_rng(371)\\n    blocks = {'random': list(np.array_split(rng.permutation(len(x)), 6)), 'radius': [np.argsort(np.linalg.norm(x, axis=1))[-12:]], 'axis': [np.argsort(sign*x[:, j])[-12:] for j in range(x.shape[1]) for sign in [-1, 1]], 'diagonal': [np.argsort(x @ d)[-12:] for d in rng.normal(size=(12, x.shape[1]))]}\\n    for name, folds in blocks.items():\\n        scores = []\\n        for te in folds:\\n            tr = np.setdiff1d(all_idx, te)\\n            p = pre({'__input__': dict(s, train={k: np.asarray(v)[tr] for k,v in s['train'].items()}, test=dict(s['test'], x=x[te]))})\\n            preds = [np.asarray(fn({'node_00': p})['y_hat']) for fn in [old, new]]\\n            assert all(a.shape == y[te].shape and np.isfinite(a).all() for a in preds)\\n            scores.append([np.mean(np.abs(a-y[te])) for a in preds])\\n        print(name, 'old/new mean', np.mean(scores, axis=0), 'old/new worst', np.max(scores, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated quadratic ridge → add a bounded angular interaction kernel; the challenger proxy reduces worst-slice scalar MAE from 0.11266 to 0.07408 and public scalar MAE from 0.03602 to 0.02909.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the accepted quadratic-only baseline\",\n      \"rejected_reason\": \"It passes public CV but has substantially higher directional extrapolation error in the initial stress tests.\"\n    }\n  ],\n  \"rationale\": \"The normalized cubic kernel uses only the frozen handoff and bounds the interaction contribution for distant queries. Verify the promoted file in isolation, then refit preprocessing within each stress fold and compare against the archived baseline on new directional slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "22574ecdf14aa700c6f8a75975bef605da71dd85784af923f4a02b755d364242",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30784.99,
+      "usage_known": true,
+      "prompt_tokens": 31440,
+      "cached_tokens": 5504,
+      "completion_tokens": 1240
+    }
+  ]
+}

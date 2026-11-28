@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe26a35c016243d393c59ce492a00f39",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:19:16.247604+00:00",
+  "ended_at_utc": "2026-11-28T13:19:51.950110+00:00",
+  "request_sha256": "74a8883cb544dead158464c03dfc1b9627edb57f6843e45500d9bcfbe338c11e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37658,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26962,
+    "cached_tokens": 12672,
+    "completion_tokens": 1504
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/link_probe.py <<'PY'\\nfrom readout_probe import A,c,y,old,folds,Q,pairs,study\\nfrom scipy.optimize import least_squares\\nimport numpy as np\\n\\n# Normalize links to unit local slope; a is the degree of compression.\\nlinks={\\n 'tanh':lambda z,a: np.tanh(a*z)/a,\\n 'atan':lambda z,a: np.arctan(a*z)/a,\\n 'asinh':lambda z,a: np.arcsinh(a*z)/a,\\n 'sqrt':lambda z,a:z/np.sqrt(1+(a*z)**2),\\n 'rational':lambda z,a:z/(1+(a*z)**2),\\n 'erf':lambda z,a: __import__('scipy.special',fromlist=['erf']).erf(a*z)/a*np.sqrt(np.pi)/2,\\n 'cubic':lambda z,a:z-a*a*z**3,\\n}\\n\\ndef fit(tr,te,link,mode):\\n f=links[link]; d=np.c_[A,old]; b=np.linalg.lstsq(d[tr],y[tr],rcond=None)[0]; init=np.r_[b,0.19]\\n if mode=='outside': fn=lambda p,i:p[0]+f(c[i]@p[1:5],p[-1])+old[i]*p[5]\\n if mode=='inside': fn=lambda p,i:p[0]+f(d[i,1:]@p[1:6],p[-1])\\n if mode=='all': fn=lambda p,i:f(d[i]@p[:6],p[-1])\\n if mode=='shift':\\n  init=np.r_[b,0.,0.19]; fn=lambda p,i:p[0]+f(c[i]@p[1:5]+p[6],p[-1])+old[i]*p[5]\\n if mode=='bilinear_rational': fn=lambda p,i:p[0]+(c[i]@p[1:5])/(1+(p[-1]*old[i])**2)+old[i]*p[5]\\n p=least_squares(lambda p:fn(p,tr)-y[tr],init,bounds=(np.r_[np.full(len(init)-1,-np.inf),1e-5],np.r_[np.full(len(init)-1,np.inf),1.5]),max_nfev=300).x\\n return np.mean(np.abs(fn(p,te)-y[te])),p\\n\\nscores=[]\\nfor k in links:\\n for mode in ('outside','inside','all','shift'):\\n  e=np.array([fit(tr,te,k,mode)[0] for tr,te in folds]); scores.append((e.mean(),k,mode,e))\\nfor _,k,m,e in sorted(scores)[:17]:\\n print(k,m,'holdout/oof/worst',np.round([e[0],e[1:].mean(),e.max()],6),'holdout-fit',fit(*folds[0],k,m)[1].round(6))\\nprint('bilinear denominator', [round(fit(tr,te,'rational','bilinear_rational')[0],6) for tr,te in folds])\\np=study['panel_c']; u=p['u']; x=np.c_[np.ones(len(u)),u]; cross=np.column_stack([u[:,i]*u[:,j] for i,j in pairs]);\\nfor name in ('v1','v2'):\\n for X in (x,np.c_[x,np.sum(u[:,:2]*u[:,2:],axis=1)],np.c_[x,cross]):\\n  b=np.linalg.lstsq(X[4:],p[name][4:],rcond=None)[0]; print('panel_c',name,X.shape[1],np.mean(np.abs(X[:4]@b-p[name][:4])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c \\\"import sys,runpy; sys.path.insert(0,'/tmp'); runpy.run_path('/tmp/link_probe.py',run_name='__main__')\\\" | tail -25\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 an affine readout plus a bilinear sum → H2 a compact nonlinear link coupled to the same bilinear term; the archive's worst readout fold MAE was 0.092045, versus 0.058448 for the unrestricted cubic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Refitting the archived bilinear term, or replacing it with unrestricted quadratic interactions, is sufficient.\",\n    \"empirical_witness\": \"Archived and full quadratic readouts have public holdout MAEs of 0.051827 and 0.059816, both above 0.038. The cubic reduces mean six-fold MAE to 0.046746 but still misses the public threshold.\",\n    \"causal_blanket_diagnosis\": \"The residual structure is in the readout: the same calibrated coordinates support an affine trajectory fit with worst fold MAE 0.004544 before relaxation projection.\",\n    \"sublated_pivot\": \"Preserve the archived trajectory projection and test whether a shared nonlinear link explains the cubic terms without fitting them independently.\",\n    \"risk_kind\": \"readout_basis_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the unrestricted cubic\",\n      \"rejected_reason\": \"Its public holdout MAE is 0.043001, above the 0.038 threshold, and the fitted cubic terms suggest a more compact shared projection.\"\n    }\n  ],\n  \"rationale\": \"The alternating signs of the cubic coefficients are consistent with compression along a shared linear projection. Compare links with the bilinear term inside and outside the compression to separate their effects while preserving the trajectory handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "37ef3ca8fd1758acbd2344d84132613d515fb920ef11b18ab1f1332071e54015",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35701.2,
+      "usage_known": true,
+      "prompt_tokens": 26962,
+      "cached_tokens": 12672,
+      "completion_tokens": 1504
+    }
+  ]
+}

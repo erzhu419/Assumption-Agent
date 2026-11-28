@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17e0be8663424baabdd580e339928c5c",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:44:46.181274+00:00",
+  "ended_at_utc": "2026-11-28T13:45:20.931233+00:00",
+  "request_sha256": "741fba21016582e09dd90d167c067fcf2717a1ec3cf3a9964c0249cebc7470ce",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64556,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39659,
+    "cached_tokens": 5504,
+    "completion_tokens": 1485
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py; cat > /tmp/modes.py <<'PY'\\nimport numpy as np,itertools as it,pickle\\nfrom scipy.optimize import least_squares\\nD=dict(np.load('/tmp/expanded.npz')); z=D['z']; Y=D['Y']; Q=D['Q']; n=52\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']['traj']; t=s['eval_times']; aff=lambda x:np.c_[np.ones(len(x)),x]; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-9)[0]; cy=lambda x:x*np.roll(x,-1,axis=1)\\nc=aff(cy(z))@D['C']; d=aff(np.cos(2.4*z))@D['D']; p=cy(z); h=np.cos(2.4*z); zz=np.stack([z[:,i]*z[:,j] for i,j in it.combinations_with_replacement(range(4),2)],1); z3=np.stack([np.prod(z[:,i],1) for i in it.combinations_with_replacement(range(4),3)],1)\\nfor name,X in {'cd':np.c_[c,d],'cdot':np.c_[c,d,(c*d).sum(1)],'cdiag':np.c_[c,d,c*d],'coff':np.c_[c,d,c[:,0]*d[:,1]],'mixed':np.c_[c,d,c*d,c[:,0]*d[:,1]],'poly3':np.c_[z,zz,z3],'mixed3':np.c_[z,c,d,c*d,c[:,0]*d[:,1],z3]}.items():\\n X=aff(X); b=fit(X[:n],Y[:n]); e=abs(X@b-Y); print(name,e[:n].mean(0).round(3),e[n:].mean(0).round(3),b.round(3).tolist() if name=='mixed' else '')\\n# Screen coherent low-dimensional nonlinear nodes by improvement conditional on the archived readout.\\nbase=np.c_[c,d,c*d,c[:,0]*d[:,1]]; pool={}\\nfor name,x in dict(z=z,c=c,d=d,p=p,h=h,cd=c*d,cs=c.sum(1,keepdims=True),ds=d.sum(1,keepdims=True),dot=(c*d).sum(1,keepdims=True),zsq=z*z).items():\\n for j,w in enumerate(x.T):pool[name+str(j)]=w\\nfor a,b in [('c','d'),('p','h'),('z','c'),('z','d'),('c','c'),('d','d')]:\\n A=np.column_stack([pool[a+str(j)] for j in range(4)]); B=np.column_stack([pool[b+str(j)] for j in range(4)])\\n for i,j in it.product(range(4),repeat=2):\\n  for sym,w in [('+',A[:,i]+B[:,j]),('-',A[:,i]-B[:,j]),('*',A[:,i]*B[:,j])]:pool[f'{a}{i}{sym}{b}{j}']=w\\nnames=[]; F=[]\\nfor k,x in pool.items():\\n for nm,g in [('id',x),('sq',x*x),('cube',x**3),('rat',x/(1+.22*x*x)),('evenrat',1/(1+.22*x*x)),('tanh',np.tanh(x)),('softplus',np.logaddexp(0,x)),('abs',abs(x))]+[(f'{a}{w}',(np.sin if a=='sin' else np.cos)(w*x)) for a in ('sin','cos') for w in (.5,1,1.25,1.8,2.4,3.0,4.8)]:names.append(k+'_'+nm);F.append(g)\\nF=np.array(F).T\\nfor bname,B in [('main',base),('extended',np.c_[base,z,zz]),('bare',np.empty((len(z),0)))]:\\n X=aff(B); V=np.linalg.qr(X[:n])[0]; E=Y[:n]-V@(V.T@Y[:n]); G=F[:n]-V@(V.T@F[:n]); gn=np.linalg.norm(G,axis=0); S=abs(E.T@G)/np.where(gn>1e-6,gn,np.inf)\\n for j in [0,1,2,3]:\\n  ind=S[j].argsort()[-9:][::-1]; print(bname,j,[(names[i],round(S[j,i]/np.linalg.norm(E[:,j]),3)) for i in ind]);\\n  if bname!='bare':\\n   for k in ind[:1]:\\n    M=np.c_[X,F[:,k]]; e=abs(M@fit(M[:n],Y[:n,j])-Y[:,j]); print('mae',e[:n].mean(),e[n:].mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Isolate nonlinear readout terms relative to the archived branch model; the best screened trajectory MAE remains 0.2397.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Screen terms after projecting out known branch effects so that a missing nonlinear term is not obscured by correlations with the main effects.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "584e75f61ce17159f0e2cf42cecdecd0e7558ccc2238f7758e400a557d64dfbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34748.67,
+      "usage_known": true,
+      "prompt_tokens": 39659,
+      "cached_tokens": 5504,
+      "completion_tokens": 1485
+    }
+  ]
+}

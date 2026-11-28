@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac0abf99f95149369d9fd5872d7d2d35",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:17:48.336763+00:00",
+  "ended_at_utc": "2026-11-28T14:18:33.478665+00:00",
+  "request_sha256": "2d1435bb67d2b46beb9a28ca5da12610e937491dc39bfeab009b80f1e54f4599",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29510,
+    "cached_tokens": 12672,
+    "completion_tokens": 1560
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/node_00.py; cat >/tmp/readout13.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations,combinations_with_replacement\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom scipy.linalg import orthogonal_procrustes\\nsys.path.insert(0,'/holdout_task/_frozen_nodes'); import node_00\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; x=tr['x']; q=-np.expm1(-t[:,None]*[.4127,1.8132]); y=np.c_[tr['y'],tr['traj']@np.linalg.pinv(q.T)]\\ndef fit(h,y):return np.linalg.lstsq(h,y,rcond=None)[0]\\ndef one(x):return np.c_[np.ones(len(x)),x]\\ndef quad(x):return np.column_stack([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(x.shape[1]),2)])\\ndef aq(u,v,keep):\\n def des(z,w,j):\\n  a,b=z[:,j],z[:,(j+2)%4]; return np.c_[np.ones(len(z)),a,b,np.tanh(w[0]*a),np.tanh(w[1]*b)]\\n def coeff(w): return np.stack([fit(des(u[keep],w,j),v[keep,j]) for j in range(4)])\\n def res(w):return np.column_stack([des(u[keep],w,j)@c for j,c in enumerate(coeff(w))])-v[keep]\\n w=least_squares(lambda w:res(w).ravel(),[1.1,1.1],bounds=(.25,4)).x; c=coeff(w); print('a',w,c,np.sqrt(np.mean(res(w)**2)))\\n def invert(x):\\n  z=(x-c[:,0])/1.5\\n  for _ in range(30):\\n   a,b=z,np.roll(z,2,axis=1); ta,tb=np.tanh(w[0]*a),np.tanh(w[1]*b); r=c[:,0]+c[:,1]*a+c[:,2]*b+c[:,3]*ta+c[:,4]*tb-x; J=np.zeros((len(z),4,4)); j=np.arange(4); J[:,j,j]=c[:,1]+c[:,3]*w[0]*(1-ta*ta); J[:,j,(j+2)%4]=c[:,2]+c[:,4]*w[1]*(1-tb*tb); z-=np.clip(np.linalg.solve(J,r[...,None])[...,0],-.35,.35)\\n  return z\\n return invert\\nu,v=(s['panel_a'][k] for k in ('u','v')); keep=np.argsort(np.linalg.norm(v-one(u)@fit(one(u),v),axis=1))[:45]; z=aq(u,v,keep)(x); print('z ranges',z.min(0),z.max(0)); u=s['panel_c']['u']; v1=s['panel_c']['v1']; v2=s['panel_c']['v2'];\\nfor fname,f in [('tanh',np.tanh),('sin',np.sin),('atan',np.arctan),('softsign',lambda a:a/(1+abs(a))),('gauss',lambda a:np.expm1(-a*a))]:\\n for lin in (False,True):\\n  def des(a,w):return np.c_[one(a),f(w*a)] if lin else one(f(w*a))\\n  def cost(w):\\n   h=des(u,w);return np.mean((h@fit(h,v1)-v1)**2)\\n  o=minimize_scalar(cost,bounds=(.1,4),method='bounded'); print('c1',fname,lin,o.x,o.fun**.5)\\nprint('study x ranges',x.min(0),x.max(0));\\nw=z-1.837*np.expm1(-.2922*z*z); g=np.tanh(1.59*z); b=one(z)@fit(one(s['panel_b']['u']),s['panel_b']['v']);\\nfor key,h in [('raw',one(x)),('z',one(z)),('w',one(w)),('g',one(g)),('b',one(b)),('zg',np.c_[one(z),g]),('wg',np.c_[one(w),g]),('quad-z',np.c_[one(z),quad(z)]),('quad-w',np.c_[one(w),quad(w)]),('quad-g',np.c_[one(g),quad(g)]),('quad-wg',np.c_[one(w),g,quad(w),quad(g)]),('full',np.c_[one(w),g,quad(np.c_[w,g])])]:\\n print(key,'train',np.mean(abs(h@fit(h,y)-y),0),'val',np.mean(abs(h[52:]@fit(h[:52],y[:52])-y[52:]),0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout13.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel map → H2 opposite-channel nonlinear inverse and calibrated compressed readout; archived public MAE 0.125101/0.112378, frozen-only 0.216680/0.154741.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the frozen predictor as the main estimator\",\"rejected_reason\":\"Its standalone errors exceed both tolerances and would dominate an uncompensated blend.\"}],\"rationale\":\"Recover the compact opposite-channel calibration and compare physical readout bases for both response channels and trajectory amplitudes before compensating the frozen blend.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "89f740806e338bbe8fca5ea0893cac3dabca8a49c620d3177ed3749cb84aa12d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45140.73,
+      "usage_known": true,
+      "prompt_tokens": 29510,
+      "cached_tokens": 12672,
+      "completion_tokens": 1560
+    }
+  ]
+}

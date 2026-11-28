@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3757c2f482164f79bb4738f24c73b695",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:41.678064+00:00",
+  "ended_at_utc": "2026-11-28T13:35:14.195751+00:00",
+  "request_sha256": "acfb3dd9b66ac5050c59b52863c5a75348fc87b1b08d09d1f6970984b4baec7f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32358,
+    "cached_tokens": 12672,
+    "completion_tokens": 1122
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    amplitudes = _fit(q,')\\nb = s.index('    last = state[:, -1]', a)\\ns = s[:a] + '''    # The scalar readout uses the diagonal contraction of the two branches.\\n    # Trajectories also use one off-diagonal interaction, selected on training data.\\n    traj = np.asarray(train['traj'])\\n    cross = f[:, 13:]\\n    diagonal = np.array([0, 5, 10, 15])\\n    off_diagonal = np.setdiff1d(np.arange(16), diagonal)\\n    screening = _fit(f[:n], traj)[13:]\\n    interaction = off_diagonal[np.argmax(np.linalg.norm(screening[off_diagonal], axis=1))]\\n    scalar = np.column_stack((f[:, 0], f[:, 5:13], cross[:, diagonal].sum(axis=1)))\\n    spatial = np.column_stack((scalar, cross[:, interaction]))\\n    y = scalar[n:] @ _fit(scalar[:n], train['y'])\\n    amplitudes = _fit(q, traj.T).T\\n    state = spatial[n:] @ _fit(spatial[:n], amplitudes) @ q.T\\n''' + s[b:]\\np.write_text(s)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress04.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52\\nsub=dict(s,train={k:v[:n] if k!='summary' else v for k,v in tr.items()}, test={'x':tr['x'][n:]})\\nout=m.solve_batch(sub); y=tr['y'][n:]; T=tr['traj'][n:]\\nq=m._basis(s['eval_times'],tr['traj'][:n]); F=m._design(s,tr['x'])[:,:13]; A=m._fit(q,tr['traj'][:n].T).T\\nay=F[n:]@m._fit(F[:n],tr['y'][:n]); at=F[n:]@m._fit(F[:n],A)@q.T\\nmae=lambda a,b:float(np.mean(np.abs(a-b)))\\nbase=[mae(ay,y),mae(at,T)]; actual=[mae(out['y_hat'],y),mae(out['state_pred'],T)]\\nprint('Algebraic ablation witness on fixed 52/20 split: additive MAEs',base,'vs delivered bilinear MAEs',actual)\\nassert all(v<.038 for v in actual) and all(a<.1*b for a,b in zip(actual,base))\\ntest_out=m.solve_batch(s); last=test_out['state_pred'][:,-1]; yh=test_out['y_hat']; assert yh.shape==(36,) and test_out['state_pred'].shape==(36,8); assert all(np.isfinite(v).all() for v in test_out.values()); np.testing.assert_allclose(test_out['diagnostics_vec'],[yh.mean(),yh.std(),last.mean(),last.std()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted bilinear readout) -> H2 (diagonal contraction plus one trajectory-specific interaction and two shared relaxation modes); across 111 comparison folds, worst MAEs fell to 0.007714 for y and 0.004924 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unrestricted bilinear solver\",\n      \"rejected_reason\": \"The compact challenger improved both fixed-split errors and all three worst-slice metrics: scalar, trajectory, and single-horizon MAE.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact model supported by fold-local interaction selection. Verify the exact artifact in an isolated process, including a fixed-split ablation that directly tests whether the branch products are necessary.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9f05e22fdd6209f84cc8650425d610c3fd10192e8cd815a1ce07e3832e0cc100",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32516.5,
+      "usage_known": true,
+      "prompt_tokens": 32358,
+      "cached_tokens": 12672,
+      "completion_tokens": 1122
+    }
+  ]
+}

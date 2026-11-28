@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2aa68555dac4a11a893503904c8eff9",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:36:41.634621+00:00",
+  "ended_at_utc": "2026-11-28T14:37:08.589304+00:00",
+  "request_sha256": "6b14191a46e3b387bba355b35e11079eea88f3131f276d5888bdf3bfac7c6efa",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50314,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33255,
+    "cached_tokens": 12672,
+    "completion_tokens": 876
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nnode = load('candidate', '/holdout_task/node_00.py')\\nreadout = load('readout', '/holdout_task/_frozen_nodes/node_01.py')\\nbatch = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nworst = {}\\nfor i, rec in enumerate(batch):\\n    study = rec['study']\\n    coords = node.run_node({'__input__': study})\\n    assert set(coords) == {'c', 'query'}\\n    for key, split in [('c', 'train'), ('query', 'test')]:\\n        assert isinstance(coords[key], np.ndarray) and coords[key].shape == study[split]['x'].shape\\n        assert np.isfinite(coords[key]).all()\\n    def predict(s, c):\\n        return readout.run_node({'__input__': s, 'node_00': c})\\n    ref = predict(study, coords)\\n    for panel in ('panel_a', 'panel_b'):\\n        u, v = [study[panel][k] for k in ('u', 'v')]\\n        for j in range(len(u)):\\n            keep = np.arange(len(u)) != j\\n            changed = {**study, panel: {**study[panel], 'u': u[keep], 'v': v[keep]}}\\n            pred = predict(changed, node.run_node({'__input__': changed}))\\n            for key in ('y_hat', 'state_pred'):\\n                delta = np.abs(pred[key] - ref[key])\\n                assert np.isfinite(delta).all()\\n                stat = (float(np.mean(delta)), i, j)\\n                worst[panel, key] = max(worst.get((panel, key), (0, -1, -1)), stat)\\nprint('Calibration row jackknife: worst mean absolute prediction change (value, study, omitted row):', worst)\\nassert all(x[0] < 0.038 for x in worst.values())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the calibrated cubic-and-sine sensor inverse and cosine panel-B map pass official public CV with scalar MAE 0.006433 and trajectory MAE 0.004456.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refine the sensor basis before verification\",\n      \"rejected_reason\": \"Both official errors are well below tolerance; test sensitivity to individual calibration rows before changing the accepted candidate.\"\n    }\n  ],\n  \"rationale\": \"Verify the unchanged artifact in isolated Python and measure sensitivity to dropping each calibration row, separately for both panels and both downstream predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "adeacd88d8104471ff29b57fa7ef166e2246034615a1c6350dfbab8ed81dddd6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26952.81,
+      "usage_known": true,
+      "prompt_tokens": 33255,
+      "cached_tokens": 12672,
+      "completion_tokens": 876
+    }
+  ]
+}

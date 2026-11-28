@@ -1,0 +1,6 @@
+import importlib.util, pickle, numpy as np, copy
+spec=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; allx=s['train']['x']; rng=np.random.default_rng(319); folds=[np.arange(72)]+[rng.permutation(72) for _ in range(7)]; y=s['train']['y']; t=s['train']['traj']; R=[]
+for z in folds:
+ i,j=z[:52],z[52:]; b=dict(s,train={**s['train'],**{k:s['train'][k][i] for k in ('x','y','traj')}},test={'x':allx[j]}); x=m._calibrate(b['panel_a'],np.r_[allx[i],allx[j]]); out,loo,st,os=m._portfolio(b,x); py,pt=m._readout(b,x); e=lambda v:np.mean(abs(v-y[j])); ks=sorted(out); v=[e(py)]+[e(out[k][:,0]) for k in ks]+[np.mean(abs(pt-t[j]))]; R.append(v)
+print('columns: composite, families 0-7, trajectory'); print(np.round(R,5)); print('mean',np.mean(R,0),'worst',np.max(R,0)); r=m.solve_batch(s); assert r['y_hat'].shape==(36,) and r['state_pred'].shape==(36,8) and all(np.isfinite(v).all() for v in r.values()); a,b=r['y_hat'],r['state_pred'][:,-1]; np.testing.assert_allclose(r['diagnostics_vec'],[a.mean(),a.std(),b.mean(),b.std()]); print('Isolated API checks passed')

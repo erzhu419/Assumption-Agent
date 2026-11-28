@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "085382640e89454097d6dae9c022827f",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:00:53.933585+00:00",
+  "ended_at_utc": "2026-11-28T13:01:32.230177+00:00",
+  "request_sha256": "041f014e9fa77cb324f7dde54baf07090a4a626ce63d2c6b1c96a3d45713f608",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31042,
+    "cached_tokens": 0,
+    "completion_tokens": 1556
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Batch prediction with a calibrated spatial kernel and shared temporal modes.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _calibration(panel):\\n    u, v = map(np.asarray, (panel['u'], panel['v']))\\n    i, j = np.triu_indices(len(u), 1)\\n    du = u[i] - u[j]\\n    slopes = np.median((v[i] - v[j]) / np.where(abs(du) > 1e-12, du, np.inf), axis=0)\\n    offsets = np.median(v - u * slopes, axis=0)\\n    for _ in range(3):\\n        r = np.linalg.norm(v - u * slopes - offsets, axis=1)\\n        med = np.median(r)\\n        keep = r <= max(6 * med, 0.0005)\\n        if keep.sum() < 5:\\n            break\\n        for k in range(u.shape[1]):\\n            slopes[k], offsets[k] = np.linalg.lstsq(np.c_[u[keep, k], np.ones(keep.sum())], v[keep, k], rcond=None)[0]\\n    return np.where(abs(slopes) > 1e-6, slopes, 1.), offsets\\n\\n\\ndef _kernel(x, q, slope):\\n    i, j = np.triu_indices(x.shape[1])\\n    return (1. + x @ q.T + .30 * ((x[:, i] * x[:, j]) @ (q[:, i] * q[:, j]).T)\\n            + 1.5 * np.exp(-cdist(x, q, 'sqeuclidean') / 6.)\\n            + 1.5 * np.exp(-cdist(x / slope, q / slope, 'sqeuclidean') / 6.))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.asarray(train['x'], dtype=float)\\n    q = np.asarray(study['test']['x'], dtype=float)\\n    y, t = map(np.asarray, (train['y'], train['traj']))\\n    slope, _ = _calibration(study['panel_a'])\\n    _, _, modes = np.linalg.svd(t, full_matrices=False)\\n    modes = modes[:2]\\n    target = np.c_[y, t @ modes.T]\\n    mu = target.mean(axis=0)\\n    K = _kernel(x, x, slope)\\n    K.flat[::len(K)+1] += .0008\\n    p = _kernel(q, x, slope) @ solve(K, target - mu, assume_a='pos') + mu\\n    yh, st = p[:, 0].copy(), p[:, 1:] @ modes\\n    return {'y_hat': yh, 'state_pred': st,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), st[:, -1].mean(), st[:, -1].std()])}\\nPY\\ncat > /tmp/check_batch.py <<'PY'\\nimport importlib.util, pickle, sys\\nimport numpy as np\\nfrom sklearn.model_selection import KFold\\np=sys.argv[1] if len(sys.argv)>1 else '/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('cand',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,t=[tr[k] for k in ['x','y','traj']]; n=len(x)\\nfolds=[('52/20',np.arange(52),np.arange(52,n))]+[(f'kfold{seed}-{i}',a,b) for seed in (217,481,14) for i,(a,b) in enumerate(KFold(4,shuffle=True,random_state=seed).split(x))]\\nfor j in range(4):\\n o=np.argsort(x[:,j]); folds.extend([(f'low{j}',o[12:],o[:12]),(f'high{j}',o[:-12],o[-12:])])\\no=np.argsort(np.linalg.norm(x,axis=1));folds.append(('large radius',o[:-14],o[-14:]))\\nfor lab,a,b in folds:\\n out=m.solve_batch({**s,'train':{k:tr[k][a] for k in ('x','y','traj')},'test':{'x':x[b]}}); ey=abs(out['y_hat']-y[b]); et=abs(out['state_pred']-t[b]); print(f'{lab:14s} {ey.mean():.6f} {et.mean():.6f} {et[:,-1].mean():.6f} y_max={ey.max():.6f}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 /tmp/check_batch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 global cubic → H2 long-scale Gaussian corrections plus shared temporal modes; prior Gaussian candidates reached 0.01094 scalar MAE on the prescribed split and 0.01434 worst trajectory MAE across five folds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the single best scalar result on the prescribed split\",\n      \"rejected_reason\": \"The model with 0.00954 scalar MAE had a higher worst-fold trajectory MAE of 0.01909, so paired metrics favor the more stable kernel scale.\"\n    }\n  ],\n  \"rationale\": \"Build a reproducible candidate using the supported low-rank time structure and robust panel calibration; verify both output errors and probe harder coordinate-tail and radius slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "97e1b1ffe88f11471e16e43bd0969621b7ef8e157d27904685c01f6e451e3378",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38295.09,
+      "usage_known": true,
+      "prompt_tokens": 31042,
+      "cached_tokens": 0,
+      "completion_tokens": 1556
+    }
+  ]
+}

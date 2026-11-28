@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c50762221a8c4f8f8d59e026f888af74",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:54:39.412548+00:00",
+  "ended_at_utc": "2026-11-28T13:55:18.090288+00:00",
+  "request_sha256": "f94db49e81d54a0b3f06057d74bf2aa41f66349b960095234c31ba7c014839a2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37260,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27957,
+    "cached_tokens": 12672,
+    "completion_tokens": 1647
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/public_asset_index.json; cat >/tmp/readout_probe.py <<'PY'\\nfrom panel_probe import s,fit,affine\\nimport numpy as np,itertools\\nfrom scipy.optimize import minimize_scalar,least_squares\\np=s['panel_a']; u=p['u'];v=p['v']; A=affine(u); keep=np.linalg.norm(v-A@fit(A,v),axis=1)<3\\nco=np.array([fit(A[keep][:,[0,i+1]],v[keep,i]) for i in range(4)]); z=(s['train']['x']-co[:,0])/co[:,1]\\np=s['panel_c'];u=p['u'];v1=p['v1'];v2=p['v2']; B=affine(u)\\nopts={}\\nfor k,v,fs in [(1,v1,{'rat':lambda x,a:x/(1+a*x*x),'tanh':lambda x,a:np.tanh(a*x),'atan':lambda x,a:np.arctan(a*x),'sin':lambda x,a:np.sin(a*x)}),(2,v2,{'log':lambda x,a:np.log1p(a*x*x),'exp':lambda x,a:np.expm1(-a*x*x),'cos':lambda x,a:np.cos(a*x)-1,'rat2':lambda x,a:x*x/(1+a*x*x)})]:\\n for name,fn in fs.items():\\n  def design(x,a):return np.c_[affine(x),fn(x,a)]\\n  def err(a):\\n   D=design(u,a);return (D@fit(D,v)-v).ravel()\\n  q=least_squares(err,np.full(4,.6 if name not in ['sin','cos'] else 1.8),bounds=(.01,5),gtol=1e-12); scalar=minimize_scalar(lambda a:np.mean(err(a)**2),bounds=(.01,3),method='bounded'); print(k,name,scalar.x,scalar.fun**.5,q.x,np.std(q.fun))\\n  opts[name]=(fn,q.x,fit(design(u,q.x),v),fit(B,v))\\n\\ndef poly(x,degree):\\n return np.column_stack([x[:,ids].prod(1) for d in range(1,degree+1) for ids in itertools.combinations_with_replacement(range(x.shape[1]),d)])\\ndef cross(x):return np.c_[x, *[x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(x.shape[1]),2)]]\\nF={}\\nfor name,a in [('raw',s['train']['x']),('cal',z),('b',affine(z)@fit(affine(s['panel_b']['u']),s['panel_b']['v']))]:\\n for d in (2,3,4): F[f'{name}p{d}']=poly(a,d)\\n F[name+'soft']=np.c_[poly(a,2),cross(np.tanh(a)),np.sin(a),np.cos(a),np.sin(2*a),np.cos(2*a)]\\nfor name,(fn,a,w,b) in opts.items():\\n T=fn(z,a); V=np.c_[affine(z),T]@w; R=(V-affine(z)@b)@np.linalg.pinv(b[1:]); N=T@w[5:]@np.linalg.pinv(w[1:5]);\\n F[name+'basis']=cross(np.c_[z,T]); F[name+'vb']=np.c_[cross(V),poly(z,2)];\\n for label,rr in [('R',R),('N',N),('T',T)]:\\n  for mult in [-1,.25,.5,1,2]:\\n   Z=z+mult*rr\\n   F[f'{name}{label}{mult}']=np.c_[poly(Z,2),cross(np.tanh(Z))]; F[f'{name}{label}{mult}p3']=poly(Z,3)\\nV1=np.c_[affine(z),opts['rat'][0](z,opts['rat'][1])]@opts['rat'][2]; V2=np.c_[affine(z),opts['log'][0](z,opts['log'][1])]@opts['log'][2]; F['all']=cross(np.c_[z,V1,V2]); F['both']=cross(np.c_[V1,V2]);F['exact_terms']=cross(np.c_[z,opts['rat'][0](z,opts['rat'][1]),opts['log'][0](z,opts['log'][1])]);\\ny=np.c_[s['train']['y'],s['train']['traj']]; n=len(z); print('n',n); splits=[(np.arange(n-20),np.arange(n-20,n))]+[(np.setdiff1d(np.arange(n),va),va) for va in np.array_split(np.random.default_rng(13).permutation(n),4)]\\nrecords=[]\\nfor name,X in F.items():\\n K=[]\\n for tr,va in splits:\\n  x=(X-X[tr].mean(0))/np.maximum(1e-8,X[tr].std(0)); A=x[tr]@x[tr].T; ev,U=np.linalg.eigh(A); K.append((x[va]@x[tr].T@U,ev,U.T@(y[tr]-y[tr].mean(0)),y[tr].mean(0),y[va]))\\n for reg in [.000001,.0001,.001,.01,.03,.1,.3,1,3]:\\n  E=[]\\n  for P,ev,B,m,target in K:\\n   err=abs((P/(ev+reg))@B+m-target); E.append([err[:,0].mean(),err[:,1:].mean()])\\n  rec=np.array(E); records.append((name,reg,rec[0],rec[1:].mean(0),rec[1:].max(0)))\\nfor j in (0,1):\\n print('target',j)\\n for a in sorted(records,key=lambda x:.25*x[2][j]+.5*x[3][j]+.25*x[4][j])[:18]: print(a)\\n print('public',sorted(records,key=lambda x:x[2][j])[:5])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: cyclic-product/cosine panel C map → H2: coordinatewise odd/even saturation; a log basis fits v2 with paired residual RMSE 0.00012, while readout CV is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit the panel families to paired measurements independently of the supervised labels, then compare calibrated polynomial and saturation readouts across multiple folds for both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "410ea265d96fe9248666139b716d7f3efa5ebd2bedbf30e34cf096862d786a6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38676.63,
+      "usage_known": true,
+      "prompt_tokens": 27957,
+      "cached_tokens": 12672,
+      "completion_tokens": 1647
+    }
+  ]
+}

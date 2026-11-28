@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb979b3f4efb436d919db813a44d5b64",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:12:40.961577+00:00",
+  "ended_at_utc": "2026-11-28T13:13:11.041368+00:00",
+  "request_sha256": "39b91cf6f26a918481adb36e96c2c0b673fce64dc5a9bda7e90460261fca85c4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39781,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29944,
+    "cached_tokens": 12672,
+    "completion_tokens": 1260
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import least_squares\\n\\ndef calibrate(study):\\n    u,v=(np.asarray(study['panel_a'][k]) for k in ('u','v'))\\n    keep=np.ones(len(u),dtype=bool)\\n    for _ in range(6):\\n        um=u[keep].mean(0); vm=v[keep].mean(0)\\n        gain=np.sum((u[keep]-um)*(v[keep]-vm),axis=0)/np.sum((u[keep]-um)**2,axis=0)\\n        off=vm-um*gain\\n        e=np.linalg.norm(v-off-u*gain,axis=1)\\n        keep=e<=max(.001,3*np.median(e))\\n    return off,gain\\n\\ndef temporal(t,Y):\\n    def profile(r):\\n        q=-np.expm1(-t[:,None]*r)\\n        a=np.linalg.lstsq(q,Y.T,rcond=None)[0].T\\n        return q,a\\n    def residual(r):\\n        q,a=profile(r)\\n        return (a@q.T-Y).ravel()\\n    return profile(least_squares(residual,[.4,1.82],bounds=([.1,.9],[.85,4.])).x)\\n\\ndef solve_batch(study):\\n    tr=study['train']; n=len(tr['x']); off,gain=calibrate(study)\\n    x=np.vstack([tr['x'],study['test']['x']]); z=(x-off)/gain\\n    q,a=temporal(np.asarray(study['eval_times']),np.asarray(tr['traj']))\\n    target=np.column_stack([tr['y'],a]); pred=[]\\n    for zz,sc,reg in ((x,4.,1e-6),(z,4.,1e-6),(z,8.,1e-6)):\\n        h=np.sqrt(5)*cdist(zz,zz[:n])/sc\\n        k=(1+h+h*h/3)*np.exp(-h)\\n        pred.append(k[n:]@np.linalg.solve(k[:n]+reg*np.eye(n),target))\\n    y=.5*(pred[0][:,0]+pred[1][:,0]); state=pred[2][:,1:]@q.T\\n    return dict(y_hat=y,state_pred=state,diagnostics_vec=np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/structure.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom sklearn.preprocessing import PolynomialFeatures\\nsys.path.insert(0,'/holdout_task'); from batch_solver import calibrate,temporal\\nnp.set_printoptions(precision=4,suppress=True,linewidth=200)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; off,gain=calibrate(s); z=(tr['x']-off)/gain\\nq,a=temporal(s['eval_times'],tr['traj']); Y=np.c_[tr['y'],a]\\nfor pkey,vkey,deg in [('panel_b','v',1),('panel_c','v1',2),('panel_c','v2',2)]:\\n p=s[pkey]; f=PolynomialFeatures(deg); F=f.fit_transform(p['u']); c=np.linalg.lstsq(F,p[vkey],rcond=None)[0]; print(pkey,vkey); print(list(zip(f.get_feature_names_out(),c))); print('fit to outputs',np.linalg.lstsq(np.c_[np.ones(len(z)),f.transform(z)@c],Y,rcond=None)[0]);\\nfor deg in (2,3,4):\\n f=PolynomialFeatures(deg); F=f.fit_transform(z); c=np.linalg.lstsq(F[:52],Y[:52],rcond=None)[0]; print('degree',deg,'CV',np.mean(abs(F[52:]@c-Y[52:]),0));\\n if deg==3:\\n  for j in range(3): print(sorted(zip(f.get_feature_names_out(),c[:,j]),key=lambda a:-abs(a[1]))[:22])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent calibrated smooth maps -> H2 test panel-induced algebraic structure; best observed 52/20 MAEs were 0.02147 for y and 0.02255 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a quadratic surrogate alone\",\"rejected_reason\":\"Its training residual standard deviations of 0.063–0.103 show that it misses substantial structure.\"}],\"rationale\":\"Save and check a viable baseline, then inspect panel coefficients and cubic residual structure to identify a model that improves on the gate without relying on a single split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f83a9dcc08f29acab825e78d3131ce315ce23c1a11130c85c09dbe9504de7e66",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30078.78,
+      "usage_known": true,
+      "prompt_tokens": 29944,
+      "cached_tokens": 12672,
+      "completion_tokens": 1260
+    }
+  ]
+}

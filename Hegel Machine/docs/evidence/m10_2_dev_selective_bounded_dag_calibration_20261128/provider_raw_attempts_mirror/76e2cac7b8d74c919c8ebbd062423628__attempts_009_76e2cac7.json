@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76e2cac7b8d74c919c8ebbd062423628",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:22:10.220475+00:00",
+  "ended_at_utc": "2026-11-28T14:22:55.269399+00:00",
+  "request_sha256": "8c2fc0829b653abcafb57ec368ae47a2759fd1d860c69d334c7ec70b2586477b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57170,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36058,
+    "cached_tokens": 12672,
+    "completion_tokens": 1014
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nfrom importlib.util import spec_from_file_location, module_from_spec\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = spec_from_file_location(name, path)\\n    module = module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nroot = '/holdout_task/'\\nn0 = load('n0', root+'_frozen_nodes/node_00.py')\\nn1 = load('n1', root+'node_01.py')\\nn2 = load('n2', root+'_frozen_nodes/node_02.py')\\ns = pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\ntr = s['train']\\nx = tr['x']\\nz = n1._coordinates(s['panel_a'], x)\\na, b = n1._panels(s['panel_c'], z)\\nn = len(x)\\nidx = np.arange(n)\\nsplits = [(f'random-{seed}', np.random.default_rng(seed).permutation(n)[:20]) for seed in range(12)]\\nsplits += [(f'{label}-tail', np.argsort(score)[-18:]) for label, score in [('coordinate-radius', np.linalg.norm(z,axis=1)), ('product-cosine-contraction', np.abs(np.sum(a*b,axis=1))), ('cross-channel-interaction', np.abs(a[:,0]*b[:,1]))]]\\nsplits += [(f'coordinate-{j}-{sign:+d}', np.argsort(sign*z[:,j])[-18:]) for j in range(4) for sign in (-1,1)]\\nrows = []\\nfor label, test in splits:\\n    train = np.setdiff1d(idx, test)\\n    st = dict(s, train={**tr, **{k:tr[k][train] for k in ('x','y','traj')}}, test={'x':x[test]})\\n    p0 = n0.run_node({'__input__':st})\\n    p1 = n1.run_node({'__input__':st,'node_00':p0})\\n    p2 = n2.run_node({'node_00':p0,'node_01':p1})\\n    pred_y, pred_t = p2['y_hat'], p2['state_pred']\\n    assert pred_y.shape == tr['y'][test].shape and pred_t.shape == tr['traj'][test].shape\\n    assert np.isfinite(pred_y).all() and np.isfinite(pred_t).all()\\n    err_y = np.mean(np.abs(pred_y-tr['y'][test]))\\n    err_t = np.mean(np.abs(pred_t-tr['traj'][test]))\\n    rows.append((label, err_y, err_t))\\nprint('worst y slice:', max(rows,key=lambda row:row[1]))\\nprint('worst trajectory slice:', max(rows,key=lambda row:row[2]))\\nassert all(max(row[1:])<=.038 for row in rows), rows\\nprint('Passed',len(rows),'random and tail holdouts.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived calibration -> H2 robust nonlinear calibration with a sparse interaction readout; public CV MAEs are 0.004096 for y and 0.004177 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the readout to all second-order interactions\",\n      \"rejected_reason\": \"The expanded model worsened both held-out errors relative to the compact interaction readout.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged and verify it in an isolated Python process on the official test and additional random, coordinate-tail, and interaction-tail holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "42bf9fbe1d23dd6add3e471c39f31347ebe00995a2e2d757d3368a97abb268e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45047.75,
+      "usage_known": true,
+      "prompt_tokens": 36058,
+      "cached_tokens": 12672,
+      "completion_tokens": 1014
+    }
+  ]
+}

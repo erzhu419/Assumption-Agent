@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b545ff5247ee45afbfc8530f52b47fb9",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:25:08.392233+00:00",
+  "ended_at_utc": "2026-11-28T13:26:03.290940+00:00",
+  "request_sha256": "ce8ca9012172a083c6351be7c908eef4c461b8b1305628495a2e288401053e09",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38833,
+    "cached_tokens": 14720,
+    "completion_tokens": 1463
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '58,190p' /tmp/arc.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/pathprobe.py | head -2; cat >/tmp/gp.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\n\\ndef gp(x,q,y,kind=0,seed=0,extra=None):\\n y=np.asarray(y).reshape(len(x),-1); scale=y.std(0); ym=y.mean(0); Y=(y-ym)/scale\\n d=x.shape[1]; i,j=np.triu_indices(d); DD=x[:,None]-x[None,:]; J=np.eye(len(x)); XL=np.c_[np.ones(len(x)),x]; L=XL@XL.T\\n B=np.zeros((len(i),d,d)); B[np.arange(len(i)),i,j]=1\\n if kind in (1,3): B=B[i==j]\\n if kind in (4,5): B=np.zeros((0,d,d))\\n mats=[DD[:,:,a]*DD[:,:,b] for a in range(d) for b in range(d)]; mats=np.array(mats).reshape(d,d,-1)\\n order=1 if kind in (2,3,5) else 0\\n def calc(h,X=x,Z=x,grad=False):\\n  A=h[4] * np.eye(d)+np.einsum('a,aij->ij',h[5:],B); G=A@A.T; W=X[:,None]-Z[None,:]; D=np.einsum('...i,ij,...j->...',W,G,W); R=np.exp(-.5*D) if not order else (1+np.sqrt(3*D))*np.exp(-np.sqrt(3*D)); v=np.exp(h[:4]); lin=1+X@Z.T; K=v[0]*R+v[1]*lin+v[2]*lin**2\\n  if not grad:return K\\n  K+=v[3]*J; fac=cho_factor(K); a=cho_solve(fac,Y); val=.5*np.sum(Y*a)+Y.shape[1]*np.log(np.diag(fac[0])).sum(); Mi=.5*(Y.shape[1]*cho_solve(fac,J)-a@a.T); g0=[np.sum(Mi*v[0]*R),np.sum(Mi*v[1]*lin),np.sum(Mi*v[2]*lin**2),np.sum(Mi*v[3]*J)]; deriv=(-.5*R if not order else -1.5*np.exp(-np.sqrt(3*D)))*Mi*v[0]; S=(mats@deriv.ravel())@A; g=np.r_[g0,2*np.trace(S),2*np.einsum('ij,aij->a',S,B)];\\n  return val+.3*np.dot(h[5:],h[5:]),g+np.r_[np.zeros(5),.6*h[5:]]\\n rng=np.random.default_rng(seed); opts=[]\\n for k in range(2):\\n  h0=np.r_[0,-2,-5,-7,.7,np.zeros(len(B))]; h0[5:]=rng.normal(0,.2*k,len(B)); opts.append(minimize(lambda h:calc(h,grad=True),h0,jac=True,method='L-BFGS-B',bounds=[(-8,15),(-12,5),(-14,5),(-14,-1),(.01,5)]+[(-4,4)]*len(B), options={'maxiter':150,'ftol':1e-10}))\\n opt=min(opts,key=lambda p:p.fun); H=opt.x; K=calc(H); K+=np.exp(H[3])*J; Q=calc(H,q,x); return (Q@cho_solve(cho_factor(K),Y))*scale+ym,H,opt.fun\\n\\nif __name__=='__main__':\\n import contextlib,io\\n with contextlib.redirect_stdout(io.StringIO()): from pathprobe import *\\n _,_,V=np.linalg.svd(t,full_matrices=False); T=t@V[:2].T\\n for kind in range(6):\\n  for key in ['z','Bz','Iz'] if kind<4 else ['z']:\\n   q=D[key]; errs=[]\\n   for i,j in splits:\\n    h,par,l=gp(q[i],q[j],np.c_[y][i],kind); hh,pt,lt=gp(q[i],q[j],T[i],kind); errs.append([np.mean(abs(h[:,0]-y[j])),np.mean(abs(hh@V[:2]-t[j])),l]);\\n   print(kind,key,np.round(errs,5),flush=True)\\n print('details')\\n for i,j in splits[:1]:\\n  q=D['z']; h,p,l=gp(q[i],q[j],np.c_[y][i],0); hh,pt,lt=gp(q[i],q[j],T[i],0); print(p,pt); print(np.c_[q[j],y[j],h[:,0],y[j]-h[:,0]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic calibrated kernel → H2 evidence-fitted anisotropic metric; current scalar gate MAE is 0.04472 and trajectory gate MAE is 0.01247.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The calibrated coordinates outperform tested panel compositions, and the scalar task remains the bottleneck. Fit the spatial metric and noise strictly inside each validation split to test whether directional sensitivity explains the gap.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "94306ccd86421776e30ca1c36ed30587a854bac2dce7b59acf9f56348ffa8f34",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54896.64,
+      "usage_known": true,
+      "prompt_tokens": 38833,
+      "cached_tokens": 14720,
+      "completion_tokens": 1463
+    }
+  ]
+}

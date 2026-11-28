@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0c3258a3a9f49b880a4dc8abcad7c8c",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:20.586677+00:00",
+  "ended_at_utc": "2026-11-28T13:17:45.903940+00:00",
+  "request_sha256": "eb3e1bd8c0b4ce6f901416fa119f7edaa941ffca2ca5be6d5649f7ed107e3990",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20852,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21425,
+    "cached_tokens": 12672,
+    "completion_tokens": 990
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c02_batch_01_solver.py; cat > /tmp/explore.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.linalg import lstsq\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,t=(s['train'][k] for k in ('x','y','traj'))\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef aff(a):return np.c_[np.ones(len(a)),a]\\ndef poly(a,d):return np.column_stack([np.prod(a[:,ix],axis=1) for j in range(d+1) for ix in combinations_with_replacement(range(a.shape[1]),j)])\\ndef report(a,b):\\n z=lstsq(a[:52],b[:52])[0];r=a@z-b;return np.mean(abs(r[:52])),np.mean(abs(r[52:]))\\np=s['panel_a']; u,v=p['u'],p['v']; off=[]; gain=[]\\nfor j in range(4):\\n a,b=u[:,j],v[:,j]; ii,jj=np.triu_indices(len(a),1); dx=a[jj]-a[ii]; ok=abs(dx)>.1*np.ptp(a); g=np.median((b[jj[ok]]-b[ii[ok]])/dx[ok]); o=np.median(b-g*a); r=b-o-g*a; k=abs(r)<6*np.median(abs(r))+1e-10; o,g=lstsq(aff(a[k,None]),b[k])[0];off.append(o);gain.append(g);print('cal',j,o,g,k.sum(),np.std((b-o-g*a)[k]))\\nz=(x-off)/gain\\nops={}\\nfor pn in ['panel_b','panel_c']:\\n p=s[pn];u=p['u'];\\n for k,v in p.items():\\n  if k=='u':continue\\n  op=lstsq(aff(u),v)[0];ops[pn[-1]+k[-1]]=op\\n  print(pn,k,'op',op,'residuals',[np.std(poly(u,d)@lstsq(poly(u,d),v)[0]-v) for d in (1,2)],'linear_svs',np.linalg.svd(op[1:])[1])\\nprint('times',s['eval_times']);print('traj singulars',np.linalg.svd(t,compute_uv=False));\\nfor j in range(1,5):print('poly',j,report(poly(z,j),y),report(poly(z,j),t))\\nP=poly(z,2); beta=lstsq(P[:52],y[:52])[0]; print('quad beta',beta,'linear traj',lstsq(aff(z),t)[0]);print('worst quadratic residual',np.sort(abs(P@beta-y))[-12:]);print('largest y residual rows',np.c_[z,y,P@beta-y][np.argsort(abs(P@beta-y))[-12:]])\\nfor name,op in ops.items():\\n c=aff(z)@op;print(name, 'quad coef in panel coords',lstsq(poly(c,2),y)[0], 'bilinear',report(np.c_[aff(c),np.sum(c[:,:2]*c[:,2:],axis=1)],y))\\nH=np.zeros((4,4)); ij=np.triu_indices(4);H[ij]=beta[5:];H=(H+H.T)/2; print('quad eig',np.linalg.eigh(H));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived operator chain -> H2 recover the scalar interaction and trajectory law separately; prior 52/20 MAE is 0.051827 for scalar and 0.006544 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Check calibration and panel maps, then measure polynomial residuals and quadratic structure to distinguish a missing interaction from a nonlinear scalar readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c3fae0b4b9b254acff43d12c49e2d6408c87a86548eea9ec4621e385ab622c77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25316.18,
+      "usage_known": true,
+      "prompt_tokens": 21425,
+      "cached_tokens": 12672,
+      "completion_tokens": 990
+    }
+  ]
+}

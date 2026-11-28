@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "311934f0e02946cbb7297f1527bd60c4",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:26:43.894940+00:00",
+  "ended_at_utc": "2026-11-28T13:27:02.595485+00:00",
+  "request_sha256": "af76eac577c3fdfcd0497c3539d7cec3890cd1613509e364d66f425d2b2286a9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37377,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26658,
+    "cached_tokens": 12672,
+    "completion_tokens": 694
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport copy,pickle,numpy as np\\np=Path('/holdout_task/test_dag_candidate.py')\\nns={'__file__':str(p),'__name__':'__main__'}\\nexec(compile(p.read_text().split('\\\\nst = pickle.load',1)[0],str(p),'exec'),ns)\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nt=st['train']; x,y,z=t['x'],t['y'],t['traj']; n=len(x)\\norder=np.argsort(np.linalg.norm(x-np.median(x,axis=0),axis=1))\\nslices={f'block_{i}':v for i,v in enumerate(np.array_split(np.arange(n),4))}\\nslices.update(high_radius=order[-20:],low_radius=order[:20])\\nfor name,idx in slices.items():\\n    keep=np.setdiff1d(np.arange(n),idx); s=copy.deepcopy(st)\\n    s['train']={'x':x[keep],'y':y[keep],'traj':z[keep],'summary':np.array([y[keep].mean(),y[keep].std(),z[keep,-1].mean(),z[keep,-1].std()])}\\n    s['test']={'x':x[idx]}\\n    o,ec=ns['run_dag'](s)\\n    ey=np.abs(o['y_hat']-y[idx]); et=np.abs(o['state_pred']-z[idx]); horizon=et.mean(axis=0).max()\\n    print(f'{name}: y_mae={ey.mean():.6f} traj_mae={et.mean():.6f} worst_horizon_mae={horizon:.6f}')\\n    assert all(v==1 for v in ec.values()) and max(ey.mean(),et.mean(),horizon)<0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived elementwise v1 -> H2 sparse bilinear v1: official isolated CV passes with y MAE 0.003683 and trajectory MAE 0.004338; blocked and radius-tail stress tests are next.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Keep the verified artifact unchanged and test the same DAG on held-out row blocks and input-radius extremes, checking both targets and every trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5b257ef1856b862423824ee2b4a0922d684c32e82e91133611a6c4d996443060",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18699.66,
+      "usage_known": true,
+      "prompt_tokens": 26658,
+      "cached_tokens": 12672,
+      "completion_tokens": 694
+    }
+  ]
+}

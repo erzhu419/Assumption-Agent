@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "801cbce69bdf43bebc5fd41257f24d2c",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:28:36.116377+00:00",
+  "ended_at_utc": "2026-11-28T14:29:04.556950+00:00",
+  "request_sha256": "ef5a12846cb4bd1ffbc0ed9698bf4c73d5806f15f4c893f0d78a1fc9c18dc516",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37373,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27329,
+    "cached_tokens": 12672,
+    "completion_tokens": 921
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe15.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\ndef one(*a): return np.column_stack([np.ones(len(a[0])),*a])\\ndef ls(h,y): return np.linalg.lstsq(h,y,rcond=None)[0]\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; a,b,c,d=u.T; edge=u*np.roll(u,-1,axis=1); pair=np.column_stack([u[:,i]*u[:,j] for i,j in combinations(range(4),2)]); tri=np.column_stack([np.prod(u[:,j],axis=1) for j in combinations(range(4),3)])\\n for k,v in s[p].items():\\n  if k=='u':continue\\n  keep=np.linalg.norm(v,axis=1)<4 if p=='panel_a' else np.ones(len(u),bool)\\n  print(p,k)\\n  for name,h in [('linear',one(u)),('old',one(u,edge,u**3)),('poly3',one(u,pair,u**2,u**3,edge*u,edge*np.roll(u,-1,axis=1),tri)),('edge',one(edge)),('cos',one(np.cos(2.4*u))),('sin',one(np.sin(2.4*u))),('tanh',one(np.tanh(2.15*u))),('pair',one(pair)),('linedge',one(u,edge)),('fourier',one(np.sin(2.15*u),np.cos(2.15*u))),('polysin',one(u,edge,u**3,np.sin(2.15*u),np.cos(2.15*u)))]:\\n   h=h[keep]; y=v[keep]; b=ls(h,y); r=y-h@b; lev=np.sum(h*np.linalg.pinv(h).T,axis=1); print(name, np.sqrt(np.mean(r*r)), np.sqrt(np.mean((r/np.maximum(1-lev[:,None],1e-9))**2)))\\n   if name in ('linear','old') and p=='panel_a': print(b)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe15.py; sed -n '35,110p' /tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cyclic calibration -> H2 recover shifted panel interactions and rank-two readout; best archived public CV MAEs are 0.15556 scalar and 0.17209 trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived cyclic calibration and dual-branch designs transfer unchanged.\",\"empirical_witness\":\"The archived cyclic calibration has median inlier row residual about 0.44; archived branch solvers miss both 0.038 tolerances.\",\"causal_blanket_diagnosis\":\"The archived panel feature dictionaries do not yet explain the observed paired calibration data, independently of the temporal fit.\",\"sublated_pivot\":\"Keep robust calibration and shared temporal modes, but identify each panel map using paired inlier measurements and leave-one-row-out errors.\",\"risk_kind\":\"algebraic_calibration_mismatch\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse batch 06 as-is\",\"rejected_reason\":\"Public scalar and trajectory MAEs are 0.25376 and 0.23689.\"}],\"rationale\":\"Identify the panel maps independently of target labels before selecting a spatial readout; leave-one-row-out residuals distinguish a genuine map from an interpolating dictionary.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dc8f742e6798482c03e723b5ee247c8e39a3eb5ba07e179377973b3cdd40bfdc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28439.55,
+      "usage_known": true,
+      "prompt_tokens": 27329,
+      "cached_tokens": 12672,
+      "completion_tokens": 921
+    }
+  ]
+}

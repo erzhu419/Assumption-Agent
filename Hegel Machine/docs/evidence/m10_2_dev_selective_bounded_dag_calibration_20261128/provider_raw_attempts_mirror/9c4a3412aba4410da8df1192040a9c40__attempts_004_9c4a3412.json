@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c4a3412aba4410da8df1192040a9c40",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:47.593463+00:00",
+  "ended_at_utc": "2026-11-28T13:18:41.718314+00:00",
+  "request_sha256": "b92a76bf58619e43d7d6e9bff4a36bb6346210a63bf6187a064717f10b2f99f9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21620,
+    "cached_tokens": 5504,
+    "completion_tokens": 1481
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators.py <<'PY'\\nexec(open('/tmp/explore.py').read().split('ops={}')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\nX=[('z',z)]; ys=[]\\ndef fit(A,V):return lstsq(A,V)[0]\\ndef add(na,D):\\n for desc,A in [('lin',aff(D)),('bil',np.c_[aff(D),np.sum(D[:,:2]*D[:,2:],1)]),('pair',np.c_[aff(D),D[:,:2]*D[:,2:]]),('q',poly(D,2))]:\\n  ys.append((report(A,y)[1],report(A,y)[0],na,desc))\\nfor pn in ['panel_b','panel_c']:\\n p=s[pn];u=p['u'];\\n for k,v in p.items():\\n  if k=='u':continue\\n  out=[]\\n  bases={**{f'poly{d}':lambda a,d=d:poly(a,d) for d in (1,2,3)},'pure_sq':lambda a:aff(a*a),'lin_sq':lambda a:aff(np.c_[a,a*a]),'lin_cube':lambda a:aff(np.c_[a,a**3]),'lin_cross':lambda a:aff(np.c_[a,a[:,np.triu_indices(4,1)[0]]*a[:,np.triu_indices(4,1)[1]]]),'lin_cubed_sq':lambda a:aff(np.c_[a,a*a,a**3]),'signed_sq':lambda a:aff(a*abs(a))}\\n  for tag,fn in {\\n    'cube':lambda a,h:a+h*a**3,'square':lambda a,h:a+h*a*a,'sat':lambda a,h:a/(1+h*a*a),'sqrt_sat':lambda a,h:a/np.sqrt(1+h*a*a),'tanh':lambda a,h:np.tanh(h*a),'sin':lambda a,h:np.sin(h*a),'sinh':lambda a,h:np.sinh(h*a),'power':lambda a,h:np.sign(a)*abs(a)**h,'exp':lambda a,h:np.expm1(h*a),'ratcube':lambda a,h:a**3/(1+h*a**4),'cubecross':lambda a,h:a**3+h*a}.items():\\n   best=None\\n   for ini in [.22,1.25]:\\n    def res(q):\\n     A=aff(fn(u,q[0]));return (A@fit(A,v)-v).ravel()\\n    lo=-.3 if tag in ['cube','square','sat','sqrt_sat','cubecross'] else .002\\n    r=least_squares(res,[ini],bounds=([lo],[5.]),max_nfev=100);score=np.std(r.fun)\\n    if best is None or score<best[0]:best=(score,r.x[0])\\n   par=best[1];bases[tag+':'+str(round(par,6))]=lambda a,fn=fn,par=par:aff(fn(a,par))\\n  for tag,f in bases.items():\\n   A=f(u);B=fit(A,v); pred=A@B; H=np.sum(A*lstsq(A,np.eye(len(A)))[0].T,1); rms=np.std(pred-v);loo=np.sqrt(np.mean(((pred-v)/np.maximum(1-H[:,None],1e-6))**2))\\n   name=pn[-1]+k[-1]+':'+tag\\n   out.append((rms,loo,name));D=f(z)@B;X.append((name,D));add(name,D)\\n   if tag in ['poly1','poly2','lin_sq','lin_cube']:print('coef',name,np.round(B,5))\\n  print('panel ranking', sorted(out)[:15])\\nprint('scalar direct',*sorted(ys)[:25],sep='\\\\n')\\nys=[]\\nfor (n1,A),(n2,B) in product(X,X):\\n if n1[:2]!='c1' or n2[:2]!='c2':continue\\n for n,F in [('sum(prod)',np.sum(A*B,1)[:,None]),('prod',A*B),('sum(shiftprod)',np.sum(A*np.roll(B,2,axis=1),1)[:,None]),('shiftprod',A*np.roll(B,2,axis=1)),('all', (A[:,:,None]*B[:,None,:]).reshape(len(A),-1))]:\\n  for L,V in [('z',z),('A',A),('B',B),('AB',np.c_[A,B])]:\\n   E=np.c_[aff(V),F];r=report(E,y);ys.append((r[1],r[0],n1,n2,n,L))\\nprint('scalar combined',*sorted(ys)[:30],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine-panel bilinear readout -> H2 test nonlinear panel transforms and cross-panel interactions; archived scalar MAE is 0.051827, while raw affine trajectory MAE is 0.004293.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived affine-panel bilinear basis adequately describes the scalar output.\",\"empirical_witness\":\"Its 52/20 MAE is 0.051827 versus the 0.038 gate, while a calibrated cubic expansion reduces fitting MAE to 0.010414.\",\"causal_blanket_diagnosis\":\"The scalar discrepancy is not shared by the trajectory, which is already near observation noise under an affine input map.\",\"sublated_pivot\":\"Retain robust calibration and test panel-derived nonlinear bases and cross-panel products for the scalar readout.\",\"risk_kind\":\"omitted_nonlinear_basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted cubic regression\",\"rejected_reason\":\"Its 52/20 MAE is 0.043001 despite low training error.\"}],\"rationale\":\"Use leave-one-row-out panel errors to identify operator laws, then check whether their outputs supply a compact scalar basis on the training split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7b2e9169c206ddead060bd76b65cf9b32cdc34e3f59e45c0807637c6a31f30dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54123.85,
+      "usage_known": true,
+      "prompt_tokens": 21620,
+      "cached_tokens": 5504,
+      "completion_tokens": 1481
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "669a14d3cae446c2b9cbac0ee8e03a99",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:23:44.504189+00:00",
+  "ended_at_utc": "2026-11-28T14:24:16.406933+00:00",
+  "request_sha256": "c395ffad9c662e7036fb5d00a5fb604ded658008eb0734064529d9ff8168c807",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40133,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27949,
+    "cached_tokens": 12672,
+    "completion_tokens": 1163
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators15.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_m102_c03_batch_03_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=m._calibrate(s['panel_a'],s['train']['x']); u=s['panel_c']['u']; v=s['panel_c']['v2']; n=52; t=s['eval_times']; Y=s['train']['traj']; T=np.c_[s['train']['y'],Y]; ls=lambda a,b: np.linalg.lstsq(a,b,rcond=1e-10)[0]; c=m._branch(s['panel_c'],z,'v1','soft')\\nfun={'gauss':lambda x,r:np.exp(-(x*r)**2),'cos':lambda x,r:np.cos(r*x),'rat':lambda x,r:1/(1+(r*x)**2),'soft':lambda x,r:x/(1+r*abs(x)),'tanh':lambda x,r:np.tanh(r*x),'sin':lambda x,r:np.sin(r*x),'sq':lambda x,r:x*x,'cube':lambda x,r:x**3,'abs':lambda x,r:abs(x),'none':lambda x,r:x}\\ncross=lambda x,y:(x[:,:,None]*y[:,None,:]).reshape(len(x),-1)\\ncyc=lambda x,j:x*np.roll(x,-j,axis=1)\\nbase=[('linear',lambda x:m._aff(x)),('adj',lambda x:np.c_[m._aff(x),cyc(x,1)]),('opp',lambda x:np.c_[m._aff(x),cyc(x,2)[:,:2]]),('pairs',lambda x:np.c_[m._aff(x),cyc(x,1),cyc(x,2)[:,:2]])]\\nres=[]\\nfor bn,bf in base:\\n for fn,ff in fun.items():\\n  def des(x,r):return np.c_[bf(x),ff(x,r)]\\n  def prof(r): d=des(u,r);return (d@ls(d,v)-v).ravel()\\n  for dim in (1,4):\\n   opts=[least_squares(prof,np.full(dim,r),bounds=(.075,5),gtol=1e-12,max_nfev=80) for r in (.4,1.2,2.8)] if fn not in ('sq','cube','abs','none') else [least_squares(prof,[1.])]\\n   opt=min(opts,key=lambda o:o.cost); r=opt.x; d=des(z,r)@ls(des(u,r),v); errors=[]\\n   for f in [np.c_[m._aff(z),c,d,cross(c,d)],np.c_[m._aff(z),c,d,c*d],np.c_[m._aff(z),c,d,(c*d).sum(1)]]:\\n    p=f@ls(f[:n],T[:n]); er=abs(p-T); errors.append(tuple(np.round([er[:n,0].mean(),er[n:,0].mean(),er[n:,1:].mean()],5)))\\n   res.append((np.mean(opt.fun**2)**.5,bn,fn,dim,np.round(r,5),errors))\\nfor row in sorted(res,key=lambda a:a[0])[:24]:print(row)\\nprint('best by response');\\nfor row in sorted(res,key=lambda a:max(a[-1][0][1:]))[:12]: print(row)\\nprint('times',t)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: Gaussian-only second branch -> H2: add cyclic products and profile the remaining nonlinearity; archive baseline is 0.05329 scalar and 0.03176 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A Gaussian-only nonlinear basis plus affine terms adequately describes panel C's second output.\",\"empirical_witness\":\"The shared-rate Gaussian model has panel RMSE 0.09762; cyclic pair products alone reduce it to 0.04213.\",\"causal_blanket_diagnosis\":\"A branch basis that omits input interactions can make downstream readout coefficients compensate for operator error.\",\"sublated_pivot\":\"Fit cyclic products jointly with each candidate nonlinearity and check both held-out response metrics.\",\"risk_kind\":\"Missing interaction terms\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add panel B to the readout\",\"rejected_reason\":\"Panel B is nearly affine, and adding it to the full bilinear model worsened both held-out MAEs.\"}],\"rationale\":\"Use measured operator outputs to constrain the branch before adding downstream degrees of freedom. Compare full and compact readouts on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "65687e3bf828b383020bdfa08a51cd5e93fb776d44a02827ae45aba2ffc66109",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31901.72,
+      "usage_known": true,
+      "prompt_tokens": 27949,
+      "cached_tokens": 12672,
+      "completion_tokens": 1163
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ce42bc518b3497a887ec2429e2aea75",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:42:04.921098+00:00",
+  "ended_at_utc": "2026-11-28T13:42:27.716112+00:00",
+  "request_sha256": "4ebeb950007651219cca2ffe45ce330e7af40a9d843ff0795c54fab9cd08fde0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43392,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29091,
+    "cached_tokens": 12672,
+    "completion_tokens": 784
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nbase='/holdout_task/'\\ns=pickle.load(open(base+'public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; traj=t['traj']; idx=np.arange(len(x))\\nm=runpy.run_path(base+'node_00.py'); spatial=m['run_node']; temporal=runpy.run_path(base+'_frozen_nodes/node_01.py')['run_node']; sink=runpy.run_path(base+'_frozen_nodes/node_02.py')['run_node']\\nrng=np.random.default_rng(9384); splits={f'fold{i}':v for i,v in enumerate(np.array_split(rng.permutation(idx),5))}; q=m['_calibration'](s['panel_a'],x); splits['outer_radius']=np.argsort(np.linalg.norm(q,axis=1))[-16:]; splits['largest_coordinate']=np.argsort(np.max(np.abs(q),axis=1))[-16:]; splits['official']=idx[-20:]\\nworst=np.zeros(2)\\nfor name,te in splits.items():\\n    tr=np.setdiff1d(idx,te); a=y[tr]; b=traj[tr,-1]; st=dict(s,train=dict(x=x[tr],y=a,traj=traj[tr],summary=np.array([a.mean(),a.std(),b.mean(),b.std()])),test=dict(x=x[te])); payload={'__input__':st}\\n    spatial_out=spatial(payload); assert set(spatial_out)=={'common','offdiag','y_hat'} and all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in spatial_out.values())\\n    r=sink({'node_00':spatial_out,'node_01':temporal(payload)}); err=np.array([np.abs(r['y_hat']-y[te]).mean(),np.abs(r['state_pred']-traj[te]).mean()]); worst=np.maximum(worst,err); print(name,*(f'{v:.6f}' for v in err))\\nprint('worst scalar and trajectory MAE',*(f'{v:.6f}' for v in worst)); assert np.all(worst<=.038)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived affine/rational operators) → H2 (sinusoidal calibration with pairwise and cosine spatial operators); official scalar and trajectory MAEs are 0.010322 and 0.011354.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Add all pairwise interactions to scalar regression\",\"rejected_reason\":\"They increase official scalar MAE from 0.010322 to 0.012052, and the frozen sink already selects the trajectory interaction.\"}],\"rationale\":\"The compact operator replacement passed the official gate. Verify the unchanged artifact in an isolated Python process and test both outputs on random folds and held-out spatial extremes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4c45750cef6c9b4231858ef6075f81a22156c2be41228d04a17b325ab1cdbb15",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22794.01,
+      "usage_known": true,
+      "prompt_tokens": 29091,
+      "cached_tokens": 12672,
+      "completion_tokens": 784
+    }
+  ]
+}

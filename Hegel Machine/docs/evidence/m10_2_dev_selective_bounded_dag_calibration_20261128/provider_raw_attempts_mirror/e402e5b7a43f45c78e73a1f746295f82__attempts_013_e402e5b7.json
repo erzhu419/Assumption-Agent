@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e402e5b7a43f45c78e73a1f746295f82",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:48:12.398980+00:00",
+  "ended_at_utc": "2026-11-28T13:49:01.155308+00:00",
+  "request_sha256": "0cd808e0a4bd9d691c63496d6d3abcb99fe2cc69512f6041b1c25132a547e047",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 84694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46220,
+    "cached_tokens": 12672,
+    "completion_tokens": 2201
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/b06_previous.py\\ncat >/tmp/b06_gp.py <<'PY'\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\n\\n\\ndef _adaptive(D, Y, k, h, debug=False):\\n    # Empirical-Bayes kernel with separate priors for coordinate blocks,\\n    # coordinate nonlinearities, pair interactions and full interactions.\\n    n,m=Y.shape; N=len(D['x']); atoms=[]; names=[]\\n    def append(name,K):\\n        atoms.append(K/max(np.mean(np.diag(K)[:n]),1e-10)); names.append(name)\\n    Z={}\\n    for key,z in D.items():\\n        if key not in ('x','b','c','d','bc','bd'): continue\\n        z=(z-z[:n].mean(0))/np.maximum(z[:n].std(0),.01); Z[key]=z\\n        dx=(z[:,None,:]-z[None,:,:])**2\\n        append(key+' lin',z@z.T)\\n        for power in (2,3):\\n            p=z**power;p-=p[:n].mean(0);append(key+' uni'+str(power),p@p.T)\\n        p=np.column_stack([z[:,i]*z[:,j] for i in range(4) for j in range(i+1,4)])\\n        p-=p[:n].mean(0);append(key+' bilinear',p@p.T)\\n        for scale in (1.3,3.0,6.0):\\n            g=np.exp(-dx/(2*scale**2)); append(key+' add'+str(scale),g.mean(2));append(key+' full'+str(scale),g.prod(2))\\n    for a,b in [('x','b'),('x','c'),('x','d'),('b','c'),('b','d'),('c','d')]:\\n        p,q=Z[a],Z[b]; f=(p[:,:,None]*q[:,None,:]).reshape(N,-1); f-=f[:n].mean(0);append(a+b+' interactions',f@f.T)\\n    append('constant', np.ones((N,N))*10);append('noise',np.eye(N)); mats=np.asarray(atoms); tr=mats[:,:n,:n].copy(); cross=mats[:,n:,:n].copy(); tr2=tr.reshape(len(tr),-1); init=np.full(len(mats),np.log(.015)); init[-1]=np.log(.003)\\n    def gp(Q):\\n        if Q.ndim==1: Q=Q[:,None]\\n        mean=Q.mean(0); sd=np.maximum(Q.std(0),1e-6); V=(Q-mean)/sd; p=V.shape[1]; I=np.eye(n)\\n        def fun(w):\\n            a=np.exp(w); C=(a@tr2).reshape(n,n); ch=cho_factor(C,lower=True,check_finite=False); alp=cho_solve(ch,V,check_finite=False)\\n            M=cho_solve(ch,I,check_finite=False)-alp@alp.T/p\\n            obj=np.log(np.diag(ch[0])).sum()+.5*np.sum(V*alp)/p\\n            # Weak stabilizing prior, especially important for small panels.\\n            d=w-init; strength=.023\\n            return obj+strength*np.dot(d,d),.5*a*(tr2@M.ravel())+2*strength*d\\n        r=minimize(fun,init,jac=True,method='L-BFGS-B',bounds=[(-13,3)]*(len(init)-1)+[(-13,0)],options={'maxiter':150,'ftol':1e-9}); a=np.exp(r.x)\\n        if debug: print('kernel',[(names[j],round(a[j],4)) for j in np.argsort(a)[-9:][::-1]],'noise',a[-1])\\n        C=(a@tr2).reshape(n,n); W=cho_solve(cho_factor(C,lower=True,check_finite=False),V,check_finite=False)\\n        return ((a@cross.reshape(len(a),-1)).reshape(N-n,n)@W)*sd+mean\\n    # Learn a joint readout of y and independent temporal modes, plus a\\n    # separate readout for the dominant temporal direction.\\n    _,_,basis=np.linalg.svd(Y[:,1:],full_matrices=False); basis=basis[:3]; amps=Y[:,1:]@basis.T\\n    j=gp(np.c_[Y[:,0],amps]); py=gp(Y[:,0])[:,0]; a=gp(amps); a[:,0]=.55*a[:,0]+.45*gp(amps[:,0])[:,0]\\n    return np.c_[.65*py+.35*j[:,0],(.65*a+.35*j[:,1:])@basis]\\nPY\\ncat >/tmp/b06_testgp.py <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/tmp');import b06_previous as b\\nfrom b06_gp import _adaptive\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];Y=np.c_[t['y'],t['traj']];D=b._coordinates(s,t['x']);k,h=s['telemetry_vec'][:2];rng=np.random.default_rng(295)\\nfor ii in [np.arange(len(Y)),rng.permutation(len(Y)),rng.permutation(len(Y)),rng.permutation(len(Y))]:\\n q=_adaptive({a:z[ii] for a,z in D.items()},Y[ii[:52]],k,h,debug=ii[0]==0);E=np.mean(abs(q-Y[ii[52:]]),axis=0);print('adaptive split',round(E[0],6),round(E[1:].mean(),6),np.round(E[1:],6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c \\\"import sys;sys.path.insert(0,'/tmp');import b06_testgp\\\" | tee /tmp/b06_gp_scores\\nif awk '/adaptive split/{ok=($3<0.194569 && $4<0.123353); exit !ok} END{if(NR==0)exit 1}' /tmp/b06_gp_scores && grep -q 'adaptive split' /tmp/b06_gp_scores; then\\n  python3 - <<'PY'\\np='/holdout_task/batch_solver.py';s=open(p).read();a=s.index('def _bank(');b=s.index('def solve_batch(');s=s[:a]+open('/tmp/b06_gp.py').read()+'\\\\n\\\\n'+s[b:];s=s.replace('out=_fit(D,Y,k,h)','out=_adaptive(D,Y,k,h)');s=s.replace('from scipy.linalg import solve\\\\n','').replace('from scipy.spatial.distance import cdist\\\\n','').replace('from sklearn.linear_model import lasso_path\\\\n','');open(p,'w').write(s)\\nPY\\nfi\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace fixed kernel weights with training-only adaptive weights for linear, additive, and interaction terms; the saved candidate’s 52/20 MAEs are 0.19457 for y and 0.12335 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best fixed kernel from the prescribed split\",\"rejected_reason\":\"Its improvement did not carry over to the inner splits, and choosing it directly from the prescribed split would overstate generalization.\"}],\"rationale\":\"Learn the balance between coordinate blocks from the fitting rows alone. Measure both outputs on the prescribed split and report performance on three additional splits before running the official validator in normal and isolated Python.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "61531b16aa76b59d2b7374c9808ace49701658d92c9fde33041195d0ff02a292",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48753.8,
+      "usage_known": true,
+      "prompt_tokens": 46220,
+      "cached_tokens": 12672,
+      "completion_tokens": 2201
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42b5f9fc28084a6a83cc054ed2f20dd1",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:48:33.090608+00:00",
+  "ended_at_utc": "2026-11-28T13:49:10.727251+00:00",
+  "request_sha256": "efc5f8b5efe67d6613724421f4ea9ff6de72b4541918e0118d32b091819f5d63",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31677,
+    "cached_tokens": 12672,
+    "completion_tokens": 1615
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/down.py <<'PY'\\nfrom operators import *\\nimport pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; inv,B,C,D=operators(s)\\nz=inv(s['train']['x']);x=s['train']['x'];T=s['train']['traj'];y=s['train']['y'];t=s['eval_times'];q=lambda p:-np.expm1(-t[:,None]*p)\\np=least_squares(lambda p:(q(p)@fit(q(p),T[:52].T)-T[:52].T).ravel(),[.4,1.8]).x\\nY=np.c_[y,fit(q(p),T.T).T]; n=52\\nF={}\\nfor k,u in {'z':z,'Bz':B(z),'Cz':C(z),'Dz':D(z),'CBz':C(B(z)),'DBz':D(B(z)),'BCz':B(C(z)),'BDz':B(D(z)),'raw':x,'edge':z*np.roll(z,-1,axis=1),'cos':np.cos(2.4*z)}.items():\\n F[k]=u\\n print(k)\\n for name,h in [('lin',u),('poly2',np.c_[u,*[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]]),('tanh',np.tanh(u)),('sin',np.sin(u)),('tanh+lin',np.c_[u,np.tanh(u)]),('lin+squares',np.c_[u,u*u])]:\\n  H=one(h); r=H@fit(H[:n],Y[:n])-Y; print(name,np.mean(abs(r[:n]),0).round(3),np.mean(abs(r[n:]),0).round(3))\\n for j in range(3):\\n  h=one(u); yj=Y[:,j]; out=[]\\n  for name,f in [('sin',np.sin),('tanh',np.tanh),('atan',np.arctan),('signedrat',lambda x:x/(1+abs(x))),('rat',lambda x:x/(1+x*x)),('quad',lambda x:x+x*x)]:\\n   def pred(b):return b[-2]+b[-1]*f(h@b[:5])\\n   for sc in [.4,1.2]:\\n    a=fit(h[:n],yj[:n]); a[0]-=yj[:n].mean(); b0=np.r_[a/(sc+1e-8),yj[:n].mean(),sc]; opt=least_squares(lambda b:(pred(b)-yj)[:n],b0,max_nfev=120);r=pred(opt.x)-yj;out.append((np.mean(abs(r[:n])),np.mean(abs(r[n:])),name,opt.x.round(2)))\\n  print('idx',j,[(round(a,3),round(b,3),c,d.tolist()) for a,b,c,d in sorted(out,key=lambda x:x[0])[:2]])\\n# screen sparse transformed features\\nff=[]; names=[]\\nfor k,u in F.items():\\n for nm,h in [('id',u),('sq',u*u),('cube',u**3),('tanh',np.tanh(u)),('sin',np.sin(u)),('cos',np.cos(u)),('rat',u/(1+u*u)),('sgnrat',u/(1+abs(u))),('exp',np.exp(-.5*u*u)),('tanh2',np.tanh(2*u))]:\\n  ff.extend(h.T); names.extend([k+nm+str(i) for i in range(4)])\\n for i,j in combinations(range(4),2):\\n  a,b=u[:,i],u[:,j];\\n  for nm,h in [('mul',a*b),('sumtan',np.tanh(a+b)),('diftan',np.tanh(a-b)),('sumsin',np.sin(a+b)),('difsin',np.sin(a-b)),('sumcos',np.cos(a+b)),('difcos',np.cos(a-b)),('mulrat',a*b/(1+a*a+b*b)),('amul',a*a*b),('bmul',a*b*b)]: ff.append(h);names.append(k+nm+str(i)+str(j))\\nH=np.array(ff).T;H-=H[:n].mean(0);H/=np.maximum(H[:n].std(0),1.e-8)\\nfor j in range(3):\\n yj=Y[:,j];r=yj-yj[:n].mean();ids=[]\\n for i in range(12):\\n  a=np.argmax(abs(H[:n].T@r[:n]));ids.append(a);h=one(H[:,ids]);r=yj-h@fit(h[:n],yj[:n]);print('omp',j,i,names[a],round(np.mean(abs(r[:n])),4),round(np.mean(abs(r[n:])),4))\\nprint('Y prediction from true amplitudes')\\nfor h in [Y[:,1:],np.c_[Y[:,1:],Y[:,1:]**2,Y[:,1]*Y[:,2]],np.c_[F['Cz'],F['Dz'],Y[:,1:]]]:\\n h=one(h);r=h@fit(h[:n],y[:n])-y; print(np.mean(abs(r[:n])),np.mean(abs(r[n:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/down.py > /tmp/down.out; cat /tmp/down.out\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test nonlinear readouts of the recovered panel C branches; the best current linear 52/20 MAEs are 0.3213 for y, 0.0770 for the slow amplitude, and 0.2724 for the fast amplitude.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep linear combinations of all recovered operator outputs\",\n      \"rejected_reason\": \"The held-out errors remain well above tolerance, particularly for y and the fast amplitude.\"\n    }\n  ],\n  \"rationale\": \"The cosine branch nearly explains the slow amplitude on its own. Compare nonlinear single-index readouts and sparse interaction terms, and test whether the measured amplitudes help explain the scalar output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "52dcddef8f4b68a23e27afec8b97ea5a0ca1339395d3b14e2840962e04ddfb40",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37635.35,
+      "usage_known": true,
+      "prompt_tokens": 31677,
+      "cached_tokens": 12672,
+      "completion_tokens": 1615
+    }
+  ]
+}

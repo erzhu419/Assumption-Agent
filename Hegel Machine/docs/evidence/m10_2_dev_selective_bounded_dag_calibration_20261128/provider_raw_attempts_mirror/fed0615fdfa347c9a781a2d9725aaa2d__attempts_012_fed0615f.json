@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fed0615fdfa347c9a781a2d9725aaa2d",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:10:05.333708+00:00",
+  "ended_at_utc": "2026-11-28T13:10:39.319913+00:00",
+  "request_sha256": "1e67627acebf5a26feca294fab215a6ccc9d2bca57e8804f07b605d118b3e12d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 88790,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 50755,
+    "cached_tokens": 12672,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >> /tmp/sparse_baseline.py <<'PY'\\n\\n_sparse = solve_batch\\n\\ndef _panel_pred(study, blend, reg, kind):\\n    tr=study['train']; n=len(tr['x']); xx=np.vstack([tr['x'],study['test']['x']]);\\n    p=study['panel_a']; u=np.asarray(p['u']); v=np.asarray(p['v']);\\n    h=np.column_stack([np.ones(len(u)),u]); av=np.linalg.lstsq(h,v,rcond=None)[0]; r=np.linalg.norm(v-h@av,axis=1); keep=r<3\\n    gains=[]; offsets=[]\\n    for j in range(4):\\n        c=np.linalg.lstsq(h[keep][:,[0,j+1]],v[keep,j],rcond=None)[0]; offsets.append(c[0]);gains.append(c[1]);\\n    z=(xx-offsets)/gains\\n    if kind=='sat':\\n        p=study['panel_c']; u=np.asarray(p['u']); v=np.asarray(p['v2']); h=np.column_stack([np.ones(len(u)),u]); b=np.linalg.lstsq(h,v,rcond=None)[0];\\n        pz=np.column_stack([np.ones(len(u)),u,np.expm1(-.2962*u*u)]); w=np.linalg.lstsq(pz,v,rcond=None)[0];\\n        v=np.column_stack([np.ones(len(z)),z,np.expm1(-.2962*z*z)])@w\\n        z=z+blend*((v-np.column_stack([np.ones(len(z)),z])@b)@np.linalg.inv(b[1:]))\\n        t=np.tanh(z)\\n    else:\\n        z=z+blend*np.expm1(-.2962*z*z); t=None\\n    def quad(a):\\n        return [a]+[a[:,i]*a[:,j] for i in range(4) for j in range(i,4)]\\n    f=np.column_stack(quad(z)+(quad(t) if t is not None else [np.sin(z),np.cos(z),np.sin(2*z),np.cos(2*z)]))\\n    f=(f-f[:n].mean(0))/np.maximum(f[:n].std(0),1e-7); y=np.column_stack([tr['y'],tr['traj']]); ym=y.mean(0);\\n    return f[n:]@f[:n].T@np.linalg.solve(f[:n]@f[:n].T+reg*np.eye(n),y-ym)+ym\\nPY\\ncat >/tmp/blend_check.py <<'PY'\\nexec(open('/tmp/stress.py').read().split('for name,va in folds:')[0].replace(\\\"'/holdout_task/batch_solver.py'\\\",\\\"'/tmp/sparse_baseline.py'\\\"))\\nconfigs=[(b,r,'sat') for b in [.22,.5,.75,1,1.25] for r in [.015,.08,.3,1.]]+[(b,r,'tri') for b in [-1,-.5,0,.5] for r in [.08,.3,1.]]\\nerr=[]\\nfor name,va in folds:\\n ix=np.setdiff1d(allidx,va); r=dict(s,train={k:v[ix] if k in ('x','y','traj') else v for k,v in tr.items()},test={'x':tr['x'][va]}); p=m.solve_batch(r); target=np.column_stack([tr['y'][va],tr['traj'][va]]); base=np.column_stack([p['y_hat'],p['state_pred']]); err.append((base-target,np.array([m._panel_pred(r,*c)-target for c in configs])))\\nfor j in [0,1]:\\n rows=[]\\n for i,c in enumerate(configs):\\n  for w in [.25,.4,.5,.65,.8,1.]:\\n   e=np.array([np.abs(((1-w)*a+w*b[i])[:, :(1) if j==0 else None] if j==0 else ((1-w)*a+w*b[i])[:,1:]).mean() for a,b in err]);\\n   if e[0]<.0378:rows.append((e[1:5].mean()+.55*e[5:].max()+.15*e[0],w,c,e.round(5)))\\n print(j,*sorted(rows,key=lambda x:x[0])[:9],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/blend_check.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: sparse two-mode readouts → H2: panel-informed regularization reduces extrapolation error; baseline tail MAEs are 0.0331 for y and 0.0336 for trajectory, with worst-axis trajectory MAE 0.2253.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace both sparse readouts outright\",\"rejected_reason\":\"The panel-informed trajectory alternative improves extreme slices, but the scalar alternative alone does not consistently pass the required split.\"}],\"rationale\":\"Compare blends against the saved solver without changing the deliverable. Only promote a blend that retains both required tail margins and improves the block and axis stress results.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8001511a8578ad2d9d451419b4bd0b2814008b81f56455edfc12679d6935699e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33983.35,
+      "usage_known": true,
+      "prompt_tokens": 50755,
+      "cached_tokens": 12672,
+      "completion_tokens": 1323
+    }
+  ]
+}

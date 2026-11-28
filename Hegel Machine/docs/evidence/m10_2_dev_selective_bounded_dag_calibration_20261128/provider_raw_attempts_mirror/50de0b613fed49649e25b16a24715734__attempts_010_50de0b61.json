@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50de0b613fed49649e25b16a24715734",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:53:57.476588+00:00",
+  "ended_at_utc": "2026-11-28T13:54:26.158323+00:00",
+  "request_sha256": "ce36f6702f0ef7c2a29936397a833620287d7f7d061f8965d480b0a2110f54a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55239,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32745,
+    "cached_tokens": 12672,
+    "completion_tokens": 1083
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/quotient12.py <<'PY'\\nexec(open('/tmp/audit12.py').read().split('for label,z0 in')[0])\\nfrom scipy.optimize import least_squares\\ncross=p[:,0]*r[:,1]\\n# Keep the scalar readout fixed; only the state readout has evidence for this term.\\nq=z[:,2]-.5*z[:,3]\\n\\ndef evaluate_state(tr,te,scheme):\\n order=np.r_[tr,te]; f=F[order]; g=S[order]; h=q[order]; c=cross[order]; k=len(tr); target=a[tr].ravel()\\n def calc(par):\\n  b=m._basis(times,par[:2]); ff=f\\n  if scheme=='fixed': ff=m._design(f[:,1:],c/(1+.25*h*h))\\n  if scheme=='profiled':\\n   q1=z[order,2]+par[3]*z[order,3]\\n   ff=m._design(f[:,1:],c/(1+par[2]*q1*q1))\\n  d=np.column_stack(((ff[:k,None,:]*b[None,:,0,None]).reshape(len(target),-1),(g[:k,None,:]*b[None,:,1,None]).reshape(len(target),-1)))\\n  w=m._fit(d,target)\\n  return d@w-target,ff,w,b\\n start=[1.8,.43]; lo=[.8,.03]; hi=[5,1.]\\n if scheme=='profiled': start += [.25,-.5]; lo += [.005,-3]; hi += [4,3]\\n opt=least_squares(lambda par:calc(par)[0],start,bounds=(lo,hi)); resid,ff,w,b=calc(opt.x); j=ff.shape[1]\\n pred=np.column_stack((ff[k:]@w[:j],g[k:]@w[j:]))@b.T\\n err=abs(pred-a[te]); return np.array([err.mean(),err.mean(0).max(),err[:,-1].mean()]),opt.x,w[j-1]\\nidx=np.arange(len(x)); rng=np.random.default_rng(1207)\\ngroups={'required':[held],'random':[rng.choice(idx,20,replace=False) for _ in range(30)],'extremes':[np.argsort(col)[sl] for col in np.c_[z,np.linalg.norm(z,axis=1),np.sum(p*r,axis=1),cross,q].T for sl in (slice(None,20),slice(-20,None))]}\\nprint('Metrics: trajectory MAE, worst-horizon MAE, terminal MAE')\\nfor scheme in ('base','fixed','profiled'):\\n print(scheme)\\n for label,folds in groups.items():\\n  runs=[evaluate_state(np.setdiff1d(idx,te),te,scheme) for te in folds]; er=np.array([v[0] for v in runs]); coef=np.array([v[2] for v in runs]); params=np.array([v[1] for v in runs]); print(label,'max',er.max(0),'mean',er.mean(0),'last fast coefficient quantiles',np.quantile(coef,[0,.5,1]),'parameter quantiles',np.quantile(params,[0,.5,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/quotient12.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse two-rate readout -> H2 test whether a rational term improves only the fast state readout; the verified solver’s worst stress-slice horizon MAE is 0.00919.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add the rational term to both the scalar and state models\",\n      \"rejected_reason\": \"The prior audit found a trajectory gain but a scalar regression; the two readouts need not share this term.\"\n    }\n  ],\n  \"rationale\": \"The quotient improved inner trajectory MAE from 0.00506 to 0.00443, but the gain was smaller on the required split. Test whether its coefficient and shape are stable across folds and whether it improves the worst horizon and terminal prediction before changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5ad0ecbc3d7b7aece3de74dfe7329ee829fb054ed3f17f9ce914dabb5e76f4f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28680.45,
+      "usage_known": true,
+      "prompt_tokens": 32745,
+      "cached_tokens": 12672,
+      "completion_tokens": 1083
+    }
+  ]
+}

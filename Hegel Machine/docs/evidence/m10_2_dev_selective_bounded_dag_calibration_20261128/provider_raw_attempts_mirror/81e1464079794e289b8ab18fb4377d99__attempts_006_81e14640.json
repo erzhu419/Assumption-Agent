@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81e1464079794e289b8ab18fb4377d99",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:55.752772+00:00",
+  "ended_at_utc": "2026-11-28T13:35:44.046720+00:00",
+  "request_sha256": "2822c12d1847c70964adada06f3ac1cffd59f38b7515bb8e2bb417606d666cbb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27911,
+    "cached_tokens": 12672,
+    "completion_tokens": 2006
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph05.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from discover05 import *\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nz=(np.r_[x,qa]-b)/g\\nnp.set_printoptions(precision=6,suppress=True)\\ndef projfit(u,v,fn,starts,bounds):\\n def fit(p):\\n  h=A(fn(u,p)); coef=F(h,v); return h,coef\\n def res(p):\\n  h,coef=fit(p);return (h@coef-v).ravel()\\n opt=min((least_squares(res,st,bounds=bounds,gtol=2e-12,max_nfev=300) for st in starts),key=lambda o:o.cost)\\n return opt.x,np.std(opt.fun),A(fn(z,opt.x))@fit(opt.x)[1]\\nfs={\\n 'powered':(lambda u,p:np.sign(u)*abs(u)**p[0]/(1+p[1]*abs(u)**p[2]),[[3,.22,4],[3,1,2],[5,50,3]],([.15,0,.1],[20,1000,20])),\\n 'cubic_power':(lambda u,p:u**3/(1+p[0]*abs(u)**p[1])**p[2],[[.22,4,1],[.22,2,2],[1,3,2]],([0,.1,.05],[100,16,20])),\\n 'mixrat':(lambda u,p:(u**3+p[0]*u)/(1+p[1]*abs(u)**p[2])**p[3],[[0,.22,4,1],[0,.22,2,2],[.05,1,3,2]],([-.5,0,.1,.05],[.5,100,16,20])),\\n 'positive_fixed':(lambda u,p:u**3/(1+.22*abs(u)**p[0])**p[1],[[2,1],[4,1],[5,2]],([.1,.05],[16,20])),\\n 'clipped':(lambda u,p:np.clip(u,-p[0],p[0])**3/(1+p[1]*abs(u)**p[2]),[[1.1,.22,2],[1.2,.22,4]],([.7,0,.1],[2,15,16])),\\n 'even':(lambda u,p:np.c_[u,abs(u)**p[0]/(1+p[1]*abs(u)**p[2])],[[2,.22,2],[2,.22,4]],([.5,0,.1],[7,15,16])),\\n}\\nw={}\\nfor pn,vns in [('panel_b',['v']),('panel_c',['v1','v2'])]:\\n for vn in vns:\\n  U,V=(s[pn][k] for k in ['u',vn]); name=pn[-1]+vn[-1]\\n  for ident,(fn,starts,bounds) in fs.items():\\n   if (vn=='v2')!=(ident=='even'):continue\\n   p,e,w[name+ident]=projfit(U,V,fn,starts,bounds); print(name,ident,p,e)\\n  for kind in ['powered','cubic']:\\n   w[name+'old'+kind]=m1._panel_operator({'u':U,'v':V},kind)(z)\\nw['z']=z\\nrng=np.random.default_rng(320); folds=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(72) for _ in range(25)]]\\ndef score(h,rad=0):\\n ans=[]\\n for i,j in folds:\\n  if rad:\\n   scale=h[i].std(0); scale[scale<1e-12]=1; k=h[i]/scale; co=np.linalg.solve(k.T@k+rad*np.diag(np.r_[0,np.ones(k.shape[1]-1)]),k.T@y[i]); e=h[j]/scale@co-y[j]\\n  else:e=h[j]@F(h[i],y[i])-y[j]\\n  ans.append(np.mean(abs(e)))\\n return np.r_[ans[0],np.mean(ans[1:]),np.max(ans[1:])]\\ndef prod(d,ii):return np.column_stack([np.prod(d[:,inds],1) for inds in ii])\\nresults=[]\\ndef evaluate(name,d):\\n ii=list(combinations_with_replacement(range(d.shape[1]),2)); jj=list(combinations_with_replacement(range(d.shape[1]),3))\\n a=A(d); phi=prod(d,ii); psi=prod(d,jj)\\n for n,h in [('linear',a),('paired',np.c_[a,d[:,0]*d[:,2],d[:,1]*d[:,3]]),('sum paired',np.c_[a,d[:,0]*d[:,2]+d[:,1]*d[:,3]]),('diff paired',np.c_[a,d[:,0]*d[:,2]-d[:,1]*d[:,3]]),('linear square',np.c_[a,d*d]),('quad',np.c_[a,phi]),('cubic',np.c_[a,phi,psi])]:\\n  results.append((score(h),name,n,0))\\n  if n=='cubic':\\n   for r in [.01,.1,1]: results.append((score(h,r),name,n,r))\\nfor n,d in w.items():evaluate(n,d)\\nfor bn in ['bvcubic_power','bvmixrat','bvoldpowered']:\\n d=w[bn]; a=A(d); c1,c2=w['c1powered'],w['c2even']; q=np.c_[a,d[:,0]*d[:,2],d[:,1]*d[:,3]]\\n for n,h in [('plus c1',np.c_[q,c1]),('plus c2',np.c_[q,c2]),('plus c1 c2',np.c_[q,c1,c2]),('plus z',np.c_[q,z]),('plus c1*c2',np.c_[q,c1*c2]),('plus c1+c2',np.c_[q,c1+c2]),('plus c1-c2',np.c_[q,c1-c2]),('plus c1**2',np.c_[q,c1**2]),('plus d*c1',np.c_[q,d*c1]),('plus d*c2',np.c_[q,d*c2])]:results.append((score(h),bn,n,0))\\nprint('public, random avg, random worst');\\nfor a in sorted(results,key=lambda p:p[0][1])[:32]:print(a)\\nfor n in ['bvcubic_power','bvmixrat','bvoldpowered','c1powered','z']:\\n d=w[n]; a=A(d); h=a[:52]; c=F(h,yt[:52]); resid=yt[:52]-h@c\\n print('trajectory',n,np.mean(abs(a[52:72]@c-yt[52:72]),axis=0),np.std(resid),np.linalg.svd(yt[:52],compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: diagonal calibration followed by warped panel B -> H2: recover the warp and test compact readouts; the best archived 52/20 scalar MAE is 0.041239.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear calibration terms\",\n      \"rejected_reason\": \"The robust diagonal fit already matches inlier panel readings to roughly 0.0002 per row, and nonlinear inversion changes the recovered coordinates by a median of only 0.000004.\"\n    }\n  ],\n  \"rationale\": \"Fit warps on the independent panels, then compare paired terms, polynomial terms, and panel-C additions on the public and repeated 52/20 splits. Check trajectory errors separately by timestamp.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "41223994eca4bfd29cf37aca62cce53f7227ea21b2c3d8a19abb96cb8a36c97a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48293.0,
+      "usage_known": true,
+      "prompt_tokens": 27911,
+      "cached_tokens": 12672,
+      "completion_tokens": 2006
+    }
+  ]
+}

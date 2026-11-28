@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ba5c4445a6748c6bec5e62a37c34191",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:37.393782+00:00",
+  "ended_at_utc": "2026-11-28T13:14:10.606207+00:00",
+  "request_sha256": "a08e3e54eafa5edec2a422ff0440a0d1e832538d84fb8570aad51a5d6ad19083",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24128,
+    "cached_tokens": 5504,
+    "completion_tokens": 1277
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/scalar_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nsys.path.insert(0,'/holdout_task/_frozen_nodes'); import node_00 as n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; N=len(y)\\ns=dict(s,test={'x':x}); p=n.run_node({'__input__':s}); sy=p['sy']; st=p['st']; K=p['K']; I=np.eye(N)\\nsl,off=n._calibration(s['panel_a']); b=s['panel_b']; c=s['panel_c']; w=np.linalg.lstsq(np.c_[np.ones(len(b['u'])),b['u']],b['v'],rcond=None)[0]; c1=n._operator(c['u'],c['v1'],'tanh',(.3,3.)); z=(x-off)/sl@w[1:]+w[0]; print('calibration',sl,off,'telemetry',s['telemetry_vec']); print('affine singular values',np.linalg.svd(w[1:],compute_uv=False)); print('sy scales',sy.std(0),'st scales',st.std(0))\\nrng=np.random.default_rng(42); folds=[np.arange(52,72)] + list(np.array_split(rng.permutation(N),6)); folds += [np.argsort(np.linalg.norm(x,axis=1))[-12:]]\\ndef cv(G,r):\\n out=[]\\n for te in folds:\\n  tr=np.setdiff1d(np.arange(N),te); mu=y[tr].mean(); pred=G[np.ix_(te,tr)]@solve(G[np.ix_(tr,tr)]+r*I[:len(tr),:len(tr)],y[tr]-mu,assume_a='pos')+mu; out.append(np.mean(abs(pred-y[te])))\\n return np.round([out[0],np.mean(out[1:-1]),max(out[1:-1]),out[-1]],5)\\ndef gram(v):\\n f=np.c_[np.ones(N),v]; return f@f.T\\ndef poly(v,d):\\n from itertools import combinations_with_replacement\\n return np.column_stack([np.prod(v[:,idx],axis=1) for k in range(1,d+1) for idx in combinations_with_replacement(range(v.shape[1]),k)])\\nmodels={'arch':K+.3*sy@sy.T,'K':K}\\nfor a in [.03,.3,3,30,300,3000]:\\n for k,v in [('sy',sy),('sy2',poly(sy,2)),('st',st),('sy_st',np.c_[sy,st])]: models[k+'+'+str(a)]=K+a*v@v.T\\nfor name,v in [('sy',sy),('st',st[:,:4]),('x',x),('z',z),('c1raw',c1(x@w[1:]+w[0])),('c1forward',c1((x*sl+off)@w[1:]+w[0]))]:\\n for d in [1,2,3,4]: models[name+str(d)]=gram(poly(v,d))\\n for l in [.5,2,6,20]: models[name+'rbf'+str(l)]=gram(v)+np.exp(-cdist(v,v,'sqeuclidean')/l)\\nres=[]\\nfor name,g in models.items():\\n for r in [1e-6,1e-4,.001,.005,.02,.1]:\\n  a=cv(g,r); res.append((a[1],name,r,a))\\nprint('public, random mean, random worst, outer-radius'); print('arch',cv(models['arch'],.001)); print('ranked random');\\nfor v in sorted(res,key=lambda t:t[0])[:22]:print(v[1:]);\\nprint('ranked public');\\nfor v in sorted(res,key=lambda t:t[3][0])[:12]:print(v[1:]);\\nfor name in ['sy1','sy2','sy3','st1','st2','x1','x2','x3','z1','c1raw1','c1forward1']:\\n g=models[name]; print('isolated',name,cv(g,.001), np.std(y-g@solve(g+1e-5*I,y,assume_a='pos')))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived composite ridge → compare calibration-aware polynomial and interaction bases on random and extrapolation splits; baseline public scalar MAE is 0.043185.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare scalar feature families on multiple held-out slices before editing the node. Reconstruct raw-coordinate variants only as diagnostic controls; the candidate must operate on the frozen handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "61bc8b3fc1a024a9a3f76376a92da54cde530791be8b983b50147e2379909e30",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33211.45,
+      "usage_known": true,
+      "prompt_tokens": 24128,
+      "cached_tokens": 5504,
+      "completion_tokens": 1277
+    }
+  ]
+}

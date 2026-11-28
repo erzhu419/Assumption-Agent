@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "031eb92345ce467b80df71ad12e43b5a",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:36:25.335556+00:00",
+  "ended_at_utc": "2026-11-28T13:37:06.266794+00:00",
+  "request_sha256": "b2bee6ab4e49da1265943eab361b24e5eb8ab2a99f309f047e5881c61a50d5d1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51518,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33294,
+    "cached_tokens": 12672,
+    "completion_tokens": 1797
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout05.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from graph05 import *\\nfrom scipy.interpolate import CubicSpline\\nfrom scipy.optimize import minimize_scalar\\nU,V=s['panel_b']['u'],s['panel_b']['v']\\ndef splineop(knots, ridge):\\n def make(a):\\n  v=CubicSpline(knots,np.eye(len(knots)),axis=0,bc_type=((1,np.zeros(len(knots))),'natural'))(abs(a))\\n  return v[...,1:]*np.sign(a)[...,None]\\n hu,hz=make(U),make(z); D=np.diff(np.eye(len(knots)),n=2,axis=0)[:,1:]; p=np.interp(knots[1:],np.sort(abs(U).ravel()),np.sort(abs(U).ravel())**2.5)\\n for _ in range(250):\\n  H=A(hu@p); C=F(H,V); Q=np.einsum('ndk,dm->nmk',hu,C[1:]).reshape(V.size,-1); old=p.copy(); p=F(np.r_[Q,ridge*D],np.r_[(V-C[0]).ravel(),np.zeros(len(D))]);p/=np.linalg.norm(p)\\n  if np.linalg.norm(old-p)<1e-11:break\\n return A(hz@p)@C,np.std(A(hu@p)@C-V),p/p[-1]\\nfor k in [7,10,14,18]:\\n d,e,p=splineop(np.linspace(0,1.25,k),.012);w['spl'+str(k)]=d;print('spline',k,e,p,flush=True)\\n\\ndef model(d):\\n a=A(d); q=d[:,0]*d[:,2]+d[:,1]*d[:,3]; return np.c_[a,q]\\ndef evalf(d):\\n h=model(d); j=d.shape[1]; ts=[]\\n lin=lambda p:p@F(p[:52],y[:52]); ir=np.arange(72)\\n cub=[(i,i,i) for i in range(j)]\\n pro=list(combinations_with_replacement(range(j),3)); quad=list(combinations_with_replacement(range(j),2)); idx=[np.arange(j)];\\n for tag,fn in [('signed square',lambda d:d*abs(d)),('signed power 1.25',lambda d:d*abs(d)**.25),('pure3',lambda d:d**3),('rational',lambda d:d**3/(1+.22*d*d)),('opposite pair cube',lambda d:d*(d[:,[2,3,0,1]]**2)),('adjacent pair cube',lambda d:d*(np.roll(d,1,axis=1)**2)),('distinct',lambda d:prod(d,[p for p in pro if len(set(p))==3])),('all cubic',lambda d:prod(d,pro)),('all quadratic',lambda d:prod(d,quad)),('z',lambda d:z)]:\\n  f=fn(d); ts.append((tag,score(np.c_[h,f])));\\n for tag,fn in [('tanh',lambda a,p:np.tanh(p*a)/p),('rat',lambda a,p:a/(1+p*a*a)),('asinh',lambda a,p:np.arcsinh(p*a)/p),('signed',lambda a,p:a/(1+p*abs(a))),('cubic',lambda a,p:a+p*a**3)]:\\n  ans=[]; pars=[]\\n  for i,l in folds:\\n   def pr(p):\\n    H=np.c_[np.ones(len(d)),fn(d,p),h[:,-1]]; c=F(H[i],y[i]);return H@c\\n   p=minimize_scalar(lambda p:np.mean((pr(p)[i]-y[i])**2),bounds=((-0.7,0.7) if tag=='cubic' else (.001,2)),method='bounded').x;pars.append(p); ans.append(np.mean(abs(pr(p)[l]-y[l])))\\n  ts.append((tag+' %.3g'%np.median(pars),np.r_[ans[0],np.mean(ans[1:]),np.max(ans[1:])]))\\n print('READ',[(n,np.round(e,5)) for n,e in sorted(ts,key=lambda t:t[1][1])[:9]])\\n # Orthogonal matching pursuit on each fold, with and without additional aux channels.\\n for usez in [False,True]:\\n  for same in [False, True]:\\n   f=np.c_[prod(d,quad),prod(d,pro)] if same else prod(d,pro)\\n   if usez:f=np.c_[f,z,z**3,w['c1powered'],w['c2even']]\\n   vals=[];sel=[]\\n   for i,j in folds:\\n    co=F(h[i],f[i]); r=f-h@co; r/=np.maximum(np.linalg.norm(r[i],axis=0),1e-10); H=h; keep=[]; e=y[i]-H[i]@F(H[i],y[i]); preds=[]\\n    for k in range(10):\\n     dr=r[i]-H[i]@F(H[i],r[i]); scores=abs(dr.T@e)/np.maximum(np.linalg.norm(dr,axis=0),1e-10); scores[keep]=-1; v=scores.argmax(); keep.append(v); H=np.c_[h,r[:,keep]]; c=F(H[i],y[i]);e=y[i]-H[i]@c;preds.append(np.mean(abs(H[j]@c-y[j])))\\n    vals.append(preds);sel.append(keep)\\n   vals=np.array(vals);print('OMP',usez,same,np.round(np.c_[vals[0],vals[1:].mean(0),vals[1:].max(0)],4).tolist(),sel[0][:6])\\nfor name in ['bvpowered','bvmixrat','spl7','spl10','spl14','spl18']:\\n d=w[name];a=A(d);print('BASE',name,score(model(d)),'traj', np.mean(abs(a[52:72]@F(a[:52],yt[:52])-yt[52:])),flush=True);evalf(d)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: approximate panel-B coordinates plus an incomplete paired readout -> H2: separate shared warp error from sparse scalar nonlinearities; best compact model inspected so far has repeated-split worst MAE 0.040961.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the full cubic model on public-split MAE alone\",\n      \"rejected_reason\": \"Its advantage does not carry over consistently to the repeated splits.\"\n    }\n  ],\n  \"rationale\": \"Estimate a shared odd warp from the independent panel measurements, then test low-dimensional scalar nonlinearities and fold-local term selection. The trajectory error provides a separate check on the recovered warp.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6919864676eb5fac8063a20de61a7eaca90cd305351347ee8f78061223f00d62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40930.11,
+      "usage_known": true,
+      "prompt_tokens": 33294,
+      "cached_tokens": 12672,
+      "completion_tokens": 1797
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff0de667d6ad43949770f0e26508fb01",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:18:52.921448+00:00",
+  "ended_at_utc": "2026-11-28T14:19:25.268195+00:00",
+  "request_sha256": "5913522335c61bf59001b62644a6ffe019cde9a87c4e56b4df68b80d17af4be5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34752,
+    "cached_tokens": 12672,
+    "completion_tokens": 1250
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/witness14.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch,_features,_calibrate,_aff,_ls\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; ix=np.arange(len(x)); a,b=_features(s,x); z=_calibrate(s['panel_a'],x); c=(a[:,:,None]*b[:,None,:]).reshape(len(x),16)\\nsplits=[('required',ix[52:])]+[(f'random{i}',np.random.default_rng(i).permutation(len(x))[52:]) for i in range(20)]\\nfor j in range(4):\\n order=np.argsort(x[:,j]); splits.extend([(f'x{j}_tails',np.r_[order[:10],order[-10:]]),(f'x{j}_low',order[:20]),(f'x{j}_high',order[-20:])])\\nfor name, w in [('latent',z),('interactions',c)]: splits.append(('joint_'+name,np.argsort(np.linalg.norm(w,axis=1))[-20:]))\\nF=_aff(np.c_[a,b,c]); D=_aff(np.c_[a,b,a*b]); records={}\\nfor name,te in splits:\\n ti=np.setdiff1d(ix,te); st=dict(s,train={k:(v if k=='summary' else v[ti]) for k,v in tr.items()},test={'x':x[te]}); out=solve_batch(st); p=out['state_pred']; Q=np.linalg.svd(T[ti],full_matrices=False)[2][:2]; V=T[ti]@Q.T\\n assert np.allclose(p,F[te]@_ls(F[ti],V)@Q)\\n E={'artifact':p,'diagonal_only':D[te]@_ls(D[ti],V)@Q}\\n W=F[ti,1:]; Z=F[te,1:]; mu=W.mean(0); sd=W.std(0); W=(W-mu)/sd; Z=(Z-mu)/sd\\n for lam in [0.0001,0.001,0.01,0.1]: E[f'ridge_{lam}']=(V.mean(0)+Z@np.linalg.solve(W.T@W+lam*np.eye(W.shape[1]),W.T@(V-V.mean(0))))@Q\\n for model,pred in E.items():\\n  e=np.abs(pred-T[te]); records.setdefault(model,[]).append((name,e.mean(),e.mean(0).max()))\\n if name=='required':\\n  for model,pred in E.items(): print('required',model,'trajectory_mae',np.abs(pred-T[te]).mean())\\n if name in ('required','joint_latent','joint_interactions'): print('scalar_mae',name,np.abs(out['y_hat']-y[te]).mean())\\nfor model,row in records.items():\\n print('worst',model,max(row,key=lambda r:r[1]),'worst_horizon',max(row,key=lambda r:r[2]),'median',np.median([r[1] for r in row]))\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/witness14.py && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal-only trajectory readout -> H2 full cross-branch readout; the verified artifact’s worst trajectory MAE is 0.011201 on the original stress suite, pending exact-artifact joint-tail and ablation checks.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote rational or pair-sum/difference terms\",\"rejected_reason\":\"The real-data algebraic audit found worse worst-slice errors for those alternatives.\"}],\"rationale\":\"The prior audit omitted the solver’s rank-two projection. Compare the saved artifact directly against a diagonal ablation and mild regularization while refitting temporal modes inside each split. The supplied data have no cohort labels, relay modes, or specified drift operator to audit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "213899f3856e2f3235fc8ef411bc561e02377fb851fcd707674e1580c64173e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32345.34,
+      "usage_known": true,
+      "prompt_tokens": 34752,
+      "cached_tokens": 12672,
+      "completion_tokens": 1250
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3eddad24f49949ac9e1f500442411017",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:45:29.174236+00:00",
+  "ended_at_utc": "2026-11-28T13:46:03.886525+00:00",
+  "request_sha256": "b3376d2b02aca23e4fe99c8b8408ab270abdf22d8fe5000cf86db2990e798709",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44321,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29422,
+    "cached_tokens": 12672,
+    "completion_tokens": 1508
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/refine11.py <<'PY'\\nexec(open('/tmp/probe11.py').read().split(\\\"a=s['panel_a']\\\")[0])\\nimport sys,importlib.util\\nspec=importlib.util.spec_from_file_location('arc','/tmp/hegel_continual_archive/dev_m102_c04_batch_00_solver.py'); arc=importlib.util.module_from_spec(spec); spec.loader.exec_module(arc)\\nu,v=s['panel_a']['u'],s['panel_a']['v']; good=np.max(abs(u-v),axis=1)<3\\nfor j in range(4):\\n a=u[:,j]; b=u[:,(j+1)%4]; c=u[:,(j-1)%4]; e=u[:,(j+2)%4]; print('channel',j)\\n for name,cols in [('cyclic',(a,b,a*b,a**3)),('reverse',(a,c,a*c,a**3)),('both',(a,b,c,e,a*b,a*c,a*e,a**3)),('full',(u,u**3,prod(u,2),u**2))]:\\n  f=D(*cols)[good]; w=ls(f,v[good,j]); print(name,np.std(f@w-v[good,j]),np.round(w,5))\\nW=np.stack([ls(D(u[:,j],u[:,(j+1)%4],u[:,j]*u[:,(j+1)%4],u[:,j]**3)[good],v[good,j]) for j in range(4)],axis=1)\\ndef cal(X):\\n z=(X-W[0])/W[1]\\n for _ in range(20):\\n  r=np.roll(z,-1,axis=1); err=W[0]+W[1]*z+W[2]*r+W[3]*z*r+W[4]*z**3-X; jac=np.zeros((len(z),4,4)); j=np.arange(4); jac[:,j,j]=W[1]+W[3]*r+3*W[4]*z*z; jac[:,j,(j+1)%4]=W[2]+W[3]*z; z-=np.linalg.solve(jac,err[:,:,None])[:,:,0]\\n return z\\nu=s['panel_c']['u']; ops=[]\\nF={'soft':lambda x,k:x/(1+k*abs(x)),'rat':lambda x,k:x*x/(1+k*x*x),'log':lambda x,k:np.log1p(k*x*x),'cos':lambda x,k:np.cos(k*x),'square':lambda x,k:x*x,'oddrat':lambda x,k:x/(1+k*x*x)}\\nfor key in ['v1','v2']:\\n v=s['panel_c'][key]; cand=[]\\n for name,fn in F.items():\\n  for lin in [0,1]:\\n   def design(x,k):return D(x,fn(x,k)) if lin else D(fn(x,k))\\n   def err(k):\\n    f=design(u,k); return (f@ls(f,v)-v).ravel()\\n   p=min([least_squares(err,[k],bounds=(.001,5)) for k in [.15,.8,2.2,4.]],key=lambda o:o.cost).x\\n   opt=least_squares(err,np.repeat(p,4),bounds=(.001,5)); cand.append((np.std(err(p)),np.std(opt.fun),name,lin,p,opt.x));\\n print(key,sorted(cand,key=lambda a:a[0])[:8]); _,_,name,lin,p,k=min(cand,key=lambda a:a[0]); fn=F[name]; k=p\\n def fit(x,fn=fn,k=k,lin=lin,v=v):\\n  def d(q):return D(q,fn(q,k)) if lin else D(fn(q,k))\\n  return d(x)@ls(d(u),v)\\n ops.append(fit)\\nz=cal(tr['x']); p,r=[f(z) for f in ops]; b=s['panel_b']; q=D(z)@ls(D(b['u']),b['v']); basis=arc._temporal_basis(t,tr['traj'][:52]); scores=tr['traj']@basis\\nprint('time residual',np.std(scores@basis.T-tr['traj']))\\ncommon,off=arc._features(p,r)\\nfor name,f in [('common',D(common)),('common+off',D(common,off)),('common+xyz',D(common,z,prod(z,3))),('common+q',D(common,q)),('full',D(common,z,prod(z,3),off)),('common+zquad',D(common,z,z*z,prod(z,2))),('common+qpair',D(common,q,q*q,prod(q,2))),('z cubic',D(z,z*z,z**3,prod(z,2),prod(z,3)))]:\\n yp=f@ls(f[:52],tr['y'][:52]); ap=f@ls(f[:52],scores[:52]); sp=ap@basis.T; print(name, np.mean(abs(yp[:52]-tr['y'][:52])),np.mean(abs(yp[52:]-tr['y'][52:])),np.mean(abs(sp[:52]-tr['traj'][:52])),np.mean(abs(sp[52:]-tr['traj'][52:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine11.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration transfer → H2 cyclic cubic calibration with independently fitted panel operators; best verified 52/20 MAEs remain 0.09583 scalar and 0.04886 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted cubic calibration\",\n      \"rejected_reason\": \"Its calibration residual is still about 0.021; a cyclic interaction may explain the remaining error with fewer terms.\"\n    }\n  ],\n  \"rationale\": \"Compare cyclic calibration directions on the inlier panel, then test scalar and trajectory readouts separately on the required split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "39623f315912b49855a3c9b8a8fa78b97f63015648393e8a0368a018f1a9c2b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34710.93,
+      "usage_known": true,
+      "prompt_tokens": 29422,
+      "cached_tokens": 12672,
+      "completion_tokens": 1508
+    }
+  ]
+}

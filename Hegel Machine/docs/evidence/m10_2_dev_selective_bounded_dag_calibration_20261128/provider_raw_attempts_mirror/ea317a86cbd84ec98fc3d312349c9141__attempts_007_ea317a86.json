@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea317a86cbd84ec98fc3d312349c9141",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:32:54.005894+00:00",
+  "ended_at_utc": "2026-11-28T13:33:21.089317+00:00",
+  "request_sha256": "edc0e6c0487fbfe00265a7f7d0b394bb3bfcf1289e0f8981ade4c6d08c0a857c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34257,
+    "cached_tokens": 12672,
+    "completion_tokens": 1034
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/laws.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rec=[]')[0])\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations_with_replacement\\nfrom scipy.special import expit\\n\\ndef poly(z,d): return np.column_stack([np.prod(z[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(z.shape[1]),k)])\\ndef metric(p,y):return np.mean(abs(p-y))\\nprint('traj top temporal',v[:3]); print('telemetry',s['telemetry_vec'])\\nfor name in ['x','z','bz','bx','c1z','c1b','c2z','c2b']:\\n X=charts[name]; res=[]\\n for j,target in enumerate(Y.T):\\n  for d in (2,3):\\n   F=poly(X,d)\\n   for kind in ('linear','tanh','rat','asinh','sin','den'):\\n    def infer(i,o):\\n     t=target[i]; c=t.mean(); r=np.max(abs(t-c)); h=np.sqrt(np.sum(X**2,axis=1));\\n     def pred(p):\\n      k=np.exp(p[-1]); a=F@p[:-1];\\n      if kind=='linear':return a\\n      if kind=='tanh':return c+r*k*np.tanh(a/(r*k))\\n      if kind=='asinh':return c+r*k*np.arcsinh(a/(r*k))\\n      if kind=='sin':return c+r*k*np.sin(a/(r*k))\\n      if kind=='rat':return c+a/np.sqrt(1+(a/(r*k))**2)\\n      return a/(1+k*h*h)\\n     p0=np.r_[fit(F[i],t if kind in ('linear','den') else t-c), .5]\\n     p=least_squares(lambda p: np.r_[pred(p)[i]-t, .004*p[:-1]],p0,bounds=(np.r_[np.full(F.shape[1],-np.inf),-6.],np.r_[np.full(F.shape[1],np.inf),6.]),max_nfev=70).x;return pred(p)[o],np.exp(p[-1]),np.std(pred(p)[i]-t)\\n    p,k,e=infer(*splits[0]); gate=metric(p,target[splits[0][1]]); res.append((gate,d,kind,k,e,infer))\\n  for e in sorted(res,key=lambda e:e[0])[:4]:print(name,j,e[:5])\\n# State contribution to scalar; true state in fit only, full CV also checked separately.\\nfor name in ['x','z','bz','c1z','c1b','c2z','c2b']:\\n X=charts[name]; Out=[]\\n for degree in (1,2,3):\\n  for use in (False,True):\\n   for r in (.000001,.001,.02):\\n    FG=poly(np.c_[X,a] if use else X,degree); G=FG@FG.T+r*np.eye(len(X)); E=scores(G);Out.append((E[0,0],E[1:,0].mean(),degree,use,r))\\n print('measured state shortcut',name,sorted(Out)[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/laws.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 stationary spatial kernels → H2 nonlinear readout of a low-degree calibrated field and shared state; the best new kernel reached 0.03998 MAE on 52/20.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test nonlinear response laws and whether the measured trajectory mode explains scalar residuals. The measured-state test is diagnostic only; any final predictor must use predicted state.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "fa5d7e52ed1add0892ea7df8ff37632e573f452ab9ce10ce1409b6f945c4aa5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27081.35,
+      "usage_known": true,
+      "prompt_tokens": 34257,
+      "cached_tokens": 12672,
+      "completion_tokens": 1034
+    }
+  ]
+}

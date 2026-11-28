@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cbcad33988e94070832570bea8b1e80b",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:26:18.311964+00:00",
+  "ended_at_utc": "2026-11-28T14:27:03.652455+00:00",
+  "request_sha256": "5574ad5fa2d8008e0781445818b38e6492705a8459ab01840255ce51cb859257",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39451,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27589,
+    "cached_tokens": 12672,
+    "completion_tokens": 1621
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/panel_probe.py <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=len(s['train']['x']); x=s['train']['x']; yy=np.c_[s['train']['y'],s['train']['traj']];\\ndef bias(x): return np.c_[np.ones(len(x)),x]\\ndef ls(f,y): return np.linalg.lstsq(f,y,rcond=1e-10)[0]\\na=s['panel_a']; u,v=a['u'],a['v']; keep=np.ones(len(u),bool)\\nfor i in range(5):\\n b=ls(bias(u)[keep],v[keep]); e=np.linalg.norm(bias(u)@b-v,axis=1); keep=e<max(0.001,4*np.median(e)); print('a',i,keep.sum(),np.quantile(e,[0,.5,.85,1]))\\nprint('a params',b); print('b params',ls(bias(s['panel_b']['u']),s['panel_b']['v'])); z=(x-b[0])@np.linalg.inv(b[1:]); print('z range',z.min(0),z.max(0)); print('times',s['eval_times']);\\nlib={'linear': lambda u,p:u,'sin':lambda u,p:np.sin(p*u),'cos':lambda u,p:np.cos(p*u),'tanh':lambda u,p:np.tanh(p*u),'atan':lambda u,p:np.arctan(p*u),'soft':lambda u,p:u/(1+p*abs(u)),'rational':lambda u,p:u/(1+p*u*u),'cubic':lambda u,p:u+p*u**3,'sinh':lambda u,p:np.sinh(p*u),'gauss':lambda u,p:np.exp(-p*u*u),'logistic':lambda u,p:1/(1+np.exp(-p*u))}\\nfrom itertools import combinations\\np=s['panel_c']; u=p['u']; ops=[]\\nfor name in ['v1','v2']:\\n v=p[name]; result=[]\\n for key,g in lib.items():\\n  for add in [False,True]:\\n   def make(u,k): return bias(np.c_[u,g(u,k)] if add else g(u,k))\\n   def fun(k):\\n    f=make(u,k); return np.mean((f@ls(f,v)-v)**2)\\n   grid=np.linspace(.02,4,50); j=np.argmin([fun(k) for k in grid]); r=minimize_scalar(fun,bounds=(grid[max(0,j-1)],grid[min(len(grid)-1,j+1)]),method='bounded'); result.append((r.fun,key,add,r.x,make(z,r.x)@ls(make(u,r.x),v)))\\n result.sort(key=lambda o:o[0]); print(name,[(a,b,c,d) for a,b,c,d,_ in result[:9]]); ops.append(result)\\nt=s['eval_times']; tr=yy[:,1:]\\nfor nm,make in [('relax',lambda p:-np.expm1(-t[:,None]*p)),('decay',lambda p:np.exp(-t[:,None]*p)),('one each',lambda p:np.c_[-np.expm1(-t*p[0]),np.exp(-t*p[1])])]:\\n def obj(p):\\n  f=make(p); return (f@ls(f,tr.T)-tr.T).ravel()\\n r=least_squares(obj,[.4,1.86],bounds=(.0001,8)); print(nm,r.x,np.std(r.fun))\\ncv=[(np.arange(52),np.arange(52,72))]; cv.extend((np.setdiff1d(np.arange(n),j),j) for seed in [182,991] for j in np.array_split(np.random.default_rng(seed).permutation(n),4));\\ndef scores(f,reg=0):\\n es=[]\\n for i,j in cv:\\n  fi=f[i]; fj=f[j]; fm=fi.mean(0); fs=np.maximum(fi.std(0),1e-9); fi=(fi-fm)/fs; fj=(fj-fm)/fs; y=yy[i]; ym=y.mean(0); b=ls(fi,y-ym) if reg==0 else np.linalg.solve(fi.T@fi+reg*np.eye(fi.shape[1]),fi.T@(y-ym)); e=abs(fj@b+ym-yy[j]); es.append([e[:,0].mean(),e[:,1:].mean()]);\\n return np.round(np.r_[es[0],np.mean(es[1:],0),np.max(es[1:],0)],5)\\ndef quad(w): return np.c_[w,*[w[:,i]*w[:,j] for i in range(w.shape[1]) for j in range(i,w.shape[1])]]\\nfor i,j in [(0,0),(0,1),(1,0),(1,1),(2,2)]:\\n a=ops[0][i][-1]; b=ops[1][j][-1]; w=np.c_[a,b];\\n for q in [0,1,2]:\\n  f=np.c_[w,(a*b).sum(1),a[:,0]*b[:,1]] if q==0 else quad(w) if q==1 else np.c_[quad(a),quad(b),a*b]; print('read',i,j,q,[scores(f,r).tolist() for r in [0,.03,.3,1]])\\nfor key,g in lib.items():\\n for k in [.22,.7,1.25,2.15]:\\n  f=quad(g(z,k)); print('direct',key,k,scores(f,.03))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived ridge readout → H2 calibrated nonlinear readout with two temporal modes; archived gate trajectory MAE was 0.043063 against 0.038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Separate calibration fit, temporal fit, and readout generalization. Compare the official split and independent fold slices before committing to the editable node.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d6b5a1464b9f01ba5ccf28ae9217be28f435fda713210b8023a891894b2e6a2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45339.54,
+      "usage_known": true,
+      "prompt_tokens": 27589,
+      "cached_tokens": 12672,
+      "completion_tokens": 1621
+    }
+  ]
+}

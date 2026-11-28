@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e71f3d41d2b6460dbc5a859ba7c6b5c4",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:28:09.985514+00:00",
+  "ended_at_utc": "2026-11-28T13:28:41.117131+00:00",
+  "request_sha256": "585f5e565b56ca526d5043143eed41d46f68cbf557a7f5fa82acc2660ca9cfda",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40847,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28883,
+    "cached_tokens": 12672,
+    "completion_tokens": 1205
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\n\\n\\ndef _center(k, q):\\n    mean = k.mean(axis=0)\\n    grand = mean.mean()\\n    return k - mean - mean[:, None] + grand, q - mean - q.mean(axis=1, keepdims=True) + grand\\n\\n\\ndef _gram(x, q, degree):\\n    mean = x.mean(axis=0)\\n    scale = np.maximum(x.std(axis=0), 1e-10)\\n    x, q = (x - mean) / scale, (q - mean) / scale\\n    return _center((1 + x @ x.T / x.shape[1]) ** degree,\\n                   (1 + q @ x.T / x.shape[1]) ** degree)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    state = inputs['node_02']['state_pred']\\n    k, q = _center(p['K'], p['Kq'])\\n    values, vectors = np.linalg.eigh(k)\\n    rank = min(p['sy'].shape[1], len(values))\\n    root = np.sqrt(np.maximum(values[-rank:], 1e-10))\\n    vectors = vectors[:, -rank:]\\n    terms = (\\n        (.05, _gram(vectors * root, (q @ vectors) / root, 4)),\\n        (.03, _gram(p['st'][:, :p['sy'].shape[1]], p['qt'][:, :p['sy'].shape[1]], 2)),\\n        (.03, _gram(p['scores'], state @ p['modes'].T, 1)),\\n    )\\n    for weight, (kt, qt) in terms:\\n        k += weight * kt\\n        q += weight * qt\\n    weight = solve(k + .003 * np.eye(len(k)), p['y_centered'], assume_a='pos')\\n    return {'y_hat': np.asarray(p['y_mean'] + q @ weight)}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/kernel_structure.py <<'PY'\\nfrom readout_probe import *\\nfrom scipy.spatial.distance import cdist\\np,pr,y,tr=next(batches()); x=s['train']['x'][:52]; slope,offset=node_00._calibration(s['panel_a']); print('calibration:',slope, offset)\\nfor a,b in [(p['st'][:,:4],x),(p['sy'],x),(p['scores'],x)]:\\n print('cross-correlations:\\\\n',np.round(np.corrcoef(a.T,b.T)[:len(a.T),len(a.T):],3))\\nf=np.c_[np.ones(len(x)),node_00._quadratic(x)]; y=s['train']['y'][:52]; print('oracle polynomial quadratic rms',np.std(y-f@np.linalg.lstsq(f,y,rcond=None)[0])); print('scalar quantiles',np.quantile(y,[0,.1,.5,.9,1])); print('variance in state modes',np.var(p['scores'],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (additive joint readout) -> H2 (quartic kernel-coordinate basis with operator and state terms); the probe reached 0.03779 official scalar MAE and 0.07480 worst-slice scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the basis with the lowest official split MAE\",\n      \"rejected_reason\": \"Its 0.12828 worst-slice error is substantially higher than the quartic candidate's 0.07480.\"\n    }\n  ],\n  \"rationale\": \"Establish an executable reference with the best observed worst-slice score, then diagnose whether recovering the input coordinates could improve extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "73a25c0708f7ab61719dea9c3470e8580bf668ac170c2e55438b2c105b2ad68a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31130.43,
+      "usage_known": true,
+      "prompt_tokens": 28883,
+      "cached_tokens": 12672,
+      "completion_tokens": 1205
+    }
+  ]
+}

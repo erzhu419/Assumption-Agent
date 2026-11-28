@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c85747a71c3481e9736c7b0c7fe0c44",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:15:02.487904+00:00",
+  "ended_at_utc": "2026-11-28T14:15:27.389529+00:00",
+  "request_sha256": "c43b8eeb59f3aa5804d99f3c2982e59344867b483b4a5c327ac1c7681b6a4343",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29838,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24337,
+    "cached_tokens": 12672,
+    "completion_tokens": 896
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_11_solver.py /tmp/hegel_continual_archive/*_13_solver.py; cat >/tmp/probe14.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\ndef score(a,b):\\n q,r=np.linalg.qr(a,mode='reduced'); d=b-q@(q.T@b); return np.sqrt(np.mean((d/(1-(q*q).sum(1))[:,None])**2))\\ndef aff(u):return np.c_[np.ones(len(u)),u]\\ndef pairs(u):return np.column_stack([u[:,i]*u[:,j] for i in range(4) for j in range(i)])\\nfor k in ['v1','v2']:\\n u=s['panel_c']['u']; v=s['panel_c'][k]; print(k)\\n funcs={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'erf':__import__('scipy').special.erf,'softsin':lambda x:x/(1+x*x),'softsqrt':lambda x:x/np.sqrt(1+x*x),'lorentz':lambda x:1/(1+x*x),'softplus':lambda x:np.logaddexp(0,x),'gauss':lambda x:np.exp(-x*x)}\\n choices=[]\\n for name,f in funcs.items():\\n  for mode in [0,1,2,3]:\\n   def mat(w):\\n    z=f(u*w); return [aff(z),np.c_[aff(u),z],np.c_[aff(u),pairs(u),z],np.c_[aff(z),pairs(u)]][mode]\\n   res=minimize_scalar(lambda w:score(mat(w),v),bounds=(.15,4),method='bounded'); choices.append((res.fun,name,mode,res.x))\\n print(sorted(choices)[:12]); print('poly',[(i,score(np.c_[aff(u),*(u**j for j in range(2,i+1))],v)) for i in range(1,5)]); print('quad',score(np.c_[aff(u),u*u,pairs(u)],v))\\nt=s['eval_times']; T=s['train']['traj']; _,a,q=np.linalg.svd(T,full_matrices=False); print('time sv',a[:4]); print('modes',q[:2]); print('time proj',q[:2].T@q[:2]); print('test bounds',s['test']['x'].min(0),s['test']['x'].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct archive transfer -> H2 recover the current campaign’s operator basis and rank-two temporal subspace; best archived 52/20 MAEs are 0.112072 (scalar) and 0.102071 (trajectory).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight unrelated trajectory models\",\"rejected_reason\":\"The two leading singular values are 18.33 and 2.67; the third drops to 0.056, supporting a shared temporal subspace.\"}],\"rationale\":\"Use leave-one-row-out panel residuals to compare nonlinear bases, separately from the downstream response fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ed93f2ac841302f3c56396306c60fb9b1462865e3b59797e2a92d1c66cb3156b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24900.66,
+      "usage_known": true,
+      "prompt_tokens": 24337,
+      "cached_tokens": 12672,
+      "completion_tokens": 896
+    }
+  ]
+}

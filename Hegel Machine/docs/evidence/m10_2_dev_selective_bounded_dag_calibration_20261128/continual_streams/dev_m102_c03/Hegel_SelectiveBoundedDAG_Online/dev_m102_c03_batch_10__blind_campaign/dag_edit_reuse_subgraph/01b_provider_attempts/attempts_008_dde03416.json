@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dde0341645b14fd5b21f982f331f7930",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:13:39.986759+00:00",
+  "ended_at_utc": "2026-11-28T14:14:03.415072+00:00",
+  "request_sha256": "0097925e8446bb4f32130dc917298694ef8806368a0080ebbed29ed899719166",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32266,
+    "cached_tokens": 12672,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy, numpy as np\\nroot='/holdout_task/'\\na=runpy.run_path(root+'_frozen_nodes/node_00.py')['run_node']; b=runpy.run_path(root+'node_01.py')['run_node']; c=runpy.run_path(root+'_frozen_nodes/node_02.py')['run_node']\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; n=len(x)\\ndef predict(st):\\n    base=a({'__input__':st}); panel=b({'__input__':st,'node_00':base}); return c({'node_00':base,'node_01':panel})\\nresults={}\\ndef check(name, v):\\n    ids=np.setdiff1d(np.arange(n),v); st=copy.deepcopy(s); yt=y[ids]; tt=tr[ids]; st['train']={'x':x[ids],'y':yt,'traj':tt,'summary':np.array([yt.mean(),yt.std(),tt[:,-1].mean(),tt[:,-1].std()])}; st['test']={'x':x[v]}; p=predict(st); ye=np.abs(p['y_hat']-y[v]); te=np.abs(p['state_pred']-tr[v]); results[name]=(float(ye.mean()),float(te.mean()),float(te[:,-1].mean())); print(name, 'scalar/trajectory/last-time MAE', np.round(results[name],6))\\nfor name,v in [('first',np.arange(20)),('middle',np.arange(26,46)),('last',np.arange(n-20,n)),('outer-input',np.argsort(np.max(np.abs(x),axis=1))[-20:]),('outer-response',np.argsort(np.abs(y-np.median(y)))[-20:])]: check(name,v)\\np=predict(s); assert p['y_hat'].shape==(len(s['test']['x']),) and p['state_pred'].shape==(len(s['test']['x']),len(s['eval_times'])) and all(np.isfinite(v).all() for v in p.values()); print('worst MAE', np.max(list(results.values()),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic products -> H2 calibrated odd panel features with a rank-two trajectory; the saved candidate passes public CV at 0.013117 scalar MAE and 0.016557 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted odd basis before stress testing\",\n      \"rejected_reason\": \"Panel residual alone does not show that a different basis improves either held-out output.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the exact saved artifact on alternate row blocks and extreme inputs and responses, check the final-time error separately, and confirm the public contract in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f80bae05cc52adc196d003a7d5c42003976a1092125b5677b19d4eec19848e1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23427.21,
+      "usage_known": true,
+      "prompt_tokens": 32266,
+      "cached_tokens": 12672,
+      "completion_tokens": 943
+    }
+  ]
+}

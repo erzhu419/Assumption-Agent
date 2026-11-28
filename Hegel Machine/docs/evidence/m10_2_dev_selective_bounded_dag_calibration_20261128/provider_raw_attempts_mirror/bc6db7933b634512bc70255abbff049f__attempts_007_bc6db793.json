@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc6db7933b634512bc70255abbff049f",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:23:59.891035+00:00",
+  "ended_at_utc": "2026-11-28T14:24:40.601416+00:00",
+  "request_sha256": "1d7f96e7d9e5a33d188d3adba91819481a362879e3ca4f31a64e554a7792fbed",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 45993,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31873,
+    "cached_tokens": 12672,
+    "completion_tokens": 1683
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Reference-panel calibration and two-mode trajectory regression.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _sensor_features(z, rates):\\n    return np.stack((np.ones_like(z), z, np.sin(rates[0] * np.roll(z, 2, axis=1)), np.tanh(rates[1] * z)), axis=2)\\n\\n\\ndef _latent(panel, x):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    h = _ones(u)\\n    r = np.linalg.norm(h @ _fit(h, v) - v, axis=1)\\n    keep = r < 5 * max(np.median(r), 1e-7)\\n    if keep.sum() < 8:\\n        keep = np.ones(len(u), dtype=bool)\\n\\n    def coefficients(h, mask):\\n        return np.stack([_fit(h[mask, j], v[mask, j]) for j in range(u.shape[1])])\\n\\n    def project(h, c):\\n        return np.einsum('njk,jk->nj', h, c)\\n\\n    def residual(rates):\\n        h = _sensor_features(u, rates)\\n        return (project(h, coefficients(h, keep)) - v)[keep].ravel()\\n\\n    rates = least_squares(residual, [2.4, 1.8], bounds=([1.5, .4], [3.5, 4.]), max_nfev=80).x\\n    c = coefficients(_sensor_features(u, rates), keep)\\n    bias, scale, coupled, sat = c.T\\n    z = (x - bias) / scale\\n    j = np.arange(x.shape[1])\\n    for _ in range(30):\\n        residual_x = project(_sensor_features(z, rates), c) - x\\n        jac = np.zeros((len(x), len(j), len(j)))\\n        jac[:, j, j] = scale + sat * rates[1] * (1 - np.tanh(rates[1] * z)**2)\\n        jac[:, j, (j+2) % len(j)] = coupled * rates[0] * np.cos(rates[0] * np.roll(z, 2, axis=1))\\n        step = np.linalg.solve(jac, residual_x[..., None])[..., 0]\\n        z -= np.clip(step, -1., 1.)\\n        if np.max(np.abs(step), initial=0.) < 1e-11:\\n            break\\n    return z\\n\\n\\ndef _edge(z):\\n    return z * np.roll(z, -1, axis=1)\\n\\n\\ndef _design(panel, z):\\n    u = np.asarray(panel['u'])\\n    v1, v2 = np.asarray(panel['v1']), np.asarray(panel['v2'])\\n    c = _ones(_edge(z)) @ _fit(_ones(_edge(u)), v1)\\n\\n    def residual(freq):\\n        h = _ones(np.cos(u * freq[0]))\\n        return (h @ _fit(h, v2) - v2).ravel()\\n\\n    f = least_squares(residual, [2.4], bounds=([1.5], [3.5])).x[0]\\n    d = _ones(np.cos(f * z)) @ _fit(_ones(np.cos(f * u)), v2)\\n    h = _ones(np.column_stack((c, d, np.sum(c * d, axis=1))))\\n    return h, np.column_stack((h, c[:, 0] * d[:, 1]))\\n\\n\\ndef _predict(study):\\n    tr = study['train']\\n    n = len(tr['x'])\\n    x = np.concatenate((tr['x'], study['test']['x']), axis=0)\\n    h, g = _design(study['panel_c'], _latent(study['panel_a'], x))\\n    y = h[n:] @ _fit(h[:n], tr['y'])\\n    t = np.asarray(study['eval_times'])\\n    traj = np.asarray(tr['traj'])\\n    weights = _fit(g[:n], traj)\\n    projected = (g[:n] @ weights).T\\n\\n    def modes(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def residual(rates):\\n        q = modes(rates)\\n        return (q @ _fit(q, projected) - projected).ravel()\\n\\n    rates = least_squares(residual, [.42, 1.82], bounds=([.05, .85], [.85, 4.]), max_nfev=100).x\\n    q, _ = np.linalg.qr(modes(rates), mode='reduced')\\n    state = (g[n:] @ (weights @ q)) @ q.T\\n    return y, state\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    sparse = inputs['node_00']\\n    y, state = _predict(study)\\n    # Express the calibrated estimate relative to the frozen sparse baseline,\\n    # in the panel coordinates used by the fixed downstream blend.\\n    baseline_y, baseline_state = sparse['y_hat'], sparse['state_pred']\\n    return {'panel_pred': np.column_stack((baseline_y + (y - baseline_y) / .5,\\n                                          baseline_state + (state - baseline_state) / .65))}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Replace the incomplete sensor map with antipodal sine plus local tanh, then fit cyclic and cosine branches; worst exploratory held-out MAE was 0.0072 for y and 0.0051 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An antipodal sine with no local saturation term adequately models the calibration.\",\"empirical_witness\":\"Adding local tanh lowered reference-panel RMS from 0.02751 to 0.0000945 and worst exploratory trajectory MAE from 0.0667 to 0.0051.\",\"causal_blanket_diagnosis\":\"The missing local saturation distorted the recovered coordinates before the cosine and cyclic-product transforms.\",\"sublated_pivot\":\"Retain the antipodal sine and add local tanh, fitting both from reference observations without outcome labels.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a larger polynomial outcome basis\",\"rejected_reason\":\"The compact cyclic–cosine basis gave lower worst-fold errors than adding cubic terms.\"}],\"rationale\":\"Implement the panel-supported calibration, preserve the two shared relaxation modes, and check the exact editable node against the frozen graph and public acceptance test.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ab27ed1314aa0af3d3a0cbe9ac0c7829c68581db9e03c21bf38e5aa4231c58ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40708.68,
+      "usage_known": true,
+      "prompt_tokens": 31873,
+      "cached_tokens": 12672,
+      "completion_tokens": 1683
+    }
+  ]
+}

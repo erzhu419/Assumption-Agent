@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0865131f988f4b038f3f8041dcb519a1",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:23:41.729669+00:00",
+  "ended_at_utc": "2026-11-28T13:24:05.726501+00:00",
+  "request_sha256": "762d2d58cc0521e94ff3d975193ea0864eb6a033cddbb8ecb0379d4315d87fa3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66570,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40761,
+    "cached_tokens": 12672,
+    "completion_tokens": 906
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/modes.py <<'PY'\\nexec(open('/tmp/compact.py').read().split('results=[]')[0]);\\nfrom scipy.linalg import qr\\n\\ndef fit_groups(keys,I):\\n fs=[F(k) for k in keys]; orth=[qr(f[I],mode='economic')[0] for f in fs]; target=T[I].ravel(); groups=len(fs)\\n def project(lr,output=False):\\n  Q=-np.expm1(-np.exp(lr)[:,None]*t)\\n  design=np.column_stack([(a[:,:,None]*q[None,None,:]).transpose(0,2,1).reshape(len(target),-1) for a,q in zip(orth,Q)])\\n  w=np.linalg.lstsq(design,target,rcond=1e-11)[0]\\n  if not output:return design@w-target\\n  yhat=np.zeros_like(T); pos=0\\n  for f,a,q in zip(fs,orth,Q):\\n   p=a.shape[1]; yhat+=(f@np.linalg.lstsq(f[I],a@w[pos:pos+p],rcond=1e-10)[0])[:,None]*q;pos+=p\\n  return yhat,np.exp(lr),np.sqrt(np.mean((yhat[I]-T[I])**2))\\n start=[.42,1.8] if groups==2 else [.42,1.8,.65]\\n est=least_squares(project,np.log(start),bounds=(np.log([.12,1.0]+[.08]*(groups-2)),np.log([.9,3.8]+[4.]*(groups-2))),max_nfev=80)\\n return project(est.x,True)\\nfor keys in [('ovh','ozumhv'),('ov','oum','h'),('ov','ozum','h'),('ov','oum','oh'),('ov','oum','hm'),('ov','ou','hm'),('ovh','oum','vh'),('ovh','oum','v'),('ov','oum','vh'),('ov','oum','uz')]:\\n E=[]\\n for order in orders:\\n  I,J=order[:52],order[52:]; P,r,err=fit_groups(keys,I); e=abs(P[J]-T[J]); E.append([e.mean(),e.mean(0).max(),e.mean(1).max()]);\\n  if len(E)==1: first=(r,err)\\n E=np.array(E);print(keys,first,'split',E[0],'random max',E[:26].max(0),'tail max',E[26:].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test whether the cross-branch product has its own relaxation rate; the compact two-mode challenger cuts worst coordinate-tail horizon MAE from 0.04549 to 0.01275.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the unconstrained two-mode basis\",\"rejected_reason\":\"Its extra spatial terms are not needed to pass the prescribed split and materially worsen extrapolation on a coordinate tail.\"}],\"rationale\":\"The compact fit gives a stable fast mode but its slow rate moves when the cross-branch term is reassigned. Test separate temporal responses on the same splits before promoting a final candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8e843603ef5938d829f8637f5d9303cb8c327d0057642b38540658b5a9d54f6e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23995.64,
+      "usage_known": true,
+      "prompt_tokens": 40761,
+      "cached_tokens": 12672,
+      "completion_tokens": 906
+    }
+  ]
+}

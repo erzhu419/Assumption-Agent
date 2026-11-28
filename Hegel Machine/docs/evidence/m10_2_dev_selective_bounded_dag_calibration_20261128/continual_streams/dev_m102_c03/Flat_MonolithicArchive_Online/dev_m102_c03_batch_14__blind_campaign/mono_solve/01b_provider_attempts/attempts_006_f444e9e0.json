@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f444e9e0fcc8435e81aeee106e579d27",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:16:31.151785+00:00",
+  "ended_at_utc": "2026-11-28T14:17:07.776832+00:00",
+  "request_sha256": "5bdaf90b26916337937d2c193c873890529ded3f9c7cc35ce4f69925caab5c61",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44603,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30529,
+    "cached_tokens": 12672,
+    "completion_tokens": 1394
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_12_solver.py; cat >/tmp/sp14.py <<'PY'\\nimport numpy as np,pickle,itertools,glob,runpy\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['x']); I=np.ones(N); F=lambda x:np.c_[np.ones(len(x)),x]; L=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]; cv=np.arange(52); ve=np.arange(52,72)\\ndef pairs(u):return np.column_stack([u[:,i]*u[:,j] for i,j in itertools.combinations(range(4),2)])\\ndef cal(p,x):\\n u,v=p['u'],p['v']; e=np.linalg.norm(v-F(u)@L(F(u),v),axis=1); k=e<3*np.median(e)\\n def design(z,r,j):return np.c_[np.ones(len(z)),z[:,j],np.tanh(r[0]*z[:,j]),np.sin(r[1]*z[:,(j+2)%4])]\\n def fit(r):return [L(design(u[k],r,j),v[k,j]) for j in range(4)]\\n def forward(z,r,b):return np.column_stack([design(z,r,j)@b[j] for j in range(4)])\\n r=least_squares(lambda r:(forward(u[k],r,fit(r))-v[k]).ravel(),[1.9,2.3]).x; b=fit(r); print('cal',r,b,np.std(forward(u[k],r,b)-v[k]));return np.array([least_squares(lambda z:forward(z[None],r,b)[0]-row,row).x for row in x])\\ndef operator(fun,u,v,bounds=(.2,3)):\\n def obj(r):\\n  a=fun(u,r);q=np.linalg.qr(a)[0];d=v-q@(q.T@v);return np.mean((d/(1-(q*q).sum(1))[:,None])**2)\\n rr=minimize_scalar(obj,bounds=bounds,method='bounded'); a=fun(u,rr.x); b=L(a,v); print('op',rr.x,np.sqrt(rr.fun),np.std(a@b-v)); return lambda z:fun(z,rr.x)@b\\nz=cal(s['panel_a'],tr['x']); p=s['panel_b']; m=L(F(p['u']),p['v']); B=lambda x:F(x)@m\\np=s['panel_c'];u=p['u'];v1=p['v1'];v2=p['v2']; soft=lambda x:x/np.sqrt(1+x*x)\\nA=operator(lambda x,r:np.c_[F(np.tanh(r*x)),x],u,v1); AA=operator(lambda x,r:np.c_[F(np.tanh(r*x)),x,x**3],u,v1); C=operator(lambda x,r:np.c_[F(soft(r*x)),pairs(x)],u,v2)\\nq=np.linalg.svd(tr['traj'][:52],full_matrices=False)[2][:2]; Y=np.c_[tr['y'],tr['traj']@q.T]; outs=[]\\ndef score(f):\\n b=L(f[cv],Y[cv]); r=f[ve]@b-Y[ve];return np.mean(abs(r[:,0])),np.mean(abs(r[:,1:]@q)),np.std(f[cv]@b-Y[cv],axis=0)\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nfor xn,x in [('raw',tr['x']),('cal',z),('bcal',B(z)),('binvcal',(z-m[0])@np.linalg.inv(m[1:]))]:\\n for an,a in [('A',A),('AA',AA)]:\\n  for bn,b in [('C',C),('BC',lambda x:B(C(x))),('B',B),('x',lambda x:x)]:\\n   a1,b1=a(x),b(x); diag=a1*b1\\n   for fn,f in [('linear',F(np.c_[a1,b1])),('sum',F(np.c_[a1,b1,diag.sum(1)])),('diag',F(np.c_[a1,b1,diag])),('full',F(np.c_[a1,b1,cross(a1,b1)])),('quadratic',F(np.c_[a1,b1,a1*a1,b1*b1,pairs(a1),pairs(b1),diag])),('latent',F(np.c_[x,a1,b1,diag])),('latentfull',F(np.c_[x,a1,b1,cross(a1,b1)]))]:\\n    er=score(f);outs.append((*er,xn,an,bn,fn))\\nfor i in (0,1):\\n print('rank',i)\\n for o in sorted(outs,key=lambda o:o[i])[:15]: print(o)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sp14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate archived calibration -> H2 opposite-channel sine and same-channel tanh calibration followed by competing panel compositions; best verified downstream 52/20 MAEs remain 0.112072 and 0.102071.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more terms to the calibration polynomial\",\"rejected_reason\":\"Sparse sine and tanh terms already drive each channel close to panel measurement precision.\"}],\"rationale\":\"Fit shared calibration rates, invert the calibrated map, and compare candidate panel orders and branch contractions for the scalar and rank-two trajectory separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "56677ea1ba328933eea6827cac276c175a2d18a3850b40a32d3c4d7211e904f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36623.93,
+      "usage_known": true,
+      "prompt_tokens": 30529,
+      "cached_tokens": 12672,
+      "completion_tokens": 1394
+    }
+  ]
+}

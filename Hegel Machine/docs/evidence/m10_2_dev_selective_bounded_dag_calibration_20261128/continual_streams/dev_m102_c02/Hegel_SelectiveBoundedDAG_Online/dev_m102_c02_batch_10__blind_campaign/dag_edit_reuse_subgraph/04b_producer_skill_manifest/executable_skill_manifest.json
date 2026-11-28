@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_m102_c02_batch_10_a4b304c29a0c",
+    "source_hash": "a4b304c29a0c6e0c3af2be7632080da3c886bf42660d9a12c58b6cce2e2b6b26",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "dev_m102_c02_batch_10__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/fitmaps.py",
+        "archived_relpath": "producers/tmp__fitmaps.py",
+        "bytes": 2464,
+        "sha256": "09669673d16b017abdad80a6b2200fc1e4e5226ac25c879ceb0978a57be8fb56"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 2382,
+        "sha256": "278e16fa4b0e17bf019790732a1fbe5cf90921e1b17966a6dee50a921beaff90"
+      },
+      {
+        "container_path": "/tmp/probeA.py",
+        "archived_relpath": "producers/tmp__probeA.py",
+        "bytes": 1698,
+        "sha256": "28e198c8d854e6960fdbb5641ee1e0a10e3f7656bc715c2001ecaef2f7f1b4cc"
+      },
+      {
+        "container_path": "/tmp/search_ab.py",
+        "archived_relpath": "producers/tmp__search_ab.py",
+        "bytes": 2946,
+        "sha256": "98e145e72e2a3a8de3ad0324dc1eae0084597dfa8f715766da79c7bf0e129af5"
+      },
+      {
+        "container_path": "/tmp/stress_node.py",
+        "archived_relpath": "producers/tmp__stress_node.py",
+        "bytes": 1224,
+        "sha256": "e1f5929936c753a519be919f5352a69704d9d42b7c9da9486a57f4a111ed8880"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c02_batch_00_solver.py",
+        "bytes": 2950,
+        "sha256": "7c20bc5e17fddd7a7731d9bd724fbce82f7d02897ac311817db723d68d5fec99"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_m102_c02_batch_08_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_m102_c02_batch_08_solver.py",
+        "bytes": 3257,
+        "sha256": "2ea78d336eefbd2a7f0647f65e9c7c3f76fc0967155ff6cc8a57bdff9cc7f950"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json public_asset_index.json && cat _frozen_nodes/node_01.py && cat test_dag_candidate.py && ls -la /tmp/hegel_continual_archive && find /tmp/hegel_continual_archive -maxdepth 3 -type f | head -100; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel affine alignment imputation ridge nuisance'",
+      "cat /holdout_task/_frozen_nodes/node_01.py; for f in /tmp/hegel_continual_archive/*; do echo \"--- $f\"; cat \"$f\"; done; python3 - <<'PY'\nimport numpy as np,pickle\nnp.set_printoptions(precision=4,suppress=True)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nfor k,v in s.items():\n for j,z in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(z); print(k,j,a.shape); print(a[:3] if a.ndim else a)\nPY",
+      "for f in /tmp/hegel_continual_archive/*solver.py; do echo \"--- $f\"; cat \"$f\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -25; python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=3,suppress=True)\nfor k in ['panel_a','panel_b','panel_c']:\n u=s[k]['u']; print(k)\n for name,v in s[k].items():\n  if name=='u': continue\n  for deg in [1,2,3]:\n   p=np.column_stack([np.ones(",
+      "sed -n '1,65p' /tmp/hegel_continual_archive/*08_solver.py; cat > /tmp/probe.py <<'PY'\nimport numpy as np,pickle,itertools\nfrom scipy.linalg import svd\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\ndef aff(x): return np.c_[np.ones(len(x)),x]\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for e in range(1,d+1) for ix in itertools.combinations_with_replacement(range(4),e)])\ndef check(D,Y):\n b=np.linalg.lstsq(D,Y,rcond=None)[0]; R=Y-D@b; h=np.sum(D*np.linalg.pinv(D).T,axis=1); return np.round",
+      "cat >/tmp/fitmaps.py <<'PY'\nimport pickle, numpy as np, importlib.util\nfrom scipy.optimize import minimize_scalar, root\nfrom itertools import combinations\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef load(p):\n sp=importlib.util.spec_from_file_location('mod',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); return m\nold=load('/tmp/hegel_continual_archive/dev_m102_c02_batch_08_solver.py'); sink=load('/holdout_task/_frozen_nodes/node_01.py')\nA=lambda u:np.c_[np.ones(len(u)),u]; ls=lambda x,y:np.linalg.lstsq(x,y,rcond=1e-10)[0]\ndef errs(d,y):\n r=y-d",
+      "cat >/tmp/probeA.py <<'PY'\nexec(open('/tmp/fitmaps.py').read().split(\"tr=s['train']\")[0])\nfrom itertools import combinations_with_replacement\nu,v=[s['panel_a'][k] for k in ('u','v')]; tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']\ndef cv(g, split=52):\n st=dict(s,train=dict(x=x[:split],y=y[:split],traj=t[:split])); o=sink.run_node({'__input__':st,'node_00':dict(c=g[:split],query=g[split:])}); return np.mean(abs(o['y_hat']-y[split:])),np.mean(abs(o['state_pred']-t[split:]))\nix2=list(combinations_with_replacement(range(4),2)); ix3=list(combinations_with_replacement(range(4),3)); qr=lambda q,ix",
+      "cat /holdout_task/_frozen_nodes/node_01.py; cat >/tmp/search_ab.py <<'PY'\nexec(open('/tmp/fitmaps.py').read().split(\"tr=s['train']\")[0])\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\nfams={'rat':lambda z,a:z/(1+a*z*z),'atan':lambda z,a:np.arctan(a*z),'tanh':lambda z,a:np.tanh(a*z),'sin':lambda z,a:np.sin(a*z),'asinh':lambda z,a:np.arcsinh(a*z),'sqrt':lambda z,a:z/np.sqrt(1+a*z*z),'exp':lambda z,a:z*np.exp(-a*z*z),'erf':lambda z,a:erf(a*z),'cube':lambda z,a:z**3,'soft':lambda z,a:z/(1+a*np.abs(z))}\nu,v=[s['panel_a'][k] for k in ('u','v')]; idx=np.delete(np.arange(len(u)",
+      "cat > /holdout_task/node_00.py <<'PY'\n\"\"\"Invert the coupled calibration and apply the calibrated panel-B map.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar, root\n\n\ndef _ls(design, target):\n    return np.linalg.lstsq(design, target, rcond=1e-10)[0]\n\n\ndef _frequency(loss, lower, upper):\n    grid = np.linspace(lower, upper, 51)\n    i = int(np.argmin([loss(k) for k in grid]))\n    return minimize_scalar(loss, method='bounded', bounds=(\n        grid[max(0, i-1)], grid[min(len(grid)-1, i+1)])).x\n\n\ndef _a_design(u, k, j):\n    p, q = u[:, j], u[:, (j+2) % 4]\n    return"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_m102_c02_batch_08_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_m102_c02_batch_08_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 2990,
+        "sha256": "d287bf9b4e4bf70bab2c6b336e21806ae6de123290e652163728347ed4c44f27",
+        "content_addressed_ref": "content_addressed_blobs/d287bf9b4e4bf70bab2c6b336e21806ae6de123290e652163728347ed4c44f27.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a4b304c29a0c6e0c3af2be7632080da3c886bf42660d9a12c58b6cce2e2b6b26",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /holdout_task/node_00.py <<'PY'\n\"\"\"Invert the coupled calibration and apply the calibrated panel-B map.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar, root\n\n\ndef _ls(design, target):\n    return np.lin",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a4b304c29a0c6e0c3af2be7632080da3c886bf42660d9a12c58b6cce2e2b6b26",
+        "expected_candidate_sha256": "a4b304c29a0c6e0c3af2be7632080da3c886bf42660d9a12c58b6cce2e2b6b26",
+        "computed_candidate_sha256": "a4b304c29a0c6e0c3af2be7632080da3c886bf42660d9a12c58b6cce2e2b6b26",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 2990
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_a4b304c2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": []
+  }
+}

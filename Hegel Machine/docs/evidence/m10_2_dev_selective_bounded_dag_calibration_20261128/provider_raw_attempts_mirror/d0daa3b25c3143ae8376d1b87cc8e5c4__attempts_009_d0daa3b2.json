@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0daa3b25c3143ae8376d1b87cc8e5c4",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:32:33.266876+00:00",
+  "ended_at_utc": "2026-11-28T14:33:12.568965+00:00",
+  "request_sha256": "15ad7a8bf0d30770f4625d19a0322c83897b3a09d6a12a42bdb4353b348e14d3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58546,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35529,
+    "cached_tokens": 12672,
+    "completion_tokens": 1388
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/dev_m102_c02_batch_09_solver.py; cat >/tmp/refine15.py <<'PY'\\nimport numpy as np,pickle,importlib.util\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; Y=tr['traj']; y=tr['y']; t=s['eval_times']; n=52\\nA=s['panel_a']; u,v=A['u'],A['v']; ok=np.linalg.norm(v,axis=1)<5; u,v=u[ok],v[ok]; w=np.roll(u,2,axis=1)\\ndef fit(h,y): return np.linalg.lstsq(h,y,rcond=1e-10)[0]\\ndef aff(h): return np.c_[np.ones(len(h)),h]\\nsp=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/dev_m102_c02_batch_09_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ndef cal(p,Z,k):\\n W=np.roll(Z,2,axis=-1); a,b,c,d=p\\n if k==0: return np.stack((np.ones_like(Z),Z/np.sqrt(1+a*abs(Z)**b),W/(1+c*abs(W)**d)),axis=-1)\\n if k==1: return np.stack((np.ones_like(Z),Z,Z*W,W,np.sin(a*Z),np.sin(a*W)),axis=-1)\\n return np.stack((np.ones_like(Z),Z/(1+a*abs(Z)**b)**c,np.sin(d*W)),axis=-1)\\nX={'old':m._calibrate(A,x)}\\nfor k,init,lo,hi in [(0,[.5,2,.5,2],[.001,.3,.001,.3],[8,6,8,6]),(1,[2.4,2,2,2],[1,.1,.1,.1],[4,5,5,5]),(2,[.5,2,.5,2.4],[.001,.3,.01,.5],[8,6,8,6])]:\\n def prof(p):\\n  h=cal(p,u,k); c=np.array([fit(h[:,j],v[:,j]) for j in range(4)]);return (h*c).sum(-1)-v,c\\n p=least_squares(lambda p:prof(p)[0].ravel(),init,bounds=(lo,hi),gtol=1e-12).x; e,c=prof(p); print('cal',k,p,np.std(e),np.round(c,4)); X[str(k)]=np.array([least_squares(lambda z:(cal(p,z,k)*c).sum(-1)-q,q,gtol=1e-11).x for q in x])\\nP=s['panel_b']; B=lambda z:aff(np.cos(2.6*z))@fit(aff(np.cos(2.6*P['u'])),P['v']); E=-np.expm1(-t[:,None]*[.41318229,1.81372115]); T=fit(E,Y.T).T\\nfor key,z in X.items():\\n q=B(z); co=np.cos(2.6*z); Hs={}\\n for label,a in [('b',q),('cos',co)]:\\n  Hs[label]=aff(a); Hs[label+'2']=aff(np.c_[a,*[a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(4),2)]]); Hs[label+'+sin']=aff(np.c_[a,np.sin(2.15*a),np.cos(2.15*a)]); Hs[label+'+tanh']=aff(np.c_[a,np.tanh(2.15*a)]); Hs[label+'+exp']=aff(np.c_[a,np.exp(-.22*a*a)]); Hs[label+'+rat']=aff(np.c_[a,a/(1+.22*a*a)]); Hs[label+'+z']=aff(np.c_[a,z]); Hs[label+'+soft']=aff(np.c_[a,np.logaddexp(0,2.15*a)]);\\n for j,tar in enumerate([y,T[:,0],T[:,1],Y]):\\n  scores=[]\\n  for l,h in Hs.items():\\n   f=h@fit(h[:n],tar[:n]);scores.append((np.mean(abs(f[n:]-tar[n:])),np.mean(abs(f[:n]-tar[:n])),l))\\n  print(key,j,sorted(scores)[:5]);\\n print('B polynomial coefs y',fit(Hs['b2'][:n],y[:n]));print('B poly coefs T',fit(Hs['b2'][:n],T[:n]).T)\\nnp.savez('/tmp/ref15.npz',**X)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine15.py | tail -28\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate paired-coordinate inverse -> H2 calibrated cosine features and two relaxation modes; the cosine-quadratic scalar reaches 0.02357 MAE on the 52/20 split, with joint trajectory MAE still to verify.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a flexible polynomial calibration\",\"rejected_reason\":\"The degree-three calibration had leave-one-out RMS 0.08486, versus 0.00450 for a paired trigonometric form.\"}],\"rationale\":\"Compare compact calibration laws on panel A, then use the corresponding cosine coordinates to test scalar and trajectory predictions on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0bfcb693863c5ed18a3721af44d774b6d78e846136ee8c35edce1053fa5317a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39300.58,
+      "usage_known": true,
+      "prompt_tokens": 35529,
+      "cached_tokens": 12672,
+      "completion_tokens": 1388
+    }
+  ]
+}

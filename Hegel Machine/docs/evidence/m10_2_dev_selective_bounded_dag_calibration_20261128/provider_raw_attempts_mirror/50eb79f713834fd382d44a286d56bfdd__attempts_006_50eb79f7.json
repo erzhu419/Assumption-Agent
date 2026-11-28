@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50eb79f713834fd382d44a286d56bfdd",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:32:14.869815+00:00",
+  "ended_at_utc": "2026-11-28T13:32:50.058588+00:00",
+  "request_sha256": "ab1e9f1aadc4b44f5d39cac7c5eca9bdfb7339704f40d30453f3567c62af0efa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45023,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31595,
+    "cached_tokens": 12672,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; ts=s['eval_times']; x=tr['x']; n=52\\nfit=lambda a,y:np.linalg.lstsq(a,y,rcond=None)[0]; one=lambda a:np.c_[np.ones(len(a)),a]\\nA,B,C=(s['panel_'+k] for k in 'abc'); u,v=A['u'],A['v']; keep=np.linalg.norm(v-u,axis=1)<4; cal=np.array([fit(one(u[keep,j,None]),v[keep,j]) for j in range(4)]).T; b=fit(one(B['u']),B['v'])\\ndef fitop(kind,key):\\n U=C['u']; V=C[key]\\n def f(z,k):\\n  den=k[0]*abs(z) if kind==1 else k[0]*z*z\\n  return one(z+k[1]*((z if kind==1 else z*z)/(1+den)))\\n def res(k):\\n  X=f(U,k);return (X@fit(X,V)-V).ravel()\\n r=least_squares(res,[.8,-.8] if kind==1 else [.16,.54],max_nfev=500); w=fit(f(U,r.x),V);print('panel',key,r.x,np.std(r.fun),np.linalg.svd(w[1:])[1]); return lambda x: f(x,r.x)@w\\nc1=fitop(1,'v1');c2=fitop(2,'v2')\\nz=(x-cal[0])/cal[1]; bz=one(z)@b; bx=one(x)@b; charts={'x':x,'z':z,'bz':bz,'bx':bx,'c1z':c1(z),'c1b':c1(bz),'c2z':c2(z),'c2b':c2(bz),'bi':(z-b[0])@np.linalg.inv(b[1:])}\\nu,l,v=np.linalg.svd(T,full_matrices=False); print('y stats',y.min(),y.max(),y.mean(),y.std(),np.quantile(y,[.05,.25,.5,.75,.95]));print('x stats',x.min(0),x.max(0));print('trajectory baseline',np.mean(abs(T[n:]-T[:n].mean(0))), 'centered sigmas',np.linalg.svd(T-T.mean(0),compute_uv=False)); print('times and average',ts,T.mean(0)); a=T@v[0]; Y=np.c_[y,a];\\nsplits=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=44).split(x)); J,K=np.triu_indices(4)\\ndef scores(G):\\n vals=[]\\n for i,j in splits:\\n  d=G[np.ix_(j,i)]@cho_solve(cho_factor(G[np.ix_(i,i)]),Y[i])-Y[j]; vals.append(np.mean(abs(d),axis=0))\\n return np.array(vals)\\nrec=[]\\nfor name,g in charts.items():\\n for trans in ['plain','atan','tanh','soft','sqrt','sin','rat']:\\n  for h in ([0] if trans=='plain' else [.2,.5,.85,1.25,2.]):\\n   f={'plain':lambda:g,'atan':lambda:np.arctan(h*g)/h,'tanh':lambda:np.tanh(h*g)/h,'soft':lambda:g/(1+h*abs(g)),'sqrt':lambda:g/np.sqrt(1+h*g*g),'sin':lambda:np.sin(h*g)/h,'rat':lambda:g/(1+h*g*g)}[trans](); F=f@f.T; P=cdist(f,f,'sqeuclidean'); D=cdist(g,g,'sqeuclidean'); L=g@g.T\\n   for q in [.1,1.]:\\n    for w in [0.,.04,.16,.45,1.2]:\\n     for r in [1.e-5,.001,.02]:\\n      G=1+F+q*F**2+r*np.eye(len(x)); G+=0 if not w else np.exp(-w*P); E=scores(G); rec.append((E[1:].mean(0),E[0],name,trans,h,q,w,r))\\nfor j in range(2):\\n print('TARGET',j)\\n for order in ['oof','gate']:\\n  for V in sorted(rec,key=lambda v:v[0 if order=='oof' else 1][j])[:12]:print(order,V)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived spatial kernels → H2 tied nonlinear panel operators with separable trajectory dynamics; best measured 52/20 scalar MAE remains 0.041304.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each auxiliary nonlinear output independently\",\"rejected_reason\":\"Panel C v2's nonlinear coefficient block is nearly proportional to its linear block, so a shared coordinate transform is testable with fewer parameters.\"}],\"rationale\":\"Fit the shared panel transforms directly, then compare scalar and trajectory-amplitude predictors on the required split and four independently shuffled folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f674fd6c9cce4c000e08100481ef787c0a905b04fbfea119071f3052bf0d4c55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35187.53,
+      "usage_known": true,
+      "prompt_tokens": 31595,
+      "cached_tokens": 12672,
+      "completion_tokens": 1418
+    }
+  ]
+}

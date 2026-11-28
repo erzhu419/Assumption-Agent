@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afc8f6c7d929459daaf5c9bea562f769",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:59:38.413322+00:00",
+  "ended_at_utc": "2026-11-28T14:00:15.292491+00:00",
+  "request_sha256": "a683c265aaef97546c8a4e29bf3d46f5c7ec62c61ff171920a74681b786b5756",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61867,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38165,
+    "cached_tokens": 12672,
+    "completion_tokens": 1615
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout.py <<'PY'\\nfrom graph import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nX=np.r_[s['train']['x'],s['test']['x']]; Z=calib(s['panel_a'],X); Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(Y)\\npb,pc=s['panel_b'],s['panel_c']; B=configs(pb,pb['v'])[0][-2]; C=configs(pc,pc['v1'])[0][-2]; V=configs(pc,pc['v2'])[0][-2];\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef calc(F,ii,jj,reg=0):\\n a=F[ii]; scale=np.maximum(a.std(0),1e-4); scale[0]=1; A=a/scale; pen=np.eye(A.shape[1]); pen[0,0]=0; beta=ls(np.r_[A,reg*pen],np.r_[Y[ii],np.zeros((A.shape[1],9))])/scale[:,None];return F[jj]@beta,beta\\nrng=np.random.default_rng(550); splits=[(np.arange(52),np.arange(52,72))];\\nfor i in range(8):\\n p=rng.permutation(n);splits.append((p[:52],p[52:]));\\ndef score(F,reg=0):\\n e=np.array([abs(calc(F,ii,jj,reg)[0]-Y[jj]).mean(0) for ii,jj in splits]); return np.array([e[0,0],e[0,1:].mean(),e[:,0].mean(),e[:,0].max(),e[:,1:].mean()])\\nb,c,d=B(Z),C(Z),V(Z); F=lin(np.c_[b,c,cross(b,c)]); E=Y[:52]-calc(F,np.arange(52),np.arange(52))[0];print('baseline',score(F),'res train',abs(E).mean(0),'corr y state',np.corrcoef(E.T)[0]); print('coeff y/state',calc(F,np.arange(52),np.arange(52))[1][:,[0,-1]].T)\\nD={'b':b,'c':c,'d':d,'z':Z,'rat':Z/(1+Z*Z),'tanh':np.tanh(1.25*Z),'tanh2':np.tanh(2.5*Z),'atan':np.arctan(1.25*Z),'cubic':Z**3,'sq':Z**2,'cyc':cyc(Z),'b2':b*b,'c2':c*c,'d2':d*d,'thb':np.tanh(b),'thc':np.tanh(c),'ab':abs(b),'ac':abs(c)}\\nL=[]\\nfor na,a in D.items():\\n for nb,h in D.items():\\n  if na==nb:continue\\n  for reg in [.08,.4,1.]:\\n   for nm,G in [('cross',lin(np.c_[a,h,cross(a,h)])),('add',np.c_[F,a]),('crossadd',np.c_[F,cross(a,h)]),('crossdiag',np.c_[F,a*h])]:\\n    r=score(G,reg);L.append((na,nb,nm,reg,r))\\nfor j in [0,2,3,4]:print('best',j,*sorted(L,key=lambda t:t[-1][j])[:7],sep='\\\\n')\\n# Kernel corrections around the structured readout; profile an unpenalized baseline.\\nfor space,w in [('z',Z),('b',b),('c',c),('bc',np.c_[b,c]),('resid',np.c_[Z,b,c]),('d',d)]:\\n w=w/w[:n].std(0);dist=((w[:,None]-w[None,:])**2).mean(2)\\n for ell in [.25,.5,1.,2.]:\\n  K=np.exp(-dist/(2*ell**2));\\n  for ridge in [.001,.03,.3,1.,5.]:\\n   r=[]\\n   for ii,jj in splits:\\n    M=K[np.ix_(ii,ii)]+ridge*np.eye(len(ii)); A=F[ii]; G=solve(M,np.c_[A,Y[ii]],assume_a='pos'); p=ls(A.T@G[:,:A.shape[1]], A.T@G[:,A.shape[1]:]); y=F[jj]@p+K[np.ix_(jj,ii)]@(G[:,A.shape[1]:]-G[:,:A.shape[1]]@p);r.append(abs(y-Y[jj]).mean(0))\\n   e=np.array(r);L.append((space,ell,'kernel',ridge,np.array([e[0,0],e[0,1:].mean(),e[:,0].mean(),e[:,0].max(),e[:,1:].mean()])))\\nfor j in [0,2,3,4]:print('best with kernel',j,*sorted(L,key=lambda t:t[-1][j])[:6],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py > /tmp/readout.out; tail -67 /tmp/readout.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 panel-fit refinements → H2 missing downstream interactions; the best verified scalar 52/20 MAE is 0.04555, with trajectory MAE 0.02538.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Continue tuning the separate panel transfer laws\",\"rejected_reason\":\"Across the tested choices the scalar MAE remains near 0.046, so the downstream readout is the more promising bottleneck.\"}],\"rationale\":\"Test omitted interaction blocks and smooth residual corrections across multiple 52/20 splits, keeping scalar and trajectory errors separate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "108ba3552a4cbc558aa5c7ebd0e9a7e8cba3c617175c42e5cacb79eaf44e2e64",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36877.85,
+      "usage_known": true,
+      "prompt_tokens": 38165,
+      "cached_tokens": 12672,
+      "completion_tokens": 1615
+    }
+  ]
+}

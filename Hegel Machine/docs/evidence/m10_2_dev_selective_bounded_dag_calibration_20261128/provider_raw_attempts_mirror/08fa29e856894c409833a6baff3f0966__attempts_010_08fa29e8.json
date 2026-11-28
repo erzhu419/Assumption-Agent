@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08fa29e856894c409833a6baff3f0966",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:17.691525+00:00",
+  "ended_at_utc": "2026-11-28T13:15:44.039644+00:00",
+  "request_sha256": "aab1cca697e34acabcc56605a812391f90d6e3787f550ee295f519bd546b914f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58387,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37519,
+    "cached_tokens": 12672,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ratchet.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.model_selection import ShuffleSplit\\nsys.path.insert(0,'/holdout_task'); from batch_solver import calibrate,temporal\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; off,g=calibrate(s); z=(tr['x']-off)/g; t=s['eval_times']; y=tr['y']; Y=tr['traj']; z=z/.9; p=PolynomialFeatures(6); F=p.fit_transform(z); deg=p.powers_.sum(1); supp=(p.powers_>0).sum(1); nm=p.get_feature_names_out(); G=[]\\nfor i in range(7):\\n for j in range(1 if i else 0,min(i,4)+1):\\n  v=F[:,(deg==i)&(supp==j)]; G.append(v@v.T)\\nG=np.array(G); splits=[(np.arange(52),np.arange(52,72)),*ShuffleSplit(8,train_size=52,random_state=11).split(z)]; R=[]\\nfor ii,(a,b) in enumerate(splits):\\n q,A=temporal(t,Y[a]); T=np.c_[y,np.linalg.lstsq(q,Y.T,rcond=None)[0].T]; P=[]\\n for jj,j in enumerate([0,1,2]):\\n  Ta=T[a,j]; k=G[:,a[:,None],a]; kb=G[:,b[:,None],a]; k=np.concatenate([k,np.eye(len(a))[None]],0); init=np.r_[np.arange(len(G))*-.5,-11.]; init=np.maximum(init,-11.)\\n  def fun(log):\\n   w=np.exp(log); K=np.einsum('i,ijk->jk',w,k); L=cho_factor(K); v=cho_solve(L,Ta); Ki=cho_solve(L,np.eye(len(a))); f=.5*Ta@v+np.log(L[0].diagonal()).sum(); d=.5*np.einsum('ijk,jk->i',k,Ki-np.outer(v,v))*w\\n   return f,d\\n  opt=minimize(fun,init,jac=True,method='L-BFGS-B',bounds=[(-24,3)]*len(G)+[(-14,-4)],options=dict(maxiter=160)); w=np.exp(opt.x); pred=np.einsum('i,ijk->jk',w[:-1],kb)@np.linalg.solve(np.einsum('i,ijk->jk',w,k),Ta); P.append(pred)\\n  if ii==0:\\n   for d in [3,4]:\\n    S=F[:,deg<=d]; c=np.linalg.solve(S[a].T@S[a]+.01*np.eye(S.shape[1]),S[a].T@Ta); print('coefs',j,d,[(nm[i],round(c[i],3)) for i in np.argsort(-abs(c))[:16]])\\n P=np.array(P).T; ey=np.mean(abs(P[:,0]-y[b])); et=np.mean(abs(P[:,1:]@q.T-Y[b])); R.append((ey,et));print(ii,ey,et)\\nprint('mean/max',np.mean(R,0),np.max(R,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ratchet.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic Matérn interpolation -> H2 degree- and interaction-adaptive polynomial covariance; current 52/20 MAEs are 0.01792 and 0.02312, but alternate-split scalar MAE reaches 0.06568.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Direct auxiliary-panel composition\",\"rejected_reason\":\"Tested compositions did not improve on the interpolation baseline.\"}],\"rationale\":\"Fit interaction-order weights inside each split and inspect dominant higher-order terms to improve extrapolation beyond the designated holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "816a137d621287c2aeac0e276c4d28680e02b6f9aefb0b142f3da7ca20e4477e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26346.39,
+      "usage_known": true,
+      "prompt_tokens": 37519,
+      "cached_tokens": 12672,
+      "completion_tokens": 1100
+    }
+  ]
+}

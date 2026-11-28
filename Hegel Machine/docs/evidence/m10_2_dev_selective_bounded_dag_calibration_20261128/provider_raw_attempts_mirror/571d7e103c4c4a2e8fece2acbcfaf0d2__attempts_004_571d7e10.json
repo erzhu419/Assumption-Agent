@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "571d7e103c4c4a2e8fece2acbcfaf0d2",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_03__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:19:30.515444+00:00",
+  "ended_at_utc": "2026-11-28T13:20:01.739384+00:00",
+  "request_sha256": "0517a0abbfc5dd64f4b923c6c33ee7cc997ce082a00f6c22190e59a5e1e1c5e8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30225,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24743,
+    "cached_tokens": 12672,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -23 /tmp/hegel_continual_archive/dev_m102_c01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling nonlinear variable projection' || true; cat > /tmp/probe_kernel.py <<'PY'\\nfrom scalar_probe import *\\nfrom scipy.linalg import solve\\n\\ndef grid(tr,va):\\n p,state,y,q,t,x,xq=fold(tr,va); a,b=p['scores'],state@p['modes'].T; sy,qy=p['sy'],p['qy']; st,qt=p['st'],p['qt']; m,r=len(tr),len(va); results=[]\\n for label,f,g in [('sy',sy,qy),('st',st,qt),('x',x,xq),('both',np.c_[sy,st],np.c_[qy,qt]),('state',a,b),('sy+st+state',np.c_[sy,st,a],np.c_[qy,qt,b]),('sy+state',np.c_[sy,a],np.c_[qy,b]),('x+state',np.c_[x,a],np.c_[xq,b])]:\\n  for degree in [1,2,3,4,5,6]:\\n   scale=np.sqrt(np.mean(f*f,axis=0)); u=f/scale; v=g/scale; G=u@u.T/u.shape[1]; Gq=v@u.T/u.shape[1]; D=np.maximum(np.diag(G)[:,None]+np.diag(G)[None,:]-2*G,0); Dq=np.maximum(np.mean(v*v,axis=1)[:,None]+np.diag(G)[None,:]-2*Gq,0)\\n   for kind in ['poly','rbf']:\\n    H,Hq=((1+G)**degree,(1+Gq)**degree) if kind=='poly' else (np.exp(-D*degree/12),np.exp(-Dq*degree/12))\\n    for base in [0,1]:\\n     for ridge in [1e-6,1e-4,.001,.01,.1]:\\n      mat=H+base*p['K']+ridge*np.eye(m); c=solve(mat,np.c_[y-y.mean(),np.eye(m)],assume_a='pos'); pred=(Hq+base*p['Kq'])@c[:,0]+y.mean(); loo=np.abs(c[:,0]/np.diag(c[:,1:])).mean(); cv=np.abs(q-pred).mean(); results.append((cv,loo,label,degree,kind,base,ridge))\\n print('best heldout',sorted(results)[:8]); print('best inner',sorted(results,key=lambda x:x[1])[:8]); print('best per group',[(k,min(u for u in results if u[2]==k)[:2]) for k in sorted(set(u[2] for u in results))]);\\nfor tr,va in [(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20))]:grid(tr,va)\\np,state,y,q,t,x,xq=fold(np.arange(52),np.arange(52,72)); print('ranges'); print('sy',p['sy'].min(0),p['sy'].max(0)); print('st',p['st'][:,:4].min(0),p['st'][:,:4].max(0)); print('singvals',np.linalg.svd(s['train']['traj'],compute_uv=False)); print('corr y raw and state',np.corrcoef(np.c_[y,x,p['scores']].T)[0]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_kernel.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (additive trajectory correction) -> H2 (nonlinear readout in calibrated coordinates); the joint quadratic readout reached 0.145982 worst-split scalar MAE, versus 0.013350 public trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A linear combination of scalar-panel features and trajectory scores suffices.\",\n    \"empirical_witness\": \"The additive model gave scalar MAE 0.219366 and 0.168884 on two disjoint validation splits, both above 0.038.\",\n    \"causal_blanket_diagnosis\": \"The trajectory scores carry scalar signal but do not close the readout under linear addition.\",\n    \"sublated_pivot\": \"Preserve both branches and compare nonlinear feature constructions using within-fold calibration.\",\n    \"risk_kind\": \"omitted_readout_structure\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted raw cubic\",\n      \"rejected_reason\": \"Its 0.122341 public split MAE and 0.078424 reverse split MAE indicate that generic polynomial complexity alone is insufficient.\"\n    }\n  ],\n  \"rationale\": \"Profile nonlinear kernels alongside coordinate and rank diagnostics to distinguish a learnable smooth residual from a more specific missing readout operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "11bbb39fcf30efa1a38cfdf39265db7c21001a3260848478d45768828a9c092d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31221.12,
+      "usage_known": true,
+      "prompt_tokens": 24743,
+      "cached_tokens": 12672,
+      "completion_tokens": 1307
+    }
+  ]
+}

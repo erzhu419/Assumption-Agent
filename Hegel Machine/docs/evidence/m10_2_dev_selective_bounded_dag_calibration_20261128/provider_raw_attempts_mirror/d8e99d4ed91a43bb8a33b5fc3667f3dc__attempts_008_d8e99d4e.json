@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d8e99d4ed91a43bb8a33b5fc3667f3dc",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:00.406332+00:00",
+  "ended_at_utc": "2026-11-28T13:16:32.781309+00:00",
+  "request_sha256": "0921f2e62280145273bd97212b6c5cc25798afbae5fd4fd4cc34582b282ab451",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33515,
+    "cached_tokens": 12672,
+    "completion_tokens": 1318
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_00.py')\\ns = p.read_text().replace('import numpy as np\\\\n', 'import numpy as np\\\\nfrom scipy.optimize import least_squares\\\\n')\\nstart = s.index('def _quadratic(')\\nend = s.index('def _channel_calibration(', start)\\ns = s[:start] + '''def _panel_basis(x, curvature):\\n    rational = x / (1.0 + curvature * x * x)\\n    return np.column_stack((_affine(x), rational))\\n\\n\\ndef _panel_calibration(u, v):\\n    \\\"\\\"\\\"Profile out linear mixing while estimating positive channel curvatures.\\\"\\\"\\\"\\n    u, v = np.asarray(u, dtype=float), np.asarray(v, dtype=float)\\n\\n    def residual(curvature):\\n        design = _panel_basis(u, curvature)\\n        weights = np.linalg.lstsq(design, v, rcond=None)[0]\\n        return (design @ weights - v).ravel()\\n\\n    curvature = least_squares(residual, np.full(u.shape[1], 2.0),\\n                              bounds=(0.01, 30.0), max_nfev=70).x\\n    weights = np.linalg.lstsq(_panel_basis(u, curvature), v, rcond=None)[0]\\n    return curvature, weights\\n\\n\\n''' + s[end:]\\ns = s.replace(\\\"operator = np.linalg.lstsq(_quadratic(b['u']), b['v'], rcond=None)[0]\\\", \\\"curvature, operator = _panel_calibration(b['u'], b['v'])\\\").replace('_quadratic((np.asarray(x, dtype=float) - offset)/gain)', '_panel_basis((np.asarray(x, dtype=float) - offset)/gain, curvature)')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py && python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnode = runpy.run_path('/holdout_task/node_00.py')['run_node']\\nsink = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']\\ntrain = s['train']; x, y, tr = (train[k] for k in ('x', 'y', 'traj')); ix = np.arange(len(x))\\nfolds = [ix % 6 == j for j in range(6)] + [ix >= max(40, len(x)-20)]\\nordinary = node({'__input__': s}); assert set(ordinary) == {'c', 'query'}\\nassert ordinary['c'].shape == x.shape and ordinary['query'].shape == s['test']['x'].shape\\nassert all(np.isfinite(v).all() for v in ordinary.values())\\nfor panel in (None, 'panel_a', 'panel_b'):\\n    rows = [-1] if panel is None else range(len(s[panel]['u']))\\n    errors = []\\n    for row in rows:\\n        st = dict(s)\\n        if panel is not None:\\n            keep = np.arange(len(s[panel]['u'])) != row\\n            st[panel] = {k: v[keep] for k, v in s[panel].items()}\\n        for hold in folds:\\n            st['train'] = {k: v[~hold] for k, v in zip(('x', 'y', 'traj'), (x, y, tr))}\\n            st['test'] = {'x': x[hold]}\\n            out = sink({'__input__': st, 'node_00': node({'__input__': st})})\\n            ey = np.mean(abs(out['y_hat']-y[hold])); et = np.mean(abs(out['state_pred']-tr[hold]), axis=0)\\n            assert all(np.isfinite(v).all() for v in out.values())\\n            errors.append([ey, et.mean(), et.max()])\\n    largest = np.max(errors, axis=0)\\n    print(panel or 'full panels', 'worst y, trajectory, individual-horizon MAEs:', largest)\\n    assert np.all(largest < 0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: polynomial panel_b calibration -> H2: affine mixing of raw and rational channel terms; the experimental map reached 0.01287 worst-fold scalar MAE and 0.01164 worst-fold trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use only rationally compressed channels\",\n      \"rejected_reason\": \"That basis had 0.14436 leave-one-pair-out MAE on panel_b, versus 0.00737 when both raw and rational terms were included.\"\n    }\n  ],\n  \"rationale\": \"Fit the selected map solely on reference pairs, preserve the frozen consumer and its coordinate interface, and verify the exact artifact on the public evaluator and downstream folds with each calibration pair removed in turn.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e7851e49523405f6a7a06f12e5a5671b6bd08c190d188e825be67a9bf46068a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32372.77,
+      "usage_known": true,
+      "prompt_tokens": 33515,
+      "cached_tokens": 12672,
+      "completion_tokens": 1318
+    }
+  ]
+}

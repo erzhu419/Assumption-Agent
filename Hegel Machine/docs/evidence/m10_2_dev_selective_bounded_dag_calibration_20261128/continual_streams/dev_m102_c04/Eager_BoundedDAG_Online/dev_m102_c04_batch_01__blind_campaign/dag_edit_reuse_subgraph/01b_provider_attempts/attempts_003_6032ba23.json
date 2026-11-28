@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6032ba23793e4f89a7ce3cce71dd6801",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:13:06.093165+00:00",
+  "ended_at_utc": "2026-11-28T13:13:25.488741+00:00",
+  "request_sha256": "74d2c1f29c1e06e8480bffcd42e1cc38ffbef6b9d980560eb11b1a43d3d0d2b8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21284,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21098,
+    "cached_tokens": 5504,
+    "completion_tokens": 641
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/dev_m102_c04_batch_00_solver.py; echo '--- gate ---'; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; echo '--- temporal ---'; cat _frozen_nodes/node_01.py; echo '--- numerical probes ---'; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c04_batch_00_solver.py'); print('batches',len(b:=pickle.load(open('public_batch.pkl','rb')))); s=b[0]['study']; print('study keys',s.keys());\\nfor name in ('panel_a','panel_b','panel_c'):\\n p=s[name];u=p['u'];a=np.c_[np.ones(len(u)),u]; print(name)\\n for k,v in p.items():\\n  if k=='u':continue\\n  w=np.linalg.lstsq(a,v,rcond=None)[0]; print(k,'affine',np.round(w,3),'residual quantiles',np.quantile(np.linalg.norm(a@w-v,axis=1),[0,.25,.5,.75,.9,1]))\\n if name=='panel_c':\\n  for j,f in enumerate(m['_panel_operators'](p),1): print('archived C',j,np.quantile(np.linalg.norm(f(u)-p['v'+str(j)],axis=1),[0,.5,.9,1]))\\nn=52;t=s['train']; cv=dict(s,train={**t,**{k:t[k][:n] for k in ('x','y','traj')}},test={'x':t['x'][n:]}); o=m['solve_batch'](cv); print('archived CV y/traj',np.mean(abs(o['y_hat']-t['y'][n:])),np.mean(abs(o['state_pred']-t['traj'][n:])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived spatial operators -> H2 isolate calibration, panel-operator, or feature-basis mismatch; public CV not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure the archived solver on the prescribed split and inspect residuals on each calibration panel separately before changing the shared regression features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "43a1c65496967d5680fb217f163e6b6c5dce1eab0f4e678e58ef085058f4fa1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19394.41,
+      "usage_known": true,
+      "prompt_tokens": 21098,
+      "cached_tokens": 5504,
+      "completion_tokens": 641
+    }
+  ]
+}

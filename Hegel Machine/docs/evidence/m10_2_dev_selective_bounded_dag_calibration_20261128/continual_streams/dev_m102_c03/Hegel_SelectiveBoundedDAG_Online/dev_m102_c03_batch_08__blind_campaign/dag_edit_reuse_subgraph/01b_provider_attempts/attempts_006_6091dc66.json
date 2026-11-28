@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6091dc66f9da4bfc81b1ffa8f806eeb2",
+  "call_seq": 6,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:01:35.873072+00:00",
+  "ended_at_utc": "2026-11-28T14:02:07.181599+00:00",
+  "request_sha256": "4ade6d9bca16adedcdd2be324fa23c8ef129c6b015da2865b2f670e65e413c86",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27915,
+    "cached_tokens": 0,
+    "completion_tokens": 1344
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '1,62p' _frozen_nodes/node_00.py; cat >/tmp/compact_readout.py <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task/_frozen_nodes'); import node_00 as f\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; N=len(y); ff=f.run_node({'__input__':s}); H=ff['ht'][:N]; z=f._inverse(x,f._calibration(s['panel_a'])); j=np.roll(z,-1,axis=1); ks=list(itertools.combinations(range(4),3)); C=np.column_stack([*[(z[:,k]).prod(1) for k in ks],*(z*z*j).T,*(z*j*j).T]); A=np.c_[H,z,C]; Y=np.c_[y,T]; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; w=fit(A,Y); print('coeffs columns: scalar, first, middle, final\\\\n',w[:,[0,1,4,8]].round(5)); print('cubic trajectory weights relative to scalar', (w[-12:,1:]/w[-12:,0:1]).round(3)); print('ranks',[(q,np.linalg.matrix_rank(a)) for q,a in [('base',H),('plus z',A[:,:15]),('full',A)]]); print('baseline residual along sqrt',np.linalg.svd(Y-H@fit(H,Y),full_matrices=False)[2][0].round(4));\\ndef temporal(a,tr,y,use_y):\\n g=fit(a,tr); sw=fit(a,y); zt=g.copy(); zt[-12:]=0\\n obs=a@zt\\n def q(r):return np.column_stack((-np.expm1(-t[:,None]*r),np.sqrt(t)))\\n def res(r):\\n  qt=q(r); return (obs-(obs@np.linalg.pinv(qt.T))@qt.T).ravel()\\n rates=least_squares(res,[.42,1.82],bounds=([.05,.8],[.8,5])).x\\n qt=q(rates); B=fit(qt,tr.T).T; Q=fit(a,B)\\n if use_y: Q[-12:,-1]=sw[-12:]*.55\\n print('rates',rates.round(4),'trajectory coeffs on sqrt',Q[:,-1].round(4),'basis residual',np.abs(tr-B@qt.T).mean().round(5))\\n return Q@qt.T\\nfolds=[(np.arange(52),np.arange(52,N))]+[(np.setdiff1d(np.arange(N),v),v) for v in np.array_split(np.random.default_rng(127).permutation(N),6)];\\nfor name,a in [('H+z+cubic',A),('H+cubic',np.c_[H,C]),('H+triple',np.c_[H,C[:,:4]]),('H+edge cubic',np.c_[H,C[:,4:]]),('H+z+cubic+temporal',A),('H+z+cubic+joint',A)]:\\n E=[]\\n for tr,te in folds:\\n  p=a[te]@fit(a[tr],Y[tr]);\\n  if name.endswith(('temporal','joint')): p[:,1:]=a[te]@temporal(a[tr],T[tr],y[tr],name.endswith('joint'))\\n  err=np.abs(p-Y[te]);E.append([err[:,0].mean(),err[:,1:].mean(),err[:,1:].mean(0).max()])\\n print(name,'public',np.round(E[0],5),'worst',np.round(np.max(E,axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bilinear branch readout → H2 calibrated cyclic cubic interactions; the archived cubic basis gives public scalar MAE 0.0063 and worst-horizon trajectory MAE 0.0062.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic polynomial basis\",\n      \"rejected_reason\": \"The cyclic basis already gives lower worst-horizon error with fewer terms.\"\n    }\n  ],\n  \"rationale\": \"The calibrated cubic terms recover both outputs to near the observed noise floor. Compare compact variants and test whether a shared square-root temporal component improves held-out predictions before writing the sink.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "581a8f7f3ae0a2b3d182073d4e8b0bf39a0679bc1f02b5222b3fdc305b5817c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31306.52,
+      "usage_known": true,
+      "prompt_tokens": 27915,
+      "cached_tokens": 0,
+      "completion_tokens": 1344
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7711c4ec1c5e4a71aa651527406e02a0",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:16:51.492925+00:00",
+  "ended_at_utc": "2026-11-28T13:17:16.098231+00:00",
+  "request_sha256": "d6e272fc29f06f475e21b8033a786c4549ea995fae75bdc695c358a2b68899b6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61606,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36990,
+    "cached_tokens": 5504,
+    "completion_tokens": 926
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cat >/tmp/ensemble_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('res=[]')[0]); mod=runpy.run_path('/holdout_task/node_01.py'); P=[]\\nfrom sklearn.linear_model import ARDRegression\\nfrom itertools import combinations\\nfor a,b,base in folds:\\n xx=x[np.r_[a,b]]; n=len(a); z=mod['_latent_coordinates'](st['panel_a'],xx); A,Q=mod['_mode_readout'](st['eval_times'],Y[a,1:]); T=np.c_[Y[a,0],A]; opts=[]\\n for mix in (1.,0.,.5):\\n  s,g=mod['_features'](mix*z+(1-mix)*xx); zz=mix*z+(1-mix)*xx\\n  f=np.column_stack(s+g+[np.prod(zz[:,j],axis=1) for j in combinations(range(4),3)])[:,1:]; f=(f-f[:n].mean(0))/np.maximum(f[:n].std(0),1e-9)\\n  for k in (10000,20000,30000,50000,100000):\\n   m=np.column_stack([ARDRegression(threshold_lambda=k).fit(f[:n],t).predict(f[n:]) for t in T.T]);opts.append(np.c_[m[:,0],m[:,1:]@Q.T]);\\n P.append((np.array(opts),Y[b]))\\nG={'base':[2], 'cal':[0,1,2,3,4], 'calmid':[1,2,3], 'all':list(range(15)), 'allmid':[i for i in range(15) if i%5 in (1,2,3)], 'calmild':[0,1,2], 'calmidblend':[1,2,3,11,12,13], 'calplusraw':[0,1,2,3,4,5,6,7,8,9]}\\nfor key,inds in G.items():\\n out=[]\\n for p,y in P:\\n  d=abs(p[inds].mean(0)-y);out.append([d[:,0].mean(),d[:,1:].mean(),d[:,1:].mean(0).max()]);\\n print(key,np.round(out,5).tolist(),'max',np.max(out,0).round(5))\\nPY\\npython3 -I /tmp/ensemble_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single sparse readout → ensemble of sparse readouts to reduce support instability; the verified candidate passes public CV at 0.031144 scalar and 0.028582 trajectory MAE, with stress-split maxima of 0.0728 and 0.0445.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified candidate immediately\",\n      \"rejected_reason\": \"One read-only comparison can test whether the worst held-out errors improve without risking the verified artifact.\"\n    }\n  ],\n  \"rationale\": \"Compare a small set of fold-local ensembles against the accepted artifact, including the worst trajectory horizon. Promote only if public tolerances are preserved and the stress errors materially improve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1506beb8ffabdc717914e9f2be0771fdfabf62ab3a0aed67f0dc1802e8f2146c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24603.38,
+      "usage_known": true,
+      "prompt_tokens": 36990,
+      "cached_tokens": 5504,
+      "completion_tokens": 926
+    }
+  ]
+}

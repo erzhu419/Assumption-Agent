@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "846da8162ef648b7969da90882bc1666",
+  "call_seq": 7,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Flat_MonolithicArchive_Online__dev_m102_c03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:21:11.669461+00:00",
+  "ended_at_utc": "2026-11-28T13:21:45.308863+00:00",
+  "request_sha256": "d7fd45d543289d184749e25668dd520800254ab73d25bae69be9295d6f8d7141",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34465,
+    "cached_tokens": 12672,
+    "completion_tokens": 1469
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout.py <<'PY'\\nexec(open('/tmp/separable.py').read().split('mods=[]')[0]); t0=np.arange(n); tv=np.arange(n,len(z)); soft=fit_sep(p,C['v1'],('soft',),1,np.arange(24)); print('soft fit',rms(soft[0]),soft[2],soft[3]);\\nD=np.cos(2.4*z); V=aff(D)@np.linalg.lstsq(aff(np.cos(2.4*p)),C['v2'],rcond=None)[0]; U=phi(z,('soft',),soft[3],1)@soft[2]; BZ=aff(z)@b\\nbase=np.c_[aff(z),D]; W=np.linalg.lstsq(base[:n],Y[:n],rcond=None)[0]; print('basic weights',W); R=Y-base@W; print('basic train',rms(R[:n]),'test',mae(R[n:]), 'largest',np.argsort(abs(R[n:,0]))[-5:], 'time',t, 'telemetry',s['telemetry_vec']);\\nfs={};\\ndef add(k,F): fs[k]=np.reshape(F,(len(z),-1))\\nfor key,F in [('z',z),('soft',z/(1+.83*abs(z))),('U',U),('D',D),('V',V),('B',BZ)]:\\n add(key,F)\\n for i in range(4):\\n  for fn in ['sin','cos','tanh','exp','rat','soft']:\\n   for f in [.5,1,1.5,2,2.4,3]:add(f'{key}:{fn}{f}:{i}',func[fn](f*F[:,i]))\\n for i,j in combinations(range(4),2):\\n  u,v=F[:,i],F[:,j]; add(f'{key}:{i}{j}',u*v);add(f'{key}:rat{i}{j}',u*v/(1+.5*(u*u+v*v)))\\n  for sgn in [-1,1]:\\n   for fn in ['sin','cos','tanh','rat']:\\n    for f in [.7,1.4,2.4]:add(f'{key}:{fn}{f}:{i},{sgn*(j+1)}',func[fn](f*(u+sgn*v)))\\nfor k1,k2 in product(['z','D','V','U','B','soft'],repeat=2):\\n A1,A2=fs[k1],fs[k2];\\n for i,j in product(range(4),repeat=2):add(f'{k1}{i}*{k2}{j}',A1[:,i]*A2[:,j])\\nfor d in [2,3,4]:add('poly'+str(d),pol(z,d)[:,pol(z,d-1).shape[1]:])\\nfor key in ['z','D','V','U','B','soft']:\\n F=fs[key];add('quad'+key,pol(F,2)[:,5:]);add('cube'+key,pol(F,3)[:,15:]);\\nfor k1,k2 in [('z','D'),('z','V'),('z','U')]:add('mixed'+k2,np.einsum('ni,nj->nij',fs[k1],fs[k2]).reshape(len(z),16))\\ndef stats(pred):\\n e=Y[n:]-pred[n:]; return np.r_[mae(e),np.mean(abs(e[:,1:]@q.T))]\\nprint('group shifts')\\nfor k in ['soft','U','pol y2'.replace(' ',''),'poly3','poly4','quadD','quadV','quadU','mixedD','mixedV','mixedU']:\\n F=np.c_[base,fs[k]]; W=np.linalg.lstsq(F[:n],Y[:n],rcond=1e-7)[0];print(k,rms((F@W-Y)[:n]),stats(F@W))\\nnames=[k for k,F in fs.items() if F.shape[1]==1]; F=np.column_stack([fs[k] for k in names]);\\nfor base0 in [base,np.c_[base,fs['soft']]]:\\n for out in range(3):\\n  A=base0.copy(); yy=Y[:,out]; results=[]; inds=[]\\n  for i in range(12):\\n   AF=A[:n]; AR=F[:n]-AF@np.linalg.lstsq(AF,F[:n],rcond=1e-7)[0]; rr=yy[:n]-AF@np.linalg.lstsq(AF,yy[:n],rcond=1e-7)[0]; score=np.abs(AR.T@rr)/np.maximum(np.linalg.norm(AR,axis=0),1e-7); j=score.argmax(); inds.append(j); A=np.c_[A,F[:,j]]; e=yy-A@np.linalg.lstsq(A[:n],yy[:n],rcond=1e-7)[0]; results.append((names[j],round(float(rms(e[:n])),5),round(float(mae(e[n:])),5)))\\n  print('OMP',base0.shape[1],out,results)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: calibrated cosine coordinates capture the main spatial law; test the residual readout grammar after reaching scalar MAE 0.06123 and trajectory MAE 0.04367 on separate baseline fits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel C identifies the cosine branch at panel noise level. Probe residuals for missing low-order terms and cross-branch interactions rather than increasing polynomial degree indiscriminately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "915210d5d30069c72ea50c2b1e131ac55f481815e17f5fd01088ad3145d577db",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33637.88,
+      "usage_known": true,
+      "prompt_tokens": 34465,
+      "cached_tokens": 12672,
+      "completion_tokens": 1469
+    }
+  ]
+}

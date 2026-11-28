@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7df7640580f04e2292d8f9241240221a",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:32:12.066713+00:00",
+  "ended_at_utc": "2026-11-28T14:32:41.249389+00:00",
+  "request_sha256": "64d5aa2e20c7abb3c24dd554218560ff3b18ae9c50e8324151a9a31c74e48eba",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59094,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34743,
+    "cached_tokens": 12672,
+    "completion_tokens": 789
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\n# Load the scorer's DAG runner without executing its CLI exit path.\\nns = {'__file__': str(p), '__name__': '__stress__'}\\nexec(compile(p.read_text().split('\\\\nst = pickle.load', 1)[0], str(p), 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']; n = len(tr['x'])\\ney = np.empty(n); et = np.empty_like(tr['traj']); folds = []\\nfor te in np.array_split(np.random.default_rng(19).permutation(n), 5):\\n    ix = np.setdiff1d(np.arange(n), te); st = copy.deepcopy(s)\\n    y, t = tr['y'][ix], tr['traj'][ix]\\n    st['train'] = dict(x=tr['x'][ix], y=y, traj=t, summary=np.array([y.mean(), y.std(), t[:,-1].mean(), t[:,-1].std()]))\\n    st['test'] = {'x': tr['x'][te]}\\n    out, counts = ns['run_dag'](st)\\n    assert counts == {'node_00': 1, 'node_01': 1, 'node_02': 1}\\n    ey[te] = np.abs(out['y_hat'] - tr['y'][te]); et[te] = np.abs(out['state_pred'] - tr['traj'][te])\\n    folds.append((ey[te].mean(), et[te].mean()))\\nassert np.isfinite(ey).all() and np.isfinite(et).all()\\nfar = np.argsort(np.linalg.norm(tr['x'] - np.median(tr['x'], axis=0), axis=1))[-(n//5):]\\nprint('OOF MAEs:', ey.mean(), et.mean(), 'worst fold MAEs:', np.max(folds, axis=0), 'worst horizon MAE:', et.mean(0).max(), 'outer fifth MAEs:', ey[far].mean(), et[far].mean())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 opposite-coordinate sine calibration → H2 quadratic readout on paired panel responses; verified public MAEs are 0.020507 scalar and 0.026996 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The saved artifact already passed the official test. The previous stress command reported no fold metrics because loading the scorer invoked its CLI exit; this command isolates the runner and measures the worst folds and horizons without editing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "21d81d6476545b11a33d720dcaf350956d47fa0ef30f93b6bd7991b645e0f974",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29181.43,
+      "usage_known": true,
+      "prompt_tokens": 34743,
+      "cached_tokens": 12672,
+      "completion_tokens": 789
+    }
+  ]
+}

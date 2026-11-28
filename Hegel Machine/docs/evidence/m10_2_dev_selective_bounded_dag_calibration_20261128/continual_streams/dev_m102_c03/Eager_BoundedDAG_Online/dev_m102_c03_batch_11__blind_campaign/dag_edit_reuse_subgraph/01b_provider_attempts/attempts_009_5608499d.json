@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5608499de1b64308b6aeab33f9390d47",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:16:37.859288+00:00",
+  "ended_at_utc": "2026-11-28T14:17:02.328149+00:00",
+  "request_sha256": "9e690bb5ff317e97a7a2a63300e9ff46046baf3ed0f05eef8f6d13ae85a93b4d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52513,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33792,
+    "cached_tokens": 12672,
+    "completion_tokens": 859
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location(path.rsplit('/', 1)[-1][:-3], path)\\n    m = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(m)\\n    return m\\n\\nroot = '/holdout_task/'\\na, b, c = [load(root + path) for path in ('_frozen_nodes/node_00.py','node_01.py','_frozen_nodes/node_02.py')]\\ns = pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\ntr = s['train']; x = tr['x']; n = len(x); ix = np.arange(n)\\nz = b._coordinates(s['panel_a'], x)\\nfolds = [('first',ix[:20]),('last',ix[-20:]),('interleaved_0',ix[::3]),('interleaved_1',ix[1::3]),('interleaved_2',ix[2::3]),('latent_boundary',np.argsort(np.max(np.abs(z),axis=1))[-14:])]\\nworst = np.zeros(3)\\nfor label, hi in folds:\\n    fit = np.setdiff1d(ix, hi)\\n    y, t = tr['y'][fit], tr['traj'][fit]\\n    sc = {**s, 'train': {'x': x[fit], 'y': y, 'traj': t, 'summary': np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}, 'test': {'x':x[hi]}}\\n    sp = a.run_node({'__input__': sc}); pp = b.run_node({'__input__': sc,'node_00':sp}); out = c.run_node({'node_00':sp,'node_01':pp})\\n    dy = np.abs(out['y_hat']-tr['y'][hi]); dt = np.abs(out['state_pred']-tr['traj'][hi]); metrics = np.array([dy.mean(),dt.mean(),dt.mean(axis=0).max()]); worst = np.maximum(worst, metrics)\\n    assert pp['panel_pred'].shape == (len(hi),1+tr['traj'].shape[1]) and np.isfinite(pp['panel_pred']).all()\\n    print(label, 'y_mae, traj_mae, worst_horizon_mae:', metrics.round(6))\\nprint('worst across slices:',worst.round(6))\\nassert np.isfinite(worst).all() and np.max(worst) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived calibration → H2 additive sensor inversion and mixed panel channels; the exact candidate passed public CV with y MAE 0.006303 and trajectory MAE 0.004154.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the saved artifact through both frozen nodes on blocked, interleaved, and latent-boundary holdouts. Check each trajectory horizon so the aggregate cannot hide a failing horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "95728c1c4ae0918416f7507a747378d336b881d17c9f42ebaea8bcc5c43b6797",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24467.63,
+      "usage_known": true,
+      "prompt_tokens": 33792,
+      "cached_tokens": 12672,
+      "completion_tokens": 859
+    }
+  ]
+}

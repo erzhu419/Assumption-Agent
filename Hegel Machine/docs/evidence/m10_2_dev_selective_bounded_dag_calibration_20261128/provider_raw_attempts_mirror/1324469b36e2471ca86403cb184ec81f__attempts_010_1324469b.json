@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1324469b36e2471ca86403cb184ec81f",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:07:07.358340+00:00",
+  "ended_at_utc": "2026-11-28T14:07:29.858455+00:00",
+  "request_sha256": "d3cc181aaf6096370ccddf99055eefdbcb0c36d06470f82eb02485b1ac643f5c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33798,
+    "cached_tokens": 12672,
+    "completion_tokens": 893
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nnode = runpy.run_path(root + 'node_00.py')\\nsink = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\nstudy = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\ntrain = study['train']\\nx = train['x']\\nidx = np.arange(len(x))\\nedge = np.argsort(np.abs(x).max(axis=1))[-20:]\\nworst = [0., 0., 0.]\\nfor name, val in [(f'block_{i}', v) for i, v in enumerate(np.array_split(idx, 4))] + [('largest_observed_magnitude', edge)]:\\n    fit = np.setdiff1d(idx, val)\\n    s = copy.deepcopy(study)\\n    s['train'] = {k: train[k][fit] for k in ('x', 'y', 'traj')}\\n    s['test'] = {'x': x[val]}\\n    c = node['run_node']({'__input__': s})\\n    out = sink({'__input__': s, 'node_00': c})\\n    ye = np.abs(out['y_hat'] - train['y'][val]).mean()\\n    te = np.abs(out['state_pred'] - train['traj'][val]).mean(axis=0)\\n    values = [ye, te.mean(), te.max()]\\n    worst = np.maximum(worst, values)\\n    print(name, 'scalar/trajectory/worst-horizon MAE:', *map(float, values))\\nassert np.all(np.isfinite(worst)) and max(worst) < 0.038, worst\\nmodel = node['_calibrate_a'](study['panel_a'])\\nbias, gain, a, b, k, w = model\\nrng = np.random.default_rng(125)\\nz = np.vstack([rng.uniform(-3., 3., (256, 4)), np.array(np.meshgrid(*[[-3., 3.]]*4)).reshape(4, -1).T])\\ny = bias + gain*z + a*np.tanh(k*z) + b*np.sin(w*np.roll(z, 2, axis=1))\\nerror = np.max(np.abs(node['_invert_a'](y, model)-z))\\nprint('worst slice metrics:', worst.tolist(), 'outside-range inverse roundtrip max:', float(error))\\nassert error < 1e-8\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived local calibration → H2 coupled tanh–sine inverse with an affine handoff; official scalar/trajectory MAE is 0.005066/0.004048 and worst calibration LOO RMSE is 0.0001013.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The verified candidate passes the official gate. Without editing it, test blocked holdouts, the largest observed inputs, each trajectory horizon, and numerical inversion beyond the measured range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f890bba2f52af0cf65888d80baf923f00a4a5babb8df0cc5f82fc138ca73a4ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22498.9,
+      "usage_known": true,
+      "prompt_tokens": 33798,
+      "cached_tokens": 12672,
+      "completion_tokens": 893
+    }
+  ]
+}

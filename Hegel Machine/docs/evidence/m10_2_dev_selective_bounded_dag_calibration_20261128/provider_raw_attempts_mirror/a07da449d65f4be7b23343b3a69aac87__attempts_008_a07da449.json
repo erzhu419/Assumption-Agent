@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a07da449d65f4be7b23343b3a69aac87",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:29:04.640254+00:00",
+  "ended_at_utc": "2026-11-28T13:29:31.715732+00:00",
+  "request_sha256": "c5e3becfe7f1ab96a4f1b7cdb4807d20c27368588d3175827c384a64a2d76932",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35281,
+    "cached_tokens": 12672,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/compact.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cr\\nm=runpy.run_path('/holdout_task/node_01.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; z=m['_warp'](m['_latent'](x,s['panel_a']),s['panel_c']); T=tr['traj']; y=tr['y']; t=s['eval_times']; fit=m['_fit']; poly=m['_poly']; q=lambda r:-np.expm1(-t[:,None]*r); n=len(x); rng=np.random.default_rng(1); splits=[(np.arange(52),np.arange(52,n))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(rng.permutation(n),4)]\\nD=[]\\nfor i,j in splits:\\n def e(r):\\n  Q=q(r);return (Q@fit(Q,T[i].T)-T[i].T).ravel()\\n Q=q(least_squares(e,[.408,1.815],bounds=([.1,1],[.9,4])).x);D.append((i,j,Q,np.c_[y[i],fit(Q,T[i].T).T]))\\nR=[]\\nfor a in (.5,1.,1.5,2.,2.2,2.5,3.,4.):\\n w=np.tanh(a*z)\\n for mode,F in [('ct',np.c_[poly(z,3),poly(w,2)]),('mix',np.c_[poly(z,2),poly(w,2),z*w]),('wt',np.c_[poly(z,1),poly(w,3)]),('w',poly(w,3)),('mix3',np.c_[poly(z,3),poly(w,2),z*w]),('w1',np.c_[poly(z,3),w])]:\\n  for alpha in (.0003,.003,.015,.06,.2):\\n   for prune in (0,12,20,28):\\n    if prune>=F.shape[1]:continue\\n    S=[]\\n    for i,j,Q,Y in D:\\n     M=F[i].mean(0); sd=np.maximum(F[i].std(0),1e-8); A=(F[i]-M)/sd; B=(F[j]-M)/sd; mu=Y.mean(0); G=A.T@A+alpha*np.eye(A.shape[1]); P=A.T@(Y-mu); C=np.linalg.solve(G,P)\\n     if prune:\\n      V=np.linalg.inv(G); pred=[]\\n      for c in range(3):\\n       ix=np.argsort(abs(C[:,c])/np.sqrt(V.diagonal()))[-prune:];pred.append(B[:,ix]@np.linalg.solve(G[np.ix_(ix,ix)],P[ix,c])+mu[c]);\\n      Z=np.column_stack(pred)\\n     else: Z=B@C+mu\\n     S.append([np.mean(abs(Z[:,0]-y[j])),np.mean(abs(Z[:,1:]@Q.T-T[j]))])\\n    S=np.array(S);R.append((S.max(),S[0].max(),a,mode,alpha,prune,S[0].round(5),S.mean(0).round(5)))\\nfor p in sorted(R,key=lambda r:r[0])[:13]:print(p)\\nprint('best qualifying');print(*sorted([r for r in R if r[1]<.038],key=lambda r:r[0])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense warped ridge -> H2 compact, output-specific spatial readouts; the accepted node has public MAEs of 0.018201 and 0.027582, with prototype worst alternate-split MAE of 0.067456.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the passing node immediately\",\"rejected_reason\":\"The alternate-split error is materially larger than the public error, so test compact readouts before replacing or retaining the verified node.\"}],\"rationale\":\"Keep the accepted artifact intact while comparing simpler readouts and fold-local temporal fits; promote only a candidate that preserves public acceptance and improves alternate-split performance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1968e6df343092a959d164129ea9aaca8d02ce2b231404cfc6b5f1df3d2a128d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27074.43,
+      "usage_known": true,
+      "prompt_tokens": 35281,
+      "cached_tokens": 12672,
+      "completion_tokens": 1100
+    }
+  ]
+}

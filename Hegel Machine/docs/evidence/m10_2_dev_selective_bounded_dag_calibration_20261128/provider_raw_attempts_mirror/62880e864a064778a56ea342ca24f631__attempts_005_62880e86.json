@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62880e864a064778a56ea342ca24f631",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:39:40.012112+00:00",
+  "ended_at_utc": "2026-11-28T13:40:16.039177+00:00",
+  "request_sha256": "ef997cec45985f3e22c3a68f56f31ed4156c5efca4cc7bfcf245093aa8445463",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28744,
+    "cached_tokens": 12672,
+    "completion_tokens": 1534
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat >/tmp/readout_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; t=s['eval_times']; pairs=list(combinations(range(4),2));\\ndef pp(u): return np.column_stack([u[:,i]*u[:,j] for i,j in pairs])\\ndef cal(x,kind):\\n u,v=(s['panel_a'][k] for k in ('u','v')); h=np.c_[np.ones(len(u)),u]; k=np.linalg.norm(v-h@np.linalg.lstsq(h,v,rcond=None)[0],axis=1)<3\\n if kind=='diag':\\n  b=np.array([np.linalg.lstsq(h[k][:,[0,i+1]],v[k,i],rcond=None)[0] for i in range(4)]);return (x-b[:,0])/b[:,1]\\n if kind=='aff':\\n  b=np.linalg.lstsq(h[k],v[k],rcond=None)[0];return (x-b[0])@np.linalg.inv(b[1:])\\n r,vv=np.roll(u,-1,axis=1),np.roll(u,1,axis=1); b=np.array([np.linalg.lstsq(np.c_[np.ones(k.sum()),u[k,i],r[k,i],u[k,i]*r[k,i]],v[k,i],rcond=None)[0] for i in range(4)]).T\\n print('calibration params',b) if kind=='cyc' else None\\n a,d,c,e=b; z=(x-a)/d\\n for _ in range(15): z=.25*z+.75*(x-a-c*np.roll(z,-1,axis=1))/(d+e*np.roll(z,-1,axis=1))\\n return z\\n\\ndef proj(r):\\n q=-np.expm1(-t[:,None]*r);return q,np.linalg.lstsq(q,tr['traj'].T,rcond=None)[0].T\\nr=least_squares(lambda r:(proj(r)[1]@proj(r)[0].T-tr['traj']).ravel(),[.392,1.857]).x; q,a=proj(r); Y=np.c_[tr['y'],a]; print('rates',r,'projection mae',np.abs(a@q.T-tr['traj']).mean())\\nfolds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),v),v) for v in np.array_split(np.random.default_rng(9).permutation(72),4)]\\ndef scores(F,reg):\\n E=[]\\n for fit,va in folds:\\n  G=(F-F[fit].mean(0))/np.maximum(F[fit].std(0),1e-9); Y0=Y[fit].mean(0); M=G[fit]; H=np.linalg.lstsq(M,Y[fit]-Y0,rcond=1e-8)[0] if not reg else np.linalg.solve(M.T@M+reg*np.eye(M.shape[1]),M.T@(Y[fit]-Y0)); e=(G[va]@H+Y0-Y[va]); E.append([np.abs(e[:,0]).mean(), np.abs(e[:,1:]@q.T).mean()]);\\n return np.round(np.r_[E[0],np.max(E[1:],axis=0)],5)\\nfor kind in ['diag','aff','cyc']:\\n z=cal(x,kind); u,v=(s['panel_b'][k] for k in ('u','v')); b=np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]; w=np.c_[np.ones(len(z)),z]@b; p=pp(z); c=np.cos(2.4*z)\\n fs={'base':np.c_[z,p,c], 'sq':np.c_[z,z*z,p,c], 'sin':np.c_[z,p,c,np.sin(2.4*z)],'3way':np.c_[z,p,c,*[np.prod(z[:,j],axis=1) for j in combinations(range(4),3)]], 'all':np.c_[z,p,c,z*z,z**3,np.sin(2.4*z),np.tanh(z),pp(w),np.cos(2.4*w)], 'b':np.c_[z,p,c,pp(w),np.cos(2.4*w),np.sin(2.4*w)], 'linear':z}\\n for n,F in fs.items():print(kind,n,[scores(F,k).tolist() for k in (0,.03,.3)])\\n if kind=='cyc':\\n  print('training relation',np.linalg.lstsq(np.c_[np.ones(len(z)),fs['base']],Y,rcond=None)[0]); print('residual std', (np.c_[np.ones(len(z)),fs['base']]@np.linalg.lstsq(np.c_[np.ones(len(z)),fs['base']],Y,rcond=None)[0]-Y).std(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal affine calibration -> H2 cyclic bilinear calibration plus pair/cosine features; panel A affine coordinate RMSE is 0.154–0.198 and panel C cosine RMSE is 0.000082.\",\n  \"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine basis captures the clean panel A calibration.\",\"empirical_witness\":\"After rejecting three gross outliers, even full affine RMSE is 0.154–0.198 per coordinate; a quadratic basis reduces this to 0.037–0.045 and isolates four cyclic cross-products.\",\"causal_blanket_diagnosis\":\"The forward calibration mixes each latent coordinate with its neighbor through both linear and product terms.\",\"sublated_pivot\":\"Fit and invert the cyclic bilinear map before testing the reused readout.\",\"risk_kind\":\"calibration misspecification\",\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Generic quadratic inverse regression\",\"rejected_reason\":\"The observed cyclic forward sparsity permits a lower-variance fit and explicit inversion.\"}],\n  \"rationale\":\"Compare affine and nonlinear inversions on the official holdback and four additional folds, holding the temporal basis and readout comparisons fixed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c0ed65f2a8f7e39f4f2a7c6298903d438363db50663a9c9dbaf8d604c71869d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36025.99,
+      "usage_known": true,
+      "prompt_tokens": 28744,
+      "cached_tokens": 12672,
+      "completion_tokens": 1534
+    }
+  ]
+}

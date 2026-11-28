@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "57c62e11ac09483db8d7d51e263a645b",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Flat_MonolithicArchive_Online__dev_m102_c01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:27:41.456578+00:00",
+  "ended_at_utc": "2026-11-28T13:28:23.696541+00:00",
+  "request_sha256": "b863d518481caee059fc2d7b39d18f9c8e1f4341cbe2d4e7cfa29573d0a4bcc0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67900,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42013,
+    "cached_tokens": 12672,
+    "completion_tokens": 1837
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '1,22p' /tmp/arc.py > batch_solver.py; cat >>batch_solver.py <<'PY'\\n\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\ndef _kernels(z):\\n    a=z@z.T; d=np.maximum(cdist(z,z,'sqeuclidean'),0)\\n    for h in (8,12,18,28):\\n        for w in (0,.25,1.): yield 1+w*a+np.exp(-d/h)\\n    for h in (6,12,22,40):\\n        for p in (2,3,4,5): yield (1+a/h)**p\\n    for h in (.2,.5,1.):\\n        for w in (.25,1.,3.): yield 1+a+w*a*a/4+h*a**3/16+.1*a**4/64\\n\\ndef _fit(k,n,y,noise):\\n    A=cho_solve(cho_factor(k[:n,:n]+noise*np.eye(n)),np.eye(n)); beta=A@y\\n    return k[n:,:n]@beta, beta/np.diag(A).reshape((-1,)+(1,)*(y.ndim-1))\\n\\ndef solve_batch(study: dict) -> dict:\\n    train=study['train']; n=len(train['x']); y=np.asarray(train['y']); t=np.asarray(train['traj'])\\n    a,b=_calibration(study['panel_a']); z=(np.vstack((train['x'],study['test']['x']))-b)/a\\n    if len(z)==n: return {'y_hat':np.empty(0),'state_pred':np.empty((0,t.shape[1])),'diagnostics_vec':np.zeros(4)}\\n    z=z/np.sqrt(np.mean(z[:n]**2)); preds=[]; errs=[]\\n    for k in _kernels(z):\\n        for noise in (1e-7,1e-5,.0003,.003):\\n            p,r=_fit(k,n,y,noise); preds.append(p); errs.append(np.mean(abs(r)))\\n    errs=np.array(errs); w=np.exp(-(errs-errs.min())/.004); yh=w@preds/w.sum()\\n    modes=np.linalg.svd(t,full_matrices=False)[2][:2]; d=cdist(z,z,'sqeuclidean'); K=1+.25*z@z.T+np.exp(-d/18)\\n    th=_fit(K,n,t@modes.T,.002)[0]@modes\\n    return {'y_hat': yh,'state_pred': th,'diagnostics_vec':np.array([yh.mean(),yh.std(),th[:,-1].mean(),th[:,-1].std()])}\\nPY\\nhead -25 batch_solver.py; cat >/tmp/activeprobe.py <<'PY'\\nimport sys,contextlib,io\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch,_fit\\nwith contextlib.redirect_stdout(io.StringIO()): from pathprobe import *\\nfor i,j in splits:\\n ss=dict(s,train={k:v[i] if k!='summary' else v for k,v in s['train'].items()},test={'x':x[j]}); p=solve_batch(ss); print('saved',np.mean(abs(p['y_hat']-y[j])),np.mean(abs(p['state_pred']-t[j])))\\n\\n# Structured stationarity and additive low-order interactions in panel coordinates.\\ndef bases(q):\\n d=q.shape[1]; L=q@q.T; E=cdist(q,q,'sqeuclidean'); yield 'rbf',L,E\\n for flip in (0,1):\\n  A=np.eye(d); ij=np.triu_indices(d,1); A=np.c_[A,(A[:,ij[0]]+(-1 if flip else 1)*A[:,ij[1]])/np.sqrt(2)]; f=q@A; G=(f[:,None,:]-f[None,:,:])**2\\n  for ell in (.15,.35,.7,1.4,3):\\n   w=np.exp(-G/(2*ell**2)); U=w.mean(2); yield ('add',flip,ell),U,E\\n  for ell in (.6,1.2,1.8,2.4,3):\\n   v=np.sin(f*ell); w=np.cos(f*ell); U=(v@v.T+w@w.T)/f.shape[1]; yield ('spectral',flip,ell),U,E\\n   for mode in (np.tanh,np.arctan):\\n    v=mode(f*ell); U=(v@v.T)/f.shape[1]; yield (mode.__name__,flip,ell),U,E\\n\\nrows=[]; blend=[]\\nfor name in ('z','Bz','Iz','0z','0Bz','1Bz','1z'):\\n q=D[name]; z0=D['z']; L=1+z0@z0.T/4; E0=cdist(z0,z0,'sqeuclidean')\\n for tag,U,E in bases(q):\\n  for p in (1,2,3):\\n   for h in (4,10,24):\\n    for noise in (1e-6,.0001,.002):\\n     k=(1+U)**p + np.exp(-E0/h)+L; es=[]; cv=[]; yh=[]\\n     for i,j in splits:\\n      ix=np.r_[i,j]; pred,r=_fit(k[np.ix_(ix,ix)],len(i),y[i],noise); es.append(np.mean(abs(pred-y[j]))); cv.append(np.mean(abs(r))); yh.append(pred)\\n     rows.append((np.round(es,5),np.round(cv,5),(name,tag,p,h,noise))); blend.append(yh)\\nfor si in (0,1,2):\\n key=[lambda r:r[0][0],lambda r:r[0][1:].mean(),lambda r:r[1][0]][si]; print('top',si,*sorted(rows,key=key)[:8],sep='\\\\n')\\nfor temp in (.001,.003,.006,.012):\\n print('mix',temp,[round(np.mean(abs(np.average(np.array([v[i] for v in blend]),axis=0,weights=np.exp(-(np.array([r[1][i] for r in rows])-min(r[1][i] for r in rows))/temp))-y[j])),5) for i,(_,j) in enumerate(splits)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/activeprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled trajectory readout → H2 independent regularized spatial models with structured interaction kernels; best reported 52/20 MAEs are 0.04472 for y and 0.01247 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use fitted trajectory modes as scalar regressors\",\"rejected_reason\":\"Across the tested compositions, coupling did not beat the best independent scalar gate score.\"}],\"rationale\":\"Save a self-contained candidate now and test whether pairwise and spectral interaction kernels close the remaining scalar gate gap without selecting on held-out labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d4729ba90e33f9f0109f024c774c312eb7469fe0ad9867ba81b4db84f57bbfaa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42238.2,
+      "usage_known": true,
+      "prompt_tokens": 42013,
+      "cached_tokens": 12672,
+      "completion_tokens": 1837
+    }
+  ]
+}

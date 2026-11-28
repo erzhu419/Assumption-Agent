@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9915f08798314fe7815eed76b62e8048",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:17:32.690467+00:00",
+  "ended_at_utc": "2026-11-28T13:17:57.882753+00:00",
+  "request_sha256": "8fbbab78a2efde6afa6d0710bf5f3a7ded0195d806a3c15d0640418213a4166d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61899,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36834,
+    "cached_tokens": 12672,
+    "completion_tokens": 910
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; set -e; cp /holdout_task/node_01.py /tmp/node01_verified_v1.py; python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_01.py')\\ns = p.read_text()\\nold = '    p = _predict_features(z, n, targets, 30000.)'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, '''    # Average sparse readouts across calibrated and measured coordinates.\\n    # This reduces sensitivity to either a single coordinate map or pruning cutoff.\\n    p = np.mean([_predict_features(coords, n, targets, cutoff)\\n                 for coords in (z, x)\\n                 for cutoff in (10000., 20000., 30000., 50000., 100000.)], axis=0)'''))\\nPY\\nif ! python3 -I /holdout_task/test_dag_candidate.py; then cp /tmp/node01_verified_v1.py /holdout_task/node_01.py; python3 -I /holdout_task/test_dag_candidate.py; else python3 -I - <<'PY'\\nimport runpy\\nimport numpy as np\\np = open('/tmp/readout_probe.py').read().split('res=[]')[0]\\nexec(p)\\nrun = runpy.run_path('/holdout_task/node_01.py')['run_node']\\nrows = []\\nfor a, b, sp in folds:\\n    sub = dict(st, train={k: v[a] for k,v in tr.items() if k != 'summary'}, test={'x': x[b]})\\n    panel = run({'__input__': sub})['panel_pred']\\n    e = abs(w*panel+(1-w)*sp-Y[b]); rows.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()])\\nworst = np.max(rows, axis=0)\\nprint('Exact artifact stress maxima (scalar, trajectory, horizon):', worst)\\nassert np.all(worst < [.07279,.04452,.05713])\\nPY\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single sparse readout → calibrated/raw coordinate ensemble; eight-split maxima improve from 0.07279/0.04452/0.05713 to 0.06695/0.03948/0.04848 for scalar, trajectory, and worst horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the verified single readout\",\n      \"rejected_reason\": \"The ensemble lowers all three worst-slice metrics and remains below both public tolerances in the probe.\"\n    }\n  ],\n  \"rationale\": \"Promote the ensemble on its worst-slice gains, then run the official test and the eight-split stress check on the exact saved artifact. Restore the verified predecessor if the official test fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "fecd13155bbf402fd47d54d9d4fda96ff7d19536462486b4c0a64aef4368e8f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25188.01,
+      "usage_known": true,
+      "prompt_tokens": 36834,
+      "cached_tokens": 12672,
+      "completion_tokens": 910
+    }
+  ]
+}

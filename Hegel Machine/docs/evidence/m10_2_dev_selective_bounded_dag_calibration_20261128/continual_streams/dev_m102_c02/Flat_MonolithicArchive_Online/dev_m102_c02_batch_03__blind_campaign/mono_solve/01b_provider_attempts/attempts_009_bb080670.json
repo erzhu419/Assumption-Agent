@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb080670414644e1b1b4b87ce48f173c",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:26:30.706557+00:00",
+  "ended_at_utc": "2026-11-28T13:26:59.268649+00:00",
+  "request_sha256": "28a528dbb94982452a7f7f22522a5ffb8d0eaad5c092f527bfbdf408dd067c2d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46753,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30974,
+    "cached_tokens": 12672,
+    "completion_tokens": 1128
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/deep_audit.py <<'PY'\\nexec(open('/tmp/audit_solver.py').read().split('results=[]')[0])\\nfrom itertools import combinations\\nfrom scipy.optimize import minimize_scalar\\npanel=s['panel_a']; a,b,c=cal; u,v=panel['u'],panel['v']; nxt=np.roll(u,-1,axis=1); delta=np.linalg.norm(a+b*u+c[0]*nxt+c[1]*u*nxt+c[2]*u**3-v,axis=1); good=delta<.001\\nprint('Panel A gross rows, inlier maximum',np.where(~good)[0],delta[good].max()); print('Calibration jackknife',max(np.max(np.abs(np.r_[*m._calibration({k:d[np.arange(len(u))!=j] for k,d in panel.items()})]-np.r_[*cal])) for j in range(len(u))))\\nprint('Study keys',list(s),'train keys',list(t),'times',s['eval_times']); print('Panel B affine RMSE',np.mean((m._affine(bp['u'])@m._fit(m._affine(bp['u']),bp['v'])-bp['v'])**2)**.5)\\np=w[:,0]*w[:,2]; q=w[:,1]*w[:,3]; y=t['y']; D=m._affine(w); unshared=np.c_[D,p,q]; shared=np.c_[D,p+q]; origin=shared[:,1:]; full=m._quadratic(z)\\nrat=[]\\nfor i,j in combinations(range(4),2):\\n for c0 in (-1,1):\\n  pair=(w[:,i]+c0*w[:,j])**2\\n  for a0 in (.02,.08,.22,.65): rat.append(shared/(1+a0*pair[:,None]))\\nres=[]\\nfor name,te in splits:\\n tr=np.setdiff1d(idx,te)\\n def fit_err(h): return np.mean(abs(h[te]@m._fit(h[tr],y[tr])-y[te]))\\n def press(h):\\n  u=np.linalg.qr(h[tr],mode='reduced')[0]; return np.mean(abs((y[tr]-u@(u.T@y[tr]))/(1-(u*u).sum(1))))\\n rational=min(rat,key=press)\\n tm=s['eval_times']; traj=t['traj']; aa=m._affine(z)\\n def basis(k):return -np.expm1(-np.outer(k,tm))\\n beta=m._fit(aa[tr],traj[tr]); best=None\\n for k0 in np.geomspace(.07,5,40):\\n  for k1 in np.geomspace(.08,9,42):\\n   if k1<=1.15*k0: continue\\n   bb=basis([k0,k1]); coef=m._fit(bb.T,beta.T).T\\n   loss=np.mean((aa[tr]@(coef@bb-beta))**2)\\n   if best is None or loss<best[0]: best=(loss,coef@bb,k0,k1)\\n state=aa[te]@best[1]; errors=[fit_err(h) for h in (full,unshared,shared,origin,rational)]+[np.mean(abs(state-traj[te])),np.max(np.mean(abs(state-traj[te]),axis=0))]; res.append(errors)\\n if name=='52/20': print('52/20 columns full/unshared/shared/origin/rational/exp-traj/exp-worst-time',errors,'rates',best[-2:])\\nprint('median',np.median(res,axis=0),'worst',np.max(res,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/deep_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Full calibrated quadratic → test symmetric panel-B interactions and profiled relaxation; verified worst scalar MAE is 0.00869 and worst timestamp MAE is 0.00634.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fokker–Planck/HJB, relay-mode, and within-batch classification audits\",\"rejected_reason\":\"The public study contains continuous scalar and trajectory measurements, with no relay flags, class labels, or batch identifiers.\"}],\"rationale\":\"Panel B exposes two nearly equal cross terms in the scalar readout. Compare their symmetric restriction with the full quadratic, select rational pairwise challengers only inside each training fold, and check calibration sensitivity by leaving out each panel row.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "71fcd8cd735d2810da4e94403db4384806cc81b8bb5fe61e1045c694da5820da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28561.0,
+      "usage_known": true,
+      "prompt_tokens": 30974,
+      "cached_tokens": 12672,
+      "completion_tokens": 1128
+    }
+  ]
+}

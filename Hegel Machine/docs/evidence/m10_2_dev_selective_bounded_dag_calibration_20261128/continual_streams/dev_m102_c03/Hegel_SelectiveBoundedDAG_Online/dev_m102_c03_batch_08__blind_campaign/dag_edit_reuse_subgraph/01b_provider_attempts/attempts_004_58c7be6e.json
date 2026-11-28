@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58c7be6e2bad4ce1b58e1d630e0aaff2",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:00:36.350438+00:00",
+  "ended_at_utc": "2026-11-28T14:00:58.618386+00:00",
+  "request_sha256": "6987191552146c09bacef18fa47519ef315faf2ffa529d95619c615712f331fc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27089,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23742,
+    "cached_tokens": 12672,
+    "completion_tokens": 869
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '55,150p' /tmp/hegel_continual_archive/dev_m102_c03_batch_06_solver.py; sed -n '69,140p' /tmp/hegel_continual_archive/dev_m102_c03_batch_05_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -25; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,sys\\nsys.path.insert(0,'_frozen_nodes'); from node_00 import run_node\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; f=run_node({'__input__':s}); y=s['train']['y']; t=s['train']['traj']; n=len(y); h,g=f['hy'][:n],f['ht'][:n]; c,d=h[:,1:5],h[:,5:9]; cross=(c[:,:,None]*d[:,None,:]).reshape(n,-1); cp=np.column_stack([c[:,i]*c[:,j] for i in range(4) for j in range(i,4)]); dp=np.column_stack([d[:,i]*d[:,j] for i in range(4) for j in range(i,4)]); Y=np.column_stack([y,t]);\\nfor tag,H in [('base',h),('arch_t',g),('cross',np.c_[h[:,:9],cross]),('cross+cc',np.c_[h[:,:9],cross,cp]),('cross+dd',np.c_[h[:,:9],cross,dp]),('quadratic',np.c_[h[:,:9],cross,cp,dp])]:\\n p=H[52:]@np.linalg.lstsq(H[:52],Y[:52],rcond=None)[0]; e=np.abs(p-Y[52:]); r=Y-H@np.linalg.lstsq(H,Y,rcond=None)[0]; print(tag, 'CV',round(e[:,0].mean(),5),round(e[:,1:].mean(),5),'fit',np.mean(abs(r),axis=0).round(4),'residual sv',np.linalg.svd(r,compute_uv=False)[:5].round(4));\\n if tag=='cross': print('coef y,first,last',np.linalg.lstsq(H,Y,rcond=None)[0][:,[0,1,-1]].round(3));print('residual temporal profile',np.linalg.svd(r[:,1:],full_matrices=False)[2][:2].round(3));\\nprint('study keys',s.keys()); print('centered traj modes',np.linalg.svd(t-t.mean(0),full_matrices=False)[2][:4].round(3)); print('corr y with traj',np.corrcoef(Y.T)[0].round(3));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived fixed interactions -> H2 expanded bilinear basis with separate temporal amplitudes; the trajectory residual has a dominant singular value of 7.281.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate nonlinear model at each time\",\"rejected_reason\":\"The residual spectrum is dominated by a single mode, so first test a shared spatial mechanism across time.\"}],\"rationale\":\"Compare nested interaction bases on the prescribed split and use the residual profiles to distinguish missing spatial features from missing temporal modes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "54ef720eab752c3d844eb821fa789cc31738d889b10dadaeb1795773b52a06b8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22266.94,
+      "usage_known": true,
+      "prompt_tokens": 23742,
+      "cached_tokens": 12672,
+      "completion_tokens": 869
+    }
+  ]
+}

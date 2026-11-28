@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "698cb0b6ea994fc08df8d492692e4156",
+  "call_seq": 2,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__stageS__dev_m102_c01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T12:59:26.420692+00:00",
+  "ended_at_utc": "2026-11-28T12:59:46.186849+00:00",
+  "request_sha256": "756eb492f9a4f9079b680761035ac45f376cc73e67292ff87b8e53cdc7791a81",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12142,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18258,
+    "cached_tokens": 0,
+    "completion_tokens": 769
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.linalg import lstsq\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.linear_model import Ridge\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=5,suppress=True,linewidth=180)\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; Y=np.c_[y,t]; print('time',s['eval_times']);print('trajectory SVD',np.linalg.svd(t,compute_uv=False));print('outputs std',Y.std(0));\\nops=[]\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; U=np.c_[np.ones(len(u)),u];\\n for j in p:\\n  if j=='u':continue\\n  v=p[j]; mask=np.ones(len(u),bool)\\n  for _ in range(5 if k=='panel_a' else 1):\\n   w=lstsq(U[mask],v[mask])[0];err=np.linalg.norm(U@w-v,axis=1);mask=err<=np.partition(err,len(u)-8)[len(u)-8] if k=='panel_a' else mask\\n  print(k,j,'coeff',w,'residual quantiles',np.quantile(err,[0,.25,.5,.75,.85,.95,1])); print('quadratic residual',np.std(PolynomialFeatures(2).fit_transform(u)@lstsq(PolynomialFeatures(2).fit_transform(u),v)[0]-v,0));ops.append(w)\\nfor label,z in [('raw',x)]+[(str(i),x@w[1:]+w[0]) for i,w in enumerate(ops)]:\\n for d in range(1,5):\\n  a=PolynomialFeatures(d).fit_transform(z); model=Ridge(alpha=.015).fit(a[:52],Y[:52]);e=abs(model.predict(a[52:])-Y[52:]); print(label,d,e.mean(0))\\nfor idx in [[0,1,3,5,7],list(range(8))]:\\n a=np.c_[np.ones(len(t)),t[:,idx]]; w=lstsq(a[:52],y[:52])[0]; print('readout traj',idx,w,np.mean(abs(y[52:]-a[52:]@w)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; ls -la /tmp/hegel_wormhole_skills; cat validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw-coordinate regression -> H2 panel-aligned sparse dynamics and readout; first-52/last-20 MAE is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Estimate panel maps and trajectory rank, then compare panel-aligned and raw polynomial baselines on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "2d0de57083aa709255fb758d690134d88723aaa98ac353472532e33795fc54bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19765.24,
+      "usage_known": true,
+      "prompt_tokens": 18258,
+      "cached_tokens": 0,
+      "completion_tokens": 769
+    }
+  ]
+}

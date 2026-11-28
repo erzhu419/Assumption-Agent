@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff133d048d6e4cf095bba32d9ecc8948",
+  "call_seq": 14,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:49:13.236544+00:00",
+  "ended_at_utc": "2026-11-28T13:49:49.968560+00:00",
+  "request_sha256": "629c30ff0544dd965fc10cf08ccb3358c57f61d45dcc4da69d8ccd5b4464da97",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 88344,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46646,
+    "cached_tokens": 12672,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\nsed -i '1i import numpy as np' /tmp/b06_gp.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py';s=open(p).read();a=s.index('def _bank(');b=s.index('def solve_batch(');g=open('/tmp/b06_gp.py').read();s=s[:a]+g+'\\\\n\\\\n'+s[b:];s=s.replace('out=_fit(D,Y,k,h)','out=_adaptive(D,Y,k,h)');s=s.replace('from scipy.linalg import solve\\\\n','').replace('from scipy.spatial.distance import cdist\\\\n','').replace('from sklearn.linear_model import lasso_path\\\\n','');open('/tmp/b06_adaptive_candidate.py','w').write(s)\\nPY\\ncat >/tmp/b06_compare_final.py <<'PY'\\nimport copy,importlib.util,pickle,numpy as np, shutil\\nbase='/holdout_task/batch_solver.py'\\ndef load(path):\\n s=importlib.util.spec_from_file_location('candidate',path); m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m\\nstudy=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntrain=study['train']; n=len(train['y']); rng=np.random.default_rng(295)\\nsplits=[np.arange(n)]+[rng.permutation(n) for _ in range(3)]\\ndef checked(m,st):\\n p=m.solve_batch(st); y=p['y_hat']; z=p['state_pred']; d=p['diagnostics_vec']; L=len(st['test']['x']); assert isinstance(y,np.ndarray) and isinstance(z,np.ndarray) and isinstance(d,np.ndarray); assert y.shape==(L,) and z.shape==(L,len(st['eval_times'])) and d.shape==(4,); assert all(np.isfinite(q).all() for q in (y,z,d)); np.testing.assert_allclose(d,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()],atol=1e-12); return y,z\\nbase_scores=None\\nfor path in [base,'/tmp/b06_adaptive_candidate.py']:\\n try:\\n  m=load(path); checked(m,copy.deepcopy(study)); result=[]\\n  for ii in splits:\\n   i,j=ii[:52],ii[52:]; st=copy.deepcopy(study); st['train']={k:train[k][i].copy() for k in ('x','y','traj')}; y,z=st['train']['y'],st['train']['traj']; st['train']['summary']=np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); st['test']={'x':train['x'][j].copy()}; y,z=checked(m,st); hourly=np.mean(abs(z-train['traj'][j]),0); result.append([np.mean(abs(y-train['y'][j])),hourly.mean(),hourly.max()]);\\n  e=np.array(result);print(path,'rows: prescribed then random 52/20; columns: y, trajectory, worst time',e.tolist(),flush=True)\\n  if path==base:base_scores=e\\n  elif base_scores is None or (np.all(e[0,:2]<=.038) or (np.all(e[0,:2]<base_scores[0,:2]) and e.max()<=1.05*base_scores.max())):\\n   shutil.copyfile(path,base);print('Promoted adaptive candidate',flush=True)\\n except Exception as ex:\\n  print(path,'candidate check failed:',repr(ex),flush=True)\\nPY\\npython3 -I -W ignore /tmp/b06_compare_final.py\\npython3 /holdout_task/validate_public_schema.py || true\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compare fixed readouts with training-only adaptive kernel weights; the saved solver’s official 52/20 MAEs are 0.194569 for y and 0.123353 for trajectory, above the 0.038 gate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the current solver as complete\",\n      \"rejected_reason\": \"The official validator rejected both prediction errors.\"\n    }\n  ],\n  \"rationale\": \"Fix the challenger’s missing import, check both candidates in isolated Python, and promote only a challenger that passes the gate or improves both prescribed metrics without materially worsening the worst observed slice. Run the official validator on the exact saved artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "06325cb0ad180b0fa01fee7865ff45ae54138ca49f0ab35a76704ab634b825ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36730.6,
+      "usage_known": true,
+      "prompt_tokens": 46646,
+      "cached_tokens": 12672,
+      "completion_tokens": 1565
+    }
+  ]
+}

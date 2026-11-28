@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a7a8dc1022e41a38056698e1a8623d3",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:56:10.105028+00:00",
+  "ended_at_utc": "2026-11-28T13:56:30.111524+00:00",
+  "request_sha256": "8817eaa1deb77590c0f93226ed660c634f9d358c10620ae6e2dcb2a736a85f8c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21033,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21024,
+    "cached_tokens": 12672,
+    "completion_tokens": 741
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,72p' /tmp/hegel_continual_archive/*solver.py\\npython3 - <<'PY'\\nimport pickle, numpy as np, runpy\\nfrom glob import glob\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; g=runpy.run_path(glob('/tmp/hegel_continual_archive/*solver.py')[0])\\nt=s['train']; n=len(t['x'])-20; cv={**s,'train':{**t,**{k:t[k][:n] for k in ('x','y','traj')}},'test':{'x':t['x'][n:]}}\\na=g['solve_batch'](cv); print('archived CV',*[np.abs(a[k]-t[j][n:]).mean() for k,j in [('y_hat','y'),('state_pred','traj')]])\\nu,v=[s['panel_a'][k] for k in ('u','v')]; print('old parameters',g['_calibration'](s['panel_a']))\\nrng=np.random.default_rng(0)\\nfor nn,f in [('affine',np.c_[np.ones(len(u)),u]),('diagonal quadratic',np.c_[np.ones(len(u)),u,u**2]),('full quadratic',np.c_[np.ones(len(u)),u,u**2,*[u[:,i]*u[:,j] for i,j in combinations(range(4),2)]]),('diagonal cubic',np.c_[np.ones(len(u)),u,u**2,u**3]),('odd cubic',np.c_[np.ones(len(u)),u,u**3])]:\\n p=f.shape[1]; best=None\\n for ix in [np.arange(len(u))]+[rng.choice(len(u),p,False) for _ in range(1500)]:\\n  for _ in range(3):\\n   w=np.linalg.lstsq(f[ix],v[ix],rcond=None)[0]; d=np.linalg.norm(v-f@w,axis=1); ix=np.argsort(d)[:37]\\n  loss=np.mean(d[ix]**2)\\n  if best is None or loss<best[0]:best=(loss,w,np.sort(d))\\n print(nn, 'trim rmse',best[0]**.5,'quantiles',best[2][[20,34,36,38,40,43,47]],'coef',np.round(best[1],3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine calibration -> H2 sparse quadratic or cubic calibration; archived and challenger metrics are pending this run.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure the archived baseline on the official split and compare robust panel fits across algebraic bases before choosing the inverse calibration and downstream feature fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ac5e9f0375191def6ef32af5acff81ac495e226b2dd4edc803ecfd80aa204635",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20005.19,
+      "usage_known": true,
+      "prompt_tokens": 21024,
+      "cached_tokens": 12672,
+      "completion_tokens": 741
+    }
+  ]
+}

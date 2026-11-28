@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71a7aa4ec1d842508a963e0a58a9ab6d",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:26:19.320300+00:00",
+  "ended_at_utc": "2026-11-28T14:26:51.473434+00:00",
+  "request_sha256": "4e25ee289986ec840740247ca22ea2ee43893b3047c93a9edd36a8bbe067d732",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75568,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43412,
+    "cached_tokens": 12672,
+    "completion_tokens": 1119
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncp /holdout_task/batch_solver.py /tmp/batch14_verified.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\nold='    scalar = np.column_stack((state, q / (1 + .5 * z[:, 1:2]**2)))'\\nassert s.count(old)==1\\np.write_text(s.replace(old, '    # A scalar-only cross-gate couples the threshold response to panel B.\\\\n    scalar = np.column_stack((state, q / (1 + .5 * z[:, 1:2]**2),\\\\n                              q * np.sin(2.15 * b[:, 2:3])))'))\\nPY\\ncat > /tmp/promote14.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\n\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location('solver',path)\\n    mod=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']; ix=np.arange(len(x))\\na,b=[load(p) for p in ('/tmp/batch14_verified.py','/holdout_task/batch_solver.py')]\\nz=b._calibrated(s['panel_a'],x)\\ngroups=[('public',[ix[-20:]]),('random',np.array_split(np.random.default_rng(11).permutation(len(x)),4))]\\nfor key,v in [('measured_tails',x),('latent_tails',z)]:\\n    groups.append((key,[np.argsort(col)[part] for col in v.T for part in (slice(-20,None),slice(20))]))\\n\\ndef test(mod,parts):\\n    vals=[]\\n    for te in parts:\\n        r=np.setdiff1d(ix,te)\\n        out=mod.solve_batch(dict(s,train={k:v[r] for k,v in tr.items() if k!='summary'},test={'x':x[te]}))\\n        ey=np.abs(out['y_hat']-y[te]); et=np.abs(out['state_pred']-t[te])\\n        vals.append([ey.mean(),et.mean(),et.mean(0).max(),et[:,-1].mean()])\\n    return np.max(vals,axis=0)\\nfor name,parts in groups:\\n    old,new=test(a,parts),test(b,parts)\\n    print(name,'baseline',old,'challenger',new,flush=True)\\n    assert np.all(np.isfinite(new)) and np.all(new[1:] <= old[1:]+1e-10)\\n    assert new[0] < old[0]\\n    if name=='public': assert np.all(new[:2] <= .038)\\nPY\\nif ! (python3 -I /tmp/promote14.py && python3 /holdout_task/validate_public_schema.py && python3 -I /holdout_task/validate_public_schema.py); then\\n    cp /tmp/batch14_verified.py /holdout_task/batch_solver.py\\n    echo 'Promotion rejected; restored verified baseline.'\\n    python3 /holdout_task/validate_public_schema.py\\n    python3 -I /tmp/check14.py\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the rational threshold basis leaves scalar tail error → H2: add a telemetry-scaled panel B cross-gate; exploratory 52/20 scalar MAE improves from 0.02366 to 0.02126 and worst latent-tail MAE from 0.07164 to 0.03948.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rational threshold basis alone\",\n      \"rejected_reason\": \"The cross-gate improves the exploratory public split and latent-tail errors without changing the trajectory model; keep it only if the exact artifact also improves the measured tails.\"\n    }\n  ],\n  \"rationale\": \"Promote the scalar-only challenger only if it improves the public, random, and both coordinate-tail comparisons, preserves trajectory accuracy, and passes the schema validator in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "afa9414312c8109dd4eaa39736b2f03a9b4ae54b7467f384a1f298ffd2d0e83c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32151.72,
+      "usage_known": true,
+      "prompt_tokens": 43412,
+      "cached_tokens": 12672,
+      "completion_tokens": 1119
+    }
+  ]
+}

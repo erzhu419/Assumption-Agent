@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf16fec7f385448bb604d341249dc2b5",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:43:30.164438+00:00",
+  "ended_at_utc": "2026-11-28T13:43:52.693534+00:00",
+  "request_sha256": "f002d2c40dd2beffe9d863a05eb77321e3252030fa28d1e12b715a5ddc7321a2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27015,
+    "cached_tokens": 5504,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 /tmp/probe.py | head -21; cat >/tmp/operators.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"a=s['panel_a']\\\")[0]); from scipy.optimize import least_squares\\np=s['panel_a']; good=np.linalg.norm(p['v'],axis=1)<5; u,v=p['u'][good],p['v'][good]\\nfor k in range(4):\\n print('A coord',k,'ols',fit(poly(u,1),v[:,k]),'v minmax',v[:,k].min(),v[:,k].max())\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u'];\\n for lab,y in p.items():\\n  if lab=='u':continue\\n  mask=np.linalg.norm(y,axis=1)<5; a=u[mask]; b=y[mask]; X=poly(a,1); M=fit(X,b)\\n  print(k,lab,'RMSE by operator')\\n  forms={'cube':lambda w:w**3,'tanh':np.tanh,'sin':np.sin,'sat':lambda w:w/np.sqrt(1+w*w),'rat':lambda w:w/(1+w*w),'square':lambda w:w*w,'soft':lambda w:np.logaddexp(w,0)}\\n  for n,f in forms.items():\\n   vals=[]\\n   for i in range(4):\\n    z=b[:,i]; m=M[:,i]; errs=[]\\n    def los(c): return c[0]+c[1]*f(X@c[2:])-z\\n    def add(c): return X@c[:5]+c[5]*f(X@c[6:])-z\\n    for fun,q in [(los,np.r_[0.,1.,m]),(add,np.r_[m,1.,m])]:\\n     res=least_squares(fun,q,max_nfev=280); errs.append(np.std(res.fun))\\n    vals.append(errs)\\n   print(n,np.array(vals).T)\\n  for typ,Z in [('diag3',np.c_[X,a*a,a**3]),('cubenooff',np.c_[a,a**3]),('sqnooff',np.c_[a,a*a])]:\\n   m=fit(Z,b); print(typ,np.std(Z@m-b,0),m if k=='panel_a' or (k=='panel_c' and lab=='v2') else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw polynomial features -> H2 calibrated nonlinear operator features; raw affine 52/20 MAE is 0.271 for the readout and 0.252 at the last trajectory time.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full cubic interpolant for the auxiliary panels\",\"rejected_reason\":\"With 24 rows and 35 coefficients, zero training residual cannot identify the operator.\"}],\"rationale\":\"Fit compact nonlinear operator families to each panel before composing them into candidates for held-out prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "812e1654a34720fc9960263b5980b79bfb0b25a93f5cf84af15578325ed805ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22527.97,
+      "usage_known": true,
+      "prompt_tokens": 27015,
+      "cached_tokens": 5504,
+      "completion_tokens": 842
+    }
+  ]
+}

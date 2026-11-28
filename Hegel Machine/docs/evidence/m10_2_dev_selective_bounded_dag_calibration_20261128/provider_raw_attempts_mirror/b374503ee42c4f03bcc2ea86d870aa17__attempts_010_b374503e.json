@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b374503ee42c4f03bcc2ea86d870aa17",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:31:49.394896+00:00",
+  "ended_at_utc": "2026-11-28T14:32:10.149406+00:00",
+  "request_sha256": "861b0271701b331a5a143f700faae4d6de0f6091da9b472d11adace13865dc43",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60781,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35945,
+    "cached_tokens": 12672,
+    "completion_tokens": 642
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom copy import deepcopy\\nroot='/holdout_task/'\\ng=runpy.run_path(root+'test_dag_candidate.py'); run=g['run_dag']; s=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); rng=np.random.default_rng(19)\\ney=np.empty(n); et=np.empty_like(tr['traj']);\\nfor i,te in enumerate(np.array_split(rng.permutation(n),5)):\\n    ix=np.setdiff1d(np.arange(n),te); st=deepcopy(s)\\n    y,t=tr['y'][ix],tr['traj'][ix]\\n    st['train']={'x':tr['x'][ix],'y':y,'traj':t,'summary':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}\\n    st['test']={'x':tr['x'][te]}; o,counts=run(st)\\n    assert all(v==1 for v in counts.values())\\n    assert np.isfinite(o['y_hat']).all() and np.isfinite(o['state_pred']).all()\\n    ey[te]=abs(o['y_hat']-tr['y'][te]); et[te]=abs(o['state_pred']-tr['traj'][te]); print('fold',i,ey[te].mean(),et[te].mean())\\nr=np.linalg.norm(tr['x']-np.median(tr['x'],axis=0),axis=1); far=np.argsort(r)[-max(1,n//5):]\\nprint('OOF overall',ey.mean(),et.mean(),'worst horizon',et.mean(0).max(),'outer fifth',ey[far].mean(),et[far].mean())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 opposite-coordinate sine calibration → H2 quadratic readout on paired panel responses; accepted public MAEs are 0.020507 scalar and 0.026996 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"The exact saved artifact passed the official test. Run one supplementary out-of-fold stress check across random folds, trajectory horizons, and high-radius inputs without changing the verified file.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5ee432ff63b95e785f5b57546b2704fc9efd3a72fa8b7c2a69fd8122a87ea0c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20752.77,
+      "usage_known": true,
+      "prompt_tokens": 35945,
+      "cached_tokens": 12672,
+      "completion_tokens": 642
+    }
+  ]
+}

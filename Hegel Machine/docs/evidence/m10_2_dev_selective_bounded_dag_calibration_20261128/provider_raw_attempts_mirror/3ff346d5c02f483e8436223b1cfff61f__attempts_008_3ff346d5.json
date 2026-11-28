@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ff346d5c02f483e8436223b1cfff61f",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:15:03.802464+00:00",
+  "ended_at_utc": "2026-11-28T13:15:44.608703+00:00",
+  "request_sha256": "9a9278bf08177856a239b96737f4d010c47ddc51239b472a6e9299dcc6a84773",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51443,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34890,
+    "cached_tokens": 12672,
+    "completion_tokens": 1786
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat validate_public_schema.py; cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated spatial prediction with a shared trajectory response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = np.asarray(a['u']), np.asarray(a['v'])\\n    i, j = np.triu_indices(len(u), 1)\\n    du = u[i] - u[j]\\n    slope = np.median((v[i] - v[j]) / np.where(abs(du) > 1e-12, du, np.inf), axis=0)\\n    offset = np.median(v - u*slope, axis=0)\\n    for _ in range(3):\\n        r = np.linalg.norm(v - u*slope - offset, axis=1)\\n        keep = r <= max(6*np.median(r), 0.0005)\\n        if keep.sum() < 5:\\n            break\\n        for k in range(u.shape[1]):\\n            slope[k], offset[k] = np.linalg.lstsq(np.c_[u[keep,k], np.ones(keep.sum())], v[keep,k], rcond=None)[0]\\n    b = study['panel_b']\\n    bu, bv = np.asarray(b['u']), np.asarray(b['v'])\\n    bmap = np.linalg.lstsq(np.c_[np.ones(len(bu)), bu], bv, rcond=None)[0][1:]\\n    safe = np.where(abs(slope)>1e-8, slope, 1.)\\n    return {'x': x, 'inverse': (x-offset)/safe, 'forward': x*slope+offset,\\n            'b': x@bmap, 'bi': ((x-offset)/safe)@bmap, 'bf': (x*slope+offset)@bmap}\\n\\n\\ndef _kernel(x, width, quadratic=0.):\\n    ip = x @ x.T\\n    return 1. + ip + 2*np.exp(-width*cdist(x,x,'sqeuclidean')) + quadratic*(ip*ip)\\n\\n\\ndef _predict(K, n, target, ridge):\\n    dual = solve(K[:n,:n] + ridge*np.eye(n), target, assume_a='pos')\\n    return K[n:,:n] @ dual\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.vstack([train['x'], study['test']['x']])\\n    n = len(train['x'])\\n    z = _coordinates(study, x)\\n    y = _predict(_kernel(z['bi'], .25), n, np.asarray(train['y']), .001)\\n    T = np.asarray(train['traj'])\\n    _, _, vt = np.linalg.svd(T, full_matrices=False)\\n    mode = vt[0]\\n    amp = _predict(_kernel(z['bf'], .25, .6), n, T @ mode, .001)\\n    residual = T - np.outer(T @ mode, mode)\\n    state = np.outer(amp, mode) + _predict(_kernel(z['x'], .25), n, residual, .1)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\nPY\\ncat > /tmp/kerneltest.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.linalg import solve\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _coordinates,_kernel,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; X=tr['x']; n=len(X); z=_coordinates(s,X); print('t',s['eval_times']); print('range',np.min(X,0),np.max(X,0),np.min(s['test']['x'],0),np.max(s['test']['x'],0));\\nsplits=[(np.arange(52),np.arange(52,72))]+[(a[:52],a[52:]) for a in (np.random.default_rng(i).permutation(n) for i in range(32))]; splits+= [(np.setdiff1d(np.arange(n), a),a) for a in np.array_split(np.argsort(np.linalg.norm(X,axis=1)),4)]\\ndef evaluate(K,ridge):\\n P=[]\\n for a,b in splits:\\n  A=solve(K[np.ix_(a,a)]+ridge*np.eye(len(a)),np.c_[y,T][a],assume_a='pos'); P.append(K[np.ix_(b,a)]@A)\\n return P\\ndef score(P):\\n e=np.array([np.mean(abs(p-np.c_[y,T][b]),axis=0) for p,(a,b) in zip(P,splits)]); ey=e[:,0]; et=e[:,1:].mean(axis=1); return np.round([ey[0],ey[1:33].mean(),ey[1:33].max(),ey[33:].max(),et[0],et[1:33].mean(),et[1:33].max(),et[33:].max()],5)\\nrows=[]\\nfor name,x in z.items():\\n for w in [.075,.12,.18,.25,.35,.5]:\\n  for q in [0.,.2,1.]:\\n   for ridge in [.0002,.001,.003,.008,.02]:\\n    K=_kernel(x,w,q); P=evaluate(K,ridge); rows.append(((name,w,q,ridge),score(P),P))\\nprint('current y',[(key,sc) for key,sc,_ in rows if key==('bi',.25,0.,.001)]);\\nfor col in [1,5]:\\n keep=[r for r in rows if r[1][0]<.038] if col==1 else rows\\n key=lambda r:r[1][col]+.25*r[1][col+1]+.12*r[1][col+2]\\n for a,b,_ in sorted(keep,key=key)[:12]:print(col,a,b)\\n print('ens',score([np.mean(q,axis=0) for q in zip(*[r[2] for r in sorted(keep,key=key)[:20]])]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kerneltest.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 saturating readout and amplitude-dependent rate -> H2 separate smooth spatial heads with a shared temporal mode; previous best y MAE is 0.03476 prescribed and 0.03787 worst across nine splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the amplitude-dependent rate or saturating readout\",\"rejected_reason\":\"Amplitude bins have nearly identical time profiles, and the best saturating y readout gave 0.05234 prescribed MAE.\"}],\"rationale\":\"Build a schema-conforming baseline now, then stress the spatial heads independently across more random splits and input-radius slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a8482092a3820eb30bb7a4fdd5e3bb6da908e505e4b8ac90b392308188c48e21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40805.11,
+      "usage_known": true,
+      "prompt_tokens": 34890,
+      "cached_tokens": 12672,
+      "completion_tokens": 1786
+    }
+  ]
+}

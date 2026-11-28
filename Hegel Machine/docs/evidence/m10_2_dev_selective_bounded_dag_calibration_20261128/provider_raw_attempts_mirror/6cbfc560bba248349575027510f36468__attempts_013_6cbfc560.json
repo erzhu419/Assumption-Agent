@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6cbfc560bba248349575027510f36468",
+  "call_seq": 13,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:49:14.876065+00:00",
+  "ended_at_utc": "2026-11-28T13:49:51.663118+00:00",
+  "request_sha256": "c042efa50e9aaec9548442463d2d47046632bac99aeae634b70e39d50080828e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 81968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46539,
+    "cached_tokens": 12672,
+    "completion_tokens": 1563
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Batch prediction using calibrated polynomial and cosine operator branches.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    keep = np.linalg.norm(u - v, axis=1) < 1.0\\n    if keep.sum() < 8:\\n        keep = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        offset, scale = np.array([\\n            _fit(_affine(u[keep, j:j+1]), v[keep, j]) for j in range(u.shape[1])\\n        ]).T\\n        error = np.linalg.norm(u * scale + offset - v, axis=1)\\n        new = error <= max(1e-7, 5.0 * np.median(error))\\n        if new.sum() < 8 or np.array_equal(new, keep):\\n            break\\n        keep = new\\n    return (x - offset) / scale\\n\\n\\ndef _products(q):\\n    return np.column_stack([q[:, i] * q[:, j] for i, j in ((0, 1), (0, 3), (1, 2), (2, 3))])\\n\\n\\ndef _cross(a, b):\\n    return (a[:, :, None] * b[:, None, :]).reshape(len(a), a.shape[1] * b.shape[1])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    q = _calibrate(study['panel_a'], np.concatenate((train['x'], study['test']['x'])))\\n    panel = study['panel_c']\\n    c = _affine(_products(q)) @ _fit(_affine(_products(panel['u'])), panel['v1'])\\n    # The cosine coordinates span panel C's second branch after its affine mixing.\\n    d = np.cos(2.4 * q)\\n    features = np.column_stack((q, c, d, _cross(q, c), _cross(c, d)))\\n    center = features[:n].mean(axis=0)\\n    scale = np.maximum(features[:n].std(axis=0), 1e-8)\\n    features = (features - center) / scale\\n    traj = np.asarray(train['traj'])\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:3]\\n    target = np.column_stack((train['y'], traj @ basis.T))\\n    mean = target.mean(axis=0)\\n    a = features[:n]\\n    weights = np.linalg.solve(a.T @ a + 0.002 * np.eye(a.shape[1]), a.T @ (target - mean))\\n    pred = features[n:] @ weights + mean\\n    y = pred[:, 0]\\n    state = pred[:, 1:] @ basis\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\nset -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /tmp/checksolver.py\\npython3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']; x = train['x']; n = len(x)\\nfolds = [np.arange(52,n), np.argsort(np.linalg.norm(x,axis=1))[-20:]]\\nfolds.extend(np.random.default_rng(813+i).permutation(n)[-20:] for i in range(12))\\nerrors=[]\\nfor b in folds:\\n    a = np.setdiff1d(np.arange(n), b)\\n    out = solve_batch(dict(study, train={k:(v[a] if k in ('x','y','traj') else v) for k,v in train.items()},test={'x':x[b]}))\\n    et = np.abs(out['state_pred']-train['traj'][b]); ey=np.abs(out['y_hat']-train['y'][b]); errors.append([ey.mean(),et.mean(),et.mean(0).max()])\\nprint('prescribed / outer radius',errors[:2],'; worst across 14 splits',np.max(errors,axis=0))\\nassert max(errors[0][:2]) <= .038\\nout=solve_batch(study); y=out['y_hat']; state=out['state_pred']; assert y.shape==(36,) and state.shape==(36,8)\\nassert all(np.isfinite(v).all() for v in out.values())\\nnp.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic sparse Fourier readout) -> H2 (inverse calibration with quadratic–linear and quadratic–cosine interactions); the structured prototype reaches 52/20 MAE 0.01088 for y and 0.00924 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the sparse Fourier ensemble\",\n      \"rejected_reason\": \"Its 52/20 MAEs exceed 0.038 on both outputs, whereas the panel-aligned interaction prototype passes both.\"\n    }\n  ],\n  \"rationale\": \"Promote the interaction model selected by leave-one-out error on the first 52 rows. Verify the saved implementation on the prescribed split, an outer-radius split, randomized splits, and the public schema in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "3f48662e266e7ad4de5779371c0abf7ee8e68ed24e12619b50c051625cc2a14a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36785.84,
+      "usage_known": true,
+      "prompt_tokens": 46539,
+      "cached_tokens": 12672,
+      "completion_tokens": 1563
+    }
+  ]
+}

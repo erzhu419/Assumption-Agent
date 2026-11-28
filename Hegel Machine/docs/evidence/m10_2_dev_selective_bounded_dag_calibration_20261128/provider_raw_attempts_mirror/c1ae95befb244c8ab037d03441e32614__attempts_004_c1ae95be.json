@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1ae95befb244c8ab037d03441e32614",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Eager_BoundedDAG_Online__dev_m102_c03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:14:00.952257+00:00",
+  "ended_at_utc": "2026-11-28T13:14:38.273483+00:00",
+  "request_sha256": "c0f794bf6ec3de7ad2fb2fa385d291176b75782255330a02a3295473f1b9db93",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 28623,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24005,
+    "cached_tokens": 5504,
+    "completion_tokens": 1632
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=np.c_[s['train']['y'],s['train']['traj']]; n=len(x)\\nsp=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; old=runpy.run_path('/tmp/hegel_continual_archive/dev_m102_c03_batch_00_solver.py')['_panel_pred']\\ndef aff(u): return np.c_[np.ones(len(u)),u]\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef rob(u,v):\\n h=aff(u); k=np.ones(len(u),bool)\\n for _ in range(8):\\n  r=np.linalg.norm(v-h@fit(h[k],v[k]),axis=1); k=r<max(.4,2.5*np.median(r))\\n return fit(h[k],v[k]),r,k\\ncoords={'raw':x}; p=s['panel_a']; a,r,k=rob(p['u'],p['v']); print('A coef',a.round(4),'residuals',np.sort(r).round(3),'archived keep',sum(np.linalg.norm(p['v']-aff(p['u'])@fit(aff(p['u']),p['v']),axis=1)<3))\\nu,v=p['u'][k],p['v'][k]; d=np.array([fit(aff(u)[:,[0,j+1]],v[:,j]) for j in range(4)]); print('A diagonal',d.round(5)); z=(x-d[:,0])/d[:,1]; coords['diag']=z; coords['full']=(x-a[0])@np.linalg.inv(a[1:]);\\nfor pn in ['panel_b','panel_c']:\\n p=s[pn]; u=p['u']; h=aff(u)\\n for name in p.keys()-{'u'}:\\n  v=p[name]; b=fit(h,v); print(pn,name,'linear',b.round(3),'sv',np.linalg.svd(b[1:],compute_uv=False).round(3))\\n  for tag,func in [('quad',lambda z:z*z),('cube',lambda z:z**3),('sat',lambda z:np.expm1(-.2962*z*z)),('tanh',np.tanh),('sin',np.sin)]:\\n   g=np.c_[h,func(u)]; loo=(v-g@fit(g,v))/(1-np.sum(np.linalg.svd(g,full_matrices=False)[0]**2,axis=1))[:,None]; print(tag,round(np.mean(abs(loo)),5),end='; ')\\n  print()\\n  w=fit(np.c_[h,np.expm1(-.2962*u*u)],v); coords[pn+name]=z+(np.c_[aff(z),np.expm1(-.2962*z*z)]@w-aff(z)@b)@np.linalg.inv(b[1:]);\\ndef quad(z): return np.c_[z,*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]]\\ndef poly(z,d):\\n from itertools import combinations_with_replacement\\n return np.column_stack([np.prod(z[:,j],axis=1) for k in range(1,d+1) for j in combinations_with_replacement(range(4),k)])\\nfolds=[np.arange(52,72),*np.array_split(np.random.default_rng(12).permutation(n),4)]; idx=[np.setdiff1d(np.arange(n),j) for j in folds]; sparse=[]; archive=[]\\nfor i,j in zip(idx,folds):\\n st=dict(s,train=dict(x=x[i],y=y[i,0],traj=y[i,1:]),test={'x':x[j]}); o=sp({'__input__':st}); sparse.append(np.c_[o['y_hat'],o['state_pred']]); archive.append(old(st,1.,.3,'sat'))\\nwt=np.r_[.5,np.repeat(.65,8)];\\ndef score(p):\\n out=[]\\n for j,a,b in zip(folds,sparse,p):\\n  e=np.abs((1-wt)*a+wt*b-y[j]); out.append([e[:,0].mean(),e[:,1:].mean()])\\n return np.array(out)\\nprint('sparse',score(sparse).round(4)); print('archive',score(archive).round(4)); scores=[]\\nfor cn,z in coords.items():\\n for fn,f in [('quad',quad(z)),('tanh',np.c_[quad(z),quad(np.tanh(z))]),('poly3',poly(z,3)),('fourier',np.c_[quad(z),np.sin(z),np.cos(z),np.sin(2*z),np.cos(2*z)]),('raw+tanh',np.c_[quad(x),quad(np.tanh(z))])]:\\n  for alpha in [.003,.03,.3,1,3,10]:\\n   pred=[]\\n   for i,j in zip(idx,folds):\\n    zz=(f-f[i].mean(0))/np.maximum(f[i].std(0),1e-7); q=zz[i]; m=y[i].mean(0); pred.append(zz[j]@np.linalg.solve(q.T@q+alpha*np.eye(q.shape[1]),q.T@(y[i]-m))+m)\\n   e=score(pred); scores.append((e.max(0).max(),cn,fn,alpha,e))\\nfor _,cn,fn,al,e in sorted(scores,key=lambda a:a[0])[:22]: print(cn,fn,al,e.round(4).tolist())\\nPY\\npython3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Compare fixed-threshold calibration with robust panel fits and structured readouts; the archived prior-batch gate reported MAEs of 0.235029 and 0.117312.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived calibration unchanged\",\n      \"rejected_reason\": \"The prior gate failed, and the current panel measurements need a direct residual and validation check before reuse.\"\n    }\n  ],\n  \"rationale\": \"Measure contamination and panel-model residuals separately, then compare the resulting readouts against the frozen-branch and archived baselines on the official split and four additional folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7d0cd00b2ae013deab73eb8385911084a6cd372e12d1e401170807dcf9513854",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37319.73,
+      "usage_known": true,
+      "prompt_tokens": 24005,
+      "cached_tokens": 5504,
+      "completion_tokens": 1632
+    }
+  ]
+}

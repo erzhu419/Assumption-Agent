@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1438a5cbc4844eeb8307a46da3c221d3",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:44:44.682967+00:00",
+  "ended_at_utc": "2026-11-28T13:45:17.151948+00:00",
+  "request_sha256": "7e6739bfd821d547cba795055a8eae0276856ceb9b71cfa79860d19cc82ddeff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37368,
+    "cached_tokens": 12672,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/link06.py <<'PY'\\nexec(open('/tmp/search06.py').read().split('from scipy.spatial.distance')[0])\\nfrom scipy.linalg import solve\\nfrom sklearn.model_selection import KFold\\nF=dict(z=z,a=a,b=b,c=c,d=d,q=q,r=r)\\nS=np.arange(52); I=np.arange(52,72); n=len(z)\\nM=np.column_stack((af(a),z,np.einsum('ni,nj->nij',a,z).reshape(n,-1),terms(a,2)[0][:,5:],terms(z,2)[0][:,5:])); P=fit(M[S],Y[S]); print('COEF: scalar, terminal',np.c_[P[:,0],P[:,-1]].round(4).T); print('cross a,z terminal',P[9:25,-1].reshape(4,4).round(4)); print('cross b,z terminal',(np.linalg.solve(fit(af(a),b)[1:],P[9:25,-1].reshape(4,4))).round(4));print('cross a,z scalar',P[9:25,0].reshape(4,4).round(4));print('extremes',np.c_[Y[I,0],M[I]@P[:,0],Y[I,-1],M[I]@P[:,-1]].round(3));\\ndef lin(H,y,tr,te,reg):\\n G=H[:,1:];m=G[tr].mean(0);s=G[tr].std(0)+1e-10;G=(G-m)/s;mu=y[tr].mean(0);W=G[tr];p=solve(W.T@W+reg*np.eye(W.shape[1]),W.T@(y[tr]-mu),assume_a='pos');return G[te]@p+mu\\nfolds=[(S,I),*KFold(4,shuffle=True,random_state=251).split(Y)]\\ny=Y[:,0]; T=Y[:,1:]; Hs={}\\nfor nm,u in [('z',z),('q',q),('r',r)]:\\n for threshold in [.28,.31,.35,.39]:\\n  for power0 in [1.25,1.5,1.75]:\\n   w=soft(z,[threshold,power0]); C0=np.einsum('ni,nj->nij',w,u).reshape(n,-1); A=terms(w,2)[0]; U=terms(u,2)[0];\\n   for mode,H in enumerate([np.c_[A,u,C0],np.c_[U,w,C0],np.c_[A,U[:,1:],C0],np.c_[af(w),u,C0]]):Hs[nm,threshold,power0,mode]=H\\nout=[]\\nfor name,H in Hs.items():\\n for reg in [.00001,.001,.02,.15]:\\n  for f in [('raw',0),('soft',.10),('soft',.22),('soft',.30),('sinh',.5),('sinh',1.),('cube',.22),('cube',.54)]:\\n   fn,k=f\\n   if fn=='soft': yy=y/(1-k*abs(y)); inv=lambda v:v/(1+k*abs(v))\\n   elif fn=='sinh': yy=np.sinh(k*y)/k; inv=lambda v:np.arcsinh(k*v)/k\\n   elif fn=='cube': yy=np.sign(y)*np.log1p(k*abs(y))/k; inv=lambda v:np.sign(v)*np.expm1(np.minimum(k*abs(v),5))/k\\n   else: yy=y;inv=lambda v:v\\n   e=[]\\n   for tr,te in folds:\\n    pp=inv(lin(H,yy,tr,te,reg));e.append(np.mean(abs(pp-y[te])))\\n   out.append((e[0],np.mean(e[1:]),max(e[1:]),name,reg,f))\\nprint('best combined',*sorted(out,key=lambda e:e[0]+np.mean(e[1:3]))[:22],sep='\\\\n');print('best gate',*sorted(out)[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/link06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test scalar readout links on top of thresholded–calibrated interactions; current best paired regression gives 0.0428 scalar and 0.0182 trajectory MAE on the 52/20 split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select a surrogate by the 52/20 score alone\",\n      \"rejected_reason\": \"Nearby warp parameters may fit that split by chance; compare shuffled folds and inspect the fitted interaction coefficients.\"\n    }\n  ],\n  \"rationale\": \"Cross-products improve both outputs, but the scalar misses the gate. Test whether the remaining error comes from the scalar link, the warp parameters, or extra interaction terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "40aa4ee8de2d6aafe935e9975faac13f15fc1a2107b6da5858057421b1f2b341",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32467.81,
+      "usage_known": true,
+      "prompt_tokens": 37368,
+      "cached_tokens": 12672,
+      "completion_tokens": 1316
+    }
+  ]
+}

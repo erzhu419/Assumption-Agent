@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae32eee86da74944bd3b256144432584",
+  "call_seq": 1,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__init_decomp_dev_m102_c02_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:11:22.637328+00:00",
+  "ended_at_utc": "2026-11-28T13:12:14.936969+00:00",
+  "request_sha256": "054e6e991a420dd50017fba4ec16de79e03f5e7b2e399cbde8b9e436bcfdd7f4",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 5362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14265,
+    "cached_tokens": 0,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Panel calibration and coordinate recovery form a reusable numerical transform independent of the training responses and evaluation times. Extracting that transform lets both prediction routines reuse the same calibrated coordinates without exceeding the input fan-out bound. The original numerical operations and output contract are unchanged, so the factorization preserves source predictions; it does not attempt to correct the target shift.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _panel_maps(panel_a, panel_b):\\n    u, v = (np.asarray(panel_a[k], dtype=float) for k in ('u', 'v'))\\n    offset, gain = np.empty(u.shape[1]), np.empty(u.shape[1])\\n    for j in range(u.shape[1]):\\n        a, b = u[:, j], v[:, j]\\n        i, k = np.triu_indices(len(a), 1)\\n        dx = a[k] - a[i]\\n        ok = np.abs(dx) > 0.1 * np.ptp(a)\\n        slope = np.median((b[k[ok]] - b[i[ok]]) / dx[ok])\\n        bias = np.median(b - a * slope)\\n        residual = b - (bias + slope * a)\\n        mad = np.median(np.abs(residual))\\n        keep = np.abs(residual) <= max(6 * mad, 1e-10)\\n        if keep.sum() >= 2 and np.ptp(a[keep]) > 0:\\n            bias, slope = np.linalg.lstsq(_affine(a[keep, None]), b[keep], rcond=None)[0]\\n        offset[j], gain[j] = bias, slope\\n    u, v = (np.asarray(panel_b[k], dtype=float) for k in ('u', 'v'))\\n    operator = np.linalg.lstsq(_affine(u), v, rcond=None)[0]\\n    return offset, gain, operator\\n\\n\\ndef _coordinates(x, maps):\\n    offset, gain, operator = maps\\n    return _affine((x - offset) / gain) @ operator\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    maps = _panel_maps(study['panel_a'], study['panel_b'])\\n    c = _coordinates(np.asarray(study['train']['x'], dtype=float), maps)\\n    query = _coordinates(np.asarray(study['test']['x'], dtype=float), maps)\\n    return {'c': c, 'query': query}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _readout(c, intercept=True):\\n    return np.column_stack((_affine(c) if intercept else c,\\n                            np.sum(c[:, :2] * c[:, 2:], axis=1)))\\n\\n\\ndef _trajectory(c, query, traj, times, intercept=True):\\n    design, new_design = (_affine(c), _affine(query)) if intercept else (c, query)\\n    beta = np.linalg.lstsq(design, traj, rcond=None)[0]\\n    fitted = design @ beta\\n    scale = max(float(np.max(np.abs(times))), np.finfo(float).tiny)\\n    t = times / scale\\n\\n    def basis(log_rates):\\n        return -np.expm1(-np.exp(log_rates[:, None]) * t)\\n\\n    def residual(log_rates):\\n        modes = basis(log_rates)\\n        return (fitted @ np.linalg.pinv(modes) @ modes - fitted).ravel()\\n\\n    log_rates = least_squares(residual, np.log([0.6, 2.7]),\\n                              bounds=(np.log([0.03, 0.25]), np.log([4., 20.])),\\n                              max_nfev=100).x\\n    modes = basis(log_rates)\\n    return new_design @ (beta @ np.linalg.pinv(modes)) @ modes\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    coordinates = inputs['node_00']\\n    c, query = coordinates['c'], coordinates['query']\\n    train = study['train']\\n    beta = np.linalg.lstsq(_readout(c), np.asarray(train['y'], dtype=float), rcond=None)[0]\\n    y_hat = _readout(query) @ beta\\n    state_pred = _trajectory(c, query, np.asarray(train['traj'], dtype=float),\\n                             np.asarray(study['eval_times'], dtype=float))\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "665c58852d8b6a74090dbd39a5b6ef1b6a8d5283f2830507cfe450e345c99253",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52298.4,
+      "usage_known": true,
+      "prompt_tokens": 14265,
+      "cached_tokens": 0,
+      "completion_tokens": 1326
+    }
+  ]
+}

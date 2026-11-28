@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "093335d052e04db0b87e2df5fd575614",
+  "call_seq": 12,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:54:46.819847+00:00",
+  "ended_at_utc": "2026-11-28T13:55:05.987131+00:00",
+  "request_sha256": "205b580b8889ff6f4461ed3d7346dcfbae94654c543ebdd1e7187d082614dcb6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34468,
+    "cached_tokens": 12672,
+    "completion_tokens": 726
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = '''    fast = _design(p, r, np.sum(p * r, axis=1))\\n    slow = _design(r, p[:, 0] * r[:, 1])\\n    y_hat = fast[n:] @ _fit(fast[:n], np.asarray(train['y'], dtype=float))'''\\nb = '''    common = _design(p, r, np.sum(p * r, axis=1))\\n    # Both state modes use the directional interaction; the scalar readout does not.\\n    cross = p[:, 0] * r[:, 1]\\n    fast = _design(common[:, 1:], cross)\\n    slow = _design(r, cross)\\n    y_hat = common[n:] @ _fit(common[:n], np.asarray(train['y'], dtype=float))'''\\nassert s.count(a) == 1\\np.write_text(s.replace(a, b))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress12.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nexec(open('/tmp/stress12.py').read().split(\\\"print('columns:\\\")[0])\\npublic=run(idx[52:]); print('Required 52/20 with fast cross term:',public)\\nassert public[1] < .0046\\nz=mod._calibrate(s['panel_a'],x)\\nq=z[:,2]-.5*z[:,3]\\next=np.array([run(np.argsort(q)[sl]) for sl in (slice(None,20),slice(-20,None))]); print('Additional signed-pair extreme slices:',ext.max(0))\\nassert ext[:,2].max() < .007\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 directional interaction in the slow state only -> H2 the same interaction in both state modes; the challenger reduced worst-slice horizon MAE from 0.00919 to 0.00660 without changing the scalar readout.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the fixed rational denominator\",\n      \"rejected_reason\": \"The unmodulated interaction has lower required-split trajectory MAE and lower worst extreme-slice trajectory and horizon MAEs; the profiled denominator parameters were unstable across folds.\"\n    }\n  ],\n  \"rationale\": \"Promote the single interaction that improves trajectory transfer across the required split and both stress families. Leave scalar predictions unchanged and verify the saved artifact with the public validator and isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "09cb8ba9d96c7f02c9be5df1efcc00ce776ea7a94ee9403baee19212de2e1cc5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19165.71,
+      "usage_known": true,
+      "prompt_tokens": 34468,
+      "cached_tokens": 12672,
+      "completion_tokens": 726
+    }
+  ]
+}

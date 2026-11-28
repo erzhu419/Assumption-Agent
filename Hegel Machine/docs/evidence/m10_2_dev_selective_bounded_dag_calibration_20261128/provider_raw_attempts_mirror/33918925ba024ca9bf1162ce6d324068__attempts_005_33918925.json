@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "33918925ba024ca9bf1162ce6d324068",
+  "call_seq": 5,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Hegel_SelectiveBoundedDAG_Online__dev_m102_c04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:12:44.964444+00:00",
+  "ended_at_utc": "2026-11-28T13:13:18.358333+00:00",
+  "request_sha256": "ff8fc6445f66af91d0e692cd0176f8f8f3cbf6e7c10555cdf0b0b74de3f49041",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41517,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30716,
+    "cached_tokens": 12672,
+    "completion_tokens": 1448
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/f.py <<'PY'\\nfrom d import *\\nu,v=[s['panel_a'][k] for k in ('u','v')];m=np.linalg.norm(v-u,axis=1)<2\\nwd=np.array([ls(A(u[m])[:,[0,i+1]],v[m,i]) for i in range(4)]).T\\nb=ls(A(s['panel_b']['u']),s['panel_b']['v']);q=(x-wd[0])/wd[1];z=A(q)@b;zi=np.linalg.solve(b[1:].T,(q-b[0]).T).T\\n\\ndef loo(f,Y):\\n U,S,V=np.linalg.svd(f,full_matrices=False); m=S>1e-9*S[0]; U,S,V=U[:,m],S[m],V[m];E=U@(U.T@Y)-Y; h=np.sum(U*U,axis=1);return np.mean(abs(E),axis=0),np.mean(abs(E/np.maximum(1-h,1e-12)[:,None]),axis=0)\\n\\ndef grams(p):\\n F=poly(p,2);P=poly(p,3);a=p*p\\n yield 'linear',A(p);yield 'quadratic',F;yield 'cubic',P\\n for i,k in enumerate((.22,1.25)):\\n  for j,g in enumerate((1+k*a,1+k*abs(p),np.sqrt(1+k*a),np.cosh(k*p))):\\n   for lab,h in [('odd',p/g),('even',a/g)]:\\n    yield f'q + {i},{j},{lab}',np.c_[F,h]\\n   yield f'quad odd {i},{j}',poly(p/g,2)\\n  for lab,h in [('sin',np.sin(k*p)),('tanh',np.tanh(k*p)),('exp',np.exp(k*p)),('cos',np.cos(k*p))]:yield f'q + {i},{lab}',np.c_[F,h]\\n for i,k in enumerate((.22,1.25)):\\n  for lab,g in [('norm',np.sum(a,axis=1)),('L1',np.sum(abs(p),axis=1))]:\\n   G=1+k*g[:,None];yield f'{lab} div {k}',F/G;yield f'{lab} div+ {k}',np.c_[F,F/G]\\n for i in range(4):\\n  for j in range(i):\\n   for h,l in [(p[:,i]+p[:,j],'+'),(p[:,i]-p[:,j],'-'),(p[:,i]*p[:,j],'*')]:\\n    yield f'single {i}{l}{j}',np.c_[F,np.sin(1.25*h),np.cos(1.25*h),h/(1+.22*h*h),h*h/(1+.22*h*h)]\\n\\ndef panel():\\n u=s['panel_c']['u'];U={'u':u,'B(u)':A(u)@b,'invB(u)':np.linalg.solve(b[1:].T,(u-b[0]).T).T}; Y=np.c_[s['panel_c']['v1'],s['panel_c']['v2']]; print('C cross corr',np.corrcoef(np.c_[u,Y].T)[:4,4:]); print('C polynomial coefficients',ls(poly(u,2),Y));\\n for name,p in U.items():\\n  r=[]\\n  for lab,f in grams(p):\\n   a,c=loo(f,Y);r.append((lab,a,c))\\n  for k in range(8):\\n   print(name,k,[(a,round(b[k],4),round(c[k],4)) for a,b,c in sorted(r,key=lambda v:v[2][k])[:3]])\\n\\ndef train():\\n Y=np.c_[y,T[:,0],T[:,-1]];out=[]\\n for name,p in [('q',q),('z',z),('zi',zi)]:\\n  for lab,f in grams(p):\\n   a,c=loo(f[:52],Y[:52]); e=np.mean(abs(f[52:]@ls(f[:52],Y[:52])-Y[52:]),axis=0);out.append((name,lab,a,c,e))\\n for j in range(3):\\n  print('target',j, [(n,l,round(a[j],4),round(c[j],4),round(e[j],4)) for n,l,a,c,e in sorted(out,key=lambda v:v[3][j])[:13]])\\nif __name__=='__main__':panel();train()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/f.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear calibration) -> H2 (diagonal affine calibration plus a structured downstream law); 45 calibration inliers have residual norms below 0.0004, while raw quadratic holdout MAE remains 0.458 for y and 0.390 at the final horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Nonlinear calibration\",\n      \"rejected_reason\": \"After robust row screening and refitting, 45 rows follow a diagonal affine model to measurement precision and three have residual norms above 12.\"\n    }\n  ],\n  \"rationale\": \"Fix the calibration using the refit, then test telemetry-indexed rational features and transformed coordinates on panel and training folds before choosing the downstream model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f758e1f14fc67332b21c2fe8e071bc2d99e0ec3f8b4efdaa59d41e3f459c3e77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33392.83,
+      "usage_known": true,
+      "prompt_tokens": 30716,
+      "cached_tokens": 12672,
+      "completion_tokens": 1448
+    }
+  ]
+}

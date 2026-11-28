@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e88ce004eab4eceb406bbf98940af67",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:42:55.726664+00:00",
+  "ended_at_utc": "2026-11-28T13:43:36.122344+00:00",
+  "request_sha256": "be8d831fe8fccbdc45796a0ee742748a4ae51e23ee65df7a4ebcdc4f3f616fb6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34697,
+    "cached_tokens": 12672,
+    "completion_tokens": 1739
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout.py <<'PY'\\nimport numpy as np,pickle,itertools as it\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x); t=s['eval_times']; T=tr['traj']; Y=np.c_[tr['y'],T]; np.set_printoptions(precision=4,suppress=True)\\ndef fit(f,v): return np.linalg.lstsq(f,v,rcond=1e-10)[0]\\ndef ones(u): return np.ones(len(u))\\ndef quad(u): return np.c_[ones(u),u,*[u[:,i]*u[:,j] for i,j in it.combinations_with_replacement(range(4),2)]]\\np=s['panel_a'];u=p['u'];v=p['v'];h=np.c_[ones(u),u];g=np.linalg.norm(v-h@fit(h,v),axis=1)<3;u=u[g];v=v[g];w=np.roll(u,-1,axis=1)\\nfor j in range(4):\\n a=u[:,j]; b=w[:,j]; y=v[:,j]; mats=np.c_[ones(u),a,b,a*b,a*a,b*b,a**3,b**3,a*a*b,a*b*b,np.sin(2*a),np.sin(2*b)];print('A',j,fit(mats[:,:10],y),np.std(y-mats[:,:4]@fit(mats[:,:4],y)),np.std(y-mats[:,:10]@fit(mats[:,:10],y)))\\ndef cal(u):\\n w=np.roll(u,-1,axis=1);return np.stack([np.ones_like(u),u,w,u*w],axis=2)\\nc=np.stack([fit(cal(u)[:,j],v[:,j]) for j in range(4)]);print('cal',c)\\ndef inv(x,c):\\n z=(x-c[:,0])/c[:,1]\\n for _ in range(30):z=(x-c[:,0]-c[:,2]*np.roll(z,-1,axis=1))/(c[:,1]+c[:,3]*np.roll(z,-1,axis=1))\\n return z\\nz=inv(x,c); xs=np.r_[x,s['test']['x']]; zz=inv(xs,c);print('ranges',xs.min(0),xs.max(0),zz.min(0),zz.max(0), 'invert error',np.max(abs((cal(zz)*c).sum(2)-xs)))\\np=s['panel_b'];b=fit(np.c_[ones(p['u']),p['u']],p['v']);p=s['panel_c']; q=fit(quad(p['u']),p['v1']); uu=p['u']; vv=p['v2'];\\nfor name,fn in [('sat',lambda u,a: -np.expm1(-a*u*u)),('tanh2',lambda u,a:np.tanh(a*u)**2),('cos',lambda u,a:np.cos(a*u)),('rational',lambda u,a:u*u/(1+a*u*u)),('abs',lambda u,a:abs(u)**a),('tanh',lambda u,a:np.tanh(a*u))]:\\n def h(u,a):return np.c_[ones(u),fn(u,a)]\\n def res(a):return (vv-h(uu,a)@fit(h(uu,a),vv)).ravel()\\n a=least_squares(res,.5,bounds=(.005,6)).x;print('C2',name,a,np.std(res(a)))\\n if name=='sat': ac=a; cc=fit(h(uu,a),vv)\\nD={'raw':x,'diag':(x-c[:,0])/c[:,1],'A':z,'A_lin':(x-c[:,0])@np.linalg.inv(np.diag(c[:,1])+np.roll(np.diag(c[:,2]),1,axis=0))}\\nD.update({k+tag:f(v) for k,v in list(D.items()) for tag,f in [('B',lambda z:z@b[1:]+b[0]),('Bi',lambda z:(z-b[0])@np.linalg.inv(b[1:])),('C',lambda z:quad(z)@q),('BC',lambda z:quad(z@b[1:]+b[0])@q)]})\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\nfrom sklearn.model_selection import KFold\\nrates=np.array([.4153,1.8082]); ts=-np.expm1(-t[:,None]*rates); R=np.c_[Y[:,0],fit(ts,T.T).T];out=[]\\nfor key,u in D.items():\\n w=u[:,list(range(4))];fs={'Q':quad(u),'Q+sat':np.c_[quad(u),quad(np.tanh(u))[:,1:]],'Q+trig':np.c_[quad(u),np.sin(u),np.cos(u),np.sin(2*u),np.cos(2*u)],'P3':np.c_[quad(u),*[np.prod(u[:,i],axis=1) for i in it.combinations_with_replacement(range(4),3)]],'full':np.c_[quad(u),quad(np.tanh(u))[:,1:],np.sin(u),np.cos(u),np.sin(2*u),np.cos(2*u),*[np.prod(u[:,i],axis=1) for i in it.combinations_with_replacement(range(4),3)]]}\\n for tag,f in fs.items():\\n  fitidx=np.arange(52); testidx=np.arange(52,n); F=(f-f[fitidx].mean(0))/np.maximum(f[fitidx].std(0),1e-9); L=F[:52]; V=F[52:]; M=R[:52].mean(0); Z=R[:52]-M\\n  for reg in [1e-6,.01,.2,2.]:\\n   pr=V@L.T@np.linalg.solve(L@L.T+reg*np.eye(52),Z)+M; err=[np.mean(abs(pr[:,0]-R[52:,0])),np.mean(abs(pr[:,1:]@ts.T-T[52:]))];out.append((sum(err),key,tag,reg,np.round(err,5)))\\nprint(*sorted(out,key=lambda d:d[0])[:30],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py; grep -nE 'study|panel|summary' /holdout_task/public_asset_index.json | head -25\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coordinates → H2 cyclic bilinear calibration and transformed joint readout; archived public MAEs are 0.540840 and 0.506873.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare cyclic panel inversion and reference-panel feature families against the same held-out rows, while estimating the two temporal modes independently of the input geometry.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "af80acbce5b0cb32f2028428b7aa44d9d23f7a0b597cd7d770e80ef27f8976f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40394.25,
+      "usage_known": true,
+      "prompt_tokens": 34697,
+      "cached_tokens": 12672,
+      "completion_tokens": 1739
+    }
+  ]
+}

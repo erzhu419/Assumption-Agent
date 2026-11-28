@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "667cedaa66d44cb59fa92614a4f799f5",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:27:18.826581+00:00",
+  "ended_at_utc": "2026-11-28T13:28:07.788669+00:00",
+  "request_sha256": "1223aacb3a579ebf6dd5b856b36a00b7ecf8fa8d71e5bb400596a25d7e3ec101",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 32844,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25441,
+    "cached_tokens": 12672,
+    "completion_tokens": 1226
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/basis_probe.py <<'PY'\\nfrom readout_probe import *\\nfrom scipy.spatial.distance import cdist\\nD=list(batches()); print('trajectory', [round(np.abs(pr-tr).mean(),5) for p,pr,y,tr in D])\\ndef center(K,L):\\n c=K.mean(0); return K-c-c[:,None]+c.mean(), L-c-L.mean(1,keepdims=True)+c.mean()\\ndef setup(p,pr):\\n K,L=p['K'],p['Kq']; C,M=center(K,L); e,U=np.linalg.eigh(C); U=U[:,-4:]; e=e[-4:]; A,B=U*np.sqrt(e), (M@U)/np.sqrt(e)\\n out={'x':(A,B),'s':(p['sy'],p['qy']),'t':(p['st'][:,:4],p['qt'][:,:4]),'a':(p['scores'],pr@p['modes'].T)}\\n terms={'k':(C,M)}\\n for key,(x,q) in out.items():\\n  sd=x.std(0); x,q=(x-x.mean(0))/sd,(q-x.mean(0))/sd\\n  D,E=cdist(x,x,'sqeuclidean'),cdist(q,x,'sqeuclidean'); P,Q=x@x.T,q@x.T\\n  for deg in [1,2,3,4,5]: terms[key+str(deg)]=center((1+P/len(sd))**deg,(1+Q/len(sd))**deg)\\n  for w in [.5,1,2,4,8,16,32]: terms[key+'r'+str(w)]=center(np.exp(-D/w),np.exp(-E/w))\\n return terms\\nV=[(setup(p,pr),p['y_mean'],p['y_centered'],y) for p,pr,y,tr in D]\\ndef eval(combo,r):\\n errors=[]\\n for d,mu,y,z in V:\\n  K=sum(w*d[k][0] for k,w in combo); L=sum(w*d[k][1] for k,w in combo)\\n  errors.append(np.abs(mu+L@solve(K+r*np.eye(len(K)),y,assume_a='pos')-z).mean())\\n return np.array(errors)\\ncs=[]\\nfor k in V[0][0]:\\n for w in [.05,.3,1,3] if k!='k' else [1]:\\n  for r in [.00003,.0003,.003,.03,.3]:\\n   combo=[('k',1),(k,w),('t2',.03),('a1',.03)]\\n   e=eval(combo,r);cs.append((e.max(),e.mean(),e[0],k,w,r,e))\\nfor lo in [0,1,2]:\\n print('ranking',lo)\\n for c in sorted(cs,key=lambda c:c[lo])[:5]:print(c[:6],np.round(c[6],4))\\np,pr,y,_=D[0];print('feature ranges',[(k,np.round(p[k].std(0),3)) for k in ['sy','st','scores']]); print('targets',np.round(y,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/basis_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (additive joint readout) -> H2 (nonlinear joint basis); the additive K + st + state model reached 0.03335 public scalar MAE at one ridge setting but 0.08890 worst-slice MAE at its minimax setting.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Adding linear state scores and the frozen operator features to the archived kernel is sufficient across input slices.\",\"empirical_witness\":\"The joint K + st + state family passed the official scalar split at 0.03335 but retained a worst-slice MAE of 0.08890 even at its best tested minimax ridge.\",\"causal_blanket_diagnosis\":\"The archived kernel and additive projections may miss nonlinear structure needed when extrapolating on high-coordinate rows.\",\"sublated_pivot\":\"Compare polynomial and distance bases on the frozen signed operator outputs, trajectory scores, and leading kernel coordinates.\",\"risk_kind\":\"coordinate-tail extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit an additive model that passes the official split\",\"rejected_reason\":\"Coordinate-tail errors still exceed the public tolerance by more than a factor of two.\"}],\"rationale\":\"Keep the frozen trajectory path unchanged and test whether a better nonlinear basis improves worst-slice scalar error without sacrificing the official split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7f97d059e3d75ad3e0ba14a34d99ae4ebae3a1a269b42aad1785e36f0f94e5f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48961.14,
+      "usage_known": true,
+      "prompt_tokens": 25441,
+      "cached_tokens": 12672,
+      "completion_tokens": 1226
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5756fae43ed04d439771842912dc8af7",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:31:41.007919+00:00",
+  "ended_at_utc": "2026-11-28T13:32:21.072314+00:00",
+  "request_sha256": "71dd5b108faf59a13330e7b0352e42fbb954e00160ff021024d25735bc7d08b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59018,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37462,
+    "cached_tokens": 12672,
+    "completion_tokens": 1757
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Robust cyclic calibration, panel-B operator, and shared relaxation modes.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    r = np.roll(u, -1, axis=1)\\n    d = u.shape[1]\\n    j = np.arange(d)\\n    h = np.zeros((len(u), d, 2*d+3))\\n    h[:, j, j] = 1\\n    h[:, j, d+j] = u\\n    h[:, :, -3:] = np.stack((r, u*r, u**3), axis=-1)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(12):\\n        p = _fit(h[keep].reshape(-1, h.shape[-1]), v[keep].ravel())\\n        error = np.linalg.norm(h @ p-v, axis=1)\\n        new = error <= max(5*np.median(error), 1e-8)\\n        if np.array_equal(keep, new) or new.sum() < 2*d+3:\\n            break\\n        keep = new\\n    bias, gain = p[:d], p[d:2*d]\\n    linear, pair, cubic = p[-3:]\\n\\n    def forward(z):\\n        other = np.roll(z, -1)\\n        return bias + gain*z + linear*other + pair*z*other + cubic*z**3\\n\\n    return np.array([least_squares(lambda z: forward(z)-row, (row-bias)/gain,\\n                                   gtol=1e-11).x for row in x])\\n\\n\\ndef _operator(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n\\n    def transform(x, p):\\n        return _affine(x + p[0]*x/(1+p[1]*x*x))\\n\\n    def res(p):\\n        h = transform(u, p)\\n        return (h @ _fit(h, v)-v).ravel()\\n\\n    p = least_squares(res, [-1, .8], bounds=([-4,.001],[4,12]),\\n                      max_nfev=150).x\\n    return transform(z, p) @ _fit(transform(u, p), v)\\n\\n\\ndef _state(h, yt, q, t):\\n    coeff = _fit(h, yt)\\n\\n    def project(log_rates):\\n        modes = -np.expm1(-np.exp(log_rates[:, None])*t)\\n        return _fit(modes.T, coeff.T).T @ modes\\n\\n    opt = least_squares(lambda p: (h @ (project(p)-coeff)).ravel(),\\n                        np.log([.4, 1.8]), bounds=(np.log([.005,.25]), np.log([2,15])))\\n    return q @ project(opt.x)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    z = _calibration(study['panel_a'], np.concatenate((train['x'],test['x'])))\\n    w = _operator(study['panel_b'], z)\\n    paired = np.sum(w[:, :2]*w[:, 2:], axis=1)\\n    h = np.column_stack((_affine(w), paired))\\n    y = h[n:] @ _fit(h[:n], train['y'])\\n    state = _state(h[:n], train['traj'], h[n:], np.asarray(study['eval_times'], dtype=float))\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/stress.py <<'PY'\\nimport pickle,numpy as np, importlib.util\\nsp=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); mod=importlib.util.module_from_spec(sp);sp.loader.exec_module(mod)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); norm=np.linalg.norm(mod._calibration(s['panel_a'], t['x']),axis=1); a=np.arange(n)\\nd={ '52/20':a[52:], 'large-coordinate':np.argsort(norm)[-20:], 'small-coordinate':np.argsort(norm)[:20], 'large-readout':np.argsort(abs(t['y']))[-20:], 'late-amplitude':np.argsort(abs(t['traj'][:,-1]))[-20:]};r=np.random.default_rng(220)\\nd.update({f'random_{i}':r.permutation(n)[:20] for i in range(12)})\\nworst=np.zeros(4)\\nfor name,j in d.items():\\n i=np.setdiff1d(a,j); fit={k: (v[i] if k in ('x','y','traj') else v) for k,v in t.items()}; p=mod.solve_batch(dict(s,train=fit,test={'x':t['x'][j]})); es=abs(p['state_pred']-t['traj'][j]); ey=abs(p['y_hat']-t['y'][j]); e=np.array([ey.mean(),es.mean(),es[:,-1].mean(),es.mean(0).max()]); print(name,e);worst=np.maximum(worst,e)\\nprint('Worst (readout, trajectory, terminal, worst time):',worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Paired panel-B regression → self-contained calibrated solver with shared relaxation modes; prototype 52/20 MAEs were 0.01246 for readout, 0.00640 for trajectory, and 0.00983 at the worst time.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Add the nonlinear single-index readout\",\"rejected_reason\":\"Most links degraded held-out MAE, and the sinusoidal link’s small improvement has not been replicated on other splits.\"}],\"rationale\":\"Implement the compact model with a substantial public validation margin, then check the exact artifact on the required split, random splits, and held-out extremes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9942fdb8d88665e842854eddcb2247f669858642d33ef976229ca60fc2510cff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40063.1,
+      "usage_known": true,
+      "prompt_tokens": 37462,
+      "cached_tokens": 12672,
+      "completion_tokens": 1757
+    }
+  ]
+}

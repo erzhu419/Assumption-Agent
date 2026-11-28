@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bab06c669c6e4678b3fcfd870c2815d5",
+  "call_seq": 11,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:35:15.464853+00:00",
+  "ended_at_utc": "2026-11-28T13:35:54.095059+00:00",
+  "request_sha256": "6895610963b91581d631d752d31395dcffa8ab9f3b01725a12adebd70cc41894",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67594,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40595,
+    "cached_tokens": 12672,
+    "completion_tokens": 1675
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated spatial regression with a shared temporal response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _affine(panel):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    i, j = np.triu_indices(len(u), 1)\\n    du = u[i] - u[j]\\n    slopes = np.median((v[i] - v[j]) / np.where(abs(du) > 1e-12, du, np.inf), axis=0)\\n    offsets = np.median(v - u * slopes, axis=0)\\n    for _ in range(3):\\n        r = np.linalg.norm(v - u * slopes - offsets, axis=1)\\n        keep = r <= max(6 * np.median(r), .0005)\\n        if keep.sum() >= 6:\\n            for k in range(u.shape[1]):\\n                offsets[k], slopes[k] = np.linalg.lstsq(np.c_[np.ones(keep.sum()), u[keep, k]], v[keep, k], rcond=None)[0]\\n    return slopes, offsets\\n\\n\\ndef _coordinates(study, x):\\n    a, b = _affine(study['panel_a'])\\n    z = (x - b) / a\\n    p = study['panel_b']\\n    u = np.asarray(p['u'])\\n    w = np.linalg.lstsq(np.c_[np.ones(len(u)), u], p['v'], rcond=None)[0]\\n    return z, np.c_[np.ones(len(z)), z] @ w\\n\\n\\ndef _predict(charts, targets):\\n    n = len(targets)\\n    yw = targets / np.maximum(targets.std(axis=0), 1e-12)\\n    eye = np.eye(n)\\n    estimates, scores, groups = [], [], []\\n    for j, X in enumerate(charts):\\n        for h in [0., .22, .45]:\\n            Z = X if h == 0 else np.tanh(h * X) / h\\n            L = Z @ Z[:n].T\\n            D = cdist(Z, Z[:n], 'sqeuclidean')\\n            for scale in [.12, .22, .34, .48, .65, .85]:\\n                for q in [.02, .12, .45]:\\n                    for mode in (0, 1):\\n                        R = np.exp(-scale * D)\\n                        if mode:\\n                            A = (Z[:, None, :] - Z[None, :n, :]) ** 2\\n                            R = .6 * R + .4 * np.exp(-2 * scale * A).mean(axis=2)\\n                        K = 1. + L + q * L**2 + R\\n                        for ridge in [.00012, .00065, .0025, .009]:\\n                            f = cho_factor(K[:n] + ridge * eye, lower=True, check_finite=False)\\n                            alpha = cho_solve(f, yw, check_finite=False)\\n                            diagonal = cho_solve(f, eye, check_finite=False).diagonal()\\n                            err = alpha / diagonal[:, None]\\n                            scores.append(.68 * np.mean(abs(err), axis=0) + .32 * np.sqrt(np.mean(err**2, axis=0)))\\n                            estimates.append(K[n:] @ alpha)\\n                            groups.append((j,h,scale,q,mode,ridge))\\n    scores = np.array(scores)\\n    estimates = np.array(estimates)\\n    output = []\\n    for k in range(yw.shape[1]):\\n        s = scores[:, k]; w = np.exp(-(s / s.min() - 1) / .065); w /= w.sum()\\n        output.append(w @ estimates[:, :, k] * max(targets.std(axis=0)[k], 1e-12))\\n    return np.array(output).T\\n\\n\\ndef solve_batch(study):\\n    tr = study['train']\\n    x = np.concatenate([tr['x'], study['test']['x']], axis=0)\\n    charts = _coordinates(study, x)\\n    T = np.asarray(tr['traj'])\\n    h = np.linalg.svd(T, full_matrices=False)[2][0]\\n    p = _predict(charts, np.c_[tr['y'], T @ h])\\n    y = p[:, 0]\\n    state = p[:, 1, None] * h\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/check13.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; f=runpy.run_path('/holdout_task/batch_solver.py')['solve_batch']; rng=np.random.default_rng(1642)\\nsplits=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=44).split(x))+[(q[:52],q[52:]) for q in (rng.permutation(72) for _ in range(4))]\\nfor i,o in splits:\\n y,t=tr['y'][i],tr['traj'][i]; p=f({**s,'train':{'x':x[i],'y':y,'traj':t,'summary':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])},'test':{'x':x[o]}}); print(np.round(np.r_[np.mean(abs(p['y_hat']-tr['y'][o])),np.mean(abs(p['state_pred']-tr['traj'][o]),0)],6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check13.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single spatial kernel → H2 calibrated kernel ensemble with low-rank trajectory reconstruction; prior best 52/20 y MAE is 0.03998.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the shared rational denominator\",\"rejected_reason\":\"It did not improve scalar accuracy and gave unstable trajectory errors across folds.\"}],\"rationale\":\"Save a standalone solver now, select ensemble weights using only the fitting rows, and verify scalar and per-horizon trajectory errors on the required split and independent resamples.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7051df1ab195cfb39fc3820c97a81f192fe5a970f28eb4e019cbad2798d6bc70",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38628.55,
+      "usage_known": true,
+      "prompt_tokens": 40595,
+      "cached_tokens": 12672,
+      "completion_tokens": 1675
+    }
+  ]
+}

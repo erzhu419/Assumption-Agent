@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82e98b9788a647db8c6c64339128cb35",
+  "call_seq": 4,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:18:39.844717+00:00",
+  "ended_at_utc": "2026-11-28T13:19:12.068818+00:00",
+  "request_sha256": "8fb3dd67d545044c0e615906ad9c39f87be769b39679aa3c150b23e1cd2db257",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24835,
+    "cached_tokens": 12672,
+    "completion_tokens": 1328
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(x)\\ndef affine(u,v):\\n X=np.c_[np.ones(len(u)),u]; w=np.linalg.lstsq(X,v,rcond=None)[0]; return w\\np=s['panel_a']; u,v=p['u'],p['v']; keep=np.ones(len(u),bool)\\nfor j in range(6):\\n a=affine(u[keep],v[keep]); e=np.linalg.norm(np.c_[np.ones(len(u)),u]@a-v,axis=1); keep=np.argsort(e)[:44]; print('A',j,np.round(np.sort(e)[[0,22,43,44,45,46,47]],6))\\nb=affine(s['panel_b']['u'],s['panel_b']['v']);print('A map',a);print('B map',b)\\nfor p,name in [(s['panel_c'],'v1'),(s['panel_c'],'v2')]:\\n u,v=p['u'],p[name]\\n for family in ['tanh','sin','rat','ratodd','soft','square','tanhplus','ratplus']:\\n  def feat(z,h):\\n   t={'tanh':lambda:np.tanh(h*z),'sin':lambda:np.sin(h*z),'rat':lambda:z*z/(1+h*z*z),'ratodd':lambda:z/(1+h*z*z),'soft':lambda:z/np.sqrt(1+h*z*z),'square':lambda:z*z,'tanhplus':lambda:np.tanh(h*z),'ratplus':lambda:z*z/(1+h*z*z)}[family]()\\n   extra=(family in ('rat','square','tanhplus','ratplus'))\\n   return np.c_[np.ones(len(z)),z,t] if extra else np.c_[np.ones(len(z)),t]\\n  def loss(h):\\n   Q=np.linalg.qr(feat(u,h))[0]; return np.sqrt(np.mean(((v-Q@(Q.T@v))/(1-(Q*Q).sum(1,keepdims=True)))**2))\\n  opt=minimize_scalar(loss,bounds=(.02,3),method='bounded');print(name,family,round(opt.x,5),round(opt.fun,6))\\ncoords={'x':x,'a':x@a[1:]+a[0],'ai':(x-a[0])@np.linalg.pinv(a[1:]),'b':x@b[1:]+b[0]};coords['ab']=coords['a']@b[1:]+b[0];coords['aib']=coords['ai']@b[1:]+b[0];\\nfolds=[(np.arange(52),np.arange(52,72))];rng=np.random.default_rng(456)\\nfor _ in range(5):\\n i=rng.permutation(n);folds.append((i[:52],i[52:]))\\nresults=[]\\nfor key,z in coords.items():\\n z=z-z.mean(0);z/=np.sqrt((z*z).sum(1).mean()); D=cdist(z,z,'sqeuclidean'); dot=z@z.T\\n for width in [.05,.12,.25,.5,1,2]:\\n  for typ in ['rbf','m52','rq','add']:\\n   R=np.sqrt(5*width*D); K={'rbf':np.exp(-width*D),'m52':(1+R+R*R/3)*np.exp(-R),'rq':(1+width*D)**-1,'add':np.exp(-width*(z[:,None]-z[None,:])**2).sum(2)}[typ]+1+dot+.3*dot**2\\n   for ridge in [1e-6,1e-4,.003,.02]:\\n    E=[]\\n    for i,j in folds:\\n     e=abs(K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+ridge*np.eye(len(i)),Y[i],assume_a='pos')-Y[j]);E.append([e[:,0].mean(),e[:,1:].mean()]);\\n    E=np.array(E);results.append((E.mean(0)[0],E.max(0)[0],E[0,0],E.max(0)[1],key,width,typ,ridge))\\nprint('ascending mean',*sorted(results)[:20],sep='\\\\n');print('ascending gate',*sorted(results,key=lambda a:a[2])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct coordinate kernel -> H2 robust panel-derived coordinates and nonlinear operators; archived 52/20 scalar MAE 0.060375 remains above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the ordinary least-squares reference map\",\"rejected_reason\":\"Three reference residuals exceed 10 units, so a trimmed fit is needed before assessing the map.\"}],\"rationale\":\"Use panel-only fits to isolate calibration and candidate operators, then compare spatial kernels across multiple fixed 52/20 splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "8b7ddcfee7e098863355bf131d73b860fec97becc4ef589cd6f4b7c6e53529e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32222.19,
+      "usage_known": true,
+      "prompt_tokens": 24835,
+      "cached_tokens": 12672,
+      "completion_tokens": 1328
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5f2f6f2605f491d963b49c188746b9a",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c03__Hegel_SelectiveBoundedDAG_Online__dev_m102_c03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:30:17.644997+00:00",
+  "ended_at_utc": "2026-11-28T14:31:02.453335+00:00",
+  "request_sha256": "2cfbb895c26b402795ad0cba3d6ef06c8ddf394639508fa07a56e1fbb96035e8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52340,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33106,
+    "cached_tokens": 12672,
+    "completion_tokens": 1605
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -58 /holdout_task/test_dag_candidate.py; cat > /tmp/fit15.py <<'PY'\\nfrom maps15 import *\\nfrom itertools import combinations\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.spatial.distance import cdist\\nI,J=np.array(list(combinations(range(4),2))).T\\ndef pairs(z):return z[:,I]*z[:,J]\\ndef fitA(s,x):\\n p=s['panel_a'];u=p['u'];v=p['v']; k=np.linalg.norm(v,axis=1)<4; u=u[k];v=v[k]; js=np.arange(4)\\n def design(u,j,w):return one(u[:,j],np.sin(w*u[:,j]),np.sin(w*u[:,(j+2)%4]))\\n def fit(w):return [ls(design(u,j,w),v[:,j]) for j in js]\\n def err(w):return sum(np.sum((design(u,j,w)@b-v[:,j])**2) for j,b in enumerate(fit(w)))\\n w=minimize_scalar(err,bounds=(1.8,3.0),method='bounded').x; b=np.array(fit(w)); print('A',w,np.sqrt(err(w)/v.size),b)\\n bias,a,c,d=b.T;z=(x-bias)/a\\n for _ in range(30):\\n  sin=np.sin(w*z);cos=w*np.cos(w*z); r=bias+a*z+c*sin+d*np.roll(sin,2,axis=1)-x\\n  jac=np.zeros((len(x),4,4));jac[:,js,js]=a+c*cos;jac[:,js,(js+2)%4]=d*np.roll(cos,2,axis=1)\\n  z-=np.clip(np.linalg.solve(jac,r[...,None])[...,0],-.35,.35)\\n print('inv max',abs(r).max(), 'z range',z.min(0),z.max(0));return z\\n\\ndef branches(s,z):\\n p=s['panel_c'];u=p['u'];out=[]\\n for key in ('v1','v2'):\\n  v=p[key];scores=[]\\n  for name,f in func.items():\\n   for form in range(3):\\n    def des(u,w):return one(*([u]+([pairs(u)] if form else [])+([u*u] if form==2 else [])+[f(u,w)]))\\n    def err(w):\\n     h=des(u,w);r=v-h@ls(h,v);lev=np.sum(h*np.linalg.pinv(h).T,axis=1);return np.mean((r/(1-lev[:,None]))**2)\\n    grid=np.linspace(.25,5,40);k=grid[np.argmin([err(w) for w in grid])]; w=minimize_scalar(err,bounds=(max(.15,k-.13),k+.13),method='bounded').x\\n    scores.append((err(w),name,form,w,ls(des(u,w),v),des(z,w)))\\n  scores.sort(key=lambda a:a[0]); print(key,[(a[0]**.5,*a[1:4]) for a in scores[:6]]); e,name,form,w,b,h=scores[0]; print(b.round(4));out.append(h@b)\\n return out\\n\\ndef run(s):\\n tr=s['train'];z=fitA(s,tr['x']); B=s['panel_b'];b=one(z)@ls(one(B['u']),B['v']);c,d=branches(s,z)\\n Y=np.column_stack((tr['y'],tr['traj']));n=len(z);cut=int(.75*n);print('n',n,'cut',cut,'t',s['eval_times']);np.savez('/tmp/coords15.npz',z=z,b=b,c=c,d=d,Y=Y)\\n scores=[]\\n for nam,X in [('z',z),('b',b),('c',c),('d',d),('cd',np.c_[c,d]),('zbcd',np.c_[z,b,c,d])]:\\n  for pre in ('none','tanh','atan'):\\n   xx={'none':X,'tanh':np.tanh(X),'atan':np.arctan(X)}[pre];xx=(xx-xx.mean(0))/xx.std(0);dd=cdist(xx,xx,'sqeuclidean')/xx.shape[1]\\n   for kind in ('RBF','M32','M52','poly'):\\n    for k in [.08,.2,.5,1,2,4]:\\n     a=np.sqrt(k*dd);K={'RBF':np.exp(-a*a),'M32':(1+a)*np.exp(-a),'M52':(1+a+a*a/3)*np.exp(-a),'poly':(1+xx@xx.T/xx.shape[1])**int(k+2)}[kind]\\n     for reg in [1e-6,1e-4,.001,.01,.05]:\\n      A=K[:cut,:cut]+np.eye(cut)*reg; P=np.linalg.inv(A); co=P@Y[:cut]; loo=np.mean(np.abs(co/np.diag(P)[:,None]),axis=0); e=np.mean(abs(K[cut:,:cut]@co-Y[cut:]),axis=0);scores.append((max(loo[0],loo[1:].mean()),e[0],e[1:].mean(),nam,pre,kind,k,reg))\\n print('LOO',sorted(scores)[:12]);print('CV',sorted(scores,key=lambda a:max(a[1:3]))[:12]);\\nif __name__=='__main__':run(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 opposite-coordinate sine calibration → H2 calibrated sparse or kernel readout; archived worst public MAE is 0.17209.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit and invert the compact panel A map, inspect plausible branch coefficients, and benchmark calibrated readouts on withheld labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "49405930cdda0424cf084adf71ebbe3134bfa1eb20bb204866174e90c06d5360",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44806.93,
+      "usage_known": true,
+      "prompt_tokens": 33106,
+      "cached_tokens": 12672,
+      "completion_tokens": 1605
+    }
+  ]
+}

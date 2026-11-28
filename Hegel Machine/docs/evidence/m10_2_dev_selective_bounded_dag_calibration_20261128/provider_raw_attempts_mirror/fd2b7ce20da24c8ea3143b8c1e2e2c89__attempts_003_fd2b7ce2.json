@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd2b7ce20da24c8ea3143b8c1e2e2c89",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Flat_MonolithicArchive_Online__dev_m102_c04_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:02:12.633877+00:00",
+  "ended_at_utc": "2026-11-28T14:02:29.415093+00:00",
+  "request_sha256": "ba92c2d59b6766e443ea3d69b0156228533826fdfc29f1dbf9a85827433fa727",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21255,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21495,
+    "cached_tokens": 12672,
+    "completion_tokens": 540
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; cat dev_m102_c04_batch_{04,08,12,13}_solver.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,glob,importlib.util,copy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; print('times',s['eval_times']);print('traj sv',np.linalg.svd(s['train']['traj'][:52],compute_uv=False));\\nt=s['train']; z=copy.deepcopy(s); z['train'].update({k:t[k][:52] for k in ('x','y','traj')}); z['train']['summary']=np.array([t['y'][:52].mean(),t['y'][:52].std(),t['traj'][:52,-1].mean(),t['traj'][:52,-1].std()]);z['test']['x']=t['x'][52:];\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);p=m.solve_batch(z);print(f.split('/')[-1],np.mean(abs(p['y_hat']-t['y'][52:])),np.mean(abs(p['state_pred']-t['traj'][52:])))\\n except Exception as e:print(f,type(e).__name__,e)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived graph families -> H2 identify the active panel and temporal operators; reference 52/20 MAEs are 0.199579 for y and 0.110567 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent models at all eight time points\",\"rejected_reason\":\"The temporal spectrum can show whether a shared basis is better supported.\"}],\"rationale\":\"Directly score each archived graph on the same 52/20 split and inspect reusable primitives before changing the structural model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6fc8f115223d91d06d34043b77a45c00506bb2ec73cfc09e00323d0a330bea82",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 16778.58,
+      "usage_known": true,
+      "prompt_tokens": 21495,
+      "cached_tokens": 12672,
+      "completion_tokens": 540
+    }
+  ]
+}

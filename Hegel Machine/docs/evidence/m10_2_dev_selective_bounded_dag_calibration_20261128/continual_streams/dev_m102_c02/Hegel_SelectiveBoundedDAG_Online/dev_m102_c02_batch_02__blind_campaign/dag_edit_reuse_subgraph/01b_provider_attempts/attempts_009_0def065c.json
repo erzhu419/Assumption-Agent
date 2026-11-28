@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0def065c044c4dfc85848f5a467f0fe0",
+  "call_seq": 9,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Hegel_SelectiveBoundedDAG_Online__dev_m102_c02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:21:37.521993+00:00",
+  "ended_at_utc": "2026-11-28T13:21:59.742723+00:00",
+  "request_sha256": "4e259077ddd333b11f00b3d046ff113496a5a896aa813bfeac67f5de0a4047d8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57553,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35221,
+    "cached_tokens": 12672,
+    "completion_tokens": 791
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\nup=runpy.run_path(root+'_frozen_nodes/node_00.py')['run_node']\\nsink=runpy.run_path(root+'node_01.py')['run_node']\\na=s['train']; n=len(a['y']); c=up({'__input__':s})['c']; r=np.linalg.norm(c,axis=1); ordered=np.argsort(r)\\nfolds=[(f'random_{i}',v) for i,v in enumerate(np.array_split(np.random.default_rng(724).permutation(n),5))]+[('large_radius',ordered[-14:]),('small_radius',ordered[:14])]\\nworst=np.zeros(3)\\nfor name,v in folds:\\n    t=np.setdiff1d(np.arange(n),v)\\n    z={**s,'train':{k:a[k][t] for k in ('x','y','traj')},'test':{'x':a['x'][v]}}\\n    out=sink({'__input__':z,'node_00':up({'__input__':z})})\\n    y,p,d=(out[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape==(len(v),) and p.shape==a['traj'][v].shape and d.shape==(4,)\\n    assert np.all(np.isfinite(np.r_[y,p.ravel(),d]))\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()],atol=1e-12)\\n    e=np.abs(p-a['traj'][v]); metric=[np.mean(np.abs(y-a['y'][v])),e.mean(),e.mean(axis=0).max()]\\n    worst=np.maximum(worst,metric)\\n    print(name, 'scalar/traj/worst-horizon MAE:',np.round(metric,6))\\nprint('Worst stress-slice metrics:',np.round(worst,6))\\nassert np.all(worst<0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic-only readout → rational saturation of a linear-plus-bilinear index; the exact artifact passed public validation with scalar MAE 0.004171 and trajectory MAE 0.006544.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit or replace the accepted readout\",\n      \"rejected_reason\": \"Both public metrics have substantial margin; test the unchanged artifact on unseen folds and coordinate extremes before considering any edit.\"\n    }\n  ],\n  \"rationale\": \"The public contract is verified. Stress-test the same artifact in an isolated process on shuffled folds and coordinate-radius extremes, checking scalar error, trajectory error by horizon, and diagnostics separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "76577a30596a7cf46b9259f9e69755aed554f1451633a2ab72952b01ecb53468",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22219.04,
+      "usage_known": true,
+      "prompt_tokens": 35221,
+      "cached_tokens": 12672,
+      "completion_tokens": 791
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "926f79ab5acc417ebc52896d29676d8c",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:33:24.594119+00:00",
+  "ended_at_utc": "2026-11-28T13:33:57.098483+00:00",
+  "request_sha256": "22e1d2d3203bec0215278f720b2950676488e8d3926c3e882bd9c24dc62e7a69",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55261,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36105,
+    "cached_tokens": 12672,
+    "completion_tokens": 1381
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/struct.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rec=[]')[0])\\nfrom itertools import combinations_with_replacement\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nfrom functools import partial\\n\\ndef poly(X,d):return np.column_stack([np.prod(X[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(4),k)])\\n\\ndef getpred(i,o,tar,X,d,kind,pen, numseed=3):\\n F=poly(X,d); W=F[i]; yy=tar[i]; tiny=np.where(np.arange(F.shape[1])<5,.003,.006); rng=np.random.default_rng(5721)\\n def design(p):\\n  if kind=='ratnorm':return F/(1+np.sum((X*p[:4])**2,axis=1)[:,None])\\n  if kind=='ratproj':return F/(1+(X@p[:4]+p[4])[:,None]**2)\\n  if kind=='ratexp':return F/(1+np.sum((X@p.reshape(4,4))**2,axis=1)[:,None])\\n  if kind=='ratmult':return F/(1+np.sum((X@p.reshape(4,2))**2,axis=1)[:,None])\\n  if kind=='rataff':return F/(1+np.sum(((X-p[4:])*p[:4])**2,axis=1)[:,None])\\n  if kind=='ratweak':return np.c_[F, X/(1+(X@p[:4]+p[4])[:,None]**2)]\\n  if kind=='sind': g=np.sin\\n  elif kind=='tanhd': g=np.tanh\\n  elif kind=='softd': g=lambda a:a/(1+abs(a))\\n  elif kind=='erb':g=erf\\n  elif kind=='sinp':\\n   return np.c_[F,np.sin(X@p[:4]),np.cos(X@p[:4])]\\n  elif kind=='rp':g=lambda a:a/(1+a*a)\\n  return np.c_[F,g(X@p[:4]+p[4])]\\n dim={'ratnorm':4,'ratexp':16,'ratmult':8,'rataff':8}.get(kind,5)\\n def get(p):\\n  M=design(p); V=M[i]; reg=np.r_[tiny,np.full(V.shape[1]-len(tiny),.008)]*pen\\n  c=np.linalg.solve(V.T@V+np.diag(reg*reg),V.T@yy);return M,c,reg\\n def fun(p):\\n  M,c,reg=get(p);return np.r_[M[i]@c-yy,reg*c,.008*pen*p]\\n seeds=[rng.normal(0,.3,size=dim) for _ in range(numseed)]\\n if kind in ('ratnorm','rataff'):seeds[0][:4]=.45\\n if kind.endswith('d') or kind in ('sinp','erb','rp','ratproj','ratweak'):seeds[0][:4]=fit(W[:,:5],yy)[1:];seeds[0][4]=0.\\n opts=[least_squares(fun,p,max_nfev=100,ftol=.0001) for p in seeds]; r=min(opts,key=lambda r:r.cost);M,c,reg=get(r.x)\\n return M[o]@c,np.std(M[i]@c-yy),r.x\\n\\nif __name__=='__main__':\\n for tar in [y,a]:\\n  rec=[]\\n  for name in ('x','z','bz','c2z','c1z'):\\n   X=charts[name]\\n   for d in (2,3):\\n    for kind in ('ratnorm','ratproj','ratmult','rataff','ratweak','sind','tanhd','softd','erb','sinp','rp'):\\n     p,e,k=getpred(*splits[0],tar,X,d,kind,1.); mae=np.mean(abs(p-tar[52:]));rec.append((mae,e,name,d,kind,k))\\n  for R in sorted(rec)[:18]:\\n   mae,e,name,d,kind,k=R\\n   scores=[np.mean(abs(getpred(i,o,tar,charts[name],d,kind,1.)[0]-tar[o])) for i,o in splits[1:]]\\n   print('struct',tar is y, R, 'oof',np.round(scores,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic kernels → H2 an anisotropic rational field or a low-dimensional nonlinear correction; best observed 52/20 scalar MAE is 0.03998.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use measured trajectory amplitude directly in the scalar readout\",\"rejected_reason\":\"It did not improve the quadratic readout, and measured test trajectories are unavailable.\"}],\"rationale\":\"Test positive multivariate rational denominators and nonlinear ridge corrections using variable projection, and check whether improvements reproduce across shuffled folds for each output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "24202e7aff4e5851367f688ac1cf770a40ea9a4401454266480b43ea0583e2da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32502.83,
+      "usage_known": true,
+      "prompt_tokens": 36105,
+      "cached_tokens": 12672,
+      "completion_tokens": 1381
+    }
+  ]
+}

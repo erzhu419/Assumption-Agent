@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78a9fa1723b64969941f4064fbb7ee59",
+  "call_seq": 8,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c04__Eager_BoundedDAG_Online__dev_m102_c04_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c04_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:53:38.393222+00:00",
+  "ended_at_utc": "2026-11-28T13:53:59.572591+00:00",
+  "request_sha256": "e5c10bf45c21de9b3194bf5f3d087fc7091cde0acdd772ad65a67a945fd1e125",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47447,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31446,
+    "cached_tokens": 12672,
+    "completion_tokens": 829
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport copy,pickle,runpy,numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task/test_dag_candidate.py'); src=p.read_text().split('st = pickle.load(open(')[0]; env={'__file__':str(p),'__name__':'__main__'}; exec(compile(src,str(p),'exec'),env)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; n=len(x); rng=np.random.default_rng(231)\\nsets=[(f'block{i}',a) for i,a in enumerate(np.array_split(np.arange(n),4))]+[(f'random{i}',rng.choice(n,20,replace=False)) for i in range(6)]\\nfor j in range(x.shape[1]):\\n    order=np.argsort(x[:,j]); sets.extend([(f'axis{j}_low',order[:10]),(f'axis{j}_high',order[-10:])])\\nsets.append(('outer_radius',np.argsort(np.linalg.norm(x,axis=1))[-12:])); results=[]\\nfor name,idx in sets:\\n    k=np.setdiff1d(np.arange(n),idx); st=copy.deepcopy(s); st['train']={a:t[a][k] for a in ('x','y','traj')}; y=t['y'][k]; last=t['traj'][k,-1]; st['train']['summary']=np.array([y.mean(),y.std(),last.mean(),last.std()]); st['test']={'x':x[idx]}\\n    out,counts=env['run_dag'](st); assert all(a==1 for a in counts.values()); e=np.abs(out['y_hat']-t['y'][idx]); f=np.abs(out['state_pred']-t['traj'][idx]); assert np.isfinite(e).all() and np.isfinite(f).all(); results.append((name,e.mean(),f.mean(),f.mean(axis=0).max())); print('%s y=%.6f trajectory=%.6f worst_time=%.6f'%results[-1])\\nprint('worst slices:',*[max(results,key=lambda a:a[j]) for j in range(1,4)])\\nnode=runpy.run_path('/holdout_task/node_00.py'); c=s['panel_c']; u=c['u']\\nfor key in ('v1','v2'):\\n    e=node['_operator'](u,c[key],u,'tanh')-c[key]; print(key,'mixed-tanh panel row RMSE',np.linalg.norm(e)/np.sqrt(len(u)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: paired sinusoidal calibration and mixed tanh operators pass public CV at 0.017804 scalar MAE and 0.009034 trajectory MAE; alternate-slice metrics are not yet available.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"The previous probe exited before reporting its slices. Run the official verifier separately, then load only the reusable DAG harness to measure blocked, randomized, and extrapolation slices on the unchanged artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "830a23f035231246b096439b85246d3b3dcbd055327029b4f63a8ebf494fd118",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21177.96,
+      "usage_known": true,
+      "prompt_tokens": 31446,
+      "cached_tokens": 12672,
+      "completion_tokens": 829
+    }
+  ]
+}

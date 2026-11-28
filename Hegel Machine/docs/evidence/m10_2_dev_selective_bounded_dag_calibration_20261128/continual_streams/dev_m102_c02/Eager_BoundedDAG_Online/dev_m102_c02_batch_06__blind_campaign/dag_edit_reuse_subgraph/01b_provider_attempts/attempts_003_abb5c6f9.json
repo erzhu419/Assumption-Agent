@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abb5c6f90a754ef5880c0f28ee78b081",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Eager_BoundedDAG_Online__dev_m102_c02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:33:03.027145+00:00",
+  "ended_at_utc": "2026-11-28T13:33:23.622642+00:00",
+  "request_sha256": "417bdcf3c919932df7bf27fe983d3c4dde7a8365f8455121e1f5c69c55a4bfcc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21106,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21175,
+    "cached_tokens": 12672,
+    "completion_tokens": 777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat _frozen_nodes/node_02.py _frozen_nodes/node_03.py; tail -45 /tmp/hegel_continual_archive/dev_m102_c02_batch_00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' || true; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'_frozen_nodes'); import node_00\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; p=node_00.run_node({'__input__':s}); c=p['c']; y=s['train']['y']; t=s['train']['traj']; print('coordinate ranges',c.min(0),c.max(0), 'query',p['query'].min(0),p['query'].max(0)); print('trajectory sv',np.linalg.svd(t,compute_uv=False)); print('panel-c sv',[np.linalg.svd(v,compute_uv=False) for v in s['panel_c'].values()]);\\nfor name,z in [('c',c),('raw',s['train']['x']),('u',node_00._invert_a(s['train']['x'],node_00._fit_a(**s['panel_a'])))]:\\n print(name)\\n x=np.c_[np.ones(len(z)),z,np.sum(z[:,:2]*z[:,2:],axis=1)];\\n def fit(x):\\n  a=np.linalg.lstsq(x[:52],np.c_[y,t][:52],rcond=None)[0]; e=abs(x@a-np.c_[y,t]); print(x.shape[1],np.round([e[:52,0].mean(),e[52:,0].mean(),e[:52,1:].mean(),e[52:,1:].mean()],6)); return a\\n fit(x)\\n for d in range(1,5):\\n  terms=[j for i in range(d+1) for j in combinations_with_replacement(range(z.shape[1]),i)]; x=np.stack([np.prod(z[:,j],axis=1) for j in terms],axis=1); a=fit(x)\\n  if d==2: print('quadratic y coefficients',list(zip(terms,np.round(a[:,0],4))))\\nprint('tail responses',np.round(np.c_[c,y,t][:12],4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived bilinear readout -> H2 test polynomial and nonlinear readouts in the frozen calibrated coordinates; out-of-fold MAE not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare the archived bilinear basis and nested polynomial bases on the prescribed split, and check the trajectory rank before changing its projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "4136a0c4b40e98b8361c888cc8ae5c6b612dededf9c01871e8bf25cd123fbc23",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20594.68,
+      "usage_known": true,
+      "prompt_tokens": 21175,
+      "cached_tokens": 12672,
+      "completion_tokens": 777
+    }
+  ]
+}

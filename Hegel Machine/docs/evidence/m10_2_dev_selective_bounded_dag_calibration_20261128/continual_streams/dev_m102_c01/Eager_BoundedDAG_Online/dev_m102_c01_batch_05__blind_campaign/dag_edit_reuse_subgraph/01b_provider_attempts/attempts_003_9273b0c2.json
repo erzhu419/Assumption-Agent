@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9273b0c20bb64dca99f25bc33420d9fb",
+  "call_seq": 3,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Eager_BoundedDAG_Online__dev_m102_c01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:26:48.184926+00:00",
+  "ended_at_utc": "2026-11-28T13:27:17.187423+00:00",
+  "request_sha256": "53154007e356ea74bfc859d14b8a1c845b99b6154b5041cdbb551c6ec02f3300",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 22294,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21022,
+    "cached_tokens": 12672,
+    "completion_tokens": 1139
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat _frozen_nodes/node_02.py _frozen_nodes/node_03.py && tail -25 /tmp/hegel_continual_archive/*solver.py && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -25; cat >/tmp/readout_probe.py <<'PY'\\nimport sys,pickle,copy\\nimport numpy as np\\nfrom scipy.linalg import solve\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00,node_02\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=len(s['train']['y'])\\ndef batches():\\n rng=np.random.default_rng(51)\\n splits=[np.arange(52,n),*np.array_split(rng.permutation(n),5)]\\n splits += [np.argsort(s['train']['x'][:,j])[-14:] for j in range(4)]\\n splits += [np.argsort(np.linalg.norm(s['train']['x'],axis=1))[-14:]]\\n for I in splits:\\n  J=np.setdiff1d(np.arange(n),I); t=copy.deepcopy(s); t['train']={k:v[J] if len(v)==n else v for k,v in s['train'].items()}; t['test']['x']=s['train']['x'][I]\\n  p=node_00.run_node({'__input__':t}); pred=node_02.run_node({'node_00':p})['state_pred']; yield p,pred,s['train']['y'][I],s['train']['traj'][I]\\ndef read(p,pred,kind,ridge):\\n A,B=p['scores'],pred@p['modes'].T\\n maps={'s':(p['sy'],p['qy']),'t':(p['st'],p['qt']),'u':(p['st'][:,:4],p['qt'][:,:4]),'a':(A,B),'b':(node_00._quadratic(A),node_00._quadratic(B))}\\n K=np.zeros_like(p['K']); L=np.zeros_like(p['Kq'])\\n for f in kind:\\n  if f=='k': K+=p['K']; L+=p['Kq']; continue\\n  U,V=maps[f]; K+=U@U.T;L+=V@U.T\\n # profile an intercept via centering the Gram matrix\\n c=K.mean(axis=0); L=L-c-L.mean(axis=1,keepdims=True)+c.mean(); K=K-c-c[:,None]+c.mean()\\n return p['y_mean']+L@solve(K+ridge*np.eye(len(K)),p['y_centered'],assume_a='pos')\\nif __name__=='__main__':\\n D=list(batches()); print('trajectory',np.round([np.abs(pr-tr).mean() for _,pr,_,tr in D],5))\\n for kind in ['k','s','t','a','b','ks','ka','ksa','kst','kstb','ksta','sta','stb','stu','sua','ta','tb','ktb','kta','kt','ksua','ksub','sa','sb','st']:\\n  vals=[]\\n  for r in [1e-7,1e-5,.0003,.003,.03,.3,3]:\\n   e=np.array([np.abs(read(p,pr,kind,r)-y).mean() for p,pr,y,_ in D]); vals.append((max(e),r,e))\\n  w,r,e=min(vals,key=lambda z:z[0]); print(kind,r,np.round(e,5),'worst',round(w,5),'mean',round(e.mean(),5),'public range',np.round([v[2][0] for v in vals],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (state-only readout) -> H2 (joint operator and predicted-state readout); reported public CV MAEs are 0.086479 scalar and 0.011057 trajectory, with independent slice checks pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select features using only the official suffix split\",\"rejected_reason\":\"Random partitions and coordinate-tail holdouts help distinguish a transferable readout from one that only works on the official split.\"}],\"rationale\":\"Compare centered additive bases with explicit operator and projected state terms, using ablations to measure each input's contribution without changing the frozen trajectory path.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "0f64cccbdd7bc30cf9e92d268bdf7bbc745356167e1627f619d750816b7ebd52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29001.66,
+      "usage_known": true,
+      "prompt_tokens": 21022,
+      "cached_tokens": 12672,
+      "completion_tokens": 1139
+    }
+  ]
+}

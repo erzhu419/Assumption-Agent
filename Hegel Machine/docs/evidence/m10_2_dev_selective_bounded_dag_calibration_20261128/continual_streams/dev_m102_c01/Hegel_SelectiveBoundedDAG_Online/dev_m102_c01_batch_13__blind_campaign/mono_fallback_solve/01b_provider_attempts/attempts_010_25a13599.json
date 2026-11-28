@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25a1359909d147c9b917e39028e83b25",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c01__Hegel_SelectiveBoundedDAG_Online__dev_m102_c01_batch_13__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T13:34:23.246893+00:00",
+  "ended_at_utc": "2026-11-28T13:35:01.090680+00:00",
+  "request_sha256": "d643651bc8fae3158b9d42f12453d188f8004d8ad610fb55c7f52ed2f9232426",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61122,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38046,
+    "cached_tokens": 12672,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep 'struct True' /tmp/rational_probe.log | head -18; cat /tmp/hegel_continual_archive/dev_m102_c01_batch_03_solver.py; cat > /tmp/joint_laws.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('rec=[]')[0])\\nfrom scipy.optimize import least_squares, minimize\\nfrom itertools import combinations_with_replacement\\nfrom scipy.linalg import solve_triangular\\n\\ndef check(pred, targets=Y):\\n return np.array([np.mean(abs(pred(i,o)-targets[o]),axis=0) for i,o in splits])\\n\\nfor name in ('x','z','bz','c2z','c1z'):\\n X=charts[name]; lin=one(X); quad=X[:,J]*X[:,K]; F=np.c_[lin,quad];\\n for degree in (2,3):\\n  F=np.column_stack([np.prod(X[:,jj],axis=1) for k in range(degree+1) for jj in combinations_with_replacement(range(4),k)])\\n  for g in [0.02,.08,.25,.75]:\\n   for col in [0,1,2]:\\n    def pred(i,o):\\n     z=Y[i]; sc=z.std(0); z=z/sc; cols=range(2) if col==2 else [col];\\n     m=F.shape[1]; D=np.c_[X,quad]; LL=[np.c_[np.tile(np.zeros_like(F[i]),(1,k)),F[i],np.tile(np.zeros_like(F[i]),(1,1-k)),-z[:,k,None]*D[i]] for k in cols]; A=np.concatenate(LL); yy=np.concatenate([z[:,k] for k in cols]); P=np.r_[np.full(2*m,.01 if degree==2 else .04),np.full(D.shape[1],g)]; p0=np.linalg.solve(A.T@A+np.diag(P*P),A.T@yy)[2*m:];\\n     def loss(p, ret=False):\\n      h=np.maximum(.18,1+D@p); M=F/h[:,None]; C=np.linalg.solve(M[i].T@M[i]+np.diag(P[:m]**2),M[i].T@z); E=M@C\\n      if ret:return E[o]*sc\\n      return np.r_[(E[i][:,cols]-z[:,cols]).ravel(),(P[:m,None]*C[:,cols]).ravel(),g*p, 2*np.minimum(1+D@p-.20,0)]\\n     q=least_squares(loss,p0,max_nfev=85,ftol=1e-5).x; return loss(q,True)\\n    E=check(pred); j=0 if col in (0,2) else 1\\n    if E[0,j]<.036 or E[1:,j].mean()<.029:print('rational',name,degree,g,col,np.round(E.T,5),flush=True)\\n\\nfor name in ['x','z','bz','c1z','c2z']:\\n X=charts[name]; D=(X[:,None,:]-X[None,:,:])**2; Z=X@X.T; Q=Z**2; V=1+Z\\n for kind in ['rbf','m52','m32','rq','mix']:\\n  out=[]\\n  for i,o in splits:\\n   z=Y[i]; scale=z.std(0); z=z/scale; m=len(i); eye=np.eye(m)\\n   def kernels(log):\\n    w=np.exp(log); R=np.einsum('ijk,k->ij',D,w[:4]);\\n    if kind=='rbf':G=np.exp(-R)\\n    elif kind=='m52':r=np.sqrt(5*R); G=(1+r+r*r/3)*np.exp(-r)\\n    elif kind=='m32':r=np.sqrt(3*R); G=(1+r)*np.exp(-r)\\n    elif kind=='rq':G=(1+R/(2*w[8]))**(-w[8])\\n    else:G=np.exp(-R)+.5*np.exp(-.2*R)\\n    return w[4]*V+w[5]*Q+w[6]*G,w[7]\\n   pp=[]\\n   for j in range(2):\\n    def obj(p, ret=False):\\n     K,r=kernels(p); L=np.linalg.cholesky(K[np.ix_(i,i)]+r*eye); hh=solve_triangular(L,z[:,j],lower=True); alpha=solve_triangular(L.T,hh,lower=False)\\n     if ret:return (K[np.ix_(o,i)]@alpha)*scale[j]\\n     return .5*(hh@hh)+np.log(L.diagonal()).sum()+.12*np.sum((p-p0)**2)\\n    p0=np.log([.6]*4+[.4,.15,1,.001,1]); p=minimize(obj,p0,method='L-BFGS-B',bounds=[(-5,3)]*4+[(-8,5)]*3+[(-12,-3),(-4,5)]).x; pp.append(obj(p,True))\\n   out.append(np.mean(abs(np.array(pp).T-Y[o]),axis=0))\\n  print('GP',name,kind,np.round(np.array(out).T,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint_laws.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic spatial kernels → H2 shared rational denominator or anisotropic evidence-fitted kernel; prior measured 52/20 scalar MAE is 0.03998, with structural search results pending inspection.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Inspect the strongest structural fits and test a shared denominator against separately regularized spatial models, fitting all coefficients and kernel scales inside each split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "341077850988f006239c436f8fb2d95fc9ff64941a05f20a3065b4fbf1b3d2b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37842.58,
+      "usage_known": true,
+      "prompt_tokens": 38046,
+      "cached_tokens": 12672,
+      "completion_tokens": 1565
+    }
+  ]
+}

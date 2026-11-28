@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54eaf1ed1447474ab5251772b440c7a5",
+  "call_seq": 10,
+  "stage_subdir": "m102_dev_20261128T125905Z_303a8d08__dev_m102_c02__Flat_MonolithicArchive_Online__dev_m102_c02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_m102_c02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:24:16.067428+00:00",
+  "ended_at_utc": "2026-11-28T14:24:52.729185+00:00",
+  "request_sha256": "491be94f2b9dcd3ec35e21f14b028b09faf9c7e2e3b090eed8bcb9441988ab67",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61826,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39160,
+    "cached_tokens": 12672,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/scalar14.py <<'PY'\\nimport numpy as np\\nfrom fit14 import aff,fit\\nfrom scipy.optimize import least_squares\\nM=np.load('/tmp/m14.npz'); z,b,c,d=[M[k] for k in 'zbcd']; y=M['Y'][:,0]; n=52\\nh=aff(np.c_[b,(b*np.roll(z,-1,axis=1)).sum(1)]); h4=aff(np.c_[b,b*np.roll(z,-1,axis=1)])\\nq=np.sign(z)*np.maximum(abs(z)-.35,0)**1.5\\npb=h@fit(h[:n],y[:n]); vv=b*np.roll(z,-1,axis=1); p=pb-vv.sum(1)*fit(h[:n],y[:n])[-1];\\ndef score(h):\\n u,s,v=np.linalg.svd(h[:n],full_matrices=False); good=s>s[0]*1e-10; u,s,v=u[:,good],s[good],v[good]; pred=h@(v.T@((u.T@y[:n])/s)); e=y-pred; return np.mean(abs(e[:n]/(1-(u*u).sum(1)))),np.mean(abs(e[n:])),np.mean(abs(e[:n]))\\nprint('base',score(h),score(h4),fit(h[:n],y[:n])); rows=[]\\ndef add(k,x,base=h):\\n a=np.c_[base,x];rows.append((*score(a),k,a))\\nfor sk,S in [('z',z),('q',q),('b',b),('c',c),('d',d),('p',p[:,None]),('pb',pb[:,None])]:\\n for i,v in enumerate(S.T):\\n  for l in [.1,.22,.5,1,1.25,2.15,4,8,16]:\\n   for fk,f in [('div',1/(1+l*v*v)),('exp',np.exp(-l*v*v)),('tan',np.tanh(l*v)),('sin',np.sin(l*v)),('soft',np.logaddexp(0,l*v)),('sq',v*v)]:\\n    for tk,X in [('one',np.ones((len(v),1))),('b',b),('q',q),('bz',np.c_[b,z]),('p',p[:,None]),('pb',pb[:,None]),('vv',vv.sum(1)[:,None])]:add((sk,i,l,fk,tk),X*f[:,None])\\nfor k,X in [('z',z),('q',q),('b',b),('c',c),('d',d)]:\\n for l in [.22,.5,1,1.25,2.15,3,4,6]:\\n  for nk,U in [('self',X),('b',b),('q',q),('z',z)]:\\n   for i in range(4):\\n    S=np.roll(X,i,axis=1)\\n    for fk,f in [('div',U/(1+l*S*S)),('tan',U*np.tanh(l*S)),('sq',S*S),('cub',S**3),('sin',np.sin(l*S)),('tanh',np.tanh(l*S)),('soft',np.logaddexp(0,l*S)),('cos',np.cos(l*S))]:add((k,l,nk,i,fk),f)\\nfor name,X in [('b',b),('q',q),('z',z),('c',c),('d',d),('p',p[:,None])]:\\n for name2,W in [('b',b),('q',q),('z',z),('c',c),('d',d),('p',p[:,None])]:\\n  for i,v in enumerate(X.T):\\n   for j,w in enumerate(W.T):add(('pair',name,i,name2,j),v*w)\\nfor a,b,c,k,_ in sorted(rows,key=lambda r:r[0])[:28]:print(np.round([a,b,c],6),k)\\nprint('best standalone threshold',[(k,score(np.c_[h,x])) for k,x in [('q1',q[:,1]),('z1',z[:,1]),('q1div',q[:,1]/(1+2.15*z[:,1]**2))]])\\nfor x in [z[:,1],q[:,1],b[:,2],p,pb,vv.sum(1)]:\\n print('nonlinear',end=' ')\\n for fn in [lambda p:np.tanh(p[0]*(x-p[1])),lambda p:np.sin(p[0]*(x-p[1])),lambda p:x/(1+p[0]*(x-p[1])**2)]:\\n  def design(p):return np.c_[h,fn(p)]\\n  def r(p):\\n   D=design(p)[:n];return D@fit(D,y[:n])-y[:n]\\n  v=least_squares(r,[1,0],bounds=([.02,-3],[20,3])).x; print(v,score(design(v)),end=' ')\\n print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar14.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py | head -25; cat /holdout_task/validate_public_schema.py | tail -50\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: the cyclic B–coordinate interaction explains trajectories → H2: add a sparse scalar correction; 52/20 terminal-state MAE is 0.00430 and a single threshold-gated scalar correction reaches 0.02743 MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse a long greedy residual expansion\",\"rejected_reason\":\"Several added terms lower training error while worsening the held-out score; prefer a compact scalar readout.\"}],\"rationale\":\"Use the near-equal trajectory interaction coefficients to test a summed cyclic feature, then rank structured scalar corrections by leave-one-out error within the first 52 rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "92dbc15a5c44f65819ca0fff040ad7e70400954ea7f305148f44b29832c79a0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36660.57,
+      "usage_known": true,
+      "prompt_tokens": 39160,
+      "cached_tokens": 12672,
+      "completion_tokens": 1575
+    }
+  ]
+}
