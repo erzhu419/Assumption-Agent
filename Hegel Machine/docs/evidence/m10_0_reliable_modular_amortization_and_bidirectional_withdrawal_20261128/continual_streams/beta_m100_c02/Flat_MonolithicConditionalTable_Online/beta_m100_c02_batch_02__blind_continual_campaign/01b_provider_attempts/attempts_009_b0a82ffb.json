@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0a82ffb7fdb46ae8bdf1bcee5bd66fb",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:16.345924+00:00",
+  "ended_at_utc": "2026-11-28T03:38:49.289973+00:00",
+  "request_sha256": "9482c9986732b9e498c17d2d599d72d85332c2151f6abb4a52a35969ebf3058f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59682,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32063,
+    "cached_tokens": 9344,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; out=m.solve_batch(s)\\ndef axis(k,v,h,rob):\\n n=len(k); A=np.zeros((n,n))\\n for j in range(1,n-1):\\n  lo=(k[j]+k[j-1])/(2*h*h)+max(v[j],0)/h; hi=(k[j]+k[j+1])/(2*h*h)+max(-v[j],0)/h\\n  A[j,j-1:j+2]=[-lo,lo+hi,-hi]\\n A[0,:2]=[k[0]/h**2+rob/h,-k[0]/h**2]; A[-1,-2:]=[-k[-1]/h**2,k[-1]/h**2+rob/h]\\n return A\\nnx,ny=s['nx'],s['ny']; ax=axis(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1),s['robin_x']); ay=axis(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1),s['robin_y']); L=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F')); modes=np.stack([v.ravel(order='F') for v in s['source_modes']],axis=1); ij=np.asarray(s['sensor_ij']); idx=ij[:,0]+nx*ij[:,1]; blocks=[]; w=np.asarray(out['weights']); c=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; Z=s['Z_nuisance']; ridge=s['source_ridge']\\nfor mu in s['mu_shifts']:\\n U=np.linalg.solve(L+mu*np.eye(nx*ny),modes); blocks.append(U[idx])\\nfield=(U@w).reshape((nx,ny),order='F'); field_err=np.max(abs(field-out['terminal_field'])); assert field_err<1e-10\\nA=np.vstack(blocks); y=m.calibrate(s); P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); A=A-Z@(P@A); r=y-Z@(P@y); e=A@w-r; g=A.T@e+ridge*w; J=(e@e+ridge*(w@w))/2; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); gap=J-c['dual_lower_bound']; station=np.max(abs(g-nu-lo+hi)); comp=max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))); assert np.allclose(w,c['weights'],rtol=0,atol=1e-13); assert w.min()>=-1e-12 and w.max()<=cap+1e-12 and abs(w.sum()-budget)<1e-12; assert min(lo.min(),hi.min())>=0 and max(station,comp,abs(gap))<1e-10 and abs(c['primal_objective']-J)<1e-12\\nprint('public dense-field max error',field_err,'KKT stationarity',station,'complementarity',comp,'duality gap',gap)\\nfor budget_test in (.2,.42,.84,1.13,3.33):\\n q,nu=m.box_simplex(np.eye(8),np.arange(8,dtype=float),.42,budget_test); g=q-np.arange(8,dtype=float); gap=g@q-nu*budget_test-.42*np.minimum(0,g-nu).sum(); assert abs(q.sum()-budget_test)<1e-11 and min(q)>=-1e-12 and max(q)<=.42+1e-12 and abs(gap)<1e-10,(budget_test,q,nu,gap)\\nprint('active-bound stress passed: 5 budgets including 2 all-bound optima')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived zero-loss walls → H2 restored Robin walls with nonlinear calibration; worst held-out rosette RMSE fell from 0.1213 to 0.01107, and the host public probe measured relative field error of 6.27e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit continuous wall losses\",\n      \"rejected_reason\": \"Free wall losses worsened the worst held-out error both with and without source regularization.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in isolated Python. The independent dense calculation detects stencil or field-order errors, and the bound-active tests detect invalid certificates that the public interior solution would not expose.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e60ba838f916fd2533e3a38845d1edbddf7843eaf446d69f895e77eae3aec88f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34947.68,
+      "usage_known": true,
+      "prompt_tokens": 32063,
+      "cached_tokens": 9344,
+      "completion_tokens": 1305
+    }
+  ]
+}

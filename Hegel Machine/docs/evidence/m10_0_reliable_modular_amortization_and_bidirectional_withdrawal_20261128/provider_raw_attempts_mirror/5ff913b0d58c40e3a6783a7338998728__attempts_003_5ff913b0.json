@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ff913b0d58c40e3a6783a7338998728",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:04.665256+00:00",
+  "ended_at_utc": "2026-11-28T03:50:21.692226+00:00",
+  "request_sha256": "88f4ff2252dc0d1552b616c2947616794596cd7d27c42b5c0984cde7f9a27985",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21522,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19083,
+    "cached_tokens": 9344,
+    "completion_tokens": 572
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; print('dataset keys',list(d)); c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print(np.c_[np.arange(45), x[:45],y[:45]])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus top-level:',list(a) if isinstance(a,dict) else len(a));\\nif isinstance(a,dict):\\n for k,v in a.items(): print(k, (list(v) if isinstance(v,dict) else f'list({len(v)}), example: {str(v[-1])[:650]}' if isinstance(v,list) and v else str(v)[:400]))\\nelse:\\n for v in a: print({k:(f'{type(w).__name__}({len(w)})' if isinstance(w,(list,dict)) else w) for k,w in v.items()})\\nPY\\nsed -n '65,150p' _verified_downstream.py; grep -Ein 'calibr|bridge|apparatus|telemetry' public_asset_index.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust regression IRLS Cauchy' | cut -c1-225 | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: distinguish isolated spikes from a separate bridge response at extreme loads; maximum observed raw magnitude is 15.07, with held-out calibration error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Discard all large bridge readings\",\"rejected_reason\":\"Repeated readings at known loads would indicate a systematic response, not independent spike contamination.\"}],\"rationale\":\"Inspect the structured portion of the calibration table to determine whether the extreme readings recur at matching loads; the answer determines whether to reject individual rows or model a separate response regime.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "fa28c1955eec7b06b831077ffbf8a84d6e788b53f352e6e4e75452daf3741ad9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19114.59,
+      "usage_known": true,
+      "prompt_tokens": 19083,
+      "cached_tokens": 9344,
+      "completion_tokens": 572
+    }
+  ]
+}

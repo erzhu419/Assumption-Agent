@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca6ac5eaeb8e49a99f4caa649cb6823d",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:04.106823+00:00",
+  "ended_at_utc": "2026-11-28T03:49:32.807811+00:00",
+  "request_sha256": "4b7abc3c3ce35b4b0316decbcb074dc45dd5107c777745232bc1d0bf13780978",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 57156,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28762,
+    "cached_tokens": 9344,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nimport batch_solver as batch\\nimport downstream_solver as solver\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nactual = batch.solve_batch(raw)\\nchanged = dict(raw, test=dict(raw['test'], past_channel_raw=raw['test']['past_channel_raw'][::-1].copy()))\\nfor key, value in batch.solve_batch(changed).items():\\n    np.testing.assert_array_equal(value, actual[key], err_msg=key)\\ncal = calibrate_upstream(dict(raw, chamber_verification_trials=item['campaign_diagnostics']))\\ntrial = cal['chamber_verification_trials']\\ndt, times, _, tau, theta = solver._intrinsic(cal)\\npast, hold = solver._stress(trial)\\nx = solver._features(trial, trial)[:len(hold)]\\nc, r, *_ = solver._design(np.log(tau), past, hold, x, dt, times)\\nobs_y, obs_r = trial['strain_curves_obs'], trial['instant_rate_obs']\\ny0 = trial['strain_0']\\ny, rate = solver._chamber_response(hold, x, y0, times, tau, theta, solver._CHAMBER_FRACTIONS)\\nrise = -np.expm1(-times[:,None]/tau)\\na = x @ theta[2:]\\nA = a[:,None,None] * (rise*tau - times[:,None])\\nbase = y0[:,None] + hold[:,None]*(rise@theta[:2]) + a[:,None]*times\\nlabs = trial['lab_id']\\ndef metrics(pred, rp, mask):\\n    e = pred[mask] - obs_y[mask]\\n    return np.sqrt([np.mean(e**2), np.mean(e[:,-1]**2), np.mean((rp[mask]-obs_r[mask])**2)])\\nrows = []\\nfor lab in np.unique(labs):\\n    valid = labs == lab\\n    fit = np.linalg.lstsq(A[~valid].reshape(-1,2), (obs_y-base)[~valid].ravel(), rcond=None)[0]\\n    before = metrics(y0[:,None] + c@theta, r@theta, valid)\\n    after = metrics(y, rate, valid)\\n    oof = metrics(base + A@fit, rate, valid)\\n    assert np.all(after < before) and np.all(oof < before), lab\\n    rows.append([before, after, oof])\\nprint('Worst chamber lab RMSE [curve, final time, initial rate]: retained history, saved reset, out-of-fold reset')\\nprint(np.max(rows, axis=0))\\nprint('PASS ng_t06: exact batch outputs are invariant to shuffled deployment histories; both saved and out-of-fold reset laws beat retained history in every measured lab.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained benchtop history → H2 chamber reset with two drift modes; latest leave-one-lab-out worst RMSE was 0.014121 for strain, 0.021394 at the final time, and 0.010456 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add the last-load difference or rational drift term\",\n      \"rejected_reason\": \"The difference term traded slightly lower overall strain error for slightly higher final-time error without improving rate; the rational term fitted to zero in every fold.\"\n    },\n    {\n      \"option\": \"Replace the prescribed missing-feature imputation\",\n      \"rejected_reason\": \"Missing features explain much of the residual error, but the task explicitly specifies cell-balanced imputation.\"\n    }\n  ],\n  \"rationale\": \"The challenger audit does not justify a model edit. This probe checks that the saved batch entry point actually discards deployment history, then compares the saved and out-of-fold reset laws with retained history on each measured lab. A failure would expose a mismatch between the validated chamber law and the saved solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4329f4af610016085eca75bd9e651e097c42c39e7d6d8167a7b66dcdfc233866",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30809.74,
+      "usage_known": true,
+      "prompt_tokens": 28762,
+      "cached_tokens": 9344,
+      "completion_tokens": 1151
+    }
+  ]
+}

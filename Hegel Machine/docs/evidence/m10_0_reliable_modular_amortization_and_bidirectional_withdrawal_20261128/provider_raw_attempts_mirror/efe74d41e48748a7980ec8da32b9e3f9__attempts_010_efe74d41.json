@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "efe74d41e48748a7980ec8da32b9e3f9",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:17:38.347315+00:00",
+  "ended_at_utc": "2026-11-28T04:18:18.600870+00:00",
+  "request_sha256": "a3f81270ce0e9bdd8c45199ff908510203a36263a1cd5dd1ff8951135ddff526",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67857,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35769,
+    "cached_tokens": 9344,
+    "completion_tokens": 1769
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cp /tmp/hegel_continual_archive/beta_m100_c02_batch_06_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read(); start=s.index('def _basis'); end=s.index('def solve_batch',start); print(s[start:end][:5400]); print([x for x in s.splitlines() if x.startswith('def ')])\\nPY\\ncat > /tmp/bound08.py <<'PY'\\nimport pickle, numpy as np, itertools, json, sys\\nfrom scipy.optimize import least_squares, root\\nsys.path[:0]=['/holdout_task','/tmp']; import batch_solver as m\\nfrom cal08 import data\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X,Y,ids,t,z=data(s)\\nprint('study scalars',[(k,v) for k,v in s.items() if np.isscalar(v)])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in a:\\n q=np.asarray(e['facility_telemetry_trace']);print('trace',e['completed_campaign_short_name'],q.mean(0).round(2))\\nprint('aux first/last',s['aux_manifold_telemetry'][[0,-1]])\\ndef terms(a,b,d): return np.column_stack([a**(i-j)*b**j for i in d for j in range(i+1)])\\ndef fit(X,Y,kind):\\n fs=[]\\n for i in range(4):\\n  T=np.vstack((X,np.eye(4)[i]*t[ids==i,None])); y=np.r_[Y[:,i],z[ids==i]]; a,b=T[:,i],T[:,(i+2)%4]\\n  if kind in ['pade2','pade4']:\\n   deg=[2] if kind=='pade2' else [2,4]; N=terms(a,b,range(6)); D=terms(a,b,deg); p=np.linalg.lstsq(np.c_[N,-D*y[:,None]],y,rcond=None)[0]; n=N.shape[1]; p=least_squares(lambda p:N@p[:n]/(1+D@p[n:])-y,p,max_nfev=150).x\\n   def f(a,b,p=p,n=n,deg=deg):return terms(a,b,range(6))@p[:n]/(1+terms(a,b,deg)@p[n:])\\n  else:\\n   def design(a,b,q,kind=kind):\\n    k,r,h,j,l=q; u=a+k*b if kind!='sep' else a; den=1+r*u*u+h*u**4; den2=1+j*b*b+l*b**4\\n    return np.column_stack([np.ones(len(a)),u/den,u**3/den,u**5/den,b/den2,b*b/den2,b**3/den2,b**4/den2]+([a*b,a*b*b,a*a*b,a*a*b*b] if kind=='inter' else []))\\n   def res(q):\\n    A=design(a,b,q); c=np.linalg.lstsq(A,y,rcond=None)[0]; return A@c-y\\n   q=least_squares(res,[-.12,.23,.03,.25,.02],bounds=([-1,0,0,0,0],[1,4,2,4,2]),max_nfev=100).x; c=np.linalg.lstsq(design(a,b,q),y,rcond=None)[0];\\n   def f(a,b,q=q,c=c,design=design):return design(a,b,q)@c\\n  fs.append(f)\\n return lambda x:np.column_stack([f(x[:,i],x[:,(i+2)%4]) for i,f in enumerate(fs)])\\n\\ndef calibrate(f):\\n raw=s['y_obs_raw'].reshape(-1,4)\\n return np.array([root(lambda x:f(x[None,:])[0]-y,np.zeros(4),tol=1e-11).x for y in raw]).ravel()\\n\\norig=m.axis_operator\\ndef per(k,v,h,loss):\\n if not np.isnan(loss[0]):return orig(k,v,h,loss)\\n n=len(k); i=np.arange(n); l=(i-1)%n; r=(i+1)%n; a=-(k+k[l])/(2*h*h)-np.maximum(v,0)/h; b=-(k+k[r])/(2*h*h)-np.maximum(-v,0)/h\\n return m.sparse.csc_matrix((np.r_[a,-a-b,b],(np.tile(i,3),np.r_[l,i,r])),shape=(n,n))\\nm.axis_operator=per\\nif __name__=='__main__':\\n for kind in ['pade2','pade4','sep','mix','inter']:\\n  E=np.empty_like(Y)\\n  for j in range(5):\\n   test=np.arange(len(X))%5==j; E[test]=fit(X[~test],Y[~test],kind)(X[test])-Y[test]\\n  f=fit(X,Y,kind); y=calibrate(f)\\n  print('CAL',kind,'fit',np.max(np.std(f(X)-Y,axis=0)),'cv',np.sqrt(np.mean(E**2,axis=0)).round(6),'inverse',np.max(abs(f(y.reshape(-1,4)).ravel()-s['y_obs_raw'])),'range',y.min(),y.max());\\n  vals=[]\\n  for i,j in itertools.product(range(3),repeat=2):\\n   a=[s['robin_x'],0,np.nan][i]; b=[s['robin_y'],0,np.nan][j]; S,U=m.chamber_response(s,[a,a,b,b]); w,c=m._inverse(s,S,y); z0=s['Z_nuisance']; e=S@w-y; prof=e-z0@np.linalg.solve(z0.T@z0+s['nuisance_ridge']*np.eye(z0.shape[1]),z0.T@e); vals.append((np.linalg.norm(prof),i,j,c['primal_objective'],w.round(4)))\\n  for vv in sorted(vals)[:5]:print('wall',vv)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bound08.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 isolated rational banks -> H2 coupled opposite-bank calibration and wall-law comparison; current worst joint rational fit RMSE is 1.1e-3.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Assume the last archived periodic wall law persists\",\"rejected_reason\":\"The blind observations can discriminate archived wall stencils once calibrated.\"}],\n  \"rationale\":\"Start from the archived forward and KKT implementation, then compare coupled calibration models on held-out sweep rows and evaluate wall candidates against the resulting chamber measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b03ba981218304d0ece6b10f3e9f42f6cdf7843aee81d2d245fefcb1e021030e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44635.87,
+      "usage_known": true,
+      "prompt_tokens": 35769,
+      "cached_tokens": 9344,
+      "completion_tokens": 1769
+    }
+  ]
+}

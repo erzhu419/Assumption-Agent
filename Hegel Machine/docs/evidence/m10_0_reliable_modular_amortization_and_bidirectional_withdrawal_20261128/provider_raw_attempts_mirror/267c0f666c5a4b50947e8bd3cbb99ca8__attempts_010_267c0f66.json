@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "267c0f666c5a4b50947e8bd3cbb99ca8",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:57.134992+00:00",
+  "ended_at_utc": "2026-11-28T03:50:22.828542+00:00",
+  "request_sha256": "ec02e99273007b521e285e6aac042270b393b607d2b832577b21a2d66cc46fb7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 70508,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35182,
+    "cached_tokens": 9344,
+    "completion_tokens": 976
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('downstream_solver.py')\\ns = p.read_text().replace('def _intrinsic_features(train, test):', 'def _pooled_features(train, test):')\\na = s.index('    return _with_drift_intercept(x, mean)[:len(train[\\\\'lab_id\\\\'])]')\\nb = s.index('\\\\ndef _loads', a)\\ns = s[:a] + \\\"    return np.split(_with_drift_intercept(x, mean), [len(train['lab_id'])])\\\\n\\\\n\\\" + s[b:]\\ns = s.replace('def _predict_chamber(test, tau, theta, times):', 'def _predict_chamber(test, x, tau, theta, times):').replace('drift = _chamber_features(test) @ theta[2:]', 'drift = x @ theta[2:]').replace('x = _intrinsic_features(train, test)', 'x_train, x_test = _pooled_features(train, test)').replace('_fit_intrinsic(train, x, cal_item', '_fit_intrinsic(train, x_train, cal_item').replace('_predict_chamber(test, tau, theta, times)', '_predict_chamber(test, x_test, tau, theta, times)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nimport json,pickle\\nx=pickle.load(open('public_batch.pkl','rb'))[0]; d=x['dataset']\\nfor k,v in d.items():\\n if k not in ('train','test','calibration_load_cells'): print(k,str(v)[:220])\\nfor name in ('pre_llm_gate_diagnostic.json','archive_manifest.json'):\\n a=json.load(open('/tmp/hegel_continual_archive/'+name)); print(name,str(a)[:1600])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 deployment-local reference alignment → H2 split-invariant pooled deployment alignment with a drift kernel identified on locally aligned diagnostics; the prior candidate failed the reference exchange by 0.462 strain and 0.186 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The diagnostic-only reference convention can be applied directly to the deployment split.\",\n    \"empirical_witness\": \"Exchanging 24 reference rows per split within labs preserves the pooled panel but changed predicted strain by 0.461594 and initial rate by 0.186484, above the 1e-5 tolerance.\",\n    \"causal_blanket_diagnosis\": \"Deployment-only centering and scaling depend on which split holds a reference row, even though the deployed input contract defines a joint panel.\",\n    \"sublated_pivot\": \"Keep local alignment to identify the chamber kernel from the standalone diagnostics; use the prescribed joint alignment and cell-balanced imputation for both production splits.\",\n    \"risk_kind\": \"reference-exchange symmetry\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep separate panels in production because they fit diagnostics\",\n      \"rejected_reason\": \"The standalone diagnostic panel identifies the response kernel, but the public exchange test directly falsifies split-dependent deployment normalization.\"\n    }\n  ],\n  \"rationale\": \"Use the same pooled feature matrix for material estimation and deployment drift while retaining the separately identified chamber response. The public validator tests whether this fixes the measured symmetry failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "388fb751827d1302823c2819fd696e6da223a19ff1ec6748d3f1764a7a0070ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27778.87,
+      "usage_known": true,
+      "prompt_tokens": 35182,
+      "cached_tokens": 9344,
+      "completion_tokens": 976
+    }
+  ]
+}

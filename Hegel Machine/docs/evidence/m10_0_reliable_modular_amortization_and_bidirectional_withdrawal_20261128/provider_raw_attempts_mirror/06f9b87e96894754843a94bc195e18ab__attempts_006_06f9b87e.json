@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06f9b87e96894754843a94bc195e18ab",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:20.603361+00:00",
+  "ended_at_utc": "2026-11-28T03:32:50.402310+00:00",
+  "request_sha256": "5da4e34613c56c2f135c17fd5c9659d23ee59dde232a3a962e83c7bf49f4a8ad",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26924,
+    "cached_tokens": 9344,
+    "completion_tokens": 1182
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_compare.py <<'PY'\\nfrom chamber_probe import *\\nfrom scipy.optimize import least_squares\\none=n.ones(len(h));\\n\\ndef feats(x, mode):\\n dr=x@th[2:]; basic=n.c_[one,h,dr]; plain=n.c_[one,h,x[:,1:]]\\n if mode=='reset': return (basic,basic,n.c_[one,dr])\\n if mode=='reset_x': return (plain,plain,x)\\n if mode=='structured': return (n.c_[basic,z[:,0]],n.c_[basic,z[:,1]],n.c_[one,dr])\\n if mode=='linear':\\n  all=n.c_[plain,past]; return (all,all,all)\\n if mode=='reset_constant_drift': return (basic,basic,one[:,None])\\n if mode=='reset_nonlinear': return (n.c_[basic,dr**2,h*dr],n.c_[basic,dr**2,h*dr],n.c_[one,dr,dr**2])\\n\\ndef solve(F,mask,free=False):\\n dims=[f.shape[1] for f in F]; sel=n.repeat(mask,y.shape[1]);\\n def matrix(u):\\n  b=basis(u);return n.column_stack([(f[:,None,:]*b[None,:,j,None]).reshape(y.size,-1) for j,f in enumerate(F)])\\n A=matrix(tau); q=n.linalg.lstsq(A[sel],y.ravel()[sel],rcond=None)[0];\\n if free:\\n  opt=least_squares(lambda p:matrix(n.exp(p[:2]))[sel]@p[2:]-y.ravel()[sel],n.r_[n.log(tau),q],loss='soft_l1',f_scale=.004,max_nfev=120)\\n  u=n.exp(opt.x[:2]);q=opt.x[2:]; A=matrix(u)\\n else:\\n  u=tau; q=least_squares(lambda q:A[sel]@q-y.ravel()[sel],q,jac=lambda _:A[sel],loss='soft_l1',f_scale=.004).x\\n return (A@q).reshape(y.shape),u,n.split(q,n.cumsum(dims)[:-1])\\n\\nalign={ 'combined': x, 'diag_only':m._features(g,g)[:len(h)] }\\nfor al,v in align.items():\\n for mode in ('reset','reset_x','structured','linear','reset_constant_drift','reset_nonlinear'):\\n  for free in (False,True):\\n   F=feats(v,mode); o,u,a=solve(F,one.astype(bool),free); q=n.empty_like(y)\\n   for l in n.unique(g['lab_id']):\\n    ix=g['lab_id']==l;q[ix]=solve(F,~ix,free)[0][ix]-y[ix]\\n   worst=n.max([n.sqrt(n.mean(q[g['lab_id']==i]**2,axis=0))[[0,4,11,12]] for i in range(4)],axis=0)\\n   print(al,mode,free,'tau',u.round(4),'fit',n.sqrt(n.mean((o-y)**2,axis=0))[[0,4,11,12]].round(4),'LOLO',worst.round(4),'coef',[w.round(4).tolist() for w in a] if mode in ('reset','reset_x','reset_constant_drift') else '')\\nprint('refs means',[(n.mean(s['ref_coupons'],axis=0).round(2),n.isnan(s['coupon_features_raw']).sum(0)) for s in [tr,te,g]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Benchtop memory transfer → chamber reset and drift mixing; the unrestricted linear model's worst held-out-lab RMSE is 0.089 at the final horizon and 0.050 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full linear model immediately\",\"rejected_reason\":\"Its past-load coefficients are small and its held-out error grows at late times; test whether a compact reset law predicts better.\"}],\"rationale\":\"Fit curves and rates jointly with robust loss. Held-out labs will distinguish actionable memory, feature, and time-basis effects from coefficients that only improve the training fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9d441332192f6b255dc3977c032997739cacaa4487441690d467d6a2c35deffb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31858.46,
+      "usage_known": true,
+      "prompt_tokens": 26924,
+      "cached_tokens": 9344,
+      "completion_tokens": 1182
+    }
+  ]
+}

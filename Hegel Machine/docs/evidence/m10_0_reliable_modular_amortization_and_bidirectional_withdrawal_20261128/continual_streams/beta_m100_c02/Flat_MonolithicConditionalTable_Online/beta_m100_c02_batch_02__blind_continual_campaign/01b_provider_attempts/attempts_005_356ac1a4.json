@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "356ac1a4c44a4fcda3f5e7674e9428b2",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:36:13.588181+00:00",
+  "ended_at_utc": "2026-11-28T03:36:36.534789+00:00",
+  "request_sha256": "02093a42602227f9e801e58478f3bf88fe835357f662b020cf0aee951bdd03d1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40267,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25921,
+    "cached_tokens": 9344,
+    "completion_tokens": 860
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/test_cal.py <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; print('gross outliers',np.argwhere(abs(y)>5).tolist())\\nfor k in range(4):\\n mask=(b['bank_id']==k)&(abs(b['raw_readout'])<5); t=b['ref_signal'][mask]; z=b['raw_readout'][mask]; print('bank', k)\\n for d in range(1,6):\\n  a=np.polynomial.polynomial.polyfit(t,z,d); print(d,np.round(a,7), np.sqrt(np.mean((np.polynomial.polynomial.polyval(t,a)-z)**2)))\\nfor d in range(1,5):\\n terms=[t for i in range(d+1) for t in itertools.combinations_with_replacement(range(4),i)]\\n X=np.array([np.prod(x[:,t],axis=1) for t in terms]).T\\n for k in range(4):\\n  good=abs(y[:,k])<5; errs=[]\\n  for fold in range(5):\\n   tr=good&(np.arange(len(x))%5!=fold); va=good&~tr\\n   fit=np.linalg.lstsq(X[tr],y[tr,k],rcond=None)[0]; errs.append(np.sqrt(np.mean((X[va]@fit-y[va,k])**2)))\\n  fit=np.linalg.lstsq(X[good],y[good,k],rcond=None)[0]; print('degree/bank/worst',d,k,max(errs),'coef',[(t,round(a,5)) for t,a in zip(terms,fit) if abs(a)>.008][:35])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/test_cal.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette response → H2 nonlinear bank response with cross-channel mixing; the affine fit has per-channel median absolute residuals of 0.50–0.51 raw units, with held-out error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the large affine residuals as proof of nonlinearity\",\n      \"rejected_reason\": \"Gross outliers can bias the affine fit; compare models on held-out clean readings and use the isolated sweeps to identify the bank response.\"\n    }\n  ],\n  \"rationale\": \"The single-bank sweeps isolate the transfer curves, while held-out rosettes test whether powers and cross-channel terms explain the joint response. This separates calibration errors from wall-model errors before fitting the chamber.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f49016a59346c32e6dd83e6fbc6d1014a2b56fcbda023ad9fbc9a62d4aad2b64",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25004.84,
+      "usage_known": true,
+      "prompt_tokens": 25921,
+      "cached_tokens": 9344,
+      "completion_tokens": 860
+    }
+  ]
+}

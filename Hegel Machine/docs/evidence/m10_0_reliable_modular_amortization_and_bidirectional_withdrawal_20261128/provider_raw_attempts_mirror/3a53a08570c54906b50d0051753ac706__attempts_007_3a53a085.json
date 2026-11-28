@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a53a08570c54906b50d0051753ac706",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:06:23.454350+00:00",
+  "ended_at_utc": "2026-11-28T04:07:05.089765+00:00",
+  "request_sha256": "f48a06c37c4373b75cbb404242c43fe6ad6192267676ba438e0bc4e5c25720f0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49610,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29311,
+    "cached_tokens": 9344,
+    "completion_tokens": 1720
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe7.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; m=np.max(abs(y),axis=1)<8; x,y=x[m],y[m]; b=c['single_bank_sweeps']; ids,t,z=[b[k] for k in ('bank_id','ref_signal','raw_readout')]; m=abs(z)<8; ids,t,z=ids[m],t[m],z[m]; j=np.arange(4); opp=(j+2)%4; q=x[:,opp]; pure=np.count_nonzero(x,axis=1)==1\\nX=np.r_[x[pure], np.eye(4)[ids]*t[:,None]]; Y=np.r_[y[pure],np.where(np.eye(4)[ids],z[:,None],np.nan)]; selfrows=(X!=0)&np.isfinite(Y); R,C=np.where(selfrows); V=X[R,C]; D=Y[R,C]\\nmodels={\\n 'tanh_lin':(lambda v,p:np.tanh(p[0]*v)+p[1]*v,[1.3,.16]),\\n 'tanh_poly_lin':(lambda v,p:np.tanh(p[0]*v+p[1]*v**3)+p[2]*v,[1.3,0,.16]),\\n 'tanh_rational_lin':(lambda v,p:np.tanh(p[0]*v/(1+p[1]*v*v))+p[2]*v,[1.3,0,.16]),\\n 'tanh_out_cubic':(lambda v,p:np.tanh(p[0]*v)+p[1]*v+p[2]*v**3,[1.3,.16,0]),\\n 'tanh_plus_rational':(lambda v,p:np.tanh(p[0]*v)+p[1]*v/(1+p[2]*v*v),[1.3,.16,0]),\\n 'rational':(lambda v,p:v*(1+p[0]*v*v+p[1]*v**4)/(1+p[2]*v*v+p[3]*v**4),[.1,.01,.5,.02]),\\n 'sqrt_lin':(lambda v,p:v/np.sqrt(1+p[0]*v*v)+p[1]*v,[1,.16]),\\n 'asinh_lin':(lambda v,p:np.arcsinh(p[0]*v)+p[1]*v,[1,-.1]),\\n 'poly':(lambda v,p:v*np.polynomial.polynomial.polyval(v*v,np.r_[1,p]),[-.3,.05,-.005,0,0,0]),\\n 'tanh_sin':(lambda v,p:np.tanh(p[0]*v)+p[1]*np.sin(p[2]*v),[1.3,.3,.6]),\\n}\\nbase0=np.array([.07,-.08,-.06,.05]); fits={}\\nfor name,(f,p0) in models.items():\\n def r(p): return p[:4][C]+p[4:8][C]*f(V,p[8:])-D\\n a=least_squares(r,np.r_[base0,[1.5,.9,.9,1.5],p0],max_nfev=2500,gtol=1e-13); fits[name]=(np.mean(r(a.x)**2),a.x,f); print(name,np.sqrt(fits[name][0]),max(abs(r(a.x))),a.x.round(7))\\n_,p,f=min(fits.values(),key=lambda a:a[0]); E=(y-p[:4])/p[4:8]-f(x,p[8:]); print('normalized cross isolated:',np.c_[q[pure].ravel(),E[pure].ravel()][q[pure].ravel()!=0].round(7).tolist());\\n# A held-out rosette group tests additive and mixed rational grammars.\\na=x.ravel(); d=q.ravel(); e=E.ravel(); bank=np.tile(j,len(x)); hold=np.repeat((np.arange(len(x))%5==1)&~pure,4)\\nfor name,F in {\\n 'q_poly':lambda a,d:np.array([d**k for k in range(1,6)]).T,\\n 'mixed_poly':lambda a,d:np.array([d**k*a**l for k in range(1,6) for l in range(4) if k+l<=6]).T,\\n 'q_tanh2':lambda a,d:np.array([np.tanh(d),d*d/(1+d*d),d]).T,\\n 'q_rational':lambda a,d:np.array([d/(1+d*d),d*d/(1+d*d),d,d*d]).T,\\n }.items():\\n A=F(a,d); h=np.linalg.lstsq(A[~hold],e[~hold],rcond=None)[0]; print(name,'train/hold',*(np.sqrt(np.mean((A[m]@h-e[m])**2)) for m in (~hold,hold)),h.round(5))\\nprint('study scalar or shape',[(k,getattr(v,'shape',v) if not isinstance(v,dict) else list(v)) for k,v in s.items()]); print('gate open snippet');\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe7.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json | head -65; cat /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bankwise tanh plus linear → H2 shared nonlinear response with scaled opposite-bank coupling; the current bank-0 isolated fit misses by up to 0.0161 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Interpolate each calibration bank independently\",\n      \"rejected_reason\": \"Nearly identical fitted saturation rates across banks support testing a shared response; the flagged sweep rows also leave gaps that a shared law can fill.\"\n    }\n  ],\n  \"rationale\": \"Fit candidate self-response laws using isolated excitations, where cross-talk is absent. Then test normalized cross-talk on held-out rosettes. If the errors remain large relative to the clean measurement precision, revise the calibration before ranking wall laws.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "76b0b82628020be1c6a45b559ff4ee31fcd7a985ade6a5dd411c250cf760054c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43715.01,
+      "usage_known": true,
+      "prompt_tokens": 29311,
+      "cached_tokens": 9344,
+      "completion_tokens": 1720
+    }
+  ]
+}

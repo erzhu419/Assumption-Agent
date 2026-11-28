@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2fb72d2309c942ba81a11ff75a06ab7e",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:21.315410+00:00",
+  "ended_at_utc": "2026-11-28T03:54:54.763822+00:00",
+  "request_sha256": "7c66a148952b29c1cced2a0b967bbbe0a64b1e5088d1a9969fd68efaa62b4c9e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 59700,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32032,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nbatch = pickle.load(open('public_batch.pkl', 'rb'))\\ntelemetry = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nprint('Telemetry fields:', list(telemetry) if isinstance(telemetry, dict) else sorted({k for row in telemetry if isinstance(row, dict) for k in row}))\\nfor item in batch:\\n    s = item['study']; c = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\n    print('Study fields:', sorted(s)); print('Sweep fields:', sorted(c))\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    clean = np.max(np.abs(y - np.median(y, axis=0)), axis=1) < 5\\n    edge = np.max(np.abs(x), axis=1) >= 1.2\\n    rng = np.random.default_rng(901); fold = np.empty(len(x), int)\\n    for a in (axis, ~axis): fold[a] = rng.permutation(a.sum()) % 5\\n    pred = {name: np.zeros_like(y) for name in ('trig','rational_additive','rational_sum_diff')}\\n    err = np.zeros_like(x); margins = []\\n    def design(xj, p, paired):\\n        a, b = xj.T\\n        q, r = (a+p[2]*b, a-p[2]*b) if paired else (a,b)\\n        return np.column_stack((np.ones(len(a)), a, b, np.sin(b)**2, q/(1+(p[0]*q)**2), r/(1+(p[1]*r)**2)))\\n    for k in range(5):\\n        tr, te = fold != k, fold == k\\n        b = u._fit(x[tr], y[tr]); offset, slope, sine, cross, even = b.T\\n        margins.append(np.min(slope-2.5*abs(sine)-abs(cross)-abs(even)))\\n        pred['trig'][te] = np.einsum('njk,jk->nj', u._design(x[te]), b)\\n        good = te & clean\\n        err[good] = u._inverse(y[good], b) - x[good]\\n        for name, paired in [('rational_additive',False),('rational_sum_diff',True)]:\\n            for j in range(4):\\n                z = x[:,[j,j^2]]; yy = y[tr & clean,j]; zz = z[tr & clean]\\n                def fit(p): return np.linalg.lstsq(design(zz,p,paired), yy, rcond=None)[0]\\n                def res(p): return design(zz,p,paired) @ fit(p) - yy\\n                p = min((least_squares(res, [f,f,1], bounds=([.03,.03,.05],[8,8,3]), max_nfev=150) for f in (.25,1.25)), key=lambda r:r.cost).x\\n                pred[name][te,j] = design(z[te],p,paired) @ fit(p)\\n    for name, sl in [('axis',axis),('mixed',~axis),('edge',edge)]:\\n        m = clean & sl\\n        print(name, 'rows', m.sum(), 'OOF worst-channel forward RMSE', {key:float(np.sqrt(np.mean((value[m]-y[m])**2,axis=0)).max()) for key,value in pred.items()}, 'inverse max', np.max(abs(err[m])))\\n    print('Minimum global Jacobian dominance margin across folds:', min(margins), 'worst held-out inverse max:', abs(err[clean]).max())\\n    assert min(margins) > 0\\n    assert abs(err[clean]).max() < 2e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or simple additive saturation -> H2 paired linear-plus-sine response; worst verified held-out channel RMSE is 1.11e-5 on mixed sweeps, with calibration-edge inversion not yet tested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the central-range round-trip check\",\n      \"rejected_reason\": \"It cannot expose inverse error on real calibration-edge measurements or establish that the fitted map has a unique inverse.\"\n    }\n  ],\n  \"rationale\": \"Compare additive and pairwise sum/difference rational alternatives on real held-out sweeps, measure inverse error through the calibration edges, and check a global Jacobian bound. A failed inverse or materially better alternative would change the implementation. Inspect the study and telemetry fields to determine whether a batch-stratified comparison is applicable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4c1c8efd3bb0c29035d697d5cbbc1f19c002d89b36e215c04ca7d1e60a37ed7a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35537.43,
+      "usage_known": true,
+      "prompt_tokens": 32032,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

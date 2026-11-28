@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "974a6595643e4baf87eb2f4035ac53fd",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:04.180428+00:00",
+  "ended_at_utc": "2026-11-28T04:03:29.719762+00:00",
+  "request_sha256": "78a7225857df15d86e8f9b6eafdbcb34ac83a2af341814c0eec905f5e8b59948",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44927,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25084,
+    "cached_tokens": 9344,
+    "completion_tokens": 941
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '91,139p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw,loads=c['bridge_raw'],c['true_channel_loads']; p,keep=m._fit_bridge(raw,loads)\\nprint('single-channel sweep structure:', [(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()] if isinstance(c['single_channel_sweeps'],dict) else (type(c['single_channel_sweeps']).__name__,len(c['single_channel_sweeps'])))\\nprint('excluded rows',np.flatnonzero(~keep),'max inlier channel residual',np.max(abs(raw[keep]-m._bridge_forward(loads[keep],p))))\\n# A small forward residual alone does not rule out a poorly conditioned inverse.\\neye=np.eye(4)*1e-5\\nfor split in ('train','test'):\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  a=d[split][key].reshape(-1,4); x=m._load_from_raw(a,p)\\n  j=np.stack([(m._bridge_forward(x+u,p)-m._bridge_forward(x-u,p))/2e-5 for u in eye],axis=-1)\\n  gain=np.linalg.solve(j.transpose(0,2,1),np.ones((len(x),4,1))).squeeze(-1)\\n  lo,hi=loads[keep].min(0),loads[keep].max(0)\\n  extrapolation=np.maximum(np.maximum(lo-x,x-hi),0).max(axis=0)\\n  print(split,key,'minimum singular value',np.linalg.svd(j,compute_uv=False)[:,-1].min(),'max total-stress gain',np.linalg.norm(gain,axis=1).max(),'calibration range exceedance',extrapolation.round(4))\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor row in rows:\\n a=np.asarray(row['facility_telemetry_trace'])\\n print('pre-batch trace',row['completed_campaign_index'],'projection indicator median/range',round(np.median(a[:,2]),3),np.round([a[:,2].min(),a[:,2].max()],3),'drift indicator median/range',round(np.median(a[:,7]),3),np.round([a[:,7].min(),a[:,7].max()],3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (idle chamber) → H2 (archived projected reset); worst leave-one-lab-out P90 errors are 0.0243 strain and 0.0154 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay-mode, HJB, or classification diagnostics\",\"rejected_reason\":\"The supplied task has no relay states, stochastic drift operator, or classification labels; the relevant checks are bridge algebra and chamber-state transfer.\"}],\"rationale\":\"Audit whether the bridge formula leaves structured residuals or gives an ill-conditioned inverse on actual deployment inputs; either finding would justify revisiting calibration. Compare the full ranges of both apparatus indicators to detect an ambiguous or mixed chamber regime that a mean alone could mask.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "58196144d043e34cc2305895ba85d1d4ddd364bdb9a56323dc15e6041b5463f1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27549.8,
+      "usage_known": true,
+      "prompt_tokens": 25084,
+      "cached_tokens": 9344,
+      "completion_tokens": 941
+    }
+  ]
+}

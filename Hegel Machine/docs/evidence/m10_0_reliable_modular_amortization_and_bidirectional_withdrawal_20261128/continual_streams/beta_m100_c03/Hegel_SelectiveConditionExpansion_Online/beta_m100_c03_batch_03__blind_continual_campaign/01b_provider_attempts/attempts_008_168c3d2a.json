@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "168c3d2affb5459f92544db0f086ff17",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:50.069361+00:00",
+  "ended_at_utc": "2026-11-28T03:47:25.746943+00:00",
+  "request_sha256": "2fdafc1dee36d6b16e0c2429279d017b4e92a960f9c2bf92960a190173253cfd",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42201,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25002,
+    "cached_tokens": 9344,
+    "completion_tokens": 1444
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _response, _fit, _invert\\nfrom batch_solver import solve_batch\\nfrom _verified_downstream import solve_downstream\\nitems = pickle.load(open('public_batch.pkl','rb'))\\nprint('public items:',len(items))\\nfor item in items:\\n s=item['study']; c=s['sensor_calibration_sweeps']; x,y=map(np.asarray,(c['ref_rosette'],c['raw_rosette'])); A=_design(x)\\n full,clean=_response(A,y); axis=np.count_nonzero(x,axis=1)==1; mixed=np.flatnonzero(~axis); radius=np.linalg.norm(x,axis=1)\\n splits=[(f'axis {j}',np.flatnonzero(axis & (x[:,j]!=0))) for j in range(4)]; splits += [('highest-radius mixed',mixed[np.argsort(radius[mixed])[-12:]])]\\n best_max=0.\\n for name,held in splits:\\n  train=np.ones(len(x),bool); train[held]=False; test=held[clean[held]]\\n  if not len(test): print(name,'no clean test rows'); continue\\n  fit=_fit(x[train],y[train]); _,keep=_response(A[train],y[train]); tr=np.flatnonzero(train)[keep]; ring=A[test]@fit\\n  # Quadratic sums/differences squared are spanned by the full quadratic basis.\\n  # Profile rational alternatives only on the training rows; score outer rows once.\\n  rational=np.empty_like(ring); choices=[]\\n  for j in range(4):\\n   support=np.flatnonzero(fit[:,j]); f=A[:,support]; best=(np.inf,None,None)\\n   for k in ((j+1)%4,(j-1)%4):\\n    for sign in (-1,0,1):\\n     q=(x[:,j]+sign*x[:,k])**2\\n     for a in (0,1e-6,3e-6,1e-5,1e-4,1e-3,0.01,0.1):\\n      d=1+a*q; design=f/d[:,None]; b=np.linalg.lstsq(design[tr],y[tr,j],rcond=None)[0]; err=np.linalg.norm(design[tr]@b-y[tr,j]);\\n      if err<best[0]: best=(err,a,design[test]@b)\\n   choices.append(best[1]); rational[:,j]=best[2]\\n  inv=np.max(abs(_invert(y[test],fit)-x[test])); best_max=max(best_max,inv)\\n  print(name,'n',len(test),'inverse max',f'{inv:.3g}','forward RMS ring/rational',*(f'{np.sqrt(np.mean((p-y[test])**2)):.3g}' for p in (ring,rational)), 'rational a',choices)\\n print('worst grouped inverse abs',best_max)\\n broad=dict(s,y_obs_raw=_invert(s['y_obs_raw'],full)); b=dict(c,raw_rosette=c['ref_rosette'].copy()); banks=c['single_bank_sweeps']; b['single_bank_sweeps']=dict(banks,raw_readout=banks['ref_signal'].copy()); broad['sensor_calibration_sweeps']=b\\n one,two=solve_batch(s),solve_downstream(broad); k=one['kkt_certificate']; w=one['weights']; print('public bank counts (sensor channel, not cohort)',np.unique(s['row_bank_id'],return_counts=True)[1].tolist()); print('ring-vs-full downstream peak delta weights/field:',np.max(abs(w-two['weights'])),np.max(abs(one['terminal_field']-two['terminal_field'])),'budget residual',abs(w.sum()-s['total_budget']),'KKT gap',abs(k['primal_objective']-k['dual_lower_bound']))\\n assert np.isfinite(one['terminal_field']).all() and abs(w.sum()-s['total_budget'])<1e-10 and w.min()>=-1e-10 and w.max()<=s['u_box']+1e-10 and abs(k['primal_objective']-k['dual_lower_bound'])<1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine response → ring-coupled quadratic and channelwise cubic response; worst random-fold inverse error was 3.18e-5, with grouped extrapolation still to be measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Relay-mode, stochastic-drift, and classification-confounding tests\",\n      \"rejected_reason\": \"The calibration data consist of continuous paired measurements, not relay states, stochastic trajectories, or labeled cohorts. Sensor-bank IDs identify channels, not cohort batches.\"\n    }\n  ],\n  \"rationale\": \"Hold out whole axis sweeps and the highest-amplitude mixed sweeps to expose failures random folds can miss. Fit rational challengers on training rows only and compare the ring and full polynomial models downstream; promote a challenger only if it improves held-out calibration or materially changes downstream accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "772d432da6a5e9ddf8eb6c5aaf775c811e40662a2ea788271119ea7964d7882e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37768.53,
+      "usage_known": true,
+      "prompt_tokens": 25002,
+      "cached_tokens": 9344,
+      "completion_tokens": 1444
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "344f572597fd4d9aa49da127d85aa57d",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:24.906044+00:00",
+  "ended_at_utc": "2026-11-28T03:57:56.932793+00:00",
+  "request_sha256": "1ec3ef55f86fc6012c335c34c548434eb880f5e2906f0d8342adb3a36ada8dbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57891,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33005,
+    "cached_tokens": 9344,
+    "completion_tokens": 1263
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; y=c['true_channel_loads']; r=c['bridge_raw']; keep=abs(r).max(1)<5; y,r=y[keep],r[keep]; pairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\nfor i in range(4):\\n m=np.count_nonzero(y,axis=1)==1;m &= y[:,i]!=0\\n print('axis',i,np.c_[y[m,i],r[m]].round(5))\\n\\ndef basis(y,k,mode):\\n s=np.sin(k*y); p=np.array([y[:,i]*y[:,j] for i,j in pairs]).T\\n a=np.c_[np.ones(len(y)),y,s]\\n if mode==0:return np.c_[a,np.cos(k*y)-1]\\n if mode==1:return np.c_[a,np.cos(k*y)-1,p]\\n if mode==2:return np.c_[a,np.cos(k*y)-1,p,y**2]\\n if mode==3:return np.c_[a,np.abs(y),p]\\n if mode==4:return np.c_[a,np.logaddexp(y,-y)-np.log(2),p]\\n if mode==5:return np.c_[a,np.tanh(y),y*np.tanh(y),p]\\n if mode==6:return np.c_[a,np.cos(k*y)-1,p,*[np.cos(k*(y[:,i]-y[:,j]))-np.cos(k*y[:,i])-np.cos(k*y[:,j])+1 for i,j in pairs]]\\n if mode==7:return np.c_[a,np.cos(k*y)-1,p,*[np.cos(k*(y[:,i]+y[:,j]))-np.cos(k*y[:,i])-np.cos(k*y[:,j])+1 for i,j in pairs]]\\nfor mode in range(8):\\n def fit(m):\\n  def res(k):\\n   A=basis(y[m],k,mode); b=np.linalg.lstsq(A,r[m],rcond=None)[0]; return np.linalg.norm(A@b-r[m]),b\\n  o=minimize_scalar(lambda k:res(k)[0],bounds=(2.15,2.85),method='bounded');return o.x,res(o.x)[1]\\n k,b=fit(np.ones(len(y),bool)); e=basis(y,k,mode)@b-r; ee=np.zeros_like(e)\\n for i in range(5):\\n  m=np.arange(len(y))%5!=i; kk,bb=fit(m); ee[~m]=basis(y[~m],kk,mode)@bb-r[~m]\\n print(mode,round(k,5),'fit',np.linalg.norm(e)/np.sqrt(e.size),'CV',np.linalg.norm(ee)/np.sqrt(ee.size),'max',abs(ee).max());\\n if mode in (0,1,3,4,5): print(b.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== ${f##*/}\\\"; sed -n '/^def solve_batch/,$p' \\\"$f\\\" | tail -23; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared sine and bilinear products → H2 sine plus an even cross-channel response; the best tested model so far has held-out raw-channel RMSE 0.0143 and maximum error 0.0546.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the expanded nonlinear bridge from the previous probe\",\"rejected_reason\":\"Single-axis rows show an asymmetric off-diagonal response that may explain its remaining held-out error with fewer terms.\"}],\"rationale\":\"Compare even response terms on held-out sweeps and inspect the archived deployment formulas. Adopt a compact bridge if it reduces held-out error; choose the chamber law separately using the telemetry and archive.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2f69002a9e19a42b4d922bd2882fdf36b0400bfe71adcf1b238e085e9da2773c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34208.59,
+      "usage_known": true,
+      "prompt_tokens": 33005,
+      "cached_tokens": 9344,
+      "completion_tokens": 1263
+    }
+  ]
+}

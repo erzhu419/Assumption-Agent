@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "817c46926542486aa014ad74cc2f7136",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:06.516151+00:00",
+  "ended_at_utc": "2026-11-28T03:44:36.799097+00:00",
+  "request_sha256": "43e3b9a5e5c0a3e1e6b2546718a65a680d62172bbe25a18c1b6ec1cb0e241020",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57848,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30541,
+    "cached_tokens": 9344,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,105p' /holdout_task/batch_solver.py; grep -A20 '^def _loads' /tmp/hegel_continual_archive/alpha_m100_c02_batch_01_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nfrom pathlib import Path\\n\\ndef load(path,name):\\n    spec=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nroot=Path('/holdout_task'); arc=Path('/tmp/hegel_continual_archive'); s=load(root/'batch_solver.py','candidate'); old=load(arc/'alpha_m100_c02_batch_01_solver.py','prior'); D=pickle.load(open(root/'public_batch.pkl','rb'))[0]['dataset']; t,u=D['train'],D['test']; dt,ts=D['past_dt'],D['eval_times']; cal=D['calibration_load_cells']; cf=s._fit_bridge(cal); p,h=s._loads(cf,t); P,H=s._loads(cf,u); x=s._features(t,u); n=len(h); y=t['strain_curves_obs']-t['strain_0'][:,None]; r=t['instant_rate_obs']; out=s.solve_batch(D); tau=out['estimated_taus']; w=out['hereditary_weights']; print('feature shape',x.shape,'fit',tau,w)\\nfor key in ('lab_id','stratum'):\\n    for k in np.unique(t[key]):\\n        te=t[key]==k; tr=~te; a,b=s._fit(p[tr],h[tr],x[:n][tr],dt,ts,y[tr],r[tr]); c,d,*_=s._design(np.log(a),p[te],h[te],x[:n][te],dt,ts); ec=abs(c@b-y[te]); er=abs(d@b-r[te]); print(key,k,'curve abs p90 by time max',round(np.quantile(ec,.9,axis=0).max(),5),'rate RMSE',round(np.sqrt(np.mean(er**2)),5),'tau max rel change',round(np.max(abs(a/tau-1)),5),'theta max abs change',round(np.max(abs(b-w)),5))\\nxx=x[n:]; drift=xx@w[2:] if xx.shape[1]==5 else w[2]+xx@w[3:]; co=np.column_stack([np.ones(len(H)),H,drift,P[:,-1]])@old._CHAMBER; basis=np.column_stack([-np.expm1(-ts[:,None]/tau),ts]); ec=co@basis.T+u['strain_0'][:,None]-out['predicted_strain']; er=co@np.r_[1/tau,1]-out['initial_rate_pred']; print('archive minus baseline strain at last time, rate: min/median/max',np.quantile(ec[:,-1],[0,.5,1]),np.quantile(er,[0,.5,1]));\\nlog=json.load(open(arc/'archive_apparatus_log.json')); print('prefix channel-4 change and next completed campaign',[(round(np.median(row['facility_telemetry_trace'],axis=0)[4],3), nxt['completed_campaign_short_name']) for row,nxt in zip(log,log[1:])]); print('latest prefix state',round(np.median(log[-1]['facility_telemetry_trace'],axis=0)[4],3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: baseline chamber persistence -> H2: preceding facility state selects the archived chamber law; public calibration rowwise p95 error is 0.000285, and blind chamber error is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the benchtop law for every deployment coupon\",\n      \"rejected_reason\": \"The preceding facility state matches the state before the one archived nonbaseline campaign; quantify the resulting prediction difference before selecting the transfer.\"\n    }\n  ],\n  \"rationale\": \"Leave out each lab and stratum to detect material-fit instability before changing the chamber law. Measure how much the archived law changes strain and initial rate; this tests whether selecting the wrong regime would materially affect either output, not whether the blind chamber law is correct.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "531058901f453d653a218623f34cd32bd63cc69d036f9d965c4034789dfd057f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32358.85,
+      "usage_known": true,
+      "prompt_tokens": 30541,
+      "cached_tokens": 9344,
+      "completion_tokens": 1192
+    }
+  ]
+}

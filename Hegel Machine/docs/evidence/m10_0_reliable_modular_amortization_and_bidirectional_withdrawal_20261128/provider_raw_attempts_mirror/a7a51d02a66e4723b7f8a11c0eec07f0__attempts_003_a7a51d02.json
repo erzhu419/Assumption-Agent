@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7a51d02a66e4723b7f8a11c0eec07f0",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:26.869705+00:00",
+  "ended_at_utc": "2026-11-28T03:51:47.707924+00:00",
+  "request_sha256": "b6b7a11fffd872e5e7de8f24cc0d9a391406350deae8e0604340bf7245bff6da",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22310,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18192,
+    "cached_tokens": 9344,
+    "completion_tokens": 650
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np,json\\nfrom pathlib import Path\\nbatch=pickle.load(open('public_batch.pkl','rb')); print('items:',len(batch)); d=batch[0]['dataset']; print('dataset keys:',list(d))\\nc=d['calibration_load_cells']; print('calibration fields:',[(k,list(v) if isinstance(v,dict) else np.shape(v)) for k,v in c.items()]); x=c['true_channel_loads']; y=c['bridge_raw']; print('calibrated ranges:',x.min(0),x.max(0),'raw ranges:',y.min(0),y.max(0)); print('first 5 calibration pairs:',np.column_stack([x,y])[:5]); s=c['single_channel_sweeps']; print('sweep shapes:',[(k,np.shape(v)) for k,v in s.items()]); print('sweep ranges:',[(k,np.min(v),np.max(v)) for k,v in s.items() if np.asarray(v).dtype.kind in 'fiu'])\\nfor k in ('train','test','chamber_verification_trials'):\\n v=d.get(k); print(k,type(v).__name__,list(v) if isinstance(v,dict) else None)\\n if isinstance(v,dict):\\n  for f in ('past_channel_raw','hold_channel_raw'):\\n   if f in v:\\n    a=np.asarray(v[f]); z=a.reshape(-1,4); print(f,a.shape,z.min(0),z.max(0))\\np=Path('/tmp/hegel_continual_archive/archive_manifest.json'); j=json.loads(p.read_text()); print('manifest sample:',str(j)[-2700:])\\np=Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); j=json.loads(p.read_text()); print('apparatus entries:',len(j)); print('last entry summary:',[(k,(type(v).__name__,len(v)) if isinstance(v,(dict,list)) else v) for k,v in j[-1].items()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine bridge -> H2 coupled nonlinear bridge if held-out errors justify it; no out-of-fold metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Use the validator’s batch nesting to inspect calibration coverage and trial layout. If operational histories extend beyond calibration support, include a boundary holdout before choosing the bridge model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "bf2cef19ade558473bfb90887bf4cb3075eb6ee98eea5dbe9627d4ae2e7537fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20791.23,
+      "usage_known": true,
+      "prompt_tokens": 18192,
+      "cached_tokens": 9344,
+      "completion_tokens": 650
+    }
+  ]
+}

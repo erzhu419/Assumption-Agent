@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "baab879d704c48aa9d8ce7bd1c82b085",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:27.125527+00:00",
+  "ended_at_utc": "2026-11-28T03:51:57.774415+00:00",
+  "request_sha256": "65c221478b6c7bea5b785826d43080200c62dbe1df8a765d4de4b9c23af0bf57",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55280,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29977,
+    "cached_tokens": 9344,
+    "completion_tokens": 1209
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; sweeps=s['sensor_calibration_sweeps']; x=sweeps['ref_rosette']; y=sweeps['raw_rosette']; banks=sweeps['single_bank_sweeps']; ids=banks['bank_id']; br=banks['raw_readout']; bx=np.eye(4)[ids]*banks['ref_signal'][:,None]; good=np.flatnonzero(np.max(np.abs(y),axis=1)<8)\\n# Stratify folds by sweep amplitude; also hold out the high-amplitude tail as its own slice.\\norder=good[np.argsort(np.max(np.abs(x[good]),axis=1))]; folds=[order[j::5] for j in range(5)]+[order[-max(1,len(order)//5):]]\\ndef design(v,k,a=0):\\n    F=m._sensor_features(v,k); F[..., -1]/=1+a*v[..., k]**2\\n    return F\\ndef fit(train,rational):\\n    coeff=[]\\n    for k in range(4):\\n        keep=(ids==k)&(np.abs(br)<8); X=np.concatenate((x[train],bx[keep])); Y=np.r_[y[train,k],br[keep]]\\n        def linear(a):\\n            F=design(X,k,a); return F,np.linalg.lstsq(F,Y,rcond=None)[0]\\n        def residual(p):\\n            F,b=linear(p[0]); return F@b-Y\\n        a=least_squares(residual,[0.],bounds=(0.,2.),gtol=1e-14).x[0] if rational else 0.\\n        coeff.append((a,linear(a)[1]))\\n    return coeff\\ndef predict(v,coeff):\\n    return np.stack([design(v,k,a)@c for k,(a,c) in enumerate(coeff)],axis=-1)\\nS,_=m._forward(s); pulses=item['campaign_diagnostics']; shifts=len(s['mu_shifts']); w=np.stack([p['w_pulse'] for p in pulses]); tracer=(w@S.T).reshape(len(pulses),-1,4); measured=np.stack([p['y_pulse_raw'] for p in pulses]).reshape(tracer.shape)\\nfor rational in (False,True):\\n    errs=[]\\n    for test in folds:\\n        c=fit(np.setdiff1d(good,test),rational); e=predict(x[test],c)-y[test]; errs.append(np.sqrt(np.mean(e**2,axis=0)))\\n    c=fit(good,rational); e=(predict(tracer,c)-measured).reshape(len(pulses),shifts,-1); t=np.sqrt(np.mean(e**2,axis=2))\\n    print('rational',rational,'worst stratified sweep channel RMSE',np.max(errs[:-1]),'amplitude-tail worst channel RMSE',np.max(errs[-1]),'worst tracer pulse/shift raw RMSE',t.max(),'pulse/shift RMSEs',t.tolist())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Periodic x and closed y → test whether rational rosette saturation improves the high-amplitude calibration slice; the verified worst held-out tracer RMSE is 1.67e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay, drift, or within-batch classification checks\",\"rejected_reason\":\"This is a steady transport inverse problem with no relay state, evolution law, or classification labels.\"}],\"rationale\":\"The isolated field and KKT checks already passed. This focused audit tests a remaining plausible failure: amplitude-dependent rosette bias hidden by aggregate sweep error. A material improvement on both the held-out amplitude tail and independent tracer slices would justify revisiting calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b3d17e0cc66664b4235bed25e73c8e305e6fe1c150648a00fe13ae0ddfcc33c8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32776.49,
+      "usage_known": true,
+      "prompt_tokens": 29977,
+      "cached_tokens": 9344,
+      "completion_tokens": 1209
+    }
+  ]
+}

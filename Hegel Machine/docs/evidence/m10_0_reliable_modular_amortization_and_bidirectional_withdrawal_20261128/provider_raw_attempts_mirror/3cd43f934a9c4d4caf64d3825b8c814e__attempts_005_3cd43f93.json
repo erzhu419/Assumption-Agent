@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3cd43f934a9c4d4caf64d3825b8c814e",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:19.290195+00:00",
+  "ended_at_utc": "2026-11-28T03:52:53.636903+00:00",
+  "request_sha256": "7602151de8f2f789af16923a2cec11b85820b6d0e8aaf99853fe53d401220d1d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24263,
+    "cached_tokens": 9344,
+    "completion_tokens": 1499
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_shape.py <<'PY'\\nfrom bridge_probe import X,Y,N,basis\\nfrom itertools import product\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\n# The three gross bridge spikes are separated from all other measurements by an order of magnitude.\\nclean=np.max(np.abs(Y-np.median(Y,axis=0)),axis=1)<8\\npair=[2,3,0,1]\\nforms={'tanh':np.tanh,'atan':np.arctan,'rat':lambda z:z/(1+z*z),'root':lambda z:z/np.sqrt(1+z*z),'sin':np.sin,'erf':__import__('scipy').special.erf}\\n\\ndef fit(m,j,diag,cross=None,degree=2,shift=False):\\n def des(x,p):\\n  u=x[:,j]; v=x[:,pair[j]]\\n  cols=[basis(x,'quadratic' if degree==2 else 'affine'),forms[diag](p[0]*u+(p[-1] if shift else 0.))]\\n  if cross=='cubic': cols.append(v**3)\\n  elif cross: cols.append(forms[cross](p[1]*v))\\n  return np.column_stack(cols)\\n def loss(p):\\n  a=des(X[m],p); b=np.linalg.lstsq(a,Y[m,j],rcond=None)[0];return np.sum((a@b-Y[m,j])**2)\\n bounds=[(.15,5)]*(1+int(cross in forms))+([(-1,1)] if shift else [])\\n p=min((minimize(loss,[start]*(len(bounds)-int(shift))+([0] if shift else []),bounds=bounds,method='L-BFGS-B',options={'ftol':1e-13,'gtol':1e-10}) for start in (.65,1.6)),key=lambda r:r.fun).x\\n b=np.linalg.lstsq(des(X[m],p),Y[m,j],rcond=None)[0]\\n return des(X,p)@b,p,b\\n\\nif __name__=='__main__':\\n folds=np.random.default_rng(8).permutation(N)%5\\n edge=np.max(abs(X),axis=1)>=np.quantile(np.max(abs(X),axis=1),.8)\\n rows=[]\\n for diag,cross,degree,shift in [(d,c,2,s) for d,c,s in product(forms,(None,'cubic','tanh','atan','rat'),(False,))]+[(d,c,2,True) for d,c in product(('tanh','atan','rat'),(None,'tanh'))]:\\n  res=[fit(clean,j,diag,cross,degree,shift) for j in range(4)]\\n  rm=np.sqrt(np.mean((np.column_stack([r[0] for r in res])[clean]-Y[clean])**2))\\n  rows.append((rm,diag,cross,degree,shift,res))\\n for rm,d,c,g,s,res in sorted(rows,key=lambda row:row[0])[:12]:\\n  pred=np.zeros_like(Y)\\n  for f in range(5):\\n   for j in range(4): pred[folds==f,j]=fit(clean&(folds!=f),j,d,c,g,s)[0][folds==f]\\n  ep=np.column_stack([fit(clean&~edge,j,d,c,g,s)[0] for j in range(4)])\\n  print(d,c,s,'rms',round(rm,7),'OOF max',round(np.max(np.linalg.norm((pred-Y)[clean],axis=1)),6),'edge max',round(np.max(np.linalg.norm((ep-Y)[clean&edge],axis=1)),6),'p',np.round([r[1] for r in res],4).tolist())\\n rm,d,c,g,s,res=min(rows,key=lambda row:row[0]);print('best coeffs:\\\\n',np.round(np.column_stack([r[2] for r in res]),6)); print('best residual quantiles',np.quantile(abs((np.column_stack([r[0] for r in res])-Y)[clean]),[.5,.9,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_shape.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine and low-order interactions -> H2 saturating per-channel response with paired coupling; clean boundary maximum forward error fell from 0.704 (affine) to 0.146 (axis quintic).\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine mixing matrix, even with quadratic interactions, adequately represents the clean bridge response.\",\"empirical_witness\":\"Clean boundary maximum forward error is 0.704 for the affine model and 0.690 with quadratic interactions; adding axis cubic and quintic terms reduces it to 0.146. Single-axis sweeps show strong compression.\",\"causal_blanket_diagnosis\":\"The missing structure is predominantly an odd nonlinear response on each driven channel; the three gross spikes do not explain it.\",\"sublated_pivot\":\"Retain the joint four-channel calibration and explicit spike separation, but compare smooth diagonal and paired coupling laws by held-out error.\",\"risk_kind\":\"calibration bias and unstable boundary extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the quintic as the final forward map\",\"rejected_reason\":\"It still has substantial held-out error and its derivative can behave poorly at the calibration boundary.\"}],\"rationale\":\"Compare saturating and rational families on clean calibration folds and a high-load holdout. The residual pattern will show whether a paired nonlinear term suffices or the nonlinearity must act on a mixed input before inversion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "a81c6d659188e0860a7329faad29e15120c49b163740438fab0d119f1429f53d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38570.25,
+      "usage_known": true,
+      "prompt_tokens": 24263,
+      "cached_tokens": 9344,
+      "completion_tokens": 1499
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8534cb672a1b4cffa0b6b0292211e783",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:27:30.134386+00:00",
+  "ended_at_utc": "2026-11-28T03:28:04.308410+00:00",
+  "request_sha256": "0d893c1cb06f772d2f8cc7012fb11ff78ce49ddb6cc783a8b385bfa6bb10903f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42944,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26118,
+    "cached_tokens": 10880,
+    "completion_tokens": 1358
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_batch_solver.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\ncal=d['calibration_load_cells']; x=cal['bridge_raw']; y=cal['true_channel_loads'].sum(1)\\na=np.column_stack((np.ones(len(x)),x)); z=(x-x.mean(0))/x.std(0)\\npairs=[z[:,i]+sgn*z[:,j] for i,j in combinations(range(4),2) for sgn in (-1,1)]\\nq=np.column_stack(pairs); folds=np.array_split(np.random.default_rng(52).permutation(len(x)),5)\\nmodels={'affine':a,'pairwise-squares':np.column_stack((a,q**2)),'three-way':np.column_stack((a,*[np.prod(z[:,i],axis=1) for i in combinations(range(4),3)]))}\\nfor scale in (.01,.1,1.): models[f'rational-{scale}']=np.column_stack((a,(1/(1+scale*q*q))-1))\\nfor name,m in models.items():\\n    err=[]\\n    for f in folds:\\n        tr=np.setdiff1d(np.arange(len(x)),f)\\n        err.extend(m[f]@np.linalg.lstsq(m[tr],y[tr],rcond=None)[0]-y[f])\\n    print(name,'calibration OOF RMSE/max',np.round([np.sqrt(np.mean(np.square(err))),np.max(np.abs(err))],8))\\ntr,te=d['train'],d['test']; out=s.solve_batch(d); taus=out['estimated_taus']; p,h,f=s._inputs(te,s._features(tr,te)[1],s._bridge(x,cal['true_channel_loads'])); dt,t=d['past_dt'],d['eval_times']; theta=out['hereditary_weights']\\nfor u in (taus,np.array([.05001,24.999])):\\n    z=np.zeros((len(h),2))\\n    for j,width in enumerate(dt):\\n        v=np.exp(-width/u); z=v*z+(1-v)*p[:,j,None]\\n    c,r=s._design(u,p,h,f,dt,t)\\n    print('exact recurrence and derivative design max discrepancies',np.max(np.abs(c[:,:,:2]-(h[:,None]-z)[:,None,:]*(1-np.exp(-t[:,None]/u)))),np.max(np.abs(r[:,:2]-(h[:,None]-z)/u)))\\n    assert np.allclose(c[:,:,:2],(h[:,None]-z)[:,None,:]*(1-np.exp(-t[:,None]/u))) and np.allclose(r[:,:2],(h[:,None]-z)/u)\\n    eps=1e-6\\n    cp,_=s._design(u,p,h,f,dt,np.array([eps])); cm,_=s._design(u,p,h,f,dt,np.array([-eps])); assert np.allclose((cp[:,0]@theta-cm[:,0]@theta)/(2*eps),r@theta,rtol=1e-7,atol=1e-8)\\n# A grouped jackknife is the available nuisance audit for continuous targets.\\nfor l in np.unique(tr['lab_id']):\\n    mask=tr['lab_id']==l\\n    sub=dict(d,train={k:v[~mask] for k,v in tr.items()},test={k:v[mask] for k,v in tr.items() if k in te})\\n    # Retain the unlabeled deployment coupons in the reference and imputation pool.\\n    sub['test']={k:np.concatenate((te[k],sub['test'][k])) for k in te}\\n    o=s.solve_batch(sub); n=len(te['lab_id']); ce=o['predicted_strain'][n:]-tr['strain_curves_obs'][mask]; re=o['initial_rate_pred'][n:]-tr['instant_rate_obs'][mask]\\n    print('held-out lab',l,'signed medians',round(float(np.median(ce)),6),round(float(np.median(re)),6),'trimmed curve RMS/rate RMS',round(float(np.sqrt(np.mean(np.minimum(abs(ce),.04)**2))),6),round(float(np.sqrt(np.mean(re**2))),6),'gross strain/rate counts',int(np.sum(abs(ce)>.08)),int(np.sum(abs(re)>.04)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge and pooled lab calibration -> H2 exact two-branch response with baseline chamber transfer; leave-one-lab-out worst-slice p90 errors were 0.02715 strain and 0.01768 rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run classifier or relay diagnostics\",\"rejected_reason\":\"The supplied data have continuous strain and rate outcomes, with no class labels, relay states, or stochastic-control dynamics.\"}],\"rationale\":\"Test whether pairwise, three-way, or rational bridge terms materially improve held-out calibration. Check the closed-form history and zero-time derivative against the stated recurrence; any discrepancy would require fixing the solver. Grouped signed errors can expose lab offsets hidden by pooled metrics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "00372477259179376197dbc207382254637fc78b2839a78cc7460e89022166d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36237.21,
+      "usage_known": true,
+      "prompt_tokens": 26118,
+      "cached_tokens": 10880,
+      "completion_tokens": 1358
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e317ef79860e4fc781c2d6d4bfe336dd",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:09.999186+00:00",
+  "ended_at_utc": "2026-11-28T03:42:43.165158+00:00",
+  "request_sha256": "f6aeed62c46a10946cd7ea906802914bf53f8ccc902ad5300e521ab5ed076897",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 48363,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25895,
+    "cached_tokens": 9344,
+    "completion_tokens": 1346
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette_blocks.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nsw = study['sensor_calibration_sweeps']\\nx, y = sw['ref_rosette'], sw['raw_rosette']\\nclean = np.max(np.abs(y), axis=1) < 5\\nobs = study['y_obs_raw'].reshape(-1, 4)\\nbase = up._fit_forward(x, y)\\nbase_obs = up._invert(obs, base)\\n\\ndef compact(ref, raw):\\n    a = up._features(ref)\\n    c = np.zeros((a.shape[1], 4))\\n    for j in range(4):\\n        k = (j + 1) % 4\\n        cols = [0, 1+j, 1+k, 1+(j-1)%4, 5+j, 9+up._PAIRS.index(tuple(sorted((j,k))))]\\n        b = a[:, cols]\\n        w = np.ones(len(b))\\n        for _ in range(24):\\n            v = np.linalg.lstsq(b*w[:, None], raw[:, j]*w, rcond=None)[0]\\n            e = np.abs(b @ v - raw[:, j])\\n            scale = max(np.median(e), 1e-12)\\n            w = 1/np.hypot(1, e/(2*scale))\\n        keep = e <= 6*scale\\n        if np.linalg.matrix_rank(b[keep]) == len(cols):\\n            v = np.linalg.lstsq(b[keep], raw[keep, j], rcond=None)[0]\\n        c[cols, j] = v\\n    return c\\n\\nrows = np.arange(len(x))\\nprint('EMI indices:', rows[~clean].tolist())\\nfor name, fit in [('delivered', up._fit_forward), ('compact cyclic alternative', compact)]:\\n    maxima = []\\n    for block in np.array_split(rows, 8):\\n        train = ~np.isin(rows, block)\\n        test = clean & ~train\\n        c = fit(x[train], y[train])\\n        worst = np.max(np.abs(up._invert(y[test], c) - x[test]))\\n        shift = np.max(np.abs(up._invert(obs, c) - base_obs))\\n        maxima.append((worst, shift, int(block[0])))\\n    c = fit(x, y)\\n    no_emi = fit(x[clean], y[clean])\\n    emi_shift = np.max(np.abs(up._invert(obs, c) - up._invert(obs, no_emi)))\\n    axes = [np.linspace(min(a,b),max(d,e),9) for a,b,d,e in zip(x.min(0),base_obs.min(0),x.max(0),base_obs.max(0))]\\n    grid = np.stack(np.meshgrid(*axes, indexing='ij'),axis=-1).reshape(-1, 4)\\n    jacs = np.array([up._jacobian(p,c) for p in grid])\\n    min_sv = np.linalg.svd(jacs,compute_uv=False)[:,-1].min()\\n    grid_err = np.max(np.abs(up._invert(up._features(grid) @ c,c)-grid))\\n    print(name, 'worst contiguous holdout (inverse error, obs shift, block start):', max(maxima), 'max obs shift:', max(m[1] for m in maxima), 'EMI-induced obs shift:', emi_shift, 'grid min singular value:', min_sv, 'grid inverse error:', grid_err)\\n    if name == 'delivered':\\n        assert max(maxima)[0] < 1e-4 and emi_shift < 1e-5 and grid_err < 1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_blocks.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 coupled cubic and pairwise response; maximum clean held-out inverse error is 4.11e-5, with contiguous-block and inversion-conditioning checks pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the compact cyclic model based only on grouped forward error.\",\n      \"rejected_reason\": \"Its advantage has not been measured in inverse coordinates, which are what the downstream solver consumes.\"\n    }\n  ],\n  \"rationale\": \"Public EMI spikes occupy consecutive rows, so interleaved folds do not test holding out the burst as a block. Compare both models on contiguous holdouts and measure the effect of EMI on inferred observations. The grid check separately probes near-singular Jacobians and wrong inverse branches between measured rows. If either failure appears, revise the fit or inverse before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "223b4a26be5e7325c0d2cc3a8b21370e60cfe1620869f99d4c96fa54f5fea49d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35247.43,
+      "usage_known": true,
+      "prompt_tokens": 25895,
+      "cached_tokens": 9344,
+      "completion_tokens": 1346
+    }
+  ]
+}

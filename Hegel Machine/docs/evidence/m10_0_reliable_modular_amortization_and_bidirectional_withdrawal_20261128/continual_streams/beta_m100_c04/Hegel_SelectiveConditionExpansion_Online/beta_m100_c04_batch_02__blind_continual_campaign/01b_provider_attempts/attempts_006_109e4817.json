@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "109e4817d65e4734b5562efe15f5566d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:39.494176+00:00",
+  "ended_at_utc": "2026-11-28T03:41:15.384623+00:00",
+  "request_sha256": "ac2259519b59b19d44c8ebda129cd14cbc59431985e49d25e9340583ec3e656e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40765,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26049,
+    "cached_tokens": 9344,
+    "completion_tokens": 1473
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver\\nimport upstream_transducer as u\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    ref, raw = c['ref_rosette'], c['raw_rosette']\\n    gross = np.max(np.abs(raw), axis=1) > 8\\n    axis = np.count_nonzero(ref, axis=1) == 1\\n    labels = np.array_split(np.arange(len(ref)), 5)\\n    errors = np.full(len(ref), np.nan)\\n    for fold in labels:\\n        train = ~np.isin(np.arange(len(ref)), fold)\\n        valid = fold[~gross[fold]]\\n        model = u._fit(ref[train], raw[train])\\n        errors[valid] = np.max(np.abs(u._invert(raw[valid], model) - ref[valid]), axis=1)\\n    for name, select in [('single-channel', axis), ('mixed-channel', ~axis)]:\\n        e = errors[select & ~gross]\\n        print(name, 'held-out n', len(e), 'p90', np.quantile(e, .9), 'max', e.max())\\n        assert e.max() < 2e-4, name\\n    coeff = u._fit(ref, raw)\\n    target = np.asarray(s['y_obs_raw']).reshape(-1, 4)\\n    calibrated = u.calibrate_upstream(s)\\n    out = calibrated['y_obs_raw']\\n    roundtrip = np.max(np.abs(u._design(out.reshape(-1, 4)) @ coeff - target))\\n    print('Public observation round-trip max:', roundtrip)\\n    assert roundtrip < 1e-10 and out.shape == s['y_obs_raw'].shape\\n    banks = calibrated['sensor_calibration_sweeps']['single_bank_sweeps']\\n    for a, b in [(calibrated['sensor_calibration_sweeps']['raw_rosette'], ref), (banks['raw_readout'], c['single_bank_sweeps']['ref_signal'])]:\\n        assert np.array_equal(a,b) and not np.shares_memory(a,b)\\n    assert batch_solver.solve_batch(s)\\n\\nrng = np.random.default_rng(47)\\nref = rng.uniform(-1.5, 1.5, (80, 4))\\nbias = np.array([-.04, .06, .08, -.05])\\nmix = np.array([[.9,.17,0,-.23],[-.24,1.2,.18,0],[0,-.35,1.25,.11],[.12,0,-.36,.8]])\\ndef response(x):\\n    a,b,c,d = x.T\\n    return bias + x @ mix + x**3 * [.16,.2,.21,.14] - np.column_stack((a*b, b*c, c*d, a*d)) * [.19,.26,.28,.17]\\nraw = response(ref)\\nraw[:8] += rng.choice([-14.,14.], size=(8,4))\\ntruth = rng.uniform(-1.5, 1.5, (36, 4))\\nfixture = copy.deepcopy(s)\\nfixture['sensor_calibration_sweeps'].update(ref_rosette=ref, raw_rosette=raw)\\nfixture['y_obs_raw'] = response(truth[:12]).ravel()\\nfixture['reference_tracer_pulses'] = [{'y_pulse_raw': response(truth[12:]), 'tag': 'keep'}, {'y_pulse_raw': None}, None]\\noriginal_pulse = fixture['reference_tracer_pulses'][0]['y_pulse_raw'].copy()\\nresult = u.calibrate_upstream(fixture)\\npulses = result['reference_tracer_pulses']\\nassert pulses[0]['tag'] == 'keep' and pulses[1:] == [{'y_pulse_raw': None}, None]\\nassert np.array_equal(fixture['reference_tracer_pulses'][0]['y_pulse_raw'], original_pulse)\\nassert np.array_equal(fixture['sensor_calibration_sweeps']['raw_rosette'], raw)\\nfor name, actual, expected in [('observations', result['y_obs_raw'], truth[:12].ravel()), ('pulses', pulses[0]['y_pulse_raw'], truth[12:])]:\\n    e = np.max(np.abs(actual - expected))\\n    print('10% EMI stress:', name, 'max absolute error', e)\\n    assert actual.shape == expected.shape and e < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: pairwise products plus channelwise cubes lower five-fold 90th-percentile forward error from 0.899 to 4.1e-5; the public schema passes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check\",\n      \"rejected_reason\": \"The public study has no tracer pulses, and schema validity alone cannot detect inaccurate inversion or sensitivity to EMI.\"\n    }\n  ],\n  \"rationale\": \"Test the saved artifacts in an isolated Python process. Blocked sweeps expose failures on either single-channel or mixed-channel inputs; a known-reference fixture tests pulse inversion, shape preservation, and resistance to 10% gross EMI. A failing slice identifies whether to revise the fit, inverse, or pulse handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c1f2235beaf7dd01ec0a5ab8b1d5ed86745f9b8d81d31ddd4541f29c24df0eac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38004.96,
+      "usage_known": true,
+      "prompt_tokens": 26049,
+      "cached_tokens": 9344,
+      "completion_tokens": 1473
+    }
+  ]
+}

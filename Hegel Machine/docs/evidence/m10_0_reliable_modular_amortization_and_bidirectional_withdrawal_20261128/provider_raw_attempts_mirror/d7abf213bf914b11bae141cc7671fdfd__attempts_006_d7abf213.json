@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7abf213bf914b11bae141cc7671fdfd",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:09.388417+00:00",
+  "ended_at_utc": "2026-11-28T03:43:33.430736+00:00",
+  "request_sha256": "3ae785b6eb91e6ca813f63c0c0c6aa54ac6aadb822c91bb2ec83e5b70f2d302f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44003,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25942,
+    "cached_tokens": 9344,
+    "completion_tokens": 905
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/alpha_m100_c04_batch_02_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\npos = s.index('def solve_batch(')\\ns = s[:pos] + '''def _chamber_response(taus, theta, hold, covariates, times):\\n    # The pre-run apparatus trace has a high plateau on telemetry channel 5,\\n    # as before the archived reset campaign. Its hold starts with zero memory.\\n    drift = covariates @ theta[2:]\\n    amplitudes = hold[:, None] * theta[:2] + drift[:, None] * np.array([0.4, 1.6])\\n    linear = 0.06 * drift\\n    rise = -np.expm1(-times[:, None] / taus)\\n    return (amplitudes @ rise.T + linear[:, None] * times,\\n            amplitudes @ (1.0 / taus) + linear)\\n\\n\\n''' + s[pos:]\\ns = s.replace('tr, te = _inputs(train, x[:n], cal), _inputs(test, x[n:], cal)', 'tr = _inputs(train, x[:n], cal)')\\ns = s.replace('    a, b = _design(taus, te, dt, t)\\\\n', '''    hold = _stress(test['hold_channel_raw'], cal)\\n    covariates = np.column_stack((np.ones(len(hold)), x[n:]))\\n    response, rate = _chamber_response(taus, theta, hold, covariates, t)\\n''')\\ns = s.replace(\\\"test['strain_0'][:, None] + a @ theta\\\", \\\"test['strain_0'][:, None] + response\\\").replace(\\\"'initial_rate_pred': b @ theta\\\", \\\"'initial_rate_pred': rate\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear bridge and shared benchtop spectrum → H2 transfer the reset law using the preceding telemetry plateau; clean bridge residual at the 95th percentile is about 2.8e-4 or less across channels, and blind deployment error is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine bridge adequately calibrates the active transducer.\",\n    \"empirical_witness\": \"On clean sweeps, affine channel residual medians were approximately 0.11–0.17; adding the self-cubic and cyclic pairwise terms reduced them below 8e-5.\",\n    \"causal_blanket_diagnosis\": \"An affine inverse would pass load-dependent bridge bias into the material fit and deployment forecasts.\",\n    \"sublated_pivot\": \"Fit the nonlinear forward bridge on the current calibration sweeps and invert it before estimating material parameters.\",\n    \"risk_kind\": \"transducer model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the entire reset solver from batch 01.\",\n      \"rejected_reason\": \"Its affine bridge does not explain this batch's calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"Combine the empirically supported nonlinear bridge with the archived reset law. Run the schema validator now to catch mismatched inputs, shapes, or nonfinite outputs before testing numerical accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1e175330ceffdcd4c6c36ee7f5bc7264d0396f4215c244b7186e2f245735bbf8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26206.6,
+      "usage_known": true,
+      "prompt_tokens": 25942,
+      "cached_tokens": 9344,
+      "completion_tokens": 905
+    }
+  ]
+}

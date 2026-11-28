@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2612031d52734d81a4d788c1629a4dc3",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:09.132161+00:00",
+  "ended_at_utc": "2026-11-28T03:46:41.568455+00:00",
+  "request_sha256": "f4c04101486da8d5a8aaab0e5f6baf52989a501c55ec8807aa66d1d8daa3ed43",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25595,
+    "cached_tokens": 9344,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport runpy\\nimport sys\\nfrom itertools import product\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nimport upstream_transducer as U\\nfrom batch_solver import solve_batch\\n\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    batches = pickle.load(f)\\nfor item in batches:\\n    d = item['dataset']\\n    cal = d['calibration_load_cells']\\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\\n    row = np.arange(len(x))\\n    axes = np.count_nonzero(x, axis=1) == 1\\n    inv_error, fwd_error = np.full(len(x), np.nan), np.empty(len(x))\\n    for i in row:\\n        train = row != i\\n        b = U._fit(x[train], y[train])\\n        fwd_error[i] = np.linalg.norm(U._basis(x[i:i+1]) @ b - y[i])\\n        if fwd_error[i] < 0.01:\\n            inv_error[i] = np.linalg.norm(U._invert(y[i:i+1], b)[0] - x[i])\\n    clean = np.isfinite(inv_error)\\n    print('held-out spike rows:', row[~clean].tolist())\\n    assert (~clean).sum() == 3 and fwd_error[~clean].min() > 1\\n    for name, mask in [('axis', axes), ('mixed', ~axes)]:\\n        z = clean & mask\\n        print(name, 'n', z.sum(), 'max forward', fwd_error[z].max(), 'max inverse', inv_error[z].max())\\n        assert inv_error[z].max() < 1e-3\\n\\n    b = U._fit(x, y)\\n    grid = np.array(list(product(*[np.linspace(lo, hi, 7) for lo, hi in zip(x.min(0), x.max(0))])))\\n    grid_recovered = U._invert(U._basis(grid) @ b, b)\\n    grid_max = np.max(np.abs(grid_recovered - grid))\\n    print('maximum calibration-box inverse error:', grid_max)\\n    assert grid_max < 1e-8\\n\\n    augmented = dict(d, chamber_verification_trials={k: d['test'][k][:3].copy() for k in ('past_channel_raw', 'hold_channel_raw')})\\n    source_bytes = pickle.dumps(augmented)\\n    normalized = U.calibrate_upstream(augmented)\\n    assert pickle.dumps(augmented) == source_bytes\\n    outcal = normalized['calibration_load_cells']\\n    for a, truth in [(outcal['bridge_raw'], cal['true_channel_loads']), (outcal['single_channel_sweeps']['cmd_stress'], cal['single_channel_sweeps']['true_stress'])]:\\n        np.testing.assert_array_equal(a, truth)\\n        assert not np.shares_memory(a, truth)\\n    for split in ('train', 'test', 'chamber_verification_trials'):\\n        for field in ('past_channel_raw', 'hold_channel_raw'):\\n            raw = augmented[split][field]\\n            loads = normalized[split][field]\\n            assert loads.shape == raw.shape and np.isfinite(loads).all()\\n            np.testing.assert_allclose(U._basis(loads.reshape(-1, 4)) @ b, raw.reshape(-1, 4), rtol=0, atol=1e-9)\\n    assert U.calibrate_upstream(d).get('chamber_verification_trials') is None\\n    for key, value in solve_batch(normalized).items():\\n        np.testing.assert_allclose(value, solve_batch(augmented)[key], rtol=1e-8, atol=1e-9)\\n    print('identity composition, populated and null trial handling, and source preservation passed')\\n\\nsys.argv = [str(root / 'validate_public_schema.py'), str(root / 'batch_solver.py')]\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full robust cubic → H2 uncertainty-pruned cubic; the adaptive probe reached 0.000365 worst clean held-out forward error, and the composed public schema passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test real held-out load recovery, inverse branch stability across the calibration box, and the populated trial path absent from the public example. A failure would identify whether to revise the fit, the inverse, or dataset handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bc30192bf14c6dd789b27d7ccd145ff327a066b9f6b1941726d3332fdab416ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35476.06,
+      "usage_known": true,
+      "prompt_tokens": 25595,
+      "cached_tokens": 9344,
+      "completion_tokens": 1366
+    }
+  ]
+}

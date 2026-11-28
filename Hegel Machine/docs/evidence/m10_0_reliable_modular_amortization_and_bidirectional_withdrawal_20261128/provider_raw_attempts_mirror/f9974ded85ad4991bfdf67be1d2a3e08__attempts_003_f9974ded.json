@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9974ded85ad4991bfdf67be1d2a3e08",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:53.024893+00:00",
+  "ended_at_utc": "2026-11-28T03:31:13.626326+00:00",
+  "request_sha256": "18ad1ff55a35f77a3347c0260b04b8dc9197099d8418b9c09a35390efdcd5a96",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19462,
+    "cached_tokens": 9344,
+    "completion_tokens": 745
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,runpy,numpy as np\\np='/tmp/hegel_continual_archive/'; d=json.load(open(p+'archive_apparatus_log.json')); print('log root',list(d) if isinstance(d,dict) else len(d));\\ndef brief(v,path=''):\\n if isinstance(v,dict):\\n  for k,x in v.items(): brief(x,path+'/'+k)\\n elif isinstance(v,list):\\n  try: a=np.asarray(v); print(path,a.shape,a.ravel()[:12].tolist()) if a.dtype.kind in 'fiu' else None\\n  except ValueError: a=None\\n  if a is None or a.dtype.kind not in 'fiu':\\n   for i,x in enumerate(v[:5]): brief(x,path+'/'+str(i))\\n else: print(path,v)\\nbrief(d); print(open(p+'pre_llm_gate_diagnostic.json').read()); print(open(p+'archive_manifest.json').read())\\na=runpy.run_path(p+'beta_m100_c03_s00_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; S,_=a['_responses'](s); Z=s['Z_nuisance']; Q=np.linalg.qr(Z,mode='reduced')[0]; print('base robin',s['robin_x'],s['robin_y']); print('wall counts',[(s['sensor_ij'][:,k]==j).sum() for k,j in [(0,0),(0,s['nx']-1),(1,0),(1,s['ny']-1)]]); print('PULSE RESIDUALS: raw RMSE, orthogonal RMSE, by shift, first 8 residuals');\\nfor pulse in i['campaign_diagnostics']:\\n y=a['_calibrate'](s,pulse['y_pulse_raw']); e=S@pulse['w_pulse']-y; f=e-Q@(Q.T@e); print(np.linalg.norm(e)/len(e)**.5,np.linalg.norm(f)/len(e)**.5,np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1)),e[:8]);\\nPY\\nsed -n '48,145p' /tmp/hegel_continual_archive/beta_m100_c03_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open-wall Robin with affine rosette) -> H2 (campaign-specific wall law if pulses reject baseline); worst calibration-channel in-sample RMSE is 1.06e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit nonlinear calibration before testing the walls\",\"rejected_reason\":\"Affine residuals are about 1e-5 in all four channels, with no resolved cross-channel mixing.\"}],\"rationale\":\"Compare baseline tracer residuals by shift, with and without nuisance projection. If the mismatch survives projection, use the compact telemetry summary and pulse signatures to test changes to the boundary operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c48d1899035f98860dee9eb0ec08e45051aca98b490d8b14c14147d1cf3e4b98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22711.14,
+      "usage_known": true,
+      "prompt_tokens": 19462,
+      "cached_tokens": 9344,
+      "completion_tokens": 745
+    }
+  ]
+}

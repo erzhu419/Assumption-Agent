@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1257d700bb84f1c94360ec84168c200",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:27.949274+00:00",
+  "ended_at_utc": "2026-11-28T03:42:00.596630+00:00",
+  "request_sha256": "908276490f1043435c621ae4bf67ca9ce839bfd7d0555ab74c0d6d62cd5dab17",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40033,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25275,
+    "cached_tokens": 9344,
+    "completion_tokens": 1348
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport itertools, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    studies = [item['study'] for item in pickle.load(f)]\\nfor study in studies:\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref, raw = (sweeps[k] for k in ('ref_rosette', 'raw_rosette'))\\n    radii = np.linalg.norm(raw - np.median(raw, axis=0), axis=1)\\n    clean = radii <= 6 * np.median(radii)\\n    axial = np.count_nonzero(ref, axis=1) == 1\\n    fwd = np.zeros_like(ref)\\n    inv = np.zeros_like(ref)\\n    for i in np.flatnonzero(clean):\\n        keep = np.arange(len(ref)) != i\\n        c = up._fit(ref[keep], raw[keep])\\n        fwd[i] = up._basis(ref[i:i+1]) @ c - raw[i]\\n        inv[i] = up._invert(raw[i:i+1], c) - ref[i]\\n    for name, ix in [('axis', clean & axial), ('mixed', clean & ~axial)]:\\n        print(name, 'n', ix.sum(), 'forward LOO RMSE', np.sqrt(np.mean(fwd[ix]**2)), 'inverse LOO RMSE', np.sqrt(np.mean(inv[ix]**2)), 'inverse LOO max', np.max(np.abs(inv[ix])))\\n    assert np.max(np.abs(fwd[clean])) < 1e-4\\n    assert np.max(np.abs(inv[clean])) < 1e-4\\n    c = up._fit(ref, raw)\\n    public = up.calibrate_upstream(study)\\n    obs = study['y_obs_raw']\\n    assert public['y_obs_raw'].shape == obs.shape\\n    residual = np.max(np.abs(up._basis(public['y_obs_raw'].reshape(-1, 4)) @ c - obs.reshape(-1, 4)))\\n    print('observed inversion residual', residual)\\n    assert residual < 1e-10\\n    probe = np.array(list(itertools.product(*[np.linspace(a, b, 7) for a, b in zip(ref.min(axis=0), ref.max(axis=0))])))\\n    encoded = up._basis(probe) @ c\\n    pulses = [None, {'y_pulse_raw': None}, {'y_pulse_raw': encoded.reshape(343, 7, 4), 'label': 'boundary grid'}]\\n    test = up.calibrate_upstream(dict(study, reference_tracer_pulses=pulses))\\n    got = test['reference_tracer_pulses']\\n    assert got[:2] == pulses[:2] and got[-1]['label'] == pulses[-1]['label']\\n    assert got[-1]['y_pulse_raw'].shape == pulses[-1]['y_pulse_raw'].shape\\n    error = np.max(np.abs(got[-1]['y_pulse_raw'].reshape(-1, 4) - probe))\\n    print('pulse grid inverse max', error)\\n    assert error < 1e-9\\n    ns = test['sensor_calibration_sweeps']\\n    sb = ns['single_bank_sweeps']\\n    assert np.array_equal(ns['raw_rosette'], ref) and not np.shares_memory(ns['raw_rosette'], ref)\\n    assert np.array_equal(sb['raw_readout'], sb['ref_signal']) and not np.shares_memory(sb['raw_readout'], sb['ref_signal'])\\n    assert np.any(sweeps['raw_rosette'] != ref)\\n    assert up.calibrate_upstream(dict(study, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n    out = solve_batch(study)\\n    w, kkt = out['weights'], out['kkt_certificate']\\n    gap = kkt['primal_objective'] - kkt['dual_lower_bound']\\n    budget_err = abs(w.sum() - study['total_budget'])\\n    print('composed solver budget error', budget_err, 'KKT gap', gap)\\n    assert budget_err < 1e-10 and np.all((w >= 0) & (w <= study['u_box'])) and abs(gap) < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine readout -> H2 own-channel cubics and pair products; worst clean leave-one-out forward RMSE across axial and mixed sweeps is 1.31e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema gate passes, but it cannot detect calibration bias, inversion onto the wrong branch, or errors in the optional pulse path. Test the exact candidate on held-out real sweeps, a pulse grid spanning the calibration range, and the composed solver's budget and KKT gap before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2ba9036267d60774eaed8647f960ed3830b0f1ea0a89ad116f14a8236a0896b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36916.92,
+      "usage_known": true,
+      "prompt_tokens": 25275,
+      "cached_tokens": 9344,
+      "completion_tokens": 1348
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "214d9cdafd8c428a9c1fdd68a8007220",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:37:34.603553+00:00",
+  "ended_at_utc": "2026-11-28T03:38:06.812120+00:00",
+  "request_sha256": "2e29e34468c4a0143c7501776c6ae45a0ea38ed9ce0654213af200719c068f1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42661,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25578,
+    "cached_tokens": 9344,
+    "completion_tokens": 1200
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat /holdout_task/validate_public_schema.py\\nsed '/^val(/,$d' /tmp/chamber_law.py > /tmp/chamber_compare.py\\ncat >> /tmp/chamber_compare.py <<'PY'\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import product\\n\\ndef exp_response(tau): return -tau*np.expm1(-t/tau)\\ndef rat_response(tau): return t/(1+t/tau)\\ndef root_response(tau): return t/np.sqrt(1+(t/tau)**2)\\ndef tanh_response(tau): return tau*np.tanh(t/tau)\\n\\nfor name,f in [('exp',exp_response),('rational',rat_response),('root rational',root_response),('tanh',tanh_response)]:\\n for nuisance in [False,True]:\\n  for cv in ['lab','stratum','missing']:\\n   group={'lab':g['lab_id'],'stratum':g['stratum'],'missing':np.isnan(g['coupon_features_raw']).any(axis=1)}[cv]\\n   def fit(mask):\\n    def calc(z):\\n     pred=U[:,None]*(f(z)-t)\\n     return pred, ((pred[mask]-S[mask,:-1])**2).mean()\\n    if nuisance:\\n     def calc(z):\\n      response=f(z); score=U[mask,None]*response; r=S[mask,:-1]+U[mask,None]*t\\n      k=(np.sum(r*score)+np.sum((S[mask,-1]+U[mask])*U[mask]))/(np.sum(score**2)+np.sum(U[mask]**2)); pred=k*U[:,None]*response-U[:,None]*t\\n      return pred, ((pred[mask]-S[mask,:-1])**2).mean()+((k-1)*U[mask]-S[mask,-1]).dot((k-1)*U[mask]-S[mask,-1])/np.count_nonzero(mask)/len(t),k\\n    q=minimize_scalar(lambda z:calc(z)[1],bounds=(.1,20),method='bounded'); out=calc(q.x); return q.x,out[0],out[2] if nuisance else 1.\\n   err=np.empty_like(S); params=[]\\n   for v in np.unique(group):\\n    i=group==v; q,pr,k=fit(~i); params.append((q,k)); err[i,:-1]=pr[i]-S[i,:-1]; err[i,-1]=(k-1)*U[i]-S[i,-1]\\n   worst=np.max([np.sqrt(np.mean(err[group==v]**2,axis=0)) for v in np.unique(group)],axis=0)\\n   if not nuisance or name=='exp': print(name,nuisance,cv,'fit',np.array(params).round(5).tolist(),'worst curve/rate',worst[:-1].max(),worst[-1]);\\n  if name=='exp':\\n   q,pr,k=fit(np.ones(len(U),bool)); e=np.c_[pr-S[:,:-1],(k-1)*U-S[:,-1]]; print('full exp',q,k,'rmse',np.sqrt(np.mean(e**2,axis=0)).round(5),'residual correlations',np.corrcoef(np.c_[e,H,P,U,F[:,1:]].T)[:e.shape[1],e.shape[1]:][[-2,-1]].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 rate-preserving two-branch drift → H2 single-exponential drift saturation; the two-branch correction has leave-one-lab-out maximum horizon RMSE 0.01206 and worst-lab rate RMSE 0.00547.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the unrestricted branch-plus-ramp correction\",\"rejected_reason\":\"It only slightly improves curve error and increases worst-lab rate RMSE from 0.00547 to 0.00738.\"}],\"rationale\":\"Test whether the exponential beats rational saturation on held-out labs, strata, and coupons with missing features. Compare a free rate multiplier against the rate-preserving law; include it only if it improves the rate output without trading away curve accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c6feca8c173932fd99be9207b08ecbe6528f9bfbfe13284ffd4f707e83368be2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34338.04,
+      "usage_known": true,
+      "prompt_tokens": 25578,
+      "cached_tokens": 9344,
+      "completion_tokens": 1200
+    }
+  ]
+}

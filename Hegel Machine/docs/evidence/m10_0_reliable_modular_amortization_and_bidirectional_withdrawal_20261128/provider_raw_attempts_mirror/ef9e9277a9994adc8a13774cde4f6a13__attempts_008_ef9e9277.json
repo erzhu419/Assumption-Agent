@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef9e9277a9994adc8a13774cde4f6a13",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:56.538594+00:00",
+  "ended_at_utc": "2026-11-28T03:53:31.282315+00:00",
+  "request_sha256": "ad7567a0746b008c1b3274e14dc08d5f4bafb478be6ad480a978b37b08052c87",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55606,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31669,
+    "cached_tokens": 9344,
+    "completion_tokens": 1347
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys,pickle\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver\\nimport upstream_transducer as u\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd=item['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; axis=np.count_nonzero(x,axis=1)<=1; clean=np.max(abs(y),axis=1)<5\\nfits=[]\\nfor mask in (axis,~axis):\\n    forward=[]; inverse=[]\\n    for i in np.flatnonzero(clean&mask):\\n        keep=np.arange(len(x))!=i\\n        fit=u._fit({**c,'true_channel_loads':x[keep],'bridge_raw':y[keep]})\\n        forward.extend(abs(u._forward(x[i],*fit)-y[i])); inverse.extend(abs(u._invert(y[i],*fit)-x[i]))\\n    print('axis' if np.array_equal(mask,axis) else 'mixed','held-out forward/inverse max:',max(forward),max(inverse))\\n    assert max(forward)<0.001 and max(inverse)<0.005\\nsweep_clean=np.abs(s['cmd_stress'])<5\\nclean_err=[]; spike_err=[]\\nfor stress in np.unique(s['true_stress']):\\n    keep=s['true_stress']!=stress\\n    fit=u._fit({**c,'single_channel_sweeps':{k:v[keep] for k,v in s.items()}})\\n    j=s['lab_id'][~keep]; a=np.eye(4)[j]*stress\\n    err=abs(u._forward(a,*fit)[np.arange(len(j)),j]-s['cmd_stress'][~keep]); good=sweep_clean[~keep]\\n    clean_err.extend(err[good]); spike_err.extend(err[~good])\\nprint('sweep leave-stress-out clean max:',max(clean_err),'spike residuals:',spike_err); assert max(clean_err)<0.001\\nfit=u._fit(c); b,p=fit\\nmargin=b[:,1]-abs(b[:,3]*p[0])-abs(b[:,2])-abs(b[:,4]*p[1]); print('minimum Jacobian dominance:',min(margin)); assert min(margin)>0\\nv=np.linspace(-3,3,91); g,h=np.meshgrid(v,v); grid=np.c_[g.ravel(),h.ravel(),h.ravel(),g.ravel()]\\nrawgrid=u._forward(grid,*fit); err=np.max(abs(u._invert(rawgrid,*fit)-grid)); print('paired-load grid max round-trip:',err); assert err<1e-9\\ncorrupt=y.copy(); idx=np.flatnonzero(clean)[::13]; corrupt[idx]+=np.random.default_rng(19).choice([-1.,1.],(len(idx),4))*np.array([7.,11.,17.,23.]); fit2=u._fit({**c,'bridge_raw':corrupt}); err=np.max(abs(u._invert(rawgrid,*fit2)-grid)); print('extra gross bridge spikes max inverse shift:',err); assert err<0.005\\nfit3=u._fit({**c,'single_channel_sweeps':{k:v[sweep_clean] for k,v in s.items()}}); err=np.max(abs(u._invert(rawgrid,*fit3)-grid)); print('removing gross sweep spikes max inverse shift:',err); assert err<0.001\\ntrial={k:d['test'][k][:2].copy() for k in ('past_channel_raw','hold_channel_raw')}; trial['marker']='preserved'; extended={**d,'chamber_verification_trials':trial}; before=pickle.dumps(extended); out=u.calibrate_upstream(extended); assert pickle.dumps(extended)==before\\noc=out['calibration_load_cells']; assert np.array_equal(oc['bridge_raw'],x) and not np.shares_memory(oc['bridge_raw'],x); assert np.array_equal(oc['single_channel_sweeps']['cmd_stress'],s['true_stress']) and not np.shares_memory(oc['single_channel_sweeps']['cmd_stress'],s['true_stress']); assert out['chamber_verification_trials']['marker']=='preserved'\\nfor split in ('train','test','chamber_verification_trials'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        actual=out[split][key]; original=extended[split][key]; assert actual.shape==original.shape and np.max(abs(u._forward(actual,*fit)-original))<1e-10\\nresult=batch_solver.solve_batch(d)\\nassert set(result)=={'estimated_taus','hereditary_weights','initial_rate_pred','predicted_strain'} and all(np.isfinite(v).all() for v in result.values()); print('isolated composed output verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Linear cross-talk → sparse sine/cosine bridge; worst held-out inverse error on clean calibration rows is 0.00164 load units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The failed sweep assertion measured prediction error against a gross spike. Measure clean sweep accuracy separately and check spike influence by refitting without the flagged sweeps. Complete the inverse and optional-trial checks that the earlier assertion prevented from running.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c7c4c7ce46205ff8040617b1b2349eab8a5064bdb6b550b09c724e6053552c64",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36867.97,
+      "usage_known": true,
+      "prompt_tokens": 31669,
+      "cached_tokens": 9344,
+      "completion_tokens": 1347
+    }
+  ]
+}

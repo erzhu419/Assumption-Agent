@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "16505176f9c044b2a200c4ea6b5dad42",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__beta_m100_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:27:06.769356+00:00",
+  "ended_at_utc": "2026-11-28T03:27:44.254608+00:00",
+  "request_sha256": "85e0da06d90e222846285a55cf78edd7d7e34069319e69ca2498fd37bddbf3e4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36908,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25772,
+    "cached_tokens": 5504,
+    "completion_tokens": 1486
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnx,ny=s['nx'],s['ny']; m=len(s['source_modes']); cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']\\ndef axis(d,n):\\n    k=s['kappa_'+d]; v=s['vel_'+d]; h=s['L'+d]/(n-1); a=np.zeros((n,n))\\n    for i in range(1,n-1):\\n        km=(k[i-1]+k[i])/2; kp=(k[i+1]+k[i])/2\\n        a[i,i-1]=-km/h**2-max(v[i],0)/h; a[i,i+1]=-kp/h**2-max(-v[i],0)/h\\n        a[i,i]=(km+kp)/h**2+abs(v[i])/h\\n    for i,j in ((0,1),(n-1,n-2)):\\n        a[i,i]=k[i]/h**2+s['robin_'+d]/h; a[i,j]=-k[i]/h**2\\n    return a\\nL=np.kron(np.eye(ny),axis('x',nx))+np.kron(axis('y',ny),np.eye(nx))+np.diag(s['V_reaction_2d'].flatten(order='F'))\\nrhs=np.column_stack([u.flatten(order='F') for u in s['source_modes']]); ij=s['sensor_ij']; rows=ij[:,0]+nx*ij[:,1]; blocks=[]\\nfor shift in s['mu_shifts']:\\n    sol=np.linalg.solve(L+shift*np.eye(nx*ny),rhs); blocks.append(sol[rows])\\nS=np.concatenate(blocks); U=np.array([x.reshape(nx,ny,order='F') for x in sol.T]); Sa,Ua=b._responses(s)\\nforward=max(np.max(abs(S-Sa)),np.max(abs(U-Ua))); assert forward<1e-12\\ncal=s['sensor_calibration_sweeps']; x=cal['ref_rosette']; raw=cal['raw_rosette']; xc=x-x.mean(0); M=np.linalg.solve(xc.T@xc,xc.T@(raw-raw.mean(0))); y=(((s['y_obs_raw'].reshape(-1,4)-raw.mean(0))@np.linalg.inv(M))+x.mean(0)).ravel()\\nz=s['Z_nuisance']; P=np.eye(len(y))-z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); A=P@S; r=P@y\\nout=b.solve_batch(s); w=out['weights']; c=out['kkt_certificate']; nu=c['nu_sum']; low=np.array(c['lam_lower']); up=np.array(c['lam_upper']); g=A.T@(A@w-r)+ridge*w; J=(np.linalg.norm(A@w-r)**2+ridge*(w@w))/2; D=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nfield=np.max(abs(out['terminal_field']-np.einsum('i,ijk->jk',w,U))); assert field<1e-12\\nassert np.array_equal(w,c['weights']); assert min(w)>=0 and max(w)<=cap and abs(sum(w)-budget)<1e-12\\nassert min(low)>=0 and min(up)>=0; assert max(np.max(abs(g-nu-low+up)),np.max(abs(low*w)),np.max(abs(up*(cap-w))),abs(J-c['primal_objective']),abs(D-c['dual_lower_bound']),abs(J-D))<1e-11\\nrng=np.random.default_rng(62); worst=0.; feasible=0.; count=0\\nfor n in (2,8,20):\\n    for k in range(40):\\n        x=rng.normal(size=(n,n)); H=x.T@x+.04*np.eye(n); f=6*rng.normal(size=n)\\n        for B in (0.,cap,cap*(n-1),cap*n,rng.uniform(0,cap*n)):\\n            q,t=b._box_qp(H,f,cap,B); gg=H@q+f-t; gap=gg@q-cap*np.minimum(gg,0).sum()+t*(q.sum()-B)\\n            feasible=max(feasible,abs(q.sum()-B),max(q)-cap,-min(q)); worst=max(worst,abs(gap)); count+=1\\nassert feasible<1e-11 and worst<1e-9,(feasible,worst)\\nprint(f'dense forward error={forward:.3g}, terminal field error={field:.3g}, public independent KKT gap={abs(J-D):.3g}; {count} active-set stress cases: worst gap={worst:.3g}, worst feasibility error={feasible:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Alternative wall models → retain documented Robin walls: worst held-out RMS is 0.013593 by shift and 0.010588 by bank; worst affine calibration LOO RMS is 1.08e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the wall model or expand the calibration basis.\",\n      \"rejected_reason\": \"Every tested wall alternative worsened held-out prediction, and polynomial calibration worsened leave-one-out sweep error.\"\n    }\n  ],\n  \"rationale\": \"Verify the unchanged candidate against an independent dense operator and certificate reconstruction. These checks can expose indexing or multiplier errors missed by schema validation; bound-heavy budgets test active-set behavior not exercised by the public solution.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c01c759b7d4a93246c541a60c5c60a9a4bdc59ead37cca0869089d5152ed28fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39605.05,
+      "usage_known": true,
+      "prompt_tokens": 25772,
+      "cached_tokens": 5504,
+      "completion_tokens": 1486
+    }
+  ]
+}

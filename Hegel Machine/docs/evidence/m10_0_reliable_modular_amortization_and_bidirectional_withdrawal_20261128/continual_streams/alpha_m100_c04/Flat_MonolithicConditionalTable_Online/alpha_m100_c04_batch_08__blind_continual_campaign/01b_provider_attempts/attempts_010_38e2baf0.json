@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38e2baf0d9ee4af08e4b5c5d56ea2063",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:13:53.002251+00:00",
+  "ended_at_utc": "2026-11-28T04:14:19.625891+00:00",
+  "request_sha256": "c5d77f0ac4e2b8a680a9822870180fd22d1dcda0960138ffbfa8963fa6505edb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31181,
+    "cached_tokens": 9344,
+    "completion_tokens": 932
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; python3 -I /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m['_features'](tr,te); dt,t=d['past_dt'],d['eval_times']; c=m['_calibrate'](d['calibration_load_cells']); p=m['_inputs'](tr,x[:n],c); q=m['_inputs'](te,x[n:],c); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; f=m['solve_batch'](d); print('taus',f['estimated_taus'],'weights',f['hereditary_weights']); print('deployment ranges',[(k,float(a.min()),float(a.max())) for k,a in f.items()]); worst=np.zeros(2)\\nfor lab in np.unique(tr['lab_id']):\\n v=tr['lab_id']==lab; u=~v; tau,w=m['_fit'](tuple(a[u] for a in p),dt,t,y[u],r[u]); a,b=m['_design'](tau,tuple(z[v] for z in p),dt,t); er=np.abs(a@w-y[v]); rr=np.abs(b@w-r[v]); score=np.array([np.quantile(er,.9),np.quantile(rr,.9)]); worst=np.maximum(worst,score); print('held-out lab',lab,'n',int(v.sum()),'curve/rate p90',score,'taus',tau)\\nprint('worst held-out lab curve/rate p90',worst)\\nh=1e-6; curve,rate=m['_chamber_response'](f['estimated_taus'],f['hereditary_weights'],q,dt,np.array([0.,h])); err=np.max(np.abs((curve[:,1]-curve[:,0])/h-rate)); print('deployment onset zero and derivative error',abs(curve[:,0]).max(),err); assert np.allclose(curve[:,0],0.) and err<1e-5; assert 0.05<f['estimated_taus'][0]<f['estimated_taus'][1]<25; assert all(np.isfinite(a).all() for a in f.values()); assert np.allclose(rate,f['initial_rate_pred'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration → H2: nonlinear opposite-channel calibration with archived full-memory chamber transfer; worst clean bridge fold RMSE is 0.000339, and the host probe measured strain MAE 0.004214 and rate MAE 0.001106 in its verified scope.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer a new chamber law from the lagged facility trace alone\",\n      \"rejected_reason\": \"The latest trace supports transferring the verified batch 07 regime, but does not supply current chamber response labels for fitting a new law.\"\n    }\n  ],\n  \"rationale\": \"Test the exact candidate in isolation. Leave-one-lab-out strain and rate errors can expose an intrinsic fit that depends on one lab; the onset check can expose a mismatch between the deployment curve and its reported initial rate. Neither check substitutes for unavailable current chamber labels.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f7dbe18586560db1b4186389234490f9b16cc4d9cafc8bb0986772d6f6ad65d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28826.79,
+      "usage_known": true,
+      "prompt_tokens": 31181,
+      "cached_tokens": 9344,
+      "completion_tokens": 932
+    }
+  ]
+}

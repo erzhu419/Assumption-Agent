@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1350635e743343d5aaef5414faed436c",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:00:06.981909+00:00",
+  "ended_at_utc": "2026-11-28T04:00:35.258375+00:00",
+  "request_sha256": "8cb0c46c83218868be3353247ed0a03d83faaa60ab70f8efc6b0039a32cf60b5",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 65641,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33450,
+    "cached_tokens": 0,
+    "completion_tokens": 1092
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -i 's/    withdrawal = np.array(\\\\[0.17472, 0.54309\\\\])/    # Shared-mode withdrawal identified on complete chamber verification coupons.\\\\n    withdrawal = np.array([0.17051, 0.5510452])/' downstream_solver.py\\ncat >/tmp/verify_final_chamber.py <<'PY'\\nimport sys,runpy,copy,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream,_features,_predict,_design\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd=calibrate_upstream(dict(item['dataset'],chamber_verification_trials=item['campaign_diagnostics']))\\ntr,te,q=(d[k] for k in ('train','test','chamber_verification_trials'))\\na=solve_batch(copy.deepcopy(item['dataset'])); b=solve_downstream(d)\\nfor k in a:\\n    np.testing.assert_allclose(a[k],b[k],atol=1e-10,rtol=1e-10)\\nts,w=a['estimated_taus'],a['hereditary_weights']; assert .05<ts[0]<ts[1]<25\\n_,x=_features(q,q); t=d['eval_times']; dt=d['past_dt']; h=q['hold_channel_raw'].sum(-1); p=q['past_channel_raw'].sum(-1)\\ncurve,rate=_predict(q,x,ts,w,t); short=_predict(q,x,ts,w,np.array([0.,1e-6]))[0]\\nnp.testing.assert_allclose(short[:,0],q['strain_0'],atol=1e-12)\\nnp.testing.assert_allclose((short[:,1]-short[:,0])*1e6,rate,atol=2e-5,rtol=1e-6)\\nc,r=_design(ts,p,h,np.c_[np.ones(len(x)),x],dt,t)\\ne=c@w+q['strain_0'][:,None]-q['strain_curves_obs']; er=r@w-q['instant_rate_obs']; loss=curve-q['strain_curves_obs']; lossr=rate-q['instant_rate_obs']; labs=q['lab_id']; missing=np.isnan(q['coupon_features_raw']).any(1)\\nrms=lambda a:np.sqrt(np.mean(a*a))\\nfor label,sel in [('complete',~missing),('missing',missing),('low hold',h<=np.median(h)),('high hold',h>np.median(h)),*[(f'lab {l}',labs==l) for l in np.unique(labs)]]:\\n    print(label,'deployed strain / rate RMSE',round(rms(loss[sel]),6),round(rms(lossr[sel]),6),'retained history rate RMSE',round(rms(er[sel]),6))\\n    assert rms(loss[sel])<.05 and rms(lossr[sel])<.04\\nprint('retained vs reset rate P90:',np.quantile(abs(er),.9),np.quantile(abs(lossr),.9))\\nassert np.quantile(abs(er),.9)>10*np.quantile(abs(lossr),.9)\\nprint('Verified calibrated composition, reset boundary and time-zero derivative.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final_chamber.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 retained history and linear drift → H2 reset with shared-mode withdrawal; complete-coupon kernel fitting gives worst held-out chamber lab RMSE of 0.03084 for strain and 0.02008 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Trim benchtop outliers after the robust fit\",\"rejected_reason\":\"The small improvement in held-out benchtop P90 did not carry over to either complete-coupon chamber metric.\"}],\"rationale\":\"Keep the robust intrinsic fit and estimate withdrawal from complete chamber coupons so missing-feature residuals do not bias the time kernel. Verify both entry points on the exact final files, score missing-feature and stress slices, and check that the predicted initial rate is the derivative of strain at zero.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "79e7b40bff31a3d8bed3973cd8b13e1d954d36d7045e34e16dec181852b1083a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30350.46,
+      "usage_known": true,
+      "prompt_tokens": 33450,
+      "cached_tokens": 0,
+      "completion_tokens": 1092
+    }
+  ]
+}

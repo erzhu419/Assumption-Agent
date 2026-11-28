@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d4fa68e45c2a4931acddd836f21cfc44",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:08.325056+00:00",
+  "ended_at_utc": "2026-11-28T03:38:32.022129+00:00",
+  "request_sha256": "851769fcaea3ec1fd7194f540969f60ed3b4235c8ed77f0c77638c185f475a40",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48250,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27906,
+    "cached_tokens": 9344,
+    "completion_tokens": 899
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed '/^def solve_batch(/,$d' /tmp/hegel_continual_archive/alpha_m100_c01_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Chamber drift time (seconds), estimated from the verification coupons.\\n_CHAMBER_DRIFT_TIME = 1.0145541335277333\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge = _bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    past, hold, features = _inputs(test, xte, bridge)\\n    curve, rate = _design(taus, past, hold, features, dt, times)\\n    drift = features @ theta[2:]\\n    # The chamber replaces the linear drift ramp with exponential saturation.\\n    # Both ramps have derivative one at time zero, so the rate is unchanged.\\n    tau = _CHAMBER_DRIFT_TIME\\n    ramp = -tau * np.expm1(-times / tau)\\n    strain = test['strain_0'][:, None] + curve[:, :, :2] @ theta[:2] + drift[:, None] * ramp\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate @ theta}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\npython3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\nd=json.load(open(p)); print(type(d).__name__)\\nif isinstance(d,dict):\\n for k,v in d.items():\\n  print(k, len(v) if isinstance(v,(list,dict)) else v)\\n  if isinstance(v,list) and v: print(str(v[-1])[:3000])\\nelse:\\n print(str(d[-1])[:3000])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop linear drift → H2 rate-preserving exponential chamber saturation; worst held-out lab, stratum, or missingness slice has horizon RMSE 0.01289 and initial-rate RMSE 0.00549.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Fit an extra chamber gain\",\"rejected_reason\":\"The gain leaves the worst curve error unchanged and offers only a small rate improvement; keeping the zero-time derivative exact avoids fitting a gain to feature-alignment or material-fit error.\"}],\"rationale\":\"Build the single-file candidate and run the isolated schema check to catch interface or pooled-reference symmetry errors. Read the latest apparatus record to see whether it independently specifies the saturation timescale or identifies another chamber effect worth testing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b4f529ac819a40597ab2ec4144b94bf603c48b4df7e7514f786134795ae282ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25693.88,
+      "usage_known": true,
+      "prompt_tokens": 27906,
+      "cached_tokens": 9344,
+      "completion_tokens": 899
+    }
+  ]
+}

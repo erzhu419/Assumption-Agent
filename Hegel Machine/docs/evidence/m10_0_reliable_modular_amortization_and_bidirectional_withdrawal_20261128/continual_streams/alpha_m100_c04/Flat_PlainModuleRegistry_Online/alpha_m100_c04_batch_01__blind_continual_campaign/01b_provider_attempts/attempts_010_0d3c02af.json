@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d3c02afb33f4242917bf98666080283",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:07.299110+00:00",
+  "ended_at_utc": "2026-11-28T03:34:41.994652+00:00",
+  "request_sha256": "9c7d7a5bc448c84db3f0dd6f874cf40f219c9a02ab6da0aba484ed86b2f86221",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66527,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34554,
+    "cached_tokens": 9344,
+    "completion_tokens": 1400
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_chamber_transfer.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, v = item['dataset'], item['campaign_diagnostics']\\no = m.solve_batch(d)\\ntau, theta, t = o['estimated_taus'], o['hereditary_weights'], d['eval_times']\\ncal = m._calibration(d['calibration_load_cells'])\\nx = m._features(v, v)[:len(v['lab_id'])]\\npast, hold, cov = m._inputs(v, x, cal)\\ng = cov @ theta[2:]\\nstate = m._design(tau, (past, np.zeros_like(hold), cov), d['past_dt'], t)[1][:,:2] * -tau\\nA = np.vstack((-np.expm1(-t[:,None]/tau), 1/tau))\\nL = np.r_[t, 1.]\\ny = np.c_[v['strain_curves_obs']-v['strain_0'][:,None], v['instant_rate_obs']]\\nbase = (hold[:,None]*theta[:2]) @ A.T\\nresponse = (theta[:2]*tau) @ A.T\\nlab = v['lab_id']\\ncomplete = ~np.isnan(v['coupon_features_raw']).any(axis=1)\\n\\ndef predict(p, mode):\\n    drive = g\\n    if mode == 'saturation':\\n        drive = g/(1+p[2]*g*g)\\n    out = base + (p[0]*drive)[:,None]*response + (p[1]*g)[:,None]*L\\n    if mode == 'pulse difference':\\n        out += (p[2]*(state[:,0]-state[:,1]))[:,None]*response\\n    return out\\n\\npreds = {'artifact': np.column_stack(m._chamber(tau, theta, hold, x, t))}\\nfor mode in ('reset', 'saturation', 'pulse difference'):\\n    pred = np.empty_like(y)\\n    for j in np.unique(lab):\\n        keep = (lab != j) & complete\\n        p0 = [.7,.065] + ([] if mode == 'reset' else [0.])\\n        bounds = ([0,0,0],[np.inf]*3) if mode == 'saturation' else (-np.inf,np.inf)\\n        p = least_squares(lambda z: (predict(z,mode)[keep]-y[keep]).ravel(),p0,bounds=bounds,loss='soft_l1',f_scale=.009).x\\n        pred[lab==j] = predict(p,mode)[lab==j]\\n    preds[mode] = pred\\nfor name, pred in preds.items():\\n    for label, mask in [('complete',complete),('missing',~complete)]:\\n        sub = [(pred-y)[mask & (lab==j)] for j in np.unique(lab[mask])]\\n        worst = np.max([[np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))] for e in sub],axis=0)\\n        bias = max(abs(np.mean(e,axis=0)).max() for e in sub)\\n        print(name,label,'worst_lab_rmse_strain_rate',worst,'max_lab_time_bias',round(bias,6))\\n\\nc = d['calibration_load_cells']\\nraw, loads = c['bridge_raw'], c['true_channel_loads'].sum(axis=1)\\n# Hold the highest and lowest applied loads out of the bridge fit.\\norder = np.argsort(loads)\\nk = max(1,len(order)//10)\\ncenter = order[k:-k]\\nbeta = m._calibration({key:c[key][center] for key in ('bridge_raw','true_channel_loads')})\\nfor label, ix in [('low',order[:k]),('high',order[-k:])]:\\n    e = raw[ix] @ beta[:4] + beta[4] - loads[ix]\\n    print('bridge',label,'RMSE',np.sqrt(np.mean(e**2)),'max',abs(e).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber_transfer.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test the drift-driven reset against saturation and retained pulse differences; current worst held-out lab RMSE is 0.0483 strain and 0.0433 rate on diagnostic coupons with missing features.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck operators, or within-batch balanced accuracy\",\n      \"rejected_reason\": \"The measured system has continuous strain and rate targets, no relay, and no class labels; held-out laboratory errors test the relevant nuisance dependence.\"\n    }\n  ],\n  \"rationale\": \"Fit each chamber challenger without the held-out lab and score both outputs by missingness. Promote a challenger only if it materially improves the worst slice without degrading complete coupons. Bridge tail errors would reopen the affine calibration; otherwise retain it and verify the artifact in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "eb1ea19e223fdc56ae134a1382646a877ae1c0d7d86a23f9dacea1e1f67440dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36787.11,
+      "usage_known": true,
+      "prompt_tokens": 34554,
+      "cached_tokens": 9344,
+      "completion_tokens": 1400
+    }
+  ]
+}

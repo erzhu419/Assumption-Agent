@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc029622f45e4931b0efdade7a48e462",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:02.324287+00:00",
+  "ended_at_utc": "2026-11-28T03:42:43.726220+00:00",
+  "request_sha256": "6d60b55112884d5a6f8399416ccbb421138c2217e58e80ed058665c76cb616c2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46926,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29176,
+    "cached_tokens": 9344,
+    "completion_tokens": 1671
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rosette.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _rosette_features(x, bank):\\n    a, b, c = x[:, bank], x[:, (bank+1)%4], x[:, (bank-1)%4]\\n    return np.column_stack((np.ones(len(a)), a, b, c, a*b, a**3))\\n\\n\\ndef _calibrate(study, raw, report=False):\\n    sweeps = study['sensor_calibration_sweeps']\\n    x = np.asarray(sweeps['ref_rosette'])\\n    y = np.asarray(sweeps['raw_rosette'])\\n    sweeps = sweeps['single_bank_sweeps']\\n    matrices, readings = [], []\\n    for j in range(4):\\n        mask = sweeps['bank_id'] == j\\n        single = np.zeros((mask.sum(), 4))\\n        single[:, j] = sweeps['ref_signal'][mask]\\n        matrices.append(np.vstack((_rosette_features(x,j), _rosette_features(single,j))))\\n        readings.append(np.r_[y[:,j], sweeps['raw_readout'][mask]])\\n    def robust(A, b):\\n        keep = np.ones(len(b), dtype=bool)\\n        for _ in range(12):\\n            c = np.linalg.lstsq(A[keep], b[keep], rcond=None)[0]\\n            e = np.abs(A@c-b)\\n            new = e <= max(6*np.median(e),1e-10)\\n            if np.array_equal(new, keep):\\n                break\\n            keep = new\\n        return np.linalg.lstsq(A[keep],b[keep],rcond=None)[0], keep\\n    fits = [robust(A,b) for A,b in zip(matrices,readings)]\\n    mat = np.asarray([c for c,_ in fits]); offset, gain, nxt, prv, cross, cubic = mat.T\\n    def predict(z):\\n        return offset + gain*z + nxt*np.roll(z,-1,axis=1) + prv*np.roll(z,1,axis=1) + cross*z*np.roll(z,-1,axis=1) + cubic*z**3\\n    yy = np.asarray(raw).reshape(-1,4)\\n    j = np.arange(4)\\n    jac0 = np.diag(gain)\\n    jac0[j,(j+1)%4] = nxt\\n    jac0[j,(j-1)%4] = prv\\n    z = np.linalg.solve(jac0,(yy-offset).T).T\\n    for _ in range(20):\\n        e = predict(z) - yy\\n        if np.max(np.abs(e)) < 1e-13:\\n            break\\n        jac = np.broadcast_to(jac0,(len(z),4,4)).copy()\\n        jac[:,j,j] += cross*np.roll(z,-1,axis=1) + 3*cubic*z**2\\n        jac[:,j,(j+1)%4] += cross*z\\n        z -= np.linalg.solve(jac,e[...,None])[...,0]\\n    if report:\\n        print('calibration parameters:',mat,'max inverse error:',np.max(np.abs(predict(z)-yy)))\\n        for A,b,(c,keep) in zip(matrices,readings,fits):\\n            err=[]\\n            for i in np.flatnonzero(keep):\\n                fold=keep.copy(); fold[i]=False\\n                err.append(A[i]@np.linalg.lstsq(A[fold],b[fold],rcond=None)[0]-b[i])\\n            print('calibration worst LOO',max(np.abs(err)), 'outliers',np.flatnonzero(~keep))\\n    return z.ravel()\\nPY\\ncat > /tmp/rescore.py <<'PY'\\nimport compare_chamber as q\\nfrom rosette import _calibrate\\nimport itertools,numpy as np\\nq.y=_calibrate(q.s,q.s['y_obs_raw'],report=True)\\nprint('study keys',list(q.s),'shifts',q.s['mu_shifts'])\\nprint('obs/nuisance/source',q.y.shape,q.Z.shape,q.s['source_modes'].shape)\\nprint('calibrated range',np.min(q.y),np.max(q.y))\\nprint('robins',q.s['robin_x'],q.s['robin_y'])\\nkinds=[0,.25,.5,1,2,4,'periodic','absorbing']; i=np.arange(len(q.y)); Ax={k:q.axis('x',k) for k in kinds}; Ay={k:q.axis('y',k) for k in kinds}\\nfor ridge in [q.s['source_ridge'],1e-8]:\\n results=[]\\n for a,b in itertools.product(kinds,repeat=2):\\n  S,_=q.m._responses(q.s,(Ax[a],Ay[b])); e,w=q.evaluate(S,i,ridge); fs=[]\\n  for fold in range(6):\\n   test=(i//4)%6==fold; err,_=q.evaluate(S,~test,ridge); fs.append(np.sqrt(np.mean(err[test]**2)))\\n  results.append((float(np.mean(fs)),max(fs),np.std(e),a,b,w.round(3)))\\n print('ridge',ridge,'best',*sorted(results,key=lambda x:x[0])[:8],sep='\\\\n'); print('core',*[r for r in results if r[3] in [0,1,'periodic'] and r[4] in [0,1,'periodic']],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rescore.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; head -2 \\\"$f\\\"; grep -n 'axes is None\\\\|axes =\\\\|robin_' \\\"$f\\\"; done; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette → H2 sparse cyclic cubic rosette: robust cubic fit has 95th-percentile sweep residual 2.64e-5, with three gross outlier rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain all 35 cubic monomials per output\",\n      \"rejected_reason\": \"The sweep fit identifies six material terms per channel; refit those terms with the single-bank sweeps and check held-out calibration error.\"\n    }\n  ],\n  \"rationale\": \"Run leave-one-sweep-out checks on the compact rosette model and verify its inverse before scoring wall closures on held-out rosettes. Compare weak and prescribed ridge so a regularization effect is not mistaken for a wall change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "eb1a4ca529f8b27dc8088ad56e13f7e154277a81754e68aede98d22984ac43fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43483.05,
+      "usage_known": true,
+      "prompt_tokens": 29176,
+      "cached_tokens": 9344,
+      "completion_tokens": 1671
+    }
+  ]
+}

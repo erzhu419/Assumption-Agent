@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f14cd432085c4f85ae67262dca1da777",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:00.634527+00:00",
+  "ended_at_utc": "2026-11-28T03:49:31.876892+00:00",
+  "request_sha256": "e702e2d988f4c94e881a672d98a0dadbcfc2bb5f8c9d9c9964c45d28e001cca0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29297,
+    "cached_tokens": 9344,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_nonlinear.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for tag,s,h')[0])\\nY=v['strain_curves_obs']-v['strain_0'][:,None]; R=v['instant_rate_obs']; n=len(R); lab=v['lab_id']; strata=v['stratum']\\nB=np.vstack([np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1]])\\nQ=np.c_[Y,R]; A=np.linalg.lstsq(B,Q.T,rcond=None)[0].T\\nF=lambda parts:{k:np.concatenate([p[k] for p in parts]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}\\nvariants={'joint':xv,'local':m._features(v,v)[:n],'train+diag':m._features(tr,v)[-n:],'test+diag':m._features(te,v)[-n:]}\\nbase=np.c_[hv[:,None]*theta[:2],np.zeros(n)]; print('diag rows sorted by inferred drift: drift variants, missing count, amplitude residual')\\nrows=np.c_[*[xx@theta[2:] for xx in variants.values()],np.isnan(v['coupon_features_raw']).sum(1),A-base]; print(rows[np.argsort(rows[:,0])].round(4))\\nprint('reference shapes',[p['ref_coupons'].shape for p in (tr,te,v)]); print('relative drift output baselines',theta)\\nfor tag,xx in variants.items():\\n D=xx@theta[2:]; pred_amp={}\\n grammar={'lin':[D],'square':[D,D**2],'abs':[D,abs(D)],'cubic':[D,D**3],'poly3':[D,D**2,D**3],'cross':[D,D*hv],'cross+sq':[D,D*hv,D**2],'quad_cross':[D,D*hv,D**2,D**2*hv],'tanh':[D,np.tanh(D)],'sat':[D,D/(1+D**2)],'Hsq':[D,hv**2],'Xquad':[xx[:,1:],D**2],'Xlin':[xx[:,1:]],'timeH':[D,D**2,np.maximum(D,0)]}\\n for name,cols in grammar.items():\\n  X=np.column_stack([np.ones(n),hv,*cols]); E=[]\\n  for ii in [lab==k for k in np.unique(lab)]+[strata==k for k in np.unique(strata)]:\\n   pred=X[ii]@np.linalg.lstsq(X[~ii],Q[~ii],rcond=None)[0]; err=pred-Q[ii]; E.append([np.sqrt(np.mean(err[:,:-1]**2)),np.max(abs(err[:,:-1])),np.sqrt(np.mean(err[:,-1]**2)),np.max(abs(err[:,-1]))])\\n  pred_amp[name]=np.max(E,axis=0)\\n print(tag,[(k,np.round(val,4).tolist()) for k,val in sorted(pred_amp.items(),key=lambda kv:kv[1][0])[:9]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_nonlinear.py | tail -32; python3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json')); print({k:v for k,v in p.items() if len(str(v))<550})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine hold-stress and drift transfer -> H2: shared decay kinetics with an experimentally testable nonlinear amplitude law; the current affine model has leave-one-lab-out maximum strain/rate errors of 0.324/0.128.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more hereditary stress-history terms\",\"rejected_reason\":\"Neither the propagated history states nor all six stress steps improved held-out lab errors over hold stress and intrinsic drift.\"}],\"rationale\":\"Compare low-order nonlinear drift terms and reference-panel choices on held-out labs and strata. If a normalization choice explains the residual, preserve the affine chamber law; if curvature improves both outputs across cohorts, carry it into the deployment model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e0cf898247f495f1914c348e0a1efcb8a522680d1c8d30827d3e038527d9ffba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33351.91,
+      "usage_known": true,
+      "prompt_tokens": 29297,
+      "cached_tokens": 9344,
+      "completion_tokens": 1224
+    }
+  ]
+}

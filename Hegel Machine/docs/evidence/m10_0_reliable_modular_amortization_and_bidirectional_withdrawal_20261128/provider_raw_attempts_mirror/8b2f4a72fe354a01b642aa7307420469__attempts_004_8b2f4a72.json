@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b2f4a72fe354a01b642aa7307420469",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:14.677557+00:00",
+  "ended_at_utc": "2026-11-28T03:39:41.351688+00:00",
+  "request_sha256": "22d0237a99b8e2ad8dfa45ab8e22d438e8d47201b6f488ec0cc48ca06d3d9908",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 28714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20903,
+    "cached_tokens": 9344,
+    "completion_tokens": 1018
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > /tmp/probe_rosette.py <<'PY'\\nimport pickle,itertools\\nimport numpy as np\\nfrom scipy.linalg import lstsq\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; single=sw['single_bank_sweeps']; print('single bank rows'); print(np.c_[single['bank_id'],single['ref_signal'],single['raw_readout']].reshape(4,-1,3).round(6)); print('zero rows',np.c_[x,y][np.all(x==0,axis=1)]); print('operator scale');\\nfor spec in ['affine','diag3','cross2_diag3','full3','full4','cross2_diag5']:\\n p=[()] + [(i,) for i in range(4)];\\n if spec in ['diag3','cross2_diag3','cross2_diag5']: p += [(i,)*d for d in ([2,3,4,5] if spec.endswith('5') else [2,3]) for i in range(4)]\\n if spec.startswith('cross'): p += list(itertools.combinations(range(4),2))\\n if spec.startswith('full'): p += [t for d in range(2,int(spec[-1])+1) for t in itertools.combinations_with_replacement(range(4),d)]\\n A=np.column_stack([np.prod(x[:,t],axis=1) for t in p]); pred=np.zeros_like(y)\\n def fit(train):\\n  w=np.ones(train.sum()); a,b=A[train],y[train];\\n  for _ in range(22):\\n   c=lstsq(a*w[:,None],b*w[:,None])[0]; r=np.linalg.norm(a@c-b,axis=1); w=1/np.sqrt(1+(r/max(2*np.median(r),1e-10))**2)\\n  return c\\n c=fit(np.ones(len(x),bool)); main=np.linalg.norm(A@c-y,axis=1); clean=main<3\\n for fold in range(5):\\n  test=np.arange(len(x))%5==fold; pred[test]=A[test]@fit(~test)\\n r=np.linalg.norm(pred-y,axis=1); print(spec,'rank',np.linalg.matrix_rank(A),'fit',np.quantile(main[clean],[.5,.9,1]),'OOF',np.quantile(r[clean],[.5,.9,1]),'outliers',np.flatnonzero(~clean));\\n if spec in ('cross2_diag3','full3'): print('coefficients',list(zip(p,c.round(6).tolist())))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_rosette.py && python3 - <<'PY'\\nimport json\\nj=json.load(open('public_asset_index.json')); print({k:v for k,v in j.items() if k not in ('public_batch',)})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled affine → H2 coupled nonlinear calibration; the affine fit has median row error 0.325 and at least two gross residuals near 26.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Coupling alone, with a constant affine slope, explains the sweeps.\",\"empirical_witness\":\"With only reference channel 0 excited, the raw channel 0 slope changes from 1.100 to 0.830 to 1.173 across successive intervals.\",\"causal_blanket_diagnosis\":\"The systematic slope change persists on a single-axis sweep, so cross-channel excitation cannot account for it.\",\"sublated_pivot\":\"Retain the coupled affine terms and test diagonal curvature and cross-channel nonlinear terms on held-out sweep rows.\",\"risk_kind\":\"calibration model bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare robust nonlinear bases on held-out rows. The single-bank sweeps can reveal curvature independently and help distinguish missing terms from EMI residuals.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4c19e62dec728604ff3d7e7bc9312e700fa16a86b908cc181ca6d1c546e4fa4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28786.99,
+      "usage_known": true,
+      "prompt_tokens": 20903,
+      "cached_tokens": 9344,
+      "completion_tokens": 1018
+    }
+  ]
+}

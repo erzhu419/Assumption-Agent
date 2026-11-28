@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f78ff238ba94a74b542c761e8f3f84e",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:27:13.117335+00:00",
+  "ended_at_utc": "2026-11-28T03:27:47.380162+00:00",
+  "request_sha256": "108a2c7ac9d2426e6f3e4f44fe3c8e90e9bc78a93519b32ff3abcce980c8a635",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25693,
+    "cached_tokens": 10880,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); b=importlib.util.module_from_spec(s); s.loader.exec_module(b)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; loads=c['true_channel_loads']; total=loads.sum(1); i,j=np.triu_indices(4,1); one=np.ones((len(raw),1)); base=np.c_[one,raw]; pairs=raw[:,i]*raw[:,j]; triples=np.column_stack([np.prod(raw[:,[k for k in range(4) if k!=l]],axis=1) for l in range(4)]); blends=np.c_[base, raw**2, pairs]; candidates={'affine':base,'quadratic with cross terms':blends,'quadratic plus cubic/triples':np.c_[blends,raw**3,triples],'rational attenuation':np.c_[base,raw/(1+raw**2), (raw[:,i]-raw[:,j])/(1+(raw[:,i]-raw[:,j])**2)]}\\n# Interleaved folds stratified by single-channel identity versus mixed sweep.\\ngroup=np.where(np.count_nonzero(loads,axis=1)==1,np.argmax(abs(loads),axis=1),4); fold=np.empty(len(raw),int)\\nfor g in np.unique(group):\\n idx=np.where(group==g)[0]; fold[idx]=np.arange(len(idx))%4\\nfor label,A in candidates.items():\\n err=np.empty(len(raw)); ranks=[]\\n for f in range(4):\\n  m=fold==f; pfit,_,rank,_=np.linalg.lstsq(A[~m],total[~m],rcond=None); ranks.append(rank); err[m]=abs(A[m]@pfit-total[m])\\n print(label,'rank',min(ranks),'/',A.shape[1],'mixed p90',np.percentile(err[group==4],90),'worst single-channel p90',max(np.percentile(err[group==g],90) for g in range(4)))\\nn=len(tr['lab_id']); x=b._features(tr,te)[:n]; inp=b._inputs(tr,x,b._calibration(c)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=b.solve_batch(d); tau,pfit=out['estimated_taus'],out['hereditary_weights']; z=np.zeros((n,2))\\nfor h,step in enumerate(dt):\\n a=np.exp(-step/tau); z=a*z+(1-a)*inp[0][:,h,None]\\ngap=inp[1][:,None]-z; drift=inp[2]@pfit[2:]; expected=(gap*pfit[:2])@(-np.expm1(-t[:,None]/tau)).T+drift[:,None]*t\\nA,B=b._design(tau,inp,dt,t)\\nprint('chronological identity max',np.max(abs(expected-A@pfit))); assert np.allclose(expected,A@pfit,rtol=0,atol=1e-12)\\nh=1e-6; H,_=b._design(tau,inp,dt,np.array([-h,h])); delta=((H[:,1]-H[:,0])@pfit)/(2*h); print('initial-rate derivative max',np.max(abs(delta-B@pfit))); assert np.allclose(delta,B@pfit,rtol=1e-9,atol=1e-9)\\n# Evaluate lab offsets rather than using classification metrics on continuous observations.\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']==lab; tt,ww=b._fit(tuple(a[~m] for a in inp),dt,t,y[~m],r[~m]); aa,bb=b._design(tt,tuple(a[m] for a in inp),dt,t); e=y[m]-aa@ww; er=r[m]-bb@ww\\n print('held-out lab',lab,'signed medians early/late/rate',*[round(float(np.median(v)),5) for v in (e[:,:4],e[:,-4:],er)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 exact two-branch benchtop relaxation → H2 baseline deployment transfer; prior worst held-out p90 absolute errors were 0.03534 for early strain and 0.01448 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode or balanced-accuracy checks\",\n      \"rejected_reason\": \"The dataset contains continuous mechanical responses and no relay states or class labels. Held-out lab residuals test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"Use held-out sweeps to see whether nonlinear bridge terms genuinely improve the worst calibration slice. Compare the compact history with the explicit recurrence and differentiate the strain law at zero to detect sign, ordering, or rate errors. Check signed held-out lab residuals for systematic offsets before considering any lab adjustment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1e80f34c1000c7c802156891ff64993c28eeb426f34d3f4798392ac8d4bff7fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36383.91,
+      "usage_known": true,
+      "prompt_tokens": 25693,
+      "cached_tokens": 10880,
+      "completion_tokens": 1354
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f34dca66213643a49708dd1fae2f9924",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:08:21.463578+00:00",
+  "ended_at_utc": "2026-11-28T04:08:45.111268+00:00",
+  "request_sha256": "5d6eb4a4ceb06963085eef9266b3bcbf75078dcab4be7ba7d822b0bea1ac812d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28440,
+    "cached_tokens": 9344,
+    "completion_tokens": 902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; cat public_asset_index.json; sed -n '1,40p' downstream_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nimport _verified_upstream as u, downstream_solver as d\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; p=json.load(open('_upstream_param_payload.json')); c=u.calibrate_upstream(raw,p); dyn=u.calibrate_upstream(raw); print('max staged-vs-dynamic load delta',max(np.max(abs(c[s][k]-dyn[s][k])) for s in ('train','test') for k in ('past_channel_raw','hold_channel_raw')))\\ntr,te=c['train'],c['test']; times,dt=c['eval_times'],c['past_dt']; x,_=d._features(tr,te); a=d._inputs(tr,x); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; q=[]\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']==lab; tau,b=d._fit(*(z[~m] for z in a),dt,times,y[~m],r[~m]); v,w=d._design(tau,*(z[m] for z in a),dt,times); e=abs(v@b-y[m]); er=abs(w@b-r[m]); row=(np.quantile(e[:,:4],.9),np.quantile(e[:,-4:],.9),np.quantile(er,.9)); q.append(row); print('held-out lab',lab,'taus',tau.round(4),'early/late/rate abs-q90',np.round(row,5))\\nprint('worst lab',np.max(q,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived reset baseline -> H2 independently validated intrinsic material fit with an archive-supported chamber assumption; the public reference-swap test changed strain and rate by 0, and the in-sample strain and rate absolute residual p95 were 0.02784 and 0.01816.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the staged calibration without comparison\",\n      \"rejected_reason\": \"The contract calls for dynamic calibration, and the staged transducer exposes a dynamic fit; comparing both on actual coupon loads will show whether switching affects prediction materially.\"\n    }\n  ],\n  \"rationale\": \"The memory assumption changes some rates by up to 3.61, so a good fit on benchtop coupons cannot establish chamber accuracy. Check whether the public asset metadata identifies the chamber boundary, and test material transfer on held-out labs separately. Large lab-specific errors would justify revisiting the intrinsic fit before selecting a chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "823272e73f6198f6fdf0b03b86ed531972ff772948d55654534f1e141f848820",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25798.79,
+      "usage_known": true,
+      "prompt_tokens": 28440,
+      "cached_tokens": 9344,
+      "completion_tokens": 902
+    }
+  ]
+}

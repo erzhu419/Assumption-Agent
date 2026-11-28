@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "235c700a16264f82acd60eb99e5c79c1",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:04:48.708573+00:00",
+  "ended_at_utc": "2026-11-28T04:05:24.254510+00:00",
+  "request_sha256": "40212aa03f530bc75223e82087d25eebda96741fb087a622c297561b2ae2b750",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 57699,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29341,
+    "cached_tokens": 9344,
+    "completion_tokens": 1435
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; sed -n '1,115p' downstream_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features,_loads,_fit,_design,_predict_chamber\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; d=calibrate_upstream(item['dataset']); a,b=d['train'],d['test']; n=len(a['lab_id']); x=_features(a,b)[:n]; p,h=_loads(a); dt,t=d['past_dt'],d['eval_times']; y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; tel=a['aux_chamber_telemetry']; raw=d['calibration_load_cells'];\\n# Fit supplemental bases on the in-fold coupons only; test whether they predict residual structure across labs.\\ndef extras(tau):\\n z=np.zeros((n,2))\\n for j,ds in enumerate(dt):\\n  keep=np.exp(-ds/tau); z=keep*z+(1-keep)*p[:,j,None]\\n gap=h[:,None]-z\\n c,k=_design(tau,x,p,h,dt,t)\\n np.testing.assert_allclose(k[:,:2],gap/tau,atol=1e-12,rtol=1e-12)\\n np.testing.assert_allclose(c[:,:,:2],gap[:,None,:]*(-np.expm1(-t[:,None]/tau)),atol=1e-12,rtol=1e-12)\\n diff=np.column_stack([tel[:,i]-tel[:,j] for i in range(4) for j in range(i+1,4)])\\n pair=np.column_stack([tel[:,i]*tel[:,j] for i in range(4) for j in range(i+1,4)])\\n rat=np.column_stack([gap/(1+0.2*gap**2)-gap, h/(1+0.2*h**2)-h])\\n return c,k,[tel,np.c_[diff,pair],rat]\\nfor group in ('lab_id','stratum'):\\n vals=[]\\n for g in np.unique(a[group]):\\n  v=a[group]==g; f=~v\\n  tau,th=_fit(x[f],p[f],h[f],dt,t,y[f],r[f]); c,k,ex=extras(tau); er=r-k@th; ec=y-c@th\\n  def metrics(curve,rate): return [*np.quantile(abs(curve[v]).reshape(v.sum(),3,-1),.9,axis=(0,2)),np.quantile(abs(rate[v]),.9)]\\n  row=[metrics(ec,er)]\\n  for Z in ex:\\n   A=(Z-Z[f].mean(axis=0))/np.maximum(Z[f].std(axis=0),1e-12); u=np.clip((ec@t)/(t@t),-.02,.02); q=np.clip(er,-.035,.035)\\n   bc=np.linalg.solve(A[f].T@A[f]+5*np.eye(A.shape[1]),A[f].T@u); br=np.linalg.solve(A[f].T@A[f]+5*np.eye(A.shape[1]),A[f].T@q)\\n   row.append(metrics(ec-(A@bc)[:,None]*t,er-A@br))\\n  vals.append(row)\\n print(group,'worst slice [early,mid,late,rate] by [baseline,telemetry,telemetry pairwise,saturating stress]:',np.round(np.max(vals,axis=0),6))\\nout=solve_batch(item['dataset']); tau=out['estimated_taus']; th=out['hereditary_weights']; _,hold=_loads(b); xt=_features(a,b)[n:]; eps=1e-5\\npred,rate=_predict_chamber(tau,th,xt,hold,np.array([0.,eps]),b['strain_0']); np.testing.assert_allclose(pred[:,0],b['strain_0'],atol=1e-12,rtol=0); delta=np.max(abs((pred[:,1]-pred[:,0])/eps-rate)); print('Boundary derivative max error',delta); assert delta<1e-4\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust two-branch material fit → H2 archive-transferred chamber law; current worst held-out benchtop p90 errors are 0.02261 strain and 0.01376 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or Fokker–Planck drift\",\n      \"rejected_reason\": \"The supplied observations are continuous strain and rate under a deterministic history law; there are no relay modes, class labels, or stochastic drift operator in the contract.\"\n    }\n  ],\n  \"rationale\": \"Check the exact branch recurrence and chamber initial derivative independently. Use held-out labs and strata to see whether telemetry interactions or stress saturation predict benchtop residuals without mistaking that evidence for validation of the blind chamber transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "80bbc1a306f85ec49bcea25fe8b3a7ca5de7d85f6c44cf90c00a20d36739b663",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37646.52,
+      "usage_known": true,
+      "prompt_tokens": 29341,
+      "cached_tokens": 9344,
+      "completion_tokens": 1435
+    }
+  ]
+}

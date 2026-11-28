@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6571b5967a5f4d43a2811db243ef6f8b",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:22.159828+00:00",
+  "ended_at_utc": "2026-11-28T03:40:42.460915+00:00",
+  "request_sha256": "ec49639836fd6367e91fee71a6ab50e671ae85e5ccba87505cfdcd12df3ac03c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66939,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32566,
+    "cached_tokens": 9344,
+    "completion_tokens": 749
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_equal_weight.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = '    return unpack(result.x[:2]), result.x[2:]'\\nb = '''    # Give the direct initial-rate measurements more leverage than any\\n    # single strain reading while retaining robust loss for both outputs.\\n    def rate_weighted_residual(q):\\n        e = residual(q).reshape(n, k + 1)\\n        e[:, -1] *= 4.0\\n        return e.ravel()\\n\\n    result = least_squares(rate_weighted_residual, result.x, loss='soft_l1',\\n                           f_scale=.008, x_scale='jac', max_nfev=200,\\n                           bounds=(np.r_[bounds[0], np.full(7, -np.inf)],\\n                                   np.r_[bounds[1], np.full(7, np.inf)]))\\n    return unpack(result.x[:2]), result.x[2:]'''\\nassert s.count(a) == 1\\ns = s.replace(a, b).replace('_CHAMBER_DRIFT_TIME = 1.0145541335277333', '_CHAMBER_DRIFT_TIME = 1.0116511228821314')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -e 's/for weight in (1, 2, 4):/for weight in (1,):/' /tmp/audit_joint_slices.py > /tmp/audit_promoted.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_promoted.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 equal-weight robust fit → H2 rate-weighted robust fit: with a characterization lab removed, worst chamber horizon RMSE fell from 0.01458 to 0.01293 while rate RMSE rose from 0.00580 to 0.00620.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote 2× rate weighting\",\n      \"rejected_reason\": \"It improved worst-case strain less, while the full-training worst diagnostic rate errors for 2× and 4× differed by only 0.0000013.\"\n    }\n  ],\n  \"rationale\": \"Promote the fit that reduced the largest strain error across the joint holdouts, without changing the hereditary law or initial-rate identity. Run the schema check and repeat the joint holdout audit against the exact bounded implementation; restore the prior candidate if the curve gain fails to reproduce or the rate error materially worsens.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "11a669f0dd02e517e369114bd51b66283708ac9de49227f8b90f28545af09344",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22359.05,
+      "usage_known": true,
+      "prompt_tokens": 32566,
+      "cached_tokens": 9344,
+      "completion_tokens": 749
+    }
+  ]
+}

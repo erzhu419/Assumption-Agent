@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbb869c513524c35bad733d10ea684ed",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:28.459611+00:00",
+  "ended_at_utc": "2026-11-28T03:39:54.806851+00:00",
+  "request_sha256": "c63a08205e89eb408862ee149998eab0fdc9d318ec52f985f42f884670f9771a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 29052,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20337,
+    "cached_tokens": 11904,
+    "completion_tokens": 923
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('keys',list(D),list(c)); print('cal true',np.round(np.quantile(x,[0,.1,.5,.9,1],axis=0),4)); print('cal raw',np.round(np.quantile(y,[0,.1,.5,.9,1],axis=0),4)); print('pairs',np.round(np.c_[x,y][:8],4)); print('sweep shapes',{k:np.shape(v) for k,v in c['single_channel_sweeps'].items()});\\nfor k in ['train','test','chamber_verification_trials']:\\n a=D.get(k); print(k,type(a).__name__);\\n if isinstance(a,dict):\\n  for q in ('past_channel_raw','hold_channel_raw'):\\n   if q in a:\\n    v=np.asarray(a[q]); print(q,v.shape,np.round(np.quantile(v.reshape(-1,4),[0,.5,1],axis=0),4))\\nfor name,xx,yy in [('forward',x,y),('inverse',y,x)]:\\n z=(xx-np.median(xx,axis=0))/np.std(xx,axis=0); idx=np.arange(len(z)); folds=np.array_split(np.random.default_rng(23).permutation(len(z)),5)\\n for kind in ['linear','diag2','full2','diag3','full3','full4']:\\n  terms=[(j,) for j in range(4)]\\n  if kind!='linear':\\n   for p in range(2,int(kind[-1])+1): terms+=([(j,)*p for j in range(4)] if kind.startswith('diag') else list(combinations_with_replacement(range(4),p)))\\n  A=np.column_stack([np.ones(len(x))]+[z[:,t].prod(axis=1) for t in terms]); pred=np.zeros_like(yy)\\n  for te in folds:\\n   tr=np.setdiff1d(idx,te); a,b=A[tr],yy[tr]; coef=np.linalg.lstsq(a,b,rcond=None)[0]\\n   for _ in range(35):\\n    r=np.linalg.norm(a@coef-b,axis=1); w=1/np.sqrt(1+(r/max(np.median(r)*2,1e-8))**2); coef=np.linalg.lstsq(a*w[:,None],b*w[:,None],rcond=None)[0]\\n   pred[te]=A[te]@coef\\n  e=np.linalg.norm(pred-yy,axis=1); print(name,kind,'quantiles',np.round(np.quantile(e,[.5,.8,.9,.95,1]),6),'last',[(int(i),round(e[i],5)) for i in np.argsort(e)[-9:]])\\n  if name=='forward' and kind in ('diag3','full2'): print('coef',np.round(coef,5).T)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine bridges -> H2 coupled polynomial bridge response; held-out errors have not yet been measured on the unwrapped dataset.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare forward and direct inverse models on identical held-out rows to determine whether cross terms improve calibration or amplify spikes. Compare trial and calibration ranges to identify where the inverse must extrapolate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "bd9d17d3593ed25c0f82ca9d2f1154ae72fd1b2385623e9257ab5d67c23baa81",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26300.15,
+      "usage_known": true,
+      "prompt_tokens": 20337,
+      "cached_tokens": 11904,
+      "completion_tokens": 923
+    }
+  ]
+}

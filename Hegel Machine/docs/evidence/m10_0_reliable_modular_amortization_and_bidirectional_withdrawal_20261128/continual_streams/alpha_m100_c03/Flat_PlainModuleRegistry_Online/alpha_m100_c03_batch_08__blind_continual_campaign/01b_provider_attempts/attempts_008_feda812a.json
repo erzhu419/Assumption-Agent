@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "feda812ac80444cbbdf65423968fc76e",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:06.978629+00:00",
+  "ended_at_utc": "2026-11-28T03:58:43.511756+00:00",
+  "request_sha256": "f8e01b92a4d56f18c1aa1ca0c65bc1422efafd11d2133903772ac84193b178ca",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30297,
+    "cached_tokens": 9344,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/chamber_validate.py <<'PY'\\nimport contextlib,io\\nimport numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    exec(open('/tmp/chamber_probe.py').read().split('for name,s,u in')[0])\\nP,H=load(di)\\nX=m._features(di,di)[:len(H)]\\nD=th[2]+X@th[3:]\\nB=np.column_stack((1/taus,-np.expm1(-t[None,:]/taus[:,None])))\\nF=np.vstack((taus[:,None]*B,np.r_[1,t]))\\nY=np.column_stack((di['instant_rate_obs'],y(di)))\\nE=Y-(H[:,None]*th[:2])@B\\n\\ndef fit(mask):\\n    # The normalized drift time response has unit derivative at zero.\\n    a=D[mask,None,None]*(F[:2]-F[2]).T[None,:,:]\\n    b=E[mask]-D[mask,None]*F[2]\\n    w=np.linalg.lstsq(a.reshape(-1,2),b.ravel(),rcond=None)[0]\\n    return np.r_[w,1-w.sum()]\\n\\nlabs=di['lab_id']\\nc=fit(np.ones(len(D),bool))\\nprint('derivative-normalized drift fractions',c)\\nfor j in np.unique(labs):\\n    use=labs==j\\n    coef=fit(~use)\\n    r=E[use]-D[use,None]*(coef@F)\\n    print('held-out lab',j,'coef',coef.round(5),'rate RMSE',np.sqrt(np.mean(r[:,0]**2)),'worst horizon RMSE',np.max(np.sqrt(np.mean(r[:,1:]**2,axis=0))))\\nfor k in range(1,len(t)+1):\\n    cols=np.arange(F.shape[1])!=k\\n    a=D[:,None,None]*(F[:2,cols]-F[2,cols]).T[None,:,:]\\n    b=E[:,cols]-D[:,None]*F[2,cols]\\n    w=np.linalg.lstsq(a.reshape(-1,2),b.ravel(),rcond=None)[0]\\n    pred=D*(np.r_[w,1-w.sum()]@F[:,k]); print('held-out horizon',t[k-1],np.sqrt(np.mean((E[:,k]-pred)**2)))\\nnp.save('/tmp/chamber_drift_fractions.npy',c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_validate.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\nimport numpy as np\\nsource=Path('/tmp/hegel_continual_archive/alpha_m100_c03_batch_02_solver.py').read_text().split('_CHAMBER_DRIFT_TAU =')[0].rstrip()\\nc=np.load('/tmp/chamber_drift_fractions.npy')\\nsource += f'\\\\n\\\\n\\\\n# Shared drift time basis identified from calibrated chamber verification coupons.\\\\n_DRIFT_FRACTIONS = {tuple(float(v) for v in c[:2])!r}\\\\n'\\nPath('downstream_solver.py').write_text(source+'''\\n\\n\\ndef _loads(split):\\n    return tuple(np.asarray(split[key]).sum(axis=-1)\\n                 for key in ('past_channel_raw', 'hold_channel_raw'))\\n\\n\\ndef _predict_chamber(taus, theta, x, hold, times, strain_0):\\n    \\\"\\\"\\\"Reset the chamber memory and couple coupon drift to the two branches.\\\"\\\"\\\"\\n    drift = theta[2] + x @ theta[3:]\\n    fractions = np.asarray(_DRIFT_FRACTIONS)\\n    relaxation = -np.expm1(-times[:, None] / taus)\\n    drift_time = relaxation @ (fractions * taus) + (1.0 - fractions.sum()) * times\\n    strain = strain_0[:, None] + (hold[:, None] * theta[:2]) @ relaxation.T\\n    strain += drift[:, None] * drift_time\\n    rate = hold * np.sum(theta[:2] / taus) + drift\\n    return strain, rate\\n\\n\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    dt, times = cal_item['past_dt'], cal_item['eval_times']\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    taus, theta = _fit(x[:n], *_loads(train), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    _, hold = _loads(test)\\n    strain, rate = _predict_chamber(taus, theta, x[n:], hold, times, test['strain_0'])\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\n''')\\nPY\\ncat batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged chamber memory → H2 zero-memory branches with a shared derivative-normalized drift kernel; the empirical rank-one residual has worst-horizon RMSE 0.00278 in sample.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an independent chamber relaxation spectrum\",\n      \"rejected_reason\": \"The reset response already uses the benchtop spectrum, and adding a free time constant mainly fits small residual variation.\"\n    }\n  ],\n  \"rationale\": \"Fit only two drift fractions on the calibrated diagnostic coupons, enforcing consistency between strain and initial rate. Hold out labs and horizons to detect a correction that depends on one lab or time point. Keep deployment feature normalization joint across train and test as required.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c45672fdbe5315c0c1df36393296f83a92f80482c1203afecedc47dc80601b33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38628.59,
+      "usage_known": true,
+      "prompt_tokens": 30297,
+      "cached_tokens": 9344,
+      "completion_tokens": 1511
+    }
+  ]
+}

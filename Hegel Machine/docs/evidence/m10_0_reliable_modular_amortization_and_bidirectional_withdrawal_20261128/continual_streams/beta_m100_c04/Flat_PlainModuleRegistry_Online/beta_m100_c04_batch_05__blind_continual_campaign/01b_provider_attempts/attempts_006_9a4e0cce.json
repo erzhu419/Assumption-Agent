@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a4e0cced59d401b9deff9d3d4caebaa",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:36.944802+00:00",
+  "ended_at_utc": "2026-11-28T03:53:11.771943+00:00",
+  "request_sha256": "ed44f78c13b262eb04e58e9de1583b51b1708e85fa46e74c815f0004b8f207d7",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43728,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27181,
+    "cached_tokens": 9344,
+    "completion_tokens": 1402
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rosette_families.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']; x,y=b['ref_rosette'],b['raw_rosette']; good=np.max(abs(y),axis=1)<5; x,y=x[good],y[good]; bank=b['single_bank_sweeps']; pair=[2,3,0,1]\\ndef basis(name,t,k):\\n if name=='tanh': return np.tanh(k*t)\\n if name=='atan': return np.arctan(k*t)\\n if name=='rat': return t/(1+k*t*t)\\n if name=='sqrt': return t/np.sqrt(1+k*t*t)\\n if name=='erf':\\n  from scipy.special import erf\\n  return erf(k*t)\\n if name=='exp': return t*np.exp(-k*t*t)\\n if name=='pole': return t/(1+k*t)\\n if name=='asinh': return np.arcsinh(k*t)\\n if name=='expasym': return np.expm1(k*t)\\n if name=='sat2': return t*t/(1+k*t*t)\\n if name=='gauss2': return 1-np.exp(-k*t*t)\\n if name=='tanh2': return np.tanh(k*t)**2\\n if name=='sig2': return np.tanh(k*t*t)\\n\\ndef variable(f,y,starts,lower,upper):\\n def calc(k):\\n  A=f(k); return A@np.linalg.lstsq(A,y,rcond=None)[0]-y\\n opts=[]\\n for start in starts:\\n  r=least_squares(calc,start,bounds=(lower,upper),max_nfev=120,gtol=1e-11); opts.append((np.mean(r.fun**2)**.5,r.x,np.max(abs(r.fun))))\\n return min(opts,key=lambda a:a[0])\\nfor j in [0,1]:\\n a=(bank['bank_id']==j)&(abs(bank['raw_readout'])<5); t,z=bank['ref_signal'][a],bank['raw_readout'][a]; ranking=[]\\n for d in ['tanh','atan','rat','sqrt','erf','exp','asinh']:\\n  for p in [[],[1],[3],[1,3],[3,5]]:\\n   f=lambda k: np.column_stack([np.ones(len(t)),basis(d,t,k[0])]+[t**n for n in p]); ranking.append((variable(f,z,[[.5],[1.5]],[.01],[6]),d,p))\\n print('bank',j,sorted(ranking,key=lambda a:a[0][0])[:9])\\nfor j in range(4):\\n t,u=x[:,j],x[:,pair[j]]; z=y[:,j]; ranking=[]\\n for d in ['tanh','rat','atan','sqrt','erf','asinh']:\\n  for p in [[3],[1],[1,3],[]]:\\n   for c in ['poly','pole','expasym','asinh','tanh','rat','sat2','gauss2','tanh2','sig2']:\\n    def f(k):\\n     C=[u,u*u,u**3,u**4,u**5,u**6] if c=='poly' else [u,basis(c,u,k[1])]+([u*u] if c not in ['pole','sat2','gauss2','tanh2','sig2'] else [])\\n     return np.column_stack([np.ones(len(t)),basis(d,t,k[0])]+[t**n for n in p]+C)\\n    upper=.95/max(abs(u)) if c=='pole' else 6.; starts=[[1,.15],[1,.4 if c=='pole' else 1]]\\n    ranking.append((variable(f,z,starts,[.02,.005],[6.,upper]),d,p,c))\\n print('rosette',j,sorted(ranking,key=lambda a:a[0][0])[:8])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_families.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coupling → H2 additive diagonal saturation and paired crosstalk; leave-one-out maximum raw error fell from 0.518 to 0.00115 for the paired degree-10 model.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine channel coupling is sufficient for this sweep.\",\"empirical_witness\":\"Paired affine leave-one-out RMSE was 0.166 and maximum error was 0.518; paired nonlinear terms reduced RMSE to 0.0000773.\",\"causal_blanket_diagnosis\":\"Axial sweeps reveal distinct curved diagonal responses and asymmetric responses in paired channels.\",\"sublated_pivot\":\"Compare compact saturation functions against the additive polynomial reference.\",\"risk_kind\":\"calibration bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the polynomial immediately\",\"rejected_reason\":\"The maximum error is much larger than the in-range RMSE; a compact saturating law could improve edge accuracy and inversion stability.\"}],\"rationale\":\"Test candidate saturation functions and asymmetric crosstalk terms; advance a compact model only if it improves independent sweep slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "24bbb7a3f5d62e6e3abb5c54c26105031351bbefb24a6ea7eafa141d093c703c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36921.08,
+      "usage_known": true,
+      "prompt_tokens": 27181,
+      "cached_tokens": 9344,
+      "completion_tokens": 1402
+    }
+  ]
+}

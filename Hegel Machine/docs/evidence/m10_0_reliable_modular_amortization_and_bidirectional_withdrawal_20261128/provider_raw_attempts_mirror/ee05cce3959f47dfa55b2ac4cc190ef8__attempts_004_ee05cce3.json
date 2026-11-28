@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee05cce3959f47dfa55b2ac4cc190ef8",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:20.900391+00:00",
+  "ended_at_utc": "2026-11-28T03:48:49.501965+00:00",
+  "request_sha256": "f399ba737b96f3be6ffa2db264f0d2da8e637fc537f8f50f76a051578a7e1706",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21348,
+    "cached_tokens": 9344,
+    "completion_tokens": 1117
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; grep -nEi 'bridge|transduc|cubic|sweep|calibrat' \\\"$f\\\" | head -40; done\\ncat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom collections import Counter\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; X=c['true_channel_loads']; Y=c['bridge_raw'];\\nA=[(0,0,0,0)]+[tuple(int(i==j) for i in range(4)) for j in range(4)]\\ndef terms(k):\\n return [tuple(Counter(s)[i] for i in range(4)) for s in itertools.combinations_with_replacement(range(4),k)]\\ndef phi(x,p):return np.prod(x[:,None,:]**np.array(p),axis=-1)\\ndef fit(z,y):\\n b=np.linalg.lstsq(z,y,rcond=None)[0]\\n for s in [.4,.1,.02,.004,.001,.00035,.0002,.0002]:\\n  for _ in range(15):\\n   r=np.linalg.norm(y-z@b,axis=1); w=(1+(r/s)**2)**(-.5); b=np.linalg.lstsq(z*w[:,None],y*w[:,None],rcond=None)[0]\\n return b\\ncore=A+terms(2)+[k for k in terms(3) if max(k)==3]; full=A+terms(2)+terms(3)\\nfor name,p in [('affine',A),('diag cubic only',A+[k for k in terms(3) if max(k)==3]),('quad plus diag cubic',core),('full cubic',full),('full quartic',full+terms(4))]:\\n z=phi(X,p); b=fit(z,Y); r=np.linalg.norm(Y-z@b,axis=1); print(name,'rank',np.linalg.matrix_rank(z),'fit row norm quantiles',np.quantile(r,[.5,.8,.9,.95,1]).round(7));\\n if name in ('quad plus diag cubic','full cubic'):\\n  print('terms:',[(k,np.round(v,5).tolist()) for k,v in zip(p,b) if np.max(abs(v))>.002]); print('largest row residuals:',[(int(i),round(r[i],5)) for i in np.argsort(r)[-12:]])\\n if len(p)<=35:\\n  rs=[]\\n  for i in range(len(X)):\\n   m=np.arange(len(X))!=i; rs.append(np.linalg.norm(Y[i]-z[i]@fit(z[m],Y[m])))\\n  print('LOO',np.quantile(rs,[.5,.8,.9,.95,.975,1]).round(7))\\nprint('axial rows'); a=np.count_nonzero(X,axis=1)<=1; print(np.c_[np.flatnonzero(a),X[a],Y[a]].round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 affine cross-channel mixing with nonlinear bridge response; axial sweeps show curvature, and leave-one-out error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A purely affine transducer explains the clean calibration data.\",\n    \"empirical_witness\": \"On the first axial sweep the primary bridge's three successive slopes are approximately 2.17, 1.38, and 2.33, while the other bridge outputs vary smoothly.\",\n    \"causal_blanket_diagnosis\": \"A linear coupling matrix alone cannot account for load-axis curvature, and gross calibration spikes separately bias ordinary least squares.\",\n    \"sublated_pivot\": \"Retain affine cross-channel coupling and compare robust fits with diagonal cubic and interaction terms.\",\n    \"risk_kind\": \"systematic inverse-load bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained inverse directly from raw bridges\",\n      \"rejected_reason\": \"Gross bridge spikes would become high-leverage predictors; the known applied loads are the better-conditioned regression inputs.\"\n    }\n  ],\n  \"rationale\": \"Compare nested forward bases on withheld calibration rows. The residual structure will determine which nonlinear terms are needed and whether the archive offers a compatible prior.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "786d458c0ea41fafe86028d77c1c7a0cac40a8ecbacf7a628a8f8aa28e7dd3c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30688.2,
+      "usage_known": true,
+      "prompt_tokens": 21348,
+      "cached_tokens": 9344,
+      "completion_tokens": 1117
+    }
+  ]
+}

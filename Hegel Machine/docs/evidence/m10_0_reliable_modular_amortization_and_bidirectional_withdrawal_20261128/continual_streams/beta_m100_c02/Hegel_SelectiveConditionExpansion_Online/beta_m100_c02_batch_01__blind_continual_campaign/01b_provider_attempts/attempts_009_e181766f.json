@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e181766f7e17462d8e53a285faf6fe06",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:33.515980+00:00",
+  "ended_at_utc": "2026-11-28T03:34:02.804045+00:00",
+  "request_sha256": "66d729ae61d8760ad8a2c222fe05031b27e8efb43ce5a183a8784ec01d561e87",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25120,
+    "cached_tokens": 9344,
+    "completion_tokens": 1147
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import root\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open(p+'public_batch.pkl','rb'))[0]\\ns = item['study']; c = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nA = np.c_[np.ones(len(x)), x]\\nS, _ = m.chamber_response(s)\\nX = np.concatenate([S @ q['w_pulse'] for q in item['campaign_diagnostics']]).reshape(-1,4)\\nY = np.concatenate([q['y_pulse_raw'] for q in item['campaign_diagnostics']]).reshape(-1,4)\\n# Saturating response along a channel or a pairwise rosette contrast.\\ndirs = list(np.eye(4)) + [(np.eye(4)[i]+sgn*np.eye(4)[j])/np.sqrt(2) for i in range(4) for j in range(i) for sgn in (-1,1)]\\nmodels = [(None,0.)] + [(d,a) for d in dirs for a in (0.03,0.1,0.3,1.,3.)]\\ndef feat(v, model):\\n    d,a = model\\n    if d is None: return np.c_[np.ones(len(v)),v]\\n    t = v @ d\\n    return np.c_[np.ones(len(v)),v,t**3/(1+a*t*t)]\\ndef fit(idx, model):\\n    return np.linalg.lstsq(feat(x[idx],model),y[idx],rcond=None)[0]\\ndef select(ids):\\n    def score(model):\\n        return np.mean([np.mean((feat(x[ho],model)@fit(np.setdiff1d(ids,ho),model)-y[ho])**2) for ho in np.array_split(ids,4)])\\n    return min(models,key=score)\\nfor name in ('affine','nested rational contrast'):\\n    cells=[]; tracer=[]; enriched=0\\n    ids=np.arange(len(x))\\n    for ho in np.array_split(ids,5):\\n        tr=np.setdiff1d(ids,ho)\\n        model=models[0] if name=='affine' else select(tr)\\n        B=fit(tr,model); enriched += model[0] is not None\\n        cells.append(np.sqrt(np.mean((feat(x[ho],model)@B-y[ho])**2,axis=0)).max())\\n        # Score independent diagnostic tracer predictions in raw sensor units.\\n        e=(feat(X,model)@B-Y).reshape(len(item['campaign_diagnostics']),len(s['mu_shifts']),-1)\\n        tracer.append(np.sqrt(np.mean(e*e,axis=2)).max())\\n    print(name, 'non-affine folds',enriched,'worst sweep fold-channel RMS',max(cells),'worst tracer fold-pulse-shift RMS',max(tracer))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal Robin walls → H2 zero-flux walls; worst tracer pulse-by-shift RMS is 1.345e-6, and the remaining audit tests rational sensor response along pairwise rosette contrasts.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat certificate or bank-centering checks\",\n      \"rejected_reason\": \"Independent KKT and field checks already passed, and the tracer bank audit found only calibration-scale residuals.\"\n    }\n  ],\n  \"rationale\": \"The quadratic audit did not test rational saturation along channel contrasts. Select those terms inside calibration folds and check them on separate tracer measurements; only a repeatable improvement on both would justify changing the verified calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "72d8f6c8ced2a6128ad866de96f71e9cfda04fc24b3ca8fc29beccfba4fff19d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31362.51,
+      "usage_known": true,
+      "prompt_tokens": 25120,
+      "cached_tokens": 9344,
+      "completion_tokens": 1147
+    }
+  ]
+}

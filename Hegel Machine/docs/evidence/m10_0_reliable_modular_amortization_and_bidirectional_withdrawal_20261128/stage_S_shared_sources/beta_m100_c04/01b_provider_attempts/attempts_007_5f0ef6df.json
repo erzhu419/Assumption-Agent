@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f0ef6df34fd484bb953d30fc5e986a5",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__beta_m100_c04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:22.697551+00:00",
+  "ended_at_utc": "2026-11-28T03:28:49.058463+00:00",
+  "request_sha256": "93ca9caa5be1c7d7a057ef61a28d1d51bc46e861f681f7d232cce00ab3021686",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42583,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27139,
+    "cached_tokens": 10880,
+    "completion_tokens": 1022
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pathlib, pickle\\nimport numpy as np\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; x = c['ref_rosette']; y = c['raw_rosette']\\naff = np.c_[np.ones(len(x)), x]\\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\nmodels = {'affine': aff, 'quadratic interactions': np.c_[aff, x*x, *[x[:,i]*x[:,j] for i,j in pairs]], 'rational saturation': np.c_[aff, x/(1+x*x)]}\\n# Compare one extra differential-response term at a time; select it only on the training fold.\\ndiff = [np.c_[aff, q/(1+q*q)] for i,j in pairs for sign in (-1,1) for q in [x[:,i]+sign*x[:,j]]]\\n\\ndef score(D, tr):\\n    A = D[tr]; Y = y[tr]; pinv = np.linalg.pinv(A)\\n    resid = Y - A @ (pinv @ Y)\\n    leverage = np.einsum('ij,ji->i', A, pinv)\\n    return np.mean((resid / np.maximum(1-leverage[:,None],1e-12))**2)\\n\\nerrors = {k: [] for k in [*models, 'nested pairwise differential']}\\nfor t in range(len(x)):\\n    tr = np.arange(len(x)) != t\\n    chosen = min(diff, key=lambda D: score(D,tr))\\n    for name,D in [*models.items(), ('nested pairwise differential',chosen)]:\\n        errors[name].append(y[t] - D[t] @ np.linalg.lstsq(D[tr],y[tr],rcond=None)[0])\\nprint('calibration rows',len(x))\\nfor name, err in errors.items():\\n    err = np.asarray(err); print(name, 'channel RMSE', np.sqrt(np.mean(err**2,axis=0)), 'max abs', np.max(abs(err)))\\nz = s['Z_nuisance']; Z = z.T @ z; G = Z + s['nuisance_ridge'] * np.eye(Z.shape[0]); print('nuisance Gram eigenvalues',np.linalg.eigvalsh(Z),'ridge Gram condition',np.linalg.cond(G))\\np = pathlib.Path('/tmp/hegel_continual_archive')\\nfor name in ('pre_llm_gate_diagnostic.json','archive_manifest.json'):\\n    f = p/name\\n    if f.exists():\\n        obj = json.loads(f.read_text()); print(name, str(obj)[:1700])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette response and documented Robin walls → H2 nonlinear calibration only if independently supported; current worst held-out channel RMSE is 1.12e-5 and worst sensor-slice RMSE is 1.17e-2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or stochastic-drift tests\",\n      \"rejected_reason\": \"This task has continuous observations and a specified steady linear operator, with no batch labels, relay state, or stochastic evolution.\"\n    }\n  ],\n  \"rationale\": \"Test the applicable algebraic alternatives on real calibration sweeps, selecting differential terms inside each fold. A consistent improvement would justify testing a nonlinear inverse over the observed range; otherwise retain the verified affine model. Check whether the nuisance solve is ill-conditioned and whether compact archive metadata supplies an explicit boundary mapping.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cdcf0dc4fb119b8ce4c33a8e5a84784302070f8601439fb6add0d058fd095151",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28464.07,
+      "usage_known": true,
+      "prompt_tokens": 27139,
+      "cached_tokens": 10880,
+      "completion_tokens": 1022
+    }
+  ]
+}

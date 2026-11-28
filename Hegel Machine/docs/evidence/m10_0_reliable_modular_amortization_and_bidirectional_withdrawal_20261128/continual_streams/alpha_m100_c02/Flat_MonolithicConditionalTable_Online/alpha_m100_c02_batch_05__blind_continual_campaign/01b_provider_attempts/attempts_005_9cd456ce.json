@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9cd456ce95d647f69fac157108f0f7f8",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:11.455145+00:00",
+  "ended_at_utc": "2026-11-28T03:54:29.932908+00:00",
+  "request_sha256": "2255a5a64b489475a8d2006e13501d6e6f1bb9522b4cd7abaaa4e91760ca5eb4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38654,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24055,
+    "cached_tokens": 9344,
+    "completion_tokens": 669
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; sed -n '1,74p' alpha_m100_c02_batch_02_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel imputation robust regression' | cut -c1-175 | head -12; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np\\npath='alpha_m100_c02_batch_02_solver.py'; spec=importlib.util.spec_from_file_location('archived',path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw=c['bridge_raw']; loads=c['true_channel_loads']; ids=np.arange(len(raw));\\nfor n in (4,5,6):\\n errors=[]\\n for f in range(5):\\n  fit=ids%5!=f; val=~fit; a=m._bridge_basis(loads[fit])[...,:n]; co=np.zeros((4,6));\\n  for j in range(4): co[j,:n]=np.linalg.lstsq(a[:,j],raw[fit,j],rcond=None)[0]\\n  e=(m._invert_bridge(raw[val],co)-loads[val]).sum(axis=1); errors.append([np.median(abs(e)), np.sqrt(np.mean(e**2)),np.quantile(abs(e),.9)])\\n print('basis width',n,'median abs/RMSE/p90 per fold',np.round(errors,5))\\no=m.solve_batch(d); print('archived baseline taus',o['estimated_taus'],'theta',o['hereditary_weights']); print('ref rows',d['train']['ref_coupons'][:3].round(4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 recurring low-offset apparatus regime → H2 baseline chamber law with independently validated bridge calibration; deployment labels are absent.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse batch 04's reset law\",\"rejected_reason\":\"The current apparatus offsets match baseline campaigns 00 and 02, not the reset campaign.\"}],\"rationale\":\"Compare held-out total-load errors across nested bridge bases before reusing the archived material fit. This detects a calibration mismatch that would otherwise bias the relaxation estimates even if the chamber regime is chosen correctly.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "46813c74b3481c3188e44b5b36a6919eb43036cddd78313aff7ebe47d185745c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20557.9,
+      "usage_known": true,
+      "prompt_tokens": 24055,
+      "cached_tokens": 9344,
+      "completion_tokens": 669
+    }
+  ]
+}

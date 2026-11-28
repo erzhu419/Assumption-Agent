@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc9a75162c0343ea9b1b0960ad7e1748",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:06.730574+00:00",
+  "ended_at_utc": "2026-11-28T03:50:38.816185+00:00",
+  "request_sha256": "7a631df5ff4a69143b41a50524c4c524c3ef96e1ecab9018af99661321b48f58",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45674,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29080,
+    "cached_tokens": 9344,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/rosette_terms.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nfrom itertools import combinations\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; d=c['single_bank_sweeps']; z=d['ref_signal'].reshape(4,-1).T; w=d['raw_readout'].reshape(4,-1).T; qa=abs(w)<4; good=np.max(abs(y),axis=1)<4\\npairs=list(combinations(range(4),2)); folds=np.random.default_rng(20).permutation(len(x))%5\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('axis normalized (banks 1-3):', np.c_[z[:,1],(w[:,1:]-w[5,1:])/(w[11,1:]-w[5,1:])]);\\nfunc={'tanh':lambda h,k:np.tanh(k*h),'root':lambda h,k:h/np.sqrt(1+k*h*h),'exp':lambda h,k:h*np.exp(-k*h*h),'rat':lambda h,k:h/(1+k*h*h),'erf':lambda h,k:erf(k*h)}\\neven={'sq':lambda h:h*h,'ratsq':lambda h:h*h/(1+h*h),'expsq':lambda h:-np.expm1(-h*h),'zero':lambda h:np.zeros_like(h)}\\nfor kind,f in func.items():\\n for ek,e in even.items():\\n  def resid(p):\\n   h=f(z,p[0]); out=[]\\n   for j in range(4):\\n    q=qa[:,j]; a=np.column_stack([np.ones(len(z)),h[:,j],z[:,j],e(z[:,j])]); t=np.linalg.lstsq(a[q],w[q,j],rcond=None)[0]; out.extend((a@t-w[:,j])[q]);\\n   return np.array(out)\\n  p=least_squares(resid,[1.],bounds=(.05,8)).x; print('axis',kind,ek,round(p[0],5),round(np.sqrt(np.mean(resid(p)**2)),8))\\n\\ndef design(v,k,kind,ek,interaction):\\n h=func[kind](v,k); a=[np.ones(len(v)),v,h,even[ek](v)]\\n if interaction=='lin': a += [np.column_stack([v[:,i]*v[:,j] for i,j in pairs])]\\n if interaction=='sat': a += [np.column_stack([h[:,i]*h[:,j] for i,j in pairs])]\\n if interaction=='rational': a += [np.column_stack([v[:,i]*v[:,j]/(1+v[:,i]**2+v[:,j]**2) for i,j in pairs])]\\n return np.column_stack(a)\\ndef fit(q,kind,ek,interaction):\\n def f(k):\\n  a=design(x[q],k,kind,ek,interaction); return (a@np.linalg.lstsq(a,y[q],rcond=None)[0]-y[q]).ravel()\\n k=least_squares(f,[1.],bounds=(.05,8)).x; a=design(x[q],k,kind,ek,interaction); return k,np.linalg.lstsq(a,y[q],rcond=None)[0]\\nscores=[]\\nfor kind in func:\\n for ek in ['sq','ratsq','expsq']:\\n  for interaction in ['none','lin','sat','rational']:\\n   o=[]\\n   for j in range(5):\\n    q=good&(folds==j); k,b=fit(good&~q,kind,ek,interaction); r=np.linalg.norm(design(x[q],k,kind,ek,interaction)@b-y[q],axis=1); o.append((np.median(r),max(r)))\\n   scores.append((max(t[0] for t in o),max(t[1] for t in o),kind,ek,interaction))\\nfor row in sorted(scores)[:14]: print('cv',row)\\nfor _,_,kind,ek,interaction in sorted(scores)[:3]:\\n k,b=fit(good,kind,ek,interaction);print('coeff',kind,ek,interaction,k,b)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_terms.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable saturation plus quadratic terms → H2 shared saturation with a bounded even response or pairwise coupling; current worst-fold median/max forward errors are 0.03817/0.08821.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The nearly identical single-bank shape estimates support testing a shared saturation scale. Compare bounded even terms and pairwise products on held-out rosette rows; the residuals and coefficient patterns will determine which terms belong in the inverse map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d1212eaf230fcf7dbef098dc27f8098de367b2e65ba6dcbcacd167644c92c0a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34180.03,
+      "usage_known": true,
+      "prompt_tokens": 29080,
+      "cached_tokens": 9344,
+      "completion_tokens": 1296
+    }
+  ]
+}

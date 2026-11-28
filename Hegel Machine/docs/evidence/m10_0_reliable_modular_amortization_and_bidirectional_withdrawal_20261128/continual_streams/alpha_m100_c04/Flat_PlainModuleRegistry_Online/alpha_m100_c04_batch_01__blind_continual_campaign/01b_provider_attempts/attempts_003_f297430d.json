@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f297430de4934edda5f2a58bd8345604",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:49.752046+00:00",
+  "ended_at_utc": "2026-11-28T03:31:11.032725+00:00",
+  "request_sha256": "0c4a6fa01c315a7e62d9e19f9b9dbb8fd8711cefe13bd28cfb849404c6653d3e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23836,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18671,
+    "cached_tokens": 9344,
+    "completion_tokens": 808
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '49,200p' /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np,importlib.util\\nfrom pathlib import Path\\nf=next(Path('/tmp/hegel_continual_archive').glob('*solver.py')); s=importlib.util.spec_from_file_location('old',f); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=p['dataset'];v=p.get('campaign_diagnostics'); np.set_printoptions(precision=4,suppress=True)\\nfor k in ('train','test'):\\n a=d[k]['aux_chamber_telemetry'];print(k,'aux mean/std',a.mean(0),a.std(0),'sample',a[:5]);print('lab counts',np.unique(d[k]['lab_id'],return_counts=True))\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(r['facility_telemetry_trace']);print(r['completed_campaign_short_name'],a.mean(0),a.std(0))\\nc=d['calibration_load_cells'];a=c['bridge_raw'];y=c['true_channel_loads']; xx=np.c_[a,np.ones(len(a))];b=np.linalg.lstsq(xx,y,rcond=None)[0];e=xx@b-y;print('affine bridge errors RMSE',np.mean(e**2,0)**.5,'total',np.mean(e.sum(1)**2)**.5,'max',abs(e.sum(1)).max(),'load scale',y.std(0))\\no=m.solve_batch(d);print('archived intrinsic fit',o['estimated_taus'],o['hereditary_weights']);\\nif v:\\n for i,part in enumerate((d['train'],v)):\\n  x=m._features(d['train'],d['test'])[:len(part['lab_id'])] if i==0 else m._features(v,d['test'])[:len(v['lab_id'])]\\n  inp=m._inputs(part,x,m._calibration(c));D,R=m._design(o['estimated_taus'],inp,d['past_dt'],d['eval_times']);w=o['hereditary_weights'];es=part['strain_curves_obs']-part['strain_0'][:,None]-D@w;er=part['instant_rate_obs']-R@w;print(('train','chamber')[i],'curve abs quantiles',np.quantile(abs(es),[.5,.9,.99,1]),'rate abs quantiles',np.quantile(abs(er),[.5,.9,.99,1]));print('curve residual mean over coupons',es.mean(0));print('lab counts',np.unique(part['lab_id'],return_counts=True))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Measure the archived affine bridge and benchtop model errors separately before identifying a chamber correction; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Large bridge residuals would require correcting the stress reconstruction before fitting chamber mechanics; small bridge residuals with a chamber-only strain error would instead localize the failure to deployment.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2e9d332ab98b5f7b4a2e69ac52393e98a4666b57ea2e5969e71c178747fea388",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23386.66,
+      "usage_known": true,
+      "prompt_tokens": 18671,
+      "cached_tokens": 9344,
+      "completion_tokens": 808
+    }
+  ]
+}

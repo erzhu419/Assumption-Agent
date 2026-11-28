@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cade0ff696e5462a8c44799c1246bcaa",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:25:41.490309+00:00",
+  "ended_at_utc": "2026-11-28T03:26:09.356043+00:00",
+  "request_sha256": "0e5651ab7c3fd57e57e7c993745ce2777e9636aa86c394c92e9cf1a319ce1573",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21780,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19820,
+    "cached_tokens": 5504,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle, json, numpy as np\\nfrom pathlib import Path\\nnp.set_printoptions(precision=5,suppress=True)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; y=c['bridge_raw']; x=c['true_channel_loads']; print('durations',d['past_dt'],'times',d['eval_times']); print('load designs',np.unique((x!=0).sum(1),return_counts=True)); print('load span',x.min(0),x.max(0)); print('max raw load departure',np.max(abs(y-x),0)); print('test raw span',np.vstack([d['test']['past_channel_raw'].reshape(-1,4),d['test']['hold_channel_raw']]).min(0),np.vstack([d['test']['past_channel_raw'].reshape(-1,4),d['test']['hold_channel_raw']]).max(0));\\nfor name,z in [('affine',np.c_[np.ones(len(x)),x]),('diag-poly',np.c_[np.ones(len(x)),x,x**2,x**3]),('full-quadratic',np.c_[np.ones(len(x)),x,*[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]])]:\\n b=np.linalg.lstsq(z,y,rcond=None)[0]; r=y-z@b; e=[]\\n for j in range(len(x)):\\n  mask=np.arange(len(x))!=j; e.append(y[j]-z[j]@np.linalg.lstsq(z[mask],y[mask],rcond=None)[0]);\\n e=np.array(e); print(name,'rank',np.linalg.matrix_rank(z),'rms',np.sqrt(np.mean(r*r)),'loo rms',np.sqrt(np.mean(e*e)),'loo total max',np.max(abs(e.sum(1)))); print('linear terms',b[:5]);\\ntr,te=d['train'],d['test']; lab=np.r_[tr['lab_id'],te['lab_id']]; st=np.r_[tr['stratum'],te['stratum']]; ref=np.vstack([tr['ref_coupons'],te['ref_coupons']]); raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); print('cells',np.unique(np.c_[lab,st],axis=0,return_counts=True)); print('missing counts',np.isnan(raw).sum(0));\\nfor g in np.unique(lab):\\n rr=ref[lab==g]; print('lab',g,'ref median center and scale',np.median(rr.mean(0)),np.median(rr.std(0)),'raw means',np.nanmean(raw[lab==g],0));\\na=np.array(json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text())[0]['facility_telemetry_trace']); print('facility mean, std',a.mean(0),a.std(0)); print('batch telemetry mean, std',[(s['aux_chamber_telemetry'].mean(0),s['aux_chamber_telemetry'].std(0)) for s in (tr,te)]);\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' 2>&1 || true\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated benchtop hereditary law -> H2: reuse it for blind deployment unless the facility log supplies an identifiable correction; no validation metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a chamber correction from the facility trace alone\",\n      \"rejected_reason\": \"The archive contains only an initialization trace, with no prior verified solver or chamber response to identify the correction.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out bridge residuals and calibration coverage before choosing an inverse model: if nonlinear terms improve prediction and are supported by mixed-load sweeps, retain them; otherwise use the simpler fit. Inspect pooled lab scales and missingness to implement the specified feature normalization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "314b2acbe6b14e7cd7ca85d9bf836be233a0e3284f815aa3b563b0496bb92267",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29984.18,
+      "usage_known": true,
+      "prompt_tokens": 19820,
+      "cached_tokens": 5504,
+      "completion_tokens": 1074
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c962dde63e64830a2d3dde9183c5aa5",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:47.778725+00:00",
+  "ended_at_utc": "2026-11-28T03:59:18.397847+00:00",
+  "request_sha256": "6919c62bcbce67c45d9888f9069e7fdbdf3c97b050c72bd4ad26874a19c74673",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77168,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39514,
+    "cached_tokens": 9344,
+    "completion_tokens": 1157
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy nonlinear regression calibration' | head -12\\ncat > /tmp/cal_challenge05.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; clean=(abs(y)<8).all(1); b=c['single_bank_sweeps']; ids,t,z=(b[k] for k in ('bank_id','ref_signal','raw_readout')); bank=abs(z)<8; ids,t,z=ids[bank],t[bank],z[bank]; opp=np.roll(np.arange(4),2)\\ndef fit(keep,dp,dc,robust):\\n X,Y=x[keep],y[keep]; V=X[:,opp]; p0=np.r_[np.zeros(4),np.ones(4),np.zeros(dp-1),np.zeros(dc)];\\n def predict(p,Q):\\n  own=np.polynomial.polynomial.polyval(Q**2,np.r_[1,p[8:7+dp]])*Q\\n  cross=np.polynomial.polynomial.polyval(Q[:,opp],np.r_[0,p[7+dp:]])\\n  return p[:4]+p[4:8]*(own+cross)\\n def residual(p):\\n  selfpred=p[:4][ids]+p[4:8][ids]*t*np.polynomial.polynomial.polyval(t*t,np.r_[1,p[8:7+dp]])\\n  return np.r_[(predict(p,X)-Y).ravel(),selfpred-z]\\n p=least_squares(residual,p0,loss='soft_l1' if robust else 'linear',f_scale=4e-5,gtol=1e-12,max_nfev=250).x\\n return lambda v:predict(p,np.atleast_2d(v)),p\\nbase=m._calibrate(s)\\nfor dp,dc,rob in [(5,8,False),(5,8,True),(6,8,True),(7,8,True),(6,10,True)]:\\n pred,p=fit(clean,dp,dc,rob); fiterr=pred(x)-y; e=[]; small=[]\\n for j in np.flatnonzero(clean):\\n  keep=clean.copy(); keep[j]=False; f,_=fit(keep,dp,dc,rob); r=f(x[j])[0]-y[j]; e.extend(r); small.extend(r[np.abs(x[j])<.65])\\n obs=m._invert(pred,s['y_obs_raw']); print(dp,dc,rob,'rms/max',np.sqrt(np.mean(np.square(e))),max(abs(np.array(e))),'operating rms/max',np.sqrt(np.mean(np.square(small))),max(abs(np.array(small))),'cal change',max(abs(obs-base)),'coef',p.round(7));\\n if dp==6 and dc==8: print('residual extremes',[(int(j),x[j].round(3).tolist(),fiterr[j].round(6).tolist()) for j in np.flatnonzero(clean)[np.argsort(np.max(abs(fiterr[clean]),axis=1))[-8:]]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_challenge05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 prior periodic-x/closed-y chamber → H2 open Robin on both axes; the open chamber's worst held-out rosette RMSE is 0.011722 versus 0.113360 for periodic-x/closed-y.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Carry forward the previous wall stencil\",\"rejected_reason\":\"Open Robin walls predict every held-out shift better and agree with the preceding telemetry.\"}],\"rationale\":\"Cross-bank coefficients appear proportional to the self gains. Test a shared cross response and a robust loss against held-out sweeps, including readouts in the operating range. Adopt the challenger only if that slice improves without worsening calibration elsewhere.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d9862cf21500f53fe914227af86ed6a4e081a1bd484470a11b858e72ba81fd3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32737.26,
+      "usage_known": true,
+      "prompt_tokens": 39514,
+      "cached_tokens": 9344,
+      "completion_tokens": 1157
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9d5150411f4a496090fc173d05d33113",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:08.932609+00:00",
+  "ended_at_utc": "2026-11-28T03:50:39.401116+00:00",
+  "request_sha256": "3b5c3360faf495d13a0d70f46e8c8b017fd696d6939b33fbd991fdb6c61a740a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 32041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23075,
+    "cached_tokens": 9344,
+    "completion_tokens": 1209
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat > /tmp/bridge_mixed.py <<'PY'\\nimport pickle,numpy as np,itertools\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; g=np.max(abs(y),axis=1)<5; x,y=x[g],y[g]; axis=(x!=0).sum(1)==1; pairs=list(itertools.combinations(range(4),2)); n=len(x)\\nfor j in range(4):\\n print('\\\\nchannel',j)\\n for name, fs in [('linear',[]),('quadratic',[x*x]),('sin_cos',[np.sin(2.5*x),1-np.cos(2.5*x)]),('pair_quadratic',[x*x,np.array([x[:,a]*x[:,b] for a,b in pairs]).T]),('cubic',[x*x,np.array([np.prod(x[:,p],axis=1) for p in itertools.combinations_with_replacement(range(4),3)]).T,np.array([x[:,a]*x[:,b] for a,b in pairs]).T]),('pair_sines',[np.sin(2.5*x),1-np.cos(2.5*x),*[np.array([f(2.5*(x[:,a]+sg*x[:,b])) for a,b in pairs]).T for f in [np.sin,lambda t:1-np.cos(t)] for sg in [1,-1]]])]:\\n  a=np.column_stack([np.ones(n),x,np.sin(2.5*x[:,j]),*fs]); b=np.linalg.lstsq(a,y[:,j],rcond=None)[0]; e=y[:,j]-a@b; loo=np.array([y[k,j]-a[k]@np.linalg.lstsq(np.delete(a,k,0),np.delete(y[:,j],k),rcond=None)[0] for k in range(n)]); print(name,'fit/LOO RMSE',np.round([np.mean(e**2)**.5,np.mean(loo**2)**.5],7),'LOO axis/mixed max',np.round([max(abs(loo[axis])),max(abs(loo[~axis]))],7));\\n  if name in ('linear','pair_quadratic','pair_sines'): print('coef',np.round(b,4));\\n print('ridge profile: compare simple pair sums and differences across the entire mixed design')\\n for k in range(4):\\n  if k==j: continue\\n  m=axis&(x[:,k]!=0); print(k,'axis differential',np.round(np.c_[x[m,k],y[m,j]],6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_mixed.py; python3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nr=p[-1]; t=r['facility_telemetry_trace']; print(r['completed_campaign_short_name'],str(t)[:2200])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Generic saturation → shared linear-plus-sine axis response with structured cross-coupling; worst clean sweep leave-one-stress-out error is 2.18e-4 bridge units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or simple tanh-plus-linear self-response is sufficient.\",\"empirical_witness\":\"The worst clean sweep leave-one-stress-out error is 0.0294 for tanh-plus-linear versus 0.000218 for sine-plus-linear, with fitted frequencies near 2.5 for all four channels.\",\"causal_blanket_diagnosis\":\"The axis sweeps isolate the bridge's odd nonlinear self-response from simultaneous channel loading.\",\"sublated_pivot\":\"Preserve the affine terms, add a shared sinusoidal basis, and test structured coupling on held-out mixed loads.\",\"risk_kind\":\"calibration_model_bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an odd polynomial for the diagonal response\",\"rejected_reason\":\"It loses in held-out sweep accuracy and lacks the controlled extrapolation of the identified sine term.\"}],\"rationale\":\"Mixed-load residuals and leave-one-load-out errors will distinguish additive channel terms from true joint-load coupling; this determines the forward model to invert.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ec98d57d4ba37fc25876f311a3c828db8d7289f324b77130ea7a8090ce23d3f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32555.61,
+      "usage_known": true,
+      "prompt_tokens": 23075,
+      "cached_tokens": 9344,
+      "completion_tokens": 1209
+    }
+  ]
+}

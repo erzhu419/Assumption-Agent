@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "547c93a5f5454b878f0cc0d2cdef056a",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:15.842817+00:00",
+  "ended_at_utc": "2026-11-28T03:56:49.900030+00:00",
+  "request_sha256": "23d5e5740e1f4a4ab22310bf673329a37b22f9e9ff13f6617b167b2d6ff725c0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 68095,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34452,
+    "cached_tokens": 9344,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/quintic_trial/upstream_transducer.py /holdout_task/upstream_transducer.py\\nsed -i 's/The bounded loss reduces the influence of smaller EMI./The soft-L1 objective limits the influence of residual spikes on the shape fit./' /holdout_task/upstream_transducer.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nimport batch_solver\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; c = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']; j, u, v = (b[k] for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    good = m._clean(y); bg = np.zeros(len(v), bool)\\n    for h in range(4): bg[j == h] = m._clean(v[j == h, None])\\n    err = np.zeros(len(x)); bank_err = np.zeros(len(v)); closure = 0.\\n    for fold in range(6):\\n        tr = np.arange(len(x)) % 6 != fold; bt = np.arange(len(v)) % 6 != fold\\n        sh, cf = m._fit(dict(ref_rosette=x[tr], raw_rosette=y[tr], single_bank_sweeps={k: arr[bt] for k, arr in b.items()}))\\n        te = ~tr & good; be = ~bt & bg\\n        rec = m._inverse(y[te], sh, cf)\\n        err[te] = np.max(abs(rec-x[te]), axis=1)\\n        closure = max(closure, float(np.max(abs(m._forward(rec, sh, cf)-y[te]))))\\n        bx = np.zeros((be.sum(), 4)); idx = np.arange(len(bx)); bx[idx, j[be]] = u[be]\\n        bank_err[be] = abs(m._forward(bx, sh, cf)[idx, j[be]]-v[be])\\n    amp = np.max(abs(x), axis=1)\\n    central, mid, edge = [float(err[sl & good].max()) for sl in (amp <= .75, (amp > .75) & (amp <= 1.4), amp > 1.4)]\\n    print('Held-out inverse maxima central/mid/edge:', central, mid, edge, 'bank maximum:', bank_err.max(), 'raw closure:', closure)\\n    assert central < .0011 and mid < .008 and edge < .021 and bank_err.max() < .0013 and closure < 1e-8\\n    sh, cf = m._fit(c)\\n    z = x[good][np.argsort(amp[good])[-8:]].reshape(2, 4, 4)\\n    raw = m._forward(z.reshape(-1, 4), sh, cf).reshape(z.shape)\\n    raw_before = raw.copy(); obs_before = s['y_obs_raw'].copy(); sweeps_before = y.copy(); bank_before = v.copy()\\n    trial = dict(s, reference_tracer_pulses=[{'y_pulse_raw': raw}, {'y_pulse_raw': raw.ravel()}, {'y_pulse_raw': None}])\\n    out = m.calibrate_upstream(trial)\\n    pulses = out['reference_tracer_pulses']\\n    np.testing.assert_allclose(pulses[0]['y_pulse_raw'], z, atol=1e-8, rtol=0)\\n    np.testing.assert_allclose(pulses[1]['y_pulse_raw'], z.ravel(), atol=1e-8, rtol=0)\\n    assert pulses[2]['y_pulse_raw'] is None\\n    norm = out['sensor_calibration_sweeps']\\n    np.testing.assert_array_equal(norm['raw_rosette'], x)\\n    np.testing.assert_array_equal(norm['single_bank_sweeps']['raw_readout'], u)\\n    assert not np.shares_memory(norm['raw_rosette'], x)\\n    assert not np.shares_memory(norm['single_bank_sweeps']['raw_readout'], u)\\n    np.testing.assert_allclose(m._forward(out['y_obs_raw'].reshape(-1,4), sh, cf), obs_before.reshape(-1,4), atol=1e-8, rtol=0)\\n    for actual, before in ((raw, raw_before), (s['y_obs_raw'], obs_before), (y, sweeps_before), (v, bank_before)):\\n        np.testing.assert_array_equal(actual, before)\\n    batch_solver.solve_batch(s)\\nprint('Isolated checks passed on the installed bundle.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic correction → H2 quintic correction; with production initialization, worst held-out inverse error fell from 0.02346 to 0.02024 at the edge, while the mid-range maximum rose from 0.00585 to 0.00695.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the cubic baseline\",\n      \"rejected_reason\": \"The quintic fit reduces the worst edge error and nearly halves the maximum bank error, with a smaller increase in mid-range error and no observed inverse convergence failures.\"\n    }\n  ],\n  \"rationale\": \"Install the challenger and verify the exact delivered files. A failure in held-out calibration, pulse layout, identity normalization, or downstream integration would block promotion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8327c44a53f1036953da906450df628877911d16e1b24cbd7c3c9d8e9ea15ace",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38260.48,
+      "usage_known": true,
+      "prompt_tokens": 34452,
+      "cached_tokens": 9344,
+      "completion_tokens": 1462
+    }
+  ]
+}

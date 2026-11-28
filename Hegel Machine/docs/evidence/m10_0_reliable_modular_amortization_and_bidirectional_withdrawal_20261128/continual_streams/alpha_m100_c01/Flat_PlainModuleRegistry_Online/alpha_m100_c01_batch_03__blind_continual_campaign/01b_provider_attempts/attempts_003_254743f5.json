@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "254743f584dc41209554ef07bc8cafe0",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:59.687346+00:00",
+  "ended_at_utc": "2026-11-28T03:48:19.532565+00:00",
+  "request_sha256": "1c741974b3fa12ee4f293db70f1deae95303045de515b5bb851df2e4e5a78750",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 20781,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17976,
+    "cached_tokens": 9344,
+    "completion_tokens": 704
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle, numpy as np, json\\nitems=pickle.load(open('public_batch.pkl','rb'))\\nprint('public cases:',len(items))\\nfor item in items:\\n D=item['dataset']; print('item fields:',list(item),'dataset fields:',list(D))\\n c=D['calibration_load_cells']; print('calibration fields:',[(k,list(v) if isinstance(v,dict) else np.shape(v)) for k,v in c.items()]); x=np.asarray(c['true_channel_loads']); y=np.asarray(c['bridge_raw']); z=np.c_[np.ones(len(x)),x]\\n coef=np.linalg.lstsq(z,y,rcond=None)[0]; r=y-z@coef\\n for name,a in [('true',x),('raw',y),('affine residual',r)]:\\n  print(name,np.quantile(a,[0,.01,.1,.5,.9,.99,1],axis=0).round(6))\\n print('affine coefficients',coef.round(6)); print('first calibration rows',np.c_[x,y][:6].round(6)); print('summed true loads',np.quantile(x.sum(axis=1),[0,.05,.5,.95,1]).round(5))\\n for k in ('train','test','chamber_verification_trials'):\\n  s=D.get(k); print(k,type(s).__name__,[(f,np.shape(v)) for f,v in s.items()] if isinstance(s,dict) else '')\\n  if isinstance(s,dict):\\n   for f in ('past_channel_raw','hold_channel_raw'):\\n    a=np.asarray(s[f]).reshape(-1,4); print(f,np.quantile(a,[0,.01,.5,.99,1],axis=0).round(5))\\n print('sweeps',[(k,np.shape(v)) for k,v in c.get('single_channel_sweeps',{}).items()])\\na=json.load(open('/tmp/hegel_continual_archive/archive_manifest.json')); print('prior manifest summary:',str(a)[:1400]); a=json.load(open('public_asset_index.json')); print('public asset index:',str(a)[:3200])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge mixing -> H2 robust nonlinear calibration; no held-out metric yet because the first probe did not unwrap the public case list.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Use the validator's case-list layout to inspect calibration coverage, affine residuals, and every trial input. If trial loads extend beyond calibration support, prioritize a structured forward model and validate on withheld calibration extremes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "0683d623b9a2a5ca5a9379ab1ad8b6fb829d4a55d26c2aa470131d2e5bf5ac7c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21929.44,
+      "usage_known": true,
+      "prompt_tokens": 17976,
+      "cached_tokens": 9344,
+      "completion_tokens": 704
+    }
+  ]
+}

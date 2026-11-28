@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "134a4bc8e6b94b77979839c90e2466c7",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:01.064717+00:00",
+  "ended_at_utc": "2026-11-28T03:42:20.174890+00:00",
+  "request_sha256": "776ed3ff4c69db756de5567e6838e4d1888eac9aa0c4b903059d99354a09909f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22141,
+    "cached_tokens": 9344,
+    "completion_tokens": 682
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,93p' /tmp/hegel_continual_archive/beta_m100_c04_batch_02_solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; print('ranges ref/raw', x.min(0),x.max(0),y.min(0),y.max(0)); print('bank',[(k,v.shape,v.min(),v.max()) for k,v in b.items()]); print('obs ranges',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0)); print('aux mean/std',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0)); print('aux singular values',np.linalg.svd(s['aux_manifold_telemetry'],compute_uv=False)); print('aux first/last',s['aux_manifold_telemetry'][[0,1,2,-1]]); print('calibration held-out errors excluding evident saturation spikes:')\\ngood=np.max(np.abs(y),axis=1)<8\\nfor k in range(4):\\n v=x[:,k]; p=x[:,(k-1)%4]; q=x[:,(k+1)%4]; models=[np.c_[np.ones(len(x)),x], np.c_[np.ones(len(x)),v,p,q,v*q,v**3]]\\n for name,A in zip(['affine','archived'],models):\\n  train=good&(np.arange(len(x))%4!=0); test=good&~train; beta=np.linalg.lstsq(A[train],y[train,k],rcond=None)[0]; e=y[test,k]-A[test]@beta; print(k,name,'rms/max',np.sqrt(np.mean(e**2)),max(abs(e)), 'coeff',beta.round(5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged archived solver -> H2 independently select the sensor and wall models; current-campaign prediction errors are not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the last logged wall state as the current state\",\"rejected_reason\":\"The log ends with the previous campaign, and a wall change has already occurred between verified campaigns.\"}],\"rationale\":\"Held-out sweep errors will show whether the archived sensor features still apply; reading the archived axis implementation gives concrete wall candidates to compare on the current observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "219a93f3bf05e82149e7195cd039a0627b517315f8b72b964b611bc22b87ea86",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21195.81,
+      "usage_known": true,
+      "prompt_tokens": 22141,
+      "cached_tokens": 9344,
+      "completion_tokens": 682
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "475c58e277ac44c0b78a0f26f8a86c43",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:48.563678+00:00",
+  "ended_at_utc": "2026-11-28T03:56:29.816566+00:00",
+  "request_sha256": "a4c37746019098d84f2d716671a07ca5752fbedf52a18c178760197fcbff9222",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55788,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30833,
+    "cached_tokens": 9344,
+    "completion_tokens": 1813
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_structure.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']\\nX,Y=D['true_channel_loads'],D['bridge_raw']; keep=np.max(np.abs(Y),axis=1)<5; ids=np.flatnonzero(keep); X,Y=X[keep],Y[keep]; Z=np.roll(X,2,axis=1)\\nfit=(ids<16)|(ids%4!=0)\\nF={'tanh':np.tanh,'rat':lambda t:t/(1+t*t),'atan':np.arctan,'sqrt':lambda t:t/np.sqrt(1+t*t),'clip':lambda t:np.clip(t,-1,1),'sinh':lambda t:t/np.cosh(t),'poly':lambda t:t**3,'erf':None}\\nfrom scipy.special import erf\\nF['erf']=erf\\n# Common response shape with per-channel gain and offset; independent opposite-channel coefficients.\\nfor name,f in F.items():\\n for form in ('sep','sep3','sep5','shift','mix','split','clip2','quot'):\\n  if form=='clip2' and name!='clip': continue\\n  if form=='quot' and name!='rat': continue\\n  def pred(p):\\n   k,b,c,m,a,e,h,j,v=p[:9]; offsets=p[9:13]; gains=np.r_[1,np.exp(p[13:16])]; z=Z\\n   cross=c*z+m*np.abs(z)+a*z**3\\n   if form=='sep': cross=c*z+m*np.abs(z)\\n   if form=='sep5': cross=c*z+m*np.abs(z)+a*z**3+e*z*np.abs(z)+h*np.abs(z)**3\\n   if form=='split': cross=c*z+m*np.abs(z)+a*z**3+e*z*np.abs(z)+h*np.abs(z)**3+j*X**5+v*X**3\\n   if form=='shift': t=(X+h*z)*np.exp(k)\\n   elif form=='mix': t=X*np.exp(k)*(1+h*z+v*z*z)\\n   elif form=='split': t=X*np.exp(k+j*np.sign(X))\\n   else: t=X*np.exp(k)\\n   if form=='clip2': cross+=h*np.clip(X*np.exp(v),-1,1)\\n   if form=='quot': cross+=h*X*(X*X)/(1+np.exp(v)*X*X)\\n   return offsets+gains*(f(t)*b+X*e+cross) if form not in ('sep5','split') else offsets+gains*(f(t)*b+X*0.3+cross)\\n  sols=[]\\n  for k in (-.6,.35,.9):\\n   p=np.r_[k,1,.27,-.09,.005,.3,.0,0.,0.,.14,-.11,.13,-.11,-.47,.02,-.46]\\n   res=least_squares(lambda p:(pred(p)-Y)[fit].ravel(),p,loss='soft_l1',f_scale=.003,max_nfev=240,bounds=(np.r_[[-2],np.full(7,-np.inf),[-4],np.full(4,-np.inf),np.full(3,-2)],np.r_[[2],np.full(7,np.inf),[4],np.full(4,np.inf),np.full(3,2)])); sols.append(res)\\n  r=min(sols,key=lambda r:r.cost); err=pred(r.x)-Y\\n  print(name,form,'fit/hold/max',np.round([np.sqrt(np.mean(err[fit]**2)),np.sqrt(np.mean(err[~fit]**2)),np.max(abs(err[~fit]))],6), 'pars',np.round(r.x,5) if np.sqrt(np.mean(err[~fit]**2))<.009 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent saturation fits → H2 shared response shape with opposite-channel coupling; the best sparse first-pass fits still miss some held-out readings by about 0.02 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the first-pass tanh fit directly\",\"rejected_reason\":\"Its held-out errors are far above the roughly 0.0001 scatter visible on isolated sweeps; those errors could bias recovered stresses near saturation.\"}],\"rationale\":\"Isolated sweeps on channels 0 and 2 have nearly proportional centered responses. Test whether a shared response shape and a sparse opposite-channel term reduce held-out error before fitting the material.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "cf0d4290c0c3f845043ac855cf161b953069b8e7292b7f638203920326bd98bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45539.15,
+      "usage_known": true,
+      "prompt_tokens": 30833,
+      "cached_tokens": 9344,
+      "completion_tokens": 1813
+    }
+  ]
+}

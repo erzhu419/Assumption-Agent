@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a4b37612f10c4f7591de181a7ce46b62",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:01.177338+00:00",
+  "ended_at_utc": "2026-11-28T03:34:32.162749+00:00",
+  "request_sha256": "aa1b76436387ece95abcba418625d2746fb8bba45f49ad35d4d81930b1105dd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62052,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33716,
+    "cached_tokens": 9344,
+    "completion_tokens": 1253
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/base.py /holdout_task/batch_solver.py; python3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('\\\"\\\"\\\"Calibrate the load bridge and fit the two-branch hereditary response.\\\"\\\"\\\"','\\\"\\\"\\\"Fit the benchtop material and predict the reset-memory chamber response.\\\"\\\"\\\"')\\nstart=s.index('    curve, rate = _design(taus, *_inputs(test, xte, bridge), dt, times)')\\ns=s[:start]+'''    _, hold, features = _inputs(test, xte, bridge)\\n    curve, rate = _chamber(taus, theta, hold, features, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n\\n\\ndef _chamber(taus, theta, hold, features, times):\\n    # Chamber verification coupons support reset branch states and a\\n    # correction proportional to the intrinsic drift in both branches.\\n    drift = features @ theta[2:]\\n    amplitudes = hold[:, None] * theta[:2] + drift[:, None] * np.array([.19552, 1.90306])\\n    linear_drift = .01715 * drift\\n    curve = amplitudes @ (-np.expm1(-times[:, None] / taus)).T\\n    return curve + linear_drift[:, None] * times, amplitudes @ (1 / taus) + linear_drift\\n'''\\nopen(p,'w').write(s)\\nPY\\ncat > /tmp/check_chamber.py <<'PY'\\nfrom chamber import *\\nfrom itertools import product\\nraw=q['coupon_features_raw']; labs=q['lab_id']; strata=q['stratum']; xx=raw.copy(); clean=np.isfinite(xx).all(1)\\nfor l in np.unique(labs):\\n m=labs==l; ref=q['ref_coupons'][m]; xx[m]=(xx[m]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n_, cell, n=np.unique(np.c_[labs,strata],axis=0,return_inverse=True,return_counts=True)\\nw=1/n[cell,None]; valid=np.isfinite(xx)\\nmu=np.nansum(w*xx,0)/np.sum(w*valid,0)\\nz=np.c_[np.ones(len(xx)),np.where(valid,xx,mu)]@W[2:]\\nbase=(h[:,None]*W[:2])@A[:,:2].T\\nD=z[:,None,None]*A[None,:,:]\\ndef stats(E):\\n return np.round([np.mean(E[:,:-1]**2)**.5,np.mean(E[:,-1]**2)**.5,np.max(np.mean(E[:,:-1]**2,axis=1)**.5),np.max(np.abs(E[:,-1]))],5)\\nfor g in [np.arange(len(labs)),labs,strata]:\\n E=np.empty_like(y)\\n for val in np.unique(g):\\n  m=g!=val; k=m&clean\\n  beta=np.linalg.lstsq(D[k].reshape(-1,3),(y-base)[k].ravel(),rcond=None)[0]; E[~m]=(y-base)[~m]-D[~m]@beta\\n print('group count',len(np.unique(g)),'complete',stats(E[clean]),'missing',stats(E[~clean]))\\nfor beta in ([.19552,1.90306,.01715],[.2,1.9,.02]):\\n E=y-base-D@beta; print('fixed',beta,'complete',stats(E[clean]),'missing',stats(E[~clean]))\\nprint('diagnostic imputation values',mu,'pooled train/test sample mean',np.vstack(_features(tr,te)).mean(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check_chamber.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (retained chamber memory) → H2 (reset branch states with drift coupling); complete-coupon leave-one-out worst strain RMSE is 0.00468 and worst absolute initial-rate error is 0.00448.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Retain a fitted fraction of benchtop memory\",\"rejected_reason\":\"It does not meaningfully improve held-out strain and slightly worsens pooled held-out initial-rate error.\"}],\"rationale\":\"Implement the reset law with coefficients inferred from diagnostics and keep material fitting and deployment normalization on train/test as specified. Validate the independent strain and rate outputs, including omitted labs, omitted strata, and coupons requiring imputation; a failure isolated to the missing-feature slice would point to diagnostic imputation rather than retained memory.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "26fb08c418ef29ae75255b9ac5b5de7218908ed015f733ca24e804c3a1b724ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33074.06,
+      "usage_known": true,
+      "prompt_tokens": 33716,
+      "cached_tokens": 9344,
+      "completion_tokens": 1253
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4cefa357f3d64e6fbca750ceae24006d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:06:59.757356+00:00",
+  "ended_at_utc": "2026-11-28T04:07:30.522028+00:00",
+  "request_sha256": "a2a61caf3ed5443c7673e7613577b45edad9810900322b9e5f0488a52e2da44d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26049,
+    "cached_tokens": 9344,
+    "completion_tokens": 1216
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,/^_CHAMBER_PROJECTION/{ /^_CHAMBER_PROJECTION/d; p; }' /tmp/hegel_continual_archive/alpha_m100_c01_batch_06_solver.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\n# Lagged facility channel 7 identifies the saturation regime; its time\\n# constant was measured on the earlier chamber verification coupons.\\n_CHAMBER_DRIFT_TIME = 1.0116511228821314\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge, _ = _fit_bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_calibrated_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    past, hold, features = _calibrated_inputs(test, xte, bridge)\\n    curve, rate = _design(taus, past, hold, features, dt, times)\\n    tau = _CHAMBER_DRIFT_TIME\\n    ramp = -tau * np.expm1(-times / tau)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': (test['strain_0'][:, None] + curve[:, :, :2] @ theta[:2]\\n                                 + (features @ theta[2:])[:, None] * ramp),\\n            'initial_rate_pred': rate @ theta}\\nPY\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nsed -n '45,92p' batch_solver.py\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/check_batch07.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=D['train'],D['test']; c=D['calibration_load_cells']; y,x=c['bridge_raw'],c['true_channel_loads']; dt,t=D['past_dt'],D['eval_times']\\np,good=m._fit_bridge(y,x)\\nscore=np.linalg.norm(x,axis=1); order=np.argsort(score); groups=np.array_split(order,5)\\nfor i,g in enumerate(groups):\\n    learn=np.ones(len(x),bool); learn[g]=False; p0,_=m._fit_bridge(y[learn],x[learn]); g=g[good[g]]\\n    e=m._load_from_raw(y[g],p0).sum(axis=1)-x[g].sum(axis=1)\\n    print('cal norm slice',i,len(g),'stress RMSE/max',np.sqrt(np.mean(e**2)),max(abs(e)))\\na,b=m._features(tr,te); P,H,F=m._calibrated_inputs(tr,a,p); C=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']\\nq,w=m._fit(P,H,F,dt,t,C,R); print('full fit',q,w)\\nfor l in np.unique(tr['lab_id']):\\n    valid=tr['lab_id']==l; z=~valid\\n    Q,W=m._fit(P[z],H[z],F[z],dt,t,C[z],R[z]); A,B=m._design(Q,P[valid],H[valid],F[valid],dt,t); ec=abs(A@W-C[valid]);er=abs(B@W-R[valid]); print('held-out lab',l,'tau',Q,'curve med/90/max horizon median',np.median(ec),np.percentile(ec,90),max(np.median(ec,axis=0)),'rate med/90',np.median(er),np.percentile(er,90))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge and unchanged drift -> nonlinear bridge and lagged-telemetry saturation; nonlinear worst-channel inlier RMS is 1.13e-4 raw units, with out-of-fold checks pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Carry forward the prior campaign’s projection law\",\"rejected_reason\":\"The lagged trace matches the earlier saturation regime on facility channel 7, not the projection regime on channel 2.\"}],\"rationale\":\"Implement the supported chamber transfer and check the gate evidence, schema, withheld calibration load ranges, and held-out laboratory predictions. These checks can distinguish a wrong chamber assignment, calibration extrapolation, and unstable material fitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "01ccb4be1d73cf9a2ef7e3ef0ccaaa55fb980daa7dbe2566c5033d7ccff0e9a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32847.49,
+      "usage_known": true,
+      "prompt_tokens": 26049,
+      "cached_tokens": 9344,
+      "completion_tokens": 1216
+    }
+  ]
+}

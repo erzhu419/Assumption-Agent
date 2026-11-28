@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "242d2c0d1f8448b499996ce3b0234353",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:31.447712+00:00",
+  "ended_at_utc": "2026-11-28T03:33:57.603933+00:00",
+  "request_sha256": "7ef34c7e37a75bfa3855427748776f87482f1a304f0f008252415e4784f5be6c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47375,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26760,
+    "cached_tokens": 9344,
+    "completion_tokens": 924
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: items=pickle.load(f)\\nprint('public study count',len(items)); print('asset keys',list(json.load(open(p+'public_asset_index.json'))))\\nfor item in items:\\n s=item['study']; c=s['sensor_calibration_sweeps']; r=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); singles=c['single_bank_sweeps']; bank=np.asarray(singles['bank_id']); x=np.asarray(singles['ref_signal']); z=np.asarray(singles['raw_readout']); S,_=m._transport(s)\\n a=np.zeros(4); b=np.zeros(4); err=[]\\n for j in range(4):\\n  idx=bank==j; X=np.c_[np.ones(idx.sum()),x[idx]]; a[j],b[j]=np.linalg.lstsq(X,z[idx],rcond=None)[0]; err.append(float(np.linalg.norm(z[idx]-X@[a[j],b[j]])/np.sqrt(idx.sum())))\\n print('single-bank fit RMS',err,'independent rosette RMS',np.sqrt(np.mean((y-a-r*b)**2,axis=0)).tolist())\\n # A single-bank challenger cannot hide a cross-channel term or saturation; validate it on simultaneous rosette sweeps and independent pulses.\\n for name,cal in [('current rosette',lambda raw:m._calibrate(dict(s,y_obs_raw=raw))),('single bank',lambda raw:((np.asarray(raw).reshape(-1,4)-a)/b).ravel())]:\\n  worst=0.; whole=[]\\n  for pulse in item.get('campaign_diagnostics') or []:\\n   e=cal(pulse['y_pulse_raw'])-S@pulse['w_pulse']; e=e.reshape(len(s['mu_shifts']),-1,4); worst=max(worst,np.sqrt(np.mean(e**2,axis=1)).max()); whole.append(float(np.sqrt(np.mean(e**2))))\\n  print(name,'worst shift/bank RMS',worst,'pulse RMS',whole)\\n print('single bank vs current observation max delta',np.max(np.abs(((s['y_obs_raw'].reshape(-1,4)-a)/b).ravel()-m._calibrate(s))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full affine rosette) -> H2 (single-bank calibration only if it transfers to independent rosettes and tracer pulses); current worst pulse slice RMS is 1.61e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the KKT and terminal-field checks\",\n      \"rejected_reason\": \"The artifact has not changed, and the independent host probe already verified both outputs.\"\n    }\n  ],\n  \"rationale\": \"The remaining visible error is concentrated in one sensor bank. The independent single-bank sweeps can distinguish uncertainty in fitted gain and offset from a discrepancy that persists on simultaneous readings. Change calibration only if the challenger improves tracer agreement without sacrificing the ability to calibrate simultaneous rosettes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4c32b547b9855afbebc4a63ee9281e9dba3d99e143e5992fb1f6ed5b73009884",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26121.29,
+      "usage_known": true,
+      "prompt_tokens": 26760,
+      "cached_tokens": 9344,
+      "completion_tokens": 924
+    }
+  ]
+}

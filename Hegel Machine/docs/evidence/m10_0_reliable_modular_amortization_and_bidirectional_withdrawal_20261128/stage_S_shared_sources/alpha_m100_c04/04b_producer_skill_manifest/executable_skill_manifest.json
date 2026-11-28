@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m100_c04_s00_32c1d7a2f851",
+    "source_hash": "32c1d7a2f85159c7310fecf617c20cd51c5b041a09c66934892323e3ab21db4d",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m100_c04",
+    "task_id": "alpha_m100_c04_s00__blind_continual_campaign",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && ls -lah /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null; cd /holdout_task && cat public_asset_index.json validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference panel alignment imputation robust IRLS'; python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\ndef show(x,k='',n=0):\n if isinstance(x,dict) and n<4:\n  print(k,list(x)); [show(v,k+'/'+str(i),n+1) for i,v in x.items()]\n elif hasattr(x,'shape'): print(k,x.shape,x.dtype, str(x.ravel()[:5]))\n ",
+      "cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /tmp/hegel_continual_archive/archive_manifest.json; cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation'",
+      "sed -n '1,125p' /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p))\nfor e in a:\n for k,v in e.items():\n  if k=='facility_telemetry_trace':\n   v=np.asarray(v); print(k,v.shape,'mean',v.mean(0).round(4),'std',v.std(0).round(4),'last',v[-1])\n  else: print(k,str(v)[:500])\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; print('times',d['eval_times'],'dt',d['past_dt']); print('refs first rows',d['train']['ref_coupons'][:2]); print('scipy',__import__('scipy'",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated two-branch hereditary strain and initial-rate prediction.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    parts = train, test\n    labs = np.concatenate([p['lab_id'] for p in parts])\n    strata = np.concatenate([p['stratum'] for p in parts])\n    ref = np.vstack([p['ref_coupons'] for p in parts])\n    raw = np.vstack([p['coupon_features_raw'] for p in parts])\n    x = np.empty_like(raw, dtype=float)\n    for lab in np.unique(labs):\n        m = labs == lab\n        # Pool each lab's reference pa",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'\ns=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); b=importlib.util.module_from_spec(s); s.loader.exec_module(b)\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']\nc=d['calibration_load_cells']; raw=c['bridge_raw']; loads=c['true_channel_loads']; total=loads.sum(1); i,j=np.triu_indices(4,1); one=np.ones((len(raw),1)); base=np.c_[one,raw]; pairs=raw[:,i]*raw[:,j]; triples=np.column_stack([np.p",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; n=len(tr['lab_id']); x=b._features(tr,te); cal=b._calibration(d['calibration_load_cells']); inp=b._inputs(tr,x[:n],cal); dep=b._inputs(te,x[n:],cal); y=tr['strain_curves_obs"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4886,
+        "sha256": "e1b71bc02617932d98476b2b32fb8aea7ff695971ea5e764135172c31d4ebe5f",
+        "content_addressed_ref": "content_addressed_blobs/e1b71bc02617932d98476b2b32fb8aea7ff695971ea5e764135172c31d4ebe5f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "32c1d7a2f85159c7310fecf617c20cd51c5b041a09c66934892323e3ab21db4d",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); b=impo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "32c1d7a2f85159c7310fecf617c20cd51c5b041a09c66934892323e3ab21db4d",
+        "expected_candidate_sha256": "32c1d7a2f85159c7310fecf617c20cd51c5b041a09c66934892323e3ab21db4d",
+        "computed_candidate_sha256": "32c1d7a2f85159c7310fecf617c20cd51c5b041a09c66934892323e3ab21db4d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4886
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_32c1d7a2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

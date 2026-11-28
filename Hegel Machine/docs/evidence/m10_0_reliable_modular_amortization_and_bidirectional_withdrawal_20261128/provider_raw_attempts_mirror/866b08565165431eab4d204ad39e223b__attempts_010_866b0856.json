@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "866b08565165431eab4d204ad39e223b",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:17.754910+00:00",
+  "ended_at_utc": "2026-11-28T03:51:40.340466+00:00",
+  "request_sha256": "761467b9ee658f4f3c58bf1a379407995fe935bb3a6d43e7820b3c2c1133da38",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50446,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27135,
+    "cached_tokens": 9344,
+    "completion_tokens": 853
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\nc=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; p=u._basis(x)\\nb=u._fit_forward(x,y); e=np.linalg.norm(y-p@b,axis=1); clean=e<8*np.median(e)\\nnp.set_printoptions(precision=6,suppress=True)\\nprint('forward coefficients by basis row:\\\\n',b)\\n# Select per-output support and refit using only the training portion of each fold.\\ndef sparse(m,threshold):\\n    beta=u._fit_forward(x[m],y[m]); r=np.linalg.norm(y[m]-p[m]@beta,axis=1); good=m.copy(); good[m]=r<=8*np.median(r)\\n    for j in range(4):\\n        terms=np.abs(beta[:,j])>=threshold; terms[:5]=True\\n        beta[:,j]=0\\n        beta[terms,j]=np.linalg.lstsq(p[good][:,terms],y[good,j],rcond=None)[0]\\n    return beta\\nnorm=np.linalg.norm(x,axis=1); total=x.sum(1)\\naxial=np.count_nonzero(x,axis=1)<=1\\nslices=[axial,norm>=np.quantile(norm,.85),total>=np.quantile(total,.85),total<=np.quantile(total,.15)]\\n# A separate held-out contiguous clean/spike boundary probes sensitivity to the clustered corruption.\\nslices.append(np.arange(len(x))<24)\\nfor t in (0,.0005,.002,.01):\\n    errors=[]\\n    for h in slices+[np.arange(len(x))==i for i in np.flatnonzero(clean)]:\\n        beta=sparse(~h,t) if t else u._fit_forward(x[~h],y[~h]); q=h&clean\\n        errors.append(np.linalg.norm(u._inverse(y[q],beta)-x[q],axis=1).max())\\n    print('threshold',t,'slice maxima axial/high norm/high sum/low sum/first block',errors[:5],'LOO P95/max',np.quantile(errors[5:],[.95,1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 coupled quadratic and diagonal-cubic response; the verified clean leave-one-out maximum is 0.00042847, and the grouped high-load maximum is 0.00040324.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational saturation sweep\",\n      \"rejected_reason\": \"The measured grouped folds already showed that all tested rational variants worsened the worst-slice residual.\"\n    }\n  ],\n  \"rationale\": \"Test whether the coupled basis contains unsupported terms that inflate inverse error when an entire acquisition block is withheld. Estimate sparse support inside each training fold; change the artifact only if this reveals a meaningful worst-slice improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "60c4432482a2d173473b63fe4e76ed5b563a5bd367b488c1b6c7451b6a8cfbd7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24722.32,
+      "usage_known": true,
+      "prompt_tokens": 27135,
+      "cached_tokens": 9344,
+      "completion_tokens": 853
+    }
+  ]
+}

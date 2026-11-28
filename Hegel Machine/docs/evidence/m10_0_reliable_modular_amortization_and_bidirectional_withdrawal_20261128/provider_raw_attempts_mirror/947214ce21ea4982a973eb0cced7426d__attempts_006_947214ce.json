@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "947214ce21ea4982a973eb0cced7426d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_10__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:20:18.910784+00:00",
+  "ended_at_utc": "2026-11-28T04:20:40.328422+00:00",
+  "request_sha256": "0430bf05f9bf22a3aa6550e5fa7cb39365ea8dc4a7cfb777098f9f6d32b52dd7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45156,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25976,
+    "cached_tokens": 9344,
+    "completion_tokens": 703
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; f=/tmp/hegel_continual_archive; sed -n '27,95p' \\\"$f/alpha_m100_c03_batch_08_solver.py\\\"; sed -n '/^def _chamber/,/^_CHAMBER_LAW/p' \\\"$f/alpha_m100_c03_batch_01_solver.py\\\"; python3 - <<'PY'\\nimport pickle,numpy as np,sys\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m100_c03_batch_08_solver as m\\np=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=p['calibration_load_cells']; y,r=c['true_channel_loads'],c['bridge_raw']; b=m._bridge(c); a=m._bridge_terms(y); err=np.max(abs(r-a@b),axis=1); dec=m._decode(r,b); np.set_printoptions(precision=5,suppress=True); print('bridge coefficients',b,sep='\\\\n'); print('forward max residual quantiles',np.quantile(err,[0,.5,.8,.9,1])); print('large error rows',np.flatnonzero(err>.01)); print('cal stress error quantiles',np.quantile(abs((dec-y).sum(1)),[0,.5,.8,.9,1])); out=m.solve_batch(p); print('taus, weights',out['estimated_taus'],out['hereditary_weights']);\\nfor s in ('train','test'):\\n z,h=m._loads(p[s],b); print(s,'decoded stress ranges',z.min(),z.max(),h.min(),h.max()); print('raw ranges',[(p[s][k].min(),p[s][k].max()) for k in ('past_channel_raw','hold_channel_raw')]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coarse-state transfer -> H2 a shared hold-dominated law across two verified high-channel-3 states; their full traces are 0.6553 RMS from the current state, and the exact current-state repeat has no archived solver.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Exact-trace nearest-neighbor transfer\",\"rejected_reason\":\"The only exact repeat for the current state precedes batch 09, which has no archived solver.\"}],\"rationale\":\"Compare the two verified high-channel-3 response equations for common structure, and test the archived bridge on current calibration sweeps. The residual pattern will determine whether that bridge can be reused or needs repair before fitting material kinetics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c71849c3fb89d847e8f71cf5daf5bfac2166520993ceb3c93fc274c5b3939244",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21380.45,
+      "usage_known": true,
+      "prompt_tokens": 25976,
+      "cached_tokens": 9344,
+      "completion_tokens": 703
+    }
+  ]
+}

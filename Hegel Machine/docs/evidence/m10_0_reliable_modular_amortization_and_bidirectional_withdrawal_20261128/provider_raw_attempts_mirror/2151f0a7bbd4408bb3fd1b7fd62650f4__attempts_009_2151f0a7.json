@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2151f0a7bbd4408bb3fd1b7fd62650f4",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:20:20.307928+00:00",
+  "ended_at_utc": "2026-11-28T04:20:47.231157+00:00",
+  "request_sha256": "f482ea0b2f6e9ebfd47c38211653c6427c4d441888539dbfebc243ebd959811f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60987,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32850,
+    "cached_tokens": 9344,
+    "completion_tokens": 1043
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/cal08.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']; x,y=s['ref_rosette'],s['raw_rosette'];ok=np.max(np.abs(y),axis=1)<8;x,y=x[ok],y[ok];b=s['single_bank_sweeps'];k,t,z=[b[a] for a in ('bank_id','ref_signal','raw_readout')];ok=np.abs(z)<8;k,t,z=k[ok],t[ok],z[ok];opp=(np.arange(4)+2)%4\\nforms={'atan':lambda x,a:np.arctan(a*x)/a,'tanh':lambda x,a:np.tanh(a*x)/a,'asinh':lambda x,a:np.arcsinh(a*x)/a,'sqrt':lambda x,a:x/np.sqrt(1+(a*x)**2),'ratio':lambda x,a:x/(1+(a*x)**2),'erf':None};from scipy.special import erf\\nforms['erf']=lambda x,a:erf(a*x)*np.sqrt(np.pi)/(2*a)\\nfor key,f in forms.items():\\n def res(p):return p[k]+p[4+k]*f(t,p[8])-z\\n r=least_squares(res,np.r_[np.zeros(4),np.ones(4),1.],bounds=(np.r_[np.full(8,-np.inf),.01],np.inf),gtol=1e-14); print(key,'bank rms',np.std(r.fun),'params',r.x.round(8))\\n if np.std(r.fun)<1e-5:\\n  p=r.x; v=x[:,opp]; c=(y-p[:4])/p[4:8]-f(x,p[8]); print('cross samples',np.array([v.ravel(),c.ravel()]).T[np.argsort(v.ravel())[::max(1,v.size//19)]].round(7));\\n  for name,fn in {**forms,'sin':lambda v,a:np.sin(a*v)/a,'linear':lambda v,a:v,'quadratic':lambda v,a:v*v,'cos':lambda v,a:1-np.cos(a*v),'exp':lambda v,a:np.expm1(a*v),'sigm':lambda v,a:np.tanh(a*v/2)}.items():\\n   for extra in (0,1):\\n    r2=least_squares(lambda q:(q[0]*fn(v,q[1])+extra*q[2]*v-c).ravel(),[.1,1.,0.],bounds=([-np.inf,.01,-np.inf],[np.inf,10,np.inf]),gtol=1e-13); print(name,extra,np.std(r2.fun),r2.x.round(8))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cal08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin) -> H2 (two periodic seams): worst grouped RMSE 0.009991, versus 0.013164 for periodic x and closed y; the ranking persists without shrinkage (0.009328 versus 0.011847).\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the archived polynomial without testing a compact response law\",\n      \"rejected_reason\": \"The isolated-bank sweeps can distinguish a shared saturation law from a polynomial approximation independently of the wall fit.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified periodic stencil. Test compact calibration laws on isolated-bank data and then on full rosettes; replace the polynomial only if a compact law materially improves calibration on held-out sweeps.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5eefe1cec1e7dd821eedc944c67bece22d1d75a14bc0a12a15b4b4439502764d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29127.34,
+      "usage_known": true,
+      "prompt_tokens": 32850,
+      "cached_tokens": 9344,
+      "completion_tokens": 1043
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "34f002ef0482488886efc75fc5d0ac42",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:10.352981+00:00",
+  "ended_at_utc": "2026-11-28T03:55:40.772829+00:00",
+  "request_sha256": "36643cb0aca768e60a58811035b8c37abf20fb64e3987c1009e8f74422a3bd5c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 77257,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40085,
+    "cached_tokens": 9344,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_shared_fit.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom numpy.polynomial.chebyshev import chebvander\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; d=c['single_bank_sweeps']; ids=d['bank_id']; ref=d['ref_signal']; raw=d['raw_readout']; keep=np.max(abs(y),axis=1)<6; bk=abs(raw)<6\\nbank=np.r_[np.tile(np.arange(4),keep.sum()),ids[bk]]; u=np.r_[x[keep].ravel(),ref[bk]]; v=np.r_[np.roll(x[keep],2,axis=1).ravel(),np.zeros(bk.sum())]; z=np.r_[y[keep].ravel(),raw[bk]]\\ndef diag(t,a):\\n q=t*t; return t*(1+q*(a[0]+q*a[1]))/(1+q*(a[2]+q*(a[3]+q*a[4])))\\nfor deg in (7,9,11):\\n for shared in (False,True):\\n  C=chebvander(v/1.8,deg)[:,1:]-chebvander(0.,deg)[:,1:]; M=np.eye(4)[bank]; p0=np.r_[[-.19,.066,.21,.024,.0024],np.zeros(deg)] if shared else [-.19,.066,.21,.024,.0024]\\n  def calc(p, train, ret=False):\\n   q=diag(u,p[:5]); H=np.c_[M,M*(q+C@p[5:])[:,None]] if shared else np.c_[M,M*q[:,None],(M[:,:,None]*C[:,None,:]).reshape(len(u),-1)]; b=np.linalg.lstsq(H[train],z[train],rcond=None)[0]; P=H@b\\n   return (P,b) if ret else (P-z)[train]\\n  def fit(train):\\n   return least_squares(calc,p0,args=(train,),bounds=(np.r_[[-1,0,0,0,0],np.full(len(p0)-5,-1)],np.r_[[1,1,2,2,1],np.full(len(p0)-5,1)]),max_nfev=100,gtol=1e-12).x\\n  allrows=np.ones(len(u),bool); p=fit(allrows); pred,b=calc(p,allrows,True); errors=[]; worst=[]\\n  for k in range(4):\\n   test=np.zeros(len(u),bool); test[:keep.sum()*4]=np.repeat(np.arange(keep.sum())%4==k,4); err=(calc(fit(~test),~test,True)[0]-z)[test].reshape(-1,4); errors.append(err); worst.append(np.sqrt(np.mean(err**2,0)).max())\\n  print(deg,shared,'train',np.sqrt(np.mean((pred-z)**2)),'worst forward fold',max(worst),'max cv',max(np.max(abs(e)) for e in errors),'shape',p.round(7),'gain',b[4:8].round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe_shared_fit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent additive curves -> H2 shared saturation and normalized coupling; baseline outer-sweep inverse RMSE is 0.00175 in the worst channel.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the compact rational coupling from the previous probe\",\n      \"rejected_reason\": \"Its training residual is larger than the additive polynomial benchmark; the proportional coefficients suggest testing a shared curve first.\"\n    }\n  ],\n  \"rationale\": \"Compare shared and independent coupling on grouped held-out rows. If tying the response across banks reduces error, it can stabilize the outer inverse without adding cross-channel products.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a7ac4361fb357889de29e18b78bf5bb1a8990294b5831fbdc4ae09d33112cd4c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32544.29,
+      "usage_known": true,
+      "prompt_tokens": 40085,
+      "cached_tokens": 9344,
+      "completion_tokens": 1202
+    }
+  ]
+}

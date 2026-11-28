@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "034510f42ad54690923d166fddc710f0",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:31.323457+00:00",
+  "ended_at_utc": "2026-11-28T03:32:11.882684+00:00",
+  "request_sha256": "b555a07da7c60078b4452625be14e9143092996d394d504d7281521202e774fa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41864,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25658,
+    "cached_tokens": 9344,
+    "completion_tokens": 1641
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_basis.py <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom scipy.optimize import minimize_scalar, least_squares\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; dg=p['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; m=runpy.run_path('/tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py')\\nb=m['_bridge'](d['calibration_load_cells']); x=m['_features'](tr,te); X=m['_features'](tr,dg)[len(tr['lab_id']):]; past,hold=m['_loads'](tr,b); tau,w=m['_fit'](x[:len(hold)],past,hold,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); past,hold=m['_loads'](dg,b); C,R=m['_design'](tau,X,past,hold,dt,t); Y=np.c_[dg['strain_curves_obs']-dg['strain_0'][:,None],dg['instant_rate_obs']]; E=Y-np.c_[C@w,R@w]; L=np.r_[t,1]; Q=np.r_[t*t,0]\\ndef f(s): return np.r_[-np.expm1(-t/s),1/s]\\ndef fit(A,y=E):\\n A=np.column_stack(A); co=np.linalg.lstsq(A,y.T,rcond=None)[0].T; return (co@A.T-y),co\\nfor label,y in [('response',Y),('baseline residual',E)]:\\n print(label,'sv',np.linalg.svd(y,compute_uv=False)[:9])\\n for name,A in [('nominal', [f(tau[0]),f(tau[1]),L]),('nominal+quadratic',[f(tau[0]),f(tau[1]),L,Q]),('fast+linear',[f(tau[0]),L]),('fast+quad',[f(tau[0]),Q])]:\\n  e,c=fit(A,y); print(name,np.sqrt(np.mean(e**2)),np.max(abs(e)),np.linalg.svd(c,compute_uv=False))\\n for name,bas in [('F+L',lambda s:[f(s[0]),L]),('F+Q',lambda s:[f(s[0]),Q]),('FF',lambda s:[f(s[0]),f(s[1])]),('FF+L',lambda s:[f(s[0]),f(s[1]),L]),('FF+LQ',lambda s:[f(s[0]),f(s[1]),L,Q])]:\\n  sol=min((least_squares(lambda z:fit(bas(np.exp(z)),y)[0].ravel(),np.log(v),bounds=(-4,5)) for v in [[a,b] if 'FF' in name else [a] for a in (.2,.6,1.5) for b in (1,4)]),key=lambda z:z.cost); s=np.exp(sol.x); e,c=fit(bas(s),y); A=np.column_stack(bas(s)); print(name,s,'rmse/max',np.sqrt(np.mean(e**2)),np.max(abs(e)),'coef sv',np.linalg.svd(c,compute_uv=False),'rate/late rmse',np.sqrt(np.mean(e[:,[-1,-2]]**2,axis=0)))\\nnp.set_printoptions(precision=4,suppress=True,linewidth=130)\\nP=np.c_[hold,past,X,R[:,2:]@w[2:]]; print('pred columns labels hold,p0..5,x0..3,drift'); print('OLS coeff along response (t first, middle, last, rate):',np.linalg.lstsq(np.c_[np.ones(len(P)),P[:,:-1]],E[:,[0,5,-2,-1]],rcond=None)[0]); print('residue after linear predictors',np.linalg.svd(fit(np.c_[np.ones(len(P)),P[:,:-1]].T, E.T)[0],compute_uv=False)[:5]); print('last stress/rate/last residual:',np.c_[past[:,-1],E[:,-1],E[:,-2]])\\nfor lab in np.unique(dg['lab_id']):\\n print('lab',lab,'panel (center, scale)',[(round(np.median(a.mean(0)),5),round(np.median(a.std(0)),5)) for a in [q['ref_coupons'][q['lab_id']==lab] for q in (tr,te,dg)]]); print('diagnostic feature missing',np.sum(np.isnan(dg['coupon_features_raw'][dg['lab_id']==lab]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_basis.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain affine bridge calibration (leave-one-out total-load RMSE 0.000173) and identify the chamber’s two dominant residual modes; the benchtop law misses chamber initial rates by up to 3.245.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The unmodified benchtop hereditary basis and coefficients transfer directly to the deployment chamber.\",\n    \"empirical_witness\": \"On 24 chamber coupons, the median absolute error is 0.619 for strain and 1.652 for initial rate; the first two strain residual singular values are 12.81 and 3.39, versus 0.036 for the third.\",\n    \"causal_blanket_diagnosis\": \"The bridge fits its calibration sweeps accurately, while the chamber errors have coherent time structure rather than the benchtop sensor-outlier pattern.\",\n    \"sublated_pivot\": \"Keep the train-only material fit and compare compact chamber-specific memory and drift bases using both curves and initial rates.\",\n    \"risk_kind\": \"deployment_law_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a nonlinear bridge calibration\",\n      \"rejected_reason\": \"Quadratic and cubic calibration both worsen held-out total-load error.\"\n    }\n  ],\n  \"rationale\": \"Compare exact time bases before fitting a coupon-level correction. A candidate that fits strain but misses the independently observed initial derivative needs a different time law, not more coupon predictors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2994a1524fe22f7f20c2ea0a2f76f3dc126aa3aadff5b7bd51bf2aa26e049847",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42573.25,
+      "usage_known": true,
+      "prompt_tokens": 25658,
+      "cached_tokens": 9344,
+      "completion_tokens": 1641
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "868a2a3325fe400e9453e90d6c32ad52",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:20.564380+00:00",
+  "ended_at_utc": "2026-11-28T03:57:05.548034+00:00",
+  "request_sha256": "27c6b9b04cf07990e1232f9f3fd71aba3f0ee7985147d774f61054b36a309cc5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58392,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32577,
+    "cached_tokens": 9344,
+    "completion_tokens": 1902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/shared_bridge.py <<'PY'\\nimport numpy as np\\nfrom numpy.polynomial.chebyshev import chebvander\\nfrom scipy.optimize import least_squares\\n\\n\\ndef clean_bridge(c):\\n    l,r=c['true_channel_loads'],c['bridge_raw']; s=c['single_channel_sweeps']\\n    good=np.max(abs(r),axis=1)<4\\n    j=s['lab_id']; good_s=abs(s['cmd_stress'])<4\\n    return l[good],r[good],j[good_s],s['true_stress'][good_s],s['cmd_stress'][good_s]\\n\\n\\ndef fit_bridge(l,r,j,x,y,n=5,style='tanh',interaction=False):\\n    u=np.r_[l.ravel(),x]; v=np.r_[np.roll(l,2,axis=1).ravel(),np.zeros_like(x)]; k=np.r_[np.tile(np.arange(4),len(l)),j]; obs=np.r_[r.ravel(),y]\\n    def selfbasis(u): return chebvander(u/1.7,2*n-1)[...,1::2]\\n    def crossbasis(v,b):\\n        if style=='tanh': return np.stack((v,v*np.tanh(b*v)),axis=-1)\\n        if style=='rat': return np.stack((v,v*v/np.sqrt(1+(b*v)**2)),axis=-1)\\n        if style=='poly':\\n            z=v/1.7; a=chebvander(z,8)[...,1:]; return a-chebvander(np.array([0.]),8)[0,1:]\\n        return np.stack((v,np.logaddexp(b*v,-b*v)/b-np.log(2)/b),axis=-1)\\n    m=8 if style=='poly' else 2\\n    def apply(p,u,v,k):\\n        f=selfbasis(u)@p[7:7+n]+crossbasis(v,p[-1])@p[7+n:7+n+m]\\n        if interaction: f=f+p[-3]*u*v+p[-2]*u*u*v\\n        return p[k]+np.r_[1.,p[4:7]][k]*f\\n    start=np.r_[[-.12,.14,-.11,.12],1.6,.986,1.57,np.zeros(n+m),np.zeros(2*interaction),2.]\\n    start[7]=1.2\\n    fit=least_squares(lambda p:apply(p,u,v,k)-obs,start,bounds=(np.r_[np.full(len(start)-1,-np.inf),.05],np.r_[np.full(len(start)-1,np.inf),20.]),ftol=1e-11,gtol=1e-11,xtol=1e-11,max_nfev=300)\\n    return lambda u,v,k=np.arange(4):apply(fit.x,u,v,k),fit.x\\n\\n\\ndef invert(raw,forward):\\n    raw=np.asarray(raw); x=np.zeros_like(raw); eps=1e-5\\n    for i in range(35):\\n        v=np.roll(x,2,axis=-1); f=forward(x,v)-raw\\n        a=(forward(x+eps,v)-forward(x-eps,v))/(2*eps); b=(forward(x,v+eps)-forward(x,v-eps))/(2*eps)\\n        dx=(np.roll(a,2,axis=-1)*f-b*np.roll(f,2,axis=-1))/(a*np.roll(a,2,axis=-1)-b*np.roll(b,2,axis=-1))\\n        x=np.clip(x-np.clip(dx,-.35,.35),-1.7,1.7)\\n        if np.max(abs(dx))<1e-10: break\\n    return x\\n\\nif __name__=='__main__':\\n    import pickle\\n    d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; l,r,j,x,y=clean_bridge(d['calibration_load_cells'])\\n    for n,style,i in [(n,s,i) for n in [4,5] for s in ['tanh','rat','log','poly'] for i in [False,True]]:\\n        e=[]; raw=[]\\n        for z in range(5):\\n            tr=np.arange(len(l))%5!=z\\n            f,p=fit_bridge(l[tr],r[tr],j,x,y,n,style,i); e.append((invert(r[~tr],f)-l[~tr]).sum(axis=1)); raw.append(f(l[~tr],np.roll(l[~tr],2,axis=1))-r[~tr]);\\n        f,p=fit_bridge(l,r,j,x,y,n,style,i)\\n        print(n,style,i,'worst fold total RMSE',round(max(np.sqrt(np.mean(a*a)) for a in e),6),'raw RMSE',round(np.sqrt(np.mean(np.vstack(raw)**2)),6),'p',p.round(5))\\n        if style=='poly' and n==5 and not i:\\n            for k in ['train','test']:\\n                a=d[k]['past_channel_raw']; b=invert(a,f); print(k,'past range',b.min(),b.max(),'max raw roundtrip',np.max(abs(f(b,np.roll(b,2,axis=-1))-a)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 opposite-channel input shift → H2 gain-scaled additive self and opposite responses; rejected shift models reach at least 0.102 mixed-sweep CV RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit independent opposite responses to each output\",\n      \"rejected_reason\": \"Three isolated channel-3 rows are corrupted, while the measured cross-responses scale in nearly the same ratios as the diagonal responses. Test shared scaling on held-out mixed rows before adding independent shapes.\"\n    }\n  ],\n  \"rationale\": \"Compare additive bridge models by held-out total-load error, not just forward residual. A round-trip check on coupon readings will detect whether the inverse leaves the calibrated range or fails to converge.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8867cf3c204662b0c8715f189674a9ece193d62b024d296ac5d1f19caa7aec6e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47078.81,
+      "usage_known": true,
+      "prompt_tokens": 32577,
+      "cached_tokens": 9344,
+      "completion_tokens": 1902
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e860f42fc954231aaf011ddb36b8df9",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:08.294063+00:00",
+  "ended_at_utc": "2026-11-28T03:40:36.494116+00:00",
+  "request_sha256": "f170c9728e8584b3245c6a2d581ebab6616097d971d06cdcba4b88c5b0d1b1e7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61590,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30776,
+    "cached_tokens": 9344,
+    "completion_tokens": 1092
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset'];cal=d['calibration_load_cells'];a,b=cal['bridge_raw'],cal['true_channel_loads'];ix=np.flatnonzero(np.max(abs(a),axis=1)<8);D=m._bridge_design(b);nxt=np.roll(b,-1,axis=1);Q=(b-nxt)**2\\nerr={k:[] for k in ['compact','pair_differences','rational']}\\nfor fold in range(5):\\n te=ix[fold::5];tr=np.setdiff1d(ix,te)\\n for name in err:\\n  pred=[]\\n  for j in range(4):\\n   Z=D[:,j];y=a[:,j];p=np.linalg.lstsq(Z[tr],y[tr],rcond=None)[0]\\n   if name=='pair_differences':\\n    Z=np.column_stack((Z,Q[:,j],(b[:,j]+nxt[:,j])**2));p=np.linalg.lstsq(Z[tr],y[tr],rcond=None)[0]\\n   if name=='rational':\\n    p=least_squares(lambda p:(Z[tr]@p[:-1])/(1+p[-1]*Q[tr,j])-y[tr],np.r_[p,0.],bounds=(np.r_[np.full(7,-np.inf),0.],np.full(8,np.inf))).x\\n    pred.append((Z[te]@p[:-1])/(1+p[-1]*Q[te,j]))\\n   else: pred.append(Z[te]@p)\\n  err[name].extend(np.asarray(pred).T-a[te])\\nfor k,e in err.items():\\n e=np.asarray(e);print(k,'forward OOF worst-channel RMSE',np.sqrt(np.mean(e**2,axis=0)).max(),'summed raw RMSE',np.sqrt(np.mean(e.sum(1)**2)))\\ntr,te=d['train'],d['test']; x=m._features(tr,te); n=len(tr['lab_id']); p=m._inputs(tr,x[:n],m._calibrate(cal)); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None];r=tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n h=tr['lab_id']==lab;f=lambda mask:tuple(v[mask] for v in p);tau,w=m._fit(f(~h),dt,t,y[~h],r[~h]);A,B=m._design(tau,f(h),dt,t);e=A@w-y[h];q=B@w-r[h];print('held lab',lab,'early/late strain signed medians',np.median(e[:,0]),np.median(e[:,-1]),'rate signed median',np.median(q))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic cubic bridge with benchtop transfer → test added calibration terms and lab-specific bias; existing worst held-out lab P90 errors are 0.0233 for strain and 0.0179 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, stochastic control operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"This task has no relay, stochastic control operator, or class labels. Lab-wise signed residuals test the relevant nuisance effect in this regression.\"\n    }\n  ],\n  \"rationale\": \"Compare compact and expanded bridge laws on the same held-out sweeps. A forward improvement would warrant an inverse axial-load test before promotion. Early and late strain residuals and initial-rate residuals can expose lab-specific bias hidden by pooled absolute errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "de58f2d2290a45a5ef6a010ebb897e223c4fe7c0b2a62aac7dfe136cdc64569e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30250.98,
+      "usage_known": true,
+      "prompt_tokens": 30776,
+      "cached_tokens": 9344,
+      "completion_tokens": 1092
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1918851fc6d435fabe4afa79224d542",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:27:07.094598+00:00",
+  "ended_at_utc": "2026-11-28T03:27:39.151133+00:00",
+  "request_sha256": "de547f9ec6480e75e3287472eee1cc62fc35e90e46cb062c8aadd0808a9a3e4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38875,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25692,
+    "cached_tokens": 10880,
+    "completion_tokens": 1266
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd = copy.deepcopy(pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'])\\ndt, times = d['past_dt'], d['eval_times']\\ntr, te = d['train'], d['test']\\n# Independent feature oracle: weighted mean over occupied lab-by-stratum cells.\\nlab = np.r_[tr['lab_id'],te['lab_id']]; strata = np.r_[tr['stratum'],te['stratum']]\\nref = np.vstack((tr['ref_coupons'],te['ref_coupons'])); x = np.vstack((tr['coupon_features_raw'],te['coupon_features_raw']))\\nfor g in set(lab):\\n    m = lab == g\\n    x[m] = (x[m] - np.median(ref[m].mean(0))) / np.median(ref[m].std(0))\\ncells = [(lab == g) & (strata == j) for g,j in sorted(set(zip(lab,strata)))]\\nfor k in range(x.shape[1]):\\n    nums = [np.nansum(x[m,k])/m.sum() for m in cells]\\n    dens = [np.isfinite(x[m,k]).sum()/m.sum() for m in cells]\\n    x[np.isnan(x[:,k]),k] = sum(nums)/sum(dens)\\nbridge = np.array([[1.08,.04,-.03,.01],[-.02,.93,.08,-.04],[.06,-.01,1.15,.05],[.03,.04,-.06,.87]])\\nzero = np.array([.11,-.08,.045,-.03]); cal = d['calibration_load_cells']\\ncal['bridge_raw'] = cal['true_channel_loads'] @ bridge + zero\\nexpected = {}\\ntrue_tau = np.array([.32,7.2]); true_theta = np.array([.77,.61,.24,.14,-.10,.16,-.09])\\nfor part, xx in ((tr,x[:len(tr['lab_id'])]),(te,x[len(tr['lab_id']):])):\\n    past = part['past_channel_raw'].sum(-1); hold = part['hold_channel_raw'].sum(-1)\\n    for name in ('past_channel_raw','hold_channel_raw'):\\n        part[name] = part[name] @ bridge + zero\\n    remaining = np.r_[np.cumsum(dt[:0:-1])[::-1],0]\\n    memory = past @ (np.exp(-remaining[:,None]/true_tau)-np.exp(-(remaining+dt)[:,None]/true_tau))\\n    amplitude = (hold[:,None]-memory)*true_theta[:2]\\n    drift = true_theta[2] + xx @ true_theta[3:]\\n    strain = part['strain_0'][:,None] + amplitude @ (1-np.exp(-times[None,:]/true_tau[:,None])) + drift[:,None]*times\\n    rate = amplitude @ (1/true_tau) + drift\\n    if part is tr:\\n        part['strain_curves_obs'] = strain\\n        part['instant_rate_obs'] = rate\\n    else:\\n        expected.update(predicted_strain=strain,initial_rate_pred=rate)\\nexpected.update(estimated_taus=true_tau,hereditary_weights=true_theta)\\nout = s.solve_batch(d)\\nfor name, target in expected.items():\\n    err = np.max(np.abs(out[name]-target)); print(name, 'max absolute error', err)\\n    assert err < 2e-5, name\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared two-branch material spectrum -> H2: baseline law for blind deployment; worst held-out-lab 90th-percentile error is 0.02317 strain and 0.01497 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The measured lab holdouts support the material fit, and the reference-swap check passed exactly. An isolated-process run with a known cross-coupled bridge and an independent hereditary calculation tests what the near-identity public bridge cannot: calibration inversion, stress-history ordering, and recovery of all four returned quantities. A failure would identify which implementation component to revisit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1d2b78f728922d15b35b59fad5b0f0f74673610fb95e1f9394ea59c5821185ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34174.27,
+      "usage_known": true,
+      "prompt_tokens": 25692,
+      "cached_tokens": 10880,
+      "completion_tokens": 1266
+    }
+  ]
+}

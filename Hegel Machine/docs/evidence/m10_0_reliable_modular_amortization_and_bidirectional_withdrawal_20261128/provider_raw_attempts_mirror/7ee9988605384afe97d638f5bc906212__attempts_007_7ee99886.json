@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ee9988605384afe97d638f5bc906212",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:17.574363+00:00",
+  "ended_at_utc": "2026-11-28T03:47:44.135644+00:00",
+  "request_sha256": "4f3d559107758444afd4238891a4bf606b97aa644c0f9f631c92a60d72ec7939",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27075,
+    "cached_tokens": 9344,
+    "completion_tokens": 1044
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nroot = '/holdout_task'\\nsys.path.insert(0, root)\\nfrom upstream_transducer import calibrate_upstream, _fit_bridge, _inverse\\nfrom batch_solver import solve_batch\\nwith open(root+'/public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']; x, y = cal['true_channel_loads'], cal['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) == 1\\nedge = np.max(np.abs(x), axis=1) >= 1.4\\nfor name, held in [('all isolated-axis rows', axis), ('high-load mixed rows', ~axis & edge)]:\\n    coef = _fit_bridge(x[~held], y[~held])\\n    # Gross spikes are not physical operating loads; keep them out of inverse scoring.\\n    clean = held & (np.max(np.abs(y), axis=1) < 10)\\n    error = _inverse(y[clean], coef) - x[clean]\\n    coord, total = np.max(np.abs(error)), np.max(np.abs(error.sum(axis=1)))\\n    print(name, 'n=', int(clean.sum()), 'worst coordinate/summed error:', coord, total)\\n    assert coord < .002 and total < .003\\nsplit = ds['test']\\ncanonical = calibrate_upstream(ds)\\nfor trials in (split, [split]):\\n    result = calibrate_upstream({**ds, 'chamber_verification_trials': trials})['chamber_verification_trials']\\n    got = result[0] if isinstance(trials, list) else result\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        np.testing.assert_array_equal(got[field], canonical['test'][field])\\n        assert not np.shares_memory(got[field], split[field])\\noutcal = canonical['calibration_load_cells']; sweeps = outcal['single_channel_sweeps']\\nnp.testing.assert_array_equal(outcal['bridge_raw'], x)\\nnp.testing.assert_array_equal(sweeps['cmd_stress'], sweeps['true_stress'])\\nassert not np.shares_memory(outcal['bridge_raw'], x)\\nassert not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\nassert not np.array_equal(cal['bridge_raw'], x)\\nfor name, value in solve_batch(ds).items():\\n    assert np.all(np.isfinite(value)), name\\nagain = calibrate_upstream(canonical)\\nfor k in ('train', 'test'):\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        np.testing.assert_array_equal(again[k][field], canonical[k][field])\\nprint('Optional trial conversion, canonical copies and identity pass-through verified')\\nsys.argv = [root+'/validate_public_schema.py', root+'/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 uncoupled cubic corrections → H2 sparse bilinear coupling plus cubic self-response; worst leave-one-out coordinate and summed errors were 4.23×10⁻⁴ and 4.45×10⁻⁴ on the mixed and high-load slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Grouped holdouts test whether calibration still works when an entire loading regime is missing from the fit. The public batch has no chamber trials, so exercise that branch separately and run the composed validator in isolated Python. Failures would distinguish insufficient calibration coverage from a conversion or integration bug.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3468dd31741688035bc6fc4951274944a858530cbbb4f5dfd5be7a770e7ac044",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28653.26,
+      "usage_known": true,
+      "prompt_tokens": 27075,
+      "cached_tokens": 9344,
+      "completion_tokens": 1044
+    }
+  ]
+}

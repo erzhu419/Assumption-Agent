@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "787a8ecf6a284a3ab127966926414d42",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:01.620040+00:00",
+  "ended_at_utc": "2026-11-28T03:45:25.543883+00:00",
+  "request_sha256": "854acde9b177d5126c6a2df101061fd0ed6e67c77875270837206f2f4a937123",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22593,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18936,
+    "cached_tokens": 11904,
+    "completion_tokens": 901
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && grep -nEi 'calibr|rosette|tanh|pulse|bank' /tmp/hegel_continual_archive/*solver.py | head -65 && python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x); bank=c['single_bank_sweeps']; print('bank sample',np.c_[bank['bank_id'],bank['ref_signal'],bank['raw_readout']][:12]);print('pulse key',s.get('reference_tracer_pulses')); print('axis rows',np.where(np.count_nonzero(x,axis=1)==1)[0]); np.set_printoptions(precision=7,suppress=True)\\nfor name,phi in [('affine',lambda x:np.c_[np.ones(len(x)),x]),('cubic',lambda x:np.c_[np.ones(len(x)),x,x**3]),('quadratic+cubic',lambda x:np.c_[np.ones(len(x)),x,x*x,x**3]),('tanh',lambda x:np.c_[np.ones(len(x)),x,np.tanh(x)]),('rational',lambda x:np.c_[np.ones(len(x)),x,x/(1+x*x)]),('all pair terms',lambda x:np.c_[np.ones(len(x)),x,x*x,x**3,*[x[:,i]*x[:,j] for i in range(4) for j in range(i)]]),('axis cubic+pair gain',lambda x:np.c_[np.ones(len(x)),x,x**3,*[x[:,i]*x[:,j] for i in range(4) for j in range(i)]])]:\\n z=phi(x); rr=[]; co=[]\\n for k in range(5):\\n  tr=np.arange(n)%5!=k; te=~tr; w=np.ones(sum(tr)); zz=z[tr]; yy=y[tr]\\n  for _ in range(20):\\n   b=np.linalg.lstsq(w[:,None]*zz,w[:,None]*yy,rcond=None)[0]; q=np.linalg.norm(yy-zz@b,axis=1); w=1/(1+(q/max(2*np.median(q),1e-8))**2)\\n  rr.extend(zip(np.where(te)[0],np.linalg.norm(y[te]-z[te]@b,axis=1))); co.append(b)\\n rr=np.asarray(sorted(rr))[:,1]; print(name,'OOF quantiles',np.quantile(rr,[0,.25,.5,.8,.9,.95,.975,1]),'rows > 5',np.where(rr>5)[0]);\\n if name in ('cubic','axis cubic+pair gain'): print('coef',np.median(co,axis=0).T)\\nprint('axis raw:');print(np.c_[x,y][:16]); print('axis versus rest amplitude quantiles',np.quantile(np.linalg.norm(x,axis=1),[0,.25,.5,.75,1]));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coupling → H2 axis-local nonlinear gain plus linear mixing; simultaneous held-out channel errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each raw channel independently\",\"rejected_reason\":\"Axis sweeps visibly change other channels, so independent calibration would leave cross-channel leakage.\"}],\"rationale\":\"Compare nonlinear bases on held-out rows and separate isolated EMI spikes from systematic errors before choosing a forward map to invert.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "4326780a1733862a732f2efdc14e57f2ad3ebc2c42926d9d3fa30217c0d56866",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26054.39,
+      "usage_known": true,
+      "prompt_tokens": 18936,
+      "cached_tokens": 11904,
+      "completion_tokens": 901
+    }
+  ]
+}

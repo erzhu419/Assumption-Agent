@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0cb62838cfce456b9997fcf426a8c141",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:09:27.327967+00:00",
+  "ended_at_utc": "2026-11-28T04:10:05.045675+00:00",
+  "request_sha256": "91eff5ef7bb1b6f776a2acea51be9ae2af4783af134d9fa899cf4c87c6ccb0ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57485,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30782,
+    "cached_tokens": 9344,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit07.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', path + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(path + 'public_batch.pkl', 'rb'))[0]['study']\\nout = m.solve_batch(s)\\nw, u, cert = (out[k] for k in ('weights', 'terminal_field', 'kkt_certificate'))\\nnx, ny = s['nx'], s['ny']\\ndef row_op(a, n):\\n    h = s['L' + a] / (n - 1)\\n    k, v = s['kappa_' + a], s['vel_' + a]\\n    op = np.zeros((n, n))\\n    for i in range(n):\\n        l, r = (i-1) % n, (i+1) % n\\n        west = (k[i] + k[l]) / (2*h*h) + max(v[i], 0)/h\\n        east = (k[i] + k[r]) / (2*h*h) + max(-v[i], 0)/h\\n        op[i,l] -= west\\n        op[i,r] -= east\\n        op[i,i] += west + east\\n    assert np.max(np.abs(op.sum(axis=1))) < 1e-10\\n    return op\\nax, ay = row_op('x', nx), row_op('y', ny)\\nV = s['V_reaction_2d']\\nmu = s['mu_shifts'][-1]\\nsource = np.tensordot(w, s['source_modes'], axes=1)\\nfield_res = np.max(np.abs(ax @ u + u @ ay.T + (V+mu)*u - source))\\nassert field_res < 1e-10\\nL = np.kron(np.eye(ny), ax) + np.kron(ay, np.eye(nx)) + np.diag(V.ravel(order='F'))\\nrhs = np.stack([q.ravel(order='F') for q in s['source_modes']], axis=1)\\ni, j = s['sensor_ij'].T\\nS = np.vstack([np.linalg.solve(L + shift*np.eye(nx*ny), rhs)[i+nx*j] for shift in s['mu_shifts']])\\ny = m._calibrate(s)\\nZ = s['Z_nuisance']\\nP = np.eye(len(y)) - Z @ np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nerr = P @ (S@w-y)\\ng = (P@S).T @ err + s['source_ridge']*w\\nlo, hi, nu = (np.asarray(cert[k]) for k in ('lam_lower', 'lam_upper', 'nu_sum'))\\ncap, budget = s['u_box'], s['total_budget']\\nJ = (err@err + s['source_ridge']*(w@w))/2\\nD = J-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\nchecks = {'budget':abs(w.sum()-budget), 'stationarity':np.max(np.abs(g-nu-lo+hi)), 'lower_complementarity':np.max(np.abs(lo*w)), 'upper_complementarity':np.max(np.abs(hi*(cap-w))), 'objective_error':abs(cert['primal_objective']-J), 'bound_error':abs(cert['dual_lower_bound']-D), 'duality_gap':abs(J-D)}\\nassert np.all((w >= 0) & (w <= cap)) and np.all(lo >= 0) and np.all(hi >= 0)\\nassert np.array_equal(w, cert['weights']) and max(checks.values()) < 1e-10\\nprint('field PDE infinity residual:', field_res, 'certificate errors:', checks)\\n# Hold out each bank across all shifts; profile nuisance using only retained rows.\\nbank = np.asarray(s['row_bank_id']).ravel()\\nassert len(y) % len(bank) == 0\\nbank = np.tile(bank, len(y)//len(bank))\\nscore = {}\\nfor b in np.unique(bank):\\n    t = bank != b\\n    X, z = S[t], Z[t]\\n    p = np.linalg.solve(z.T@z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T)\\n    A, r = X-z@(p@X), y[t]-z@(p@y[t])\\n    wt, _ = m._box_simplex(A.T@A+s['source_ridge']*np.eye(len(w)), -A.T@r, cap, budget)\\n    et = S[~t]@wt + Z[~t]@(p@(y[t]-X@wt)) - y[~t]\\n    score[int(b)] = float(np.linalg.norm(et)/np.sqrt(len(et)))\\nprint('held-out bank RMSE:', score)\\nassert max(score.values()) < 0.025\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit07.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fitted seam corrections -> H2 exact periodic upwind stencil on both axes; worst held-out shift RMSE was 0.00959 versus 0.01648 for fitted seams.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification accuracy, or time-dependent drift laws\",\n      \"rejected_reason\": \"The study contains steady transport observations, no relay states, and no class labels. The relevant nuisance check is prediction on held-out sensor banks.\"\n    }\n  ],\n  \"rationale\": \"A separately assembled dense stencil checks periodic seam signs, row balance, and field ordering; failure would require fixing the transport operator. Recomputing the certificate checks multiplier signs and the objective bound. Holding out every bank across shifts tests whether profiling nuisance on the remaining rows hides a bank-specific calibration error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "db05eda3cbc926052f1122cc4ced93e3aa117858c263cb562ecb63bfdd18a094",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39863.18,
+      "usage_known": true,
+      "prompt_tokens": 30782,
+      "cached_tokens": 9344,
+      "completion_tokens": 1543
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "98ce507394ae4cb4a8a69b107b1f51a8",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:12.282611+00:00",
+  "ended_at_utc": "2026-11-28T03:40:46.726835+00:00",
+  "request_sha256": "099b5100de3b8ff6e339d9ca7425863329a78ba871515c2646b3334b1b141f21",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44011,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24801,
+    "cached_tokens": 9344,
+    "completion_tokens": 1388
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _fit_forward, _invert\\nfrom batch_solver import solve_batch\\n\\ndef robust(a, y):\\n    w = np.ones(len(a))\\n    for _ in range(24):\\n        c = np.linalg.lstsq(a*w[:, None], y*w[:, None], rcond=None)[0]\\n        e = np.linalg.norm(y-a@c, axis=1)\\n        scale = max(np.median(e), 1e-12)\\n        w = np.minimum(1, 2*scale/np.maximum(e, 1e-15))\\n    return e <= 5*scale\\n\\nfor item in pickle.load(open('public_batch.pkl','rb')):\\n    s = item['study']; cal = s['sensor_calibration_sweeps']; x, y = cal['ref_rosette'], cal['raw_rosette']; a = _design(x)\\n    # Leave out all single-axis sweeps together, and separately the mixed amplitude tail.\\n    axial = np.count_nonzero(x, axis=1) == 1\\n    keep = np.r_[0:9, 15:19]\\n    for name, test in [('all_axial', axial), ('mixed_tail', ~axial & (np.max(np.abs(x),axis=1)>1.4))]:\\n        tr = ~test; clean = robust(a[tr],y[tr]); at, yt, xt = a[tr][clean], y[tr][clean], x[tr][clean]\\n        # Gross EMI is separated by raw magnitude in this public fixture; apply the same slice to every model.\\n        ev = test & (np.max(np.abs(y),axis=1)<6)\\n        coeff = _fit_forward(x[tr],y[tr])\\n        reduced = np.linalg.lstsq(at[:,keep],yt,rcond=None)[0]\\n        err = lambda p: float(np.max(np.abs(p-y[ev])))\\n        rat = []\\n        for j in range(4):\\n            best = np.inf; pred = None\\n            for k in range(4):\\n                if k == j: continue\\n                for c in [-1., -.5, .5, 1.]:\\n                    q = (xt[:,j]+c*xt[:,k])**2; qe = (x[ev,j]+c*x[ev,k])**2\\n                    for alpha in np.r_[0., np.geomspace(1e-6,1,25)]:\\n                        d = at/(1+alpha*q[:,None]); b = np.linalg.lstsq(d,yt[:,j],rcond=None)[0]\\n                        loss = np.linalg.norm(d@b-yt[:,j]);\\n                        if loss < best:\\n                            best = loss; pred = a[ev]@b/(1+alpha*qe)\\n            rat.append(pred)\\n        h1 = err(a[ev][:,keep]@reduced); h2 = err(a[ev]@coeff)\\n        inv = float(np.max(np.abs(_invert(y[ev],coeff)-x[ev])))\\n        print(json.dumps(dict(slice=name, clean_rows=int(ev.sum()), no_cross_forward_max=h1, current_forward_max=h2, pairwise_rational_forward_max=err(np.column_stack(rat)), current_inverse_max=inv)))\\n        if name == 'mixed_tail': assert h2 < h1/100, (h1,h2)\\n        assert inv < 1e-4, inv\\n    sol = solve_batch(s)\\n    assert np.isfinite(sol['terminal_field']).all()\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (omit quadratic cross terms) → H2 (retain them): worst clean inverse error is 4.15e-5 in leave-one-out and 3.6e-5 in the existing grouped holdouts.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, stochastic drift, or batch-classification checks\",\n      \"rejected_reason\": \"The public study supplies continuous rosette measurements, not relay states, stochastic drift measurements, or classification labels.\"\n    }\n  ],\n  \"rationale\": \"Test the outstanding basis claim directly: remove only cross-channel quadratic terms and compare on the same clean held-out rows, including a new joint holdout of all axial sweeps. Select signed-pair rational denominators on training data only. Revise the model if the inverse error materially grows or the challenger improves the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e205caa964dd73e082c04a581bbeba88883ad7f1e046dfe9237949cd4026fe21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36494.71,
+      "usage_known": true,
+      "prompt_tokens": 24801,
+      "cached_tokens": 9344,
+      "completion_tokens": 1388
+    }
+  ]
+}

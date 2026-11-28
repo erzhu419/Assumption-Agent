@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "537007bc1d2f419daa10ed5a9fde9a15",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:38.697920+00:00",
+  "ended_at_utc": "2026-11-28T03:45:06.778425+00:00",
+  "request_sha256": "214e73ff81c197c955ee43299faed0637672b3d794808a95b22e1f800220b1b8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22122,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18887,
+    "cached_tokens": 9344,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rosette_probe.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; cal=s['sensor_calibration_sweeps']; x=cal['ref_rosette']; y=cal['raw_rosette']\\nnp.set_printoptions(precision=5,suppress=True)\\nfor k,v in cal['single_bank_sweeps'].items():\\n a=np.asarray(v); print('single',k,a.shape,a.ravel()[:12])\\nprint('banks',np.unique(s['row_bank_id'].reshape(-1,4),axis=0)); print('pulse key', 'reference_tracer_pulses' in s)\\nprint('paired first rows\\\\n',np.c_[x,y][:5]); print('ranges',x.min(0),x.max(0)); print('obs',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0))\\n\\ndef fit(a,b):\\n w=np.ones(len(a))\\n for _ in range(25):\\n  c=np.linalg.lstsq(a*w[:,None]**.5,b*w[:,None]**.5,rcond=None)[0]\\n  r=np.linalg.norm(b-a@c,axis=1); m=max(np.median(r),1e-10)\\n  w=1/(1+(r/(2*m))**2)\\n return c\\n\\ndef features(x,kind):\\n terms=[np.ones(len(x)),*x.T];\\n if kind in ('quad','cubic'): terms += [x[:,inds].prod(1) for inds in combinations_with_replacement(range(4),2)]\\n if kind in ('pure3','pure5'): terms += [*(x**3).T]\\n if kind=='pure5': terms += [*(x**5).T]\\n if kind=='cubic': terms += [x[:,inds].prod(1) for inds in combinations_with_replacement(range(4),3)]\\n if kind=='tanh': terms += [*np.tanh(x).T]\\n if kind=='rat': terms += [*(x/(1+x*x)).T]\\n return np.column_stack(terms)\\n\\nif __name__=='__main__':\\n keep=abs(y).max(1)<4\\n print('spike IDs',np.flatnonzero(~keep)); block=np.arange(len(x))//10\\n for kind in ('linear','quad','pure3','pure5','tanh','rat','cubic'):\\n  a=features(x,kind); p=np.empty_like(y)\\n  for f in np.unique(block):\\n   t=block!=f; p[~t]=a[~t]@fit(a[t],y[t]);\\n  e=(p-y)**2; near=keep & (abs(x).max(1)<np.quantile(abs(x).max(1),.4)); worst=max(np.sqrt(e[keep & (block==f)].mean()) for f in np.unique(block)); print(kind,'rmse',np.sqrt(e[keep].mean(0)),'near',np.sqrt(e[near].mean()),'worst block',worst)\\n  if kind in ('linear','pure3','pure5','tanh','rat'): print('coef',fit(a,y).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py; tail -30 _verified_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine cross-channel coupling → coupling plus smooth saturation; held-out block error is pending the model comparison.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a full cubic inverse directly\",\n      \"rejected_reason\": \"EMI would contaminate the predictors, and unconstrained cubic extrapolation could yield ambiguous or unstable inverses.\"\n    }\n  ],\n  \"rationale\": \"Hold out contiguous sweep blocks to test whether saturation terms improve predictions beyond affine coupling. Score the lower-amplitude slice separately because it is closer to the observation range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "50c49307040f5b8e483de5eab97fc9182e2382675ddfd60fd8b2f808b499ce6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30215.51,
+      "usage_known": true,
+      "prompt_tokens": 18887,
+      "cached_tokens": 9344,
+      "completion_tokens": 1074
+    }
+  ]
+}

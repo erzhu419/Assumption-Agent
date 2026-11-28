@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b333f510cee14f63a4e0526d6048a5de",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:08.324128+00:00",
+  "ended_at_utc": "2026-11-28T04:01:30.896303+00:00",
+  "request_sha256": "af07ecb9cd8aea41adfdc360bb6168b808245a5911c2a22b1e99711594d0ec7f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60205,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30668,
+    "cached_tokens": 9344,
+    "completion_tokens": 820
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import _features, _fit, _invert\\nfrom downstream_solver import _responses\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nstudy = item['study']\\nsweeps = study['sensor_calibration_sweeps']\\nx = np.asarray(sweeps['ref_rosette'])\\ny = np.asarray(sweeps['raw_rosette'])\\nforward = np.empty(len(x))\\ninverse = np.empty(len(x))\\nfor fold in range(5):\\n    hold = np.arange(len(x)) % 5 == fold\\n    coef = _fit(x[~hold], y[~hold])\\n    forward[hold] = np.linalg.norm(_features(x[hold]) @ coef - y[hold], axis=1)\\n    inverse[hold] = np.linalg.norm(_invert(y[hold], coef)-x[hold], axis=1)\\ninlier = forward < 10*np.median(forward)\\nprint('Calibration rows:', len(x), 'forward outliers:', np.flatnonzero(~inlier).tolist())\\nprint('Worst inverse row error on forward inliers:', float(inverse[inlier].max()), 'minimum forward error among flagged rows:', float(forward[~inlier].min()) if not inlier.all() else None)\\nprint('Rows with clean forward residual but large inverse error:', np.flatnonzero(inlier & (inverse > 1e-3)).tolist())\\nS, _ = _responses(study)\\ncoef = _fit(x, y)\\nfor j, pulse in enumerate(item['campaign_diagnostics']):\\n    ref = (S @ pulse['w_pulse']).reshape(-1,4)\\n    raw = np.asarray(pulse['y_pulse_raw']).reshape(-1,4)\\n    print('Pulse', j, 'forward RMSE:', float(np.sqrt(np.mean((_features(ref)@coef-raw)**2))), 'inverse RMSE:', float(np.sqrt(np.mean((_invert(raw,coef)-ref)**2))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared wall mode -> H2 periodic x and reflecting y; worst jointly held-out pulse/shift RMSE is 1.53e-6, and a forward-residual audit will distinguish contaminated calibration rows from inverse branch errors.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The full-sweep and cross-fold fits agree, but a few rows may dominate the inverse error. Compare forward and inverse residuals on the same held-out sweep rows. Large inverse errors on clean forward rows would indicate a branch failure worth reporting; large forward errors on those same rows would instead implicate the measurements. Raw tracer residuals test whether the issue reaches the downstream operating range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "67587f57120ea5025ffeded6dd200b9678564be36232b2e8c477484c8baa5e1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24697.28,
+      "usage_known": true,
+      "prompt_tokens": 30668,
+      "cached_tokens": 9344,
+      "completion_tokens": 820
+    }
+  ]
+}

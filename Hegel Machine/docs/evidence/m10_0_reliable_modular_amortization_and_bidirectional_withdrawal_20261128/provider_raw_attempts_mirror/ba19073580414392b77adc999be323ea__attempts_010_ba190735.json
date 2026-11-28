@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ba19073580414392b77adc999be323ea",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:24.465471+00:00",
+  "ended_at_utc": "2026-11-28T03:46:53.476362+00:00",
+  "request_sha256": "98835315dd8c629752711ac301a26539e43983235e5e4e2dd217b1d314bec8ee",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56577,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30047,
+    "cached_tokens": 9344,
+    "completion_tokens": 1136
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,88p' batch_solver.py\\nsed -n '/^def _inputs(/,/^def _design(/p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_02_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py'); s=p.read_text()\\nold=\\\"_load_from_raw(split['hold_channel_raw'], bridge).sum(-1), features)\\\"\\nassert s.count(old)==1\\np.write_text(s.replace(old,\\\"_load_from_raw(split['hold_channel_raw'], bridge).sum(-1),\\\\n            np.column_stack((np.ones(len(features)), features)))\\\"))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r,l=c['bridge_raw'],c['true_channel_loads']; b,keep=m._fit_bridge(r,l)\\nprint('excluded',np.flatnonzero(~keep)); groups=np.arange(len(r))%5\\nfor fold in range(5):\\n j=groups==fold; bf,kf=m._fit_bridge(r[~j],l[~j]); delta=r[~j][~kf]-m._bridge_forward(l[~j][~kf],bf)\\n raw=r[j].copy(); bad=np.max(np.abs(raw),axis=1)>5\\n if bad.any(): raw[bad]-=np.median(delta,axis=0)\\n err=m._load_from_raw(raw,bf)-l[j]; print('cal fold',fold,'max total/channel error',np.max(abs(err.sum(1))),np.max(abs(err)))\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,_=m._features(tr,te); p,h,f=m._calibrated_inputs(tr,x,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; o=m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in o.values())\\nfor name,split in [('train',tr),('test',te)]:\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  q=split[key]; load=m._load_from_raw(q,b); err=np.max(np.abs(m._bridge_forward(load,b)-q)); print('roundtrip',name,key,err,'load range',load.min(),load.max()); assert err<1e-9\\nprint('full',o['estimated_taus'],o['hereditary_weights'])\\nfor lab in np.unique(tr['lab_id']):\\n j=tr['lab_id']==lab; k=~j; tau,a=m._fit(p[k],h[k],f[k],dt,t,y[k],rate[k]); cm,rm=m._design(tau,p[j],h[j],f[j],dt,t); e=abs(cm@a-y[j]); er=abs(rm@a-rate[j]); print('held lab',lab,'tau',tau,'MAE strain/rate',e.mean(),er.mean(),'median strain/rate',np.median(e),np.median(er))\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print('telemetry',row['completed_campaign_short_name'],np.mean(row['facility_telemetry_trace'],axis=0).round(4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine inverse bridge → H2 sparse cubic forward calibration; worst clean held-out forward error is 0.000329, and end-to-end validation is pending after restoring the drift intercept.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Reshape the six-column design\",\"rejected_reason\":\"The seventh column is the physical drift intercept required by the model, not a layout discrepancy.\"}],\"rationale\":\"Restore the intercept dropped when replacing the calibration path. The schema check detects interface regressions, held-out bridge inversion measures physical load error, and held-lab fits show whether any material instability remains after recalibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "591fc9b52e8ea9b406c6e45c0a36e92ccee4f98bdd1367f101066aa121495653",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31034.34,
+      "usage_known": true,
+      "prompt_tokens": 30047,
+      "cached_tokens": 9344,
+      "completion_tokens": 1136
+    }
+  ]
+}

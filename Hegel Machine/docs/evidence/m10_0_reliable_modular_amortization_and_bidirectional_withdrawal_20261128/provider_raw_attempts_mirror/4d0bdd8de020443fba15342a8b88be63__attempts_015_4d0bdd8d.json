@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d0bdd8de020443fba15342a8b88be63",
+  "call_seq": 15,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:51.645065+00:00",
+  "ended_at_utc": "2026-11-28T03:46:15.705592+00:00",
+  "request_sha256": "67060e51da4b0d7c2f025549c1f03d27ae415bdfd531b9da6f8b7dc9184ae844",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 75725,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34131,
+    "cached_tokens": 9344,
+    "completion_tokens": 807
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, json\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom downstream_solver import _features, _inputs, _fit, _chamber\\nfrom _verified_upstream import calibrate_upstream\\nroot='/holdout_task/'\\nwith open(root+'public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\nwith open(root+'_upstream_param_payload.json') as f:\\n    payload=json.load(f)\\nraw=item['dataset']; d=calibrate_upstream(raw); tr,te=d['train'],d['test']\\ns=calibrate_upstream(dict(raw,test=item['campaign_diagnostics']),payload)['test']\\nxtr,_=_features(tr,te); x,_=_features(s,s)\\ninputs=_inputs(tr,xtr); dt=d['past_dt']; t=d['eval_times']\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]\\nzero=dict(s,past_channel_raw=np.zeros_like(s['past_channel_raw']))\\nscores=[]\\nfor lab in np.unique(s['lab_id']):\\n    fit=tr['lab_id']!=lab; val=s['lab_id']==lab\\n    tau,theta=_fit(*(a[fit] for a in inputs),dt,t,y[fit],tr['instant_rate_obs'][fit])\\n    row=[]\\n    for cohort,h in [(s,()),(zero,()),(s,(1e8,))]:\\n        p,r=_chamber(cohort,x,dt,t,tau,theta,*h)\\n        row.append([np.quantile(abs(p[val]-s['strain_curves_obs'][val]),.9),np.quantile(abs(r[val]-s['instant_rate_obs'][val]),.9)])\\n    scores.append(row)\\n    print('held lab',lab,'strain and initial rate P90 [candidate, zero memory, linear drift]:',np.round(row,6).tolist())\\nscores=np.array(scores)\\nassert np.all(scores[:,0,1]<scores[:,1,1]) and np.all(scores[:,0,0]<scores[:,2,0])\\nprint('Worst held-lab strain and initial-rate P90:',np.round(scores.max(axis=0),6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unit decay → diagnostic-calibrated exponential decay with retained memory: the exact candidate's worst held-lab strain P90 is 0.011147, terminal strain P90 is 0.016324, and initial-rate P90 is 0.007923.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact candidate passed schema and isolated entry-point checks. This standalone audit removes memory and restores linear drift in separate comparisons across all four held-out labs. If either change improves its targeted metric in any lab, the corresponding mechanism claim needs narrowing. No artifacts or fixtures are modified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "4e77cabb5f4bee4687bb86d4587b342be715717d2e8f287619b2079093062241",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24015.18,
+      "usage_known": true,
+      "prompt_tokens": 34131,
+      "cached_tokens": 9344,
+      "completion_tokens": 807
+    }
+  ]
+}

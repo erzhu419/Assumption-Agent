@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7add6aec3fa14cfea544ad2b19addf28",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:36:54.974743+00:00",
+  "ended_at_utc": "2026-11-28T03:37:14.014178+00:00",
+  "request_sha256": "b8e763111d815f0b04530f58e1c6d76516ef63020f11801aae071c74bdfff765",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23110,
+    "cached_tokens": 9344,
+    "completion_tokens": 678
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport json, numpy as np, pickle, runpy\\nr=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in r:\\n a=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],'mean',a.mean(0).round(4),'sd',a.std(0).round(4))\\n print('max half-mean shift in steady channels',np.abs(a[:12].mean(0)-a[12:].mean(0))[[0,4]].round(4))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; b=c['bridge_raw']; l=c['true_channel_loads']; A=np.c_[np.ones(len(l)),l]; p=np.linalg.lstsq(A,b,rcond=None)[0]; print('calibration sample size, residual SD and condition',len(l),(b-A@p).std(0),np.linalg.cond(p[1:])); print('bridge',p.round(5)); print('lab/stratum counts',np.unique(np.c_[d['train']['lab_id'],d['train']['stratum']],axis=0,return_counts=True));\\nfor name in ['s00','batch_01']:\\n f=runpy.run_path('/tmp/hegel_continual_archive/alpha_m100_c02_'+name+'_solver.py')['solve_batch']; o=f(d); print(name,o['estimated_taus'],o['hereditary_weights'],np.percentile(o['initial_rate_pred'],[0,50,100]),np.percentile(o['predicted_strain'][:,-1],[0,50,100]))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared material spectrum → baseline chamber law if the latest telemetry returns to the initialization regime; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the immediately preceding chamber regression\",\"rejected_reason\":\"The visible telemetry suggests the steady channel that shifted before batch 01 has returned to its earlier level; quantify that match before choosing the operator.\"}],\"rationale\":\"Compare steady-channel levels across the chronological prefix to distinguish a return to baseline from a persistent chamber change. Check the bridge fit to determine whether the archived affine calibration remains suitable for this batch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "616658f7b7a13a11e0114affb12925cc14d18d972f8bf4fb4acceb6324368f8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21146.86,
+      "usage_known": true,
+      "prompt_tokens": 23110,
+      "cached_tokens": 9344,
+      "completion_tokens": 678
+    }
+  ]
+}

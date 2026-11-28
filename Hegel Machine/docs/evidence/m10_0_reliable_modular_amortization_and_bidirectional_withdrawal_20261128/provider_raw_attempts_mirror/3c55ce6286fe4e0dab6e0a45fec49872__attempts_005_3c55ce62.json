@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c55ce6286fe4e0dab6e0a45fec49872",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:26:54.347274+00:00",
+  "ended_at_utc": "2026-11-28T03:27:24.413585+00:00",
+  "request_sha256": "336cfc3de68fbecac63b6bf92895a0dd9e5f0a8a74fefb7caef70c97f40a4962",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42520,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26646,
+    "cached_tokens": 5504,
+    "completion_tokens": 1185
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nx = s._features(tr, te)[:len(tr['lab_id'])]\\np, h = s._loads(tr, s._bridge(d['calibration_load_cells']))\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\ne, er = np.empty_like(y), np.empty_like(r)\\no = s.solve_batch(d)\\nfor lab in np.unique(tr['lab_id']):\\n    holdout = tr['lab_id'] == lab\\n    keep = ~holdout\\n    tau, theta = s._fit(x[keep], p[keep], h[keep], dt, t, y[keep], r[keep])\\n    assert .05 < tau[0] < tau[1] < 25\\n    a, b = s._design(tau, x[holdout], p[holdout], h[holdout], dt, t)\\n    e[holdout], er[holdout] = abs(a @ theta - y[holdout]), abs(b @ theta - r[holdout])\\n    print('held-out lab', lab, 'n', int(holdout.sum()), 'taus', tau.round(4), 'strain median/90th', np.quantile(e[holdout], [.5,.9]).round(5), 'rate median/90th', np.quantile(er[holdout], [.5,.9]).round(5))\\nfor name, ids in [('early', slice(None,4)), ('middle', slice(4,8)), ('late', slice(8,None))]:\\n    print(name, 'worst lab strain 90th', round(max(np.quantile(e[tr['lab_id']==lab, ids], .9) for lab in np.unique(tr['lab_id'])), 5))\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor name, m in [('imputed', missing), ('complete', ~missing)]:\\n    if m.any():\\n        print(name, 'n', int(m.sum()), 'strain/rate 90th', round(np.quantile(e[m], .9), 5), round(np.quantile(er[m], .9), 5))\\n# Exact t=0 and forward derivative on the actual deployment histories.\\npt, ht = s._loads(te, s._bridge(d['calibration_load_cells']))\\na, b = s._design(o['estimated_taus'], s._features(tr, te)[len(x):], pt, ht, dt, np.array([0.,1e-7]))\\ny0, y1 = (a @ o['hereditary_weights']).T\\nrate_err = np.max(abs((y1-y0)/1e-7 - o['initial_rate_pred']))\\nprint('deployment baseline max error', float(np.max(abs(y0))), 'initial-rate derivative max error', float(rate_err))\\nassert np.max(abs(y0)) == 0 and rate_err < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain the robust two-branch benchtop law unless held-out slices expose a defect; in-sample 90th-percentile errors are 0.02117 strain and 0.01304 rate, with held-out metrics pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the deployment derivative check as chamber accuracy validation\",\n      \"rejected_reason\": \"It verifies agreement between the two output columns, not agreement with unobserved deployment measurements.\"\n    }\n  ],\n  \"rationale\": \"Hold out each lab's response labels while preserving the specified joint, unlabeled reference alignment. A large late-horizon error would prompt a check of the slow branch; an error concentrated in imputed rows would prompt a check of the cell weights. The isolated schema and derivative checks verify the exact candidate's output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "07f9de59113af3203d2d366a08e9a99968d9681b02a4b0ee3858087ec89856b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32116.81,
+      "usage_known": true,
+      "prompt_tokens": 26646,
+      "cached_tokens": 5504,
+      "completion_tokens": 1185
+    }
+  ]
+}

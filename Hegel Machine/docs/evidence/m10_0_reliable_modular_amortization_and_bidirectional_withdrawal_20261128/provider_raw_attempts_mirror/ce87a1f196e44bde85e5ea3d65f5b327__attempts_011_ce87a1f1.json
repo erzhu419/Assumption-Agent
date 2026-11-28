@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce87a1f196e44bde85e5ea3d65f5b327",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:04.997037+00:00",
+  "ended_at_utc": "2026-11-28T03:34:39.873101+00:00",
+  "request_sha256": "1ddd0ce9b9d46568b6ced823fc27a5dad594a9b75ba10a87ab72fc9ef3211377",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52051,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27780,
+    "cached_tokens": 9344,
+    "completion_tokens": 1405
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '    affine = np.linalg.lstsq(np.column_stack((np.ones(len(ref)), ref)), raw, rcond=None)[0]'\\nnew = '''    design = np.column_stack((np.ones(len(ref)), ref))\\n    single = sweeps['single_bank_sweeps']\\n    bank = np.asarray(single['bank_id'], dtype=int)\\n    bank_design = np.zeros((len(bank), 5))\\n    bank_design[:, 0] = 1.0\\n    bank_design[np.arange(len(bank)), bank + 1] = single['ref_signal']\\n    bank_raw = np.asarray(single['raw_readout'], dtype=float)\\n    # A single-bank sweep measures the same affine response with other inputs zero.\\n    affine = np.empty((5, 4))\\n    for j in range(4):\\n        use = bank == j\\n        affine[:, j] = np.linalg.lstsq(\\n            np.vstack((design, bank_design[use])),\\n            np.concatenate((raw[:, j], bank_raw[use])), rcond=None,\\n        )[0]'''\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; S,_=m._transport(s)\\nerrors=np.array([(S@d['w_pulse']-m._calibrate(s,d['y_pulse_raw'])).reshape(len(s['mu_shifts']),-1,4) for d in item['campaign_diagnostics']]); pulse=np.sqrt((errors**2).mean(axis=(1,2,3))); worst=np.sqrt((errors**2).mean(axis=2)).max()\\nprint('pooled calibration pulse RMSE',pulse,'worst pulse/shift/channel',worst)\\nassert np.all(pulse < [8.57950e-7,8.17560e-7,8.73521e-7]) and worst < 1.611824e-6\\nZ=s['Z_nuisance']; M=Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]); y=m._calibrate(s,s['y_obs_raw']); cap=s['u_box']; n=S.shape[1]; nx,ny=s['nx'],s['ny']\\nAx=m._axis(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1)); Ay=m._axis(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1))\\ndef project(v): return v-Z@np.linalg.solve(M,Z.T@v)\\nmax_kkt=max_pde=0.\\nfor b in (0.,.1*cap,cap,s['total_budget'],(n-1)*cap,(n-.1)*cap,n*cap):\\n    out=m.solve_batch(dict(s,total_budget=b)); w=out['weights']; k=out['kkt_certificate']; lo,hi=k['lam_lower'],k['lam_upper']; nu=k['nu_sum']; r=project(S@w-y)\\n    g=S.T@project(r)+s['source_ridge']*w; J=.5*(r@r+s['source_ridge']*(w@w)); dual=J-g@w+nu*b+cap*np.minimum(0,g-nu).sum()\\n    kkt=max(abs(w.sum()-b),max(0,-w.min(),w.max()-cap),max(abs(w-k['weights'])),max(abs(g-nu-lo+hi)),max(abs(w*lo)),max(abs((cap-w)*hi)),abs(J-k['primal_objective']),abs(dual-k['dual_lower_bound']),abs(J-dual))\\n    u=out['terminal_field']; source=np.einsum('i,ijk->jk',w,s['source_modes']); pde=np.max(abs(Ax@u+(Ay@u.T).T+(s['V_reaction_2d']+s['mu_shifts'][-1])*u-source))\\n    assert np.all(lo>=0) and np.all(hi>=0) and max(kkt,pde)<1e-10,(b,kkt,pde)\\n    max_kkt=max(max_kkt,kkt); max_pde=max(max_pde,pde)\\nprint('seven budgets worst KKT',max_kkt,'worst terminal PDE',max_pde)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (rosette-only affine fit) -> H2 (pooled affine fit with reflecting walls): worst public pulse–shift–channel RMSE improved from 1.61e-6 to 1.12e-6 in the challenger test.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rosette-only fit\",\n      \"rejected_reason\": \"The single-bank sweeps agree with the affine model and pooling them improved predictions on all three tracer pulses without adding parameters.\"\n    }\n  ],\n  \"rationale\": \"Promote the pooled fit and verify the saved solver in isolation. The pulse test catches calibration regressions; KKT checks at active bounds and terminal PDE checks catch downstream regressions before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a1165ff87d7739e4e983c9d855cbb84ac401a67d9ee0d804d7c6d970fa5b6a27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36967.34,
+      "usage_known": true,
+      "prompt_tokens": 27780,
+      "cached_tokens": 9344,
+      "completion_tokens": 1405
+    }
+  ]
+}

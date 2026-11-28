@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f34dc0c6db94c5db2298a7052053451",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:48.132819+00:00",
+  "ended_at_utc": "2026-11-28T03:31:07.512689+00:00",
+  "request_sha256": "d04e9c590eca24856d2df98533e43109c1954752be05047fb87b0904c11a161d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22943,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18099,
+    "cached_tokens": 9344,
+    "completion_tokens": 704
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '47,180p' /tmp/hegel_continual_archive/*_solver.py; python3 - <<'PY'\\nimport pickle,json,numpy as n\\np='/holdout_task/'; a=pickle.load(open(p+'public_batch.pkl','rb'));print('items',len(a)); o=a[0];d=o['dataset'];print('metadata', [(k,str(v)[:140]) for k,v in o.items() if k not in ('dataset','campaign_diagnostics')]); print('dataset keys',list(d)); print('dt/time',d['past_dt'],d['eval_times']);print('diag',None if o.get('campaign_diagnostics') is None else list(o['campaign_diagnostics']));\\nfor k in ['train','test']:\\n s=d[k];print(k,list(s),'aux fingerprint',n.round(s['aux_chamber_telemetry'][:5],4));print('aux ranges',s['aux_chamber_telemetry'].min(0),s['aux_chamber_telemetry'].max(0),'miss',n.isnan(s['coupon_features_raw']).sum(0))\\ncal=d['calibration_load_cells']; R=cal['bridge_raw']; T=cal['true_channel_loads'];print('cal residual RMS',n.std(R-n.c_[n.ones(len(T)),T]@n.linalg.lstsq(n.c_[n.ones(len(T)),T],R,rcond=None)[0],axis=0));print('sweeps',[(k,n.shape(v),n.asarray(v).ravel()[:5]) for k,v in cal['single_channel_sweeps'].items()]);\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n x=n.array(row['facility_telemetry_trace']);print('log',row['completed_campaign_index'],row['completed_campaign_short_name'],'mean',x.mean(0).round(3),'std',x.std(0).round(3),'quarter means',x.reshape(4,6,8).mean(1).round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived affine calibration and material fit -> use measured bridge residuals and chamber observations to decide what transfers; no worst-slice metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer the chamber law from facility telemetry alone\",\n      \"rejected_reason\": \"The asset index advertises direct chamber measurements; confirm they are present before using indirect telemetry.\"\n    }\n  ],\n  \"rationale\": \"Quantify affine bridge error to decide whether nonlinear calibration is needed, confirm diagnostic labels are available for chamber model selection, and inspect the archived fitter below the previous output truncation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8d67feaefa7bf4afb31f08bb8ed60c89f7226245bc80f9919c7f879c32657f4d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21492.38,
+      "usage_known": true,
+      "prompt_tokens": 18099,
+      "cached_tokens": 9344,
+      "completion_tokens": 704
+    }
+  ]
+}

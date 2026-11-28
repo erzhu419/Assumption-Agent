@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe8c123973354db29b69191030ccf2c2",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:10.309751+00:00",
+  "ended_at_utc": "2026-11-28T03:56:35.459626+00:00",
+  "request_sha256": "d0943a36cda31f770484857e840c4598666dff9ebcbf0ea0d4d602e94420d9f8",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60162,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29628,
+    "cached_tokens": 9344,
+    "completion_tokens": 960
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import _basis, _fit, calibrate_upstream\\nfrom batch_solver import solve_batch\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\npanel=raw['calibration_load_cells']; loads=panel['true_channel_loads']; bridge=panel['bridge_raw']\\ncoef=_fit(loads,bridge)\\ne=np.linalg.norm(_basis(loads)@coef-bridge,axis=1)\\nprint('forward bridge residual median',np.median(e),'rows 13,14',e[[13,14]],'largest row indices',np.argsort(e)[-8:])\\nkeep=e <= 8*np.median(e)\\nprint('retained panel rank',np.linalg.matrix_rank(_basis(loads[keep])),'of',_basis(loads).shape[1])\\nc=calibrate_upstream(raw)\\nfor split in ('train','test'):\\n for field in ('past_channel_raw','hold_channel_raw'):\\n  a=c[split][field].reshape(-1,4); b=raw[split][field].reshape(-1,4)\\n  print(split,field,'max closure residual',np.max(np.linalg.norm(_basis(a)@coef-b,axis=1)))\\nclean=dict(raw,calibration_load_cells=dict(panel,bridge_raw=bridge[keep],true_channel_loads=loads[keep]))\\na,b=solve_batch(raw),solve_batch(clean)\\nfor field in a: print(field,'max difference after removing flagged bridge rows',np.max(abs(a[field]-b[field])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Low-imbalance inversion failure → suspected corrupted calibration readings; with the full panel, errors above 4.5 on individual channels were isolated to two measured sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the verified bridge inversion\",\n      \"rejected_reason\": \"The full-panel failures are isolated to two sweeps. Their forward residuals and influence on actual coupons distinguish corrupted readings from an inversion failure that affects the deliverables.\"\n    }\n  ],\n  \"rationale\": \"Check whether the two bad sweeps disagree with the forward bridge at their known loads, whether coupon inversions close, and whether removing the flagged sweeps changes any output. If the sweeps are corrupt and the predictions are unchanged, report the finding and keep the verified composition.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9303db6e95cf4f64260476cb78e11385d1f8e2e4ea7247a6dcd07e919d1eee90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27213.01,
+      "usage_known": true,
+      "prompt_tokens": 29628,
+      "cached_tokens": 9344,
+      "completion_tokens": 960
+    }
+  ]
+}

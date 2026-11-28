@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1edcd3aa7fc645dc845416f2674430ef",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:37.238905+00:00",
+  "ended_at_utc": "2026-11-28T03:40:03.576804+00:00",
+  "request_sha256": "e8c7c15c17afcbb8e7e88001514fa1e0cdd9ad322ea4c968f9ee5d0bed6c3567",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21786,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18394,
+    "cached_tokens": 9344,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in p: print(str(e)[:3300])\\nPY\\ncat >/tmp/probe_bridge.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=p['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw'];\\ndef basis(x,name):\\n z=[np.ones(len(x)),*x.T]; pairs=[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)]\\n if name=='aff': return np.array(z).T\\n if name=='diag2': return np.c_[np.array(z).T,x*x]\\n if name.startswith('poly'):\\n  for d in range(2,int(name[-1])+1): z.extend(np.prod(x[:,ix],axis=1) for ix in combinations_with_replacement(range(4),d))\\n else:\\n  z+=pairs\\n  k,f=name.split(':'); a=float(k); z.extend({'sin':lambda:np.sin(a*x),'tanh':lambda:np.tanh(a*x),'rat':lambda:x/(1+(a*x)**2),'cub':lambda:x**3}[f]().T)\\n return np.array(z).T\\n\\ndef fit(z,y):\\n w=np.ones(len(z));\\n for _ in range(16):\\n  b=np.linalg.lstsq(z*w[:,None],y*w[:,None],rcond=1e-10)[0]; e=np.linalg.norm(z@b-y,axis=1); w=1/np.sqrt(1+(e/max(.3*np.median(e),1e-7))**2)\\n keep=e<max(6*np.median(e),.15); return np.linalg.lstsq(z[keep],y[keep],rcond=1e-10)[0]\\nif __name__=='__main__':\\n for name in ['aff','diag2','poly2','poly3','1:cub']+[f'{a}:{f}' for f in ('sin','tanh','rat') for a in (.5,1,1.5,2)]:\\n  z=basis(x,name); err=[]\\n  for i in range(len(x)):\\n   m=np.arange(len(x))!=i; err.append(z[i]@fit(z[m],y[m])-y[i]);\\n  e=np.array(err); n=np.linalg.norm(e,axis=1); clean=n<5; axis=np.count_nonzero(x,axis=1)==1; print(name,'n',clean.sum(),'axis/mixed max',np.round([max(n[clean&axis]),max(n[clean&~axis])],5),'median',round(np.median(n),5),'channel RMSE',np.round(np.sqrt(np.mean(e[clean]**2,axis=0)),5),'gross',np.where(~clean)[0]);\\n print('quadratic coefficients');print(np.round(fit(basis(x,'poly2'),y),5)); print('cubic coefficients'); print(np.round(fit(basis(x,'poly3'),y)[15:],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compare robust affine coupling with structured nonlinear bridge models; affine in-sample median row error is 0.332, with three gross spikes above 27.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave-one-row-out residuals on axis and mixed-load calibrations will show whether pairwise or higher-order terms improve prediction outside the fit. The facility log may explain the clustered spikes and help distinguish calibration corruption from a genuine response change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "632f109184b2d5bc9c54db95dc5fcce807a11f8c69364f34821d332972cbe94e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28436.57,
+      "usage_known": true,
+      "prompt_tokens": 18394,
+      "cached_tokens": 9344,
+      "completion_tokens": 1004
+    }
+  ]
+}

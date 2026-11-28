@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f602444481c74fe2a120c17ffaff7513",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:00:04.997777+00:00",
+  "ended_at_utc": "2026-11-28T04:00:45.439573+00:00",
+  "request_sha256": "0372a283fb39c8b0ff9629ae0a7aca8a7bec6acdc5f009a470f5ad21f27b368a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46720,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26247,
+    "cached_tokens": 9344,
+    "completion_tokens": 1619
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/holdout_margin_audit.py <<'PY'\\nimport itertools\\nimport sys\\nfrom pathlib import Path\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import _fit, _invert\\nfrom downstream_solver import _responses\\np = {}\\nexec(Path('/tmp/probe_walls.py').read_text().split('sx,sy=')[0], p)\\ns, y, w = p['s'], p['y'], p['weights']\\nraw_study = p['item']['study']\\nref = np.asarray(raw_study['sensor_calibration_sweeps']['ref_rosette'])\\nraw = np.asarray(raw_study['sensor_calibration_sweeps']['raw_rosette'])\\ncal_err = []\\nfor fold in range(5):\\n    hold = np.arange(len(raw)) % 5 == fold\\n    cal_err.append(_invert(raw[hold], _fit(ref[~hold], raw[~hold])) - ref[hold])\\ncal_err = np.concatenate(cal_err)\\nprint('out-of-fold calibration inverse RMSE per channel:', np.sqrt(np.mean(cal_err**2, axis=0)))\\nsx, sy = [p['states'](d) for d in 'xy']\\nrows = [[state[j] for state in axis] for axis in (sx, sy) for j in range(2)]\\nkeys = list(itertools.product(range(3), repeat=4))\\ncoefs = [np.array([rows[i][k] for i, k in enumerate(key)]) for key in keys]\\nbase = coefs[keys.index((2,2,1,1))]\\nfor wall in range(4):\\n    d, edge = 'xy'[wall//2], wall%2\\n    k, v = s['kappa_'+d], s['vel_'+d]\\n    n = len(k); h = s['L'+d]/(n-1); i, j = (0,1) if edge == 0 else (n-1,n-2)\\n    face = (k[i]+k[j])/(2*h*h)\\n    rob = s['robin_'+d]/h\\n    inward = max(0., (-1 if edge == 0 else 1)*v[i])/h\\n    outward = max(0., (1 if edge == 0 else -1)*v[i])/h\\n    seam = (k[0]+k[-1])/(2*h*h)\\n    base_in, base_seam, base_leak = base[wall]\\n    for label, row in [('face', (face,base_seam,base_leak)),('double', (2*base_in,base_seam,base_leak)),('leaky', (base_in,base_seam,rob)),('inward_upwind',(face+inward,base_seam,base_leak)),('reversed_upwind',(face+outward,seam+inward if d=='x' else 0,base_leak)),('diffusion_seam',(base_in,seam,base_leak))]:\\n        a = base.copy(); a[wall] = row\\n        if any(np.allclose(a, b, rtol=0, atol=1e-12) for b in coefs):\\n            continue\\n        keys.append((wall,label)); coefs.append(a)\\nerrors = np.stack([p['pred'](a.ravel())-y for a in coefs])\\nshift_count = len(s['mu_shifts'])\\nZ = s['Z_nuisance']\\nS, _ = _responses(s)\\nassert np.max(np.abs((S@w-y)-errors[keys.index((2,2,1,1))])) < 1e-12\\nfor profile in (False, True):\\n    E = errors.reshape(len(keys), shift_count, -1, y.shape[1]).copy()\\n    if profile:\\n        for j, z in enumerate(np.array_split(Z, shift_count)):\\n            q = np.linalg.qr(z, mode='reduced')[0]\\n            E[:,j] -= q @ (q.T @ E[:,j])\\n    floors, margins = [], []\\n    for sh, pul in itertools.product(range(shift_count),range(y.shape[1])):\\n        shifts = np.arange(shift_count) != sh\\n        pulses = np.arange(y.shape[1]) != pul\\n        score = np.mean(E[:,shifts][:,:,:,pulses]**2, axis=(1,2,3))\\n        i,j = np.argsort(score)[:2]\\n        floors.append(float(np.sqrt(np.mean(E[i,sh,:,pul]**2))))\\n        margins.append(float(np.sqrt(score[j])-np.sqrt(score[i])))\\n        assert keys[i] == (2,2,1,1), (profile,sh,pul,keys[i])\\n    assert max(floors) < 5e-6\\n    print('within-shift nuisance profiling:', profile, 'wall candidates:', len(keys), 'worst joint held-out RMSE:', max(floors), 'minimum training RMSE margin:', min(margins))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/holdout_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared wall mode -> H2 periodic x and reflecting y; worst leave-one-pulse-out RMSE is 1.29e-6, pending a joint pulse-and-shift audit.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Run classification or relay-mode checks\",\"rejected_reason\":\"This is a steady continuous inverse problem with no class labels, relay states, or time evolution. The relevant confounding test is whether nuisance directions change wall selection within shifts.\"}],\"rationale\":\"Test additional wall conventions with each pulse and shift jointly withheld, then repeat selection after within-shift nuisance projection. A changed winner would reopen the stencil choice. Out-of-fold sensor inversion quantifies calibration error independently; the audit writes nothing to the fixtures or deliverables.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3542ac536957fe64246d6137e734197f0f42e389153ae79f629229ce6d5e5659",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42519.26,
+      "usage_known": true,
+      "prompt_tokens": 26247,
+      "cached_tokens": 9344,
+      "completion_tokens": 1619
+    }
+  ]
+}

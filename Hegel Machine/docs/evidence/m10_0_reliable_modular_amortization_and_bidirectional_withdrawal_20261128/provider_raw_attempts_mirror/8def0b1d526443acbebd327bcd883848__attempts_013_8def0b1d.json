@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8def0b1d526443acbebd327bcd883848",
+  "call_seq": 13,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:10.477418+00:00",
+  "ended_at_utc": "2026-11-28T03:58:50.369699+00:00",
+  "request_sha256": "8341a33f0bdfbc01d4b86d47c10ffe5e96f03f5d344cef9b6c18cab199532b78",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83661,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39862,
+    "cached_tokens": 5504,
+    "completion_tokens": 1678
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_two_stage.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read(); lo=s.index('def calibration_map'); hi=s.index('def box_simplex',lo)\\ns=s[:lo]+'''def calibration_map(sweeps, held_out=None):\\n    \\\"\\\"\\\"Jointly fit the isolated and mixed sweeps, sharing the transfer curves.\\\"\\\"\\\"\\n    from numpy.polynomial.chebyshev import chebvander\\n    from scipy.optimize import least_squares\\n\\n    X = np.asarray(sweeps['ref_rosette'])\\n    Y = np.asarray(sweeps['raw_rosette'])\\n    single = sweeps['single_bank_sweeps']\\n    t, v, ids = (np.asarray(single[k]) for k in ('ref_signal', 'raw_readout', 'bank_id'))\\n    x = np.r_[t, X.ravel()]\\n    opposite = np.r_[np.zeros_like(t), np.roll(X, 2, axis=1).ravel()]\\n    bank = np.r_[ids, np.tile(np.arange(4), len(X))].astype(int)\\n    obs = np.r_[v, Y.ravel()]\\n    # The gross sweep spikes are separate from the physical readout range.\\n    keep = abs(obs) < 5.\\n    if held_out is not None:\\n        keep[len(t) + (4*np.asarray(held_out)[:, None] + np.arange(4)).ravel()] = False\\n    A = chebvander(x/1.8, 9)[:, 1::2]\\n    B = (chebvander(opposite/1.8, 8) - chebvander(0., 8))[:, 1:]\\n\\n    def error(p):\\n        gain = np.r_[1., p[4:7]]\\n        return (p[bank] + gain[bank]*(A@p[7:12] + B@p[12:]) - obs)[keep]\\n\\n    p0 = np.r_[np.zeros(4), 1.6, 1., 1.6, 1., np.zeros(12)]\\n    p = least_squares(error, p0, loss='soft_l1', f_scale=3e-5,\\n                      gtol=1e-11, max_nfev=200).x\\n    own = np.zeros(10)\\n    own[1::2] = p[7:12]\\n    cross = np.r_[0., p[12:]]\\n    return p[:4], np.r_[1., p[4:7]], own, cross\\n\\n\\ndef raw_map(x, offset, gain, own, cross):\\n    from numpy.polynomial.chebyshev import chebval\\n    z = np.roll(x, 2, axis=1)/1.8\\n    return offset + gain*(chebval(x/1.8, own) + chebval(z, cross) - chebval(0., cross))\\n\\n\\ndef calibrate(study):\\n    from numpy.polynomial.chebyshev import chebder, chebval\\n\\n    offset, gain, own, cross = calibration_map(study['sensor_calibration_sweeps'])\\n    raw = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    target = (raw-offset)/gain\\n    own_d, cross_d = chebder(own)/1.8, chebder(cross)/1.8\\n    c0 = chebval(0., cross)\\n    x = target / chebval(0., own_d)\\n    for _ in range(15):\\n        z = np.roll(x, 2, axis=1)/1.8\\n        error = chebval(x/1.8, own) + chebval(z, cross) - c0 - target\\n        if np.max(abs(error)) < 1e-13:\\n            break\\n        diag, off = chebval(x/1.8, own_d), chebval(z, cross_d)\\n        paired_diag = np.roll(diag, 2, axis=1)\\n        det = diag*paired_diag - off*np.roll(off, 2, axis=1)\\n        x -= (paired_diag*error - off*np.roll(error, 2, axis=1))/det\\n    return x.ravel()\\n\\n\\n'''+s[hi:]; open(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe10.py 2>/dev/null | grep -E 'y range|degree' | head -6 || true\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); c=importlib.util.module_from_spec(spec); spec.loader.exec_module(c)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X,Y=a['ref_rosette'],a['raw_rosette']; err=np.zeros_like(Y)\\nfor idx in np.array_split(np.random.default_rng(20).permutation(len(X)),8):\\n err[idx]=c.raw_map(X[idx],*c.calibration_map(a,idx))-Y[idx]\\nprint('exact artifact OOF clean sweep median/p95/max',np.quantile(abs(err[abs(Y)<5]),[.5,.95,1]))\\nx=c.calibrate(s); print('readout inversion max',np.max(abs(c.raw_map(x.reshape(-1,4),*c.calibration_map(a)).ravel()-s['y_obs_raw'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: two-stage calibration with open Robin walls → H2: robust joint opposite-channel calibration with the same walls; challenger sweep OOF max error 0.0001935 versus 0.00536, with baseline worst sensor-block RMSE 0.01193.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate Robin wall coefficients\",\n      \"rejected_reason\": \"It worsened both pooled and worst-fold sensor error at the required source ridge.\"\n    },\n    {\n      \"option\": \"Keep the two-stage calibration\",\n      \"rejected_reason\": \"The shared joint fit reduced maximum held-out clean sweep error by about 28-fold without changing the chamber operator.\"\n    }\n  ],\n  \"rationale\": \"Promote the joint calibration and check that integrating it preserves its out-of-fold gain and inverts the observed readouts. Keep the specified Robin coefficients, which beat freely fitted coefficients out of fold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "15eacf157809b21ab835db3f51d7fe19c002d01e0d82bde9e596ad467ce4fbd4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41994.52,
+      "usage_known": true,
+      "prompt_tokens": 39862,
+      "cached_tokens": 5504,
+      "completion_tokens": 1678
+    }
+  ]
+}

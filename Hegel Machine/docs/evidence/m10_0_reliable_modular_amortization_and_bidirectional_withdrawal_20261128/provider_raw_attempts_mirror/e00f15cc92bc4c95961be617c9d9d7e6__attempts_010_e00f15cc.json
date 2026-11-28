@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e00f15cc92bc4c95961be617c9d9d7e6",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:59.986254+00:00",
+  "ended_at_utc": "2026-11-28T03:56:36.596195+00:00",
+  "request_sha256": "f05cb31b649d221876d1d60004f6377dc2bd8779002021833e6615b579be8677",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 57705,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29484,
+    "cached_tokens": 9344,
+    "completion_tokens": 1448
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('upstream_transducer.py')\\ns = p.read_text()\\na = s.index('    freq = least_squares(')\\nb = s.index('\\\\n\\\\ndef _forward', a)\\ns = s[:a] + '''    # The channels share the same normalized response; gain and offset remain\\n    # channel-specific. Profile them out of the nonlinear fit.\\n    good = weights.astype(bool)\\n    initial, _ = project(_INITIAL_FREQ, weights)\\n    seed = np.r_[_INITIAL_FREQ, np.median(initial[:, 2:] / initial[:, 1, None], axis=0)]\\n    truth, raw = x[good], y[good]\\n    partner = truth[:, _PARTNER]\\n    raw_mean = raw.mean(axis=0)\\n    raw_centered = raw - raw_mean\\n\\n    def shared(params):\\n        h, k, sine, cross, cosine = params\\n        shape = (truth + sine * np.sin(h * truth) + cross * partner\\n                 + cosine * (np.cos(k * partner) - 1))\\n        center = shape.mean(axis=0)\\n        centered = shape - center\\n        gain = np.sum(centered * raw_centered, axis=0) / np.sum(centered**2, axis=0)\\n        offset = raw_mean - gain * center\\n        return shape * gain + offset - raw, gain, offset\\n\\n    params = least_squares(lambda p: shared(p)[0].ravel(), seed,\\n                           gtol=1e-12, ftol=1e-10, xtol=1e-10).x\\n    _, gain, offset = shared(params)\\n    return params[:2], np.column_stack((offset, gain, gain[:, None] * params[2:]))\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I /tmp/bridge_margin_audit.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _forward, _inverse\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as fh:\\n    d = pickle.load(fh)[0]['dataset']\\nc = d['calibration_load_cells']\\nf, b = _fit(c)\\nmargin = b[:, 1] - f[0]*abs(b[:, 2]) - abs(b[:, 3]) - f[1]*abs(b[:, 4])\\nassert min(margin) > 0\\nz = np.pi/f[0]\\ngrid = [-z, -.65, 0, .35, .9, z-.02, z, z+.02, 1.35]\\nx = np.stack(np.meshgrid(grid, grid, grid, grid), axis=-1).reshape(-1, 4)\\ne = np.max(abs(_inverse(_forward(x, f, b), f, b)-x))\\nassert e < 1e-9\\nkeys = ('past_channel_raw', 'hold_channel_raw')\\ntrial = {k: d['test'][k][:3] for k in keys}\\nd = dict(d, chamber_verification_trials=[trial])\\nbefore = pickle.dumps(d)\\no = calibrate_upstream(d)\\nassert before == pickle.dumps(d)\\nfor src, dst in [(d['train'], o['train']), (d['test'], o['test']), (trial, o['chamber_verification_trials'][0])]:\\n    for k in keys:\\n        assert src[k].shape == dst[k].shape\\n        np.testing.assert_allclose(_forward(dst[k].reshape(-1,4), f,b),src[k].reshape(-1,4),atol=1e-10,rtol=0)\\noc = o['calibration_load_cells']\\nfor a, target in [(oc['bridge_raw'], c['true_channel_loads']), (oc['single_channel_sweeps']['cmd_stress'], c['single_channel_sweeps']['true_stress'])]:\\n    np.testing.assert_array_equal(a,target)\\n    assert not np.shares_memory(a,target)\\nassert calibrate_upstream(dict(d,chamber_verification_trials=None))['chamber_verification_trials'] is None\\nassert all(np.all(np.isfinite(v)) for v in solve_batch(d).values())\\nprint('Normalized coefficients', b[0, 2:]/b[0, 1], 'minimum Jacobian margin', min(margin), 'worst stress-grid load error', e)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent channel harmonics → shared normalized harmonics with channel-specific gains and offsets; held-out worst load error improved from 0.00152449 to 0.00143884 in the challenger audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep independent nonlinear coefficients or add mixed-load terms\",\n      \"rejected_reason\": \"The shared fit improved both worst held-out load error and pooled load RMSE; the product and rational-difference terms did not improve held-out bridge error.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler challenger while retaining row-level spike rejection and distinct linear and sine gains within each channel. Re-run the real-data audit on the shipped fit to catch any discrepancy from the probe, and verify the inverse and output contract in an isolated process before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9f58628441eb2a95fdaf3e88de54f65e6369db660b30ad0aab06698ad7f76ff7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38681.74,
+      "usage_known": true,
+      "prompt_tokens": 29484,
+      "cached_tokens": 9344,
+      "completion_tokens": 1448
+    }
+  ]
+}

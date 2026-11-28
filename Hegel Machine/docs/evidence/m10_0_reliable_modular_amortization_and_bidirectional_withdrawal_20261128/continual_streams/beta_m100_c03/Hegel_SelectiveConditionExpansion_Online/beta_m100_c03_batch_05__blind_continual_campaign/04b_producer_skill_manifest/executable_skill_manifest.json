@@ -1,0 +1,178 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m100_c03_batch_05_42a50c8214bc",
+    "source_hash": "42a50c8214bc966f37bee6c4e0b4b11ef67a41d7c381720f0cb19bdae3eaff1d",
+    "parent_ids": [],
+    "source_episode_id": "beta_m100_c03_batch_05__blind_continual_campaign",
+    "task_id": "beta_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/bank_laws.py",
+        "archived_relpath": "producers/tmp__bank_laws.py",
+        "bytes": 2398,
+        "sha256": "b2f0681f33568746a6cb04534c414f6abbdcd30a4f8f396a4c3bd77026d696e4"
+      },
+      {
+        "container_path": "/tmp/coupling.py",
+        "archived_relpath": "producers/tmp__coupling.py",
+        "bytes": 2485,
+        "sha256": "bb5b6aa320d6f7e412c39ed5cbaac5a21821c8e242eac53e0455437521ffbc3e"
+      },
+      {
+        "container_path": "/tmp/identify_rosette.py",
+        "archived_relpath": "producers/tmp__identify_rosette.py",
+        "bytes": 1635,
+        "sha256": "29670e4b7500ae0704608a8f4c636020c517089a01620bdcc355f16afa142a63"
+      },
+      {
+        "container_path": "/tmp/probe_cal.py",
+        "archived_relpath": "producers/tmp__probe_cal.py",
+        "bytes": 1347,
+        "sha256": "e326228386abd68bf6599197bf0aa9cb3a1274863f9b67ce029ffabf2b7ac5b5"
+      },
+      {
+        "container_path": "/tmp/probe_compact.py",
+        "archived_relpath": "producers/tmp__probe_compact.py",
+        "bytes": 1771,
+        "sha256": "d3e5d2942a4ca299ac882b0b49f61062bbb3025f387316cd720b741bc7e399bb"
+      },
+      {
+        "container_path": "/tmp/probe_shared_fit.py",
+        "archived_relpath": "producers/tmp__probe_shared_fit.py",
+        "bytes": 1843,
+        "sha256": "ee4f406b118cbe072d50697701c51e9c915ec6d85c0e7722178f727d00c1488d"
+      },
+      {
+        "container_path": "/tmp/shared.py",
+        "archived_relpath": "producers/tmp__shared.py",
+        "bytes": 1897,
+        "sha256": "2f3cae710d0aa95950064cd0794af6a08ad5ba7beed8fc6606ebbdcac0fcb271"
+      },
+      {
+        "container_path": "/tmp/test_transducer.py",
+        "archived_relpath": "producers/tmp__test_transducer.py",
+        "bytes": 1898,
+        "sha256": "b262c98aec827624e9c0782d947a187510902fd2dfc74b0c13735ceddd962d5d"
+      },
+      {
+        "container_path": "/tmp/transducer_baseline.py",
+        "archived_relpath": "producers/tmp__transducer_baseline.py",
+        "bytes": 5108,
+        "sha256": "2a3def8982f28f9e7ba5ca220ca54a193742c8b6e6dc908c6b70c947f92e3884"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_batch_01_solver.py",
+        "bytes": 5105,
+        "sha256": "470925abe77c30d99529922ea8e740d41b433bed211eae73529dad8a3651d6c6"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_batch_02_solver.py",
+        "bytes": 4711,
+        "sha256": "ae0f6574b62180fdc59459d702617e8bf7f24c86956145553bd74828e690b133"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_s00_solver.py",
+        "bytes": 5061,
+        "sha256": "748d773f919c3fbe75c289df99c4ace1e0b88406ed7db4bb0dfd0d391e895e9c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat batch_solver.py validate_public_schema.py _verified_downstream.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))\ndef show(k,v):\n if isinstance(v,np.ndarray):\n  print(k,v.shape,v.dtype, np.nanpercentile(v,[0,10,50,90,100]).round(5) if v.size and v.dtype.kind in 'iuf' else '')\n elif isinstance(v,dict): print(k, list(v))\n elif isinstance(v,(tuple,list)): print(k,type(v).__name__,len(v), list(v[0]) if v and isinstance(v[0],dict) else '')\n else: print(k,str(v)[:200])\nfor k,v in s.items(): show(k,v)\nfo",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nitems=pickle.load(open('public_batch.pkl','rb'));print('items',len(items))\ndef show(k,v):\n if isinstance(v,np.ndarray):\n  print(k,v.shape,v.dtype, np.nanpercentile(v,[0,5,50,95,100]).round(7) if v.size and v.dtype.kind in 'iuf' else '')\n elif isinstance(v,dict): print(k, list(v))\n elif isinstance(v,(tuple,list)): print(k,type(v).__name__,len(v), list(v[0]) if v and isinstance(v[0],dict) else '')\n else: print(k,str(v)[:100])\nfor item in items:\n print('item',list(item)); s=item['study'];print('study',list(s));c=s['sensor_calibration_",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nit=pickle.load(open('public_batch.pkl','rb'))[0];s=it['study'];c=s['sensor_calibration_sweeps'];x=c['ref_rosette'];y=c['raw_rosette'];print('diagnostics keys',list(it['campaign_diagnostics']));print('support counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True));print('rank',np.linalg.matrix_rank(x),'ranges',x.min(0),x.max(0));print('row bank IDs',s['row_bank_id'][:24]);print('pulse field',s.get('reference_tracer_pulses'));d=c['single_bank_sweeps'];print('bank array shapes',{k:np.shape(v) for k,v in d.items()});print('pa",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];c=s['sensor_calibration_sweeps'];x=c['ref_rosette'];y=c['raw_rosette'];print('support',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('ranges',x.min(0),x.max(0));print('banks',s['row_bank_id'][:24]);d=c['single_bank_sweeps'];print('single-bank', {k:np.shape(v) for k,v in d.items()}); print(np.round(np.c_[x,y][::3],5)); print('bank samples',np.c_[d['bank_id'],d['ref_signal'],d['raw_readout']][::6].round(5)); z=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(z,y,r",
+      "cat >/tmp/probe_cal.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations,combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; good=np.max(abs(y),axis=1)<6\nnp.set_printoptions(precision=6,suppress=True,linewidth=130)\nprint('axis rows',np.c_[x[:16],y[:16]])\nprint('bank data',np.column_stack(list(c['single_bank_sweeps'].values())).reshape(4,12,3).transpose(1,0,2)[:, :, 1:])\ni,j=np.triu_indices(4,1)\nfor name,terms in [('affine',[x]),('quadratic',[x,x*x,x[:,i]",
+      "cat >/tmp/identify_rosette.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps'];x=c['ref_rosette'];y=c['raw_rosette']; bank=c['single_bank_sweeps']; good=np.max(abs(y),axis=1)<6\nfns={'tanh':lambda t,b:np.tanh(b*t),'atan':lambda t,b:np.arctan(b*t),'rational':lambda t,b:t/(1+b*t*t),'sqrt':lambda t,b:t/np.sqrt(1+b*t*t),'erf':lambda t,b:__import__('scipy').special.erf(b*t)}\nfor name,f in fns.items():\n def fit(t,v,linear):\n  def basis(b):return np.column_stack([np.ones(le",
+      "cat >/tmp/bank_laws.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf,expit\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; C=s['sensor_calibration_sweeps']; d=C['single_bank_sweeps']; t=d['ref_signal']; y=d['raw_readout']; bank=d['bank_id']; good=abs(y)<6\nlaws={\n 'tanh+rational':(lambda x,a,b:[np.tanh(a*x),x/(1+b*x*x)],2),\n 'tanh+atan':(lambda x,a,b:[np.tanh(a*x),np.arctan(b*x)],2),\n 'tanh+sqrt':(lambda x,a,b:[np.tanh(a*x),x/np.sqrt(1+b*x*x)],2),\n 'tanh+linear+cubic':(lambda x,a:[np.tanh(a*x),x,x**3],1),\n 'tanh+c",
+      "cat >/tmp/shared.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom numpy.polynomial.chebyshev import chebvander\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];c=s['sensor_calibration_sweeps'];d=c['single_bank_sweeps'];t=d['ref_signal'];r=d['raw_readout'];k=d['bank_id'];m=abs(r)<6;x=c['ref_rosette'];y=c['raw_rosette'];g=np.max(abs(y),1)<6\n# Anchor gain and offset using one bank, then pool all points on the same amplitude grid.\nT=np.unique(t); arr=np.array([r[(t==v)] for v in T]); arr[abs(arr)>6]=np.nan\nfor j in range(4):\n z=np.isfinite(arr",
+      "cat >/tmp/coupling.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom numpy.polynomial.chebyshev import chebvander\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];c=s['sensor_calibration_sweeps'];x=c['ref_rosette']; y=c['raw_rosette'];d=c['single_bank_sweeps'];u=d['ref_signal'];bank=d['bank_id'];r=d['raw_readout']; g=np.max(abs(y),1)<6; h=abs(r)<6\nA=np.vstack((x,np.eye(4)[bank]*u[:,None]));Y=np.vstack((y,np.where(np.eye(4,dtype=bool)[bank],r[:,None],np.nan)));G=np.r_[g,h]; Y[~G]=np.nan\njs=np.array([2,3,0,1]);i,j=np.triu_indices(4,1)\ndef des",
+      "cat > /holdout_task/upstream_transducer.py <<'PY'\n\"\"\"Fit and invert the four-channel rosette transfer function.\"\"\"\nimport numpy as np\nfrom numpy.polynomial.chebyshev import chebvander, chebval, chebder\nfrom scipy.optimize import least_squares\n\n_OPPOSITE = (2, 3, 0, 1)\n\n\ndef _basis(x, scale, k):\n    j = _OPPOSITE[k]\n    diagonal = chebvander(x[:, k] / scale[k], 9)\n    coupled = chebvander(x[:, j] / scale[j], 7)[:, 1:]\n    return np.column_stack((diagonal, coupled - chebvander(0., 7)[:, 1:]))\n\n\ndef _gross_mask(y):\n    # EMI is a row event; do not let one affected channel enter another fit.\n    i",
+      "cat >/tmp/probe_compact.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];c=s['sensor_calibration_sweeps'];d=c['single_bank_sweeps'];x=c['ref_rosette'];y=c['raw_rosette'];g=np.max(abs(y),axis=1)<6;b=d['bank_id'];t=d['ref_signal'];r=d['raw_readout'];sel=abs(r)<6\nX=[np.r_[x[g,k],t[sel&(b==k)]] for k in range(4)]; V=[np.r_[x[g,(k+2)%4],np.zeros(np.sum(sel&(b==k)))] for k in range(4)];Y=[np.r_[y[g,k],r[sel&(b==k)]] for k in range(4)]\ndef diagonal(u,a,n):\n return (u+a[0]*u**3+a[1]*u**5)/(1+a[2]*u**2+a[",
+      "cat >/tmp/probe_shared_fit.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom numpy.polynomial.chebyshev import chebvander\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; d=c['single_bank_sweeps']; ids=d['bank_id']; ref=d['ref_signal']; raw=d['raw_readout']; keep=np.max(abs(y),axis=1)<6; bk=abs(raw)<6\nbank=np.r_[np.tile(np.arange(4),keep.sum()),ids[bk]]; u=np.r_[x[keep].ravel(),ref[bk]]; v=np.r_[np.roll(x[keep],2,axis=1).ravel(),np.zeros(bk.sum())]; z=np.r_[y[keep].r",
+      "set -e\ncp /holdout_task/upstream_transducer.py /tmp/transducer_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/upstream_transducer.py')\ns=p.read_text(); start=s.index('def _basis'); end=s.index('def _gross_mask'); s=s[:start]+'''def _diagonal(t, p):\n    a, b, c, d, e = p\n    q = t*t\n    numerator = t * (1 + q*(a + b*q))\n    denominator = 1 + q*(c + q*(d + e*q))\n    slope = ((1 + q*(3*a + 5*b*q))*denominator\n             - numerator*2*t*(c + q*(2*d + 3*e*q))) / denominator**2\n    return numerator / denominator, slope\n\n\n'''+s[end:]; start=s.index('def _fit'); end=s.in"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__transducer_baseline.py",
+      "primary_producer_container_path": "/tmp/transducer_baseline.py",
+      "selected_channels": [
+        "m100_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 6058,
+        "sha256": "dd1104196f3f83bfde228fd8a6c5be0363cbb838575a5acdad2b4576668e30f8",
+        "content_addressed_ref": "content_addressed_blobs/dd1104196f3f83bfde228fd8a6c5be0363cbb838575a5acdad2b4576668e30f8.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "42a50c8214bc966f37bee6c4e0b4b11ef67a41d7c381720f0cb19bdae3eaff1d",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\ncp /holdout_task/upstream_transducer.py /tmp/transducer_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/upstream_transducer.py')\ns=p.read_text(); start=s.index('def _basis'); end=s.index('def _gross_mask')",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "42a50c8214bc966f37bee6c4e0b4b11ef67a41d7c381720f0cb19bdae3eaff1d",
+        "expected_candidate_sha256": "42a50c8214bc966f37bee6c4e0b4b11ef67a41d7c381720f0cb19bdae3eaff1d",
+        "computed_candidate_sha256": "42a50c8214bc966f37bee6c4e0b4b11ef67a41d7c381720f0cb19bdae3eaff1d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 6058
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_42a50c82"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": []
+  }
+}

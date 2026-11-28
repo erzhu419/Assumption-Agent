@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4fc1da45849d458c9e23d39b8e12ad3c",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:08.829561+00:00",
+  "ended_at_utc": "2026-11-28T03:47:48.122829+00:00",
+  "request_sha256": "42b55392509a2eeeb37e6fe662278112d64cab80eb410e1a1c05c626f1d922ad",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53763,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30120,
+    "cached_tokens": 9344,
+    "completion_tokens": 1729
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _axis, _box_simplex\\n\\ndef reference_axis(k, v, h, wraps):\\n    n = len(k)\\n    a = np.zeros((n, n))\\n    for i in range(n):\\n        if wraps or 0 < i < n-1:\\n            left, right = (i-1)%n, (i+1)%n\\n            a[i,left] -= (k[i]+k[left])/(2*h*h) + max(v[i],0)/h\\n            a[i,right] -= (k[i]+k[right])/(2*h*h) + max(-v[i],0)/h\\n        else:\\n            a[i,1 if i==0 else n-2] = -k[i]/(h*h)\\n        a[i,i] = -a[i].sum()\\n    return a\\n\\ndef certificate_error(w, g, nu, cap, budget):\\n    lo = np.maximum(g-nu, 0)\\n    hi = np.maximum(nu-g, 0)\\n    return max(abs(w.sum()-budget), max(0, -w.min(), w.max()-cap), np.max(abs(w*lo)), np.max(abs((cap-w)*hi)))\\n\\nwith open('public_batch.pkl', 'rb') as file:\\n    item = pickle.load(file)[0]\\ns = item['study']\\ncal = calibrate_upstream(s)\\nnx,ny = s['nx'],s['ny']\\nax,ay = [reference_axis(s['kappa_'+d],s['vel_'+d],s['L'+d]/(s['n'+d]-1),d=='x') for d in ('x','y')]\\na = np.kron(np.eye(ny),ax) + np.kron(ay,np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nsource = np.stack([f.ravel(order='F') for f in s['source_modes']],axis=1)\\nix,iy = s['sensor_ij'].T\\nrows=[]\\nfor shift in s['mu_shifts']:\\n    u=np.linalg.solve(a+shift*np.eye(len(a)),source)\\n    rows.append(u[ix+nx*iy])\\nS=np.vstack(rows)\\nrmse=[]\\nfor pulse in item['campaign_diagnostics']:\\n    y=calibrate_upstream(dict(s,y_obs_raw=pulse['y_pulse_raw']))['y_obs_raw']\\n    errs=(S@pulse['w_pulse']-y).reshape(len(rows),-1)\\n    rmse.extend(np.sqrt(np.mean(errs**2,axis=1)))\\nassert max(rmse)<4e-6\\nZ=s['Z_nuisance']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nresult=solve_batch(s); w=result['weights']; c=result['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']; nu=c['nu_sum']\\nnp.testing.assert_allclose(result['terminal_field'],(u@w).reshape(nx,ny,order='F'),atol=1e-12,rtol=0)\\nT=P@S; e=T@w-P@cal['y_obs_raw']; g=T.T@e+ridge*w; obj=(e@e+ridge*(w@w))/2\\nlo,hi=np.array(c['lam_lower']),np.array(c['lam_upper'])\\nnp.testing.assert_allclose(c['weights'],w,atol=0,rtol=0)\\nnp.testing.assert_allclose(g-nu-lo+hi,0,atol=1e-12,rtol=0)\\nassert min(lo.min(),hi.min())>=0\\nassert abs(c['primal_objective']-obj)<1e-12\\nbound=obj-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\nassert abs(c['dual_lower_bound']-bound)<1e-12\\nassert certificate_error(w,g,nu,cap,budget)<1e-12\\nrng=np.random.default_rng(41); worst=0.; both=0\\nfor j in range(360):\\n    n=int(rng.integers(3,19)); k=rng.uniform(.1,1,n); v=rng.uniform(-1,1,n); h=rng.uniform(.05,.3)\\n    for wrap in (True,False):\\n        np.testing.assert_allclose(_axis(k,v,h,wrap).toarray(),reference_axis(k,v,h,wrap),atol=2e-13,rtol=1e-13)\\n    X=rng.normal(size=(n//2,n)); H=X.T@X+0.04*np.eye(n); f=rng.normal(size=n)*5; cap=.42\\n    budget=[0, n*cap, int(rng.integers(1,n))*cap, cap*rng.uniform(0,n)][j%4]\\n    w,nu=_box_simplex(H,f,cap,budget)\\n    worst=max(worst,certificate_error(w,H@w+f,nu,cap,budget)); both+=bool(np.any(w==0) and np.any(w==cap))\\nassert worst<1e-10 and both>0\\nprint(f'Worst public tracer/shift RMSE {max(rmse):.3e}; public primal-dual gap {obj-bound:.3e}; worst 360-case KKT error {worst:.3e}; both bounds active in {both} cases', flush=True)\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (fitted wrap coefficients) → H2 (periodic upwind x and reflecting y); exact-stencil worst public pulse/shift RMSE is 2.93e-6 and public primal-dual gap is 4.09e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema result alone\",\n      \"rejected_reason\": \"The public weights are all interior, so that result does not exercise active bounds; the schema also does not independently verify field orientation.\"\n    }\n  ],\n  \"rationale\": \"Verify the unchanged artifacts in an isolated Python process. The independent dense reference detects stencil, field-ordering, or certificate errors; the active-bound cases detect optimizer failures not exercised by the public weights. A failure identifies which component to revise before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "071b686911c3ac79a251f67d686854d62ffab7196dc93d5680b848eb635bb708",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43520.79,
+      "usage_known": true,
+      "prompt_tokens": 30120,
+      "cached_tokens": 9344,
+      "completion_tokens": 1729
+    }
+  ]
+}

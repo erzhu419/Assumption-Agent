@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "baf10279c5a342b8b9560316b097e800",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:37:58.881706+00:00",
+  "ended_at_utc": "2026-11-28T03:38:33.971757+00:00",
+  "request_sha256": "91762b6ef5e4ad773048ce49edde75c8ae356ebff0e991811b69894b340d6660",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46603,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28600,
+    "cached_tokens": 9344,
+    "completion_tokens": 1347
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.optimize import least_squares\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; g=np.linalg.norm(y,axis=1)<12; sw=(x!=0).sum(1)==1; n=len(x)\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('axis true by direction; response rows'); print(np.c_[x[sw],y[sw]])\\ns=c['single_channel_sweeps']; offs=[]; diag=[]; cubic=[]\\nfor j in range(4):\\n t=s['lab_id']==j; u=s['true_stress'][t]; v=s['cmd_stress'][t]; k=abs(v)<6; b=np.linalg.lstsq(np.c_[np.ones(sum(k)),u[k],u[k]**3],v[k],rcond=None)[0]; offs.append(b[0]);diag.append(b[1]); cubic.append(b[2]);\\na=x+.18*x**3; o=np.array(offs); d=np.array(diag); q=np.array(cubic); p0=np.linalg.lstsq(a[g],y[g]-o,rcond=None)[0]; p0[np.diag_indices(4)]=d\\nprint('fixed sweep coefficients',o,d,q,'initial M',p0)\\nmodels={}\\nfor deg in (1,2,3):\\n terms=[ij for k in range(1,deg+1) for ij in itertools.combinations_with_replacement(range(4),k)]; models['polynomial '+str(deg)]=np.c_[np.ones(n),np.column_stack([np.prod(x[:,ij],axis=1) for ij in terms])]\\nmodels['premixed cubic']=np.c_[np.ones(n),a]; models['nonlinear diag only']=np.c_[np.ones(n),x]\\nfor name,D in models.items():\\n yy=y-x**3*q if name=='nonlinear diag only' else y\\n e=[]; errs=[]\\n for i in np.flatnonzero(g):\\n  m=g&(np.arange(n)!=i); b=np.linalg.lstsq(D[m],yy[m],rcond=None)[0]; e.append(np.linalg.norm(D[i]@b-yy[i])); errs.append(D[i]@b-yy[i]);\\n print(name,'LOO',np.quantile(e,[.5,.9,1]));\\n if name=='polynomial 3':\\n  b=np.linalg.lstsq(D[g],yy[g],rcond=None)[0]; print('train',np.max(np.linalg.norm(D[g]@b-yy[g],axis=1))); print('terms');\\n  for ij,z in zip([()]+terms,b): print(ij,z)\\ncs=np.eye(4,dtype=bool); cross=~cs\\nfor kind in ('pre','post','diag','rawmixpre','sumdiffcub'):\\n def pred(p):\\n  M=p0.copy(); M[cross]=p[:12]; w=x@M\\n  if kind=='pre': return o+a@M\\n  if kind=='post': return o+w+w**3*(q/d**3)\\n  if kind=='diag': return o+w+x**3*q\\n  if kind=='rawmixpre': return o+(x+x**3*(q/d))@M\\n  if kind=='sumdiffcub':\\n   r=x[:,:,None]+p[12]*x[:,None,:]; return o+w+x**3*q+np.sum((r**3-x[:,:,None]**3-(p[12]*x[:,None,:])**3)*(M*cross),axis=1)*p[13]\\n z=np.r_[p0[cross],1.,.1] if kind=='sumdiffcub' else p0[cross]; b=least_squares(lambda p:(pred(p)[g]-y[g]).ravel(),z).x; e=np.linalg.norm(pred(b)[g]-y[g],axis=1); print(kind,np.quantile(e,[.5,.9,1]),b)\\nPY\\npython3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust affine bridge → coupled nonlinear bridge constrained by single-channel sweeps; affine leave-one-row-out median error is 0.367 and diagonal cubic alone has not explained multichannel errors.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Gross outlier removal suffices to make an affine bridge accurate.\",\"empirical_witness\":\"After gross row removal the affine leave-one-row-out median raw error is 0.367, while four independent axial sweeps show cubic fits accurate within 0.00026.\",\"causal_blanket_diagnosis\":\"The bridge input/output map contains deterministic curvature independent of the hereditary coupon response.\",\"sublated_pivot\":\"Retain affine cross-talk as a candidate component and test coupled cubic forms constrained by the isolated sweeps.\",\"risk_kind\":\"calibration model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unconstrained full cubic directly\",\"rejected_reason\":\"With only 77 clean rows, use it first to identify terms and then prefer a compact invertible law if supported.\"}],\"rationale\":\"Compare isolated and simultaneous loads to locate where the cubic enters the bridge. If a structured model removes multichannel residuals, implement that model rather than passing calibration error into the material fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "89a0af9650248c47c6204cf6280bd4fcecae6d7f8b372026668ce153e8b2212e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37085.13,
+      "usage_known": true,
+      "prompt_tokens": 28600,
+      "cached_tokens": 9344,
+      "completion_tokens": 1347
+    }
+  ]
+}

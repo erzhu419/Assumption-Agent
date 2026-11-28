@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2ea1d366bd404e56963418dab4750fcb",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:11:42.786485+00:00",
+  "ended_at_utc": "2026-11-28T04:12:20.356341+00:00",
+  "request_sha256": "0b45f1daba26c0cd403de229373ab323ace48244f9e32d461dff49e535962fa9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46318,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27713,
+    "cached_tokens": 9344,
+    "completion_tokens": 1531
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/check08.py <<'PY'\\nexec(open('/tmp/probe08.py').read().split('print(\\\\'intrinsic\\\\'')[0])\\nfrom itertools import combinations\\nF=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); L=np.r_[t,1.]; R=F*tau; ref=h[:,None]*(F@th[:2]); target=np.c_[y(q),q['instant_rate_obs']]; basis=np.c_[R[:,0]-L,R[:,1]-L]; labs=q['lab_id']; pte,hte=_loads(te)\\nfor name, ps, hs in [('diag',p,h),('test',pte,hte)]:\\n print(name,'hold range',hs.min(),hs.max(),'hold-minus-last',np.quantile(hs-ps[:,-1],[0,.1,.5,.9,1]),'negative counts',np.sum(hs<0),np.sum(hs<ps[:,-1]),'past range',ps.min(),ps.max())\\ndef feat_by(name):\\n if name=='train+diag': return xq\\n if name=='test+diag': return _features(te,q)[len(hte):]\\n if name=='diag': return _features(q,q)[len(h):]\\n source=(tr,te,q) if name=='all' else (tr,te)\\n v=q['coupon_features_raw'].copy(); ac=np.concatenate([s['lab_id'] for s in source]); panel=np.vstack([s['ref_coupons'] for s in source]); xx=np.vstack([s['coupon_features_raw'] for s in source]); strata=np.concatenate([s['stratum'] for s in source]);\\n for lab in np.unique(ac):\\n  m=ac==lab; panel0=panel[m]; mu=np.median(panel0.mean(0)); sig=np.median(panel0.std(0)); xx[m]=(xx[m]-mu)/sig; v[labs==lab]=(v[labs==lab]-mu)/sig\\n _,c,ns=np.unique(np.c_[ac,strata],axis=0,return_inverse=True,return_counts=True); w=1/ns[c,None]; return np.where(np.isnan(v),np.nansum(w*xx,axis=0)/np.sum(w*~np.isnan(xx),axis=0),v)\\ndef stats(pred):\\n err=pred-target; slices=[labs==i for i in np.unique(labs)]+[h<p[:,-1],h>=p[:,-1]]\\n return np.round([np.sqrt(np.mean(err[:,:-1]**2)), np.sqrt(np.mean(err[:,-1]**2)), max(np.sqrt(np.mean(err[s,:-1]**2)) for s in slices if s.any()),max(np.sqrt(np.mean(err[s,-1]**2)) for s in slices if s.any()),np.max(abs(err[:,-2]))],5)\\nfor name in ('train+diag','test+diag','diag','all','train+test'):\\n f=feat_by(name); r=th[2]+f@th[3:]; U=r[:,None,None]*basis; O=ref+r[:,None]*L\\n g=np.linalg.lstsq(U.reshape(-1,2),(target-O).ravel(),rcond=None)[0]\\n for kind,G in [('conserved',g),('rounded',[.2,.55])]:\\n  out=O+U@G; print(name,kind,np.round(G,5),stats(out))\\n out=np.empty_like(target)\\n for lab in np.unique(labs):\\n  m=labs!=lab; G=np.linalg.lstsq(U[m].reshape(-1,2),(target[m]-O[m]).ravel(),rcond=None)[0]; out[~m]=O[~m]+U[~m]@G\\n print(name,'LOLO',stats(out),'rate residual',np.round((target-ref)[:,-1]-r,4))\\n # Fit the three amplitudes while allowing the drift standardization for diagnostic coupons to be wrong.\\n for G in ([.2,.55],[.2,.5],[.2,.6],[.2,.8],[.5,.5]):\\n  b=L+basis@G; obs=target-ref; drift=obs@b/(b@b); print('latent drift',G,np.sqrt(np.mean((ref+drift[:,None]*b-target)**2)),np.sqrt(np.mean((drift-r)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace equal drift routing with a conserved split across fast, slow, and linear terms; the archived equal-routing law has 0.444 final-horizon RMSE and 0.0448 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Resetting memory and routing all drift equally into the two intrinsic branches is sufficient.\",\n    \"empirical_witness\": \"Final-horizon RMSE rises to 0.444, but the same two relaxation times plus a linear term give per-horizon residual RMSE below 0.003 when amplitudes are profiled per coupon.\",\n    \"causal_blanket_diagnosis\": \"Initial rate cannot distinguish drift allocations with the same total derivative at time zero; later horizons identify the missing linear term.\",\n    \"sublated_pivot\": \"Retain the intrinsic times and test conserved fast, slow, and linear drift fractions after memory reset.\",\n    \"risk_kind\": \"deployment drift routing\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit new chamber relaxation times\",\n      \"rejected_reason\": \"The intrinsic times already fit diagnostic curve shape to near the measurement noise once the linear term is included.\"\n    }\n  ],\n  \"rationale\": \"Compare fitted and rounded drift splits on held-out labs and check withdrawal coverage. Comparing plausible reference panels separately will show whether initial-rate residuals come from feature alignment rather than the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c25efd64f1b8aff4045af7e38e50c271499b4a81bfd9b669d0f4c85f520f285b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39779.15,
+      "usage_known": true,
+      "prompt_tokens": 27713,
+      "cached_tokens": 9344,
+      "completion_tokens": 1531
+    }
+  ]
+}

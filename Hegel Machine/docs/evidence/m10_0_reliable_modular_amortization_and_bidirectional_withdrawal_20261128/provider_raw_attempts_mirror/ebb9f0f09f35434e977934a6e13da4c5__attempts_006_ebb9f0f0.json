@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ebb9f0f09f35434e977934a6e13da4c5",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:37.727356+00:00",
+  "ended_at_utc": "2026-11-28T03:50:08.936791+00:00",
+  "request_sha256": "dfd73479ffb7644315cdc4c49049affdbb1599dfc26484f7926533bfb2b9bb51",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44121,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26296,
+    "cached_tokens": 9344,
+    "completion_tokens": 1247
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nimport batch_solver\\nwith open('public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\ncoef = u._fit_forward(x,y)\\nresid = np.linalg.norm(y-u._basis(x)@coef,axis=1)\\nclean = resid < 8*np.median(resid)\\nprint('spike rows and raw residuals:', list(zip(np.flatnonzero(~clean),resid[~clean].round(5))))\\ndef withheld(label, mask):\\n    b = u._fit_forward(x[~mask], y[~mask]); ids = mask & clean\\n    raw_error = np.linalg.norm(u._basis(x[ids])@b-y[ids],axis=1)\\n    load_error = np.linalg.norm(u._inverse(y[ids],b)-x[ids],axis=1)\\n    print(label,'n',sum(ids),'raw max',raw_error.max(),'load max',load_error.max())\\n    assert load_error.max() < .005\\nloo=[]\\nfor i in np.flatnonzero(clean):\\n    m=np.arange(len(x))!=i\\n    loo.append(np.linalg.norm(u._inverse(y[i:i+1],u._fit_forward(x[m],y[m]))[0]-x[i]))\\nprint('clean leave-one-out inverse load error median/P95/max:',np.quantile(loo,[.5,.95,1]))\\nassert max(loo)<.005\\nwithheld('all axial rows',np.count_nonzero(x,axis=1)<=1)\\nwithheld('upper magnitude tail',np.linalg.norm(x,axis=1)>=np.quantile(np.linalg.norm(x,axis=1),.85))\\nfor key in ('train','test'):\\n    for field in ('past_channel_raw','hold_channel_raw'):\\n        raw=ds[key][field]; inv=u._inverse(raw,coef)\\n        err=np.max(abs(u._basis(inv.reshape(-1,4))@coef-raw.reshape(-1,4)))\\n        print(key,field,'round-trip max',err,'load min/max',inv.min(),inv.max()); assert err<1e-8\\n# Replay real calibration loads through the optional trial fields using raw bridge readings.\\nraw_hold=y[clean][:8].copy(); raw_past=y[clean][8:32].reshape(8,3,4).copy()\\ntrial=dict(past_channel_raw=raw_past,hold_channel_raw=raw_hold)\\naug=dict(ds,chamber_verification_trials=trial); out=u.calibrate_upstream(aug)\\nt=out['chamber_verification_trials']; np.testing.assert_allclose(t['hold_channel_raw'],x[clean][:8],atol=.001); np.testing.assert_allclose(t['past_channel_raw'],x[clean][8:32].reshape(8,3,4),atol=.001)\\nassert t is not trial and t['past_channel_raw'] is not raw_past\\nnp.testing.assert_array_equal(raw_past,y[clean][8:32].reshape(8,3,4)); np.testing.assert_array_equal(raw_hold,y[clean][:8])\\ncc=out['calibration_load_cells']; ss=cc['single_channel_sweeps']; np.testing.assert_array_equal(cc['bridge_raw'],x); np.testing.assert_array_equal(ss['cmd_stress'],ss['true_stress']); assert not np.shares_memory(cc['bridge_raw'],x) and not np.shares_memory(ss['cmd_stress'],ss['true_stress'])\\nassert u.calibrate_upstream(dict(ds,chamber_verification_trials=None))['chamber_verification_trials'] is None\\nout=batch_solver.solve_batch(ds)\\nfor key, shape in [('estimated_taus',(2,)),('hereditary_weights',(7,)),('predicted_strain',(36,12)),('initial_rate_pred',(36,))]:\\n    a=np.asarray(out[key]); assert a.shape==shape and np.isfinite(a).all(); print(key,shape,'finite')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 quadratic interactions and diagonal cubics; public schema and reference invariance pass, and the forward leave-one-out P95 residual is 0.000425.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate does not measure load recovery or exercise optional trials. Withhold axial and high-load groups to detect extrapolation bias, replay real calibration readings through optional trials, and verify the exact composed artifacts in an isolated Python process. A failure would distinguish a forward-model error from an inverse or schema error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "8b551e80f2efefed512151abcf6ddcd2f5b9e93adb6a77b8f8db19a44eb723ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33301.33,
+      "usage_known": true,
+      "prompt_tokens": 26296,
+      "cached_tokens": 9344,
+      "completion_tokens": 1247
+    }
+  ]
+}

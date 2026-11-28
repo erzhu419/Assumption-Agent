@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb9d2b1547614b888788316c1009a955",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:55.136311+00:00",
+  "ended_at_utc": "2026-11-28T04:06:21.898815+00:00",
+  "request_sha256": "407dc4e53068738da54829c80ea6fd88ca9c280d54804074690dfa44e8ee69fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45175,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27566,
+    "cached_tokens": 9344,
+    "completion_tokens": 1033
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; good=np.max(np.abs(y),axis=1)<8; x,y=x[good],y[good]; b=c['single_bank_sweeps']; ids,t,z=[b[k] for k in ('bank_id','ref_signal','raw_readout')]\\nfor k in range(4):\\n a=np.flatnonzero((np.count_nonzero(x,axis=1)==1)&(x[:,k]!=0)); m=(ids==k)&(abs(z)<8); v=np.r_[x[a,k],t[m]]; r=np.r_[y[a,k],z[m]]; print('\\\\nbank',k)\\n for name,func,p0 in [('tanh+linear',lambda v,p:p[0]+p[1]*np.tanh(p[2]*v)+p[3]*v,[0,1,1,.15]),('arctan+linear',lambda v,p:p[0]+p[1]*np.arctan(p[2]*v)+p[3]*v,[0,1,1,.15]),('shifted tanh+linear',lambda v,p:p[0]+p[1]*np.tanh(p[2]*v+p[4])+p[3]*v,[0,1,1,.15,0])]:\\n  p=least_squares(lambda p:func(v,p)-r,p0,gtol=1e-14).x; print(name,p,'max',max(abs(func(v,p)-r)))\\n  if name=='tanh+linear': selfp=p; selff=func\\n q=x[:,(k+2)%4]; e=y[:,k]-selff(x[:,k],selfp);\\n for deg in (1,2,3,4,5,7):\\n  F=np.column_stack([q**j for j in range(1,deg+1)]); use=np.arange(len(e))%4!=0; p=np.linalg.lstsq(F[use],e[use],rcond=None)[0]; print('cross',deg,'train',np.sqrt(np.mean((F[use]@p-e[use])**2)),'hold',max(abs(F[~use]@p-e[~use])),p.round(6))\\n print('single-axis residuals',[(i,np.c_[x[np.count_nonzero(x,axis=1)==1,i],e[np.count_nonzero(x,axis=1)==1]][x[np.count_nonzero(x,axis=1)==1,i]!=0].round(6).tolist()) for i in range(4)])\\nPY\\npython3 /tmp/cal_probe.py\\nsed -n '54,98p' /tmp/hegel_continual_archive/beta_m100_c04_batch_04_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -20\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette → H2 saturating self response plus opposite-bank coupling; the affine fit has 2.46 raw-unit sweep RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived odd polynomial calibration unchanged\",\n      \"rejected_reason\": \"The current isolated sweeps visibly saturate; compare response laws on the isolated sweeps and test the cross terms on held-out rosettes before committing.\"\n    }\n  ],\n  \"rationale\": \"Use isolated sweeps to identify self saturation without cross-channel confounding, then use held-out rosettes to detect missing coupling terms before comparing alternative wall operators.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6a50f38cbca9915febdf6c221e9b1d213f7b485c812d57a4df2d82290999e12c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28921.81,
+      "usage_known": true,
+      "prompt_tokens": 27566,
+      "cached_tokens": 9344,
+      "completion_tokens": 1033
+    }
+  ]
+}

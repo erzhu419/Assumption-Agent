@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af4fa031e4f54a3c8d7324a7e887fc0c",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:59.149786+00:00",
+  "ended_at_utc": "2026-11-28T03:49:34.725334+00:00",
+  "request_sha256": "c7769013afc41cc60175642e400db116d3f031428996d6797cb84863d0281473",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 64588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32967,
+    "cached_tokens": 9344,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/chamber_stress.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for tt in (ta,')[0])\\nimport downstream_solver as s\\nfrom batch_solver import solve_batch\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nlab=d['lab_id']; raw=d['coupon_features_raw']; panel=d['ref_coupons']; xx=np.empty_like(raw)\\nfor l in np.unique(lab):\\n m=lab==l; pp=panel[m]; xx[m]=(raw[m]-np.median(pp.mean(0)))/np.median(pp.std(0,ddof=0))\\nfull=np.isfinite(xx).all(1); pulse=np.c_[past, h]; tbase=F(ta); B=h[:,None]*(tbase[:,:2]@th[:2]); R=Y-B\\nz=h[:,None]-design[1][:,:2]*ta\\n# Fit both response channels jointly; select optional terms strictly within the outer training labs.\\ndef fit(Q,mask):\\n A=(Q[:,None,:,None]*tbase[None,:,None,:]).reshape(len(h),len(t)+1,-1)\\n c=np.linalg.lstsq(A[mask].reshape(-1,A.shape[-1]),R[mask].ravel(),rcond=None)[0]\\n return B+A@c\\nmaxima={}\\nfor out in np.unique(lab):\\n train=lab!=out; holdout=~train\\n # Reference coordinates use each panel, not its labels. Compare the diagnostic-only\\n # imputation indicated by measurements against required deployment imputation.\\n v=th[2]+np.where(np.isfinite(xx),xx,np.nanmean(xx[train],axis=0))@th[3:]\\n vb=np.c_[np.ones(len(h)),s._features(d,{k:a[:0] for k,a in d.items()})]@th[2:]\\n gs={'rank_one':v[:,None], 'baseline_diag_imputation':vb[:,None]}\\n terms={'signed-memory':[z[:,0],z[:,1],z[:,0]-z[:,1],h-z[:,0],h-z[:,1]], 'pairwise-pulses':[pulse[:,i]-pulse[:,j] for i,j in combinations(range(pulse.shape[1]),2)], 'product':[h*v,z[:,0]*z[:,1],h*z[:,0]*v,v*v], 'rational':[v/(1+a*q*q)-v for q in (h,z[:,0],z[:,1],z[:,0]-z[:,1],v) for a in (.03,.3,3.)]}\\n for fam,candidates in terms.items():\\n  mats=[np.c_[v,q] for q in candidates]\\n  def score(Q):\\n   es=[]\\n   for inner in np.unique(lab[train]):\\n    m=lab==inner; E=fit(Q,train&~m&full)[m&full]-Y[m&full]; es.append(max(np.sqrt(np.mean(E**2,axis=0))))\\n   return max(es)\\n  gs[fam]=min(mats,key=score)\\n common=fit(gs['rank_one'],train&full)-Y\\n for name,Q in gs.items():\\n  E=fit(Q,train&full)-Y\\n  for slice_,m in [('complete',holdout&full),('all',holdout),('imputed',holdout&~full)]:\\n   if m.any():\\n    pair=np.array([np.max(np.sqrt(np.mean(E[m,:-1]**2,axis=0))),np.sqrt(np.mean(E[m,-1]**2))]); key=(name,slice_); maxima[key]=np.maximum(maxima.get(key,0),pair)\\n # Within-lab drift sensitivity and residual bias at the longest time and at t=0.\\n print('lab',out,'complete centered drift/response r',round(np.corrcoef(v[holdout&full],R[holdout&full,-2])[0,1],5),'mean strain/rate residual',np.round(common[holdout&full,-2:].mean(0),5))\\nfor key,val in maxima.items(): print(key,np.round(val,6))\\nans=solve_batch(D)\\nassert all(np.isfinite(a).all() for a in ans.values())\\nassert .05<ans['estimated_taus'][0]<ans['estimated_taus'][1]<25\\nprint('deployment rate range',np.min(ans['initial_rate_pred']),np.max(ans['initial_rate_pred']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_stress.py\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,sys\\nsys.path.insert(0,'/holdout_task')\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed archive coupling -> H2 campaign-specific rank-one drift coupling; prior held-out lab RMSE reached 0.04465 strain and 0.01846 initial rate, versus 0.00417 and 0.00267 on complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB operators, or classification balanced accuracy\",\n      \"rejected_reason\": \"This dataset has continuous strain and rate outputs, with no relay states, control objective, or class labels. Within-lab response and bias are the relevant confounding checks.\"\n    }\n  ],\n  \"rationale\": \"Test whether an omitted signed memory term, product, or rational correction reduces held-out lab error, choosing each candidate term inside the outer fold. Report complete and imputed slices separately so diagnostic preprocessing cannot masquerade as a constitutive improvement, then verify the unchanged deployment contract in isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cf825f0e86d75f3d45888e04501786866a0e211f7f9fed696a5f91b7463f06f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37690.17,
+      "usage_known": true,
+      "prompt_tokens": 32967,
+      "cached_tokens": 9344,
+      "completion_tokens": 1457
+    }
+  ]
+}

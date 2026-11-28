@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc5479f33c1342b880eb628525f0913a",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:17.645620+00:00",
+  "ended_at_utc": "2026-11-28T03:53:54.132973+00:00",
+  "request_sha256": "07b1b5bbe09344b2765636198864c1af2600e9275da63a5c89014d1fb1dc7ffa",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 53790,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32746,
+    "cached_tokens": 9344,
+    "completion_tokens": 1560
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Robust calibration for the four-channel load bridge.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\n_PARTNER = np.array([2, 3, 0, 1])\\n\\n\\ndef _design(loads):\\n    partner = loads[:, _PARTNER]\\n    return np.stack((np.ones_like(loads), loads + .25*np.sin(2.5*loads),\\n                     partner, 1 - np.cos(2*partner)), axis=-1)\\n\\n\\ndef _fit(loads, raw):\\n    # One weight per calibration row: a spike can affect several outputs.\\n    design = _design(loads)\\n    weight = np.ones(len(loads))\\n    for _ in range(12):\\n        beta = np.array([np.linalg.lstsq(design[:, j]*weight[:, None],\\n                                        raw[:, j]*weight, rcond=None)[0]\\n                         for j in range(4)]).T\\n        error = np.max(np.abs(np.sum(design*beta.T, axis=-1) - raw), axis=1)\\n        scale = max(4*np.median(error), 1e-10)\\n        weight = 1/np.hypot(1, error/scale)\\n    # Refit clean rows without shrinking legitimate observations.\\n    keep = error <= scale*2\\n    return np.array([np.linalg.lstsq(design[keep, j], raw[keep, j], rcond=None)[0]\\n                     for j in range(4)]).T\\n\\n\\ndef _inverse(raw, beta):\\n    raw = np.asarray(raw, dtype=float)\\n    offset, gain, linear, cosine = beta\\n    target = (raw.reshape(-1, 4) - offset)/gain\\n    linear, cosine = linear/gain, cosine/gain\\n    loads = target.copy()\\n\\n    def residual(x):\\n        p = x[:, _PARTNER]\\n        return x + .25*np.sin(2.5*x) + linear*p + cosine*(1 - np.cos(2*p)) - target\\n\\n    r = residual(loads)\\n    # The fitted bridge is diagonally dominant. Solve its two coupled\\n    # 2-by-2 Newton systems in parallel and backtrack per measurement.\\n    for _ in range(40):\\n        norm = np.max(np.abs(r), axis=1, keepdims=True)\\n        if np.all(norm <= 1e-11):\\n            return loads.reshape(raw.shape)\\n        a = 1 + .625*np.cos(2.5*loads)\\n        b = linear + 2*cosine*np.sin(2*loads[:, _PARTNER])\\n        step = (a[:, _PARTNER]*r - b*r[:, _PARTNER]) / (\\n            a*a[:, _PARTNER] - b*b[:, _PARTNER])\\n        step = np.where(norm > 1e-11, step, 0.)\\n        trial = loads - step\\n        rt = residual(trial)\\n        for _ in range(20):\\n            retry = np.max(np.abs(rt), axis=1, keepdims=True) > norm\\n            if not np.any(retry):\\n                break\\n            step = np.where(retry, step*.5, step)\\n            trial = loads - step\\n            rt = residual(trial)\\n        loads, r = trial, rt\\n    raise RuntimeError('load bridge inversion did not converge')\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Convert the bridge readings to load coordinates without mutating inputs.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\\n    result = dict(dataset)\\n    if not np.array_equal(raw, loads):\\n        beta = _fit(loads, raw)\\n\\n        def convert(record):\\n            out = dict(record)\\n            for key in ('past_channel_raw', 'hold_channel_raw'):\\n                if key in record:\\n                    out[key] = _inverse(record[key], beta)\\n            return out\\n\\n        for key in ('train', 'test', 'chamber_verification_trials'):\\n            record = dataset.get(key)\\n            if isinstance(record, dict):\\n                result[key] = convert(record)\\n            elif record is not None:\\n                result[key] = type(record)(convert(trial) for trial in record)\\n    result['calibration_load_cells'] = dict(cal, bridge_raw=cal['true_channel_loads'].copy())\\n    sweeps = cal['single_channel_sweeps']\\n    result['calibration_load_cells']['single_channel_sweeps'] = dict(\\n        sweeps, cmd_stress=sweeps['true_stress'].copy())\\n    return result\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Paired sinusoidal forward model -> robust fit and coupled Newton inverse; worst held-out forward error was 0.000268 on the boundary slice.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Add pair and triple products\",\"rejected_reason\":\"They increase worst boundary forward error from 0.000268 to 0.000522; the paired harmonic model already reaches the measurement-noise scale.\"}],\"rationale\":\"Fit the per-channel offsets, gains, and coupling coefficients from the supplied calibration rows, downweighting gross spikes jointly across outputs. Run the required validator now to catch composition errors before measuring inverse accuracy and optional-trial coverage in isolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d19d35b5fb62446f5be188a07c49fa83032d4d1687338bdf525d00c7dd26c8c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40810.56,
+      "usage_known": true,
+      "prompt_tokens": 32746,
+      "cached_tokens": 9344,
+      "completion_tokens": 1560
+    }
+  ]
+}

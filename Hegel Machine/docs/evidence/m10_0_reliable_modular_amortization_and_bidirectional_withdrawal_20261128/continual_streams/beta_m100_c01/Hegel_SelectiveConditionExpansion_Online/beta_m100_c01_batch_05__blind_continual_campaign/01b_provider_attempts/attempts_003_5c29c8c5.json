@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c29c8c5f18941409df4c9c89000f7c5",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:51.259223+00:00",
+  "ended_at_utc": "2026-11-28T03:50:15.256205+00:00",
+  "request_sha256": "e12b3e75113531950c0f018d46522d48277ad445f6b742b89ac19757a96a3204",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21481,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19090,
+    "cached_tokens": 9344,
+    "completion_tokens": 768
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as n\\np='/tmp/hegel_continual_archive/'\\nfor f in ['archive_manifest.json','pre_llm_gate_diagnostic.json','archive_apparatus_log.json']:\\n d=json.load(open(p+f));print(f, list(d) if isinstance(d,dict) else len(d));\\n if f!='archive_apparatus_log.json': print(d)\\n else:\\n  if isinstance(d,dict):\\n   for k,v in d.items(): print(k,type(v).__name__,str(v[-1] if isinstance(v,list) and v else v)[:2400])\\n  else: print(str(d[-1])[:3000])\\nb=pickle.load(open('public_batch.pkl','rb'));print('studies',len(b))\\nfor it in b:\\n s=it['study']; c=s['sensor_calibration_sweeps'];x=c['ref_rosette'];y=c['raw_rosette'];z=s['y_obs_raw'].reshape(-1,4); a=c['single_bank_sweeps'];print('keys',list(s));print('groups',n.unique(n.count_nonzero(x,axis=1),return_counts=True),'obs range',z.min(0),z.max(0));print('pulses',[(list(t),n.shape(t.get('y_pulse_raw'))) for t in s.get('reference_tracer_pulses') or []]);print('cal rails',[(lambda v:(v.tolist()))(n.unique(y[:,j].round(4),return_counts=True)[0][n.unique(y[:,j].round(4),return_counts=True)[1]>1]) for j in range(4)]); print('axes rows\\\\n',n.c_[x,y][n.count_nonzero(x,axis=1)<2].round(5)); print('single bank\\\\n',n.c_[a['bank_id'],a['ref_signal'],a['raw_readout']].round(5));print('gross rows\\\\n',n.c_[x,y][(abs(y)>3).any(1)].round(5))\\nPY\\nsed -n '36,125p' /holdout_task/_verified_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling -> H2 coupled nonlinear response with possible hard rails and separate EMI contamination; held-out error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat every extreme reading as an independent EMI spike\",\n      \"rejected_reason\": \"Repeated values may be hardware rails; check their levels and whether the actual observations reach them before choosing an inverse.\"\n    }\n  ],\n  \"rationale\": \"The earlier output was truncated. Isolate the apparatus metadata, repeated levels, and axis sweeps to distinguish clipping from EMI and determine whether a censored observation needs special treatment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "d526009930672dc7da3f44a693f51164134b2860984dfed8698fec119e52539e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23944.56,
+      "usage_known": true,
+      "prompt_tokens": 19090,
+      "cached_tokens": 9344,
+      "completion_tokens": 768
+    }
+  ]
+}

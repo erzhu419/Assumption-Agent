@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "163b5729312b4af3ac6ac6e88f95e6c3",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:23.158235+00:00",
+  "ended_at_utc": "2026-11-28T03:54:59.122090+00:00",
+  "request_sha256": "322eac2e766f7de33cf949d45485a8e951212a7bcdefe2b0fb3f1d08f18eadc0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55121,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29343,
+    "cached_tokens": 9344,
+    "completion_tokens": 1467
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _fit, _inverse, _PARTNER\\nwith open('public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ns = study['sensor_calibration_sweeps']; x = s['ref_rosette']; y = s['raw_rosette']\\naxis = np.count_nonzero(x, axis=1) == 1\\nlev = np.max(abs(x), axis=1)\\nfolds = [(f'mixed_{i}', (~axis) & (np.arange(len(x)) % 4 == i)) for i in range(4)]\\nfolds += [(f'axis_{i}', axis & (x[:, i] != 0)) for i in range(4)]\\nfolds += [('high_excitation', (~axis) & (lev >= np.quantile(lev[~axis], .8)))]\\nD = _design(x); z = x[:, _PARTNER]; pairs = np.column_stack([x[:, i]*x[:, j] for i in range(4) for j in range(i+1, 4)])\\nmetrics = []\\nfor name, test in folds:\\n    p = _fit(x[~test], y[~test]); pred = (D*p).sum(-1)\\n    error = np.linalg.norm(pred-y, axis=1)\\n    # The cutoff is set only on the training fold; it separates EMI (order one) from sweep noise.\\n    clean = error <= 6*np.median(error[~test]); tr = ~test & clean; te = test & clean\\n    extra_pred, rational_pred = [], []\\n    for j in range(4):\\n        t, u = x[:, j], z[:, j]\\n        dif, add = t-u, t+u\\n        H = np.column_stack((D[:, j], pairs, dif**2/(1+dif**2), add**2/(1+add**2)))\\n        extra_pred.append(H[te] @ np.linalg.lstsq(H[tr], y[tr,j], rcond=None)[0])\\n        def prof(a, predict=False):\\n            H = np.column_stack((D[:,j,:4], u*u/(1+a*u*u)))\\n            b = np.linalg.lstsq(H[tr], y[tr,j], rcond=None)[0]\\n            return H[te]@b if predict else np.mean((H[tr]@b-y[tr,j])**2)\\n        a = minimize_scalar(prof, bounds=(0, 4), method='bounded').x\\n        rational_pred.append(prof(a, True))\\n    observed = y[te]\\n    rmse = lambda v: np.sqrt(np.mean((v-observed)**2, axis=0)).max()\\n    results = [rmse(pred[te]), rmse(np.array(extra_pred).T), rmse(np.array(rational_pred).T)]\\n    metrics.append(results)\\n    print(name, 'clean rows', te.sum(), 'worst channel forward RMSE: base / extra pair & rational / rational partner', *results)\\nprint('worst fold by model:', np.max(metrics, axis=0))\\np = _fit(x,y); predicted = (D*p).sum(-1); resid = y-predicted\\nis_spike = np.linalg.norm(resid,axis=1)>1e-2\\nxc,yc,dc = x[~is_spike],y[~is_spike],D[~is_spike]\\n# Reposition measured EMI amplitudes onto clean mixed and high-excitation rows.\\nrng = np.random.default_rng(561)\\nworst = 0\\nfor n in range(64):\\n    pool = np.flatnonzero(np.max(abs(xc),axis=1)>=1.2) if n%2 else np.arange(len(xc))\\n    idx = rng.choice(pool, is_spike.sum(), replace=False)\\n    damaged = yc.copy(); damaged[idx] += resid[is_spike]\\n    q = _fit(xc,damaged); ok = np.ones(len(xc),bool); ok[idx]=False\\n    err = _inverse(yc[ok],q)-xc[ok]\\n    worst = max(worst, np.sqrt(np.mean(err**2,axis=0)).max())\\nprint('worst inverse channel RMSE after relocating measured EMI:',worst)\\nassert worst < 2e-4\\nprint('applicable nuisance: continuous sweep-row EMI; relay or labeled calibration cohorts:', [k for k in (*study,*s) if any(v in k for v in ('relay','technical_batch','label','cohort'))])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: linear mixing gave way to a sine self-response and cosine partner coupling; worst held-out inverse channel RMSE is 3.51e-5 before the challenger audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode and balanced-accuracy tests\",\n      \"rejected_reason\": \"The upstream interface is continuous rosette regression, not relay control or classification; excitation strata and measured EMI are the relevant slices.\"\n    }\n  ],\n  \"rationale\": \"Compare pair and rational challengers on held-out measurements, fitting their parameters only on training folds. Relocating measured EMI onto clean high-excitation rows tests whether rejection depends on the original spike locations. Improve the model or rejection rule only if a challenger closes a meaningful error margin or the stress test exposes a failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b1a7d1f8a591944dc09e07a796811669d8d7c9f4fca09e614fc78eccc4040332",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38052.23,
+      "usage_known": true,
+      "prompt_tokens": 29343,
+      "cached_tokens": 9344,
+      "completion_tokens": 1467
+    }
+  ]
+}

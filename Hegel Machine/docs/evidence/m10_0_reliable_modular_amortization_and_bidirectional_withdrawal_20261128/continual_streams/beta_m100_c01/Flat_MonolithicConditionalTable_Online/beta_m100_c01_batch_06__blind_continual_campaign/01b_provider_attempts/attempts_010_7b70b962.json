@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b70b96256624843b0cdfefd44da0c8a",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:47.324595+00:00",
+  "ended_at_utc": "2026-11-28T04:04:15.042658+00:00",
+  "request_sha256": "d2364eabc1a153808fcc4329c2f766049a4c54b4cc7072445cf68bf634c2b17f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28757,
+    "cached_tokens": 9344,
+    "completion_tokens": 1067
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat >/tmp/audit_rosette06.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']\\nx,y = c['ref_rosette'],c['raw_rosette']\\nclean = np.max(abs(y),axis=1)<5\\n\\ndef features(x):\\n    other = np.roll(x,2,axis=1)\\n    d,t = x-other,x+other\\n    return np.stack([q/(1+r*r) for q,r in ((d,d),(t,t),(x*x,other),(other*other,x),(x*other,d))],axis=-1)\\n\\nrecords=[]\\nfor k, mask in enumerate(np.array_split(np.arange(len(x)), 4)):\\n    held = np.isin(np.arange(len(x)),mask)\\n    train,test = ~held & clean,held & clean\\n    banks = {name:v[b['bank_id']!=k] for name,v in b.items()}\\n    p = m._fit_calibration(x[~held],y[~held],banks)\\n    e = y[test]-m._response(x[test],p)\\n    train_e = y[train]-m._response(x[train],p)\\n    F,T = features(x[train]),features(x[test])\\n    coef = np.stack([np.linalg.lstsq(F[:,j],train_e[:,j],rcond=None)[0] for j in range(4)])\\n    alt_e = e - np.einsum('ijk,jk->ij',T,coef)\\n    train_c = {'ref_rosette':x[~held],'raw_rosette':y[~held],'single_bank_sweeps':banks}\\n    yy = m._calibrate({'sensor_calibration_sweeps':train_c,'y_obs_raw':s['y_obs_raw']})\\n    q = np.max(abs(yy-m._calibrate(s)))\\n    rms = lambda z: np.sqrt(np.mean(z*z))\\n    records.append((rms(e),rms(alt_e),q))\\nprint('blocked sweep RMSE (base, rational residual correction), max observed-input inversion change:', np.asarray(records))\\nprint('worst across blocked folds:',np.max(records,axis=0))\\nPY\\npython3 -I /tmp/audit_rosette06.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 opposite-channel sinusoidal response -> H2 add rational pairwise corrections only if they improve blocked sweep validation; current worst held-out sensor RMSE is 0.01590 and worst held-out sweep RMSE is 1.27e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the wall-leakage audit or apply relay and class-balance tests\",\n      \"rejected_reason\": \"Wall leakage has already been tested on three holdout schemes; this steady inverse problem has neither relay states nor class labels.\"\n    }\n  ],\n  \"rationale\": \"Blocked rosette sweeps and withholding an entire single-bank sweep can expose calibration errors that interleaved folds miss. Compare rational sum and difference corrections fitted only on training rows; revisit the artifact only if they materially improve held-out prediction or expose unstable inversion on the actual chamber readings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "32badf7d36d3b78800372f18e43f2ac89514c0e64f25b9e18ca6888a52e00a80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29853.86,
+      "usage_known": true,
+      "prompt_tokens": 28757,
+      "cached_tokens": 9344,
+      "completion_tokens": 1067
+    }
+  ]
+}

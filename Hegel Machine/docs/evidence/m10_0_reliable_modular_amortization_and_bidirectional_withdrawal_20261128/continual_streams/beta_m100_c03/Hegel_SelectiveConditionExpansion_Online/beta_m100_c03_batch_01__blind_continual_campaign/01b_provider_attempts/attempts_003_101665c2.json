@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "101665c2d98d4a668ba92e78775df66a",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:52.246963+00:00",
+  "ended_at_utc": "2026-11-28T03:31:15.512790+00:00",
+  "request_sha256": "9a8ad219e9ff711291ea1c8db246fbef9d7c3df8816a7d50d5d0f17b61e09178",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23766,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20033,
+    "cached_tokens": 9344,
+    "completion_tokens": 885
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; tail -65 /tmp/hegel_continual_archive/beta_m100_c03_s00_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np, sys\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import beta_m100_c03_s00_solver as a\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; C=s['sensor_calibration_sweeps']; x=C['ref_rosette']; y=C['raw_rosette']; print('banks first rows',s['row_bank_id'][:32]); print('aux first rows',s['aux_manifold_telemetry'][:6]); print('aux mean/std',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0)); d=C['single_bank_sweeps']; print('single shapes',{k:np.shape(v) for k,v in d.items()});\\nfor k in np.unique(d['bank_id']):\\n ix=d['bank_id']==k; r=d['ref_signal'][ix]; Y=d['raw_readout'][ix]; A=np.c_[np.ones(len(r)),r]; p=np.linalg.lstsq(A,Y,rcond=None)[0]; print('bank',k,'affine params',p,'RMS',np.sqrt(np.mean((Y-A@p)**2)))\\nfor degree in (1,2,3):\\n from itertools import combinations_with_replacement\\n terms=[np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for j in range(1,degree+1) for ix in combinations_with_replacement(range(4),j)]; A=np.array(terms).T; p=np.linalg.lstsq(A,y,rcond=None)[0]; res=[]\\n for fold in np.array_split(np.random.default_rng(2).permutation(len(x)),5):\\n  tr=np.setdiff1d(np.arange(len(x)),fold); res.append(np.sqrt(np.mean((A[fold]@np.linalg.lstsq(A[tr],y[tr],rcond=None)[0]-y[fold])**2)))\\n print('degree',degree,'max fold RMSE',max(res),'affine params' if degree==1 else '',p if degree==1 else '')\\nS,_=a._responses(s);\\nfor d in item['campaign_diagnostics']:\\n p=S@d['w_pulse']; z=a._calibrate(s,d['y_pulse_raw']); err=z-p; print('pulse baseline RMS by shift',np.sqrt(np.mean(err.reshape(3,-1)**2,axis=1)), 'corr',np.corrcoef(p,z)[0,1], 'pred/obs means', p.mean(),z.mean(), 'profile RMS',np.sqrt(np.mean(a._profile(s,err)**2)))\\nprint('archive weights',a.solve_batch(s)['weights'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived affine calibration and open Robin walls) -> H2 (separately identify calibration and wall changes); worst-slice residual not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit wall coefficients directly to raw pulses\",\"rejected_reason\":\"First isolate sensor distortion on calibration sweeps so it is not mistaken for a boundary change.\"}],\"rationale\":\"Held-out sweep errors will distinguish affine from nonlinear calibration; shift-resolved pulse errors will show whether the archived boundary remains viable after calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "361a4480e05a4142f61af61e0aae2fd77ffa7268c4918404102fe0f120af2885",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25372.28,
+      "usage_known": true,
+      "prompt_tokens": 20033,
+      "cached_tokens": 9344,
+      "completion_tokens": 885
+    }
+  ]
+}

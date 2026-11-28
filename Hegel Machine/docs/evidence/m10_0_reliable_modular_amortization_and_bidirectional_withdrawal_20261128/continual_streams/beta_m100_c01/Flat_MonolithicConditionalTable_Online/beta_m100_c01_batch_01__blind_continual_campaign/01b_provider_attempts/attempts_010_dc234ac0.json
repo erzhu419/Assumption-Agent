@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc234ac03e4d464c8a5f6d537a0108ff",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:39.183044+00:00",
+  "ended_at_utc": "2026-11-28T03:34:03.106517+00:00",
+  "request_sha256": "9441cca3098ba303ce752bf297dcaa95f308db7dd41d32960de8f74ff052d558",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47892,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26423,
+    "cached_tokens": 9344,
+    "completion_tokens": 779
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; D=np.c_[np.ones(len(x)),x]; b=c['single_bank_sweeps']; bank=b['bank_id']; ref=b['ref_signal']; raw=b['raw_readout']; S,_=m._transport(s)\\nE=np.zeros((len(bank),5)); E[:,0]=1; E[np.arange(len(bank)),bank+1]=ref\\nfor j in range(4):\\n k=bank==j; a=np.linalg.lstsq(D,y[:,j],rcond=None)[0]; bb=np.linalg.lstsq(E[k][:,[0,j+1]],raw[k],rcond=None)[0]; print('bank',j,'standalone minus rosette offset/gain',bb-a[[0,j+1]],'standalone residual RMSE',np.sqrt(np.mean((E[k][:,[0,j+1]]@bb-raw[k])**2)))\\nfor strength in (0.,1.):\\n B=np.column_stack([np.linalg.lstsq(np.r_[D,strength*E[bank==j]],np.r_[y[:,j],strength*raw[bank==j]],rcond=None)[0] for j in range(4)])\\n er=[]\\n for d in item['campaign_diagnostics']:\\n  z=np.linalg.solve(B[1:].T,(d['y_pulse_raw'].reshape(-1,4)-B[0]).T).T.ravel(); er.append((S@d['w_pulse']-z).reshape(len(s['mu_shifts']),-1,4))\\n er=np.array(er); print('single-bank weight',strength,'RMSE by pulse',np.sqrt(np.mean(er**2,axis=(1,2,3))),'worst slice RMSE',np.sqrt(np.mean(er**2,axis=2)).max())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open Robin walls) -> H2 (reflecting walls with affine calibration); worst public pulse–shift–channel RMSE is 1.61e-6 and the independent host duality gap is 7.75e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add nonlinear saturation terms\",\"rejected_reason\":\"They raised the worst held-out calibration RMSE from 1.35e-5 to 4.66e-5.\"}],\"rationale\":\"The single-bank sweeps are an unused calibration measurement. Compare their gains and offsets with the rosette fit, then test whether pooling improves independent tracer predictions. Keep the verified calibration if pooling does not materially improve those predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "dbcf53a82ad1175b451a983225e130a44086431ea254eba2c65cb9de1a77c371",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26002.2,
+      "usage_known": true,
+      "prompt_tokens": 26423,
+      "cached_tokens": 9344,
+      "completion_tokens": 779
+    }
+  ]
+}

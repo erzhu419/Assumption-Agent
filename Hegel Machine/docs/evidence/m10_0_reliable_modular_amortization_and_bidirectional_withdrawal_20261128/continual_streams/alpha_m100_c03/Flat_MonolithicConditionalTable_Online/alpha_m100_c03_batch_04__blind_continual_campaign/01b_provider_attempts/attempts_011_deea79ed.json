@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "deea79ed45db4ae5966ef1215a262ff7",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:50.324491+00:00",
+  "ended_at_utc": "2026-11-28T03:53:31.975369+00:00",
+  "request_sha256": "898469b3773a25fc6ac0fa91a90f6cca2d8526ba7b5fa71a9e7f771299d34951",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61799,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30562,
+    "cached_tokens": 9344,
+    "completion_tokens": 1674
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_batch04.py <<'PY'\\nimport pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\n\\np = Path('/holdout_task')\\nm = runpy.run_path(str(p / 'batch_solver.py'))\\nd = pickle.load(open(p / 'public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\ny, r = c['true_channel_loads'], c['bridge_raw']\\nraw_sum = r.sum(1)\\naxis = np.count_nonzero(y, axis=1) == 1\\nbase = m['_bridge_terms'](y)\\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\nother = np.column_stack([y[:,0]*y[:,2], y[:,1]*y[:,3]])\\ncontrasts = np.column_stack([(y[:,i]+sgn*y[:,j])**3 for i,j in pairs for sgn in (-1,1)])\\n\\ndef loo(a):\\n    pred = np.empty(len(y))\\n    for i in range(len(y)):\\n        k = np.arange(len(y)) != i\\n        pred[i] = a[i] @ np.linalg.lstsq(a[k], raw_sum[k], rcond=None)[0]\\n    return pred - raw_sum\\n\\ndef scores(e):\\n    return [float(np.sqrt(np.mean(e[s]**2))) for s in (axis,~axis)]\\n\\nfor name, a in [('affine',base[:,:5]),('diagonal cubic',base[:,:9]),('current sparse',base),('all paired products',np.c_[base,other]),('paired sum/difference cubics',np.c_[base,other,contrasts])]:\\n    print(name, 'LOO RMSE isolated/mixed', scores(loo(a)))\\n# Choose the rational denominator inside each outer fold by inner LOO.\\nqs = [(y[:,i]-y[:,j]) for i,j in pairs] + [y.sum(1)]\\nmodels = [base] + [base / (1 + a * q[:,None]**2) for q in qs for a in (.001,.01,.1,1.)]\\nrat, picked = [], []\\nfor i in range(len(y)):\\n    k = np.arange(len(y)) != i\\n    def inner(a):\\n        mat = a[k]; u,s,v = np.linalg.svd(mat,full_matrices=False)\\n        u = u[:,s > 1e-12*s[0]]\\n        e = (raw_sum[k] - u @ (u.T @ raw_sum[k])) / np.maximum(1-(u*u).sum(1),1e-12)\\n        return max(np.sqrt(np.mean(e[f]**2)) for f in (axis[k],~axis[k]))\\n    j = min(range(len(models)),key=lambda j: inner(models[j]))\\n    a = models[j]; picked.append(j)\\n    rat.append(a[i] @ np.linalg.lstsq(a[k],raw_sum[k],rcond=None)[0]-raw_sum[i])\\nprint('nested sparse versus rational selection LOO RMSE isolated/mixed', scores(np.asarray(rat)), 'nonbaseline picks', sum(j != 0 for j in picked))\\n\\nb = m['_bridge'](c)\\nfor name in ('train','test'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        raw = d[name][key].reshape(-1,4)\\n        decoded = m['_decode'](raw,b)\\n        e = m['_bridge_terms'](decoded) @ b - raw\\n        print(name,key,'forward closure max',float(np.max(abs(e))), 'channel range',float(decoded.min()),float(decoded.max()))\\n        assert np.max(abs(e)) < 1e-6\\n\\ntr,te=d['train'],d['test']; labs=tr['lab_id']; x=m['_features'](tr,te)[:len(labs)]\\npast,hold=m['_loads'](tr,b); dt,t=d['past_dt'],d['eval_times']; obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; err=np.empty_like(rate); ce=np.empty_like(rate)\\nfor l in np.unique(labs):\\n    h=labs==l; k=~h; tau,w=m['_fit'](x[k],past[k],hold[k],dt,t,obs[k],rate[k]); a,z=m['_design'](tau,x[h],past[h],hold[h],dt,t); err[h]=rate[h]-z@w; ce[h]=np.median(obs[h]-a@w,axis=1)\\naux=tr['aux_chamber_telemetry']\\nresponse=np.column_stack((ce,err))\\ndef within(a):\\n    a=a.copy()\\n    for l in np.unique(labs):\\n        h=labs==l; a[h]-=a[h].mean(0)\\n    return a\\nfor label,a,f in [('pooled',aux,response),('within lab',within(aux),within(response))]:\\n    corr=np.corrcoef(a.T,f.T)[:4,4:]; print(label,'aux vs OOF curve/rate residual corr max',np.max(abs(corr),axis=0).round(4),'signed',corr.round(3).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch04.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse mixed-cubic calibration with telemetry-selected chamber transfer → H2 retain that model unless a richer grammar improves held-out sweeps; current worst clean held-out stress error is 0.000374.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay states, Fokker–Planck operators, or classification balanced accuracy\",\n      \"rejected_reason\": \"This dataset has continuous strain and rate outcomes and no relay state or diffusion operator. The relevant nuisance check compares pooled and within-lab residual associations.\"\n    }\n  ],\n  \"rationale\": \"Use measured sweep holdouts to test whether omitted pairwise or rational terms improve the bridge, and check inversion closure on every operating input. Use leave-one-lab-out residuals to test whether pooled telemetry associations obscure a within-lab effect. These checks cannot establish blind chamber accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a32a40362d0b8fb9d0d235f22f347e6608d8feb79b87235bea2e6bd04c6f43ad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43777.84,
+      "usage_known": true,
+      "prompt_tokens": 30562,
+      "cached_tokens": 9344,
+      "completion_tokens": 1674
+    }
+  ]
+}

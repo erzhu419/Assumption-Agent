@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f19279b3604f472ab9268a2a38349af0",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:31.176700+00:00",
+  "ended_at_utc": "2026-11-28T03:53:53.779853+00:00",
+  "request_sha256": "01b7ac969295fd77818d03e3a93d7ed2cd9bf40bc7828ddebe213de9b65cff6b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 52317,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29983,
+    "cached_tokens": 9344,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u, batch_solver as b\\np=pickle.load(open('public_batch.pkl','rb')); print('public items',len(p)); d=p[0]['dataset']; c=d['calibration_load_cells']; X=c['true_channel_loads']; Y=c['bridge_raw']; base=u._fit_bridge(X,Y); print('frequencies',base[0]);print('coeff',base[1]); print('keys',list(c),list(d['train']),list(d['test'])); clean=np.max(abs(Y),axis=1)<5; axis=np.flatnonzero(clean & (np.count_nonzero(X,axis=1)==1)); mix=np.flatnonzero(clean & (np.count_nonzero(X,axis=1)!=1)); folds=[('mixed'+str(i),v) for i,v in enumerate(np.array_split(np.random.default_rng(49).permutation(mix),4))]+[('axis',axis),('extreme',mix[np.max(abs(X[mix]),axis=1)>1.48])];\\nfor name,v in folds:\\n t=np.ones(len(X),bool);t[v]=False; f,q=u._fit_bridge(X[t],Y[t]); xf=u._invert(Y[v],f,q); e=xf-X[v]; fr=u._forward(X[v],f,q)-Y[v]; r=u._forward(xf,f,q)-Y[v]; j=np.unravel_index(abs(e).argmax(),e.shape)[0]; print(name,'forward channel rmse',np.sqrt(np.mean(fr**2,axis=0)).round(7),'inverse channel rmse',np.sqrt(np.mean(e**2,axis=0)).round(6),'max error',abs(e).max(),'closure',abs(r).max(),'worst truth/fit',X[v[j]].round(4),xf[j].round(4));\\nfor k in ('train','test','chamber_verification_trials'):\\n if d.get(k) is None:continue\\n for s in ('past_channel_raw','hold_channel_raw'):\\n  y=d[k][s].reshape(-1,4); x=u._invert(y,*base); r=u._forward(x,*base)-y; print(k,s,'closure',np.quantile(abs(r).max(axis=1),[0,.5,.95,.99,1]),'load range',np.min(x,axis=0),np.max(x,axis=0))\\nassert all(np.isfinite(v).all() for v in b.solve_batch(d).values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the paired sine/cosine bridge reached 0.000151 worst blocked forward RMSE and passed the public schema; test whether its inverse recovers the known load branch.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema pass\",\"rejected_reason\":\"A small forward residual can coexist with a large load error if the inverse selects another branch.\"}],\"rationale\":\"Refit the actual artifact on blocked calibration folds and compare recovered loads against known loads. Separately check solver closure on deployed histories, where known loads are unavailable. A branch error would require revising the inverse rather than the forward fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "652fe54b6aa1ccd69810bcc680e02dae6dae98c2d0e64086200bbcac56872882",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24762.56,
+      "usage_known": true,
+      "prompt_tokens": 29983,
+      "cached_tokens": 9344,
+      "completion_tokens": 842
+    }
+  ]
+}

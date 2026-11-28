@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3db59958a8304288a576cbce598f05e6",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:00.335476+00:00",
+  "ended_at_utc": "2026-11-28T03:43:28.456908+00:00",
+  "request_sha256": "d1a25fd0d2bdbd923e5dcc1a05e2ed2cf4e9218ea36d8a6b38a3734b5c1e2891",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58922,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32357,
+    "cached_tokens": 9344,
+    "completion_tokens": 1002
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/kernel_cv.py <<'PY'\\nfrom chamber_probe import *\\nfrom downstream_solver import _features\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.special import erf\\ntr,te=d['train'],d['test']; labs=np.asarray(g['lab_id']); F=y-basis(tau)[:,:2]@(w[:2]*gap).T if False else y-(w[:2]*gap)@basis(tau)[:,:2].T\\nkernels={'exp':lambda k: np.r_[-np.expm1(-k*times)/k,1.], 'atan':lambda k:np.r_[np.arctan(k*times)/k,1.], 'erf':lambda k:np.r_[np.sqrt(np.pi)*erf(k*times)/(2*k),1.], 'rational':lambda k:np.r_[times/(1+k*times),1.], 'linear':lambda k:np.r_[times,1.]}\\nxg=_features(g,g)[-len(h):]; rg=w[2]+xg@w[3:]\\nfor name,fun in kernels.items():\\n def fit(m):\\n  def obj(k):\\n   v=fun(k); a=F[m]@v/(v@v); return np.sum((F[m]-a[:,None]*v)**2)\\n  return minimize_scalar(obj,bounds=(.1,4.),method='bounded').x\\n k=fit(np.ones(len(h),bool)); fitv=fun(k); amp=F@fitv/(fitv@fitv); print(name,'full k',round(k,6),'profile',np.round(stats(amp[:,None]*fitv-F),5),'coef amplitude vs intrinsic',np.round(np.linalg.lstsq(np.c_[ones,rg],amp,rcond=None)[0],6)); print('  lab CV k & RMSE',[(int(l),round(kl,6),np.round(stats(rg[m,None]*fun(kl)-F[m])[:2],5).tolist()) for l in np.unique(labs) for m in [labs==l] for kl in [fit(~m)]])\\nprint('eval times',times,'splits',[(name,len(s['lab_id']),list(s)) for name,s in [('train',tr),('test',te),('diag',g)]]); print('diagnostic missing',np.isnan(g['coupon_features_raw']).sum(axis=0),'test missing',np.isnan(te['coupon_features_raw']).sum(axis=0)); print('lab reference dispersion',[(name,[(int(l),round(np.median(s['ref_coupons'][s['lab_id']==l].mean(0)),3),round(np.median(s['ref_coupons'][s['lab_id']==l].std(0)),3)) for l in np.unique(s['lab_id'])]) for name,s in [('train',tr),('test',te),('diag',g)]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_cv.py\\ncd /holdout_task; sed -n '1,125p' validate_public_schema.py; cat _upstream_param_payload.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear benchtop drift → H2 saturating chamber drift; chamber-only reference alignment gives diagnostic rate RMSE ≤0.0065 across labs, and the kernel is next tested with each lab held out.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the chamber time constant using train-plus-diagnostic feature amplitudes\",\"rejected_reason\":\"Mixing those reference panels produces lab-specific amplitude errors that can bias the temporal fit; profile amplitudes out when estimating the kernel.\"}],\"rationale\":\"Fit each kernel without the held-out lab’s response data, then score strain and initial rate using that lab’s diagnostic reference coordinates. This tests whether the time law transfers across labs and distinguishes kernel error from reference misalignment before implementation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7cfe8a0b5e1be36fe11d623aa47091e72a1237aae2377a29a19e898ab058e2d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28076.83,
+      "usage_known": true,
+      "prompt_tokens": 32357,
+      "cached_tokens": 9344,
+      "completion_tokens": 1002
+    }
+  ]
+}

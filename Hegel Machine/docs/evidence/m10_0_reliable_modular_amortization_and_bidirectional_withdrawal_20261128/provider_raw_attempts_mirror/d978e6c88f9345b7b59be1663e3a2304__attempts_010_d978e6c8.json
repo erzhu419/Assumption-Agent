@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d978e6c88f9345b7b59be1663e3a2304",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:39.362454+00:00",
+  "ended_at_utc": "2026-11-28T03:58:17.212509+00:00",
+  "request_sha256": "de272d12221eee99c112a1eca2ae58c61dfd4379951ac1b82e6696b049f9e5da",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 53928,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29528,
+    "cached_tokens": 9344,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import brentq\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\n\\ndef features(x, name):\\n    p = x[:, u._PAIR]\\n    if name == 'rational':\\n        return (x * p / (1 + (x - p)**2))[..., None]\\n    if name == 'pairwise':\\n        return np.stack((np.sin(2.5*(x+p))-np.sin(2.5*x)-np.sin(2.5*p), np.sin(2.5*(x-p))-np.sin(2.5*x)+np.sin(2.5*p)), axis=-1)\\n    other = x[:, [1,0,3,2]]\\n    return (x*p*other)[...,None]\\n\\nscores = {k: [] for k in ('baseline','rational','pairwise','three-way')}\\nfor item in pickle.load(open('public_batch.pkl','rb')):\\n    d = item['dataset']; c = d['calibration_load_cells']; s = c['single_channel_sweeps']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    lab = s['lab_id']; ix = np.arange(len(x)); si = np.arange(len(lab))\\n    print('Supported dataset fields:', sorted(d), 'sweep groups:', np.unique(lab).tolist())\\n    splits = [(f'fold-{i}', ix%5==i, si%5==i) for i in range(5)]\\n    splits += [(f'omit-sweep-{j}', ix%4==j, lab==j) for j in range(4)]\\n    splits += [('extremes', np.max(abs(x),axis=1)>=1.5, abs(s['true_stress'])>=1.4)]\\n    for label, h, sh in splits:\\n        fit = u._fit(dict(c, true_channel_loads=x[~h], bridge_raw=y[~h], single_channel_sweeps={k:v[~sh] for k,v in s.items()}))\\n        off,gain,shape=fit; a,k,b,e,f=shape\\n        assert 1-abs(a*k)-abs(b)-abs(e*f)>0\\n        residual=y[~h]-off-gain*u._response(x[~h],shape)\\n        clean=u._clean(residual)\\n        # Only scoring uses the obvious gross-spike labels on withheld records.\\n        m=h&(np.max(abs(y),axis=1)<5)\\n        initial=u._invert(y[m],fit)\\n        scores['baseline'].append((float(np.max(abs(initial-x[m]))),label))\\n        for name in tuple(scores)[1:]:\\n            from scipy.optimize import root\\n            z=features(x[~h][clean],name)\\n            coef=np.array([np.linalg.lstsq(z[:,j],residual[clean,j]/gain[j],rcond=None)[0] for j in range(4)])\\n            preds=[]\\n            for seed, obs in zip(initial,y[m]):\\n                sol=root(lambda v: u._response(v,shape)+(features(v[None,:],name)[0]*coef).sum(axis=1)-(obs-off)/gain,seed,tol=1e-10)\\n                assert np.max(abs(sol.fun))<1e-9\\n                preds.append(sol.x)\\n            scores[name].append((float(np.max(abs(np.array(preds)-x[m]))), label))\\n    fit=u._fit(c)\\n    off,gain,shape=fit; a,k,b,e,h=shape\\n    blocks=u.calibrate_upstream(d)\\n    samples=np.concatenate([blocks[split][field].reshape(-1,4) for split in ('train','test') for field in ('past_channel_raw','hold_channel_raw')])\\n    # Include the least diagonal slope in each observed coordinate interval,\\n    # and an independent inverse of the lowest-slope pair encountered.\\n    extrema=[]\\n    for lo,hi in zip(samples.min(0),samples.max(0)):\\n        extrema.append([lo,hi]+[z*np.pi/k for z in range(-8,9) if lo<z*np.pi/k<hi])\\n    stress=np.array(list(itertools.product(*extrema)))\\n    raw=off+gain*u._response(stress,shape)\\n    err=float(np.max(abs(u._invert(raw,fit)-stress)))\\n    assert err<1e-8\\n    print('Observed envelope stress rows:',len(stress),'max inverse closure error:',err)\\n    print('Global Jacobian dominance margin:',1-abs(a*k)-abs(b)-abs(e*h))\\n    assert max(v for v,_ in scores['baseline']) < 0.002\\nfor name, values in scores.items():\\n    print(name, 'worst absolute load error and slice', max(values), 'median slice maximum', np.median([v for v,_ in values]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared sinusoidal response with paired cosine coupling -> H2 add cross-channel terms only if they improve held-out inversion; current worst held-out load error is 9.56e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or within-batch classification\",\n      \"rejected_reason\": \"The transducer task is continuous load reconstruction, with no relay state, drift operator, or classification labels. Holding out each sweep group tests the relevant calibration dependency.\"\n    }\n  ],\n  \"rationale\": \"Compare rational, pairwise, and three-way corrections on the same held-out measurements. A meaningful reduction in load error would justify revising the basis; a failure near low-slope operating points would instead call for revising the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2cf578063c7f3f86496bd7244237d2b815382e4e852c52cc87949add02284090",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40026.82,
+      "usage_known": true,
+      "prompt_tokens": 29528,
+      "cached_tokens": 9344,
+      "completion_tokens": 1553
+    }
+  ]
+}

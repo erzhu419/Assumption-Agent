@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8f41d006f694941b56b41abc09ae1db",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:10.849846+00:00",
+  "ended_at_utc": "2026-11-28T03:54:45.199631+00:00",
+  "request_sha256": "b326a345237f45e0858bb994ae534e6ae4b5316a2208dfb09fad11ea9d339cf2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43771,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26854,
+    "cached_tokens": 9344,
+    "completion_tokens": 1403
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_wall_cal.py <<'PY'\\nexec(open('/tmp/compare_walls.py').read().split(\\\"print('archived calibration sources:')\\\")[0])\\nfrom itertools import product\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nm=M[4]\\np=m._fit_calibration(ref,raw)\\ne=np.max(abs(m._forward(ref,p)-raw),axis=1)\\nprint('calibration parameters\\\\n',p)\\nprint('calibration max-channel errors sorted',np.sort(e))\\nprint('bank error by channel',[(i,np.max(abs(b['raw_readout'][b['bank_id']==i]-(p[i,0]+p[i,1]*b['ref_signal'][b['bank_id']==i]+p[i,5]*b['ref_signal'][b['bank_id']==i]**3)))) for i in j])\\nfor name, design in [('affine',lambda x,i:np.c_[np.ones(len(x)),x]),('archived nonlinear',m._design)]:\\n errs=[]\\n for f in range(5):\\n  test=np.arange(len(ref))%5==f; train=~test\\n  if name=='archived nonlinear': pp=m._fit_calibration(ref[train],raw[train]); pred=m._forward(ref[test],pp)\\n  else:\\n   D=design(ref,0); pp=np.linalg.lstsq(D[train & (e<1)],raw[train & (e<1)],rcond=None)[0]; pred=D[test]@pp\\n  errs.append(np.sort(np.max(abs(pred-raw[test]),axis=1)))\\n print(name,'fold errors', [np.round(u,6).tolist() for u in errs])\\ny=m._calibrate(s); z=s['Z_nuisance']; ridge=s['source_ridge']; rz=s['nuisance_ridge']; cap=s['u_box']; budget=s['total_budget']; nx,ny=s['nx'],s['ny']; groups=np.arange(len(y)).reshape(len(s['mu_shifts']),-1,4); rows=np.arange(len(y)); ij=s['sensor_ij']; edge=(ij[:,0]==0)|(ij[:,0]==nx-1)|(ij[:,1]==0)|(ij[:,1]==ny-1)\\ndef transport(x,y):\\n axes=[]\\n for a,n,model in [('x',nx,x),('y',ny,y)]:\\n  args=(s['kappa_'+a],s['vel_'+a],s['L'+a]/(n-1))\\n  axes.append(M[2]._axis(*args) if model=='P' else M[3]._axis(*args, s['robin_'+a] if model=='R' else (0 if model=='N' else model)))\\n ax,ay=axes\\n L=kron(eye(ny), ax,format='csc')+kron(ay,eye(nx),format='csc')+diags(s['V_reaction_2d'].ravel(order='F'),format='csc'); I=eye(nx*ny,format='csc'); rhs=np.column_stack([v.ravel(order='F') for v in s['source_modes']]); slots=ij[:,0]+nx*ij[:,1]\\n return np.vstack([splu(L+mu*I).solve(rhs)[slots] for mu in s['mu_shifts']])\\ndef scores(S, train, test, sr=ridge):\\n Z=z[train]; P=np.linalg.solve(Z.T@Z+rz*np.eye(Z.shape[1]),Z.T); A=S[train]-Z@(P@S[train]); r=y[train]-Z@(P@y[train]); H=A.T@A+sr*np.eye(S.shape[1]); w,_=m._box_simplex(H,-A.T@r,cap,budget); err=S[test]@w+z[test]@(P@(y[train]-S[train]@w))-y[test]; return np.sqrt(np.mean(err**2))\\nfolds=[('shift',groups),('rosette',groups.transpose(1,0,2)),('edge',[rows[np.tile(edge,len(groups))]])]\\nprint('Robin values', s['robin_x'],s['robin_y'])\\nfor x,ywall in product('RNP',repeat=2):\\n S=transport(x,ywall)\\n print(x+ywall,[[round(scores(S,rows,rows,sr),7), *[round(max(scores(S,np.setdiff1d(rows,np.ravel(f)),np.ravel(f),sr) for f in ff),7) for _,ff in folds]] for sr in [ridge,1e-7]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/audit_wall_cal.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Symmetric archived wall models -> axis-wise boundary comparison; Robin has worst held-out RMSE 0.05331 versus 0.12368 for reflecting and 0.13236 for periodic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select Robin on both axes immediately\",\n      \"rejected_reason\": \"The initial comparison only tested matching walls on both axes; an axis-wise comparison can reveal a mixed regime, and the calibration residuals have not yet been separated from sweep corruption.\"\n    }\n  ],\n  \"rationale\": \"Use independent single-bank sweeps to check the calibrated response, then compare mixed wall models on held-out shifts, rosettes, and boundary sensors. The low-ridge comparison tests whether source shrinkage, rather than the wall physics, is driving the model ranking.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "557488c695aa9f19150210e65f2855ff0100e13590479817c1938ad533061f31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36424.73,
+      "usage_known": true,
+      "prompt_tokens": 26854,
+      "cached_tokens": 9344,
+      "completion_tokens": 1403
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4562738ac6a47a994fb86be2aae19a6",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:19:00.574039+00:00",
+  "ended_at_utc": "2026-11-28T04:19:24.450794+00:00",
+  "request_sha256": "7f17713f99b3a9b3d2cd9a798b64c4c11484a590d28c350468ee8067e39f4969",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40900,
+    "cached_tokens": 9344,
+    "completion_tokens": 917
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/compare08.py <<'PY'\\nimport itertools, numpy as np\\nimport bound08 as b\\ns,m=b.s,b.m\\nZ=s['Z_nuisance']; f=b.fit(b.X,b.Y,'sep'); y=b.calibrate(f)\\nprint('archive calibration comparison'); x=b.X; yy=b.Y; c=m.calibration_map(s['sensor_calibration_sweeps']); print('archived fit RMSE',np.sqrt(np.mean((m.raw_map(x,c)-yy)**2,axis=0)))\\n# Keep all three shifts in spatial folds; also test extrapolation to a whole shift.\\ngroups=[np.arange(len(y))//32]+[np.tile(np.arange(32)//4,3)]\\nfor i,j in itertools.product([1,2],repeat=2):\\n S,U=m.chamber_response(s,[[0,np.nan][i-1]]*2+[[0,np.nan][j-1]]*2)\\n errs=[]\\n for g in groups:\\n  es=[]\\n  for k in np.unique(g):\\n   train=g!=k; A=S[train]; z=Z[train]; t=y[train]; q=np.linalg.qr(z,mode='reduced')[0]; a=A-q@(q.T@A); t0=t-q@(q.T@t); w,_=m.box_simplex(a.T@a+1e-10*np.eye(a.shape[1]),a.T@t0,s['u_box'],s['total_budget']); gamma=np.linalg.lstsq(z,t-A@w,rcond=None)[0]; es.append(np.sqrt(np.mean((S[~train]@w+Z[~train]@gamma-y[~train])**2)))\\n  errs.append(np.array(es))\\n print('walls',i,j,'by shift',errs[0].round(6),'spatial RMS/worst',np.sqrt(np.mean(errs[1]**2)),max(errs[1]))\\nfor train in [np.arange(len(x))%5!=k for k in range(5)]:\\n d=s['sensor_calibration_sweeps'].copy(); d['ref_rosette']=x[train]; d['raw_rosette']=yy[train]; c=m.calibration_map(d); e=m.raw_map(x[~train],c)-yy[~train]; print('archived cal CV',np.sqrt(np.mean(e**2,axis=0)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare08.py | tail -12; sed -n '40,121p' /tmp/hegel_continual_archive/beta_m100_c02_batch_06_solver.py; grep -A5 '^def solve_batch' /tmp/hegel_continual_archive/*_solver.py | grep -E 'periodic=|walls =|chamber_response'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 freely fit seam conductance -> H2 prefer the archived periodic stencil if held-out prediction supports it; unregularized profiled residual norms are 0.07129 for the fitted seam and 0.07150 for periodic walls.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the fitted seam based on its training residual\",\"rejected_reason\":\"Its gain is only 0.00021 in residual norm and its conductances vary across held-out shifts.\"}],\"rationale\":\"Compare fixed wall stencils on whole-shift and spatial-rosette holdouts; compare the archived calibration on held-out sweeps to choose the better-supported components for the final solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "89e43694d90a2d32ec9fb192208cece9eb58a3e72031f8fc76a799f0bf277903",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26022.09,
+      "usage_known": true,
+      "prompt_tokens": 40900,
+      "cached_tokens": 9344,
+      "completion_tokens": 917
+    }
+  ]
+}

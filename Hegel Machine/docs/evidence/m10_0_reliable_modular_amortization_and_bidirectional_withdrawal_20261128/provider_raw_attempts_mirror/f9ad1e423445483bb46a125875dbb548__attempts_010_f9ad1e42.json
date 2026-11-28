@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9ad1e423445483bb46a125875dbb548",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:12:06.118054+00:00",
+  "ended_at_utc": "2026-11-28T04:12:30.946569+00:00",
+  "request_sha256": "00a87283826621836181ff810e7f8b9fead1f1d842e4f19b03a05ee368bfc35a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 67041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32823,
+    "cached_tokens": 9344,
+    "completion_tokens": 963
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 validate_public_schema.py batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward, _fit\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ncal = calibrate_upstream(study)\\ny, z = cal['y_obs_raw'], cal['Z_nuisance']\\nblock = len(cal['sensor_ij'])\\nshift_id = np.arange(len(y)) // block\\nrosette_id = (np.arange(len(y)) % block) // 4\\nscores = {}\\nfor walls in [('robin','robin'), ('periodic','sealed'), ('sealed','periodic'), ('periodic','periodic')]:\\n    S, _ = _forward(cal, walls)\\n    for label, labels in [('shift', shift_id), ('rosette', rosette_id)]:\\n        errs = []\\n        for j in np.unique(labels):\\n            keep = labels != j\\n            w, _, _, _, b = _fit(cal, S[keep], y[keep], z[keep])\\n            e = y[~keep] - S[~keep] @ w - z[~keep] @ b\\n            errs.append(float(np.sqrt(np.mean(e**2))))\\n        scores[(walls, label)] = max(errs)\\n        print(f'{walls} {label} worst held-out RMSE: {max(errs):.9f}')\\nfor label in ('shift', 'rosette'):\\n    assert scores[(('periodic','periodic'), label)] < scores[(('robin','robin'), label)]\\nS, U = _forward(cal, ('periodic','periodic'))\\nw, _, _, _, _ = _fit(cal, S, y, z)\\nout = solve_batch(study)\\nnp.testing.assert_allclose(out['weights'], w, rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(out['terminal_field'], np.tensordot(w, U, axes=(0,0)), rtol=0, atol=1e-12)\\nk = out['kkt_certificate']\\ngap = k['primal_objective'] - k['dual_lower_bound']\\nassert abs(gap) < 1e-10\\nprint(f'Batch output matches the periodic-periodic law; certified gap: {gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin walls) -> H2 (periodic on both axes); previous worst held-out RMSE was 0.009782 by shift and 0.011272 by rosette, with a final-bundle public KKT gap of 5.53e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit using the previous receipt\",\n      \"rejected_reason\": \"The numerical checks passed, but the host rejected the evidence attached to the boundary-model resolution.\"\n    }\n  ],\n  \"rationale\": \"Run a read-only comparison on the original public study using the final bundle’s dynamic calibration. This directly tests the rejected Robin assumption and confirms that the submitted entry point uses the selected periodic law; neither the fixtures nor the deliverables are changed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "15e4496c60726fecea8072f8a4e269404cb836101ce94f5ff1665500cb71135d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27035.19,
+      "usage_known": true,
+      "prompt_tokens": 32823,
+      "cached_tokens": 9344,
+      "completion_tokens": 963
+    }
+  ]
+}

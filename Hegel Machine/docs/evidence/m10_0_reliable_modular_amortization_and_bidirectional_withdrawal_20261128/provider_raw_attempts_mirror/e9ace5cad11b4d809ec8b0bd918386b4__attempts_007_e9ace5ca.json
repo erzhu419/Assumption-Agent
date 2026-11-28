@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9ace5cad11b4d809ec8b0bd918386b4",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:50.566104+00:00",
+  "ended_at_utc": "2026-11-28T03:33:16.554065+00:00",
+  "request_sha256": "982e7f139cb7f94711318a53c00d8e89b121612f3680d1b962e5ec6308ebe435",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43195,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25768,
+    "cached_tokens": 9344,
+    "completion_tokens": 988
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; r=c['ref_rosette']; y=c['raw_rosette']; single=c['single_bank_sweeps']; b=np.asarray(single['bank_id']).ravel(); x=np.asarray(single['ref_signal']); z=np.asarray(single['raw_readout']); print('sweep shapes',r.shape,x.shape,z.shape,'bank counts',np.unique(b,return_counts=True)); print('single rows',x[:5],z[:5]); print('observation bank labels by rosette',np.unique(s['row_bank_id'].reshape(-1,4),axis=0));\\nX=np.c_[np.ones(len(r)),r]; a=np.linalg.lstsq(X,y,rcond=None)[0]; e=y-X@a; print('affine coefficients',a,'residual std',e.std(0),'bias by signal quartile', [e[g].mean(0).tolist() for g in np.array_split(np.argsort(np.linalg.norm(r,axis=1)),4)]);\\n# Compare affine and full quadratic on the same held-out sweep rows in each fold.\\nQ=np.c_[X,np.column_stack([r[:,i]*r[:,j] for i in range(4) for j in range(i,4)])]; groups=np.arange(len(r))%5; errors=[]\\nfor design in (X,Q):\\n    pred=np.empty_like(y)\\n    for k in range(5):\\n        f=groups!=k; pred[~f]=design[~f]@np.linalg.lstsq(design[f],y[f],rcond=None)[0]\\n    errors.append(np.array([np.sqrt(np.mean((pred[groups==k]-y[groups==k])**2,axis=0)) for k in range(5)]))\\nprint('held-out sweep worst RMS by bank affine/quadratic',*[e.max(0).tolist() for e in errors]);\\nS,_=m._transport(s); nshift=len(s['mu_shifts']); Z=s['Z_nuisance']; q=np.linalg.qr(Z,mode='reduced')[0]\\nfor k,p in enumerate(item['campaign_diagnostics']):\\n    d=m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))-S@p['w_pulse']; residual=d-q@(q.T@d); arr=d.reshape(nshift,-1,4); print('pulse',k,'shift-bank bias',arr.mean(1).tolist(),'nuisance-aligned RMS',np.sqrt(np.mean(residual**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (reflecting walls with affine calibration) -> H2 (the same walls with richer calibration only if held-out sweeps support it); worst public pulse RMS by shift and bank is 1.61e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"This steady inverse problem has no relay state or classification outcome. Sensor banks, shift slices, and the specified nuisance span are the relevant checks.\"\n    }\n  ],\n  \"rationale\": \"The field and KKT checks already passed in a clean process. This audit tests whether the remaining sensor-bank residual reflects missing calibration terms rather than sweep noise. Only consider a calibration change if it improves held-out sweeps and then independently improves tracer pulses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3a5df5e564e6e85b9f408257bbaa0edd06985c135af4617fe6fe34e89e6201b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28101.45,
+      "usage_known": true,
+      "prompt_tokens": 25768,
+      "cached_tokens": 9344,
+      "completion_tokens": 988
+    }
+  ]
+}

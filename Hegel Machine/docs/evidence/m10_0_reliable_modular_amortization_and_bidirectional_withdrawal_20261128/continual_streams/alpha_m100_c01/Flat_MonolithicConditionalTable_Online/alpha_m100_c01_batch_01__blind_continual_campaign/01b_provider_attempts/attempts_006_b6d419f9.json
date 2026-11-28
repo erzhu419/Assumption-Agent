@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6d419f93e9947f4beb6f15b187cd9bd",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:04.410183+00:00",
+  "ended_at_utc": "2026-11-28T03:32:38.560596+00:00",
+  "request_sha256": "e186c75ab2f99370563070ea681797698466a33c7be6799304d634557a35e692",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46913,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29656,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/law.py <<'PY'\\nfrom explore import *\\nfrom scipy.optimize import least_squares\\np,h,F=inputs[2]; Y=di['strain_curves_obs']-di['strain_0'][:,None]; R=di['instant_rate_obs']; yy=np.c_[Y,R]; n=len(h); labs=di['lab_id']; ones=np.ones(n)\\ndef basis(a,b): return np.vstack([np.c_[-np.expm1(-t[:,None]/[a,b]),t],np.r_[1/np.array([a,b]),1]])\\nD=basis(.497,3.356); gain=np.linalg.lstsq(D[:,:2],yy.T,rcond=None)[0].T\\nxdi=m._features(di,di)[0]; zs={'pooled':F[:,1:],'diag':xdi}\\n# Also transform diagnostics with train+test panel and imputation moments, without augmenting it.\\nraw=di['coupon_features_raw'].copy(); L=np.r_[tr['lab_id'],te['lab_id']]; ref=np.vstack([tr['ref_coupons'],te['ref_coupons']]); X=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]);\\nfor lab in np.unique(L):\\n ref0=ref[L==lab]; c=np.median(ref0.mean(0)); s=np.median(ref0.std(0)); raw[labs==lab]=(raw[labs==lab]-c)/s; X[L==lab]=(X[L==lab]-c)/s\\n_,cells,counts=np.unique(np.c_[L,np.r_[tr['stratum'],te['stratum']]],axis=0,return_inverse=True,return_counts=True); w=1/counts[cells,None]; mu=np.nansum(w*X,axis=0)/(w*np.isfinite(X)).sum(0); zs['train+test']=np.where(np.isnan(raw),mu,raw)\\nfor key,X0 in zs.items():\\n r=theta[2]+X0@theta[3:]; print(key,'r, amp0 - theta0*hold, amp1 - theta1*hold, amp1/hold',np.round(np.c_[r,gain[:,0]-theta[0]*h,gain[:,1]-theta[1]*h,gain[:,1]/h],4) if key=='pooled' else '')\\n out=[]\\n for typ in ['r','r2','r3','x','h*r','h*r2','h*x','past+r','past+h*r']:\\n  f={'r':np.c_[h,ones,r],'r2':np.c_[h,ones,r,r*r],'r3':np.c_[h,ones,r,r*r,r**3],'x':np.c_[h,ones,X0],'h*r':np.c_[h,h*r],'h*r2':np.c_[h,h*r,h*r*r],'h*x':np.c_[h,h[:,None]*X0],'past+r':np.c_[h,p,ones,r],'past+h*r':np.c_[h,p,h*r]}[typ]\\n  pred=np.empty_like(yy)\\n  for lab in np.unique(labs):\\n   keep=labs!=lab; pred[~keep]=np.c_[gain[~keep,0],f[~keep]@np.linalg.lstsq(f[keep],gain[keep,1],rcond=None)[0]]@D[:,:2].T\\n  out.append((typ,round(rms(pred[:,:-1]-Y),5),round(rms(pred[:,-1]-R),5),np.round(np.linalg.lstsq(f,gain[:,1],rcond=None)[0],4)))\\n for v in out: print(v)\\nprint('missing by diag feature',np.isnan(di['coupon_features_raw']).sum(0)); print('corr f0 hold',np.corrcoef(h,gain[:,0]), 'amp0 line', np.linalg.lstsq(np.c_[ones,h],gain[:,0],rcond=None)[0]); print('gain0 residual vs gain1',np.linalg.lstsq(np.c_[ones,h,gain[:,1]],gain[:,0],rcond=None)[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/law.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent linear history amplitudes -> H2 hold-driven fast branch and feature-modulated slow branch; the best tested held-out-lab linear model still has maximum strain/rate errors of 0.476/0.303.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unrestricted linear history fit\",\n      \"rejected_reason\": \"Adding six independent history coefficients worsened both held-out strain and rate errors relative to hold stress alone.\"\n    }\n  ],\n  \"rationale\": \"The fast amplitude is close to proportional to hold stress, while the slow amplitude varies substantially. Compare additive and multiplicative feature laws on omitted labs. Check diagnostic panel normalization separately so a reference-scale mismatch is not mistaken for chamber nonlinearity.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1aa566ae09b1d0f78ff87d6136da11f46e7fcf17192a9c24d02a405e819c5647",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36209.32,
+      "usage_known": true,
+      "prompt_tokens": 29656,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

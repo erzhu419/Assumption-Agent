@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c7ecd13604844a49e5a6c0eeeb2b6cb",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:26.893925+00:00",
+  "ended_at_utc": "2026-11-28T03:48:52.718222+00:00",
+  "request_sha256": "be8aaeb8e572a3d6125c734d3cc305ccd22eaa29bea865b4aa739454e4bc2ca9",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49542,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26658,
+    "cached_tokens": 9344,
+    "completion_tokens": 946
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream\\n\\nbatch = pickle.load(open('public_batch.pkl', 'rb'))\\nworst = np.zeros(3)\\nfor item in batch:\\n    study = item['study']\\n    sweep = study['sensor_calibration_sweeps']\\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\\n    nominal = solve_batch(study)\\n    n = len(x)\\n    amp = np.argsort(np.argsort(np.linalg.norm(x, axis=1))) * 5 // n\\n    order = np.arange(n) * 5 // n\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    groups = [(f'amplitude {k}', amp != k) for k in range(5)] + [(f'sweep order {k}', order != k) for k in range(5)] + [('axis only', ~axis)]\\n    clean = np.array([True] * n)\\n    # Public EMI rows identified by the independent interleaved out-of-fold audit.\\n    clean[[13, 14, 15]] = False\\n    for label, keep in groups:\\n        test = ~keep & clean\\n        train = dict(sweep, ref_rosette=x[keep], raw_rosette=y[keep])\\n        reduced = dict(study, sensor_calibration_sweeps=train)\\n        predicted = calibrate_upstream(dict(reduced, y_obs_raw=y[test]))['y_obs_raw']\\n        inverse = np.linalg.norm(predicted - x[test], axis=1).max()\\n        out = solve_batch(reduced)\\n        weights = np.max(np.abs(out['weights'] - nominal['weights']))\\n        field = np.max(np.abs(out['terminal_field'] - nominal['terminal_field']))\\n        worst = np.maximum(worst, [inverse, weights, field])\\n        print(f'{label}: inverse L2={inverse:.3g}; actual-observation weights/field max change={weights:.3g}/{field:.3g}')\\nassert worst[0] < 3e-4 and np.max(worst[1:]) < 3e-4\\nprint('PASS ng_t04: exact production calibrator and composed solver, worst errors', worst)\\nlog = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nif isinstance(log, list):\\n    print('Telemetry row fields:', [list(row) for row in log if isinstance(row, dict)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive response → H2 coupled cubics and pairwise products; worst clean held-out inverse error is 4.31e-5 L2, with downstream sensitivity to sweep exclusions not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and higher-order feature comparison\",\n      \"rejected_reason\": \"Both challengers already worsened held-out errors. The untested question is whether excluding calibration slices materially changes downstream outputs on the actual observations.\"\n    }\n  ],\n  \"rationale\": \"Run the exact composed solver on real observations after withholding calibration slices. Excessive weight or field movement would trigger investigation of calibration leverage; stable outputs would support retaining the verified candidate. Inspect telemetry field names to determine whether batch adjustment is applicable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7635d9068724b3d777b69767b57c0686e25af27a09ec3192399d86ab851b7f35",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27905.86,
+      "usage_known": true,
+      "prompt_tokens": 26658,
+      "cached_tokens": 9344,
+      "completion_tokens": 946
+    }
+  ]
+}

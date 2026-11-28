@@ -1,0 +1,11 @@
+import importlib.util,pickle,numpy as np
+from scipy.optimize import least_squares
+s=importlib.util.spec_from_file_location('prev','/tmp/hegel_continual_archive/alpha_m100_c01_batch_01_solver.py'); prev=importlib.util.module_from_spec(s);s.loader.exec_module(prev)
+p=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr=d['train']; te=d['test']; g=p['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; ca=d['calibration_load_cells']; b=prev._bridge(ca['bridge_raw'],ca['true_channel_loads']); xt,xe=prev._features(tr,te)
+P,H,F=prev._inputs(tr,xt,b); a,w=prev._fit(P,H,F,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('material',a,w,flush=True)
+for name,split,x in [('train',tr,xt),('diag_own',g,prev._features(g,{k:v[:0] for k,v in g.items()})[0]),('diag_pooled',g,prev._features(tr,g)[1])]:
+ P,H,F=prev._inputs(split,x,b); C,R=prev._design(a,P,H,F,dt,t); Y=np.c_[split['strain_curves_obs']-split['strain_0'][:,None],split['instant_rate_obs']]; D=np.concatenate((C,R[:,None]),axis=1); age=np.cumsum(dt[::-1])[::-1]-dt; M=P@(np.exp(-age[:,None]/a)*-np.expm1(-dt[:,None]/a)); U=F@w[2:]; E=np.c_[-np.expm1(-t[:,None]/a),t]; E=np.vstack((E,np.r_[1/a,1])); A=Y@np.linalg.pinv(E.T); print(name,'target ranges',np.quantile(Y,[0,.5,1],axis=0).round(3)); print('decomp residual median/max',np.median(abs(Y-A@E.T),axis=0).round(5),abs(Y-A@E.T).max(axis=0).round(5)); print('baseline residual median/max',np.median(abs(Y-D@w),axis=0).round(5),abs(Y-D@w).max(axis=0).round(5)); print('corr A with H,M,U, P',np.corrcoef(np.c_[A,H,M,U,P].T)[:3,3:].round(3)); print('lab counts',np.unique(split['lab_id'],return_counts=True));
+ if name.startswith('diag'):
+  for tag,Z in [('hold + score',np.c_[H,U]),('hold + memory + score',np.c_[H,M,U]),('hold + past + score',np.c_[H,P,U]),('hold + memory + features',np.c_[H,M,F])]:
+   def design(Z): return np.einsum('ij,kl->ikjl',Z,E).reshape(len(Z),len(E),-1)
+   X=design(Z); fit=lambda ii: np.linalg.lstsq(X[ii].reshape(-1,X.shape[-1]),Y[ii].ravel(),rcond=None)[0]; pred=X@fit(np.arange(len(Y))); oo=np.vstack([X[i]@fit(np.arange(len(Y))!=i) for i in range(len(Y))]); print(tag,'coef',fit(np.arange(len(Y))).reshape(-1,3).round(4),'RMSE in/oof',np.sqrt(np.mean((pred-Y)**2,axis=0))[[0,5,11,12]].round(5),np.sqrt(np.mean((oo-Y)**2,axis=0))[[0,5,11,12]].round(5))

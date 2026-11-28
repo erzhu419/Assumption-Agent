@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd73ed4a3c824fa1894feab6c9d8eaa8",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:17.467967+00:00",
+  "ended_at_utc": "2026-11-28T03:41:52.537434+00:00",
+  "request_sha256": "42cf64786527383db63e415601ef67f77c33786d17795b35aa9ca8e14e5bbbcf",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43943,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25742,
+    "cached_tokens": 5504,
+    "completion_tokens": 1430
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    studies = [item['study'] for item in pickle.load(f)]\\n\\ndef fit(a, b):\\n    w = np.ones(len(b))\\n    for _ in range(24):\\n        c = np.linalg.lstsq(a * w[:, None], b * w, rcond=None)[0]\\n        r = np.abs(a @ c - b)\\n        s = max(np.median(r), 1e-12)\\n        w = 1 / np.hypot(1, r / (2 * s))\\n    good = r <= 6*s\\n    if np.linalg.matrix_rank(a[good]) == a.shape[1]:\\n        c = np.linalg.lstsq(a[good], b[good], rcond=None)[0]\\n    return c\\n\\ndef design(x, j, alpha, kind):\\n    u, v, w = x[:, j], x[:, (j+1)%4], x[:, (j-1)%4]\\n    q = u if kind == 'self' else u - v\\n    return np.column_stack((np.ones(len(x)), u, v, w, u**3 / (1 + alpha*q*q), u*v))\\n\\nfor st in studies:\\n    sw = st['sensor_calibration_sweeps']; x, y = sw['ref_rosette'], sw['raw_rosette']\\n    clean = np.max(np.abs(y), axis=1) < 5\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    radius = np.linalg.norm(x, axis=1)\\n    singles = sw['single_bank_sweeps']; bank = singles['bank_id']; r = singles['raw_readout']; xr = np.eye(4)[bank] * singles['ref_signal'][:, None]\\n    variants = [(0., 'self')] + [(a, k) for a in (0.001, 0.01, 0.1, 1.) for k in ('self', 'difference')]\\n    for label, test in [('all axis rows held out', axis), ('upper 20% radius held out', radius >= np.quantile(radius, .8)), ('negative-sign contrast held out', (x[:,0]*x[:,1] < 0))]:\\n        train = ~test; good = clean & test\\n        c = up._fit_forward(x[train], y[train]); p = up._features(x[good]) @ c\\n        inv = np.max(np.abs(up._invert(y[good], c)-x[good])); fwd = np.max(np.linalg.norm(p-y[good],axis=1))\\n        sparse = np.empty_like(p); rational = np.empty_like(p); choices = []\\n        folds = np.arange(len(x)) % 4\\n        for j in range(4):\\n            def score(variant):\\n                a = design(x, j, *variant)\\n                err = []\\n                for k in range(4):\\n                    tr = train & (folds != k); va = train & (folds == k)\\n                    err.extend(np.abs(a[va] @ fit(a[tr], y[tr,j]) - y[va,j]))\\n                return np.median(err)\\n            best = min(variants, key=score); choices.append(best)\\n            for output, variant in [(sparse, variants[0]), (rational, best)]:\\n                a = design(x, j, *variant)\\n                output[:,j] = a[good] @ fit(a[train], y[train,j])\\n        errs = [np.max(np.linalg.norm(v-y[good],axis=1)) for v in (sparse,rational)]\\n        print(label, 'n=',good.sum(), 'deployed forward/inverse max=',fwd,inv, 'compact polynomial/nested rational forward max=',errs, 'rational choices=',choices)\\n    c = up._fit_forward(x,y); pred = up._features(xr) @ c; e = np.abs(pred[np.arange(len(bank)),bank]-r)\\n    print('independent bank maxima:', [e[(bank==j)&(np.abs(r)<5)].max() for j in range(4)])\\n    print('study count:',len(studies), 'cohort/relay fields:',[k for k in st if any(t in k.lower() for t in ('cohort','technical_batch','relay','class'))])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 coupled self-cubic and pairwise response; maximum clean held-out inverse error was 4.107e-5 before the grouped extrapolation audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply cohort classification, relay, or PDE drift checks to the upstream fit\",\n      \"rejected_reason\": \"The upstream estimator maps paired continuous measurements; it has no class labels or relay state, and the verified downstream PDE operator is not being edited.\"\n    }\n  ],\n  \"rationale\": \"Interleaved folds could miss extrapolation bias. Hold out whole excitation regimes and compare the deployed basis with a compact cyclic polynomial and rational corrections selected inside training folds. A material reduction in worst-slice error would justify changing the delivered model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b81e56e9d88a6d69e448b2ad4056a650461b8cacce590863ae0c6bfdcd9ecee1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37202.97,
+      "usage_known": true,
+      "prompt_tokens": 25742,
+      "cached_tokens": 5504,
+      "completion_tokens": 1430
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27c5436e27874262b517f73a5151e476",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:13.288118+00:00",
+  "ended_at_utc": "2026-11-28T03:38:49.485486+00:00",
+  "request_sha256": "8d3623c85fbe2978b9973d33ec046596489d03e1415966b7c2fa645c5b2e66b6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50725,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29241,
+    "cached_tokens": 9344,
+    "completion_tokens": 1484
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nworst_pulse = worst_field = worst_gap = worst_complementarity = worst_budget = 0.0\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    s = item['study']; result = m.solve_batch(s)\\n    w, u, cert = (result[k] for k in ('weights','terminal_field','kkt_certificate'))\\n    nx, ny = s['nx'], s['ny']; ii, jj = np.asarray(s['sensor_ij']).T\\n    operator = np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    for axis, n, stride in [('x', nx, 1), ('y', ny, nx)]:\\n        h = s['L'+axis]/(n-1); k = s['kappa_'+axis]; v = s['vel_'+axis]\\n        for row in range(nx*ny):\\n            p = row//stride % n\\n            for direction in (-1, 1):\\n                q = (p+direction) % n\\n                coeff = (k[p]+k[q])/(2*h*h)+max(0.,-direction*v[p])/h\\n                operator[row,row] += coeff\\n                operator[row,row+(q-p)*stride] -= coeff\\n    rhs = np.asarray([x.ravel(order='F') for x in s['source_modes']]).T\\n    blocks = []\\n    for mu in s['mu_shifts']:\\n        shifted = operator + mu*np.eye(nx*ny)\\n        fields = np.linalg.solve(shifted, rhs)\\n        blocks.append(fields[ii+nx*jj])\\n    err = np.linalg.norm(shifted@u.ravel(order='F')-rhs@w)/np.linalg.norm(rhs@w)\\n    worst_field = max(worst_field,err)\\n    S = np.vstack(blocks)\\n    for p in item.get('campaign_diagnostics') or []:\\n        e = (S@p['w_pulse']-m._calibrate(s,p['y_pulse_raw'])).reshape(len(blocks),-1)\\n        worst_pulse = max(worst_pulse,float(np.sqrt(np.mean(e**2,axis=1)).max()))\\n    Z = s['Z_nuisance']; r = m._calibrate(s,s['y_obs_raw'])\\n    X = np.column_stack((S, r)); X -= Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@X)\\n    A, r = X[:,:-1], X[:,-1]; ridge = s['source_ridge']; g = A.T@(A@w-r)+ridge*w\\n    J = .5*(np.linalg.norm(A@w-r)**2+ridge*(w@w)); cap = s['u_box']; budget = s['total_budget']\\n    nu, lo, hi = (cert[k] for k in ('nu_sum','lam_lower','lam_upper'))\\n    assert np.array_equal(w,cert['weights']) and np.all((w>=0)&(w<=cap))\\n    assert np.all(lo>=0) and np.all(hi>=0) and np.max(np.abs(g-nu-lo+hi))<1e-10\\n    assert abs(J-cert['primal_objective'])<1e-10\\n    dual = J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n    assert abs(dual-cert['dual_lower_bound'])<1e-10\\n    worst_gap = max(worst_gap,abs(J-dual))\\n    worst_complementarity = max(worst_complementarity,np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w))))\\n    worst_budget = max(worst_budget,abs(w.sum()-budget))\\nprint('public worst pulse-by-shift RMSE, field equation relative residual, budget error, gap, complementarity:',worst_pulse,worst_field,worst_budget,worst_gap,worst_complementarity)\\nassert worst_pulse<2e-6 and max(worst_field,worst_budget,worst_gap,worst_complementarity)<1e-10\\nrng=np.random.default_rng(498); mx=0.\\nfor n in (4, 8, 16):\\n    for trial in range(40):\\n        B=rng.normal(size=(n,n)); H=B.T@B+.04*np.eye(n); c=5*rng.normal(size=n)\\n        for b in (0., 1e-8, 1.4, float(n//2), n-1e-8, float(n)):\\n            w,nu=m._box_simplex(H,c,1.,b); g=H@w+c-nu\\n            e=max(abs(w.sum()-b),np.max(np.maximum(g,0)*w),np.max(np.maximum(-g,0)*(1-w)))\\n            assert np.all((w>=0)&(w<=1)) and e<1e-9, (n,trial,b,e)\\n            mx=max(mx,e)\\nprint('720 stressed QPs, worst budget/complementarity residual:',mx)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 advection-free wrap -> H2 periodic upwind transport; worst tracer RMSE is 8.81e-7, with host-verified field and weight relative errors of 1.82e-6 and 8.74e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the submitted file in isolation. An independently assembled operator can expose indexing or terminal-shift errors; certificate reconstruction and endpoint budget tests can expose multiplier sign or active-set errors that the schema check cannot.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a785f752c671bbd247dc4a89562998743d746c89b1ca3a853f7d8e45d0e16738",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38198.67,
+      "usage_known": true,
+      "prompt_tokens": 29241,
+      "cached_tokens": 9344,
+      "completion_tokens": 1484
+    }
+  ]
+}

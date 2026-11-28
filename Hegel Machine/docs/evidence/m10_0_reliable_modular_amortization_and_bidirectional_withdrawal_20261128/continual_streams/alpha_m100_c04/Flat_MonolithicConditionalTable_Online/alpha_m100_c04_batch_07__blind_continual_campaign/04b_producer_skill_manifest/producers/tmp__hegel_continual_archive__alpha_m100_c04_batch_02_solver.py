@@ -1,0 +1,141 @@
+"""Calibrated two-branch hereditary strain and initial-rate prediction."""
+
+import numpy as np
+from scipy.optimize import least_squares
+
+
+def _features(train, test):
+    parts = train, test
+    labs = np.concatenate([p['lab_id'] for p in parts])
+    strata = np.concatenate([p['stratum'] for p in parts])
+    ref = np.vstack([p['ref_coupons'] for p in parts])
+    raw = np.vstack([p['coupon_features_raw'] for p in parts])
+    x = np.empty_like(raw, dtype=float)
+    for lab in np.unique(labs):
+        m = labs == lab
+        # Pool each lab's reference panel independently of the split. Sorting
+        # also gives an identical reduction order after reference exchange.
+        panel = np.sort(ref[m], axis=0)
+        center = np.nanmedian(np.nanmean(panel, axis=0))
+        spread = np.nanmedian(np.nanstd(panel, axis=0, ddof=0))
+        x[m] = (raw[m] - center) / spread
+    _, cell, counts = np.unique(np.column_stack((labs, strata)), axis=0,
+                                return_inverse=True, return_counts=True)
+    w = (1.0 / counts[cell])[:, None]
+    observed = np.isfinite(x)
+    denom = np.sum(w * observed, axis=0)
+    sums = np.sum(w * np.where(observed, x, 0.), axis=0)
+    means = np.divide(sums, denom, out=np.zeros_like(sums), where=denom > 0)
+    return np.where(observed, x, means)
+
+
+def _bridge_design(load):
+    n = len(load)
+    nxt = np.roll(load, -1, axis=1)
+    return np.concatenate((np.ones((n,4,1)), np.broadcast_to(load[:,None,:], (n,4,4)), (load**3)[:,:,None], (load*nxt)[:,:,None]), axis=2)
+
+
+def _calibrate(calibration):
+    raw = calibration['bridge_raw']
+    true = calibration['true_channel_loads']
+    # The disturbed sweeps are isolated by their large four-channel excursion.
+    clean = np.max(np.abs(raw), axis=1) < 8
+    design = _bridge_design(true[clean])
+    return np.stack([np.linalg.lstsq(design[:,j],raw[clean,j],rcond=None)[0] for j in range(4)])
+
+
+def _stress(raw, bridge):
+    raw = np.asarray(raw)
+    measurements = raw.reshape(-1,4)
+    offset, linear, cubic, mixed = bridge[:,0], bridge[:,1:5], bridge[:,5], bridge[:,6]
+    load = np.linalg.solve(linear, (measurements-offset).T).T
+    idx = np.arange(4)
+    for _ in range(24):
+        nxt = np.roll(load,-1,axis=1)
+        error = offset + load @ linear.T + cubic*load**3 + mixed*load*nxt - measurements
+        if np.max(np.abs(error)) < 1e-11:
+            break
+        jac = np.broadcast_to(linear,(len(load),4,4)).copy()
+        jac[:,idx,idx] += 3*cubic*load**2 + mixed*nxt
+        jac[:,idx,(idx+1)%4] += mixed*load
+        step = np.linalg.solve(jac,error[:,:,None])[:,:,0]
+        load -= step / np.maximum(1.,np.max(np.abs(step),axis=1,keepdims=True))
+    return load.sum(axis=1).reshape(raw.shape[:-1])
+
+
+def _inputs(part, x, bridge):
+    return (_stress(part["past_channel_raw"], bridge),
+            _stress(part["hold_channel_raw"], bridge),
+            np.column_stack((np.ones(len(x)), x)))
+
+
+def _design(taus, inp, dt, t):
+    past, hold, covariates = inp
+    # A pulse is attenuated by all intervals that follow it, not by its own
+    # interval twice. This is the exact unrolled chronological state update.
+    tail = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.]
+    coeff = -np.expm1(-dt[:, None] / taus) * np.exp(-tail[:, None] / taus)
+    gap = hold[:, None] - past @ coeff
+    rise = -np.expm1(-t[:, None] / taus)
+    strain = np.concatenate((gap[:, None, :] * rise[None, :, :],
+                             covariates[:, None, :] * t[None, :, None]), axis=2)
+    rate = np.column_stack((gap / taus, covariates))
+    return strain, rate
+
+
+def _fit(inp, dt, t, strain, rate):
+    n, k = strain.shape
+    y = np.r_[strain.ravel(), rate]
+
+    def matrix(taus):
+        a, b = _design(taus, inp, dt, t)
+        return np.vstack((a.reshape(n*k, 7), b))
+
+    def residual(p):
+        return matrix(p[:2]) @ p[2:] - y
+
+    def noise(r):
+        def mad(v):
+            return max(1e-8, 1.4826 * np.median(np.abs(v - np.median(v))))
+        return np.r_[np.full(n*k, mad(r[:n*k])), np.full(n, mad(r[n*k:]))]
+
+    # Compare separated branch starts, eliminating all seven linear
+    # coefficients before changing the time constants.
+    starts = []
+    for lo in (.12, .35, .8, 1.6):
+        for hi in (1.2, 3., 7., 16.):
+            if hi <= lo:
+                continue
+            a = matrix(np.array([lo, hi]))
+            p = np.r_[lo, hi, np.linalg.lstsq(a, y, rcond=None)[0]]
+            starts.append((np.linalg.norm(residual(p)), p))
+    bounds = (np.r_[np.full(2, .05000001), np.full(7, -np.inf)],
+              np.r_[np.full(2, 24.99999999), np.full(7, np.inf)])
+    p0 = min(starts, key=lambda pair: pair[0])[1]
+    scale = noise(residual(p0))
+    # Smooth robust regression first, then redescending influence for the
+    # occasional heavy-tailed sensor spikes.
+    p = least_squares(lambda q: residual(q)/scale, p0, bounds=bounds,
+                      loss='soft_l1', f_scale=2, x_scale='jac', max_nfev=200).x
+    scale = noise(residual(p))
+    p = least_squares(lambda q: residual(q)/scale, p, bounds=bounds,
+                      loss='cauchy', f_scale=2.5, x_scale='jac', max_nfev=200).x
+    if p[0] > p[1]:
+        p = p[[1, 0, 3, 2, 4, 5, 6, 7, 8]]
+    return p[:2], p[2:]
+
+
+def solve_batch(dataset: dict) -> dict:
+    train, test = dataset['train'], dataset['test']
+    dt, t = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])
+    x = _features(train, test)
+    n = len(train['lab_id'])
+    cal = _calibrate(dataset['calibration_load_cells'])
+    tr, te = _inputs(train, x[:n], cal), _inputs(test, x[n:], cal)
+    taus, theta = _fit(tr, dt, t,
+                       train['strain_curves_obs'] - train['strain_0'][:, None],
+                       train['instant_rate_obs'])
+    a, b = _design(taus, te, dt, t)
+    return {'estimated_taus': taus, 'hereditary_weights': theta,
+            'predicted_strain': test['strain_0'][:, None] + a @ theta,
+            'initial_rate_pred': b @ theta}

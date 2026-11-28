@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69a1390a09a9442ba5bdc0294fd4c5aa",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:16.921917+00:00",
+  "ended_at_utc": "2026-11-28T03:55:56.280782+00:00",
+  "request_sha256": "2338f66bdb998986984fdc0968aef0e65fed8ab1c50eae6040db8de4d13c3867",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 54043,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29035,
+    "cached_tokens": 9344,
+    "completion_tokens": 1733
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/bridge_margin_audit.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _forward, _inverse, _PARTNER\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as fh:\\n    ds = pickle.load(fh)[0]['dataset']\\nc = ds['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) == 1\\n# The gross-spike cutoff is far above the ordinary calibration residuals.\\nclean = np.max(np.abs(y-x), axis=1) < 2\\nrng = np.random.default_rng(405)\\nfolds = [('axis', np.flatnonzero(axis))] + [(f'mixed-{i}', v) for i,v in enumerate(np.array_split(rng.permutation(np.flatnonzero(~axis)), 5), 1)]\\n\\ndef shared(a, b, good, guess):\\n    def project(p):\\n        h,k,s,t,u = p\\n        z = a[:,_PARTNER]\\n        v = a + s*np.sin(h*a) + t*z + u*(np.cos(k*z)-1)\\n        va, ba = v[good], b[good]\\n        vc, bc = va-va.mean(axis=0), ba-ba.mean(axis=0)\\n        gain = np.sum(vc*bc,axis=0)/np.sum(vc**2,axis=0)\\n        offset = ba.mean(axis=0)-gain*va.mean(axis=0)\\n        return v*gain+offset, gain, offset\\n    p = least_squares(lambda p: (project(p)[0][good]-b[good]).ravel(), guess, gtol=1e-12).x\\n    _,g,o = project(p)\\n    return p[:2], np.column_stack((o,g,g[:,None]*p[2:])), p\\n\\ndef extra(a, kind):\\n    z = a[:,_PARTNER]\\n    return a*z if kind == 'product' else (a-z)/(1+(a-z)**2)\\n\\nscores = {k: [] for k in ('current', 'shared', 'product', 'rational difference')}\\nfor label, idx in folds:\\n    tr = ~np.isin(np.arange(len(x)),idx)\\n    a,b = x[tr],y[tr]\\n    v = idx[clean[idx]]\\n    f,p = _fit(dict(true_channel_loads=a,bridge_raw=b))\\n    err = b-_forward(a,f,p)\\n    good = np.max(abs(err),axis=1)<0.01\\n    fs,ps,_ = shared(a,b,good,[*f,*np.median(p[:,2:]/p[:,1,None],axis=0)])\\n    pred = _forward(x[v],f,p)\\n    for kind, ff, pp in [('current',f,p),('shared',fs,ps)]:\\n        e = _forward(x[v],ff,pp)-y[v]\\n        load = _inverse(y[v],ff,pp)-x[v]\\n        scores[kind].append((np.max(abs(e)),np.max(abs(load)),np.sum(e**2),np.sum(load**2),e.size))\\n        print(label,kind,'max bridge/load',*scores[kind][-1][:2])\\n    for kind in ('product','rational difference'):\\n        u = extra(a[good],kind)\\n        z = a[good][:,_PARTNER]\\n        zv = x[v][:,_PARTNER]\\n        ec = np.empty_like(pred)\\n        for j in range(4):\\n            def design(q,z,u):\\n                return np.column_stack((np.ones(len(q)),q,np.sin(f[0]*q),z,np.cos(f[1]*z)-1,u))\\n            w = np.linalg.lstsq(design(a[good,j],z[:,j],u[:,j]), b[good,j],rcond=None)[0]\\n            ec[:,j] = design(x[v,j],zv[:,j],extra(x[v],kind)[:,j])@w-y[v,j]\\n        scores[kind].append((np.max(abs(ec)),0,np.sum(ec**2),0,ec.size))\\nfor kind, data in scores.items():\\n    z = np.array(data)\\n    print(kind,'worst bridge/load',z[:,:2].max(axis=0),'pooled bridge/load RMSE',np.sqrt(z[:,2:4].sum(axis=0)/z[:,4].sum()))\\nf,p = _fit(c)\\noperating = np.vstack([ds[s][k].reshape(-1,4) for s in ('train','test') for k in ('past_channel_raw','hold_channel_raw')])\\nreference = _inverse(operating,f,p)\\n# Move the observed spike pattern onto clean calibration locations; check whether\\n# upstream estimates are stable when a different set of measurements is lost.\\nspikes = (y-_forward(x,f,p))[~clean]\\nnominal = _forward(x,f,p)\\nworst = 0.\\nfor i in range(20):\\n    b = y.copy()\\n    b[~clean] = nominal[~clean]\\n    k = rng.choice(np.flatnonzero(clean),len(spikes),replace=False)\\n    b[k] += spikes\\n    ff,pp = _fit(dict(c,bridge_raw=b))\\n    worst = max(worst,np.max(abs(_inverse(operating,ff,pp)-reference)))\\nprint('relocated observed spikes: worst operating load shift',worst)\\nassert worst < 0.003\\nprint('calibration fields',sorted(c),'training fields',sorted(ds['train']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent paired harmonics → test shared normalized gains and missing mixed-load terms; current worst held-out error is 0.001525 load units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or within-cohort balanced accuracy\",\n      \"rejected_reason\": \"The upstream contract is a static continuous calibration with paired reference loads; it has no relay state, drift equation, or classification target.\"\n    }\n  ],\n  \"rationale\": \"Fit shared gains and product or rational-difference terms only on each training slice. A material held-out improvement would justify changing the bridge law; instability when the measured spikes are moved to different rows would instead justify changing outlier rejection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "dd924e8408911fbc26aa5f3c28bd56824a26e3dde229fa01a82f060e82759f68",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43681.59,
+      "usage_known": true,
+      "prompt_tokens": 29035,
+      "cached_tokens": 9344,
+      "completion_tokens": 1733
+    }
+  ]
+}

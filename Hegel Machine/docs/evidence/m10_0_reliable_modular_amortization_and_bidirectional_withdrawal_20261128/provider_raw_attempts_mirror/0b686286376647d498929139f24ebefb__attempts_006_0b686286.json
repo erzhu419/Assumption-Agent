@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b686286376647d498929139f24ebefb",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:13:54.760867+00:00",
+  "ended_at_utc": "2026-11-28T04:14:31.328034+00:00",
+  "request_sha256": "b0cef6049b6bbcd7f0f2cd91c8ce9d9cc01a4f03a641e1bb9b52c8954385a9f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47380,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26823,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,190p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_03_solver.py; cat > /tmp/chamber_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport alpha_m100_c03_batch_03_solver as m\\nfrom scipy.optimize import least_squares\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=p['dataset']; d=p['campaign_diagnostics']; tr,te=ds['train'],ds['test']; dt,t=ds['past_dt'],ds['eval_times']; n=len(tr['lab_id']); nd=len(d['lab_id']); x=m._features(tr,te); xd=m._features(tr,d)[n:]; b=m._bridge(ds['calibration_load_cells']); past,h=m._loads(tr,b); tau,th=m._fit(x[:n],past,h,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); past,h=m._loads(d,b); c,r=m._design(tau,xd,past,h,dt,t); dr=th[2]+xd@th[3:]; y=np.column_stack((d['strain_curves_obs']-d['strain_0'][:,None],d['instant_rate_obs'])); base=np.column_stack((c@th,r@th)); obs_time=np.r_[t,0]; print('panel labs',np.unique(d['lab_id'],return_counts=True),'fit',tau,th); print('worst baseline',np.median(abs(y-base),0).max(), 'rate',np.median(abs(y[:,-1]-base[:,-1]))); print('residual singular values',np.linalg.svd(y-base,compute_uv=False).round(4)); print('residual medians',np.median(y-base,0).round(4));\\ndef et(q): return np.r_[-np.expm1(-t/q),1/q]\\ndef show(label,pred):\\n e=y-pred; print(label,'median/worst horizon/rate/full RMSE',np.median(abs(e[:,:-1])),np.median(abs(e[:,:-1]),0).max(),np.median(abs(e[:,-1])),np.sqrt(np.mean(e**2)))\\nfor drift in ('linear','buildup','free'):\\n D=np.r_[t,1] if drift!='buildup' else et(1); Y=y-dr[:,None]*D if drift!='free' else y\\n for free_tau in (False,True):\\n  def temporal(q): return np.vstack([et(a) for a in q]+([D] if drift=='free' else []))\\n  def proj(q):\\n   A=temporal(q); coef=np.linalg.lstsq(A.T,Y.T,rcond=None)[0].T; return coef@A-Y,coef\\n  q=tau if not free_tau else np.sort(np.exp(least_squares(lambda z: proj(np.exp(z))[0].ravel(),np.log(tau),bounds=(np.log(.06),np.log(70))).x)); e,a=proj(q); show((drift,q.round(5)),y+e)\\n  if not free_tau or drift=='free': continue\\n  np.set_printoptions(precision=3,suppress=True); cols=np.column_stack((h,past,c[:,0,:2]/(-np.expm1(-t[0]/tau)),dr,xd)); corr=np.corrcoef(np.column_stack((a,cols)),rowvar=False)[:2,2:]; print('amp correlation hold/past/gaps/dr/features',corr); print('first 8 rows [hold,gaps,amp,dr]',np.column_stack((cols[:,[0,7,8]],a,dr))[:8]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived sinusoidal bridge and drift-only transfer -> H2 cubic cross-channel calibration and separate tests of chamber kinetics and memory; calibrated benchtop median errors are 0.00833 for strain and 0.00441 for rate, but chamber baseline rate error remains 1.179.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The previous campaign’s own-channel sinusoid and opposite-channel coupling describe the current bridge.\",\n    \"empirical_witness\": \"The sinusoidal bridge has median total-load error 0.249 on calibration rows. The archived cubic and pair-product grammar reduces benchtop median rate error from 0.07455 to 0.00441 and median strain error from 0.04520 to 0.00833.\",\n    \"causal_blanket_diagnosis\": \"Bridge mismatch distorted the reconstructed stress, but correcting it did not remove the distinct chamber rate error.\",\n    \"sublated_pivot\": \"Fit the cubic bridge from current calibration sweeps, keep the material fit on benchtop data, and use the chamber panel to distinguish changed kinetics from changed memory.\",\n    \"risk_kind\": \"calibration grammar mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible correction directly to chamber residuals\",\n      \"rejected_reason\": \"Free per-coupon amplitudes are useful for diagnosing the temporal law, but a deployable correction must predict those amplitudes from observed loading and coupon features.\"\n    }\n  ],\n  \"rationale\": \"Project chamber trajectories and initial rates jointly onto candidate temporal bases. If archived time constants leave structured residuals even with free amplitudes, test changed kinetics before modeling how loading determines chamber memory.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a97368f7a415c406f45feea240aa6c3bd3e30cfc9afba09077caf98705218c2f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38768.96,
+      "usage_known": true,
+      "prompt_tokens": 26823,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

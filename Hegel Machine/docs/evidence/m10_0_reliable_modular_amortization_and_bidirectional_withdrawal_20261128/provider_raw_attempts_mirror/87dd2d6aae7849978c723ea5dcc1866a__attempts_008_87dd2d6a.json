@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "87dd2d6aae7849978c723ea5dcc1866a",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:29.854159+00:00",
+  "ended_at_utc": "2026-11-28T03:54:54.371020+00:00",
+  "request_sha256": "dbc4e5d95a47c9e2b5db1b7b66fee45edb0323f176ff2ba14f2d94e67af72728",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48128,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26414,
+    "cached_tokens": 9344,
+    "completion_tokens": 902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,numpy as np,itertools\\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; q=x['true_channel_loads']; r=x['bridge_raw']; m=np.max(abs(r),axis=1)<8; q=q[m]; r=r[m]; n=len(q)\\nprint('load rows',q[:12]); print('raw rows',r[:8]); print('unique loads per channel',[len(np.unique(a)) for a in q.T]); print('nonzero counts',np.unique(np.sum(q!=0,axis=1),return_counts=True))\\ndef test(A,y):\\n u,s,_=np.linalg.svd(A,full_matrices=False); keep=s>s[0]*1e-10; U=u[:,keep]; e=y-U@(U.T@y); loo=e/(1-np.sum(U**2,axis=1)); return np.sqrt(np.mean(loo**2)),np.max(abs(loo)),np.sqrt(np.mean(e**2)),sum(keep)\\npolys=[(str(t),np.prod(q[:,t],axis=1)) for d in (2,3,4) for t in itertools.combinations_with_replacement(range(4),d)]\\nfor j in range(4):\\n base=np.column_stack((np.ones(n),q,q[:,j]**3)); y=r[:,j]; print('channel',j,'base',test(base,y)); print('best singles',sorted((test(np.column_stack((base,p)),y),name) for name,p in polys)[:8]); print('best pairs',sorted((test(np.column_stack((base,p,s)),y),a,b) for (a,p),(b,s) in itertools.combinations(polys,2))[:5]);\\n for deg in (2,3):\\n  P=[p for name,p in polys if name.count(',')+1<=deg]; print('full polynomial',deg,test(np.column_stack((np.ones(n),q,*P)),y))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic bridge -> H2 a missing bridge basis term; worst clean-sweep LOO channel error is 0.382, and worst held-lab curve/rate MAE is 0.089/0.192.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived linear plus own-channel cubic and neighboring cross-product basis adequately represents the current bridge.\",\n    \"empirical_witness\": \"Clean-sweep LOO RMSE is 0.0777 with maximum error 0.382; adding the archived cross-product worsens the cubic-only LOO RMSE of 0.0768.\",\n    \"causal_blanket_diagnosis\": \"The residual is present in raw bridge readings at independently known loads, upstream of specimen dynamics.\",\n    \"sublated_pivot\": \"Compare sparse quadratic and cubic couplings and other polynomial terms on the current calibration sweeps before changing the material fit.\",\n    \"risk_kind\": \"bridge_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the schema-valid archived bridge fit.\",\n      \"rejected_reason\": \"It leaves a substantial calibration error and the slower relaxation time reaches the upper bound in two held-out lab fits.\"\n    }\n  ],\n  \"rationale\": \"Test the calibration basis against known loads first. If a sparse term removes the held-sweep error, update the bridge and refit the same hereditary law; otherwise inspect the residual structure before changing either mechanism.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ddb020869e88f8ef6d4f68312b2f5554d6e8fc0b826ac9190156c6265a47ffd1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26603.66,
+      "usage_known": true,
+      "prompt_tokens": 26414,
+      "cached_tokens": 9344,
+      "completion_tokens": 902
+    }
+  ]
+}

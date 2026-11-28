@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "522921ca12d54ac3a71de7b04b54933a",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:10:02.560494+00:00",
+  "ended_at_utc": "2026-11-28T04:10:30.976831+00:00",
+  "request_sha256": "dbe954b9eca1b7d8d7e3d2bae9b98892dfe7b8f61458343bced94a7ad0c49642",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56237,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28465,
+    "cached_tokens": 9344,
+    "completion_tokens": 1096
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('batch_solver', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nout = m.solve_batch(d)\\ntr, te = d['train'], d['test']\\nx = m._features(tr, te)\\nn = len(tr['lab_id'])\\ndt, t = np.asarray(d['past_dt']), np.asarray(d['eval_times'])\\nb = m._bridge(d['calibration_load_cells'])\\npast, hold = m._loads(tr, b)\\ny, r = tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25.0\\nfor key, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(te['lab_id']), len(t)), 'initial_rate_pred': (len(te['lab_id']),)}.items():\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\nprint('full fit spectrum', tau, 'weights', theta)\\nworst = np.zeros(5)\\nfor lab in np.unique(tr['lab_id']):\\n    v = tr['lab_id'] == lab\\n    f = ~v\\n    tau_v, theta_v = m._fit(x[:n][f], past[f], hold[f], dt, t, y[f], r[f])\\n    a, q = m._design(tau_v, x[:n][v], past[v], hold[v], dt, t)\\n    e = np.abs(a @ theta_v - y[v])\\n    horizons = [np.median(e[:, ix]) for ix in np.array_split(np.argsort(t), 3)]\\n    stats = np.r_[horizons, np.median(np.abs(q @ theta_v - r[v])), np.max(np.abs(tau_v / tau - 1))]\\n    worst = np.maximum(worst, stats)\\n    print('held-out lab', lab, 'spectrum', tau_v, 'early/mid/late strain median AE, rate median AE, max fractional tau shift', stats)\\nprint('worst held-out lab metrics', worst)\\np_te, h_te = m._loads(te, b)\\neps = 1e-7\\nc, q = m._chamber_response(tau, theta, x[n:], p_te, h_te, dt, np.array([0., eps]))\\nassert np.max(np.abs(c[:, 0])) < 1e-12\\nfd_error = np.max(np.abs((c[:, 1] - c[:, 0]) / eps - out['initial_rate_pred']))\\nassert fd_error < 1e-5, fd_error\\nprint('deployment initial-rate derivative max error', fd_error)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge with linear deployment drift -> H2 trigonometric bridge with telemetry-selected saturating drift; worst clean-fold total-load RMSE is 0.00065725, and the host probe reports deployment strain MAE 0.003137 and initial-rate MAE 0.000885.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema and host probe alone\",\n      \"rejected_reason\": \"Neither reports whether the intrinsic fit degrades for a held-out lab or time horizon.\"\n    }\n  ],\n  \"rationale\": \"Run the exact artifact in an isolated process and hold out each lab's outcomes to detect lab-dependent fit errors or unstable relaxation times. Independently check that the reported deployment rate is the time-zero derivative of the predicted strain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a6ed54b2bffb2f1b00f60bff76a81f161010bd0b61b05f10a2b837fbe2ecaf79",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30568.99,
+      "usage_known": true,
+      "prompt_tokens": 28465,
+      "cached_tokens": 9344,
+      "completion_tokens": 1096
+    }
+  ]
+}

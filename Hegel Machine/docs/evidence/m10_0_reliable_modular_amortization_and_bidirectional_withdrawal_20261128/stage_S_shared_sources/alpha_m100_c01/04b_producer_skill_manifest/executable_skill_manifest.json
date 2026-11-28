@@ -1,0 +1,113 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m100_c01_s00_4c3be1ac0c56",
+    "source_hash": "4c3be1ac0c56c19080f42b7bbb78dcbc10281e50a7242d42a94925181f96a7f5",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m100_c01",
+    "task_id": "alpha_m100_c01_s00__blind_continual_campaign",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_batch_solver.py",
+        "archived_relpath": "producers/tmp__audit_batch_solver.py",
+        "bytes": 2982,
+        "sha256": "1afa704870c2bd9bd4cc3414e0d07b27ba452221d3fcf9a898818de3f64794b5"
+      },
+      {
+        "container_path": "/tmp/check_batch_solver.py",
+        "archived_relpath": "producers/tmp__check_batch_solver.py",
+        "bytes": 1843,
+        "sha256": "40586cc4be598e54992567ae3276ba66f47f064ded0c763d2461bfffd6be554d"
+      },
+      {
+        "container_path": "/tmp/check_bridge_transfer.py",
+        "archived_relpath": "producers/tmp__check_bridge_transfer.py",
+        "bytes": 2154,
+        "sha256": "37b26a9eacf2e23d6065e6be983d3fca097ee344c8e83a8f789c585acd1ad830"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/public_asset_index.json /holdout_task/validate_public_schema.py; for f in /tmp/hegel_continual_archive/*.json; do [ -f \"$f\" ] && { echo \"--- $f\"; wc -c \"$f\"; head -c 7000 \"$f\"; echo; }; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference panel imputation'; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\nprint('batch size',len(p));\ndef walk(obj,p='',depth=0):\n if isinstance(obj,dict) and depth<4:\n  for k,v in obj.ite",
+      "cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search viscoelastic; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel'; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'));print('items',len(p)); d=p[0]['dataset'];print('top keys',list(d));print('times',d['eval_times'],'dt',d['past_dt']);\nfor split in ('train','test'):\n s=d[split]; print(split,'missing features',np.isnan(s['coupon_features_raw']).sum(0),'ref miss",
+      "cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport json,numpy as np\nfrom pathlib import Path\np=Path('/tmp/hegel_continual_archive')\nfor f in sorted(p.glob('*.json')):\n d=json.loads(f.read_text()); print(f.name)\n for row in d if isinstance(d,list) else [d]:\n  print({k:v for k,v in row.items() if k!='facility_telemetry_trace'})\n  if 'facility_telemetry_trace' in row:\n   a=np.array(row['facility_telemetry_trace']); print('trace shape',a.shape,'first and last',a[0],a[-1])\nimport scipy; print('scipy',scipy.__version__)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrate the load bridge and fit the two-branch hereditary response.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    splits = (train, test)\n    labs = np.concatenate([s['lab_id'] for s in splits])\n    strata = np.concatenate([s['stratum'] for s in splits])\n    refs = np.vstack([s['ref_coupons'] for s in splits])\n    x = np.vstack([s['coupon_features_raw'] for s in splits])\n    for lab in np.unique(labs):\n        rows = labs == lab\n        panel = refs[rows]\n        # Canonical row order keeps pooled",
+      "cat > /tmp/check_batch_solver.py <<'PY'\nimport importlib.util\nfrom pathlib import Path\nimport numpy as np\nimport pickle\n\npath = Path('/holdout_task/batch_solver.py')\nspec = importlib.util.spec_from_file_location('batch_solver', path)\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\ntr, te = d['train'], d['test']\nlab = tr['lab_id']\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\n\ndef hold_out(rows):\n    fields = tuple(te)\n    sub = dict(d)\n    sub['train'] = {key: value[~rows] for key, valu",
+      "cat > /tmp/audit_batch_solver.py <<'PY'\nimport importlib.util, pickle\nfrom itertools import combinations\nimport numpy as np\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\ncal=d['calibration_load_cells']; x=cal['bridge_raw']; y=cal['true_channel_loads'].sum(1)\na=np.column_stack((np.ones(len(x)),x)); z=(x-x.mean(0))/x.std(0)\npairs=[z[:,i]+sgn*z[:,j] for i,j in combinations(range(4),2) for sgn in (-1,1)]\nq=np.colu",
+      "cat > /tmp/check_bridge_transfer.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.spatial import Delaunay\n\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\ncal = d['calibration_load_cells']\nraw, loads = cal['bridge_raw'], cal['true_channel_loads']\nx = np.column_stack((np.ones(len(raw)), raw))\nbeta = s._bridge(raw, loads)\nres = x @ beta - loads.sum(axis=1)\nprint('calibration noise"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_batch_solver.py",
+      "primary_producer_container_path": "/tmp/audit_batch_solver.py",
+      "selected_channels": [
+        "m100_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4491,
+        "sha256": "5e02b9976df511fea1ab8d8bc2e7880b116bb9f3bf83170a42f51c54e878b1ef",
+        "content_addressed_ref": "content_addressed_blobs/5e02b9976df511fea1ab8d8bc2e7880b116bb9f3bf83170a42f51c54e878b1ef.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "report"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4c3be1ac0c56c19080f42b7bbb78dcbc10281e50a7242d42a94925181f96a7f5",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/check_bridge_transfer.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.spatial import Delaunay\n\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\ns = importl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4c3be1ac0c56c19080f42b7bbb78dcbc10281e50a7242d42a94925181f96a7f5",
+        "expected_candidate_sha256": "4c3be1ac0c56c19080f42b7bbb78dcbc10281e50a7242d42a94925181f96a7f5",
+        "computed_candidate_sha256": "4c3be1ac0c56c19080f42b7bbb78dcbc10281e50a7242d42a94925181f96a7f5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4491
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4c3be1ac"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "report",
+        "code": "def report(label, cf, rf):\n    print(label, 'curve med/p90', np.round(np.quantile(abs(cf), [0.5, 0.9]), 6), 'rate med/p90', np.round(np.quantile(abs(rf), [0.5, 0.9]), 6), 'curve/rate signed median', np.round([np.median(cf), np.median(rf)], 6))"
+      }
+    ]
+  }
+}

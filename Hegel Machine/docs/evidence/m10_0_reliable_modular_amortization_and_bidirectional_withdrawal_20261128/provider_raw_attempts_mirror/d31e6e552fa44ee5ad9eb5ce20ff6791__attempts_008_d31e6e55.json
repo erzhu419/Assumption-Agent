@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d31e6e552fa44ee5ad9eb5ce20ff6791",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:10:06.034006+00:00",
+  "ended_at_utc": "2026-11-28T04:10:44.149927+00:00",
+  "request_sha256": "a171aa9907869a511e63287c8af1124b7b7927a9302b2e009c7b75d560f1cd02",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54679,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30575,
+    "cached_tokens": 9344,
+    "completion_tokens": 1656
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nnx, ny = s['nx'], s['ny']\\nN = nx * ny\\nL = np.diag(s['V_reaction_2d'].ravel(order='F'))\\nfor iy in range(ny):\\n    for ix in range(nx):\\n        row = ix + nx*iy\\n        for axis, idx, n, stride in [('x', ix, nx, 1), ('y', iy, ny, nx)]:\\n            k, v = s['kappa_'+axis], s['vel_'+axis][idx]\\n            h = s['L'+axis]/(n-1)\\n            for sign in (-1, 1):\\n                other = (idx+sign) % n\\n                rate = .5*(k[idx]+k[other])/h**2 + max(-sign*v, 0)/h\\n                L[row, row] += rate\\n                L[row, row + stride*(other-idx)] -= rate\\nrhs = np.column_stack([mode.ravel(order='F') for mode in s['source_modes']])\\ni, j = np.asarray(s['sensor_ij']).T\\nresponses = [np.linalg.solve(L+mu*np.eye(N), rhs) for mu in s['mu_shifts']]\\nS = np.concatenate([u[i+nx*j] for u in responses])\\nresult = m.solve_batch(s)\\nw, cert = result['weights'], result['kkt_certificate']\\nnp.testing.assert_allclose(cert['weights'], w, rtol=0, atol=0)\\nfield = (responses[-1] @ w).reshape(nx, ny, order='F')\\nnp.testing.assert_allclose(result['terminal_field'], field, rtol=1e-11, atol=1e-12)\\no, a = m.calibration_map(s['sensor_calibration_sweeps'])\\ner = []\\nfor pulse in item['campaign_diagnostics']:\\n    pred = (S @ pulse['w_pulse']).reshape(len(responses), -1, 4)\\n    observed = (pulse['y_pulse_raw'].reshape(pred.shape)-o)/a\\n    er.append(pred-observed)\\ner = np.asarray(er)\\nworst_slice = np.sqrt(np.mean(er**2, axis=2)).max()\\nassert worst_slice < 5e-6, worst_slice\\nZ = s['Z_nuisance']\\nR = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nT = R @ S\\ny = R @ ((s['y_obs_raw'].reshape(-1,4)-o)/a).ravel()\\nr = T @ w-y\\nridge, cap, budget = (s[k] for k in ('source_ridge', 'u_box', 'total_budget'))\\ng = T.T @ r+ridge*w\\nJ = .5*(r @ r+ridge*(w @ w))\\nnu, lo, hi = cert['nu_sum'], np.array(cert['lam_lower']), np.array(cert['lam_upper'])\\ndual = J-g @ w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nassert abs(w.sum()-budget) < 1e-12 and min(w) >= 0 and max(w) <= cap\\nassert min(lo) >= 0 and min(hi) >= 0\\nkkt = max(np.max(abs(g-nu-lo+hi)), np.max(abs(w*lo)), np.max(abs((cap-w)*hi)), abs(J-dual))\\nassert kkt < 1e-11, kkt\\nnp.testing.assert_allclose([cert['primal_objective'],cert['dual_lower_bound']], [J,dual], rtol=0, atol=1e-12)\\n# Construct optima on both endpoint simplices, at a vertex, and on mixed faces.\\nrng = np.random.default_rng(24)\\nqp_error = 0.\\nfor opt in [np.zeros(8), np.ones(8), np.r_[np.ones(3),np.zeros(5)]] + [rng.uniform(.1,.9,8) for _ in range(20)]:\\n    if np.all((opt>0)&(opt<1)):\\n        opt[:2], opt[2:4] = 0, 1\\n    A = rng.normal(size=(8,8))\\n    H = A.T @ A+.04*np.eye(8)\\n    nu0 = rng.normal()\\n    c = H @ opt - (nu0+(opt==0)*rng.uniform(.1,1,8)-(opt==1)*rng.uniform(.1,1,8))\\n    got, mult = m.box_simplex(H,c,1.,float(opt.sum()))\\n    q = H @ got-c-mult\\n    qp_error = max(qp_error, np.max(abs(opt-got)), abs(got.sum()-opt.sum()), np.max(np.maximum(q,0)*got), np.max(np.maximum(-q,0)*(1-got)))\\nassert qp_error < 1e-10, qp_error\\nprint(f'Worst pulse/shift/bank RMSE={worst_slice:.3e}; dense field max error={np.max(abs(result[\\\"terminal_field\\\"]-field)):.3e}; public KKT max error={kkt:.3e}; QP stress max error={qp_error:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 one-axis periodicity -> H2 two-axis periodicity with affine readout; worst public tracer RMSE is 7.01e-7, and the host measured relative field and weight errors of 1.99e-6 and 7.15e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the calibrated wall model\",\n      \"rejected_reason\": \"The host probe passed and the fixed stencil fits every tracer direction; fitting additional parameters would not address a measured bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Load the exact solver in an isolated Python process. A dense reference will diagnose stencil, indexing, or shift-order errors; recomputed KKT quantities and known-optimum cases will diagnose certificate or active-set errors that the schema check cannot see.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ab3a0e184714a994e5e65e04b1e4b7b14768abb74e02d6d1c04a5f5746937abc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42506.7,
+      "usage_known": true,
+      "prompt_tokens": 30575,
+      "cached_tokens": 9344,
+      "completion_tokens": 1656
+    }
+  ]
+}

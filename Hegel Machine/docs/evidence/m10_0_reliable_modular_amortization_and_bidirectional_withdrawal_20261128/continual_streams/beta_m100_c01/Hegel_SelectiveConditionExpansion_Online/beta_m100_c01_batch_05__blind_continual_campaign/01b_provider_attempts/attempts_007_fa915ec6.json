@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa915ec6ad134cb1a8ef68175e77f7f0",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:02.993858+00:00",
+  "ended_at_utc": "2026-11-28T03:52:37.248433+00:00",
+  "request_sha256": "2ccbc8a0e93099d0cd57d268fa08fa81354d5bac21ee31a641f33e4de0ac8462",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46046,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29101,
+    "cached_tokens": 9344,
+    "completion_tokens": 1360
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rosette_exact.py <<'PY'\\nfrom rosette_models import X,Y,axis\\nimport numpy as np\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nrng=np.random.default_rng(812); fold=np.empty(len(X),int)\\nfor mask in (axis,~axis): fold[mask]=rng.permutation(mask.sum())%5\\nfs={'tanh':np.tanh,'erf':erf,'sin':np.sin,'atan':np.arctan,'rat':lambda x:x/(1+x*x),'soft':lambda x:x/np.sqrt(1+x*x),'exp':lambda x:x*np.exp(-x*x)}\\ndef d(x,k,sp):\\n u=x;v=x[:,[2,3,0,1]]\\n cols=[np.ones_like(u),v,np.sin(k[-1]*v)**2];\\n for i,m in enumerate(sp):cols.append(u if m=='lin' else fs[m](k[i]*u))\\n return np.stack(cols,axis=-1)\\ndef fit(x,y,sp):\\n def cf(k):\\n  a=d(x,k,sp); return np.stack([np.linalg.lstsq(a[:,j],y[:,j],rcond=1e-10)[0] for j in range(4)])\\n def err(k):return (np.einsum('njk,jk->nj',d(x,k,sp),cf(k))-y).ravel()\\n opts=[least_squares(err,p,bounds=(.08,3.5),max_nfev=120,gtol=1e-11) for p in starts[len(sp)]]\\n o=min(opts,key=lambda r:r.cost);return np.std(o.fun),o.x,cf(o.x)\\nstarts={1:[[1,1],[.6,1]],2:[[1,1,1],[.5,1.5,1],[1.5,.5,1],[.7,.85,1]]}\\nif __name__=='__main__':\\n results=[]\\n for sp in [(f,) for f in fs]+list(combinations_with_replacement([*fs,'lin'],2)):\\n  rms,k,c=fit(X,Y,sp);results.append((rms,sp,k,c))\\n for rms,sp,k,c in sorted(results,key=lambda r:r[0])[:10]:\\n  pred=np.empty_like(Y)\\n  for i in range(5):\\n   m=fold!=i; _,kk,cc=fit(X[m],Y[m],sp);pred[~m]=np.einsum('njk,jk->nj',d(X[~m],kk,sp),cc)\\n  e=pred-Y;print(sp,'train',rms,'OOF max/rms',np.abs(e).max(),np.sqrt(np.mean(e**2,axis=0)), 'axis/mixed',*[np.sqrt(np.mean(e[m]**2)) for m in (axis,~axis)]);print('scales',k,'coefficients',c.round(7))\\n for j in range(4):\\n  u=X[:,j];v=X[:,j^2]; a=np.column_stack([np.ones(len(u)), *[u**i for i in range(1,12,2)],v,np.sin(v)**2]); c=np.linalg.lstsq(a,Y[:,j],rcond=None)[0];print('odd+sin2',j,c,'rms',np.std(a@c-Y[:,j]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_exact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic paired saturation -> H2 odd self-response plus a linear and even partner response; degree-nine additive fits reach mixed-sweep OOF RMSE of 0.000102 on channel 3.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the degree-nine polynomial directly\",\"rejected_reason\":\"A compact saturating law could fit at the measurement noise floor while avoiding polynomial extrapolation and spurious inverse roots.\"}],\"rationale\":\"The fitted partner's even-power coefficients match a squared sine, and the self-response is predominantly odd. Test those structures with shared nonlinear scales and held-out axis and mixed sweeps; retain the additive polynomial if no compact fit improves them.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6ebd7a6ba4458fdded4e0fc6739036c37da3a12115cd969097b7330da060f678",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36344.38,
+      "usage_known": true,
+      "prompt_tokens": 29101,
+      "cached_tokens": 9344,
+      "completion_tokens": 1360
+    }
+  ]
+}

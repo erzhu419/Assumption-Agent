@@ -1,0 +1,133 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m100_c03_batch_01_ab2b3cb87b83",
+    "source_hash": "ab2b3cb87b83d6f744563fcf4fa01d720c839f19c291f9fe540f433722d15272",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m100_c03_batch_01__blind_continual_campaign",
+    "task_id": "alpha_m100_c03_batch_01__blind_continual_campaign",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/bench.py",
+        "archived_relpath": "producers/tmp__bench.py",
+        "bytes": 4689,
+        "sha256": "13492fb2a768dec1341cdc63399184979e4918398917b0a0e00a1735d0c4757c"
+      },
+      {
+        "container_path": "/tmp/equil.py",
+        "archived_relpath": "producers/tmp__equil.py",
+        "bytes": 1011,
+        "sha256": "d9a2bd872ddf6e3df630d90cb5ee3871db9d85b4f150640a8bb5f8da2944ef92"
+      },
+      {
+        "container_path": "/tmp/identify.py",
+        "archived_relpath": "producers/tmp__identify.py",
+        "bytes": 1404,
+        "sha256": "50a0bfefb8cd329c9b0918797914dbd749652eb0705afa2a1a8fca2fb5c51b74"
+      },
+      {
+        "container_path": "/tmp/joint.py",
+        "archived_relpath": "producers/tmp__joint.py",
+        "bytes": 2011,
+        "sha256": "0e3a56b327c45b2248b0769c06fe9cd8cdec62d253c8174ebc233d916e5ef682"
+      },
+      {
+        "container_path": "/tmp/law.py",
+        "archived_relpath": "producers/tmp__law.py",
+        "bytes": 1220,
+        "sha256": "fbd1c8c87e3295c68ea1f3061b353f989f82f54469f44455f98fef630fd107eb"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 2399,
+        "sha256": "65c4cd84a6ca2befc9512c54e3bed53986aaf6a5d2fb327b179433f6164a668f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c03_s00_solver.py",
+        "bytes": 4689,
+        "sha256": "13492fb2a768dec1341cdc63399184979e4918398917b0a0e00a1735d0c4757c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation'; python3 - <<'PY'\nimport json,pickle,pathlib\nfor p in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*.json')):\n print('\\n',p,p.stat().st_size); d=json.loads(p.read_text()); print(str(d)[:6000])\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'));print('batch len',len(a));\ndef desc(x,level=0):\n if isinstance(x,dict) and level<3:return {k:desc(v,level+1",
+      "cat /tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py; python3 -m json.tool /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; python3 - <<'PY'\nimport pickle,numpy as np\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; c=d['calibration_load_cells']; print('top',item.keys(),d.keys());print('sweeps',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]);x=c['bridge_raw'];y=c['true_channel_loads'];print('cal linear residual',np.std(np.c_[np.ones(len(x)),x]@np.linalg.lstsq(np.",
+      "sed -n '50,180p' /tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py; python3 - <<'PY'\nimport json,pathlib\np=pathlib.Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); a=json.loads(p.read_text());\nfor r in a:\n print({k:(v if not isinstance(v,list) or len(v)<8 else (len(v),v[:2])) for k,v in r.items()})\np=pathlib.Path('/holdout_task/public_asset_index.json'); a=json.loads(p.read_text()); print('asset index:',str(a)[:2200]);\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search viscoelastic",
+      "cp /tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py /tmp/bench.py; cat > /tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom bench import _features,_bridge,_loads,_fit,_design\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=4,suppress=True,linewidth=135)\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=i['dataset'];tr,te,di=d['train'],d['test'],i['campaign_diagnostics'];dt,t=d['past_dt'],d['eval_times']; b=_bridge(d['calibration_load_cells']);X=_features(tr,te);n=len(tr['lab_id']);tau,theta=_fit(X[:n],*_loads(tr,b),dt,t,tr['strain_curves_obs']-tr[",
+      "cat > /tmp/law.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from probe import *\nf=basis(tau); q=fit(tau); jump=h-p[:,-1]; print('ranges',np.c_[q,amp0,dr,jump][:12]); u=np.c_[np.ones(len(h)),dr]; co=np.linalg.lstsq(u,q[:,2],rcond=None)[0];print('drift coeff',co,'resid',q[:,2]-u@co)\nfrom itertools import combinations\nz=q-np.c_[amp0,dr]; cols={'1':np.ones(len(h)),'h':h,'j':jump,'j2':jump**2,'j3':jump**3,'absj':abs(jump),'dr':dr,'dr2':dr**2,'h*j':h*jump,'a0':amp0[:,0],'a1':amp0[:,1]};cols.update({f'p{k}':p[:,k] for k in range(p.shape[1])});cols.update({f'x{k}':Xd",
+      "cat > /tmp/joint.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from probe import *\nf=basis(tau); z=h[:,None]-amp0/theta[:2]; one=np.ones(len(h)); j=h-p[:,-1]; base=np.c_[h[:,None]*theta[:2],np.zeros(len(h))]; Y=y-base@f.T\n\ndef fitlaw(cols, mask=None):\n if mask is None:mask=np.ones(len(h),bool)\n blocks=[v[:,None,:]*f[None,:,k,None] for k,v in enumerate(cols)]; A=np.concatenate(blocks,axis=2); m=A[mask].reshape(-1,A.shape[-1]);target=Y[mask].ravel(); w=np.linalg.lstsq(m,target,rcond=None)[0];w=least_squares(lambda w:m@w-target,w,loss='soft_l1',f_scale=.003,max_n",
+      "cat >/tmp/identify.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from joint import *\nxx=di['coupon_features_raw']; combos=[('pool',(tr,te)),('all',(tr,te,di)),('diag',(di,)),('train',(tr,))]; variants={}\nfor name,ss in combos:\n rr=np.vstack([s['ref_coupons'] for s in ss]); ll=np.concatenate([s['lab_id'] for s in ss]); v=xx.copy()\n for lab in np.unique(ll):\n  a=rr[ll==lab]; m=di['lab_id']==lab; v[m]=(v[m]-np.median(a.mean(0)))/np.median(a.std(0))\n variants[name]=np.where(np.isnan(v),Xd,v)\nprint('compare drift variations on complete',np.c_[dr,*[theta[2]+v@theta[",
+      "python3 - <<'PY'\nimport json\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\n print({k:(v if not isinstance(v,list) or len(v)<5 else f'list[{len(v)}]') for k,v in r.items()})\nPY\ncat /holdout_task/validate_public_schema.py\ncat /tmp/bench.py\ncat >/tmp/equil.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from joint import *\nD=_features(di,di)[:len(h)]; dd=theta[2]+D@theta[3:]; miss=np.isnan(di['coupon_features_raw']).any(1)\nprint('drift for missing coupons: pooled, diagnostic-imputed',np.c_[dr,dd][miss]);print('diagnostic drift",
+      "sed -i '4i from bench import _features' /tmp/equil.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/equil.py; head -30 /tmp/bench.py; tail -45 /holdout_task/validate_public_schema.py",
+      "set -e\ncp /tmp/bench.py /holdout_task/batch_solver.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=p.read_text(); start=s.index('    # The blind batch'); s=s[:start]+'''    strain, rate = _predict_chamber(taus, theta, x[n:],\n                                    _loads(test, bridge)[1], times,\n                                    test['strain_0'])\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\n            'predicted_strain': strain, 'initial_rate_pred': rate}\n\n\ndef _predict_chamber(taus, theta, x, hold, times, strain_0):\n    \"\"\"Reset the ch"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m100_c03_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py",
+      "selected_channels": [
+        "m100_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5119,
+        "sha256": "509537e01c84177f71a13896494eb28bdc53b47be875293a3012c7093ce12244",
+        "content_addressed_ref": "content_addressed_blobs/509537e01c84177f71a13896494eb28bdc53b47be875293a3012c7093ce12244.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ab2b3cb87b83d6f744563fcf4fa01d720c839f19c291f9fe540f433722d15272",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncp /tmp/bench.py /holdout_task/batch_solver.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=p.read_text(); start=s.index('    # The blind batch'); s=s[:start]+'''    strain, rate = _predict_cham",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ab2b3cb87b83d6f744563fcf4fa01d720c839f19c291f9fe540f433722d15272",
+        "expected_candidate_sha256": "ab2b3cb87b83d6f744563fcf4fa01d720c839f19c291f9fe540f433722d15272",
+        "computed_candidate_sha256": "ab2b3cb87b83d6f744563fcf4fa01d720c839f19c291f9fe540f433722d15272",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5119
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ab2b3cb8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": []
+  }
+}

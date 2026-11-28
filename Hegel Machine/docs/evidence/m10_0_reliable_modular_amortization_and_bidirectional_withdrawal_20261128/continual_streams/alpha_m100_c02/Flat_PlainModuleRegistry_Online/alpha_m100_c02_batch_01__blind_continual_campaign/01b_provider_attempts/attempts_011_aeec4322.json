@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aeec432224fc40fea3f18a9d898a76fe",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:48.859893+00:00",
+  "ended_at_utc": "2026-11-28T03:35:17.179757+00:00",
+  "request_sha256": "19f31aac702dfba2b29dca85aab359144fa6c72ae1e50347b37c68d4a35c716e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69864,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36639,
+    "cached_tokens": 9344,
+    "completion_tokens": 1115
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem = pickle.load(open(root+'public_batch.pkl','rb'))[0]\\nd = item['dataset']; o = m.solve_batch(d); g = item['campaign_diagnostics']; tr, te = d['train'], d['test']\\nu, th = o['estimated_taus'], o['hereditary_weights']; t = d['eval_times']; dt = d['past_dt']; cal = d['calibration_load_cells']\\nassert 0.05 < u[0] < u[1] < 25.0 and all(np.isfinite(v).all() for v in o.values())\\nx = m._features(tr,te)[len(tr['lab_id']):]; _, hold = m._loads(cal,te)\\neps=1e-5\\nc0,_ = m._chamber(u,th,hold,x,np.array([0.])); c1,_ = m._chamber(u,th,hold,x,np.array([eps]))\\nassert np.max(np.abs(c0)) == 0\\nrate_err=np.max(np.abs(c1[:,0]/eps-o['initial_rate_pred']))\\nassert rate_err < 1e-4, rate_err\\nprint('deployment initial-rate finite difference max error',rate_err)\\nif g is not None:\\n    r = g['coupon_features_raw'].copy(); missing = np.isnan(r); labs = g['lab_id']; refs = g['ref_coupons']\\n    for l in np.unique(labs):\\n        ix = labs == l; panel = refs[ix]; r[ix] = (r[ix]-np.median(panel.mean(0)))/np.median(panel.std(0))\\n    # Diagnostic response generation is consistent with its own panel and row mean fills.\\n    z = np.c_[np.ones(len(r)),np.where(missing,np.nanmean(r,axis=0),r)]\\n    _, h = m._loads(cal,g); pred,rate=m._chamber(u,th,h,z,t)\\n    err=pred+g['strain_0'][:,None]-g['strain_curves_obs']; er=rate-g['instant_rate_obs']\\n    slices={f'lab {l}':labs==l for l in np.unique(labs)}\\n    slices.update({'complete':~missing.any(1),'missing':missing.any(1)})\\n    scores=[]\\n    for name,ix in slices.items():\\n        if ix.any():\\n            q=np.r_[np.sqrt(np.mean(err[ix]**2,axis=0)).max(),np.sqrt(np.mean(er[ix]**2))]; scores.append(q)\\n            print(name, 'max horizon strain RMSE, rate RMSE', np.round(q,6))\\n    assert np.max(scores,axis=0)[0] < .025 and np.max(scores,axis=0)[1] < .015, scores\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Benchtop transfer → drift-coupled chamber reset; complete-row worst held-out-lab RMSE is 0.00517 for final strain and 0.00275 for initial rate, and the host probe reports strain/rate MAE of 0.001080/0.000862.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the chamber or material coefficients\",\n      \"rejected_reason\": \"The verified deployment errors are already small; retuning without a demonstrated bottleneck risks fitting diagnostic noise.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved artifact in an isolated Python process. The time-zero derivative check catches inconsistent rate output, and lab and missing-feature slices catch chamber residuals that pooled metrics could hide. A failed check would identify which component to revisit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a34eafe454f8173173da364c654b4dc0b1c5480c8e14b7c0d7fd48c4ae198bed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30412.38,
+      "usage_known": true,
+      "prompt_tokens": 36639,
+      "cached_tokens": 9344,
+      "completion_tokens": 1115
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbf4c9c1bf9745519d2a3a8665452a42",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:00.175780+00:00",
+  "ended_at_utc": "2026-11-28T03:31:27.653193+00:00",
+  "request_sha256": "18544274a78ad60f3270140b24ffc206a3a76078c3e62be8f8f8306a67488e55",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30889,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21115,
+    "cached_tokens": 9344,
+    "completion_tokens": 1052
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py /tmp/chamber_base.py\\ncat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom chamber_base import _features,_loads,_fit,_design,solve_batch\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; q=i['campaign_diagnostics']; tr=d['train']; te=d['test']; ca=d['calibration_load_cells']; dt=d['past_dt']; t=d['eval_times']; s=solve_batch(d); tau=s['estimated_taus']; th=s['hereditary_weights']; print('material',tau,th)\\ndef summary(r): return np.round([np.sqrt(np.mean(r*r)), np.median(abs(r)),np.quantile(abs(r),.9),np.max(abs(r))],7)\\nxtr=_features(tr,te)[:len(tr['lab_id'])]; xq=_features(dict((k,np.concatenate([tr[k],te[k]])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')),q)[-len(q['lab_id']):];\\nfor name,u,x in [('train',tr,xtr),('diag',q,xq)]:\\n p,h=_loads(ca,u); C,R,*_=_design(np.log(tau),p,h,x,dt,t); Y=u['strain_curves_obs']-u['strain_0'][:,None]; r=u['instant_rate_obs']; print(name,'curve/rate',summary(Y-C@th),summary(r-R@th),'ranges',np.min(p),np.max(p),np.min(h),np.max(h));\\n T=np.column_stack([-np.expm1(-t[:,None]/tau),t]); A=np.vstack((T,np.r_[1/tau,1]*.4)); coef=np.linalg.lstsq(A,np.column_stack((Y,r*.4)).T,rcond=None)[0].T; e=np.column_stack((Y,r*.4))-coef@A.T; print('time-basis residual',summary(e[:,:-1]),summary(e[:,-1]));\\n if name=='diag':\\n  exp=np.column_stack((R[:,:2]*tau*th[:2],x@th[2:])); print('rows [lab,stratum, predicted coefficients, observed coefficients, delta rate, row residual RMS]'); print(np.column_stack([u['lab_id'],u['stratum'],exp,coef,r-R@th,(e**2).mean(1)**.5])); print('curve delta median per time',np.median(Y-C@th,axis=0)); print('residual singular values',np.linalg.svd(Y-C@th,compute_uv=False)); print('diag fit as benchtop',_fit(p,h,x,dt,t,Y,r))\\nraw=ca['bridge_raw']; true=ca['true_channel_loads']; aa=np.c_[np.ones(len(true)),true]; print('bridge residual',summary(raw-aa@np.linalg.lstsq(aa,raw,rcond=None)[0])); print('single sweeps',[(k,np.shape(v),str(v)[:140]) for k,v in ca['single_channel_sweeps'].items()]); print('lab-stratum counts',[(n,np.unique(np.c_[u['lab_id'],u['stratum']],axis=0,return_counts=True)[1]) for n,u in [('tr',tr),('te',te),('q',q)]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived benchtop law → H2: identifiable chamber correction; diagnostic curve and initial-rate errors are not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test whether diagnostic curves and rates share the trained time basis. If they do, fit chamber amplitudes and drift; if they do not, investigate the missing time response. Check bridge residuals first so calibration error is not mistaken for mechanics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4a09858cfe3122fcf65a94eeda138c85f6fa7d3fdbdf2416f8e6f57924d604e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29610.25,
+      "usage_known": true,
+      "prompt_tokens": 21115,
+      "cached_tokens": 9344,
+      "completion_tokens": 1052
+    }
+  ]
+}

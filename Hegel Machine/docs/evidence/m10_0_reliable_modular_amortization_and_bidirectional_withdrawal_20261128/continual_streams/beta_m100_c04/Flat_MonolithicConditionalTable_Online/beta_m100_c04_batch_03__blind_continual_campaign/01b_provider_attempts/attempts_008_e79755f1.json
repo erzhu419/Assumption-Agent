@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e79755f1ff2d43bc81d84475016e41fc",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:59.154092+00:00",
+  "ended_at_utc": "2026-11-28T03:44:28.913204+00:00",
+  "request_sha256": "8602cef74f54448680718482f02cbcd21d6ab661593aa9cb3f356ee457b019e7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47506,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27320,
+    "cached_tokens": 9344,
+    "completion_tokens": 1155
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_batch03.py <<'PY'\\nimport hashlib\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py')\\na=importlib.util.module_from_spec(spec); spec.loader.exec_module(a)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; ok=np.max(abs(y),axis=1)<8\\nfold=np.arange(len(x))%4\\nfor name in ('deployed','difference','rational'):\\n    worst=0.\\n    for k in range(4):\\n        v=x[:,k]; prev=x[:,(k-1)%4]; nxt=x[:,(k+1)%4]; opposite=x[:,(k+2)%4]; A=a._sensor_features(x,k)\\n        if name=='difference': A=np.column_stack((A,opposite,(prev-nxt)**2,v*(prev-nxt),v*prev*nxt))\\n        if name=='rational': A=np.column_stack((A,-y[:,k]*(prev-nxt)**2,-y[:,k]*v**2))\\n        for f in range(4):\\n            train=ok&(fold!=f); test=ok&(fold==f)\\n            beta=np.linalg.lstsq(A[train],y[train,k],rcond=None)[0]\\n            if name=='rational': pred=(A[test,:-2]@beta[:-2])/(1+beta[-2]*(prev[test]-nxt[test])**2+beta[-1]*v[test]**2)\\n            else: pred=A[test]@beta\\n            worst=max(worst,np.sqrt(np.mean((pred-y[test,k])**2)))\\n    print('calibration',name,'worst channel-fold RMSE',worst)\\n\\n# Use the existing diagnostic's independently assembled wall operators and fitting code.\\nns={}; text=open('/tmp/compare_walls.py').read(); exec(text.split('ret=[]')[0],ns)\\nidx=ns['all_ids']; groups=ns['groups']; y=ns['y']; z=ns['z']; fit=ns['fit']; rms=ns['rms']; forward=ns['forward']\\nwalls={bits:forward(bits) for bits in itertools.product((0,1),repeat=4)}\\nfor adjusted in (True,False):\\n    records=[]\\n    for test in groups:\\n        train=np.setdiff1d(idx,test); choices=[]\\n        for bits,S in walls.items():\\n            if adjusted: w,gamma=fit(S,train); pred=S@w+z@gamma\\n            else:\\n                T=S[train]; w,_=a._box_simplex(T.T@T+1e-12*np.eye(T.shape[1]),-T.T@y[train],s['u_box'],s['total_budget']); pred=S@w\\n            choices.append((rms((pred-y)[train]),bits,rms((pred-y)[test])))\\n        records.append(min(choices))\\n    print('outer-fold wall selection; nuisance adjusted',adjusted,'states',sorted({r[1] for r in records}),'worst RMSE',max(r[2] for r in records))\\nPY\\nsed -i '/^import hashlib$/d' /tmp/audit_batch03.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch03.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited open Robin walls → H2 closed walls with fitted nonlinear calibration; worst held-out RMSE was 0.00934 versus 0.16805 for all-open walls.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"The study is a steady continuous inverse problem with no relay states, time evolution, or class labels. The applicable confounding check is whether profiling the measured nuisance basis changes wall selection on held-out observations.\"\n    }\n  ],\n  \"rationale\": \"Compare plausible missing calibration terms on held-out sweeps and select walls using only each outer fold’s training observations. A repeatable calibration gain or a change in selected walls would warrant revisiting the solver; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "27ee96df00703255aa4ccc8a86a921ee1b6b39559e8e6bc1bc7fa3fb7f4627dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31827.29,
+      "usage_known": true,
+      "prompt_tokens": 27320,
+      "cached_tokens": 9344,
+      "completion_tokens": 1155
+    }
+  ]
+}

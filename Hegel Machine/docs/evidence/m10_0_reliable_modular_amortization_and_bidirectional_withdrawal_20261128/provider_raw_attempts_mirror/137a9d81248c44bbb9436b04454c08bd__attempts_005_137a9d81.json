@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "137a9d81248c44bbb9436b04454c08bd",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:57.695211+00:00",
+  "ended_at_utc": "2026-11-28T03:43:26.806360+00:00",
+  "request_sha256": "4f57094a360c4988e82867b0733207e24537935856f4529840d7c3c836585614",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40617,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24271,
+    "cached_tokens": 9344,
+    "completion_tokens": 1157
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsource = Path('/tmp/hegel_continual_archive/alpha_m100_c01_batch_02_solver.py').read_text()\\nprefix = source.split('# Chamber drift time', 1)[0]\\nassert 'def _fit(' in prefix and 'def solve_batch(' not in prefix\\nPath('batch_solver.py').write_text(prefix + '''def solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt = np.asarray(dataset['past_dt'])\\n    times = np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge = _bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n\\n    # Both apparatus indicators are back at their idle levels in the\\n    # latest prefix trace, so transfer the benchtop law without correction.\\n    curve, rate = _design(taus, *_inputs(test, xte, bridge), dt, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve @ theta,\\n            'initial_rate_pred': rate @ theta}\\n''')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nsed -n '50,101p' batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,_=m._features(tr,te)\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; loads=cal['true_channel_loads']; actual=loads.sum(1)\\ngroups=np.arange(len(raw))%5\\nerrors=np.empty(len(raw))\\nfor g in range(5):\\n    keep=groups!=g; b=m._bridge(raw[keep],loads[keep]); errors[~keep]=raw[~keep]@b[1:]+b[0]-actual[~keep]\\nprint('bridge OOF max abs',np.max(np.abs(errors)))\\nb=m._bridge(raw,loads); p,h,f=m._inputs(tr,x,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; o=m.solve_batch(d)\\nprint('full taus',o['estimated_taus'],'theta',o['hereditary_weights'])\\nfor lab in np.unique(tr['lab_id']):\\n    j=tr['lab_id']==lab; k=~j\\n    tau,a=m._fit(p[k],h[k],f[k],dt,t,y[k],r[k]); c,v=m._design(tau,p[j],h[j],f[j],dt,t)\\n    ce=np.abs(c@a-y[j]); re=np.abs(v@a-r[j]); print('held lab',lab,'taus',tau.round(5),'strain MAE',ce.mean(),'strain endpoint median AE',np.median(ce[:,-1]),'rate MAE',re.mean())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 prior chamber corrections depended on active apparatus indicators -> H2 idle indicators favor the unmodified benchtop law; leave-one-lab-out metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry over the previous campaign's saturating drift\",\n      \"rejected_reason\": \"The indicator associated with that correction has returned to its initialization range; no current chamber responses support retaining it.\"\n    }\n  ],\n  \"rationale\": \"Build the standalone solver using dynamic calibration and the archived robust material fit. Out-of-fold calibration and held-lab errors will distinguish bridge error from material-fit instability; the schema validator checks the public interface and pooled reference transformation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1c89829704997876b999219da368339373c2f0d256e361e18bd070581364a727",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31208.26,
+      "usage_known": true,
+      "prompt_tokens": 24271,
+      "cached_tokens": 9344,
+      "completion_tokens": 1157
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d19cbaf9dbdc4c2daa6ee8512281d88e",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:30.364190+00:00",
+  "ended_at_utc": "2026-11-28T03:45:37.982288+00:00",
+  "request_sha256": "564e99a20143e15392cca5079515da89ce399bbd559142c05dd885f6482856ce",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50840,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28260,
+    "cached_tokens": 9344,
+    "completion_tokens": 919
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_structure.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; y=C['true_channel_loads']; r=C['bridge_raw']; ps=[()]+[p for k in range(1,4) for p in combinations_with_replacement(range(4),k)]; A=np.column_stack([np.prod(y[:,p],axis=1) for p in ps]); S=np.count_nonzero(y,axis=1)==1; B=np.column_stack([np.ones(len(y)),y,y**3]); b=np.linalg.lstsq(B[S],r[S],rcond=None)[0]; e=r-B@b; print('isolated coeffs',b.round(5)); print('isolated max error',abs(e[S]).max(axis=0),'singular values',np.linalg.svd(e,compute_uv=False)); print('largest residual rows: true, raw minus isolated fit');\\nfor i in np.argsort(np.linalg.norm(e,axis=1))[-15:]:print(i,y[i].round(4),e[i].round(4))\\nfor k in range(4):\\n n=np.linalg.lstsq(A,r[:,k],rcond=None)[0]; print('channel',k,'residual singular/full',np.std(A@n-r[:,k]),'sum clean cubic terms') if k==0 else None\\nn=np.linalg.lstsq(A,r.sum(1),rcond=None)[0]; print([(p,round(v,6)) for p,v in zip(ps,n) if abs(v)>.001]); F=r-A@np.linalg.lstsq(A,r,rcond=None)[0]; print('full cubic residual SVD',np.linalg.svd(F,full_matrices=False)[1:]);\\nfor lim in [.001,.01,.1,.5,1,2]:\\n m=np.max(abs(e),axis=1)<lim; print('max residual gate',lim,'n',sum(m),'mixed',sum(m&~S),'rank cubic',np.linalg.matrix_rank(A[m]) if m.any() else 0)\\nprint('all calibration row blocks (nonzero true channels, sum/raw residual norm):');\\nfor i in range(0,len(y),8):print(i,np.count_nonzero(y[i:i+8],axis=1),np.round(np.linalg.norm(e[i:i+8],axis=1),3));\\nPY\\npython3 /tmp/bridge_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unconstrained inverse polynomial -> H2 structured forward bridge with a conserved channel sum; cubic summed-output jackknife RMS is 0.000322, but individual-channel cubic jackknife RMS exceeds 2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the full cubic fit directly\",\n      \"rejected_reason\": \"Its individual-channel residuals are large despite near-exact conservation in the sum; the residual direction and affected calibration rows determine what can safely be inverted.\"\n    }\n  ],\n  \"rationale\": \"Inspect the residual structure to distinguish a small group of corrupted sweeps from a systematic differential signal. The distinction determines whether to fit on clean calibration rows or model the differential term explicitly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "186f94c34aee552e0eaac1da559114f1c52429d01106875f12b3b446ce693a58",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 74094.62,
+      "usage_known": true,
+      "prompt_tokens": 28260,
+      "cached_tokens": 9344,
+      "completion_tokens": 919
+    }
+  ]
+}

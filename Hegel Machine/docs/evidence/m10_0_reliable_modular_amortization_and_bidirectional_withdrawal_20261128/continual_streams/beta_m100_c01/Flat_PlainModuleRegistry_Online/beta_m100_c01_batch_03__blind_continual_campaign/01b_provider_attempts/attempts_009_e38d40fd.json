@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e38d40fd89c44bfebd2a305ae66b6b04",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:29.100498+00:00",
+  "ended_at_utc": "2026-11-28T03:48:06.942125+00:00",
+  "request_sha256": "0e39ce9f3223aeebb78d9e2a489350edece10b7f91ae4e5705f79b74fc91da0f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 48964,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27986,
+    "cached_tokens": 9344,
+    "completion_tokens": 1538
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_rosette_margin.py <<'PY'\\nimport itertools\\nimport pickle\\nimport sys\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\n\\nitems = pickle.loads((root / 'public_batch.pkl').read_bytes())\\nterms = [t for degree in range(4) for t in itertools.combinations_with_replacement(range(4), degree)]\\ndef polynomial(x):\\n    return np.column_stack([np.prod(x[:, t], axis=1) for t in terms])\\n\\ndef rational(x, j):\\n    own = x[:, j]\\n    nxt = x[:, (j+1) % 4]\\n    prev = x[:, (j-1) % 4]\\n    q = np.column_stack((own, own+nxt, own-nxt, own+prev, own-prev))\\n    return np.hstack([q**3 / (1+a*q**2) for a in (.25, 1.)])\\n\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']\\n    clean = np.max(np.abs(y), axis=1) < 8\\n    axis = np.count_nonzero(x, axis=1) <= 1\\n    amplitude = np.max(np.abs(x), axis=1)\\n    mixed = np.flatnonzero(~axis)\\n    outer = mixed[np.argsort(amplitude[mixed])[-max(1, len(mixed)//5):]]\\n    masks = {'axis rosette block': axis, 'largest mixed amplitudes': np.isin(np.arange(len(x)), outer)}\\n    maxima = {}\\n    for label, te in masks.items():\\n        tr = ~te\\n        fit = up._fit(dict(c, ref_rosette=x[tr], raw_rosette=y[tr]))\\n        yp = up._forward(x, fit)\\n        resid = np.linalg.norm(yp-y, axis=1)\\n        keep = tr & (resid <= 8*max(np.median(resid[tr]), 1e-8))\\n        test = te & clean\\n        D = polynomial(x)\\n        cubic = np.linalg.lstsq(D[keep], y[keep], rcond=None)[0]\\n        # Rediscover the dominant polynomial support on training rows only.\\n        screened = np.zeros_like(cubic)\\n        for j in range(4):\\n            active = np.abs(cubic[:, j]) > 0.01\\n            screened[active, j] = np.linalg.lstsq(D[keep][:, active], y[keep, j], rcond=None)[0]\\n        augmented = []\\n        for j in range(4):\\n            A = np.column_stack((up._design(x,j), rational(x,j)))\\n            p = np.linalg.lstsq(A[keep], y[keep,j], rcond=None)[0]\\n            augmented.append(A[test] @ p)\\n        preds = (yp[test], (D @ cubic)[test], (D @ screened)[test], np.column_stack(augmented))\\n        rms = [np.sqrt(np.mean(np.sum((p-y[test])**2, axis=1))) for p in preds]\\n        inv = np.max(np.linalg.norm(up._invert(y[test], fit)-x[test], axis=1))\\n        print(label, 'clean n', int(test.sum()), 'retained training', int(keep.sum()), 'RMS (cyclic/full cubic/fold-screened/rational sums-differences)', np.asarray(rms), 'max inverse', inv)\\n        maxima[label] = (rms[0], inv)\\n    print('study keys:', sorted(s), '| top-level item metadata keys:', sorted(set(item)-{'study'}))\\n    print('max blocked cyclic RMS and inverse:', np.max(list(maxima.values()), axis=0))\\n    assert all(rms < 1e-4 and inv < 3e-4 for rms, inv in maxima.values())\\n    out = solve_batch(s)\\n    cert = out['kkt_certificate']\\n    assert abs(cert['primal_objective']-cert['dual_lower_bound']) < 1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_margin.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic or rational response → H2 sparse cyclic response; the latest stratified held-out forward RMS is 2.40e-5 and maximum inverse error is 4.24e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the stratified random folds\",\n      \"rejected_reason\": \"They already passed and do not test extrapolation to a withheld excitation regime.\"\n    },\n    {\n      \"option\": \"Add relay, drift-operator, or class-balance tests\",\n      \"rejected_reason\": \"This task fits a continuous sensor response, not a switching controller, stochastic drift operator, or classifier. Inspect the public schema for actual batch variables rather than inventing strata.\"\n    }\n  ],\n  \"rationale\": \"Withhold the real axis-rosette block and the largest mixed amplitudes, then compare the installed response against full cubic, fold-local support discovery, and rational sum/difference terms. If the sparse model loses its margin and a challenger recovers it, revise the basis; otherwise retain the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "07fce50d1873044dade923ab21ecd3d6d56d38b3caf7edbe06a4c89905bb5b3a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39931.28,
+      "usage_known": true,
+      "prompt_tokens": 27986,
+      "cached_tokens": 9344,
+      "completion_tokens": 1538
+    }
+  ]
+}

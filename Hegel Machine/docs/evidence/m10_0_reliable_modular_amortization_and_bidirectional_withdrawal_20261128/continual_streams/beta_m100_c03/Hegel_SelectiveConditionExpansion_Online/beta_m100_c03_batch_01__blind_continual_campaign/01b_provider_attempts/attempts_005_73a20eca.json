@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "73a20eca2fae4742bcd2061c5142ef69",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:58.710900+00:00",
+  "ended_at_utc": "2026-11-28T03:32:24.802885+00:00",
+  "request_sha256": "8f57aa35705e62db70a89eff577a3caaa98b59578287dab754ae829e0467afab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26449,
+    "cached_tokens": 0,
+    "completion_tokens": 896
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/beta_m100_c03_s00_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('def _axis(kap, vel, h, rob):\\\\n', 'def _axis(kap, vel, h):\\\\n    # This campaign has sealed walls: keep neighbor diffusion, set Robin leakage to zero.\\\\n').replace('kap[0] / h**2 + rob / h', 'kap[0] / h**2').replace('kap[-1] / h**2 + rob / h', 'kap[-1] / h**2').replace(\\\"study['L' + d] / (n - 1), study['robin_' + d]\\\", \\\"study['L' + d] / (n - 1)\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; S,U=m._responses(s); worst=0\\nfor p in i['campaign_diagnostics']:\\n    r=(S@p['w_pulse']-m._calibrate(s,p['y_pulse_raw'])).reshape(len(s['mu_shifts']),-1)\\n    row=np.sqrt(np.mean(r*r,axis=1)); worst=max(worst,row.max()); print('pulse RMSE by shift:',row)\\nassert worst < 2e-6, worst\\nout=m.solve_batch(s); print('weights:',out['weights']); print('dual gap:',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound']); print('terminal range:',out['terminal_field'].min(),out['terminal_field'].max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin leakage) -> H2 (zero leakage with unchanged wall diffusion); the shared-wall fit's worst omitted pulse-by-shift RMSE is 8.6e-7, versus 0.2618 for the open-wall baseline.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain separate fitted coefficients for each wall\",\n      \"rejected_reason\": \"Every fitted wall has near-unit diffusion and near-zero leakage; the differences are at calibration noise scale.\"\n    }\n  ],\n  \"rationale\": \"Implement the exact sealed-wall stencil and retain the independently supported affine calibration. Check that rounding the fitted wall coefficients to their physical values preserves tracer accuracy and that the resulting artifact satisfies the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e521494eb94c92b197dfea275bf040d565f3d2f4fcf344373f4322efc81abb93",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26055.23,
+      "usage_known": true,
+      "prompt_tokens": 26449,
+      "cached_tokens": 0,
+      "completion_tokens": 896
+    }
+  ]
+}

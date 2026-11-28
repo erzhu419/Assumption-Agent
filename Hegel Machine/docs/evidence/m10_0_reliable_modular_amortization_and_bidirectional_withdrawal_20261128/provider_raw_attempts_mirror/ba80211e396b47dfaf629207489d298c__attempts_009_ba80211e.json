@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ba80211e396b47dfaf629207489d298c",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:32.568602+00:00",
+  "ended_at_utc": "2026-11-28T03:42:00.830706+00:00",
+  "request_sha256": "1a63d0497a1a533d3e04fbe8a200789c8fa03b33456b37aa1e8f28b109f0f179",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56366,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30839,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport sys\\n\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _design, _features, _loads, _predict_chamber\\nfrom _verified_upstream import calibrate_upstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\no = solve_batch(d)\\nq = calibrate_upstream(dict(d, test=item['campaign_diagnostics']))['test']\\nlab = q['lab_id']\\nx = _features(q, q)[len(lab):]\\npast, hold = _loads(q)\\ntau, theta = o['estimated_taus'], o['hereditary_weights']\\ndt, t = d['past_dt'], d['eval_times']\\ny0, y, yr = q['strain_0'], q['strain_curves_obs'], q['instant_rate_obs']\\ncurve, _ = _design(tau, x, past, hold, dt, t)\\nmech = y0[:, None] + curve[..., :2] @ theta[:2]\\ndrift = theta[2] + x @ theta[3:]\\nlinear = y0[:, None] + curve @ theta\\nreset_rate = hold * np.sum(theta[:2] / tau) + drift\\npred, rate = _predict_chamber(tau, theta, x, past, hold, dt, t, y0)\\nerr = np.empty_like(y)\\nfor l in np.unique(lab):\\n    held = lab == l\\n    def residual(a):\\n        return mech - drift[:, None] * a * np.expm1(-t / a) - y\\n    a = minimize_scalar(lambda a: np.mean(np.hypot(1, residual(a)[~held] / .006) - 1), bounds=(.1, 5), method='bounded').x\\n    err[held] = residual(a)[held]\\nworst_horizon = np.sqrt(np.mean(err**2, axis=0)).max()\\nworst_lab_rate = max(np.sqrt(np.mean((rate[lab == l] - yr[lab == l])**2)) for l in np.unique(lab))\\nreset_mae = np.mean(abs(reset_rate - yr))\\nlinear_mae = np.mean(abs(linear[:, -1] - y[:, -1]))\\nartifact_mae = np.mean(abs(pred[:, -1] - y[:, -1]))\\nprint(f'LOLO worst-horizon strain RMSE={worst_horizon:.8f}; worst-lab initial-rate RMSE={worst_lab_rate:.8f}; zero-memory initial-rate MAE={reset_mae:.8f}; linear-drift final-horizon MAE={linear_mae:.8f}; packaged final-horizon MAE={artifact_mae:.8f}')\\nassert max(worst_horizon, worst_lab_rate, artifact_mae) < .01\\nassert reset_mae > 10 * worst_lab_rate and linear_mae > 10 * artifact_mae\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset or linear drift → H2 retained memory with exponential drift saturation; worst held-out horizon strain RMSE 0.00583 and worst held-out lab rate RMSE 0.00652.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact bundle passed schema and slice checks, but the combined probe was rejected as evidence for the structural resolution. Isolate the diagnostic comparison from the schema validator and test the two mechanisms directly without editing either artifact. If either ablation matches the packaged law, leave the corresponding mechanism claim unresolved.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1a6e15b19debe65860a653db76391e19a12fb8d98a10e2731efadb2d8725cc42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28223.55,
+      "usage_known": true,
+      "prompt_tokens": 30839,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

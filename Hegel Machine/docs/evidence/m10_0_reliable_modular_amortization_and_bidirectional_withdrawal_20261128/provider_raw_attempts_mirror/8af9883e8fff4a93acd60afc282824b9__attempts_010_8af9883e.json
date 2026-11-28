@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8af9883e8fff4a93acd60afc282824b9",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:43.517403+00:00",
+  "ended_at_utc": "2026-11-28T03:43:10.640426+00:00",
+  "request_sha256": "97e3f7d9c2b78cdf6e8477ca70a4e9a86454db212dfa762ca732d597945c81cd",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 61954,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30963,
+    "cached_tokens": 9344,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; cat >/tmp/verify_withdrawal.py <<'PY'\\nimport sys,pickle,json\\nsys.path.insert(0,'/holdout_task')\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream,_features,_predict,_design\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nraw=item['dataset']; cal=calibrate_upstream(raw)\\nwith open('/holdout_task/_upstream_param_payload.json') as f: payload=json.load(f)\\nq=calibrate_upstream({**raw,'test':item['campaign_diagnostics']},payload)['test']\\nout=solve_batch(raw); other=solve_downstream(cal)\\nfor key in out: np.testing.assert_array_equal(out[key],other[key])\\ntau=out['estimated_taus']; theta=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\nx=_features(q,q)[0]; d=cal['past_dt']; t=cal['eval_times']; y=q['strain_curves_obs']; r=q['instant_rate_obs']; labs=q['lab_id']; strata=q['stratum']; complete=np.isfinite(q['coupon_features_raw']).all(axis=1)\\npred,rate=_predict(q,x,tau,theta,d,t); e=y-pred; er=r-rate\\nrms=lambda a: float(np.sqrt(np.mean(a*a)))\\nprint('taus',tau,'weights',theta)\\nfor name,labels in [('lab',labs),('stratum',strata),('missingness',complete),('coupon',np.arange(len(y)))]:\\n print(name,'worst strain/rate',tuple(max(rms(a[labels==k]) for k in np.unique(labels)) for a in [e,er]))\\nprint('worst horizon',max(rms(e[:,k]) for k in range(e.shape[1])))\\nprint('pooled strain/rate',rms(e),rms(er))\\nc,r0=_design(tau,q['past_channel_raw'].sum(-1),q['hold_channel_raw'].sum(-1),np.c_[np.ones(len(x)),x],d,t)\\nprint('unmodified benchtop chamber error',rms(y-q['strain_0'][:,None]-c@theta))\\nassert max(rms(e[labs==k]) for k in np.unique(labs)) < .015 and max(rms(er[labs==k]) for k in np.unique(labs)) < .012\\nsmall=np.array([0.,1.e-6]); p0,rr=_predict(q,x,tau,theta,d,small)\\nnp.testing.assert_array_equal(p0[:,0],q['strain_0'])\\nnp.testing.assert_allclose(np.diff(p0,axis=1).ravel()/small[1],rr,atol=1e-5,rtol=0)\\nprint('zero-time strain and initial-rate derivative verified')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_withdrawal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: retain full hereditary memory and replace linear drift with unit-time exponential withdrawal; the fitted-kernel holdouts reached worst-coupon RMSE of 0.0109 for strain and 0.0104 for initial rate, pending verification of the exact artifact.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Use the schema pass as the only verification\",\"rejected_reason\":\"It establishes output shape and reference symmetry but cannot distinguish the chamber law from the falsified benchtop baseline.\"}],\"rationale\":\"Run the exact saved modules in an isolated process and compare the implemented chamber law with the benchtop baseline on the calibrated diagnostic panel. Lab, stratum, missingness, and horizon errors will show whether the unit kernel leaves a material prediction gap; the derivative check catches any strain/rate inconsistency.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1c6f21a451ab68bcc398b0e47df94afa19a3db65cb61446ff806feb93b49125b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29220.49,
+      "usage_known": true,
+      "prompt_tokens": 30963,
+      "cached_tokens": 9344,
+      "completion_tokens": 1071
+    }
+  ]
+}

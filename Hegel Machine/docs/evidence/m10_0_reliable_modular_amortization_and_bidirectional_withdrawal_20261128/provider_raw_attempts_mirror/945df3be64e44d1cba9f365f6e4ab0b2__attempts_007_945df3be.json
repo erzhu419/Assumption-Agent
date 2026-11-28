@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "945df3be64e44d1cba9f365f6e4ab0b2",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:41.838206+00:00",
+  "ended_at_utc": "2026-11-28T03:33:13.067117+00:00",
+  "request_sha256": "318ef55bb86d82d11bbe624fdb92744ee7eb557c47872b276b8344ac59e59369",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39716,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24936,
+    "cached_tokens": 9344,
+    "completion_tokens": 1244
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; S,U=m._responses(s); D=i['campaign_diagnostics']; P=np.stack([S@d['w_pulse'] for d in D]); raw=np.stack([d['y_pulse_raw'] for d in D]).reshape(len(D),-1,4); rng=np.random.default_rng(620); folds=np.array_split(rng.permutation(len(x)),5)\\nfor name in ('full affine','diagonal affine','pooled diagonal','diagonal compression'):\\n def fit(tr):\\n  if name=='full affine':\\n   B=np.linalg.lstsq(np.c_[np.ones(len(tr)),x[tr]],y[tr],rcond=None)[0]; return lambda z:z@B[1:]+B[0],lambda z:(z-B[0])@np.linalg.inv(B[1:])\\n  off=[]; gain=[]; den=[]\\n  for k in range(4):\\n   X,Y=x[tr,k],y[tr,k]\\n   if name=='pooled diagonal':\\n    ix=b['bank_id']==k; X=np.r_[X,b['ref_signal'][ix]]; Y=np.r_[Y,b['raw_readout'][ix]]\\n   if name=='diagonal compression':\\n    from scipy.optimize import least_squares\\n    a,g,h=least_squares(lambda p:p[0]+p[1]*X/(1+p[2]*X**2)-Y,[0,1,0],bounds=([-np.inf,0,0],np.inf),gtol=1e-13).x\\n   else:\\n    a,g=np.linalg.lstsq(np.c_[np.ones(len(X)),X],Y,rcond=None)[0]; h=0.\\n   off.append(a); gain.append(g); den.append(h)\\n  off,gain,den=map(np.array,(off,gain,den)); return lambda z:off+gain*z/(1+den*z*z),lambda z:2*((z-off)/gain)/(1+np.sqrt(1-4*den*((z-off)/gain)**2))\\n err=[]\\n for te in folds:\\n  f,_=fit(np.setdiff1d(np.arange(len(x)),te)); err.append(np.sqrt(np.mean((f(x[te])-y[te])**2,axis=0)).max())\\n _,inv=fit(np.arange(len(x))); errs=(inv(raw).reshape(P.shape)-P).reshape(len(D),len(s['mu_shifts']),-1,4); print(name,'worst sweep fold/bank',max(err),'worst pulse/shift',np.sqrt(np.mean(errs**2,axis=(2,3))).max(),'worst pulse/shift/bank',np.sqrt(np.mean(errs**2,axis=2)).max())\\nout=m.solve_batch(s); w=out['weights']; cert=out['kkt_certificate']; Z=s['Z_nuisance']; A=np.c_[S,m._calibrate(s,s['y_obs_raw'])]; T=A-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@A); r=T[:,:-1]@w-T[:,-1]; g=T[:,:-1].T@r+s['source_ridge']*w; lo=np.array(cert['lam_lower']); hi=np.array(cert['lam_upper']); cap=s['u_box']; budget=s['total_budget']; station=np.max(np.abs(g-cert['nu_sum']-lo+hi)); comp=max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w)))); print('feasibility, stationarity, complementarity',abs(w.sum()-budget),station,comp,'box',w.min(),w.max(),cap); assert abs(w.sum()-budget)<1e-10 and np.all((w>=0)&(w<=cap)) and max(station,comp)<1e-10\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (full affine rosette) -> H2 (bank-diagonal or compressed rosette only if supported by held-out measurements); current worst tracer pulse-by-shift RMSE is 9.58e-7.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay or cohort classification models\",\"rejected_reason\":\"This study has continuous tracer measurements and no relay state or class labels; sensor-bank strata are the relevant slices.\"}],\"rationale\":\"Compare calibration structures by held-out bank error and independent tracer pulse error. Change calibration only if an alternative improves tracer accuracy without degrading sweep accuracy; if independent KKT residuals fail, inspect the optimizer or certificate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e3ffeb80afc81aa7ddd2bcf37f9b6837d246209e8f03f4d19852dbe62173c024",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33354.72,
+      "usage_known": true,
+      "prompt_tokens": 24936,
+      "cached_tokens": 9344,
+      "completion_tokens": 1244
+    }
+  ]
+}

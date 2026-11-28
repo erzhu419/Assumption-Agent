@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c74bc4b0684c4f8882c2ee9e5f4c80aa",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:43.373791+00:00",
+  "ended_at_utc": "2026-11-28T03:33:23.126502+00:00",
+  "request_sha256": "b0f44f7ba3375e7ca2b96516b1b721f8972818982b52963dbcd25798b12787a6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53982,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30991,
+    "cached_tokens": 9344,
+    "completion_tokens": 1595
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_reset.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('# Regress each component')[0])\\nfrom scipy.optimize import least_squares\\nL=q['lab_id']; S=q['stratum']; ids=np.arange(len(h)); rawq=q['coupon_features_raw']; X={}\\nfor name,parts in [('deploy',(tr,te)),('train',(tr,)),('diagnostic',(q,)),('train_diag',(tr,q)),('all',(tr,te,q))]:\\n    rr=np.vstack([a['ref_coupons'] for a in parts]); ll=np.concatenate([a['lab_id'] for a in parts]); qx=rawq.copy()\\n    for l in np.unique(L):\\n        r=rr[ll==l]; qx[L==l]=(qx[L==l]-np.median(r.mean(0)))/np.median(r.std(0))\\n    llq,iv,ct=np.unique(np.c_[L,S],axis=0,return_inverse=True,return_counts=True)\\n    ww=(1/ct[iv])[:,None]; mq=np.nansum(ww*qx,axis=0)/np.sum(ww*np.isfinite(qx),axis=0)\\n    X[name]=(np.where(np.isfinite(qx),qx,mean),np.where(np.isfinite(qx),qx,mq))\\nprint('missing diag',np.argwhere(~np.isfinite(rawq)).tolist()); print('r ranges',[(k,np.round((a@w[3:]+w[2]).min(),3),np.round((a@w[3:]+w[2]).max(),3)) for k,(a,b) in X.items()])\\n\\ndef eval_model(qx, mode):\\n    D=qx@w[3:]+w[2]; one=np.ones(len(h)); base=np.c_[one,h,D]; poly=np.c_[base,D**2,D**3,D*h,h**2]; labs_=np.eye(4)[L][:,1:]\\n    J={'drift':base,'curved':poly,'raw':np.c_[one,h,qx], 'lab':np.c_[base,labs_], 'lab_gain':np.c_[base,labs_,labs_*D[:,None]], 'stress':np.c_[base,p], 'smooth':np.c_[base,np.tanh(2*D),np.maximum(D,0)],'amplitudes':base}[mode]\\n    K=np.c_[one,D] if mode=='amplitudes' else J\\n    def fit(z, ii):\\n        B=basis(z); F=np.concatenate((B[None,:,0,None]*J[:,None,:],B[None,:,1,None]*J[:,None,:],B[None,:,2,None]*K[:,None,:]),2)\\n        b=np.linalg.lstsq(F[ii].reshape(-1,F.shape[-1]),y[ii].ravel(),rcond=None)[0]\\n        return F@b, b\\n    def opt(ii):\\n        z=least_squares(lambda z:(fit(z,ii)[0][ii]-y[ii]).ravel(),[.712,4.8],bounds=([.5,2.5],[1.,10]),max_nfev=35).x\\n        return z\\n    z=opt(ids); f,b=fit(z,ids); cv=[]\\n    for groups in (ids,L,S):\\n        e=np.empty_like(y)\\n        for j in np.unique(groups):\\n            m=groups==j; ii=ids[~m]; e[m]=(fit(opt(ii),ii)[0]-y)[m]\\n        cv.extend([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\n    return np.sqrt(np.mean((f-y)**2)),z,cv,b\\nresults=[]\\nfor panel,(a,b) in X.items():\\n    for imp,qx in enumerate((a,b)):\\n        if imp and np.array_equal(a,b):continue\\n        for mode in ('drift','amplitudes','curved','raw','lab','lab_gain','stress','smooth'):\\n            rms,z,cv,beta=eval_model(qx,mode); results.append((max(cv),panel,imp,mode,rms,z,cv,beta))\\n            if mode in ('drift','amplitudes'): print(panel,imp,mode,round(rms,5),z.round(4),np.round(cv,5),beta.round(4))\\nfor _,panel,imp,mode,rms,z,cv,beta in sorted(results,key=lambda t:t[0])[:12]:print('top',panel,imp,mode,round(rms,5),z.round(4),np.round(cv,5),beta.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_reset.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine history correction → H2 chamber history reset with a reference-aligned drift coupling; the unrestricted affine model reaches 0.1697 worst-horizon strain RMS and 0.1041 rate RMS under lab holdout.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry unrestricted stress-history coefficients into deployment\",\n      \"rejected_reason\": \"Their estimates are small and do not explain the lab-held-out error; a reset model can test whether those terms are needed at all.\"\n    }\n  ],\n  \"rationale\": \"Test whether the verification coupons independently reproduce the chamber law after a history reset. Compare reference-panel choices and drift bases to distinguish a normalization mismatch from an actual lab effect; keep deployment standardization and material estimation on the specified train/test pool.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a8fdb9f9b0a6f0243f3ac65690f5c3fbc987f7f52ffce0453bfbf3c308a457ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41875.55,
+      "usage_known": true,
+      "prompt_tokens": 30991,
+      "cached_tokens": 9344,
+      "completion_tokens": 1595
+    }
+  ]
+}

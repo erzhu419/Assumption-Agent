@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2fceab4a75a41e981d9fe7d4f5dc77a",
+  "call_seq": 2,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:13.060727+00:00",
+  "ended_at_utc": "2026-11-28T03:49:30.723443+00:00",
+  "request_sha256": "a0eb735d5818fc3559192c5b4ea26a8cef5289815aa8eb0709ce57903fb1042c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15114,
+    "cached_tokens": 9344,
+    "completion_tokens": 615
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/archive_manifest.json /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; grep -nEi 'bridge|load.cell|sweep|calibrat|transduc' /tmp/hegel_continual_archive/*solver.py; cat validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation'; python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('dataset keys', list(d)); print('axis rows (index, loads, bridge)'); m=(x!=0).sum(1)<=1; print(np.c_[np.arange(len(x)),x,y][m]); print('mixed loads summary'); print(np.quantile(x[~m],[0,.25,.5,.75,1],axis=0)); print('first mixed rows',np.c_[x,y][~m][:10]); print('target bridge ranges');\\nfor k in ('train','test'):\\n for p in ('past_channel_raw','hold_channel_raw'):\\n  z=d[k][p].reshape(-1,4); print(k,p,np.quantile(z,[0,.5,1],axis=0))\\ns=c['single_channel_sweeps']; print('sweeps by channel',np.c_[s['lab_id'],s['true_stress'],s['cmd_stress']].reshape(4,12,3));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Coupled bridge response → use axis sweeps to isolate self-response and mixed rows to identify coupling; held-out error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an inverse directly in raw bridge space\",\"rejected_reason\":\"Gross spike rows would contaminate the predictors, and the forward model can be diagnosed separately on single-axis and mixed-load rows.\"}],\"rationale\":\"Inspect whether sweeps share the bridge response and whether operating loads extrapolate beyond calibration. Those findings determine which observations can be pooled and which slices must govern model selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "44b9ac15329454f5813a7f990b6a38fc5748a8715056663c647e0424c4877825",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19775.48,
+      "usage_known": true,
+      "prompt_tokens": 15114,
+      "cached_tokens": 9344,
+      "completion_tokens": 615
+    }
+  ]
+}

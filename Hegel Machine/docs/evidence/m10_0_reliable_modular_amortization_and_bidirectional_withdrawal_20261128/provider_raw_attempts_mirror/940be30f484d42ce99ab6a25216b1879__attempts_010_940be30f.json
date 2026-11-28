@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "940be30f484d42ce99ab6a25216b1879",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:39.384666+00:00",
+  "ended_at_utc": "2026-11-28T03:34:03.455791+00:00",
+  "request_sha256": "60e7109dd01870a751acefa60000535a014132cf1ba2f80c243018daca043d29",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34301,
+    "cached_tokens": 5504,
+    "completion_tokens": 921
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/bench.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); start=s.index('    # The blind batch'); s=s[:start]+'''    strain, rate = _predict_chamber(taus, theta, x[n:],\\n                                    _loads(test, bridge)[1], times,\\n                                    test['strain_0'])\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\n\\n\\ndef _predict_chamber(taus, theta, x, hold, times, strain_0):\\n    \\\"\\\"\\\"Reset the chamber branches and distribute drift across their time bases.\\\"\\\"\\\"\\n    drift = theta[2] + x @ theta[3:]\\n    amplitudes = hold[:, None] * theta[:2] + [0.0038, -0.0639]\\n    amplitudes += drift[:, None] * [0.3324, 1.7779]\\n    final_drift = 0.0095 + 0.0336 * drift\\n    relaxation = -np.expm1(-times[:, None] / taus)\\n    strain = strain_0[:, None] + amplitudes @ relaxation.T + final_drift[:, None] * times\\n    rate = amplitudes @ (1.0 / taus) + final_drift\\n    return strain, rate\\n''';p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\npython3 - <<'PY'\\nimport json, numpy as np\\np=json.load(open('/holdout_task/public_asset_index.json')); print('asset index',str(p)[:6500]);\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(r['facility_telemetry_trace']); print('trace',r['completed_campaign_short_name'],a.shape,a[:3],a[-3:])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained chamber history → H2 reset branches with affine drift redistribution; diagnostic lab-holdout RMSE peaks at 0.01164 for strain and 0.00823 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a quadratic drift correction\",\n      \"rejected_reason\": \"It does not improve the missing-feature holdout and extrapolates less reliably beyond the diagnostic drift range.\"\n    }\n  ],\n  \"rationale\": \"Implement the simplest supported chamber law while preserving dynamic bridge calibration and train-only material estimation. The isolated validator will catch shape or pooled-reference symmetry regressions; the asset and telemetry summaries can reveal whether a documented apparatus map should replace the fitted correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a2ffbbca4222c46ba2bf0545c6032c733769b9cd57b34ca1413ca4b52d85a2ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26139.74,
+      "usage_known": true,
+      "prompt_tokens": 34301,
+      "cached_tokens": 5504,
+      "completion_tokens": 921
+    }
+  ]
+}

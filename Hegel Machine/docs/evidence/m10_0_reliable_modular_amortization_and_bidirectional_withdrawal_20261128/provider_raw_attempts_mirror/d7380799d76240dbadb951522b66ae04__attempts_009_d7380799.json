@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7380799d76240dbadb951522b66ae04",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__beta_m100_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:54.402211+00:00",
+  "ended_at_utc": "2026-11-28T03:29:26.745099+00:00",
+  "request_sha256": "775269f1695e5a1d9119f7266ed41ede69890454a306406b8334215e40fa5f56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46350,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27718,
+    "cached_tokens": 5504,
+    "completion_tokens": 1217
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\\nb = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(b)\\ns = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = map(np.asarray, (c['ref_rosette'], c['raw_rosette']))\\nF = np.c_[np.ones(len(x)), x]\\ncoef = np.linalg.lstsq(F, raw, rcond=None)[0]\\nbank = c['single_bank_sweeps']\\nprint('single-bank sweep columns:', {key: np.shape(value) for key, value in bank.items()})\\nids = np.asarray(bank['bank_id'])\\nref = np.asarray(bank['ref_signal'])\\nfor key, value in bank.items():\\n    if not key.startswith('raw'):\\n        continue\\n    observed = np.asarray(value)\\n    expected = coef[0] + ref[:, None] * coef[1:][ids]\\n    if observed.shape == expected.shape:\\n        err = observed - expected\\n    elif observed.shape == ref.shape:\\n        err = observed - expected[np.arange(len(ids)), ids]\\n    else:\\n        continue\\n    print('single-bank transfer RMS by driven bank:', [float(np.sqrt(np.mean(err[ids == j] ** 2))) for j in np.unique(ids)])\\nS, U = b._responses(s)\\ny = b._calibrate(s, s['y_obs_raw'])\\nz = np.asarray(s['Z_nuisance'])\\ncap, budget, ridge = (s[k] for k in ('u_box', 'total_budget', 'source_ridge'))\\nij = np.asarray(s['sensor_ij']).reshape(-1, 2)\\nif len(ij) != len(y):\\n    ij = np.tile(ij, (len(s['mu_shifts']), 1))\\ngroups = ij[:, 0] + s['nx'] * ij[:, 1]\\nassert len(groups) == len(y)\\nerrors = {False: [], True: []}\\nfor g in np.unique(groups):\\n    train = groups != g\\n    A, t = S[train], y[train]\\n    Z = z[train]\\n    P = np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\n    for profile in errors:\\n        C, d = (A - Z @ (P @ A), t - Z @ (P @ t)) if profile else (A, t)\\n        w, _ = b._box_qp(C.T @ C + ridge * np.eye(C.shape[1]), -(C.T @ d), cap, budget)\\n        pred = S[~train] @ w\\n        if profile:\\n            pred += z[~train] @ (P @ (t - A @ w))\\n        errors[profile].append(np.sqrt(np.mean((y[~train] - pred) ** 2)))\\nprint('whole-location holdouts:', len(np.unique(groups)), 'worst RMS without / with training-only nuisance profiling:', max(errors[False]), max(errors[True]))\\nout = b.solve_batch(s)\\ncert = out['kkt_certificate']\\nw = out['weights']\\nassert np.isfinite(out['terminal_field']).all() and out['terminal_field'].shape == (s['nx'], s['ny'])\\nassert min(w) >= 0 and max(w) <= cap and abs(sum(w) - budget) < 1e-12\\nassert abs(cert['primal_objective'] - cert['dual_lower_bound']) < 1e-11\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robin walls and affine mixing -> test calibration transfer to single-bank sweeps and nuisance profiling on unseen sensor locations; prior worst held-out RMS was 0.013593 by shift and 0.010588 by bank.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear calibration and boundary stencil searches.\",\n      \"rejected_reason\": \"Those searches already used nested validation; single-bank sweeps and whole-location holdouts test different failure modes.\"\n    }\n  ],\n  \"rationale\": \"A bank holdout can leave measurements from the same spatial location in training. Holding out each location across all shifts tests whether nuisance profiling transfers without that overlap. The separate single-bank sweeps test whether the affine calibration transfers to isolated channel inputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1d9ab577c68e02359ebb9e85838acd7915f9dc695c28e8fb1eb33bb87c2cdf3a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34448.07,
+      "usage_known": true,
+      "prompt_tokens": 27718,
+      "cached_tokens": 5504,
+      "completion_tokens": 1217
+    }
+  ]
+}

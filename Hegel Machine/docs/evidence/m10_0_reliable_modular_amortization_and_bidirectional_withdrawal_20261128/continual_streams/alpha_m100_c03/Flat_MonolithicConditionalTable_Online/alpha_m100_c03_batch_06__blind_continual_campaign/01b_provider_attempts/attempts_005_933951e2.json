@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "933951e2870a43fd9b669e149ea38dbf",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:46.090234+00:00",
+  "ended_at_utc": "2026-11-28T04:03:12.199353+00:00",
+  "request_sha256": "bdffd637c0ae1658be77bc665ed61108e82f6d34e5bd40675c24c76d13e22513",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40899,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25382,
+    "cached_tokens": 9344,
+    "completion_tokens": 932
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; sed -n '1,97p' alpha_m100_c03_batch_05_solver.py; sed -n '28,96p' alpha_m100_c03_batch_03_solver.py; sed -n '1,45p' alpha_m100_c03_batch_01_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom scipy.stats import spearmanr\\nj=json.load(open('archive_apparatus_log.json'))\\nfor a,b in zip(j,j[1:]+[{'completed_campaign_short_name':'current batch 06'}]):\\n m=np.mean(a['facility_telemetry_trace'],0); print('prior to',b['completed_campaign_short_name'],m[[3,6]].round(3))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('first independent calibration rows [true|bridge]',np.c_[x,y][:8].round(4)); print('ranges [true|bridge]',np.stack([np.min(np.c_[x,y],0),np.max(np.c_[x,y],0)]).round(3)); print('forward rank corr',spearmanr(np.c_[x,y]).statistic[:4,4:].round(3));\\nfor k,v in c['single_channel_sweeps'].items(): print('single',k,np.shape(v),np.asarray(v).ravel()[:8]);\\nfor name in ['train','test']:\\n s=d[name]; print(name,'deploy raw bounds',np.vstack((s['past_channel_raw'].reshape(-1,4),s['hold_channel_raw'])).min(0).round(3),np.vstack((s['past_channel_raw'].reshape(-1,4),s['hold_channel_raw'])).max(0).round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear bridge and shared benchtop fit → H2 lagged facility state may select batch 01’s chamber mechanism; affine calibration’s worst channel RMSE is 0.530.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine inverse adequately calibrates the current 4-channel bridge.\",\n    \"empirical_witness\": \"Affine residual RMSE is 0.374–0.530 across channels whose load standard deviations are 0.840–0.893.\",\n    \"causal_blanket_diagnosis\": \"Ignoring nonlinear bridge response can distort both the inferred material spectrum and the deployed hold loads.\",\n    \"sublated_pivot\": \"Compare structured nonlinear forward-calibration laws before fitting the material; retain independently estimated chamber and material terms.\",\n    \"risk_kind\": \"transducer_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the last archived solver unchanged\",\n      \"rejected_reason\": \"Batch 05’s solver may have a useful bridge family, but its baseline chamber law does not account for the facility state observed after that campaign.\"\n    }\n  ],\n  \"rationale\": \"Read the verified bridge equations and current calibration ranges to identify nonlinear terms worth fitting. Align each facility trace with the following campaign to test the chronology: if batch 01 and batch 06 share the same predecessor state, transfer batch 01’s chamber mechanism as a provisional model, not as independently verified deployment behavior.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "15d5f849d54b80ada2d858ffa24ae6f6cfa71be045f00433456ff38dbe97fa66",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28110.98,
+      "usage_known": true,
+      "prompt_tokens": 25382,
+      "cached_tokens": 9344,
+      "completion_tokens": 932
+    }
+  ]
+}

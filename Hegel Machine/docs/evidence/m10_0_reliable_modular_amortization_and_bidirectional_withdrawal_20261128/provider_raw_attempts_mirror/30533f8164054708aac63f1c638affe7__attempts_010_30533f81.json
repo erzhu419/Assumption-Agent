@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30533f8164054708aac63f1c638affe7",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:04:51.802073+00:00",
+  "ended_at_utc": "2026-11-28T04:05:26.378132+00:00",
+  "request_sha256": "df5201a754c379c55999edf4e6197da02061ea39901567bcbf82f82c4f734528",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66085,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34656,
+    "cached_tokens": 9344,
+    "completion_tokens": 1391
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nimport ast\\nfrom pathlib import Path\\nbase=Path('/tmp/hegel_continual_archive')\\ndef functions(batch,names):\\n    text=(base/f'beta_m100_c02_batch_{batch}_solver.py').read_text()\\n    defs={n.name:ast.get_source_segment(text,n) for n in ast.parse(text).body if isinstance(n,ast.FunctionDef)}\\n    return '\\\\n\\\\n\\\\n'.join(defs[n] for n in names)\\np=Path('/holdout_task/batch_solver.py')\\np.write_text('''\\\"\\\"\\\"Steady transport-reaction inversion for the sealed chamber.\\\"\\\"\\\"\\nimport numpy as np\\nfrom numpy.polynomial.chebyshev import chebvander\\nfrom scipy import sparse\\nfrom scipy.optimize import root\\nfrom scipy.sparse.linalg import splu\\n\\n\\n'''+functions('03',('axis_operator','chamber_response'))+'\\\\n\\\\n\\\\n'+functions('05',('box_simplex','_inverse'))+'\\\\n')\\nPY\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\n\\ndef _basis(x):\\n    return (chebvander(np.asarray(x) / 1.8, 12) - chebvander(0., 12))[..., 1:]\\n\\n\\ndef calibration_map(sweeps, held_out=()):\\n    ref = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    single = sweeps['single_bank_sweeps']\\n    models = []\\n    for j in range(4):\\n        sel = np.asarray(single['bank_id']) == j\\n        self_ref = np.r_[np.asarray(single['ref_signal'])[sel], ref[:, j]]\\n        other_ref = np.r_[np.zeros(sel.sum()), ref[:, (j+2) % 4]]\\n        obs = np.r_[np.asarray(single['raw_readout'])[sel], raw[:, j]]\\n        # Gross readout spikes are well separated from the physical sweep range.\\n        keep = abs(obs) < 5\\n        keep[sel.sum() + np.asarray(held_out, dtype=int)] = False\\n        a = np.column_stack((np.ones(keep.sum()), _basis(self_ref[keep])[:, ::2],\\n                             _basis(other_ref[keep])))\\n        models.append(np.linalg.lstsq(a, obs[keep], rcond=None)[0])\\n    return np.array(models)\\n\\n\\ndef raw_map(x, models):\\n    b = _basis(x)\\n    return (models[:, 0] + np.sum(b[..., ::2] * models[:, 1:7], axis=-1)\\n            + np.sum(np.roll(b, 2, axis=-2) * models[:, 7:], axis=-1))\\n\\n\\ndef calibrate(study):\\n    models = calibration_map(study['sensor_calibration_sweeps'])\\n    obs = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return np.array([root(lambda x: raw_map(x, models) - t, np.zeros(4),\\n                          tol=1e-11).x for t in obs]).ravel()\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    # Sealed endpoints retain the documented normal diffusion and have no wall loss.\\n    S, U = chamber_response(study, np.zeros(4))\\n    w, cert = _inverse(study, S, calibrate(study))\\n    return {'weights': w, 'terminal_field': np.tensordot(w, U, axes=(0, 0)),\\n            'kkt_certificate': cert}\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\nsed -n '/^def box_simplex/,/^def _basis/p' /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robin baseline → sealed endpoints with dynamically fitted bank-specific calibration; worst held-out shift RMSE is 0.00996 and worst held-out calibration-bank RMSE is 2.49e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The documented open-wall Robin baseline describes the blind chamber.\",\n    \"empirical_witness\": \"Robin loses on all held-out shift and rosette folds; worst shift RMSE drops from 0.15379 with Robin to 0.00996 with sealed endpoints.\",\n    \"causal_blanket_diagnosis\": \"Nominal Robin coefficients are study inputs but do not establish the active wall losses; dynamic rosette calibration separates the sensor transfer from the wall comparison.\",\n    \"sublated_pivot\": \"Keep the interior transport stencil and use the archived zero-loss endpoint stencil, with dynamically fitted per-bank calibration.\",\n    \"risk_kind\": \"boundary operator mismatch\",\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use sealed x and periodic y\",\n      \"rejected_reason\": \"It has slightly worse full-data and every held-out shift residual, though the distinction is much smaller than for Robin.\"\n    },\n    {\n      \"option\": \"Fit four continuous wall losses\",\n      \"rejected_reason\": \"The fit gains less than 8e-5 RMS and relies on a negative wall loss.\"\n    }\n  ],\n  \"rationale\": \"Write the standalone candidate using the forward stencil and box-simplex optimizer already exercised on this batch, then run the public schema in an isolated process to catch integration errors before checking field and certificate numerics independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "69fb0a43ac67b2bdc5f53921ba7d610e0945c6064153d43e721dd224b48c2be7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36681.31,
+      "usage_known": true,
+      "prompt_tokens": 34656,
+      "cached_tokens": 9344,
+      "completion_tokens": 1391
+    }
+  ]
+}

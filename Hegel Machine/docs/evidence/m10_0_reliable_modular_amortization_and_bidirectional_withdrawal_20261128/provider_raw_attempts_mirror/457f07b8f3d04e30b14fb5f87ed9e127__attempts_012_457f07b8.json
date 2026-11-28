@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "457f07b8f3d04e30b14fb5f87ed9e127",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:40.629844+00:00",
+  "ended_at_utc": "2026-11-28T03:35:06.199356+00:00",
+  "request_sha256": "1763ff0f3570f82300514c0a7f738c0fedd29ff11a894283bb33f4768a9c3c8c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58944,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29941,
+    "cached_tokens": 9344,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    affine =', s.index('def _calibrate('))\\nb = s.index('\\\\n\\\\n\\\\ndef ', a)\\ns = s[:a] + '''    # The campaign's rosette and single-bank sweeps measure independent channels.\\n    single = sweeps['single_bank_sweeps']\\n    bias = np.empty(4)\\n    gain = np.empty(4)\\n    for j in range(4):\\n        rows = np.asarray(single['bank_id']) == j\\n        x = np.r_[ref[:, j], np.asarray(single['ref_signal'])[rows]]\\n        y = np.r_[raw[:, j], np.asarray(single['raw_readout'])[rows]]\\n        bias[j], gain[j] = np.linalg.lstsq(\\n            np.column_stack((np.ones(len(x)), x)), y, rcond=None\\n        )[0]\\n    observations = np.asarray(study['y_obs_raw'], dtype=float).reshape(-1, 4)\\n    return ((observations - bias) / gain).ravel()''' + s[b:]\\np.write_text(s)\\np = Path('/tmp/verify_closed_wall.py')\\ns = p.read_text()\\na = s.index('    gain = np.linalg.lstsq(')\\nb = s.index('    def reference(', a)\\ns = s[:a] + '''    q = sw['single_bank_sweeps']\\n    gain, bias = np.zeros(4), np.zeros(4)\\n    for channel in range(4):\\n        mask = q['bank_id'] == channel\\n        xx = np.concatenate((x[:, channel], q['ref_signal'][mask]))\\n        yy = np.concatenate((raw[:, channel], q['raw_readout'][mask]))\\n        xc = xx - xx.mean()\\n        gain[channel] = (xc @ (yy - yy.mean())) / (xc @ xc)\\n        bias[channel] = yy.mean() - gain[channel] * xx.mean()\\n    def calibrate(y):\\n        return ((np.asarray(y).reshape(-1, 4) - bias) / gain).ravel()\\n    np.testing.assert_allclose(mod._calibrate(st), calibrate(st['y_obs_raw']), rtol=0, atol=1e-12)\\n''' + s[b:]\\nPath('/tmp/verify_joint_bank.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_joint_bank.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full rosette affine fit → H2 pooled per-bank affine fit; worst independent tracer shift × channel × pulse RMS fell from 1.61e-6 to 1.08e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the full affine rosette-only fit\",\n      \"rejected_reason\": \"Pooling compatible single-bank sweeps improved every independent tracer pulse, while worst held-out sweep RMS rose only from 1.209e-5 to 1.227e-5.\"\n    }\n  ],\n  \"rationale\": \"Promote the calibration that reduces worst-slice tracer error by 33%, keeping the verified wall law and optimizer unchanged. An independent centered regression checks the new calibration, and the dense transport and KKT oracle checks whether the exact artifact still meets the output contract across nominal and extreme budgets.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a574ad76d654b8476a1fed0ff94046038409e522d7d48fb2d33cbbf7699b16c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27647.58,
+      "usage_known": true,
+      "prompt_tokens": 29941,
+      "cached_tokens": 9344,
+      "completion_tokens": 983
+    }
+  ]
+}

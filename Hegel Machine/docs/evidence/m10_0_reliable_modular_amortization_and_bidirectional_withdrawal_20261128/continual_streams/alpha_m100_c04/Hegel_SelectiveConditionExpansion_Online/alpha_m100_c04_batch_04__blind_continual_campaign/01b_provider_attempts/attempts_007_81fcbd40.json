@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81fcbd40c8ba40a7a87cd55f64ab2ff3",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:07.058663+00:00",
+  "ended_at_utc": "2026-11-28T03:47:31.988160+00:00",
+  "request_sha256": "7c1dd0a57d489d21d69c00b9b8f0e09a4026829ec73802109a27b0de1de377b9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52239,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30163,
+    "cached_tokens": 9344,
+    "completion_tokens": 894
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport json,pathlib\\np=pathlib.Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); j=json.loads(p.read_text()); print(type(j), list(j) if isinstance(j,dict) else len(j));\\nif isinstance(j,dict):\\n for k,v in j.items(): print(k, type(v).__name__, len(v) if hasattr(v,'__len__') else '', repr(v[-1] if isinstance(v,list) else v)[-2300:])\\nelse:\\n for v in j: print(str(v)[:250], str(v)[-400:])\\nPY\\ncat >/tmp/chamber_refine.py <<'PY'\\nexec(open('/tmp/chamber_grammar.py').read().split(\\\"print('aux summaries'\\\")[0])\\nxx=X['diag only']; v=np.c_[np.ones(len(h)),xx]@th[2:]; complete=np.isfinite(raw).all(1)\\nfor mask in [complete,~complete,np.ones(len(h),bool)]:\\n b=np.linalg.lstsq(v[mask,None]*f[None,:,:] if False else (v[mask,None,None]*f[None,:,:]).reshape(-1,3), R[mask].ravel(), rcond=None)[0]; print('complete/imputed/all',mask.sum(),b, 'RMS',np.sqrt(np.mean((R[mask]-v[mask,None]*(f@b))**2,axis=0)))\\nfor b in ([.18,2.25,.24],[.18,2.2,.24]):\\n e=R-v[:,None]*(f@b); print('rounded',b,'curve/rate max',np.max(abs(e[:,:-1])),np.max(abs(e[:,-1])),'complete max',np.max(abs(e[complete])))\\nprint('test feature/drift shift by lab: mean joint, deployment only, difference RMS');\\nvt0=np.c_[np.ones(len(te['lab_id'])),x[n:]]@th[2:]; vt1=np.c_[np.ones(len(te['lab_id'])),a._features(te,empty)]@th[2:];\\nfor l in np.unique(te['lab_id']):\\n m=te['lab_id']==l; print(l,vt0[m].mean(),vt1[m].mean(),np.sqrt(np.mean((vt0[m]-vt1[m])**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived chamber coupling -> H2 campaign-specific rank-one drift coupling; diagnostic-local normalization gives worst held-out lab RMSE of 0.04583 strain and 0.01876 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add pulse-memory and higher-order drift terms\",\n      \"rejected_reason\": \"The load-subtracted diagnostic response is nearly rank one, and the tested extra terms did not materially improve held-out lab error.\"\n    }\n  ],\n  \"rationale\": \"Separate complete from imputed diagnostics to test whether imputation explains the residuals. Read the latest apparatus entries and quantify how much deployment predictions depend on the reference-panel convention before choosing the chamber transform.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "21f618c93d59d56b0656ce28f9e59031538d7ea16c8a3cf1c575f5c07b137bfb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27016.3,
+      "usage_known": true,
+      "prompt_tokens": 30163,
+      "cached_tokens": 9344,
+      "completion_tokens": 894
+    }
+  ]
+}

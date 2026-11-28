@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1086e39848a74271bb7980b9871c3c8f",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:16:42.608534+00:00",
+  "ended_at_utc": "2026-11-28T04:17:22.269508+00:00",
+  "request_sha256": "cf65c3e859a94ac8acc9ed7fb2e963a630626e21c35fb10456901a0ccea43566",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33676,
+    "cached_tokens": 9344,
+    "completion_tokens": 1648
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nsw = s['sensor_calibration_sweeps']; X = sw['ref_rosette']; Y = sw['raw_rosette']\\n\\ndef design(x,j,extra):\\n    a = m['_design'](x,j)\\n    if not extra:\\n        return a\\n    q,n,p,o = (x[:,(j+k)%4] for k in (0,1,-1,2))\\n    return np.column_stack((a,o,q*q,n*n,p*p,o*o,q*p,q*o,n*p,n*o,p*o,\\n                            (n-p)/(1+0.25*q*q),q/(1+q*q),o/(1+o*o)))\\n\\nerr = np.empty((2,len(X),4))\\nfor fold in range(5):\\n    test = np.arange(len(X))%5 == fold\\n    train = ~test\\n    coef = m['_fit_calibration'](X[train],Y[train])\\n    base_train = m['_forward'](X[train],coef)\\n    err[0,test] = Y[test]-m['_forward'](X[test],coef)\\n    train_error = np.max(abs(Y[train]-base_train),axis=1)\\n    good = train_error < 10*np.median(train_error)\\n    xt,yt = X[train][good],Y[train][good]\\n    for j in range(4):\\n        a = design(xt,j,True)\\n        b = np.linalg.lstsq(a,yt[:,j],rcond=None)[0]\\n        err[1,test,j] = Y[test,j]-design(X[test],j,True)@b\\n# Report a robust metric on all held-out sweeps, including injected offsets.\\nfor label,r in zip(('cyclic cubic','extended pairwise/rational'),err):\\n    print(label,'worst held-out bank median absolute error',np.median(abs(r),axis=0).max(), 'worst bank 80th percentile',np.quantile(abs(r),.8,axis=0).max())\\ncoef = m['_fit_calibration'](X,Y)\\nb = sw['single_bank_sweeps']; j = b['bank_id'].astype(int); q = np.zeros((len(j),4)); q[np.arange(len(j)),j] = b['ref_signal']\\nr = b['raw_readout']-m['_forward'](q,coef)[np.arange(len(j)),j]\\nprint('independent single-bank median absolute errors', [float(np.median(abs(r[j==i]))) for i in range(4)])\\nS,U = m['_transport'](s); Z = s['Z_nuisance']; y = m['_calibrate'](s)\\nP = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA = S-Z@(P@S); r = y-Z@(P@y); ridge = s['source_ridge']; cap = s['u_box']\\nH = A.T@A+ridge*np.eye(S.shape[1]); c = -A.T@r\\nout = m['solve_batch'](s); k = out['kkt_certificate']; n = len(c)\\nfor budget in (0,cap/100,cap,s['total_budget'],(n-1)*cap,(n-.01)*cap,n*cap):\\n    if budget == s['total_budget']:\\n        w,nu = out['weights'],k['nu_sum']\\n    else:\\n        w,nu = m['_box_simplex'](H,c,cap,budget)\\n    res = A@w-r; g = A.T@res+ridge*w; d = g-nu\\n    J = .5*(res@res+ridge*(w@w)); gap = g@w-nu*budget-cap*np.minimum(0,d).sum()\\n    feas = max(abs(w.sum()-budget),-w.min(),w.max()-cap)\\n    comp = max(np.max(abs(np.maximum(0,d)*w)),np.max(abs(np.maximum(0,-d)*(cap-w))))\\n    print('budget',budget,'feasibility',feas,'complementarity',comp,'gap',gap)\\n    assert max(feas,comp,abs(gap)) < 1e-8\\n    if budget == s['total_budget']:\\n        for a,b in ((k['weights'],w),(k['lam_lower'],np.maximum(0,d)),(k['lam_upper'],np.maximum(0,-d)),(k['primal_objective'],J),(k['dual_lower_bound'],J-gap),(out['terminal_field'],np.einsum('m,mij->ij',w,U))):\\n            np.testing.assert_allclose(a,b,rtol=1e-9,atol=1e-10)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fitted wall couplings -> H2 exact periodic-x and reflecting-y stencils; worst tracer-shift RMSE is 1.92e-6 and host-measured relative field error is 4.35e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add pairwise or rational sensor terms\",\"rejected_reason\":\"Promote extra terms only if held-out sweep errors reveal a reproducible calibration improvement.\"},{\"option\":\"Apply classification or relay stress tests\",\"rejected_reason\":\"This study has continuous tracer measurements and an explicit nuisance design, not cohort labels or a relay state.\"}],\"rationale\":\"Check held-out sweep errors for missing calibration terms and use the public nuisance-projected Hessian to test whether active bounds or near-endpoint budgets break the certificate. Recompute each certificate component independently from the saved solver output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "0cb67971488b160eeb64317c59bf3301b5fb8375662d1d6dc1194f7f461886f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41810.36,
+      "usage_known": true,
+      "prompt_tokens": 33676,
+      "cached_tokens": 9344,
+      "completion_tokens": 1648
+    }
+  ]
+}

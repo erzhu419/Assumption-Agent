@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bdf616e8d1f8473b967ab78ad15654c7",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:49.377792+00:00",
+  "ended_at_utc": "2026-11-28T03:41:18.434699+00:00",
+  "request_sha256": "19d27cb6df64b84201bf45931c5618fa13471def8c14047381b5f7f7ef22dc23",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40265,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26155,
+    "cached_tokens": 0,
+    "completion_tokens": 1143
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _fit_bridge,_forward,_inverse,calibrate_upstream\\nfrom batch_solver import solve_batch\\nitems=pickle.load(open('public_batch.pkl','rb'))\\nfor item in items:\\n d=item['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; b=_fit_bridge(c)\\n print('coefficients',np.round(b,6)); err=np.max(np.abs(_forward(x,b)-y),axis=1); print('bridge spike rows',np.flatnonzero(err>1).tolist())\\n axis=np.count_nonzero(x,axis=1)<=1\\n for label,idx in [('axis',np.where(axis & (err<1))[0]),('mixed',np.where(~axis & (err<1))[0]),('mixed boundary',np.where(~axis & (err<1) & (np.max(np.abs(x),axis=1)>1.4))[0])]:\\n  es=[]; fs=[]\\n  for i in idx:\\n   m=np.arange(len(x))!=i; p=_fit_bridge(dict(c,true_channel_loads=x[m],bridge_raw=y[m])); es.append(np.max(np.abs(_inverse(y[i],p)-x[i]))); fs.append(np.max(np.abs(_forward(x[i:i+1],p)[0]-y[i])))\\n  print(label,len(idx),'held-out inverse max',max(es),'forward max',max(fs)); assert max(es)<0.001\\n labs=s['lab_id']; z=np.eye(4)[labs]*s['true_stress'][:,None]; es=[]\\n for i in range(len(z)):\\n  if abs(_forward(z[i:i+1],b)[0,labs[i]]-s['cmd_stress'][i])>1: continue\\n  m=np.arange(len(z))!=i; p=_fit_bridge(dict(c,single_channel_sweeps={k:v[m] for k,v in s.items()})); es.append(abs(_forward(z[i:i+1],p)[0,labs[i]]-s['cmd_stress'][i]))\\n print('sweep held-out forward max',max(es)); assert max(es)<0.001\\n a=calibrate_upstream(d); dd=dict(d,chamber_verification_trials=d['test']); v=calibrate_upstream(dd); assert calibrate_upstream(dict(d,chamber_verification_trials=None))['chamber_verification_trials'] is None\\n for split in ['train','test','chamber_verification_trials']:\\n  source=dd[split]\\n  for field in ['past_channel_raw','hold_channel_raw']:\\n   raw=source[field].copy(); calibrated=v[split][field]; assert calibrated.shape==raw.shape and np.isfinite(calibrated).all() and np.array_equal(source[field],raw)\\n   e=np.max(abs(_forward(calibrated.reshape(-1,4),b)-raw.reshape(-1,4))); print(split,field,'inverse residual max',e); assert e<1e-9\\n cc=a['calibration_load_cells']; assert np.array_equal(cc['bridge_raw'],x) and not np.shares_memory(cc['bridge_raw'],x); assert np.array_equal(cc['single_channel_sweeps']['cmd_stress'],s['true_stress']) and not np.shares_memory(cc['single_channel_sweeps']['cmd_stress'],s['true_stress'])\\n grid=np.stack(np.meshgrid(*([np.linspace(-1.7,1.7,13)]*4)),axis=-1).reshape(-1,4); roundtrip=np.max(abs(_inverse(_forward(grid,b),b)-grid)); print('calibration-box round-trip max',roundtrip); assert roundtrip<1e-9\\n ans=solve_batch(d); print('composed output',[(k,np.shape(v),bool(np.isfinite(v).all())) for k,v in ans.items()]); assert all(np.isfinite(v).all() for v in ans.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full cubic bridge -> H2 sparse cyclic bridge; public schema passes, and the full cubic's worst clean leave-one-out forward error was 0.000759.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"Held-out mixed and boundary loads test whether the sparse model recovers loads rather than merely fitting bridge readings. The calibration-box and interface checks detect inverse branch errors and missed fields before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "907892b20061d0cfa9a29232f37af81e36687c8773a6791f5c1ccf25101d77f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31175.26,
+      "usage_known": true,
+      "prompt_tokens": 26155,
+      "cached_tokens": 0,
+      "completion_tokens": 1143
+    }
+  ]
+}

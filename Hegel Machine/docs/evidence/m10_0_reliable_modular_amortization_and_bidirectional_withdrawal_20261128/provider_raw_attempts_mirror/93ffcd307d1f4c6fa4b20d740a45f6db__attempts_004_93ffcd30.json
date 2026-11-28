@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93ffcd307d1f4c6fa4b20d740a45f6db",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:35:54.604173+00:00",
+  "ended_at_utc": "2026-11-28T03:36:12.354503+00:00",
+  "request_sha256": "7c69aab24055a35b422bbb9ff40d9bbcdb80daae2bf381ae2f3778dec59d5140",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22060,
+    "cached_tokens": 9344,
+    "completion_tokens": 614
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=120)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; print('bank',[(k,np.shape(v),np.asarray(v).ravel()[:5]) for k,v in b.items()]); print('rosette range',x.min(0),x.max(0),y.min(0),y.max(0)); X=np.c_[np.ones(len(x)),x]; coef=np.linalg.lstsq(X,y,rcond=None)[0]; print('affine',coef); print('affine residual quantiles',np.quantile(abs(X@coef-y),[0,.25,.5,.75,.9,.98,1],axis=0));\\nfor d in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(d['facility_telemetry_trace']); print('idx',d['completed_campaign_index']); print('mu sigma min max',a.mean(0),a.std(0),a.min(0),a.max(0)); print('corr',np.corrcoef(a.T)); print('quartile means',a.reshape(4,6,8).mean(1));\\nprint('aux range',s['aux_manifold_telemetry'].min(0),s['aux_manifold_telemetry'].max(0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS outlier calibration'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 transfer zero wall loss and affine calibration → H2 test wall transfer separately from nonlinear bank calibration; no out-of-fold error measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit wall coefficients directly to raw observations\",\"rejected_reason\":\"Unknown sensor nonlinearities can mimic changes in wall loss.\"}],\"rationale\":\"Bank residuals will show whether affine calibration survives, and compact telemetry moments and correlations will show whether the archive provides a usable wall constraint.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b84ea79722c848308f0548e88be8297661b62506c19f056a24b97d2872a256d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19839.73,
+      "usage_known": true,
+      "prompt_tokens": 22060,
+      "cached_tokens": 9344,
+      "completion_tokens": 614
+    }
+  ]
+}

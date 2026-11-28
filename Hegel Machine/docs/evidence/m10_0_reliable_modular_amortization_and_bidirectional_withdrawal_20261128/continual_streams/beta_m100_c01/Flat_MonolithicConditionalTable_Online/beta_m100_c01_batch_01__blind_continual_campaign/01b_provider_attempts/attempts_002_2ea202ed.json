@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2ea202ede4d64cabbf3089aa954315a4",
+  "call_seq": 2,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:29.988383+00:00",
+  "ended_at_utc": "2026-11-28T03:30:48.246914+00:00",
+  "request_sha256": "f840c4eef1798495af9ac2169cdcec1f828e3892e89f7e0d45abb3b614125297",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 14944,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16493,
+    "cached_tokens": 9344,
+    "completion_tokens": 559
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat validate_public_schema.py; ls -l /tmp/hegel_continual_archive; python3 - <<'PY'\\nimport json, pathlib, pickle, numpy as np\\np=pathlib.Path('/tmp/hegel_continual_archive')\\nfor f in p.glob('*.json'):\\n d=json.loads(f.read_text()); print(f.name, str(d)[:3000])\\na=pickle.load(open('public_batch.pkl','rb'))[0]; s=a['study']['sensor_calibration_sweeps']; print('sweep subkeys:', {k:(np.shape(v),str(v)[:350]) for k,v in s['single_bank_sweeps'].items()}); x=s['ref_rosette']; y=s['raw_rosette']; D=np.c_[np.ones(len(x)),x]; C=np.linalg.lstsq(D[:55],y[:55],rcond=None)[0]; print('affine C:',C,'test RMSE',np.sqrt(np.mean((D[55:]@C-y[55:])**2,axis=0))); print('reference bounds',x.min(0),x.max(0)); print('pulse weights/raw max',[(d['w_pulse'],np.max(np.abs(d['y_pulse_raw']))) for d in a['campaign_diagnostics']]); print('telemetry first rows',a['study']['aux_manifold_telemetry'][:4])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -18\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open-wall and affine rosette) -> H2 (pulse-validated wall and calibrated rosette); no held-out residual measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Assume the sensor channels are independent\",\"rejected_reason\":\"A held-out affine fit can test both channel coupling and whether affine calibration is sufficient.\"}],\"rationale\":\"A held-out calibration error would trigger a nonlinear calibration fit before tracer pulses are used to distinguish boundary operators. Read the validator and bounded archive summaries to identify the required schema and any documented wall model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "af01c65a1656b9f1c1d0df3d6dbcfe5d5621f6fab787b7e2d42b981a4e225bd9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18209.76,
+      "usage_known": true,
+      "prompt_tokens": 16493,
+      "cached_tokens": 9344,
+      "completion_tokens": 559
+    }
+  ]
+}

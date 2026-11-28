@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7a12f033212a44c29caebdd855a21e63",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:37.571714+00:00",
+  "ended_at_utc": "2026-11-28T03:51:04.995640+00:00",
+  "request_sha256": "1e21e13f972ac354fac1d4a1c364c0ca49f3aafb3b25ff06ad96ab0ff98036c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48046,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26416,
+    "cached_tokens": 9344,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/verify_batch04.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\np = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd = p['dataset']; tr, te = d['train'], d['test']; dt, times = d['past_dt'], d['eval_times']\\nx, xt = m._features(tr, te)\\ncal = d['calibration_load_cells']; b, keep = m._fit_bridge(cal['bridge_raw'], cal['true_channel_loads'])\\nprint('bridge rejected rows:', np.flatnonzero(~keep))\\nh, s, f = m._calibrated_inputs(tr, x, b)\\ny, r = tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']\\nfull = m.solve_batch(d); tau, theta = full['estimated_taus'], full['hereditary_weights']\\nprint('full taus, theta:', tau, theta)\\nassert set(full) == {'estimated_taus', 'hereditary_weights', 'predicted_strain', 'initial_rate_pred'}\\nassert full['predicted_strain'].shape == (len(xt), len(times)) and full['initial_rate_pred'].shape == (len(xt),)\\nassert all(np.isfinite(a).all() for a in full.values()) and .05 < tau[0] < tau[1] < 25\\nfor lab in np.unique(tr['lab_id']):\\n    v = tr['lab_id'] == lab; j = ~v\\n    t, w = m._fit(h[j], s[j], f[j], dt, times, y[j], r[j])\\n    c, a = m._design(t, h[v], s[v], f[v], dt, times)\\n    e, er = np.abs(c@w-y[v]), np.abs(a@w-r[v])\\n    print('held-out lab', lab, 'taus', t, 'strain abs p50/p90', np.quantile(e, [.5,.9]), 'rate abs p50/p90', np.quantile(er,[.5,.9]))\\n_, sh, ff = m._calibrated_inputs(te, xt, b)\\neps = 1e-6\\nzero, _ = m._predict_chamber(tau, theta, sh, ff, np.array([0.0, eps]), m._CHAMBER_PROJECTION)\\nassert np.max(np.abs(zero[:, 0])) < 1e-12\\nerr = np.max(np.abs(zero[:, 1] / eps - full['initial_rate_pred']))\\nprint('chamber initial-rate derivative max error:', err)\\nassert err < 1e-5\\n\\ndef walk(item):\\n    if isinstance(item, dict):\\n        if 'facility_telemetry_trace' in item:\\n            a = np.asarray(item['facility_telemetry_trace']); print('trace', {k:v for k,v in item.items() if not isinstance(v,(dict,list))}, 'medians', np.median(a, axis=0).round(4))\\n        for k,v in item.items():\\n            if k != 'facility_telemetry_trace': walk(v)\\n    elif isinstance(item, list):\\n        for v in item: walk(v)\\nwalk(json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge and benchtop transfer → H2 nonlinear bridge and telemetry-selected chamber projection; worst held-out clean calibration residual is about 4×10⁻⁴ raw units, and the public schema passes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[],\"rationale\":\"Leave one lab out to detect an unstable material fit, verify the chamber rate as the derivative of strain at entry, and check the chronological trace match. These checks can change the material estimator or chamber selection; they cannot establish blind chamber accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7f23c766322f80ea335a35ab7f2a02df8bf687fc7ee57dcb3da99b3c5023c2da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29509.53,
+      "usage_known": true,
+      "prompt_tokens": 26416,
+      "cached_tokens": 9344,
+      "completion_tokens": 1065
+    }
+  ]
+}

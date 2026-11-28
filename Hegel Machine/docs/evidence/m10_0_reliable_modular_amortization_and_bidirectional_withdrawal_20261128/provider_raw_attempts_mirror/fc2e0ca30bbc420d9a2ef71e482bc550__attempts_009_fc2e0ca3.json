@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc2e0ca30bbc420d9a2ef71e482bc550",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:44.080862+00:00",
+  "ended_at_utc": "2026-11-28T04:03:21.759392+00:00",
+  "request_sha256": "dbad5a40f1c17e2aab9393f3b369d00016244134ac04e4ec0085dc6ad1dc3636",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55856,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30068,
+    "cached_tokens": 9344,
+    "completion_tokens": 1539
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_grammar.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom numpy.polynomial.chebyshev import chebvander\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; L=c['true_channel_loads']; R=c['bridge_raw']; s=c['single_channel_sweeps']; sl=s['true_stress']; sr=s['cmd_stress']; ch=s['lab_id']; good=(abs(R).max(1)<4); sg=(abs(sr)<4); n=len(L)\\ndef setup(j,m,sm):\\n a=L[m,j]; b=L[m,(j+2)%4]; z=sm&(ch==j); return np.r_[a,sl[z]],np.r_[b,np.zeros(z.sum())],np.r_[R[m,j],sr[z]]\\ndef basis(a,b,k,l,inter):\\n U=chebvander(a/1.7,k); V=chebvander(b/1.7,l); A=np.c_[U,V[:,1:]]\\n if inter: A=np.c_[A,*[U[:,i]*V[:,j] for i in range(1,inter+1) for j in range(1,inter+1)]]\\n return A\\ndef report(tag,errs):\\n e=np.concatenate(errs); print(tag,'rms',np.sqrt(np.mean(e**2)).round(6),'abs q',np.quantile(abs(e),[.5,.9,.99,1]).round(6))\\nfold=np.arange(n)%5; mixed=np.count_nonzero(L,axis=1)==4\\nfor k,l,inter in [(7,3,0),(9,4,0),(11,5,0),(9,4,1),(9,4,2),(11,5,2)]:\\n errs=[]\\n for f in range(5):\\n  test=good&mixed&(fold==f)\\n  for j in range(4):\\n   a,b,y=setup(j,good&~test,sg); q=np.linalg.lstsq(basis(a,b,k,l,inter),y,rcond=None)[0]; errs.append(basis(L[test,j],L[test,(j+2)%4],k,l,inter)@q-R[test,j])\\n report((k,l,inter),errs)\\nfor spec in ['tanh','arctan','rational','sin','tanh+rational','tanh+sin','tanh+poly']:\\n def phi(x,p):\\n  w=np.exp(p[0]); funcs={'tanh':lambda:np.tanh(w*x),'arctan':lambda:np.arctan(w*x),'rational':lambda:x/(1+(w*x)**2),'sin':lambda:np.sin(w*x)}\\n  if spec in funcs: return np.c_[x,funcs[spec]()]\\n  extra={'tanh+rational':lambda:x/(1+(np.exp(p[1])*x)**2),'tanh+sin':lambda:np.sin(np.exp(p[1])*x),'tanh+poly':lambda:x**3}\\n  return np.c_[x,np.tanh(w*x),extra[spec]()]\\n def design(a,b,p): return np.c_[np.ones(len(a)),phi(a,p),chebvander(b/1.7,5)[:,1:]]\\n errs=[]; params=[]\\n for f in range(5):\\n  test=good&mixed&(fold==f); data=[setup(j,good&~test,sg) for j in range(4)]\\n  def profile(p,mode=False):\\n   res=[]\\n   for a,b,y in data:\\n    A=design(a,b,p); q=np.linalg.lstsq(A,y,rcond=None)[0]; res.append(q if mode else A@q-y)\\n   return res if mode else np.concatenate(res)\\n  opts=[least_squares(profile,p,bounds=(-3,2),max_nfev=100) for p in ([[-.1],[.6],[1.1]] if spec.count('+')==0 or spec.endswith('poly') else [[a,b] for a in [-.1,.6,1.1] for b in [-.5,.5,1.]] )]; p=min(opts,key=lambda r:r.cost).x; params.append(np.exp(p));\\n  for j,q in enumerate(profile(p,True)): errs.append(design(L[test,j],L[test,(j+2)%4],p)@q-R[test,j])\\n report(spec,errs); print('  shape',np.round(params,4))\\nfor name in ['train','test']:\\n d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'][name]; a=np.vstack([d['hold_channel_raw'],d['past_channel_raw'].reshape(-1,4)]); print(name,'specimen raw ranges',a.min(0),a.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_grammar.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited bridge grammars -> H2 saturating own-channel response with opposite-channel leakage; inherited worst-fold total-load p80 error is 3.065.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit unrestricted multichannel interactions\",\n      \"rejected_reason\": \"Clean isolated sweeps show only opposite-channel leakage; held-out mixed sweeps can tell whether interactions between those pairs are needed.\"\n    }\n  ],\n  \"rationale\": \"Compare saturating and rational response laws on identical clean mixed-load folds. If residuals remain above the isolated-sweep noise floor, test whether own–opposite interactions explain the difference before choosing the bridge inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cfbae2e64692121535b550a6b618bb689f149ee4f6d998164d806ea2ec794bd1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39679.14,
+      "usage_known": true,
+      "prompt_tokens": 30068,
+      "cached_tokens": 9344,
+      "completion_tokens": 1539
+    }
+  ]
+}

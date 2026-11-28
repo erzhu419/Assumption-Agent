@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d88a75aecb34409f98dc53274e54aae5",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:13:03.228361+00:00",
+  "ended_at_utc": "2026-11-28T04:13:25.376287+00:00",
+  "request_sha256": "bef7d8527a86d7c202f9b197709bed959d7f50e6cedaa0234160cd105fdcee66",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33092,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22811,
+    "cached_tokens": 9344,
+    "completion_tokens": 839
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ==== \\\"$f\\\"; awk '/^def _box_simplex/{exit} /^def |^    .*main|^    .*return |^    .*boundary|^    .*wrap|^    .*leak|^    .*offset|^    .*bank|^    .*clip/{print}' \\\"$f\\\"; done; mkdir -p /tmp/chamber; cat > /tmp/chamber/compare.py <<'PY'\\nimport pathlib,inspect,pickle,sys\\nimport numpy as np\\nD=pathlib.Path('/tmp/hegel_continual_archive')\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=it['study']; pulses=it['campaign_diagnostics']; w=np.array([p['w_pulse'] for p in pulses]); y=np.array([p['y_pulse_raw'] for p in pulses]); Z=s['Z_nuisance']; ij=s['sensor_ij']; xx=np.tile(ij[:,0],len(s['mu_shifts'])); yy=np.tile(ij[:,1],len(s['mu_shifts'])); wall=(xx==0)|(xx==s['nx']-1)|(yy==0)|(yy==s['ny']-1)\\ncal={}; operators={}\\nfor f in sorted(D.glob('*solver.py')):\\n m={}; exec(compile(f.read_text(),str(f),'exec'),m); name=f.stem.replace('beta_m100_c01_','').replace('_solver',''); c=m['_calibrate']; t=m['_transport'];\\n try:\\n  operators[name]=t(s)[0]; cal[name]=np.array([c(dict(s,y_obs_raw=r),r) if len(inspect.signature(c).parameters)>1 else c(dict(s,y_obs_raw=r)) for r in y]); sw=s['sensor_calibration_sweeps']; fake=dict(s,y_obs_raw=sw['raw_rosette'].ravel()); a=c(fake,fake['y_obs_raw']) if len(inspect.signature(c).parameters)>1 else c(fake); print(name,'sweep inverse RMSE',np.std(a-sw['ref_rosette'].ravel()))\\n except Exception as e: print(name,repr(e))\\nfor cn,obs in cal.items():\\n for tn,S in operators.items():\\n  r=obs-w@S.T; q=r-np.linalg.lstsq(Z,r.T,rcond=None)[0].T@Z.T\\n  print(cn,tn,'direct',np.round(np.sqrt(np.mean(r*r,axis=1)),5),'nuisance',np.round(np.sqrt(np.mean(q*q,axis=1)),5),'wall/core',round(np.sqrt(np.mean(q[:,wall]**2)),5),round(np.sqrt(np.mean(q[:,~wall]**2)),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber/compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall and affine rosette -> H2 independently selected archived boundary and rosette models; pulse residuals are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the most recent archived solver unchanged\",\"rejected_reason\":\"Crossing calibration and boundary candidates can identify which components transfer without assuming the whole prior campaign repeats.\"}],\"rationale\":\"Compare all archived component pairings on each known-input pulse, both before and after nuisance removal. The wall and interior residuals will show whether a boundary mismatch remains after calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e3ec7bd3962c7244ee8a61b1be9aec86b8670e19e6cb4a0f246904a7c927b7a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24283.25,
+      "usage_known": true,
+      "prompt_tokens": 22811,
+      "cached_tokens": 9344,
+      "completion_tokens": 839
+    }
+  ]
+}

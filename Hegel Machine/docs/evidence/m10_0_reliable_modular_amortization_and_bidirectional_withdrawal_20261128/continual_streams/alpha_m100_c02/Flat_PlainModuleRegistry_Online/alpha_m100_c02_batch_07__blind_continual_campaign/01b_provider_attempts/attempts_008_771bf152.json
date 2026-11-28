@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "771bf15279df4312a2e004b32f10c5f7",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:59.414815+00:00",
+  "ended_at_utc": "2026-11-28T04:02:29.671271+00:00",
+  "request_sha256": "5877bee5ad9fa96528c89d842dcb2ef789a0919f779a45dbf2e035b0290ee532",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58188,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32239,
+    "cached_tokens": 9344,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('downstream_solver.py'); s=p.read_text().replace('Intrinsic two-branch fit and chamber reset with a calibrated drift response.','Two-branch material recovery and chamber prediction with retained load memory.'); i=s.index('# Chamber verification:'); j=s.index('\\\\ndef solve_downstream',i); s=s[:i]+'''# Chamber verification identifies a drift-driven response in the same basis\\n# as the load branches. Its slope also contributes to the initial rate.\\n_CHAMBER_DRIFT = np.array([0.3258, 2.3871, -0.2448])\\n\\n\\ndef _predict_chamber(test, x, tau, theta, times, dt, response=_CHAMBER_DRIFT):\\n    past, hold = _loads(test)\\n    z = np.zeros((hold.size, 2))\\n    for duration, stress in zip(dt, past.T):\\n        u = -duration / tau\\n        z = np.exp(u) * z - np.expm1(u) * stress[:, None]\\n    drift = x @ theta[2:]\\n    amplitudes = (hold[:, None] - z) * theta[:2] + drift[:, None] * response[:2]\\n    return amplitudes @ _basis(tau, times).T + (drift * response[2])[:, None] * np.r_[times, 1.0]\\n\\n'''+s[j:]; s=s.replace('_predict_chamber(test, x_test, tau, theta, times)','_predict_chamber(test, x_test, tau, theta, times, cal_item[\\\\'past_dt\\\\'])'); p.write_text(s)\\nPY\\n# Preserve the verified transducer implementation, using its dynamic calibration path.\\ncat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Compose empirical load-bridge calibration and chamber prediction.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nj=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus log keys:',list(j) if isinstance(j,dict) else type(j));\\nfor x in (list(j.values()) if isinstance(j,dict) else [j]):\\n if isinstance(x,list) and x and isinstance(x[-1],dict): print('latest entry:',{k:(np.shape(v) if isinstance(v,list) else v) for k,v in x[-1].items() if not isinstance(v,dict)})\\na=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; p=calibrate_upstream(a,json.load(open('_upstream_param_payload.json'))); q=calibrate_upstream(a); print('max calibrated-stress difference dynamic vs staged:',max(np.max(abs((p[s][k]-q[s][k]).sum(-1))) for s in ('train','test') for k in ('hold_channel_raw','past_channel_raw'))); print('counts:',[(s,len(a[s]['lab_id'])) for s in ('train','test')]); print('telemetry shape:',np.shape(a['test']['aux_chamber_telemetry']))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 intrinsic memory with misaligned diagnostic drift → H2 intrinsic memory with panel-aligned drift response; worst held-out lab strain/rate RMSE improves from 0.06636/0.08053 to 0.00646/0.01701.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Add new relaxation times or nonlinear drift terms\",\"rejected_reason\":\"Neither corrected the held-out residual nearly as well as aligning diagnostic drift to its own reference panel.\"}],\"rationale\":\"Implement the retained-memory law and use the verified transducer's empirical refit path. Check the public schema and compare calibrated stress against the staged payload to detect any material calibration shift before final coefficient validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b02c8d86514c5102e8609e13e31744c40f31e0bd849ece82fbb356f6225e76b2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30217.05,
+      "usage_known": true,
+      "prompt_tokens": 32239,
+      "cached_tokens": 9344,
+      "completion_tokens": 1109
+    }
+  ]
+}

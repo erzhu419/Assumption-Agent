@@ -1,0 +1,125 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m100_c03_batch_03_cb1b6a03d498",
+    "source_hash": "cb1b6a03d4989b1fe1b2f9bb6746379caf75d3e28dfc5ba77d4dc15acb7411a3",
+    "parent_ids": [],
+    "source_episode_id": "beta_m100_c03_batch_03__blind_continual_campaign",
+    "task_id": "beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_rosette.py",
+        "archived_relpath": "producers/tmp__audit_rosette.py",
+        "bytes": 3287,
+        "sha256": "da5e85e02ba76454b22f42ead1780948358152a233412fbfe0d942247bf5392d"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_batch_01_solver.py",
+        "bytes": 5090,
+        "sha256": "d0e96b2519f155f1bb50732d7daf738e6a931304345f53999a4bb0532a6406cd"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_batch_02_solver.py",
+        "bytes": 4916,
+        "sha256": "7c6453e3af7e13ff76f36ec3ce841f14e5b6657960cd735a9f3318d01bae0d50"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m100_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m100_c03_s00_solver.py",
+        "bytes": 5061,
+        "sha256": "748d773f919c3fbe75c289df99c4ace1e0b88406ed7db4bb0dfd0d391e895e9c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat batch_solver.py validate_public_schema.py _verified_downstream.py && cat public_asset_index.json && ls -l /tmp/hegel_continual_archive && python3 - <<'PY'\nimport json, pickle, numpy as np\nfor name in ('pre_llm_gate_diagnostic','archive_manifest','archive_apparatus_log'):\n p=f'/tmp/hegel_continual_archive/{name}.json'\n try:\n  x=json.load(open(p)); print(name, str(x)[:2200])\n except OSError as e: print(e)\ndef walk(x,d=0):\n if isinstance(x,dict) and d<4:\n  for k,v in x.items(): print('  '*d,k); walk(v,d+1)\n elif isinstance(x,np.ndarray): print('  '*d,x.shape,x.dty",
+      "cd /holdout_task && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np,json\nfrom scipy.stats import median_abs_deviation\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=4,suppress=True,linewidth=135)\nprint('keys',s.keys(),c.keys()); print('obs range',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0)); print('banks',s['row_bank_id'].reshape(-1,4)[:5]); print('pulses',[(type(p),list(p) if isinstance(p,dict) else p) for p in s.get('referenc",
+      "cd /holdout_task && grep -nEi 'calibr|rosette|tanh|pulse|bank' /tmp/hegel_continual_archive/*solver.py | head -65 && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x); bank=c['single_bank_sweeps']; print('bank sample',np.c_[bank['bank_id'],bank['ref_signal'],bank['raw_readout']][:12]);print('pulse key',s.get('reference_tracer_pulses')); print('axis rows',np.where(np.count_nonzero(x,axis=1)==1)[0]); np.set_printoptions(precision=7,suppress=True)\nfor name,phi in [",
+      "cd /holdout_task && sed -n '1,65p' /tmp/hegel_continual_archive/beta_m100_c03_batch_01_solver.py && sed -n '50,150p' _verified_downstream.py && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x); pairs=np.tril_indices(4,-1)\ndef design(x, sparse=False):\n p=np.c_[np.ones(len(x)),x,x**3,x[:,pairs[0]]*x[:,pairs[1]]]\n if not sparse:return [p]*4\n return [p[:,[0,1+j,1+(j-1)%4,1+(j+1)%4,5+j,9+list(zip(*pairs)).index(tuple(sorted(((j-1)%4,(j+1)%4),reverse=True)))]] for j ",
+      "cd /holdout_task && cat > upstream_transducer.py <<'PY'\n\"\"\"Robust four-channel rosette calibration in reference coordinates.\"\"\"\n\nimport numpy as np\n\n\n_I, _J = np.tril_indices(4, -1)\n\n\ndef _features(x):\n    return np.column_stack((np.ones(len(x)), x, x**3, x[:, _I] * x[:, _J]))\n\n\ndef _fit(ref, raw):\n    design = _features(ref)\n    weight = np.ones(len(ref))\n    # Score complete rows: EMI in one channel can contaminate the whole sweep.\n    for _ in range(20):\n        coef = np.linalg.lstsq(design * weight[:, None], raw * weight[:, None], rcond=None)[0]\n        error = np.linalg.norm(raw - design",
+      "set -e\ncd /holdout_task\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\npython3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import calibrate_upstream, _fit, _features\nfrom batch_solver import solve_batch\nfrom _verified_downstream import solve_downstream\nbatch = pickle.load(open('public_batch.pkl', 'rb'))\nworst_pulse = worst_weights = worst_field = worst_gap = 0.\nfor item in batch:\n    s = item['study']\n    c = s['sensor_calibration_sweeps']; bank = c['single_bank_sweeps']\n    x = c['ref_rosette']; ",
+      "set -e\ncd /holdout_task\ncat > /tmp/audit_rosette.py <<'PY'\nimport json\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit, _features, _invert, _jacobian\n\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\nc = s['sensor_calibration_sweeps']\nx, y = c['ref_rosette'], c['raw_rosette']\nn = len(x)\ni, j = np.tril_indices(4, -1)\naxis = np.count_nonzero(x, axis=1) == 1\norder = np.argsort(np.argsort(np.linalg.norm(x, axis=1)))\nsplits = dict(interleaved=(np.arange(n) % 5, range(5)), amplitude=(order * 5 // n, range(5)), axis=(axis",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nimport json, pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom batch_solver import solve_batch\nfrom upstream_transducer import calibrate_upstream\n\nbatch = pickle.load(open('public_batch.pkl', 'rb'))\nworst = np.zeros(3)\nfor item in batch:\n    study = item['study']\n    sweep = study['sensor_calibration_sweeps']\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\n    nominal = solve_batch(study)\n    n = len(x)\n    amp = np.argsort(np.argsort(np.linalg.norm(x, axis=1))) * 5 // n\n    order = np.arange(n) * 5 // n\n    axis = np.coun"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__beta_m100_c03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/beta_m100_c03_batch_01_solver.py",
+      "selected_channels": [
+        "m100_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 2903,
+        "sha256": "5d28962704c2a85610355f5fef5ef855c57f43fdc42b806da4f27eff1029a579",
+        "content_addressed_ref": "content_addressed_blobs/5d28962704c2a85610355f5fef5ef855c57f43fdc42b806da4f27eff1029a579.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "cb1b6a03d4989b1fe1b2f9bb6746379caf75d3e28dfc5ba77d4dc15acb7411a3",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nimport json, pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom batch_solver import solve_batch\nfrom upstream_transducer import calibrate_upstream\n\nbatch = pickle.load(open('p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "cb1b6a03d4989b1fe1b2f9bb6746379caf75d3e28dfc5ba77d4dc15acb7411a3",
+        "expected_candidate_sha256": "cb1b6a03d4989b1fe1b2f9bb6746379caf75d3e28dfc5ba77d4dc15acb7411a3",
+        "computed_candidate_sha256": "cb1b6a03d4989b1fe1b2f9bb6746379caf75d3e28dfc5ba77d4dc15acb7411a3",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 2903
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_cb1b6a03"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "12bc6641421a49dca12c54866866ab05",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:39.693925+00:00",
+  "ended_at_utc": "2026-11-28T03:55:19.692148+00:00",
+  "request_sha256": "d012585e013b065808303c01cc4c0ecd68a338fae808d4d0e14b16eacf430d96",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30475,
+    "cached_tokens": 9344,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_compact.py <<'PY'\\nfrom bridge_probe import D,X,Y,N\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nS=D['calibration_load_cells']['single_channel_sweeps']; lab=S['lab_id']; sx=S['true_stress']; sy=S['cmd_stress']; P=[2,3,0,1]\\nclean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<8; sc=abs(sy-np.median(sy))<8\\nforms={'cos':lambda v,k:1-np.cos(k*v),'rat':lambda v,k:v*v/(1+k*v*v),'exp':lambda v,k:-np.expm1(-k*v*v),'poly':lambda v,k:v**4}\\ndef design(u,v,z,g,h):\\n a=[np.ones(len(u)),u,np.sin(z[0]*u),v,forms[g](v,z[1])]\\n if g=='poly': a.append(v*v)\\n if h=='cubic': a.append(u**3)\\n if h=='sin3': a.append(np.sin(3*z[0]*u))\\n if h=='inter': a.extend([u*v,u*u*v,u*v*v])\\n return np.array(a).T\\ndef model(m,g,h,robust=False,sm=sc):\\n pred=[]; co=[]; swept=[]\\n for j,p in enumerate(P):\\n  s=sm&(lab==j); u=np.r_[X[m,j],sx[s]]; v=np.r_[X[m,p],np.zeros(s.sum())]; y=np.r_[Y[m,j],sy[s]]; w=np.ones(len(y))\\n  def coeff(z):\\n   a=design(u,v,z,g,h); b=np.linalg.lstsq(a*w[:,None],y*w,rcond=None)[0];return a@b-y,b\\n  start=[2.5,1.6 if g=='cos' else .3]\\n  for _ in range(6 if robust else 1):\\n   z=least_squares(lambda z:coeff(z)[0]*w,start,bounds=([1,.05],[4,3.5]),max_nfev=75).x; e,b=coeff(z); start=z; w=(1+(e/max(.00025,2.5*np.median(abs(e))))**2)**(-.5)\\n  pred.append(design(X[:,j],X[:,p],z,g,h)@b); swept.extend(zip(np.where(s)[0],e[m.sum():])); co.append((z,b))\\n return np.array(pred).T,co,swept\\nif __name__=='__main__':\\n folds=np.random.default_rng(8).permutation(N)%5; edge=np.max(abs(X),axis=1)>=np.quantile(np.max(abs(X),axis=1),.8)\\n for g in forms:\\n  for h in ['none','cubic','sin3','inter']:\\n   pred,co,se=model(clean,g,h,True); e=np.linalg.norm(pred-Y,axis=1); err=np.zeros(N)\\n   for f in range(5):\\n    q=folds==f; pp,_,_=model(clean&~q,g,h,True); err[q]=np.linalg.norm((pp-Y)[q],axis=1)\\n   pp,_,_=model(clean&~edge,g,h,True); ee=np.linalg.norm(pp-Y,axis=1);print(g,h,'fit/OOF/edge p90,max',*[np.round(np.quantile(q,[.9,1]),7).tolist() for q in [e[clean],err[clean],ee[clean&edge]]]);\\n   if h=='none':\\n    print('params',[(np.round(z,5).tolist(),np.round(b,6).tolist()) for z,b in co]); idx=np.where(clean)[0][np.argsort(e[clean])[-4:]]; print('worst rows',idx.tolist(),np.round((pred-Y)[idx],6).tolist(),'worst sweep',sorted(se,key=lambda q:abs(q[1]))[-2:]);\\n for split in ['train','test']:\\n  for k in ['past_channel_raw','hold_channel_raw']:\\n   a=np.asarray(D[split][k]).reshape(-1,4); print(split,k,len(a),a.min(0),a.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic paired polynomial -> H2 compact odd diagonal plus linear/even paired coupling; the best tested model has a clean high-load maximum forward error of 0.0192 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the paired quintic fit\",\n      \"rejected_reason\": \"The paired coefficients suggest an even response plus a linear term; a compact fit would retain that structure without quintic extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Test compact even coupling laws under robust fitting. If the worst residuals persist on the same rows, inspect those measurements rather than adding terms to explain them.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1b11ec804ccc11a5fe235973c977ecb369211ee5c67af89030ea67e3e8a8e705",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42085.72,
+      "usage_known": true,
+      "prompt_tokens": 30475,
+      "cached_tokens": 9344,
+      "completion_tokens": 1425
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "072002f3701c49f49aad4a8cdc29f065",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:14.384036+00:00",
+  "ended_at_utc": "2026-11-28T03:39:37.295608+00:00",
+  "request_sha256": "177cc93e7cf8d61e2e045e0d9794651ceaf50974fef4a6d496d65c8e7ed7a150",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21197,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18668,
+    "cached_tokens": 9344,
+    "completion_tokens": 857
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport itertools as it,json,pickle,numpy as np\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['true_channel_loads']; y=C['bridge_raw']; axis=np.count_nonzero(x,axis=1)<=1\\nnp.set_printoptions(precision=7,suppress=True,linewidth=140)\\nprint('keys',list(D),'axis rows',np.where(axis)[0]); print('first anchors',np.c_[x[:14],y[:14]])\\nfor names in [('1','a','b','c','d'),('1','a','b','c','d','aaa','bbb','ccc','ddd'),tuple(['1']+[''.join(p) for k in range(1,4) for p in it.combinations_with_replacement('abcd',k)])]:\\n A=np.stack([np.prod(x[:,['abcd'.index(c) for c in s]],axis=1) if s!='1' else np.ones(len(x)) for s in names],axis=1)\\n def fit(mask):\\n  z=A[mask]; v=y[mask]; w=np.ones(len(z));\\n  for _ in range(35):\\n   sw=np.sqrt(w); B=np.linalg.lstsq(z*sw[:,None],v*sw[:,None],rcond=None)[0]; r=np.linalg.norm(z@B-v,axis=1); w=1/(1+(r/max(4e-10,0.6*np.median(r)))**2)\\n  return B\\n B=fit(np.ones(len(x),bool)); r=np.linalg.norm(A@B-y,axis=1); err=np.array([np.linalg.norm(A[i]@fit(np.arange(len(x))!=i)-y[i]) for i in range(len(x))]); print('terms',len(names),'rank',np.linalg.matrix_rank(A))\\n for m in (axis,~axis): print('axis?' ,bool(m[0]),'fit',np.quantile(r[m],[0,.5,.8,.9,1]),'LOO',np.quantile(err[m],[0,.5,.8,.9,1]))\\n if len(names)>5:\\n  for s,b in zip(names,B): print(s,b)\\n print('largest',sorted(enumerate(r),key=lambda t:t[1])[-12:])\\nP='/tmp/hegel_continual_archive/'; print('gate',open(P+'pre_llm_gate_diagnostic.json').read()); log=json.load(open(P+'archive_apparatus_log.json')); print('telemetry outline',list(log) if isinstance(log,dict) else [list(r) for r in log]);\\nfor k,v in (log.items() if isinstance(log,dict) else enumerate(log)): print(k,str(v)[-1300:])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge with row spikes -> H2 coupled cubic forward map; axis and mixed-channel leave-one-out errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit four independent inverse curves\",\"rejected_reason\":\"Mixed-channel probes show cross-channel response; independent inverses would assign it to the wrong loads.\"}],\"rationale\":\"Compare affine, diagonal cubic, and full cubic bases on the measured anchors and mixed-channel probes. The held-out residuals will show whether interaction terms improve calibration or merely absorb spikes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "053d1bbee6e743be73905c767225fe71dbeab7d5b1e195ccc13ae8e2df38e978",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25019.37,
+      "usage_known": true,
+      "prompt_tokens": 18668,
+      "cached_tokens": 9344,
+      "completion_tokens": 857
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3f4a57e2f22404a98f264a733951f9d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:00.935588+00:00",
+  "ended_at_utc": "2026-11-28T03:44:28.634192+00:00",
+  "request_sha256": "dfc6344bb234f2ac711e57595bf0448f8ed69de4e05d7133e5b961f73e411a94",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26127,
+    "cached_tokens": 9344,
+    "completion_tokens": 979
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.stats import pearsonr\\nfrom scipy.optimize import least_squares\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; R=c['bridge_raw']; Y=c['true_channel_loads']; s=c['single_channel_sweeps']; print('first paired rows',np.c_[Y,R][:10].round(4)); print('ranges Y,R', Y.min(0),Y.max(0),R.min(0),R.max(0));\\nfor j in np.unique(s['lab_id']):\\n ix=s['lab_id']==j; x=s['true_stress'][ix]; y=s['cmd_stress'][ix]; p=np.polynomial.polynomial.polyfit(x,y,3); print('sweep',j,p,'rms',np.std(np.polynomial.polynomial.polyval(x,p)-y),'rms degree 1/2',[np.std(np.polynomial.polynomial.polyval(x,np.polynomial.polynomial.polyfit(x,y,k))-y) for k in (1,2)])\\ndef cols(a,inds):return np.column_stack([np.prod(a[:,i],axis=1) for i in inds])\\ndef check(A,B,kind):\\n for p in (1,2,3,4,5):\\n  for diag in ([True,False] if 1<p<4 else [True]):\\n   inds=[()]+[i for k in range(1,p+1) for i in combinations_with_replacement(range(4),k) if not diag or len(set(i))==1]; X=cols(A,inds); F=np.linalg.lstsq(X,B,rcond=None)[0]; E=X@F-B; H=np.sum(np.linalg.qr(X,mode='reduced')[0]**2,axis=1); print(kind,p,diag,'rms',np.std(E,0).round(6),'LOO',np.std(E/(1-H[:,None]),0).round(6), 'sum rms/LOO',np.std(E.sum(1)),np.std(E.sum(1)/(1-H))); \\n   if p==3 and diag:print('coef by degree and input',F.round(5))\\ncheck(Y,R,'forward'); check(R,Y,'inverse')\\nfor split in ('train','test'):\\n a=np.concatenate([d[split]['past_channel_raw'].reshape(-1,4),d[split]['hold_channel_raw']]);print(split,'raw range',a.min(0),a.max(0))\\nPY\\npython3 /tmp/bridge_probe.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge inversion -> H2 nonlinear bridge inversion before chamber-law transfer; affine calibration RMS was 0.254 and worst held-out-lab rate MAE was 0.220.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine bridge map is adequate for the current campaign.\",\"empirical_witness\":\"Affine calibration leaves total-load RMS 0.254 and max error 0.832 on calibration rows; the shared relaxation fit drives the slow time constant to 25 in every lab fold.\",\"causal_blanket_diagnosis\":\"Load calibration is upstream of both hereditary memory and the initial-rate fit, so the affine bridge can distort material estimates before any chamber correction is applied.\",\"sublated_pivot\":\"Retain the hereditary equations and test nonlinear forward bridge bases against paired loads and isolated-channel sweeps.\",\"risk_kind\":\"model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change only deployment drift\",\"rejected_reason\":\"It cannot repair the empirically observed calibration error or the boundary-pinned benchtop fit.\"}],\"rationale\":\"Compare low-degree diagonal and interaction terms on calibration jackknifes, and use isolated sweeps to decide which forward mechanism is supported and safe to invert outside densely sampled calibration regions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e9459f2ce8f06b5a096ef9678c5b8a691204def990cca0bc19c589b30ca1c385",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27668.52,
+      "usage_known": true,
+      "prompt_tokens": 26127,
+      "cached_tokens": 9344,
+      "completion_tokens": 979
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f14d53d413f442ed99a79ab4e84562bc",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:36:10.251318+00:00",
+  "ended_at_utc": "2026-11-28T03:36:34.472589+00:00",
+  "request_sha256": "605efd5412b9da2c676e2fa6aafea332991fd93ba102fb7e963439f571c5ebc8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19511,
+    "cached_tokens": 9344,
+    "completion_tokens": 888
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\na=json.load(open(p)); print('log container',type(a).__name__,len(a))\\nfor r in a if isinstance(a,list) else [a]:\\n print('entry')\\n for k,v in r.items():\\n  if isinstance(v,list):\\n   try:\\n    x=np.asarray(v,dtype=float); print(k,x.shape,'first',x[:2].tolist(),'range',(float(x.min()),float(x.max())))\\n   except (TypeError,ValueError): print(k,len(v),str(v[:1])[:250])\\n  else: print(k,str(v)[:450])\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('batch',len(b)); s=b[0]['study']; print('study keys',list(s)); print('boundary and shifts',[(k,v) for k,v in s.items() if k.startswith('rob') or k=='mu_shifts']); print('aux first',s['aux_manifold_telemetry'][:4]); c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; print('single bank keys',list(c['single_bank_sweeps']))\\nfor d in (1,2,3,4,5):\\n from itertools import combinations_with_replacement\\n terms=[()] + [t for j in range(1,d+1) for t in combinations_with_replacement(range(4),j)]\\n if len(terms)>=len(x)//2: break\\n X=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); pred=np.empty_like(y)\\n for test in np.array_split(np.random.default_rng(21).permutation(len(x)),5):\\n  train=np.setdiff1d(np.arange(len(x)),test); pred[test]=X[test]@np.linalg.lstsq(X[train],y[train],rcond=None)[0]\\n C=np.linalg.lstsq(X,y,rcond=None)[0]; print('degree',d,'cv rms',np.sqrt(np.mean((pred-y)**2,axis=0)),'worst',np.max(np.abs(pred-y)), 'terms',[(t,np.round(z,5).tolist()) for t,z in zip(terms,C) if np.max(np.abs(z))>.002])\\nPY\\nsed -n '46,180p' /tmp/hegel_continual_archive/beta_m100_c04_batch_01_solver.py; diff -u /tmp/hegel_continual_archive/beta_m100_c04_s00_solver.py /tmp/hegel_continual_archive/beta_m100_c04_batch_01_solver.py || true\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 carry over closed walls and affine calibration -> H2 test for an apparatus change and nonlinear rosette response; held-out residuals pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the wall operator by the smallest in-sample source-fit residual\",\n      \"rejected_reason\": \"The inferred source weights and nuisance coefficients can absorb wall-model error; use apparatus telemetry and held-out observations to separate them.\"\n    }\n  ],\n  \"rationale\": \"The previous output was truncated before the useful telemetry summaries. Inspect those summaries and compare held-out calibration errors: a repeatable nonlinear residual would change the rosette inverse, while a change in the apparatus log would trigger a separate wall-model comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "7992e7671359592b2f05f07c0c3d03cd69e15dbb31287313054830aa6e5ec778",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26279.42,
+      "usage_known": true,
+      "prompt_tokens": 19511,
+      "cached_tokens": 9344,
+      "completion_tokens": 888
+    }
+  ]
+}

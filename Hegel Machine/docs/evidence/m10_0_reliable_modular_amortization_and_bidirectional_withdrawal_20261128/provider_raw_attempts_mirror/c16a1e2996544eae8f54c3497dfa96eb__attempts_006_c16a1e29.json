@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c16a1e2996544eae8f54c3497dfa96eb",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:22.704872+00:00",
+  "ended_at_utc": "2026-11-28T03:50:47.907282+00:00",
+  "request_sha256": "356e8522636fccd12fc41a240ebceab91841eda3dbeef8795a0eef2e99ae1011",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45932,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27411,
+    "cached_tokens": 9344,
+    "completion_tokens": 976
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat public_asset_index.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,runpy,numpy as np\\nnp.set_printoptions(precision=5,suppress=True)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; print('dataset keys',list(d)); c=d['calibration_load_cells']; y,r=c['true_channel_loads'],c['bridge_raw']; m=runpy.run_path('/tmp/hegel_continual_archive/alpha_m100_c03_batch_03_solver.py'); b=m['_bridge'](c); e=r-m['_bridge_terms'](y)@b\\nbad=np.max(abs(e),axis=1)>.01\\nprint('corrupt rows / total',bad.sum(),len(y)); print('corrupt true and residual',np.c_[y[bad],e[bad]][:20]); print('residual direction',np.linalg.svd(e[bad],full_matrices=False)[2][0]);print('clean decode percentiles',np.quantile(abs(m['_decode'](r[~bad],b).sum(1)-y[~bad].sum(1)),[.5,.9,1]));\\nfor key in ('train','test'):\\n s=d[key]; p,h=m['_loads'](s,b); print(key,'h,p quantiles',np.quantile(h,[0,.1,.5,.9,1]),np.quantile(p,[0,.1,.5,.9,1])); print('channel minima',m['_decode'](s['hold_channel_raw'],b).min(0),m['_decode'](s['past_channel_raw'],b).reshape(-1,4).min(0))\\no=m['solve_batch'](d);s=d['train']; x=m['_features'](s,d['test'])[:len(s['lab_id'])];p,h=m['_loads'](s,b);a,z=m['_design'](o['estimated_taus'],x,p,h,d['past_dt'],d['eval_times']);curve=s['strain_curves_obs']-s['strain_0'][:,None]-a@o['hereditary_weights'];rate=s['instant_rate_obs']-z@o['hereditary_weights']; print('residual abs percentiles curve/rate',np.quantile(abs(curve),[.5,.9,.95,.99,1]),np.quantile(abs(rate),[.5,.9,.95,.99,1])); print('curve outliers by coupon',np.sort(np.sum(abs(curve)>.025,axis=1))[-20:]);print('dt',d['past_dt']);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 sparse mixed-cubic bridge with differential-mode rejection; worst calibration slice LOO raw-sum RMSE fell from 0.48035 to 0.0002165.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or diagonal-cubic bridge suffices for stress calibration.\",\"empirical_witness\":\"The diagonal-cubic model has mixed-sweep LOO raw-sum RMSE 0.414; adding the four paired products reduces it to 0.000188.\",\"causal_blanket_diagnosis\":\"The raw sum cancels the large differential corruption but retains physical channel-mixing terms.\",\"sublated_pivot\":\"Recover the sparse forward bridge from the measured sum and clean channel sweeps, then invert it for operating loads.\",\"risk_kind\":\"calibration bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Invert each calibration row, including differential excursions, as if it were an intact operating measurement\",\"rejected_reason\":\"The worst decoded stress error is 1.887; first determine whether those excursions occur in deployment inputs or are confined to calibration.\"}],\"rationale\":\"Inspect the public metadata for a chamber transfer rule and measure residual geometry to distinguish corrupt calibration rows from operating loads. That distinction determines whether to change the operating decoder or only the calibration fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b893c41e55b01f310578e71d5c6b602ff77211a42d59cf6d2d82400148f761bb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27292.75,
+      "usage_known": true,
+      "prompt_tokens": 27411,
+      "cached_tokens": 9344,
+      "completion_tokens": 976
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "23666b6c9ea94469886d6c0d782bf904",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:17.538713+00:00",
+  "ended_at_utc": "2026-11-28T03:50:49.740414+00:00",
+  "request_sha256": "5c88f55bdb3d2b15ce9b248fa975720ec1803749e44d28bbbe8b04419fe54a99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72356,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36095,
+    "cached_tokens": 9344,
+    "completion_tokens": 1264
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom pathlib import Path\\np='/holdout_task/batch_solver.py'; s=runpy.run_path(p)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=it['dataset']; d=it['campaign_diagnostics']; tr,te=ds['train'],ds['test']; t,dt=ds['eval_times'],ds['past_dt']; n=len(tr['lab_id']); x=s['_features'](tr,te); b=s['_calibrate'](ds['calibration_load_cells']); inp=s['_inputs'](tr,x[:n],b)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=s['solve_batch'](ds); tau,th=out['estimated_taus'],out['hereditary_weights']; assert .05<tau[0]<tau[1]<25; print('material:',tau,th)\\ndef rmse(a): return np.sqrt(np.mean(a*a))\\nfor j in np.unique(tr['lab_id']):\\n m=tr['lab_id']==j; fitted,w=s['_fit'](tuple(z[~m] for z in inp),dt,t,y[~m],r[~m]); a,g=s['_design'](fitted,tuple(z[m] for z in inp),dt,t); e=a@w-y[m]; print('material held-out lab',j,'taus',fitted,'curve median/late median/rate RMSE',np.median(abs(e)),np.median(abs(e[:,-1])),rmse(g@w-r[m]))\\nraw=d['coupon_features_raw']; labs=d['lab_id']; z=np.empty_like(raw)\\nfor j in np.unique(labs):\\n m=labs==j; refs=d['ref_coupons'][m]; z[m]=(raw[m]-np.nanmedian(np.nanmean(refs,axis=0)))/np.nanmedian(np.nanstd(refs,axis=0))\\nmissing=np.isnan(z).any(1); z=np.where(np.isnan(z),np.nanmean(z,axis=0),z); cov=np.c_[np.ones(len(z)),z]; h=s['_stress'](d['hold_channel_raw'],b); yy=d['strain_curves_obs']-d['strain_0'][:,None]; rr=d['instant_rate_obs']; pred,rate=s['_chamber_response'](tau,th,h,cov,t)\\nfor label,m in [('complete',~missing),('missing',missing)]: print('saved law',label,'curve/late/rate RMSE',rmse((pred-yy)[m]),rmse((pred-yy)[m,-1]),rmse((rate-rr)[m]))\\nT=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1])); E=np.c_[yy,rr]-(h[:,None]*th[:2])@T[:,:2].T; drift=cov@th[2:]; fold=np.empty_like(E)\\nfor j in np.unique(labs):\\n m=labs==j; keep=~m&~missing; A=(drift[keep,None,None]*T[None,:,:]).reshape(-1,3); target=E[keep].ravel(); q=least_squares(lambda q:A@q-target,np.linalg.lstsq(A,target,rcond=None)[0],loss='soft_l1',f_scale=.004).x; fold[m]=drift[m,None]*(T@q)-E[m]; print('chamber held-out lab',j,'curve/late/rate RMSE',rmse(fold[m,:-1]),rmse(fold[m,-2]),rmse(fold[m,-1]))\\nassert max(rmse(fold[labs==j,:-1]) for j in np.unique(labs))<.01\\nassert max(rmse(fold[labs==j,-1]) for j in np.unique(labs))<.01\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived reset law → H2 zero-memory reset with campaign-specific drift coupling; worst complete-coupon leave-one-lab-out RMSE is 0.00276 for strain and 0.00263 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema and complete-coupon checks\",\n      \"rejected_reason\": \"Neither check measures whether the chamber law holds on verification coupons with imputed features or whether the material fit transfers across labs.\"\n    }\n  ],\n  \"rationale\": \"The schema and pooled-reference invariance already pass. This check isolates material transfer, imputation, and late-time strain from chamber rate accuracy so any failure points to the component that needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "be006bbd8635bbb9db3d952ae44a199f7f67a15b7514863d4da9af4f41e62949",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34290.83,
+      "usage_known": true,
+      "prompt_tokens": 36095,
+      "cached_tokens": 9344,
+      "completion_tokens": 1264
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aeab0a0736d44846b57cd9bf0d9932fd",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:11.359421+00:00",
+  "ended_at_utc": "2026-11-28T03:45:30.804604+00:00",
+  "request_sha256": "51e275fdc8f639d4cebf980e525cbb27a5a7c887966ceb7bb3d4d2f59d5c08a5",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 19678,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17302,
+    "cached_tokens": 9344,
+    "completion_tokens": 571
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nP=pickle.load(open('public_batch.pkl','rb')); print(type(P),len(P))\\nfor D in P if isinstance(P,list) else [P]:\\n print('top',list(D))\\n for k in ('train','test','chamber_verification_trials','calibration_load_cells'):\\n  v=D.get(k); print(k,type(v),len(v) if v is not None else None)\\n  if isinstance(v,list): v=v[0] if v else None\\n  if isinstance(v,dict):\\n   for a,b in v.items():\\n    if isinstance(b,np.ndarray): print(a,b.shape,np.round(np.nanpercentile(b,[0,50,100]),5) if b.size and b.dtype.kind in 'fiu' else '')\\n    elif isinstance(b,dict): print(a,{i:np.shape(j) for i,j in b.items()})\\n    else: print(a,type(b),str(b)[:120])\\n C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; A=np.c_[np.ones(len(X)),X]; B=np.linalg.lstsq(A,Y,rcond=None)[0]; R=Y-A@B\\n print('affine',B,'resid',np.percentile(np.linalg.norm(R,axis=1),[0,25,50,75,90,95,100])); print('X',X[:8]); print('sweeps',str(C.get('single_channel_sweeps'))[:500])\\nPY\\nsed -n '50,180p' validate_public_schema.py; grep -nE 'bridge_raw|single_channel_sweeps|calibrate_upstream' /tmp/hegel_continual_archive/*.py | cut -c1-200 | head -35\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 coupled nonlinear bridge with row-spike rejection; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Inspect each dataset inside the public list to establish calibration coverage, trial shapes, and residual scale before choosing the forward basis and validation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1b3944f41ed6e6242b1282cb1ab3ef681f12c3b444a9d92a296b49660fe01669",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19401.28,
+      "usage_known": true,
+      "prompt_tokens": 17302,
+      "cached_tokens": 9344,
+      "completion_tokens": 571
+    }
+  ]
+}

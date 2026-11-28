@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e961cdaf97c41d6abc270790b0ff284",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:34.991812+00:00",
+  "ended_at_utc": "2026-11-28T03:56:12.039777+00:00",
+  "request_sha256": "2f8af36714e336242000eeab0f10d1f63a8078eaf961049ae070c9f1b0ee3e30",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60193,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33663,
+    "cached_tokens": 9344,
+    "completion_tokens": 1506
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/compact_cal.py <<'PY'\\nimport pickle,json,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X,Y=a['ref_rosette'],a['raw_rosette']; b=a['single_bank_sweeps']; j=(b['bank_id']==1); t=b['ref_signal'][j]; y=b['raw_readout'][j]; np.set_printoptions(precision=7,suppress=True)\\nmodels={\\n 'rational': (lambda x,p: np.array([x/(1+p[0]*x*x),x**3/(1+p[0]*x*x)]).T,[.6]),\\n 'rational4': (lambda x,p: np.array([x/(1+p[0]*x*x+p[1]*x**4),x**3/(1+p[0]*x*x+p[1]*x**4)]).T,[.6,.05]),\\n 'rational5': (lambda x,p: np.array([x/(1+p[0]*x*x+p[1]*x**4),x**3/(1+p[0]*x*x+p[1]*x**4),x**5/(1+p[0]*x*x+p[1]*x**4)]).T,[.6,.05]),\\n 'power': (lambda x,p: np.array([x/(1+p[0]*x*x)**p[1],x]).T,[.6,1.]),\\n 'powerodd': (lambda x,p: np.array([x/(1+p[0]*x*x)**p[1],x**3/(1+p[0]*x*x)**p[1]]).T,[.6,1.]),\\n 'exp': (lambda x,p: np.array([x*np.exp(-p[0]*x*x),x]).T,[.5]),\\n 'tanh+rat': (lambda x,p: np.array([np.tanh(p[0]*x),x/(1+p[1]*x*x)]).T,[1.,.5]),\\n 'tanh+tan': (lambda x,p: np.array([np.tanh(p[0]*x),np.tanh(p[1]*x)]).T,[1.3,.7]),\\n 'cheby9': (lambda x,p: np.array([x**k for k in (1,3,5,7,9)]).T,[])}\\ndef fit(x,y,f,p):\\n def calc(q,z): return np.c_[np.ones(len(z)),f(z,q)]\\n def resid(q):\\n  A=calc(q,x); return A@np.linalg.lstsq(A,y,rcond=None)[0]-y\\n q=least_squares(resid,p,bounds=(.00001,10),max_nfev=600,gtol=1e-13).x if len(p) else p\\n A=calc(q,x); c=np.linalg.lstsq(A,y,rcond=None)[0]; return lambda z:calc(q,z)@c,q,c\\nfits=[]\\nfor name,(f,p) in models.items():\\n fun,q,c=fit(t,y,f,p); loo=max(abs(float(fit(t[np.arange(len(t))!=i],y[np.arange(len(t))!=i],f,p)[0](t[i:i+1])[0])-y[i]) for i in range(len(t))); print(name,max(abs(fun(t)-y)),loo,q,c); fits.append((loo,name,fun))\\n_,name,fun=min(fits,key=lambda r:r[0]); print('best',name,'single bank residual',fun(t)-y)\\nfor i in range(4):\\n j=(b['bank_id']==i)&(abs(b['raw_readout'])<5); t=b['ref_signal'][j]; v=b['raw_readout'][j]; off,gain=np.linalg.lstsq(np.c_[np.ones(len(t)),fun(t)-fun(np.array([0]))],v,rcond=None)[0]; keep=abs(Y[:,i])<5; x=X[keep]; scale=gain; e=(Y[keep,i]-off)/scale-(fun(x[:,i])-fun(np.array([0]))); o=x[:,(i+2)%4]; ii=np.argsort(o); print('opposite curve',i,'gain',gain,np.c_[o[ii],e[ii]][::5].round(5));\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor r in log:\\n T=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'],T.mean(0).round(3),T.std(0).round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_cal.py\\nsed -n '102,175p' /tmp/hegel_continual_archive/beta_m100_c02_batch_04_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cubic nearest-neighbor calibration → H2: shared bank transfer with nonlinear opposite-channel coupling; provisional worst sensor-block RMSE is 0.05125, measured before recalibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best in-sample tanh-plus-quintic fit\",\n      \"rejected_reason\": \"Its large canceling coefficients make held-out and endpoint errors more informative than its training residual.\"\n    }\n  ],\n  \"rationale\": \"Compare compact quotient and saturation laws on held-out isolated-bank measurements. Then compare normalized opposite-channel residuals across banks to see whether a single coupling law is justified before implementing the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "241f5405402f4c79c2750c9c57cd7a80bbec63f838a4764cbbe39b7b1542903f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39216.94,
+      "usage_known": true,
+      "prompt_tokens": 33663,
+      "cached_tokens": 9344,
+      "completion_tokens": 1506
+    }
+  ]
+}

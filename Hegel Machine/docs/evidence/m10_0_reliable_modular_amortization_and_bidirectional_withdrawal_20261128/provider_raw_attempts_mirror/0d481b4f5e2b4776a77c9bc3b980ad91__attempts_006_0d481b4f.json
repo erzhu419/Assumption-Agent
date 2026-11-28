@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d481b4f5e2b4776a77c9bc3b980ad91",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:16.529733+00:00",
+  "ended_at_utc": "2026-11-28T03:32:51.174207+00:00",
+  "request_sha256": "54f0863f2191f128eb7b0869a60cabcf67a7942feabd5ef4406b824f22eed1be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28396,
+    "cached_tokens": 9344,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/L=np.eye/,$d' /tmp/chamber_probe.py > /tmp/chamber_structure.py\\ncat >> /tmp/chamber_structure.py <<'PY'\\ndef panel_x(p):\\n    raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); labs=np.r_[tr['lab_id'],te['lab_id']]; strata=np.r_[tr['stratum'],te['stratum']]; panel=np.vstack([tr['ref_coupons'],te['ref_coupons']]); z=p['coupon_features_raw'].copy();\\n    for lab in np.unique(labs):\\n        m=labs==lab; means=np.nanmedian(np.nanmean(panel[m],axis=0)); sd=np.nanmedian(np.nanstd(panel[m],axis=0)); idx=p['lab_id']==lab; z[idx]=(z[idx]-means)/sd; raw[m]=(raw[m]-means)/sd\\n    _,i,cnt=np.unique(np.c_[labs,strata],axis=0,return_inverse=True,return_counts=True); w=1/cnt[i,None]; mu=np.nansum(w*raw,axis=0)/np.sum(w*np.isfinite(raw),axis=0); return np.where(np.isnan(z),mu,z)\\nfor name,xx in [('train-diag',px),('train-test anchored',panel_x(p)),('three panels',s._features(tr,{k:np.concatenate([te[k],p[k]]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')})[-len(h):])]:\\n    drift=theta[2]+xx@theta[3:]; Z=np.c_[np.ones(len(h)),past,h,xx]; print('\\\\n',name,'missing',np.isnan(p['coupon_features_raw']).sum(0)); B=np.linalg.lstsq(Z,Y,rcond=None)[0]; print('linear time coeff at first/middle/last/rate',B[:,[0,5,-2,-1]]); co=np.linalg.lstsq(Z,Y@np.linalg.pinv(D.T),rcond=None)[0]; print('linear coef per amp & drift',co); print('branch history weights nominal',-theta[:2]*(-np.expm1(-dt[:,None]/tau))*np.exp(-np.r_[np.cumsum(dt[:0:-1])[::-1],0][:,None]/tau));\\n    def model(amp1,amp2,dr):\\n        return np.concatenate([amp1[:,None,:]*D[None,:,0,None],amp2[:,None,:]*D[None,:,1,None],dr[:,None,:]*D[None,:,2,None]],axis=2)\\n    one=Z[:,:1]; hist=Z[:,1:8]; lin=Z[:,8:]; base=np.c_[b[:,:2]*tau,drift]; gain=base[:,:2]; mp=np.c_[h,past];\\n    for label,f,offs in [('free hist & drift',model(np.c_[one,hist],np.c_[one,hist],np.c_[one,lin]),0),('free hist + scaled drift',model(np.c_[one,hist],np.c_[one,hist],np.c_[one,drift]),0),('branch-specific gain + drift',model(np.c_[one,gain[:,0]],np.c_[one,gain[:,1]],np.c_[one,drift]),0),('fast free slow nominal',model(np.c_[one,hist],one[:,:0],np.c_[one,lin]),gain[:,1,None]*D[None,:,1]),('fast free slow nominal + scaled drift',model(np.c_[one,hist],one[:,:0],np.c_[one,drift]),gain[:,1,None]*D[None,:,1]),('fast free slow gain',model(np.c_[one,hist],gain[:,1,None],np.c_[one,lin]),0),('all free',model(Z,Z,Z),0)]:\\n        y=Y-offs; v=[]; loo=np.empty_like(Y)\\n        for lab in np.unique(p['lab_id']):\\n            m=p['lab_id']!=lab; cf=np.linalg.lstsq(f[m].reshape(-1,f.shape[-1]),y[m].ravel(),rcond=None)[0]; loo[~m]=f[~m]@cf-y[~m]; v.append(np.sqrt(np.mean(loo[~m]**2,axis=0))[[0,-2,-1]])\\n        cf=np.linalg.lstsq(f.reshape(-1,f.shape[-1]),y.ravel(),rcond=None)[0]; resid=f@cf-y; print(label,'fit',np.sqrt(np.mean(resid**2,axis=0))[[0,-2,-1]],'LOCO worst',np.max(v,axis=0),'co',cf)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_structure.py | tail -110\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unconstrained affine chamber correction → H2 separate stress-history amplitudes and covariate drift; current coupon-LOO worst strain RMSE is 0.10881, with pooled rate RMSE 0.03950.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use quadratic bridge calibration\",\n      \"rejected_reason\": \"Leave-one-sweep-out total-stress RMSE worsened from 0.000213 to 0.000225.\"\n    }\n  ],\n  \"rationale\": \"The projected slow amplitude and drift are hard to distinguish coupon by coupon. Fit the strain and rate jointly under structural restrictions, and hold out entire labs to see which restrictions and reference alignment transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "70f13a3b8acf26d7f8a9ce0e9c05730825284154852de1f489e8c59430371bce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36706.27,
+      "usage_known": true,
+      "prompt_tokens": 28396,
+      "cached_tokens": 9344,
+      "completion_tokens": 1422
+    }
+  ]
+}

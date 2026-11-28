@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7a515f38b68d4758a7e8753e956adad2",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:29.390277+00:00",
+  "ended_at_utc": "2026-11-28T03:34:00.701852+00:00",
+  "request_sha256": "4770a14193fca11f6fd29dcc0c6d7b57b6d00c687c3ab0d09c3fca054fd05550",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61204,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33912,
+    "cached_tokens": 9344,
+    "completion_tokens": 1185
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/robust_compare.py <<'PY'\\nfrom explore import *\\nimport inspect\\nfrom compact_chamber import temporal\\nsource=inspect.getsource(m._fit)\\nX=m._features(di,di)[0]; yt=tr['strain_curves_obs']-tr['strain_0'][:,None]; rt=tr['instant_rate_obs']; yd=np.c_[di['strain_curves_obs']-di['strain_0'][:,None],di['instant_rate_obs']]\\ndef metrics(e, labs):\\n return np.round(np.max([[rms(e[labs==l,:-1]),rms(e[labs==l,-1])] for l in np.unique(labs)],axis=0),6)\\ndef getfit(loss, scale):\\n g=m.__dict__.copy(); exec(source.replace(\\\"loss='soft_l1'\\\",'loss='+repr(loss)).replace('f_scale=.008','f_scale='+repr(scale)),g); return g['_fit']\\nfor kind,loss,s in [('old','soft_l1',.008),('soft','soft_l1',.003),('soft','soft_l1',.015),('cauchy','cauchy',.003),('cauchy','cauchy',.006),('cauchy','cauchy',.012)]:\\n fit=getfit(loss,s); P,H,F=inputs[0]; labs=tr['lab_id']; ta,th=fit(P,H,F,dt,t,yt,rt); te=np.empty((len(yt),len(t)+1)); foldparams=[]\\n for lab in np.unique(labs):\\n  keep=labs!=lab; a,b=fit(P[keep],H[keep],F[keep],dt,t,yt[keep],rt[keep]); foldparams.append(np.r_[a,b]); c,d=m._design(a,P[~keep],H[~keep],F[~keep],dt,t); te[~keep]=np.c_[c@b,d@b]-np.c_[yt[~keep],rt[~keep]]\\n D=temporal(ta)[:,:2]; h=inputs[2][1]; r=th[2]+X@th[3:]; base=(h[:,None]*th[:2])@D.T; M=r[:,None,None]*D.T[None,:,:].transpose(0,2,1); labs=di['lab_id']; err=np.empty_like(yd)\\n for lab in np.unique(labs):\\n  keep=labs!=lab; c=np.linalg.lstsq(M[keep].reshape(-1,2),(yd-base)[keep].ravel(),rcond=None)[0]; err[~keep]=base[~keep]+M[~keep]@c-yd[~keep]\\n co=np.linalg.lstsq(M.reshape(-1,2),(yd-base).ravel(),rcond=None)[0]; fixed=base+M@np.array([.2,2.])-yd\\n print('COMPARE',kind,s,'params',np.round(np.r_[ta,th],6),'lolo-rel-param-spread',np.round(np.max(abs(np.array(foldparams)/np.r_[ta,th]-1),0),3),'train worst rmse',metrics(te,tr['lab_id']),'train worst clipped',metrics(np.clip(te,-.025,.025),tr['lab_id']), 'chamber coeffs',np.round(co,6),'chamber learned worst',metrics(err,labs),'chamber nominal worst',metrics(fixed,labs),flush=True)\\nprint('train residual absolute curve/rate quantiles',q(te[:,:-1]),q(te[:,-1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/robust_compare.py | grep -E '^COMPARE|^train residual'\",\"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived soft-L1 spectrum fit -> H2 select a train-only robust fit and retain the compact chamber projection; current worst held-out-lab chamber RMSE is 0.00609 for strain and 0.00463 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the intrinsic time constants to fit chamber observations\",\n      \"rejected_reason\": \"The task requires train-only material estimation, and separate chamber time constants did not improve the joint worst-lab errors.\"\n    }\n  ],\n  \"rationale\": \"Compare robust losses on omitted benchtop labs to detect outlier-driven parameter instability. Then compare fitted and nominal chamber projections on omitted chamber labs; if the nominal coefficients fail to match the held-out errors, retain the empirically fitted coefficients.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8305b339acbd96d038f5e7be0504c870739246837e474023de8f6458c2c08564",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33387.56,
+      "usage_known": true,
+      "prompt_tokens": 33912,
+      "cached_tokens": 9344,
+      "completion_tokens": 1185
+    }
+  ]
+}

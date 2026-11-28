@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e1d7235e7b84542a47f85b26321fea2",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:20.902559+00:00",
+  "ended_at_utc": "2026-11-28T03:32:54.642080+00:00",
+  "request_sha256": "c160547588f39eb14e7ef2cb88aa3cccb809d6805a5844ee3291c5d4310bd5b6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42472,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26406,
+    "cached_tokens": 9344,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/structured_probe.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for name,y')[0])\\nfrom scipy.linalg import lstsq\\nn=len(hold); lab=v['lab_id']; A=basis(tau); tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; q=-np.expm1(-dt[:,None]/tau)*np.exp(-tail[:,None]/tau); z=past@q\\nbase=(hold[:,None]*w[:2])@A[:,:2].T\\nfor label, cx in [('diag+self',m._features(v,v)[:n]),('diag+test',x),('diag+train',m._features(v,d['train'])[:n]),('all',m._features(v,{k:np.concatenate((d['train'][k],d['test'][k])) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')})[:n])]:\\n dr=w[2]+cx@w[3:]; print(label,'missing rows',np.flatnonzero(np.isnan(v['coupon_features_raw']).any(1)))\\n col=lambda f,b: np.asarray(f)[:,None]*A[:,b]\\n variants={\\n 'drift plus free states':[col(z[:,b],b) for b in range(2)]+[col(dr,b) for b in range(3)],\\n 'drift plus state offsets':[col(z[:,b],b) for b in range(2)]+[col(dr,b) for b in range(3)]+[col(np.ones(n),b) for b in range(3)],\\n 'reweighted drift plus free states':[col(z[:,b],b) for b in range(2)]+[col(f,b) for b in range(3) for f in np.c_[np.ones(n),cx].T],\\n 'three independent memory and drift coefficients':[col(dr,b) for b in range(3)],\\n 'intrinsic dr plus common memory factor':[sum(col(w[b]*z[:,b],b) for b in range(2))]+[col(dr,b) for b in range(3)],\\n 'integrated drift drive':[sum(col(w[b]*z[:,b],b) for b in range(2)),sum(col(w[b]*tau[b]*dr,b) for b in range(2)),col(dr,2)],\\n }\\n for key,cols in variants.items():\\n  B=np.stack(cols,axis=2); target=Y-base\\n  def est(j): return lstsq(B[j].reshape(-1,len(cols)),target[j].ravel())[0]\\n  full=est(np.arange(n)); err=target-B@full; pred=np.empty_like(Y)\\n  for L in np.unique(lab):\\n   j=lab!=L; pred[~j]=base[~j]+B[~j]@est(j)\\n  e=Y-pred; stats=np.array([[np.mean(e[lab==L,:-1]**2)**.5,np.mean(e[lab==L,-1]**2)**.5] for L in np.unique(lab)]);print(key,'coef',np.round(full,4),'in',np.round((err**2).mean(0)**.5,4),'worst',stats.max(0));\\n  if key=='drift plus free states': print('coupon RMSE',np.round(np.mean(err**2,1)**.5,3))\\nprint('state quantiles',np.quantile(z,[0,.5,1],axis=0)); print('tau*weights',tau*w[:2]); print('raw covariates summary for feature proxy');\\nfor p in (d['train'],d['test'],v):\\n for L in np.unique(p['lab_id']):\\n  j=p['lab_id']==L; a=p['ref_coupons'][j]; print(L,len(a),np.median(a.mean(0)),np.median(a.std(0)),np.isnan(p['coupon_features_raw'][j]).sum())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structured_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Replace unrestricted pulse regression with calibrated hold stress, attenuated branch memory, and a shared feature-driven chamber term; the best tested baseline has worst held-out-lab RMSE 0.0761 strain and 0.0648 rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted pulse and feature coefficients\",\"rejected_reason\":\"The hold coefficients already recover the intrinsic branch weights, while the unrestricted model’s worst held-out-lab errors are 0.141 strain and 0.119 rate.\"}],\"rationale\":\"Compare shared versus branch-specific memory effects and diagnostic reference normalization. A consistent improvement across held-out labs would justify keeping the simpler chamber law; persistent lab-specific errors would point back to feature alignment rather than missing time dependence.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c0557e7438beb649b6d9b22bdc30ef9e33c8297c4c913a6c46ed92edd6d39908",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35798.71,
+      "usage_known": true,
+      "prompt_tokens": 26406,
+      "cached_tokens": 9344,
+      "completion_tokens": 1319
+    }
+  ]
+}

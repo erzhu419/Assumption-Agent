@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a471916cff6148779a37bb226621dfac",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:21.889801+00:00",
+  "ended_at_utc": "2026-11-28T03:53:05.506213+00:00",
+  "request_sha256": "a34ded18bec071407e42d714dbb2c03bef6a675c26f2463ad91cbd150139539c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46636,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30991,
+    "cached_tokens": 9344,
+    "completion_tokens": 1795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat public_asset_index.json && cat validate_public_schema.py && python3 - <<'PY'\\nimport pickle, numpy as np\\nitems=pickle.load(open('public_batch.pkl','rb')); print('items',len(items))\\nfor item in items:\\n s=item['study']; print('keys',list(s)); print('pulses',[(list(p),None if p.get('y_pulse_raw') is None else (np.shape(p['y_pulse_raw']),float(np.max(np.abs(p['y_pulse_raw']))))) for p in (s.get('reference_tracer_pulses') or [])]); print('calibration',s['sensor_calibration_sweeps']['ref_rosette'].shape)\\nPY\\ncat >/tmp/paired_cv.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; u,v,j=b['ref_signal'],b['raw_readout'],b['bank_id']; N=len(x)\\ndef mask(y):\\n m=np.median(y,axis=0); return np.max(abs(y-m)/np.maximum(np.median(abs(y-m),axis=0),1e-9),axis=1)<9\\nselfs={'tanh':([],lambda z,a:[np.tanh(a*z)]),'linear':([],lambda z,a:[np.tanh(a*z),z]),'cubic':([],lambda z,a:[np.tanh(a*z),z**3]),'quintic':([],lambda z,a:[np.tanh(a*z),z**5]),'septic':([],lambda z,a:[np.tanh(a*z),z**7]),'boundedcub':([(0,4,.6)],lambda z,a,d:[np.tanh(a*z),z**3/(1+d*z*z)]),'dualodd':([],lambda z,a:[np.tanh(a*z),z,z**3]),'tanh5+even':([],lambda z,a:[np.tanh(a*z),z**5,z*z]),'sinh':([(0.1,6,2)],lambda z,a,d:[np.tanh(a*z),np.sinh(d*z)-d*z])}\\ncross={'poly':([],lambda p:[p,p*p]),'rat':([(0,4,.4)],lambda p,d:[p,p*p/(1+d*p*p)]),'tanh':([(0.05,3,.6)],lambda p,d:[p,np.tanh(d*p*p)]),'squareclip':([(0.5,2,1.3)],lambda p,d:[p,np.minimum(p*p,d*d)]),'quartic':([],lambda p:[p,p*p,p**4]),'rationalboth':([(0,2,.15),(0,3,.3)],lambda p,d,f:[p/(1+d*p*p),p*p/(1+f*p*p)])}\\nfor sn in selfs:\\n for cn in cross:\\n  if sn not in ('tanh','quintic','dualodd') and cn not in ('poly','rat','quartic'): continue\\n  pars=[(.25,2.8,1.25)]+selfs[sn][0]+cross[cn][0]; lo,hi,start=np.array(pars).T\\n  e=np.zeros_like(y); eb=np.zeros_like(v); inv=np.zeros_like(y)\\n  for k in range(7):\\n   te=np.arange(N)%6==k if k<6 else np.zeros(N,bool); be=np.arange(len(u))%6==k if k<6 else np.zeros(len(u),bool); tr=~te; tr[tr]=mask(y[tr]); details=[]; ds=[]\\n   for h in range(4):\\n    jj=j==h; U=u[jj]; V=v[jj]; bt=~be[jj]; bt[bt]=mask(V[bt,None]); ds.append((U,V,bt,jj))\\n   def basis(z,p,par):\\n    ns=1+len(selfs[sn][0]); return np.column_stack([np.ones_like(z),*selfs[sn][1](z,*par[:ns]),*cross[cn][1](p,*par[ns:])])\\n   def fit(par,write=False):\\n    resid=[]\\n    for h,(U,V,bt,jj) in enumerate(ds):\\n     z=x[:,h]; p=x[:,(h+2)%4]; A=basis(z,p,par); B=basis(U,np.zeros_like(U),par); D=np.r_[A[tr],B[bt]]; Y=np.r_[y[tr,h],V[bt]]; C=np.linalg.lstsq(D,Y,rcond=None)[0]; resid.extend(D@C-Y)\\n     if write:\\n      e[te,h]=A[te]@C-y[te,h]; eb[jj&be]=B[be[jj]]@C-V[be[jj]]; details.append(C)\\n    return np.array(resid)\\n   out=least_squares(fit,start,bounds=(lo,hi),max_nfev=80); fit(out.x,True)\\n  good=mask(y); central=np.max(abs(x),axis=1)<.75; err=np.linalg.norm(e,axis=1); print(sn,cn,'par',np.round(out.x,3),'sweep',np.round(np.quantile(err[good],[.5,.95,1]),4),'central',np.round([np.sum(good&central),np.max(err[good&central])],4),'bank',np.round(np.quantile(abs(eb[abs(v)<4]),[.95,1]),4),'coeff',np.round(details,3).tolist() if cn in ('rat','quartic') and sn in ('tanh','quintic','dualodd') else '',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/paired_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 own-channel high-amplitude correction -> H2 independently curved own- and paired-channel responses; the current best OOF maximum clean sweep row error is 0.120.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add only an own-channel correction\",\n      \"rejected_reason\": \"An extreme input sometimes raises residuals in both paired outputs; curvature in the coupling term could explain the second residual without adding unrelated cross-channel terms.\"\n    }\n  ],\n  \"rationale\": \"Compare own-channel and paired-channel curvature on held-out sweeps, including the central range used by observations. Inspect pulse shapes and amplitudes to determine which ranges the inverse must handle.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "08c4ca90f2504ded39f084e7c2394fd7a0bdd175e5b35226b5f09a65715b3818",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45700.17,
+      "usage_known": true,
+      "prompt_tokens": 30991,
+      "cached_tokens": 9344,
+      "completion_tokens": 1795
+    }
+  ]
+}

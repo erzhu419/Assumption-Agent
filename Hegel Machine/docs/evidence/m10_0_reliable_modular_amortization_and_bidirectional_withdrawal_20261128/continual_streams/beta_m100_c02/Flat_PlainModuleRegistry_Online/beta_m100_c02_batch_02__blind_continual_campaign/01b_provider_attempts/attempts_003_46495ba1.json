@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46495ba1f98e41eb8cf4167147504e44",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:52.252432+00:00",
+  "ended_at_utc": "2026-11-28T03:39:13.307286+00:00",
+  "request_sha256": "0bb76cdc371ec81529ab688f273297045834df6892ab2cc77b0e6cf2ebbb7c82",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22506,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18359,
+    "cached_tokens": 9344,
+    "completion_tokens": 763
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json, pickle\\nimport numpy as np\\nb=pickle.load(open('public_batch.pkl','rb'))\\ndef brief(v):\\n if isinstance(v,dict): return {k:brief(a) for k,a in v.items()}\\n if isinstance(v,np.ndarray): return (v.shape,str(v.dtype),np.round([v.min(),v.max()],7).tolist())\\n if isinstance(v,(list,tuple)): return (len(v),brief(v[0]) if v else None)\\n return str(v)[:110]\\nfor item in b:\\n s=item['study']; sweeps=s['sensor_calibration_sweeps']; print('fields', {k:brief(s.get(k)) for k in ['sensor_calibration_sweeps','reference_tracer_pulses','y_obs_raw','aux_manifold_telemetry']}); print('diagnostics',brief(item.get('campaign_diagnostics')))\\n x=np.asarray(sweeps['ref_rosette']); y=np.asarray(sweeps['raw_rosette']); print('ref quantiles',np.quantile(x,[0,.25,.5,.75,1],axis=0)); print('obs quantiles',np.quantile(np.asarray(s['y_obs_raw']).reshape(-1,4),[0,.5,1],axis=0)); print('ref correlation',np.corrcoef(x.T))\\n A=np.c_[np.ones(len(x)),x]; w=np.ones(len(x))\\n for _ in range(15):\\n  c=np.linalg.lstsq(A*w[:,None],y*w[:,None],rcond=None)[0]; r=np.linalg.norm(A@c-y,axis=1); w=1/np.sqrt(1+(r/max(2*np.median(r),1e-12))**2)\\n print('affine',c.round(7),'residual percentiles',np.percentile(r,[0,50,80,90,95,99,100]).round(8),'worst rows',np.argsort(r)[-8:]); print('head ref/raw',np.c_[x,y][:10].round(5))\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; obj=json.load(open(p)); print('apparatus schema',list(obj) if isinstance(obj,dict) else (len(obj), list(obj[-1]))); rows=obj if isinstance(obj,list) else list(obj.values()); print('latest telemetry',str(brief(rows[-1]))[:2200])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 robust nonlinear forward response; affine residual and outlier-slice metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public study has no tracer-pulse key, so inspect it as optional and continue with the sweep data. Compare robust affine residuals with the observation and calibration ranges to establish how much nonlinear correction and extrapolation the inverse must handle.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "14bee542d85d502477ea977613cd94adaa18ed46c1881b11b6a194f28f77f4e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23159.86,
+      "usage_known": true,
+      "prompt_tokens": 18359,
+      "cached_tokens": 9344,
+      "completion_tokens": 763
+    }
+  ]
+}

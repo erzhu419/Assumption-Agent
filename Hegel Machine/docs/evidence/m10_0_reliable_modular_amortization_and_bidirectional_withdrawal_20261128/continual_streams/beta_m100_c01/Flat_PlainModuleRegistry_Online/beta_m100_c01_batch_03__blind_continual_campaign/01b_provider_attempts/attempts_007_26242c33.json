@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "26242c3361aa44c8947a74566ff0129f",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:42.249019+00:00",
+  "ended_at_utc": "2026-11-28T03:47:13.204774+00:00",
+  "request_sha256": "ae024339b2e773b8db82283cd8901973e98babcd02b3e6f85a45fa76e355df27",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50170,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30165,
+    "cached_tokens": 9344,
+    "completion_tokens": 1247
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nstudy = pickle.loads((root/'public_batch.pkl').read_bytes())[0]['study']\\nc = study['sensor_calibration_sweeps']; b = c['single_bank_sweeps']; x = c['ref_rosette']; y = c['raw_rosette']; ax = np.count_nonzero(x, axis=1) <= 1\\nrng = np.random.default_rng(861)\\nf = np.empty(len(x), int)\\nfor group in (ax, ~ax):\\n    ii = rng.permutation(np.flatnonzero(group)); f[ii] = np.arange(len(ii)) % 5\\npred = np.empty_like(y); inv = np.empty_like(x)\\nclean = np.max(np.abs(y), axis=1) < 8\\nfor fold in range(5):\\n    tr = f != fold; te = ~tr; dev = te & clean\\n    p = up._fit(dict(c, ref_rosette=x[tr], raw_rosette=y[tr]))\\n    pred[te] = up._forward(x[te], p)\\n    inv[dev] = up._invert(y[dev], p)\\nerr = np.linalg.norm(pred-y, axis=1); ie = np.linalg.norm(inv[clean]-x[clean], axis=1)\\nworst_forward = max(np.sqrt(np.mean(err[clean & group]**2)) for group in (ax, ~ax))\\nprint('OOF worst axis/mixed forward RMS:', worst_forward, 'clean max inverse:', ie.max(), 'smallest EMI residual:', err[~clean].min())\\nassert worst_forward < 1e-4 and ie.max() < 3e-4\\np = up._fit(c)\\npts = np.vstack((rng.uniform(x.min(0), x.max(0), (4096,4)), np.where((np.arange(16)[:,None] >> np.arange(4)) & 1, x.max(0), x.min(0))))\\nraw_pulse = up._forward(pts, p).reshape(2,-1,4)\\npulsed = dict(study, reference_tracer_pulses=[{'y_pulse_raw': raw_pulse, 'name': 'stress'}])\\ncal = up.calibrate_upstream(pulsed)\\npulse_error = np.max(np.abs(cal['reference_tracer_pulses'][0]['y_pulse_raw'].reshape(-1,4)-pts))\\nprint('pulse inverse maximum channel error at sweep ranges and corners:', pulse_error)\\nassert pulse_error < 1e-8 and cal['reference_tracer_pulses'][0]['name'] == 'stress'\\nassert up.calibrate_upstream(dict(study, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nnorm = cal['sensor_calibration_sweeps']\\nfor arr, ref in ((norm['raw_rosette'], x), (norm['single_bank_sweeps']['raw_readout'], b['ref_signal'])):\\n    assert np.array_equal(arr, ref) and not np.shares_memory(arr, ref)\\nassert not np.array_equal(c['raw_rosette'], x)\\nobs = study['y_obs_raw']; co = cal['y_obs_raw']\\nassert co.shape == obs.shape and not np.shares_memory(co, obs)\\nassert np.max(np.abs(up._forward(co.reshape(-1,4),p)-obs.reshape(-1,4))) < 1e-9\\nout = solve_batch(study); w = out['weights']; k = out['kkt_certificate']\\ngap = k['primal_objective']-k['dual_lower_bound']\\nprint('public composition budget error:', abs(w.sum()-study['total_budget']), 'KKT gap:', gap)\\nassert np.all(np.isfinite(out['terminal_field'])) and abs(w.sum()-study['total_budget']) < 1e-9 and abs(gap)<1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 complete cubic → H2 sparse cyclic response; public schema passes, and the complete model’s worst held-out forward RMS of 5.31e-5 is the reference for testing the installed sparse model.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Held-out sweeps test whether sparsification loses accuracy; sweep-corner pulses test inversion beyond the small public observation range. A failure would distinguish a fit problem from an inverse or composition problem before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c02f3ec5e20c227ebffa0c5f7c37579f864529b30fce9144fd4dd5145dcc23b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32975.68,
+      "usage_known": true,
+      "prompt_tokens": 30165,
+      "cached_tokens": 9344,
+      "completion_tokens": 1247
+    }
+  ]
+}

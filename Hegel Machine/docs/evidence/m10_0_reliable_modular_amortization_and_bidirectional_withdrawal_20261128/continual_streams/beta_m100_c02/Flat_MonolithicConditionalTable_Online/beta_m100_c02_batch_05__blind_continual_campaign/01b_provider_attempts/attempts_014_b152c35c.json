@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b152c35cbb8c43a789faf91cf9fabbf6",
+  "call_seq": 14,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:55.789739+00:00",
+  "ended_at_utc": "2026-11-28T03:59:20.435862+00:00",
+  "request_sha256": "c7e16f4815b586802b0cc670c2b3ec9d405a9f574826a018e84af2c54cc1b128",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 87788,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41348,
+    "cached_tokens": 9344,
+    "completion_tokens": 940
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, importlib.util, io, pickle, sys\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; o=b.solve_batch(s); w=o['weights']; cert=o['kkt_certificate']; S,U=b.chamber_response(s); y=b.calibrate(s); Z=s['Z_nuisance']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']\\nSY=np.column_stack((S,y)); R=SY-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@SY); A,t=R[:,:-1],R[:,-1]; r=A@w-t; g=A.T@r+ridge*w; J=.5*(r@r+ridge*(w@w)); nu=cert['nu_sum']; lo=np.asarray(cert['lam_lower']); hi=np.asarray(cert['lam_upper']); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nassert np.allclose(cert['weights'],w) and abs(w.sum()-budget)<1e-9 and w.min()>=-1e-10 and w.max()<=cap+1e-10\\nassert np.all(lo>=0) and np.all(hi>=0) and np.max(abs(g-nu-lo+hi))<1e-9\\nassert np.allclose([cert['primal_objective'], cert['dual_lower_bound']],[J,dual], rtol=0,atol=1e-10) and abs(J-dual)<1e-8\\nassert np.allclose(o['terminal_field'],np.einsum('i,ijk->jk',w,U))\\nprint('KKT stationarity infinity norm',np.max(abs(g-nu-lo+hi)),'duality gap for the fitted model',J-dual)\\nsys.path.insert(0,'/tmp')\\nwith contextlib.redirect_stdout(io.StringIO()):\\n import compare_walls as c\\nc.y=y\\nfolds=[np.tile(np.arange(c.ns)//4==i,len(s['mu_shifts'])) for i in range(c.ns//4)]\\nold=c.forward(c.axis('x','p'),c.axis('y',(0,0)))[0]\\nfor label,M in [('open Robin',S),('archived periodic/sealed',old)]:\\n scores=np.array([np.mean(c.fit(M,~te,ridge)[1][te]**2)**.5 for te in folds]); print(label,'pooled/worst held-out sensor-block RMSE',np.sqrt(np.mean(scores**2)),scores.max())\\n if label=='open Robin': assert scores.max()<.015\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived periodic/sealed walls → H2: open Robin walls with joint rosette calibration; final-artifact held-out sweep max error is 0.0001935, and the independent probe reports relative field and weight errors of 0.00002548 and 0.0001689.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Run the sensor-block comparison with the exact final calibration to detect any regression from the calibration change. Recompute the certificate from the stated objective and constraints so a numerical or sign error would block submission even though the schema passed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "c265160054e2a6309f53ede5f266dbf10479ae60eec7adf919f01e41de0c06e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26764.75,
+      "usage_known": true,
+      "prompt_tokens": 41348,
+      "cached_tokens": 9344,
+      "completion_tokens": 940
+    }
+  ]
+}

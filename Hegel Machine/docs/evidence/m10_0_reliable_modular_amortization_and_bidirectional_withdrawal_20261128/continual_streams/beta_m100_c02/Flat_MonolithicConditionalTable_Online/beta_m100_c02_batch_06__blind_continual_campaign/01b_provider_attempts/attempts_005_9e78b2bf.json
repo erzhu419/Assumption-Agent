@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e78b2bf2da74990aaa4b59e5429eaf6",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:10.100342+00:00",
+  "ended_at_utc": "2026-11-28T04:02:31.097514+00:00",
+  "request_sha256": "f0006b37fe270a943391900f2a47b1ddb4d638207c51c9eb4fdbbf69649510fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40076,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25106,
+    "cached_tokens": 9344,
+    "completion_tokens": 662
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for n in 01 02 03 04; do f=beta_m100_c02_batch_${n}_solver.py; echo ===$n; sed -n '7,31p' \\\"$f\\\"; tail -10 \\\"$f\\\"; done; sed -n '102,174p' beta_m100_c02_batch_05_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,importlib.util\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; q=importlib.util.spec_from_file_location('m','beta_m100_c02_batch_05_solver.py');m=importlib.util.module_from_spec(q);q.loader.exec_module(m)\\nc=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; err=np.empty_like(Y)\\nfor i in range(5):\\n idx=np.arange(i,len(X),5);p=m.calibration_map(c,idx);err[idx]=m.raw_map(X[idx],*p)-Y[idx]\\nmask=abs(Y)<5\\nprint('calibration OOF by bank',[(float(np.median(abs(err[:,j][mask[:,j]]))),float(np.sqrt(np.mean(err[:,j][mask[:,j]]**2)))) for j in range(4)]);print('valid ranges', X.min(),X.max(), Y[mask].min(),Y[mask].max());print('fit parameters',m.calibration_map(c)); x=m.calibrate(s); print('inverse range',x.min(),x.max(),'round trip',abs(m.raw_map(x.reshape(-1,4),*m.calibration_map(c))-s['y_obs_raw'].reshape(-1,4)).max()); print('prior solver weights',m.solve_batch(s)['weights']); print('aux summary',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine rosette fit → robust nonlinear transfer with archive-informed wall selection; worst-channel affine training RMSE is 2.553 raw units, and nonlinear holdout validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the latest solver unchanged\",\"rejected_reason\":\"The archive contains several wall regimes, and the earlier rosette model has not been validated on the current sweeps.\"}],\"rationale\":\"Score the previous calibration on held-out rosettes and check inversion on actual observations. Large errors would require changing the transfer model before comparing wall candidates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d525a6fc66756d261aaf2a08d4030efe6fec860a0895e63c4e1bc4def93824ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20949.01,
+      "usage_known": true,
+      "prompt_tokens": 25106,
+      "cached_tokens": 9344,
+      "completion_tokens": 662
+    }
+  ]
+}

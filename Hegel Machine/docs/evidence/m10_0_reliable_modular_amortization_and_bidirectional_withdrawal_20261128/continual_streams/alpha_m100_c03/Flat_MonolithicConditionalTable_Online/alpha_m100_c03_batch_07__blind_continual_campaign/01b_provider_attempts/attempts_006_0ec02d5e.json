@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ec02d5ed7ce45719c6849ac377347ac",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:08:23.524388+00:00",
+  "ended_at_utc": "2026-11-28T04:08:50.104083+00:00",
+  "request_sha256": "e447e95e8c43fac4079a98c7f867710fb0f829da69746c41666f6d0656621a65",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46484,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26921,
+    "cached_tokens": 9344,
+    "completion_tokens": 1034
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/check_bridge07.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom sklearn.model_selection import KFold\\np='/tmp/hegel_continual_archive/alpha_m100_c03_batch_05_solver.py'\\ns=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; print('diagnostics',type(i.get('campaign_diagnostics')).__name__)\\nd=i['dataset']; c=d['calibration_load_cells']; y=c['true_channel_loads']; a=c['bridge_raw']; clean=np.max(abs(a),axis=1)<6\\nfor mode in ('affine','opposite trigonometric'):\\n es=[]; inv=[]\\n for tr,va in KFold(5,shuffle=True,random_state=28).split(y):\\n  tr=tr[clean[tr]]; va=va[clean[va]]\\n  if mode=='affine':\\n   B=np.linalg.lstsq(np.c_[np.ones(len(tr)),y[tr]],a[tr],rcond=None)[0]; pred=np.c_[np.ones(len(va)),y[va]]@B; rec=np.linalg.solve(B[1:].T,(a[va]-B[0]).T).T\\n  else:\\n   f,b=m._bridge({'bridge_raw':a[tr],'true_channel_loads':y[tr]}); pred=(m._basis(y[va],f)*b).sum(-1); rec=m._inverse(a[va],(f,b))\\n  es.append(np.sqrt(np.mean((pred-a[va])**2,axis=0))); inv.append(np.sqrt(np.mean((rec-y[va]).sum(-1)**2)))\\n print(mode,'worst fold/channel raw RMSE',np.max(es),'worst fold total-load RMSE',max(inv))\\nf,b=m._bridge(c); print('full bridge',f,b,'own min derivative',b[:,1]-abs(b[:,2]*f[0]),'cross max derivative',abs(b[:,3])+abs(b[:,4]*f[1])); sw=c['single_channel_sweeps']; z=np.zeros((len(sw['lab_id']),4)); j=sw['lab_id']; z[np.arange(len(j)),j]=sw['true_stress']; pred=(m._basis(z,f)*b).sum(-1)[np.arange(len(j)),j]; print('sweep per axis clean max residual',[np.max(abs(pred[(j==k)&(abs(sw['cmd_stress'])<6)]-sw['cmd_stress'][(j==k)&(abs(sw['cmd_stress'])<6)])) for k in range(4)])\\nfor k in ('train','test'):\\n print(k,'roundtrip and inferred load range')\\n for field in ('past_channel_raw','hold_channel_raw'):\\n  a0=d[k][field].reshape(-1,4); x=m._inverse(a0,(f,b)); print(field,np.max(abs((m._basis(x,f)*b).sum(-1)-a0)),np.min(x,axis=0),np.max(x,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check_bridge07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge -> H2 opposite-channel trig bridge; the previous unfiltered affine fit had worst-channel OOF RMSE 2.89, and the clean-row comparison is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the archived trigonometric inverse without testing it\",\"rejected_reason\":\"The current bridge appears to share its basis, but a forward fit can still yield ambiguous or inaccurate loads; clean-fold inverse errors and deployment round trips test that directly.\"}],\"rationale\":\"Compare the two bases on the same intact calibration folds, then check the chosen inverse against independent single-channel sweeps and the actual deployment input range. If the trigonometric inverse fails there, adjust the calibration before fitting the material.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "899da0837f7967db7702447c379e85bd5777cf91338074f10846a9a2f369f402",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28734.13,
+      "usage_known": true,
+      "prompt_tokens": 26921,
+      "cached_tokens": 9344,
+      "completion_tokens": 1034
+    }
+  ]
+}

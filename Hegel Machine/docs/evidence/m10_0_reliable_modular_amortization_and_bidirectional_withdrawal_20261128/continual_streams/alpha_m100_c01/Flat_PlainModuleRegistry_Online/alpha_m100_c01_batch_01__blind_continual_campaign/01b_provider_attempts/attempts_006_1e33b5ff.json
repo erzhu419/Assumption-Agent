@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e33b5ff22974f9896f718a63f09533c",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:03.347665+00:00",
+  "ended_at_utc": "2026-11-28T03:32:34.465349+00:00",
+  "request_sha256": "8108f57b67148d264847a2aa8dcffbbf0149caea5842d47de1a4ae367221b14d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38726,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24968,
+    "cached_tokens": 9344,
+    "completion_tokens": 1167
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_spatial.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for name,v')[0])\\nfrom scipy.optimize import least_squares\\nY=np.c_[y,yr]; n=len(Y); stress=np.c_[hg,pg]; X=fg[:,1:]; miss=np.isnan(g['coupon_features_raw']); labs=g['lab_id']; dr=fg@theta[2:]\\nprint('theta',theta,'drift range',dr.min(),dr.max()); print('raw diag features, target rate, hold, strain0'); print(np.c_[X,yr,hg,g['strain_0']]); print('ref moments by split')\\nfor split in [tr,te,g]:\\n print([(l,np.median(split['ref_coupons'][split['lab_id']==l].mean(0)),np.median(split['ref_coupons'][split['lab_id']==l].std(0))) for l in range(4)])\\ndef score(name,B):\\n W=np.linalg.lstsq(B,Y,rcond=None)[0]; R=Y-B@W\\n pred=np.zeros_like(Y)\\n for j in np.unique(labs):\\n  z=labs==j; pred[z]=B[z]@np.linalg.lstsq(B[~z],Y[~z],rcond=None)[0]\\n print(name,'train',np.sqrt(np.mean(R**2,0))[[0,4,11,12]],'lolo',np.sqrt(np.mean((pred-Y)**2,0))[[0,4,11,12]],'row rms', np.sqrt(np.mean(R**2,1)))\\n return W,R\\none=np.ones(n); two=np.c_[one,hg,dr]; B=np.c_[one,hg,X]; W,R=score('hold/drift',two); print('time signatures',W); W,R=score('hold/features',B); print('time signature singular values',np.linalg.svd(W,compute_uv=False)); print('time signatures',W)\\nscore('hold/features/history',np.c_[B,pg]); score('+missing',np.c_[B,miss[:,1:]]); score('+lab',np.c_[B,np.eye(4)[labs,1:]]); score('+strain0',np.c_[B,g['strain_0']]); score('+interaction',np.c_[B,hg*dr,dr**2,hg**2]); score('hold/drift/strain0',np.c_[two,g['strain_0']]);\\n# Test whether all coefficient curves share the documented branch-and-drift basis.\\nfor ta in [taus,[0.493,2.8]]:\\n ta=np.array(ta); T=np.vstack([np.c_[-np.expm1(-t[:,None]/ta),t],np.r_[1/ta,1]]); co=W@np.linalg.pinv(T.T); print('coefficient projection',ta,co,'error',np.linalg.norm(W-co@T.T,axis=1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_spatial.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged hereditary history → H2 chamber response dominated by hold stress and coupon drift; baseline worst-horizon RMSE 0.759 and rate RMSE 1.681.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The benchtop hereditary stress-history law transfers unchanged to the chamber.\",\"empirical_witness\":\"The 24 chamber coupons show a 0.759 worst-horizon strain RMSE and 1.681 rate RMSE despite affine bridge residual SD of 0.000203; the fast-branch correction correlates 0.948 with the final history stress.\",\"causal_blanket_diagnosis\":\"The discrepancy is concentrated in the chamber law rather than the calibrated bridge or intrinsic material fit.\",\"sublated_pivot\":\"Retain the intrinsic train fit and compare compact hold, feature, and exact history operators on held-out chamber labs.\",\"risk_kind\":\"chamber transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent free time constants for deployment\",\"rejected_reason\":\"Free time constants only reduce the per-coupon temporal reconstruction error from 0.00226 to 0.00221; the unresolved error is in predicting amplitudes.\"}],\"rationale\":\"The observed curves are nearly rank two. Compare leave-one-lab-out errors to see whether stress history, missing-feature handling, or a nonlinear hold–drift term explains the remaining spatial variation before encoding a chamber law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b14625275a7cbe324118db6206838a743f325cb8037db1b2f6e8b8f447caf2bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33171.87,
+      "usage_known": true,
+      "prompt_tokens": 24968,
+      "cached_tokens": 9344,
+      "completion_tokens": 1167
+    }
+  ]
+}

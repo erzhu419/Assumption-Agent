@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d2124411b18f40408e9dfa2dd03b9c22",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:53.211670+00:00",
+  "ended_at_utc": "2026-11-28T03:49:37.176040+00:00",
+  "request_sha256": "2e4974321eb38915d0beeb49821235c027fc4975d1f979f646ea8725295dce9c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 23387,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19325,
+    "cached_tokens": 9344,
+    "completion_tokens": 1836
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as np,json\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; d=c['single_bank_sweeps']\\nfor k,v in d.items(): print(k,np.shape(v),np.asarray(v).ravel()[:28])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus keys',list(a)[:12]); print('gate',open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json').read())\\nPY\\ncat > /tmp/rosette_struct.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x)\\nnp.set_printoptions(precision=5,suppress=True)\\nfolds=np.random.default_rng(20).permutation(n)%5\\n\\ndef lin(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef robust(a,b):\\n m=lin(a,b)\\n for scale in [.3,.1,.03,.01]:\\n  for _ in range(12):\\n   w=1/np.hypot(1,np.linalg.norm(a@m-b,axis=1)/scale); m=lin(a*w[:,None],b*w[:,None])\\n return m\\n\\ndef sat(z,k,kind):\\n if kind=='rat': return z/(1+k*z*z)\\n if kind=='root': return z/np.sqrt(1+k*z*z)\\n if kind=='tanh': return np.tanh(z*np.sqrt(k))/np.sqrt(k)\\n if kind=='atan': return np.arctan(z*np.sqrt(k))/np.sqrt(k)\\n if kind=='exp': return z*np.exp(-k*z*z)\\n\\ndef fit(x,y,kind,layout):\\n af=lambda z: np.column_stack((np.ones(len(z)),z))\\n a=af(x); base=robust(a,y); e=np.linalg.norm(a@base-y,axis=1); good=e<max(2,4*np.median(e))\\n if layout in ('pre','preplus','prequad'):\\n  def des(z,k):\\n   q=sat(z,k,kind)\\n   return af(q) if layout=='pre' else np.column_stack((af(q),z) if layout=='preplus' else (af(q),z,z*z))\\n  p=np.full(4,.7)\\n  for _ in range(3):\\n   def err(k):\\n    a=des(x[good],k); return (a@lin(a,y[good])-y[good]).ravel()\\n   p=least_squares(err,p,bounds=(.003,15),max_nfev=100).x\\n   a=des(x,p); m=lin(a[good],y[good]); e=np.linalg.norm(a@m-y,axis=1); good=e<max(.025,5*np.median(e))\\n  return lambda z:des(z,p)@m, p, m\\n # Each channel is a nonlinear function of a normalized row of the mixing map.\\n p=np.r_[base[0],(base[1:]/np.diag(base[1:]))[~np.eye(4,dtype=bool)],np.diag(base[1:]),np.full(4,.7),np.full(4,0.) if layout=='postplus' else []]\\n def pred(z,p):\\n  mix=np.eye(4); mix[~np.eye(4,dtype=bool)]=p[4:16]; h=z@mix\\n  return p[:4]+p[16:20]*sat(h,p[20:24],kind)+(p[24:28]*h if layout=='postplus' else 0)\\n for _ in range(3):\\n  b=np.full(len(p),np.inf); low=-b.copy(); low[20:24]=.003; b[20:24]=15\\n  p=least_squares(lambda p:(pred(x[good],p)-y[good]).ravel(),p,bounds=(low,b),max_nfev=120).x\\n  e=np.linalg.norm(pred(x,p)-y,axis=1); good=e<max(.025,5*np.median(e))\\n return lambda z:pred(z,p),p,None\\n\\na=np.column_stack((np.ones(n),x)); base=robust(a,y); e=np.linalg.norm(a@base-y,axis=1); good=e<2\\nprint('EMI rows:',np.flatnonzero(~good), 'affine worst fold med',max(np.median(np.linalg.norm(a[(folds==j)&good]@robust(a[folds!=j],y[folds!=j])-y[(folds==j)&good],axis=1)) for j in range(5)))\\nfor layout in ('pre','preplus','prequad','post','postplus'):\\n for kind in ('rat','root','tanh','atan','exp'):\\n  f,p,m=fit(x,y,kind,layout); r=np.linalg.norm(f(x)-y,axis=1)\\n  vals=[]\\n  for j in range(5):\\n   q=folds==j; ff,_,_=fit(x[~q],y[~q],kind,layout); v=np.linalg.norm(ff(x[q&good])-y[q&good],axis=1); vals.append([np.median(v),np.max(v)])\\n  print(layout,kind,'fit med',round(np.median(r[good]),7),'CV worst med/max',np.max(vals,axis=0),'params',p if m is None else p.tolist(),flush=True)\\n  if np.median(r[good])<.03:\\n   print('coef',m,'clean max',max(r[good]),'residual rows',np.c_[x,y-f(x)][np.argsort(r)[-len(x[~good])-5:-len(x[~good])]],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_struct.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed-scale cubic correction → H2 fitted saturation before or after cross-channel mixing; the best tested fixed basis has a worst-fold median forward error of 0.11955.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A low-degree polynomial or affine mixing model adequately captures the calibration response.\",\n    \"empirical_witness\": \"The fixed rational cubic correction reduces the worst-fold median forward error from 0.21343 for cubic terms to 0.11955.\",\n    \"causal_blanket_diagnosis\": \"The calibration residual is structured rather than confined to gross EMI rows; polynomial terms do not capture the observed saturation.\",\n    \"sublated_pivot\": \"Fit the saturation scale inside each fold and compare whether saturation acts before or after linear mixing.\",\n    \"risk_kind\": \"biased inverse calibration\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the fixed-scale rational correction as the final model\",\n      \"rejected_reason\": \"Its residual is still large, and a good forward fit alone does not establish that the inverse is unique on the observation range.\"\n    }\n  ],\n  \"rationale\": \"Compare physically distinct layouts on held-out sweep rows. The result determines which map to invert; an error floor across layouts would instead motivate testing missing coupled terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ed11399df93f3f7be8f06621a7bdb27188bb7eb7cbd6b09d661d6cf325e2879a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46075.89,
+      "usage_known": true,
+      "prompt_tokens": 19325,
+      "cached_tokens": 9344,
+      "completion_tokens": 1836
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e0cdd3e52214d5c881132f0f28232e8",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:13.463159+00:00",
+  "ended_at_utc": "2026-11-28T04:14:52.336709+00:00",
+  "request_sha256": "10858945104b65f715ae7961737660bda38ddd11f407e85a9177f70ba60a1390",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63930,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35012,
+    "cached_tokens": 9344,
+    "completion_tokens": 1526
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^_CHAMBER_PROJECTION/,$d' /tmp/hegel_continual_archive/alpha_m100_c01_batch_04_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Chamber resets the history state. Public verification coupons identify the\\n# separate drift kernel; the material spectrum is always estimated on train.\\n_CHAMBER_DRIFT = np.array([0.35444, 0.16897, -0.19203, 0.16354, -0.10134])\\n_CHAMBER_TIME = np.exp(0.02298)\\n\\n\\ndef _predict_chamber(taus, theta, hold, features, times):\\n    amplitude = hold[:, None] * theta[:2]\\n    response = -np.expm1(-times[:, None] / taus)\\n    drift = features @ _CHAMBER_DRIFT\\n    ramp = 2 * times / (1 + np.sqrt(1 + times / _CHAMBER_TIME))\\n    return amplitude @ response.T + drift[:, None] * ramp, amplitude @ (1 / taus) + drift\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge, _ = _fit_bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_calibrated_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    hold = _load_from_raw(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    features = np.column_stack((np.ones(len(xte)), xte))\\n    curve, rate = _predict_chamber(taus, theta, hold, features, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/drift08.py <<'PY'\\nexec(open('/tmp/chamber08.py').read().split('ramps=')[0])\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\nkey=('lab_id','stratum','ref_coupons','coupon_features_raw')\\ndef join(*groups): return {k:np.concatenate([a[k] for a in groups]) for k in key}\\ndef summarize(groups):\\n for grp in groups:\\n  print('panel',len(grp['lab_id']),[(l,*np.round([np.median(grp['ref_coupons'][grp['lab_id']==l].mean(0)),np.median(grp['ref_coupons'][grp['lab_id']==l].std(0))],4)) for l in np.unique(grp['lab_id'])])\\nsummarize([tr,te,g,join(tr,te),join(tr,g)])\\nfor label,xx in [('tr+g',_features(tr,g)[1]),('te+g',_features(te,g)[1]),('g',_features({k:g[k][:0] for k in key},g)[1]),('all',_features(join(tr,te),g)[1])]:\\n fs=np.c_[np.ones(len(H)),xx]; score=fs@th[2:];\\n def ramp(u): return np.r_[2*t/(1+np.sqrt(1+t/np.exp(u))),1.]\\n for kind in ['coupled','affine','full']:\\n  def pred(v):\\n   drift=score if kind=='coupled' else v[1]*score+v[2] if kind=='affine' else fs@v[1:]; return base+np.outer(drift,ramp(v[0]))\\n  ini=np.r_[0.,[] if kind=='coupled' else [1.,0.] if kind=='affine' else th[2:]]\\n  def fit(s): return least_squares(lambda v:((pred(v)-Y)[s]*W).ravel(),ini,loss='soft_l1',f_scale=.012).x\\n  err=np.empty_like(Y)\\n  for l in np.unique(labs):\\n   s=labs==l; err[s]=abs((pred(fit(~s))-Y)[s]);\\n  print(label,kind,fit(allrows).round(5), 'pooled',np.round([np.median(err[:,:-1]),np.median(err[:,-1])],5),'worst',np.round(np.max([[np.median(err[labs==l,:-1]),np.median(err[labs==l,-1])] for l in np.unique(labs)],axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/drift08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated shared intrinsic spectrum → H2 memory reset with derivative-consistent square-root chamber drift; worst-lab median strain/rate errors are 0.04753/0.04130.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a fitted hold-load correction\",\n      \"rejected_reason\": \"It worsened held-out pooled strain and initial-rate errors and did not materially improve the worst-lab errors.\"\n    }\n  ],\n  \"rationale\": \"Write and schema-test the best supported chamber law. The diagnostic reference panels may differ from the deployment panels; compare their moments and test whether an affine correction to the intrinsic drift transfers as well as five independently fitted coefficients.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c0d09bbf9c2abc0f348468acbbcecd4ec05caeacde2be71fcfe7fdd3fc11b431",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40962.1,
+      "usage_known": true,
+      "prompt_tokens": 35012,
+      "cached_tokens": 9344,
+      "completion_tokens": 1526
+    }
+  ]
+}

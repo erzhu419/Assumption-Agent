@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "870234738af842fd8777ff72f9cdff8d",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:13.743729+00:00",
+  "ended_at_utc": "2026-11-28T04:14:44.299833+00:00",
+  "request_sha256": "3b6715fa20b004268bc1edd6d3e55ac62f3be7e2627d2dd1cfee78248f6547a9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50996,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28210,
+    "cached_tokens": 9344,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nS, fields = m._forward(study)\\ncap, ridge = study['u_box'], study['source_ridge']\\nn = S.shape[1]\\nseen = set()\\nworst = np.zeros(3)\\nfor budget in (0., cap, study['total_budget'], (n-1)*cap, n*cap):\\n    for synthetic in (False, True):\\n        s = dict(study, total_budget=budget)\\n        if synthetic:\\n            cal = study['sensor_calibration_sweeps']\\n            x = cal['ref_rosette']\\n            coef = np.linalg.lstsq(np.c_[np.ones(len(x)), x], cal['raw_rosette'], rcond=None)[0]\\n            raw = (S @ np.linspace(-1., 2., n)).reshape(-1, 4)\\n            s['y_obs_raw'] = (np.c_[np.ones(len(raw)), raw] @ coef).ravel()\\n        y = m._calibrate(s)\\n        Z = s['Z_nuisance']\\n        P = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n        A, d = P@S, P@y\\n        out = m.solve_batch(s)\\n        w, c = out['weights'], out['kkt_certificate']\\n        ll, lu = np.array(c['lam_lower']), np.array(c['lam_upper'])\\n        g = A.T@(A@w-d) + ridge*w\\n        objective = 0.5*(np.linalg.norm(A@w-d)**2 + ridge*(w@w))\\n        primal = max(abs(w.sum()-budget), max(0., -w.min(), w.max()-cap))\\n        kkt = max(np.max(np.abs(g-c['nu_sum']-ll+lu)), np.max(np.abs(ll*w)), np.max(np.abs(lu*(cap-w))))\\n        gap = abs(objective-c['dual_lower_bound'])\\n        worst = np.maximum(worst, [primal, kkt, gap])\\n        assert np.all(ll >= 0) and np.all(lu >= 0)\\n        np.testing.assert_allclose(c['weights'], w, atol=1e-12, rtol=0)\\n        np.testing.assert_allclose(c['primal_objective'], objective, atol=1e-12, rtol=0)\\n        np.testing.assert_allclose(out['terminal_field'], np.einsum('i,ijk->jk', w, fields), atol=1e-12, rtol=0)\\n        if 0 < budget < n*cap:\\n            seen.add((np.any(w < 1e-10), np.any(w > cap-1e-10)))\\nassert (True, True) in seen, seen\\nassert max(worst) < 1e-9, worst\\nprint('10 slices: worst feasibility, KKT residual, and objective-to-dual gap:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Mixed walls → periodic seams on both axes; worst projected public tracer L2 is 6.84e-6, and the independent public probe measured field and weight relative L2 errors of 1.25e-6 and 6.98e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit based on the public probe alone\",\n      \"rejected_reason\": \"All public-fit weights are interior, so that probe does not exercise active lower and upper bounds or endpoint budgets.\"\n    }\n  ],\n  \"rationale\": \"Stress the exact saved solver on the public chamber with altered budgets and a synthetic observation slice. A failure would identify a bound-handling, multiplier, or output-assembly defect to fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "15b7aef7ebc17d3287ea0a537d7c6a61bb94838415abd245fefb936fd8e5f905",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32642.44,
+      "usage_known": true,
+      "prompt_tokens": 28210,
+      "cached_tokens": 9344,
+      "completion_tokens": 1102
+    }
+  ]
+}

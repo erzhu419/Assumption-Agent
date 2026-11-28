@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0605c64de07f4935850e634dbddf980d",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:48.703228+00:00",
+  "ended_at_utc": "2026-11-28T03:55:26.417696+00:00",
+  "request_sha256": "45cf76fa9a083d12d95197cf80135b5b7a072706b38a06427a7db7b88f2ca64f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 59519,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31781,
+    "cached_tokens": 9344,
+    "completion_tokens": 1635
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cal_margin.py <<'PY'\\nimport sys,pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=(c[k] for k in ('ref_rosette','raw_rosette')); b=c['single_bank_sweeps']; j,u,v=(b[k] for k in ('bank_id','ref_signal','raw_readout')); clean=m._clean(y); bc=np.zeros(len(v),bool)\\nfor h in range(4): bc[j==h]=m._clean(v[j==h,None])\\nedge=clean&(np.max(abs(x),axis=1)>1.4); mid=clean&(np.max(abs(x),axis=1)<=.75)\\nmodels={\\n'current':([.8,.9],[.3,.05],[2.8,3],lambda z,p,a,b:[np.tanh(a*z),z,z**3,p,np.tanh(b*p*p)]),\\n'mixed':([.8,.9,0],[.3,.05,-.5],[2.8,3,.5],lambda z,p,a,b,d:[np.tanh(a*(z+d*p)),z,z**3,p,np.tanh(b*p*p)]),\\n'pair_diff':([.8,.9],[.3,.05],[2.8,3],lambda z,p,a,b:[np.tanh(a*z),z,z**3,p,np.tanh(b*p*p),z*p,z*z*p,z*p*p]),\\n'rational':([.8,.9,.5],[.3,.05,0],[2.8,3,4],lambda z,p,a,b,d:[np.tanh(a*z),z,z**3/(1+d*z*z),p,np.tanh(b*p*p)]),\\n'cross_rational':([.8,.8],[.3,0],[2.8,3],lambda z,p,a,b:[np.tanh(a*z),z,z**3,p,p*p/(1+b*p*p)]),\\n'double_tanh':([1.2,.9,.5],[.3,.05,.12],[3,3,3],lambda z,p,a,b,d:[np.tanh(a*z),z,np.tanh(d*z),p,np.tanh(b*p*p)]),\\n'quintic':([.8,.9],[.3,.05],[2.8,3],lambda z,p,a,b:[np.tanh(a*z),z,z**3,z**5,p,np.tanh(b*p*p)]),\\n}\\nfor power in [5,7,9,11,13]: models['power'+str(power)]=([1.2,.9],[.3,.05],[3,3],lambda z,p,a,b,n=power:[np.tanh(a*z),z**n,p,np.tanh(b*p*p)])\\nfor name,(init,lo,hi,f) in models.items():\\n e=np.zeros_like(y); inv=np.zeros(len(x)); eb=np.zeros(len(v));\\n def basis(z,p,par): return np.column_stack((np.ones_like(z),*f(z,p,*par)))\\n for fold in range(7):\\n  te=np.arange(len(x))%6==fold; be=np.arange(len(v))%6==fold; tr=~te; bt=~be\\n  tr[tr]=m._clean(y[tr]);\\n  for h in range(4):\\n   q=bt&(j==h); bt[q]=m._clean(v[q,None])\\n  dat=[(np.r_[x[tr,h],u[bt&(j==h)]], np.r_[x[tr,k],np.zeros(np.sum(bt&(j==h)))],np.r_[y[tr,h],v[bt&(j==h)]]) for h,k in enumerate(m._PAIR)]\\n  def profile(par,coef=False):\\n   out=[]\\n   for z,p,t in dat:\\n    D=basis(z,p,par); C=np.linalg.lstsq(D,t,rcond=None)[0]; out.append(C if coef else D@C-t)\\n   return np.array(out) if coef else np.concatenate(out)\\n  opt=least_squares(profile,init,bounds=(lo,hi),loss='soft_l1',f_scale=.008,max_nfev=100); par=opt.x; coef=profile(par,True)\\n  def forward(z): return np.column_stack([basis(z[:,h],z[:,k],par)@coef[h] for h,k in enumerate(m._PAIR)])\\n  valid=te&clean; e[valid]=forward(x[valid])-y[valid]\\n  for i in np.flatnonzero(valid):\\n   z=least_squares(lambda z:forward(z[None])[0]-y[i],x[i],max_nfev=30,gtol=1e-11).x; inv[i]=max(abs(z-x[i]))\\n  for h in range(4):\\n   q=be&bc&(j==h); eb[q]=abs(basis(u[q],np.zeros(sum(q)),par)@coef[h]-v[q]);\\n print(name,'edge inverse p95/max',np.round(np.quantile(inv[edge],[.95,1]),6),'central inverse max',round(inv[mid].max(),6),'bank max',round(eb[bc].max(),6),'shape',np.round(par,5),'coef0',np.round(coef[0],5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cal_margin.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 paired tanh with a cubic correction → H2 a better-constrained saturation law or mixed-channel term; the verified baseline has a worst held-out edge inverse error of 0.02346.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay-mode or within-batch classifier tests\",\"rejected_reason\":\"The supplied calibration problem has continuous paired measurements and no relay state, classification labels, or technical-batch grouping.\"}],\"rationale\":\"Compare rational, mixed-channel, and higher-order saturation laws on real held-out measurements. A reduction in edge inverse error without material harm to central or single-bank accuracy would justify replacing the verified baseline. This local-start probe isolates model error; any promoted model also needs an inverse test from the production initializer.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "3015ea6e76461191c59522158635ff745122f4685b0c463b74baecb21ea2603c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41965.57,
+      "usage_known": true,
+      "prompt_tokens": 31781,
+      "cached_tokens": 9344,
+      "completion_tokens": 1635
+    }
+  ]
+}

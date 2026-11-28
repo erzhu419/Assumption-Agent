@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1c32d435236946fea88e75b78cdc611c",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:06.080387+00:00",
+  "ended_at_utc": "2026-11-28T03:45:29.903876+00:00",
+  "request_sha256": "734e9a20165a581e96e9c3e2f63d5f4856fd97cfa18a1cae8fc40c8e5767c481",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29414,
+    "cached_tokens": 9344,
+    "completion_tokens": 780
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); a=importlib.util.module_from_spec(spec); spec.loader.exec_module(a)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; bank=c['single_bank_sweeps']; ids=np.asarray(bank['bank_id']); xb=np.eye(4)[ids]*np.asarray(bank['ref_signal'])[:,None]; yb=np.asarray(bank['raw_readout']); good=np.max(abs(y),axis=1)<8; good_b=abs(yb)<8\\nprint('Clean mixed / total:',good.sum(),len(good),'clean single-bank / total:',good_b.sum(),len(good_b))\\nworst=0\\nfor k in range(4):\\n    use=(ids==k)&good_b\\n    beta=np.linalg.lstsq(a._sensor_features(x[good],k),y[good,k],rcond=None)[0]\\n    e=a._sensor_features(xb[use],k)@beta-yb[use]\\n    rmse=np.sqrt(np.mean(e**2)); worst=max(worst,rmse)\\n    print('Bank',k,'held-out RMSE',rmse,'mean residual',np.mean(e),'n',use.sum())\\nprint('Worst held-out bank RMSE:',worst)\\ncoeff=a._sensor_fit(c); cal=a._calibrate(s).reshape(-1,4); raw=s['y_obs_raw'].reshape(-1,4)\\nreconstructed=np.column_stack([a._sensor_features(cal,k)@coeff[k] for k in range(4)])\\nerr=np.max(np.abs(reconstructed-raw)); print('Worst raw reconstruction error:',err); assert err<1e-9\\nout=a.solve_batch(s); cert=out['kkt_certificate']; print('Public primal-dual gap:',abs(cert['primal_objective']-cert['dual_lower_bound']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited open Robin walls → H2 closed walls with nonlinear calibration; worst nuisance-profiled outer-fold RMSE is 0.00934 and host-probe relative weight error is 1.834e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The failed audit treated each single-bank reading as a four-channel vector. Use the recorded bank IDs to compare scalar held-out readings with predictions from mixed sweeps. A bank-specific residual above the mixed-sweep noise floor would warrant revisiting the joint calibration; a chamber round-trip error would instead point to inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "34a19d9888fe62c644822d98c017768c2076fd96b1827f69a94faeba91978ade",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23777.82,
+      "usage_known": true,
+      "prompt_tokens": 29414,
+      "cached_tokens": 9344,
+      "completion_tokens": 780
+    }
+  ]
+}

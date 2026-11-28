@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "467e27799f564ac68883d263d3f99460",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:59:39.742861+00:00",
+  "ended_at_utc": "2026-11-28T04:00:15.530585+00:00",
+  "request_sha256": "609deba0a985d451a864a9e3ec46bb2eb11f45fa47ec94898be114d98353ae84",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45442,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29039,
+    "cached_tokens": 9344,
+    "completion_tokens": 1391
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_sparse.py <<'PY'\\nimport numpy as np\\nfrom bridge_shape import x,y\\nfrom itertools import product\\nfrom numpy.polynomial.chebyshev import chebvander,chebfit\\n\\ndef fit(x,y,j,dd,dc,sparse=True):\\n    others=[(j+2)%4] if sparse else [i for i in range(4) if i!=j]\\n    def design(z):\\n        return np.column_stack([chebvander(z[:,j]/1.8,dd)]+[chebvander(z[:,i]/1.8,dc)[:,1:] for i in others])\\n    a=design(x); p=np.linalg.lstsq(a,y,rcond=None)[0]; r=y-a@p; u,s,_=np.linalg.svd(a,full_matrices=False)\\n    loo=r/(1-(u[:,s>1e-10]**2).sum(1)); return r,loo,lambda z:design(z)@p\\n\\nif __name__=='__main__':\\n    ans=[]\\n    for dd,dc,sparse in product(range(3,14),range(1,10),[False,True]):\\n        rr,ll,_=zip(*(fit(x,y[:,j],j,dd,dc,sparse) for j in range(4)))\\n        ans.append((np.sqrt(np.max(np.mean(np.array(ll)**2,axis=1))),np.max(abs(np.array(ll))),dd,dc,sparse,np.std(rr,axis=1)))\\n    for a in sorted(ans,key=lambda a:a[0])[:22]: print(a)\\n    _,_,dd,dc,s,_=min(ans,key=lambda a:a[0]); g=np.arange(-1.8,1.81,.1); print('grid, channel-0 own, channel-0 cross; derivatives'); print(np.round(np.column_stack((g,*[fit(x,y[:,0],0,dd,dc,s)[2](np.eye(4)[i][None,:]*g[:,None]) for i in (0,2)])),6))\\n    print('all reference min/max',x.min(0),x.max(0)); print('largest residual by row',np.sort(np.max(abs(np.column_stack([fit(x,y[:,j],j,dd,dc,s)[0] for j in range(4)])),axis=1))[-12:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_sparse.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single saturation or sinusoid → H2 sparse additive bridge with separate diagonal and opposite-channel response; additive quintic still leads at 0.0117 worst-channel reference LOO RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a single saturation plus cross-channel quadratics\",\n      \"rejected_reason\": \"Its leverage-adjusted error is roughly twice the quintic's exact LOO error, so it is not yet a credible replacement.\"\n    }\n  ],\n  \"rationale\": \"The axial rows suggest that each output depends chiefly on its own input and the opposite channel. Isolating those two effects tests whether the sparsity holds on mixed references and reveals whether the best unconstrained fit turns over inside the measured load range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "674d5ccbd2f7680de866777ed7b809b9a986175dcea6e0030fe75525ca8f0cb1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37997.08,
+      "usage_known": true,
+      "prompt_tokens": 29039,
+      "cached_tokens": 9344,
+      "completion_tokens": 1391
+    }
+  ]
+}

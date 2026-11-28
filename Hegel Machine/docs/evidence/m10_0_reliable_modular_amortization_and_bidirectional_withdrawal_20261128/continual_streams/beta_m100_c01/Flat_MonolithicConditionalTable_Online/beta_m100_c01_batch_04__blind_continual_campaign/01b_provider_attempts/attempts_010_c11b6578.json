@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c11b65780ab64b4e85c03a7f408855b4",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:15.346560+00:00",
+  "ended_at_utc": "2026-11-28T03:50:56.519764+00:00",
+  "request_sha256": "2f655beb6f601267129e404b6e1f46de5d427b9fd67ae9a7219a8d0b763a3fc6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51837,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27823,
+    "cached_tokens": 9344,
+    "completion_tokens": 1751
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',root+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; out=m.solve_batch(s)\\nv=s['sensor_calibration_sweeps']; x,y=v['ref_rosette'],v['raw_rosette']; occ=np.count_nonzero(x,axis=1)\\ndef designs(x, family):\\n    mats=[]\\n    for j in range(4):\\n        q=x[:,j]; b=x[:,(j+1)%4]; c=x[:,(j-1)%4]; a=m._design(x,j)\\n        if family=='cubic':\\n            a=np.column_stack([np.prod(x[:,t],axis=1) for d in range(4) for t in itertools.combinations_with_replacement(range(4),d)])\\n        if family=='pair_rational':\\n            a=np.column_stack((a,*(q*(nq+sgn*q) for nq in (b,c) for sgn in (-1,1) if not (nq is b and sgn==-1)),*(q*(nq-sgn*q)**2/(1+(nq-sgn*q)**2) for nq in (b,c) for sgn in (-1,1))))\\n            # Drop dependent columns without selecting on response.\\n            keep=[]\\n            for k in range(a.shape[1]):\\n                if np.linalg.matrix_rank(a[:,keep+[k]])>len(keep): keep.append(k)\\n            a=a[:,keep]\\n        mats.append(a)\\n    return mats\\nfor f in ('cyclic','cubic','pair_rational'):\\n    e=[]; mats=designs(x,f)\\n    for i in range(len(x)):\\n        tr=np.arange(len(x))!=i\\n        base=m._fit_calibration(x[tr],y[tr]); r=np.max(abs(m._forward(x[tr],base)-y[tr]),axis=1)\\n        good=np.where(tr)[0][r<=max(1e-8,10*np.median(r))]\\n        pred= m._forward(x[i:i+1],base)[0] if f=='cyclic' else np.array([a[i]@np.linalg.lstsq(a[good],y[good,j],rcond=None)[0] for j,a in enumerate(mats)])\\n        e.append(max(abs(pred-y[i])))\\n    e=np.array(e); print(f,'median',np.median(e),'group max below gross corruption:',[(int(k),float(np.max(e[(occ==k)&(e<.01)])),int(np.sum((occ==k)&(e>=.01)))) for k in np.unique(occ)])\\nnx,ny=s['nx'],s['ny']; n=nx*ny; I=eye(n,format='csc'); B=np.stack([a.ravel(order='F') for a in s['source_modes']],axis=1); ij=s['sensor_ij']; loc=ij[:,0]+nx*ij[:,1]\\nax,ay=[m._axis(s['kappa_'+a],s['vel_'+a],s['L'+a]/(k-1)) for a,k in [('x',nx),('y',ny)]]\\nL=kron(eye(ny),ax)+kron(ay,eye(nx))+diags(s['V_reaction_2d'].ravel(order='F')); gx=np.arange(n)%nx; gy=np.arange(n)//nx\\nwalls=[mask*s['robin_'+a]/(s['L'+a]/(k-1)) for mask,a,k in [(gx==0,'x',nx),(gx==nx-1,'x',nx),(gy==0,'y',ny),(gy==ny-1,'y',ny)]]\\ny=m._calibrate(s); Z=s['Z_nuisance']; bank=s['row_bank_id']; sh=np.repeat(np.arange(len(s['mu_shifts'])),len(loc)); cap=s['u_box']; budget=s['total_budget']; sr=s['source_ridge']; nr=s['nuisance_ridge']\\ndef score(A,Z,groups):\\n    vals=[]\\n    for k in np.unique(groups):\\n        te=groups==k; a=A[~te]; z=Z[~te]; yy=y[~te]; p=np.linalg.solve(z.T@z+nr*np.eye(z.shape[1]),z.T); at=a-z@(p@a); yt=yy-z@(p@yy)\\n        w,_=m._box_simplex(at.T@at+sr*np.eye(at.shape[1]),-at.T@yt,cap,budget)\\n        vals.append(np.sqrt(np.mean((y[te]-A[te]@w-Z[te]@(p@(yy-a@w)))**2)))\\n    return np.array(vals)\\nres=[]\\nfor mask in itertools.product((0,1),repeat=4):\\n    T=L+diags(np.asarray(mask)@walls); A=np.concatenate([splu((T+mu*I).tocsc()).solve(B)[loc] for mu in s['mu_shifts']]); b=score(A,Z,bank); d=score(A,Z,sh); res.append((max(b),max(d),mask))\\n    if not any(mask):\\n        print('reflecting: bank/shift with projected nuisance',b,d,'without nuisance',score(A,Z[:,:0],bank),score(A,Z[:,:0],sh))\\n        print('isolated artifact dual gap',abs(out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound']))\\nprint('wall candidates sorted by worst bank RMSE (bank, shift, four Robin side switches):',sorted(res))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived whole-chamber wall regimes and cyclic calibration → H2 retain the reflecting cyclic model unless side-specific Robin walls or a richer rosette predict held-out measurements better; current worst bank RMSE is 0.00992.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-state, HJB, or classification checks\",\n      \"rejected_reason\": \"The contract defines a steady transport regression with no relay states, time evolution, or class labels. Held-out sensor banks and reaction shifts test the applicable nuisance and transport failures.\"\n    }\n  ],\n  \"rationale\": \"A side-specific wall law could have escaped the comparison of whole-chamber regimes, and a richer rosette could improve prediction where the six-term model misses structure. Score fixed challengers with held-out groups and calibration sweeps; compare nuisance projection with omission on the same groups so a pooled fit cannot hide a bad slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "16e344e77c2d44fac53c0c70b4d6da76f380737ac31e53862fa0ab86414d1dd5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45389.66,
+      "usage_known": true,
+      "prompt_tokens": 27823,
+      "cached_tokens": 9344,
+      "completion_tokens": 1751
+    }
+  ]
+}

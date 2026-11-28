@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c28e39bd73e4768816910b1d9a8b3e2",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:45.001002+00:00",
+  "ended_at_utc": "2026-11-28T03:32:19.132130+00:00",
+  "request_sha256": "079642f9e18d4636b7582fbd098b3dc18734c547c98a896bc820f17717615d17",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40126,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25510,
+    "cached_tokens": 14976,
+    "completion_tokens": 1367
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_probe.py <<'PY'\\nimport sys,pickle,numpy as n\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m100_c02_s00_solver as m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset'];g=p['campaign_diagnostics'];tr,te=d['train'],d['test'];dt,t=d['past_dt'],d['eval_times'];c=d['calibration_load_cells']; P,H=m._loads(c,tr);X=m._features(tr,te);tau,th=m._fit(P,H,X[:len(H)],dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); past,h=m._loads(c,g);x=m._features(tr,{k:n.concatenate((te[k],g[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')})[-len(h):]; y=n.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; _,r,*_=m._design(n.log(tau),past,h,x,dt,t); amp0=r[:,:2]*tau*th[:2];z=h[:,None]-amp0/th[:2]; drift=x@th[2:];\\ndef basis(u): return n.vstack([n.c_[-n.expm1(-t[:,None]/u),t],n.r_[1/u,1.]])\\ndef fit(F, mask, u=tau):\\n b=basis(u); A=n.column_stack([(f[:,None,:]*b[None,:,j,None]).reshape(y.size,-1) for j,f in enumerate(F)]); mask=n.repeat(mask,y.shape[1]); a=n.linalg.lstsq(A[mask],y.ravel()[mask],rcond=None)[0];return (A@a).reshape(y.shape),n.split(a,n.cumsum([f.shape[1] for f in F])[:-1])\\none=x[:,:1]; common=n.c_[one,past,h,x[:,1:]]; vars={'full':(common,common,common),'gap drift':(n.c_[one,amp0[:,0],past[:,-1]],n.c_[one,amp0[:,1],drift],n.c_[one,drift]),'z hold last drift':(n.c_[one,z[:,0],h,past[:,-1]],n.c_[one,z[:,1],h,drift],n.c_[one,drift]),'z hold last drift x':(n.c_[one,z[:,0],h,past[:,-1]],n.c_[one,z[:,1],h,x[:,1:]],x),'z hold last drift sq':(n.c_[one,z[:,0],h,past[:,-1],past[:,-1]**2],n.c_[one,z[:,1],h,drift,drift**2],n.c_[one,drift,drift**2])}\\nif __name__=='__main__':\\n for u in (tau,[tau[0],2.73]):\\n  for k,F in vars.items():\\n   pred,a=fit(F,n.ones(len(h),bool),u); e=pred-y; q=n.empty_like(y)\\n   for l in n.unique(g['lab_id']):\\n    ix=g['lab_id']==l;q[ix]=fit(F,~ix,u)[0][ix]-y[ix]\\n   print(u,k,'coeff',[v.round(4).tolist() for v in a],'rms',n.sqrt(n.mean(e**2,axis=0))[[0,4,11,12]].round(4),'worst LOLO',n.max([n.sqrt(n.mean(q[g['lab_id']==i]**2,axis=0))[[0,4,11,12]] for i in range(4)],axis=0).round(4))\\n print('past hold ranges',past.min(0),past.max(0),h.min(),h.max()); print('drift',drift.round(3)); print('refs means',[(n.mean(s['ref_coupons'],axis=0).round(2),n.isnan(s['coupon_features_raw']).sum(0)) for s in [tr,te,g]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Benchtop transfer → shared time basis with a chamber-specific amplitude and drift law; pooled diagnostic baseline RMSE is 0.767 strain and 1.789 initial rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The calibrated benchtop constitutive law transfers unchanged to chamber coupons.\",\"empirical_witness\":\"Baseline chamber RMSE is 0.767 strain and 1.789 rate, while the intrinsic time basis with free coupon coefficients reconstructs 95% of observations within 0.0047.\",\"causal_blanket_diagnosis\":\"The bulk error is in how chamber history and coupon features set response amplitudes and drift, not in the affine bridge calibration.\",\"sublated_pivot\":\"Keep the train-only material fit and test compact chamber coefficient laws on held-out labs.\",\"risk_kind\":\"deployment_law_transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent time constants for deployment\",\"rejected_reason\":\"The free-time decomposition only slightly improves reconstruction; first test whether the shared-time law predicts held-out chamber coupons.\"}],\"rationale\":\"A full linear stress-and-feature basis tests whether the chamber correction is linear; compact submodels and leave-one-lab-out errors distinguish a transferable law from diagnostic interpolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "90bc22aa05a2ed78b1b7c1dd9d255e6cef0e836b75a1aba71eb7cb24f4b54f38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36151.16,
+      "usage_known": true,
+      "prompt_tokens": 25510,
+      "cached_tokens": 14976,
+      "completion_tokens": 1367
+    }
+  ]
+}

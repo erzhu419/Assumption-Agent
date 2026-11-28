@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb7f949f60d142eebb5ebfc929b30a17",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:25.948748+00:00",
+  "ended_at_utc": "2026-11-28T03:44:47.474425+00:00",
+  "request_sha256": "b47da70a1dbed25b9138bb4240ddfdde2e3de2b32ec59e04ab9cedf6289d94a7",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22168,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18130,
+    "cached_tokens": 9344,
+    "completion_tokens": 810
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np,json,pathlib\\nb=pickle.load(open('public_batch.pkl','rb')); print('items',len(b))\\nfor i,item in enumerate(b):\\n d=item['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print(i,list(d),[(k,np.shape(v)) for k,v in c.items() if not isinstance(v,dict)],'verification',None if d.get('chamber_verification_trials') is None else list(d['chamber_verification_trials'])); print('range',x.min(0),x.max(0)); print('first',np.round(np.c_[x[:3],y[:3]],3))\\n for deg in (1,2,3):\\n  from itertools import combinations_with_replacement as cr\\n  a=np.column_stack([np.prod(x[:,j],axis=1) for k in range(deg+1) for j in cr(range(4),k)]); w=np.ones(len(x));\\n  for t in range(25):\\n   beta=np.linalg.lstsq(a*w[:,None],y*w[:,None],rcond=None)[0]; r=np.linalg.norm(a@beta-y,axis=1); w=1/np.maximum(r,np.median(r)*.9+1e-10)\\n  print(deg,'rank',np.linalg.matrix_rank(a),'res',np.round(np.quantile(r,[.1,.5,.8,.9,.95,1]),6),'large',np.flatnonzero(r>8*np.median(r)))\\n for k,v in c.items():\\n  if not isinstance(v,dict) and np.shape(v)==(len(x),): print(k,np.unique(v,return_counts=True))\\np=pathlib.Path('/tmp/hegel_continual_archive')\\nfor name in ('archive_manifest.json','archive_apparatus_log.json'):\\n q=p/name\\n if q.exists():\\n  z=json.loads(q.read_text()); print(name,type(z),list(z) if isinstance(z,dict) else len(z)); seq=next((v for v in z.values() if isinstance(v,list) and v and isinstance(v[-1],dict)),[]) if isinstance(z,dict) else z\\n  for r in seq[-5:]: print({k:(('list',len(v),np.shape(v[0]) if len(v) and isinstance(v[0],list) else str(v[0])[:150] if len(v) else '') if isinstance(v,list) else str(v)[:280]) for k,v in r.items()})\\nPY\\nsed -n '60,130p' validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine channel mixing -> H2 sparse nonlinear forward calibration; held-out error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare robust residuals and calibration design ranks to detect missing nonlinear terms or unsupported polynomial degrees. Summarize archive metadata without dumping telemetry so any relevant apparatus measurements can inform the next fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e8fd9e669be5ce5571c966cfeaabffb28ab25d7ed13ce817dccab5c03fe5c2d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23605.02,
+      "usage_known": true,
+      "prompt_tokens": 18130,
+      "cached_tokens": 9344,
+      "completion_tokens": 810
+    }
+  ]
+}

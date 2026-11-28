@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "907813a5b4c84e0693edf403e076b121",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:58.921412+00:00",
+  "ended_at_utc": "2026-11-28T04:06:20.853039+00:00",
+  "request_sha256": "3f3c81ca56530380771c6287305d258bf09913698b89854e867cee21c572ef9a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43567,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26741,
+    "cached_tokens": 9344,
+    "completion_tokens": 823
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*_solver.py; do echo \\\"--- $(basename \\\"$f\\\")\\\"; grep -A14 -E '^def (_calibrate|solve_batch)' \\\"$f\\\" | tail -33; done; cat > /tmp/bridge07.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; l=c['true_channel_loads']; y=c['bridge_raw']; print('ranges', l.min(0),l.max(0),y.min(0),y.max(0)); print('sweep',[(k,np.asarray(v)[:12]) for k,v in c['single_channel_sweeps'].items()]);\\ndef terms(l,d):\\n return np.column_stack([np.prod(l[:,ix],axis=1) for k in range(d+1) for ix in combinations_with_replacement(range(4),k)])\\ndef fit(A,y):\\n p=np.linalg.lstsq(A,y,rcond=None)[0]\\n for k in range(12):\\n  r=A@p-y; s=max(.0004,1.4826*np.median(abs(r-np.median(r)))); w=1/np.sqrt(1+(r/(3*s))**2);p=np.linalg.lstsq(A*w[:,None],y*w,rcond=None)[0]\\n return p\\nfor degree in range(1,5):\\n A=terms(l,degree); r=np.zeros_like(y); pc=[]\\n for j in range(4):\\n  pc.append(fit(A,y[:,j]));\\n  for sel in np.array_split(np.argsort(np.max(abs(l),axis=1)),8):\\n   m=np.ones(len(y),bool);m[sel]=False; r[sel,j]=A[sel]@fit(A[m],y[m,j])-y[sel,j]\\n print(degree,'quantiles',np.quantile(abs(r),[.5,.9,.95,1],axis=0).round(5),'outer-block medians',[round(float(np.median(abs(r[sel]))),5) for sel in np.array_split(np.argsort(np.max(abs(l),axis=1)),8)]); print('coefs',np.array(pc).round(4).T.tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived nonlinear bridge and zero-memory chamber → H2 recalibrated bridge and diagnostic-identified chamber; the archived bridge's 95th-percentile raw residual was 0.0802, and the preliminary chamber fit's worst held-lab RMSE was 0.0649 for strain and 0.0807 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a more complex chamber law using stresses from the archived bridge\",\"rejected_reason\":\"The archived calibration hit parameter bounds, so bridge error could be mistaken for chamber history or drift.\"}],\"rationale\":\"Compare calibration bases on held-out load ranges. A simpler bridge that predicts withheld sweeps better should replace the archived one before the material spectrum and chamber terms are re-estimated.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "8c4d787550d5760a4be29affa2424b813689efe821d3b631c87950b9f195b927",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24087.81,
+      "usage_known": true,
+      "prompt_tokens": 26741,
+      "cached_tokens": 9344,
+      "completion_tokens": 823
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d710e2aeb304533ab27ec096c31fd67",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:55.865855+00:00",
+  "ended_at_utc": "2026-11-28T03:55:18.417940+00:00",
+  "request_sha256": "8a119802d7565254d363474d243926944590bae36d95e4f2540ffbc58723178e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45108,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26165,
+    "cached_tokens": 9344,
+    "completion_tokens": 728
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat public_asset_index.json; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json | head -c 2600; python3 - <<'PY'\\nimport pickle,numpy as np\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; print('diagnostics:',type(item.get('campaign_diagnostics'))); d=item['dataset']; c=d['calibration_load_cells']; R=c['bridge_raw']; L=c['true_channel_loads']; np.set_printoptions(precision=4,suppress=True,linewidth=150); print('calibration columns',list(c)); print('shape',R.shape); g=(L!=0).sum(1); print('nonzero loads per row',np.unique(g,return_counts=True)); print('single and zero rows: i, load, raw'); print(np.c_[np.arange(len(L)),L,R][g<=1]); print('first 12 mixed rows'); print(np.c_[np.arange(len(L)),L,R][g>1][:12]); print('raw ranges',np.quantile(R,[0,.05,.5,.95,1],axis=0)); print('train/test raw ranges');\\nfor n in ('train','test'):\\n a=np.vstack((d[n]['hold_channel_raw'],d[n]['past_channel_raw'].reshape(-1,4))); print(n,np.quantile(a,[0,.05,.95,1],axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic bridge → H2 infer the active bridge from isolated and mixed sweeps; the archived inversion has a worst raw reconstruction error of 2068.57.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived cyclic-product plus cubic forward basis can calibrate this campaign's transducer.\",\n    \"empirical_witness\": \"The median calibration residual norm was 0.379 after fitting, and archived Newton inversion missed an observed deployment bridge vector by up to 2068.57.\",\n    \"causal_blanket_diagnosis\": \"Bridge model error corrupts the calibrated stress histories before the hereditary fit, so the fitted relaxation time at the upper bound cannot diagnose chamber physics.\",\n    \"sublated_pivot\": \"Use zero-load and isolated-channel rows to identify the one-channel response, then test interaction terms on mixed sweeps before refitting material parameters.\",\n    \"risk_kind\": \"transducer basis misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune Newton inversion for the archived cubic\",\n      \"rejected_reason\": \"A better numerical inverse would not fix the large residuals in the forward calibration.\"\n    }\n  ],\n  \"rationale\": \"Isolated sweeps can distinguish saturation, piecewise response, and calibration contamination without confounding them with cross-talk. Mixed sweeps then test which interaction terms are necessary.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d049aa09af344fe10043018a1cdb608b112713fc00a71c86ff4e1c22fbda7055",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22504.73,
+      "usage_known": true,
+      "prompt_tokens": 26165,
+      "cached_tokens": 9344,
+      "completion_tokens": 728
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a051a0899caf495998f092c0c18707a5",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:31.987439+00:00",
+  "ended_at_utc": "2026-11-28T03:42:56.569170+00:00",
+  "request_sha256": "43b0585348d6e36e4c41b1605823cd7c18fb03b3b5a1be0029d5a64c6f9a4e11",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46919,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26002,
+    "cached_tokens": 9344,
+    "completion_tokens": 848
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_bridge_groups.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\\nfrom batch_solver import solve_batch\\n# Reuse the previously audited fitters without executing their validation loop.\\nwith open('/tmp/audit_bridge.py') as f:\\n    exec(f.read().split('\\\\nfor item in pickle.load', 1)[0])\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    d = item['dataset']; c = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    groups = [('outer mixed shell', mixed & (np.max(abs(x),axis=1) > 1.4))]\\n    for j in range(4):\\n        k = (j+1)%4\\n        groups.append((f'large {j}-{k} contrast', mixed & (abs(x[:,j]-x[:,k]) >= np.quantile(abs(x[mixed,j]-x[mixed,k]), .75))))\\n    for name,test in groups:\\n        cal = dict(c,true_channel_loads=x[~test],bridge_raw=y[~test]); a = _fit_bridge(cal); b,_,_ = shared(cal); _,g,_ = shared(cal,True)\\n        no_cross = a.copy(); no_cross[:,6] = 0\\n        print(name, int(test.sum()), 'forward max [no interaction ablation, cyclic, shared, rational]', [float(np.max(abs(z-y[test]))) for z in (_forward(x[test],no_cross),_forward(x[test],a),_forward(x[test],b),g(x[test]))], 'inverse max [cyclic,shared]', [float(np.max(abs(_inverse(y[test],p)-x[test]))) for p in (a,b)])\\n    assert all(np.isfinite(v).all() for v in solve_batch(d).values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_bridge_groups.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent channel cubics -> H2 cyclic pair interactions plus self cubics; measured mixed-boundary leave-one-out load error is 0.000386, with grouped boundary validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run class-balance, relay-mode, or drift-operator checks\",\n      \"rejected_reason\": \"The measured bridge is a static continuous calibration map with no classification labels, relay states, or drift operator.\"\n    }\n  ],\n  \"rationale\": \"Leave-one-out retains nearby probes and could hide a failure on an entire load region. Holding out the measured outer shell and high pairwise-contrast groups tests that risk directly; a consistent improvement in worst-case recovery would justify promoting a challenger.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "13d59fe2709e48d5cf01cc5e0edaf61737f19bd3afda985740a0e950b013ad1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24540.16,
+      "usage_known": true,
+      "prompt_tokens": 26002,
+      "cached_tokens": 9344,
+      "completion_tokens": 848
+    }
+  ]
+}

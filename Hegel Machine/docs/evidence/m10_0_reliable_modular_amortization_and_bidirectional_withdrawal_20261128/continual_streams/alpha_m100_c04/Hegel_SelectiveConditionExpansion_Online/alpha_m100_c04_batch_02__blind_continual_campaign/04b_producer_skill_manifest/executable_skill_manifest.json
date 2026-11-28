@@ -1,0 +1,174 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m100_c04_batch_02_cced9867b05c",
+    "source_hash": "cced9867b05c693bfda2af635be783436f084ee7a99de5af409200df0e9f8fc9",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m100_c04_batch_02__blind_continual_campaign",
+    "task_id": "alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_bridge.py",
+        "archived_relpath": "producers/tmp__audit_bridge.py",
+        "bytes": 2654,
+        "sha256": "99e747945bc992e4e90b7dc5024231a28ff7fd23dfd730e7d4d0fe1248145709"
+      },
+      {
+        "container_path": "/tmp/audit_bridge_groups.py",
+        "archived_relpath": "producers/tmp__audit_bridge_groups.py",
+        "bytes": 1432,
+        "sha256": "d01c9c8a1ae065db27166761e66d762e4883cd8ab284c872a4bd2d9457e6d238"
+      },
+      {
+        "container_path": "/tmp/bridge_independent.py",
+        "archived_relpath": "producers/tmp__bridge_independent.py",
+        "bytes": 3638,
+        "sha256": "28a3839c14743ef9d18256d059d96f8b517e5d2af4c912f44978400fc71857b9"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c04_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c04_batch_01_solver.py",
+        "bytes": 5874,
+        "sha256": "bb5373582e81e0485651d56a318690e41a7ff6393a76ff9ca864784212e6a162"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c04_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c04_s00_solver.py",
+        "bytes": 4886,
+        "sha256": "e1b71bc02617932d98476b2b32fb8aea7ff695971ea5e764135172c31d4ebe5f"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat batch_solver.py _verified_downstream.py validate_public_schema.py && ls -l /tmp/hegel_continual_archive && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS transducer calibration nonlinear regression'; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_batch.pkl','rb') as f: ds=pickle.load(f)\ndef scan(x,p='',d=0):\n if isinstance(x,dict):\n  for k,v in x.items(): scan(v,p+'/'+str(k),d+1)\n elif isinstance(x,(list,tuple)):\n  print(p,type(x).__name__,len(x));\n  if x and d<4: scan(x[0],p+'/0',d+1)\n elif isinstance(",
+      "cd /holdout_task; cat public_asset_index.json; cat /tmp/hegel_continual_archive/{archive_manifest,pre_llm_gate_diagnostic}.json; grep -n -Ei 'bridge|sweep|transduc|calib' /tmp/hegel_continual_archive/*solver.py; head -95 /tmp/hegel_continual_archive/archive_apparatus_log.json; cat validate_public_schema.py; python3 - <<'PY'\nimport numpy as np,pickle\nc=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; np.set_printoptions(precision=3,suppress=True); print(np.c_[np.arange(len(x)),x,y]); print(np.c_[*c['single_channel_s",
+      "cd /holdout_task && python3 - <<'PY'\nimport itertools as it,json,pickle,numpy as np\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['true_channel_loads']; y=C['bridge_raw']; axis=np.count_nonzero(x,axis=1)<=1\nnp.set_printoptions(precision=7,suppress=True,linewidth=140)\nprint('keys',list(D),'axis rows',np.where(axis)[0]); print('first anchors',np.c_[x[:14],y[:14]])\nfor names in [('1','a','b','c','d'),('1','a','b','c','d','aaa','bbb','ccc','ddd'),tuple(['1']+[''.join(p) for k in range(1,4) for p in it.combinations_with_replacement('abcd',k)])]:\n A=n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools as it,pickle,numpy as np\nc=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; X=np.vstack([x,np.eye(4)[s['lab_id']]*s['true_stress'][:,None]]); Y=np.vstack([y,np.where(np.eye(4,dtype=bool)[s['lab_id']],s['cmd_stress'][:,None],np.nan)]); live=np.isfinite(Y); ok=np.nanmax(abs(Y),axis=1)<8\nnp.set_printoptions(precision=6,suppress=True)\nfor deg in [2,3,4]:\n terms=[()]+[p for k in range(1,deg+1) for p in it.combinat",
+      "cd /holdout_task && cat > upstream_transducer.py <<'PY'\n\"\"\"Calibrate the four-channel load-cell bridge before constitutive fitting.\"\"\"\n\nimport numpy as np\n\n\ndef _basis(loads, channel):\n    own = loads[:, channel]\n    neighbor = loads[:, (channel + 1) % 4]\n    return np.column_stack((np.ones(len(loads)), loads, own**3, own * neighbor))\n\n\ndef _fit_bridge(cal):\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\n    sweeps = cal['single_channel_sweeps']\n    labs = np.asarray(sweeps['lab_id'])\n    sweep_loads = np.eye(4)[labs] * np.as",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom upstream_transducer import _fit_bridge,_forward,_inverse,calibrate_upstream\nfrom batch_solver import solve_batch\nitems=pickle.load(open('public_batch.pkl','rb'))\nfor item in items:\n d=item['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; b=_fit_bridge(c)\n print('coefficients',np.round(b,6)); err=np.max(np.abs(_forward(x,b)-y),axis=1); print('bridge spike rows',np.flatnonzero(err>1).tolist())\n a",
+      "cd /holdout_task && cat > /tmp/audit_bridge.py <<'PY'\nimport sys, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\n\ndef shared(cal, rational=False):\n    b = _fit_bridge(cal)\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\n    s = cal['single_channel_sweeps']; j = np.arange(4); k = (j+1)%4; p = (j-1)%4\n    ls = s['lab_id']; xs = np.eye(4)[ls]*s['true_stress'][:,None]; ys = s['cmd_stress']\n    r = np.max(abs(_forward(x,b)-y),axis=1); rs = abs(_forward(xs,b)[np.arange(len(",
+      "cat > /tmp/audit_bridge_groups.py <<'PY'\nimport sys, pickle\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\nfrom batch_solver import solve_batch\n# Reuse the previously audited fitters without executing their validation loop.\nwith open('/tmp/audit_bridge.py') as f:\n    exec(f.read().split('\\nfor item in pickle.load', 1)[0])\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\n    d = item['dataset']; c = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\n    mixed = np.count_nonzer",
+      "set -e\ncd /holdout_task\ncp upstream_transducer.py /tmp/bridge_independent.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('upstream_transducer.py')\ns=p.read_text().replace('import numpy as np\\n','import numpy as np\\nfrom scipy.optimize import least_squares\\n',1)\nold='''    coeff, _ = regress(r <= 8 * scale)\n    return coeff'''\nnew='''    coeff, _ = regress(r <= 8 * scale)\n    _, r = regress(r <= 8 * scale)\n    clean = r <= 8 * max(np.median(r), 1e-10)\n\n    # Channel gains differ, but the normalized cyclic response is shared.\n    j = np.arange(4)\n    nxt, prev = (j + 1) % 4, (j - 1) % 4\n   "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m100_c04_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m100_c04_batch_01_solver.py",
+      "selected_channels": [
+        "m100_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 4630,
+        "sha256": "e698cd4337189bb10da7ee05c3cebf9058fe4951d138a06accd5edbf6cecc50a",
+        "content_addressed_ref": "content_addressed_blobs/e698cd4337189bb10da7ee05c3cebf9058fe4951d138a06accd5edbf6cecc50a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": [
+      "_basis",
+      "_fit_bridge",
+      "_forward",
+      "_inverse",
+      "calibrate_upstream",
+      "_design",
+      "_fit",
+      "shared"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "cced9867b05c693bfda2af635be783436f084ee7a99de5af409200df0e9f8fc9",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\ncp upstream_transducer.py /tmp/bridge_independent.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('upstream_transducer.py')\ns=p.read_text().replace('import numpy as np\\n','import numpy as np\\nfrom scipy.optimize ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "cced9867b05c693bfda2af635be783436f084ee7a99de5af409200df0e9f8fc9",
+        "expected_candidate_sha256": "cced9867b05c693bfda2af635be783436f084ee7a99de5af409200df0e9f8fc9",
+        "computed_candidate_sha256": "cced9867b05c693bfda2af635be783436f084ee7a99de5af409200df0e9f8fc9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 4630
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_cced9867"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_basis",
+        "code": "def _basis(loads, channel):\n    own = loads[:, channel]\n    neighbor = loads[:, (channel + 1) % 4]\n    return np.column_stack((np.ones(len(loads)), loads, own ** 3, own * neighbor))"
+      },
+      {
+        "name": "_fit_bridge",
+        "code": "def _fit_bridge(cal):\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\n    sweeps = cal['single_channel_sweeps']\n    labs = np.asarray(sweeps['lab_id'])\n    sweep_loads = np.eye(4)[labs] * np.asarray(sweeps['true_stress'])[:, None]\n    sweep_raw = np.asarray(sweeps['cmd_stress'])\n    n = len(loads)\n    design = []\n    for j in range(4):\n        m = labs == j\n        indices = np.r_[np.arange(n), n + np.flatnonzero(m)]\n        design.append((_basis(np.vstack((loads, sweep_loads[m])), j), np.r_[raw[:, j], sweep_raw[m]], indices))\n\n    def regress(weights):\n        coeff = []\n        residual = np.zeros(len(weights))\n        for (a, b, idx) in design:\n            w = np.sqrt(weights[idx])\n            c = np.linalg.lstsq(w[:, None] * a, w * b, rcond=None)[0]\n            coeff.append(c)\n            residual[idx] = np.maximum(residual[idx], np.abs(a @ c - b))\n        return (np.asarray(coeff), residual)\n    weights = np.ones(n + len(labs))\n    for _ in range(20):\n        (_, r) = regress(weights)\n        scale = max(np.median(r), 1e-10)\n        weights = 1 / (1 + (r / scale) ** 2)\n    (coeff, _) = regress(r <= 8 * scale)\n    return coeff"
+      },
+      {
+        "name": "_forward",
+        "code": "def _forward(loads, coeff):\n    (bias, linear, cubic, cross) = (coeff[:, 0], coeff[:, 1:5], coeff[:, 5], coeff[:, 6])\n    return bias + loads @ linear.T + cubic * loads ** 3 + cross * loads * np.roll(loads, -1, axis=1)"
+      },
+      {
+        "name": "_inverse",
+        "code": "def _inverse(raw, coeff):\n    raw = np.asarray(raw, dtype=float)\n    target = raw.reshape(-1, 4)\n    linear = coeff[:, 1:5]\n    x = np.linalg.solve(linear, (target - coeff[:, 0]).T).T\n    j = np.arange(4)\n    k = (j + 1) % 4\n    for _ in range(24):\n        r = _forward(x, coeff) - target\n        err = np.max(np.abs(r), axis=1)\n        if np.all(err < 1e-11):\n            break\n        jac = np.broadcast_to(linear, (len(x), 4, 4)).copy()\n        jac[:, j, j] += 3 * coeff[:, 5] * x ** 2 + coeff[:, 6] * x[:, k]\n        jac[:, j, k] += coeff[:, 6] * x\n        step = np.linalg.solve(jac, r[..., None])[..., 0]\n        pending = err >= 1e-11\n        for _ in range(12):\n            if not np.any(pending):\n                break\n            idx = np.flatnonzero(pending)\n            trial = x[idx] - step[idx]\n            improved = np.max(np.abs(_forward(trial, coeff) - target[idx]), axis=1) < err[idx]\n            x[idx[improved]] = trial[improved]\n            pending[idx[improved]] = False\n            step[idx[~improved]] *= 0.5\n    return x.reshape(raw.shape)"
+      },
+      {
+        "name": "calibrate_upstream",
+        "code": "def calibrate_upstream(dataset: dict) -> dict:\n    \"\"\"Return a dataset with load fields mapped to canonical channel loads.\"\"\"\n    cal = dataset['calibration_load_cells']\n    coeff = _fit_bridge(cal)\n    out = dict(dataset)\n    for key in ('train', 'test', 'chamber_verification_trials'):\n        part = dataset.get(key)\n        if part is not None:\n            out[key] = dict(part)\n            for field in ('past_channel_raw', 'hold_channel_raw'):\n                out[key][field] = _inverse(part[field], coeff)\n    sweeps = cal['single_channel_sweeps']\n    out['calibration_load_cells'] = dict(cal, bridge_raw=cal['true_channel_loads'].copy(), single_channel_sweeps=dict(sweeps, cmd_stress=sweeps['true_stress'].copy()))\n    return out"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(taus, inp, dt, t):\n    (past, hold, covariates) = inp\n    tail = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    coeff = -np.expm1(-dt[:, None] / taus) * np.exp(-tail[:, None] / taus)\n    gap = hold[:, None] - past @ coeff\n    rise = -np.expm1(-t[:, None] / taus)\n    strain = np.concatenate((gap[:, None, :] * rise[None, :, :], covariates[:, None, :] * t[None, :, None]), axis=2)\n    rate = np.column_stack((gap / taus, covariates))\n    return (strain, rate)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(inp, dt, t, strain, rate):\n    from scipy.optimize import least_squares\n    (n, k) = strain.shape\n    y = np.r_[strain.ravel(), rate]\n\n    def matrix(taus):\n        (a, b) = _design(taus, inp, dt, t)\n        return np.vstack((a.reshape(n * k, 7), b))\n\n    def residual(p):\n        return matrix(p[:2]) @ p[2:] - y\n\n    def noise(r):\n\n        def mad(v):\n            return max(1e-08, 1.4826 * np.median(np.abs(v - np.median(v))))\n        return np.r_[np.full(n * k, mad(r[:n * k])), np.full(n, mad(r[n * k:]))]\n    starts = []\n    for lo in (0.12, 0.35, 0.8, 1.6):\n        for hi in (1.2, 3.0, 7.0, 16.0):\n            if hi <= lo:\n                continue\n            a = matrix(np.array([lo, hi]))\n            p = np.r_[lo, hi, np.linalg.lstsq(a, y, rcond=None)[0]]\n            starts.append((np.linalg.norm(residual(p)), p))\n    bounds = (np.r_[np.full(2, 0.05000001), np.full(7, -np.inf)], np.r_[np.full(2, 24.99999999), np.full(7, np.inf)])\n    p0 = min(starts, key=lambda pair: pair[0])[1]\n    scale = noise(residual(p0))\n    p = least_squares(lambda q: residual(q) / scale, p0, bounds=bounds, loss='soft_l1', f_scale=2, x_scale='jac', max_nfev=200).x\n    scale = noise(residual(p))\n    p = least_squares(lambda q: residual(q) / scale, p, bounds=bounds, loss='cauchy', f_scale=2.5, x_scale='jac', max_nfev=200).x\n    if p[0] > p[1]:\n        p = p[[1, 0, 3, 2, 4, 5, 6, 7, 8]]\n    return (p[:2], p[2:])"
+      },
+      {
+        "name": "shared",
+        "code": "def shared(cal, rational=False):\n    from scipy.optimize import least_squares\n    b = _fit_bridge(cal)\n    (x, y) = (cal['true_channel_loads'], cal['bridge_raw'])\n    s = cal['single_channel_sweeps']\n    j = np.arange(4)\n    k = (j + 1) % 4\n    p = (j - 1) % 4\n    ls = s['lab_id']\n    xs = np.eye(4)[ls] * s['true_stress'][:, None]\n    ys = s['cmd_stress']\n    r = np.max(abs(_forward(x, b) - y), axis=1)\n    rs = abs(_forward(xs, b)[np.arange(len(ls)), ls] - ys)\n    scale = max(np.median(np.r_[r, rs]), 1e-10)\n    a = r < 8 * scale\n    t = rs < 8 * scale\n\n    def coeff(v):\n        c = np.zeros((4, 7))\n        g = v[4:8]\n        c[:, 0] = v[:4]\n        c[j, j + 1] = g\n        c[j, k + 1] = g * v[8]\n        c[j, p + 1] = g * v[9]\n        c[:, 5:] = g[:, None] * v[10:12]\n        return c\n\n    def predict(z, v):\n        c = coeff(v)\n        q = _forward(z, c)\n        if rational:\n            term = c[:, 6] * z * np.roll(z, -1, axis=1)\n            denom = 1 + v[12] * (z - np.roll(z, -1, axis=1)) ** 2\n            q += term * (1 / denom - 1)\n        return q\n    g = b[j, j + 1]\n    v = np.r_[b[:, 0], g, np.median(b[j, k + 1] / g), np.median(b[j, p + 1] / g), np.median(b[:, 5:] / g[:, None], axis=0)]\n    if rational:\n        v = np.r_[v, 0.0]\n\n    def residual(v):\n        return np.r_[(predict(x[a], v) - y[a]).ravel(), predict(xs[t], v)[np.arange(t.sum()), ls[t]] - ys[t]]\n    lim = (np.r_[np.full(12, -np.inf), -0.02], np.full(13, np.inf)) if rational else (-np.inf, np.inf)\n    v = least_squares(residual, v, bounds=lim).x\n    return (coeff(v), lambda z: predict(z, v), v[8:])"
+      }
+    ]
+  }
+}

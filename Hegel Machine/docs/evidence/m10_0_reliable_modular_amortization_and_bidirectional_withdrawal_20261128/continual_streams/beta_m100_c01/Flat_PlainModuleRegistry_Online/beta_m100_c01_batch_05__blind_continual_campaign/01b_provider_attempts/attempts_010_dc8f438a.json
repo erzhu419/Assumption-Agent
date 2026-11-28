@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc8f438ad72f4080a151578a9ed278ae",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:22.981166+00:00",
+  "ended_at_utc": "2026-11-28T03:53:52.800839+00:00",
+  "request_sha256": "7d5763d86506a3b743c6c0de0b02a01bdfa85cf148ec10ca543c0723f7b2e063",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 57218,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31789,
+    "cached_tokens": 9344,
+    "completion_tokens": 1129
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream\\nfrom _verified_downstream import solve_downstream\\ns = pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nd = s['sensor_calibration_sweeps']; x = d['ref_rosette']\\nrng = np.random.default_rng(41)\\np = np.r_[rng.uniform(-1.4,1.7,(128,4)), rng.choice([-1.35,1.26,1.68],(81,4))].reshape(-1,4)\\nz = rng.uniform(-0.25,0.4,s['y_obs_raw'].shape)\\nfor coupled in (False, True):\\n    l = np.diag([1.13,.91,1.4,.83]); e = np.zeros((4,4)); j=np.arange(4)\\n    l[j,j^2] = [.23,.17,.25,.19]; e[j,j^2] = [-.14,-.10,-.16,-.11]\\n    if coupled:\\n        l[j,(j+1)%4] = [.08,-.06,.07,-.05]; e[j,(j+1)%4] = .04\\n    def forward(a):\\n        t=a.reshape(-1,4)\\n        return (np.array([.04,-.09,.07,-.04])+t@l.T+np.sin(2.5*t)*np.diag(l)*.25+np.sin(t)**2@e.T).reshape(a.shape)\\n    y=forward(x)+rng.normal(0,1e-5,x.shape)\\n    y[[0,13,14,15,58]] += rng.uniform(7,13,(5,4))*rng.choice([-1,1],(5,4))\\n    study=dict(s,y_obs_raw=forward(z),sensor_calibration_sweeps=dict(d,raw_rosette=y),reference_tracer_pulses=[{'y_pulse_raw':p.ravel() if False else forward(p).ravel(),'pulse_id':0},{'y_pulse_raw':None},None])\\n    cal=calibrate_upstream(study)\\n    obs_err=np.max(abs(cal['y_obs_raw']-z)); pulse_err=np.max(abs(cal['reference_tracer_pulses'][0]['y_pulse_raw']-p.ravel()))\\n    assert cal['reference_tracer_pulses'][0]['pulse_id']==0 and cal['reference_tracer_pulses'][1]['y_pulse_raw'] is None and cal['reference_tracer_pulses'][2] is None\\n    assert np.array_equal(cal['sensor_calibration_sweeps']['raw_rosette'],x) and np.array_equal(cal['sensor_calibration_sweeps']['single_bank_sweeps']['raw_readout'],d['single_bank_sweeps']['ref_signal'])\\n    expected=solve_downstream(dict(s,y_obs_raw=z)); actual=solve_batch(study)\\n    werr=np.max(abs(actual['weights']-expected['weights'])); ferr=np.max(abs(actual['terminal_field']-expected['terminal_field']))\\n    print(f'extra_coupling={coupled}: obs_max={obs_err:.4g}, pulse_max={pulse_err:.4g}, weights_max={werr:.4g}, field_max={ferr:.4g}')\\n    assert max(obs_err,pulse_err,werr,ferr)<2e-4\\nassert calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive polynomial → H2 robust paired sinusoidal response with a full-coupling alternative; real clean-row LOO inverse RMSE is 2.24e-5 and the worst row norm is 1.37e-4.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit on public schema and LOO results alone\",\"rejected_reason\":\"The public study omits tracer pulses and exposes only paired coupling, so neither optional pulse handling nor the wider coupling path has been exercised.\"}],\"rationale\":\"Run one isolated stress test with known canonical observations, flat and absent pulse cases, EMI spikes, and extra coupling. Compare each calibrated array and both downstream numerical outputs to their known canonical counterparts; a failure will identify which path needs revision.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "05766fee69e411bed57c8517165deb72df1c6b07e1312cdb3884ef6ba5edf5dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31977.39,
+      "usage_known": true,
+      "prompt_tokens": 31789,
+      "cached_tokens": 9344,
+      "completion_tokens": 1129
+    }
+  ]
+}

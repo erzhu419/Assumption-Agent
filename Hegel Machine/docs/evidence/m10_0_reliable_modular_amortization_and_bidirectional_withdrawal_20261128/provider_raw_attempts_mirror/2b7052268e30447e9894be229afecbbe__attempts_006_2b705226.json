@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b7052268e30447e9894be229afecbbe",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:31.422459+00:00",
+  "ended_at_utc": "2026-11-28T03:47:58.601824+00:00",
+  "request_sha256": "0503a7142663ad703a2248f9c80dd3d4377889d56636885931948ffe63a514de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41009,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24316,
+    "cached_tokens": 9344,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/chamber_probe.py <<'PY'\\nimport pickle, numpy as np, runpy\\nfrom scipy.optimize import least_squares\\ns=runpy.run_path('/tmp/hegel_continual_archive/alpha_m100_c04_batch_03_solver.py'); it=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=it['dataset']; d=it['campaign_diagnostics']; tr,te=ds['train'],ds['test']; dt,t=ds['past_dt'],ds['eval_times']; x=s['_features'](tr,te); xd=s['_features'](tr,d)[len(tr['lab_id']):]; c=ds['calibration_load_cells']; r,l=c['bridge_raw'],c['true_channel_loads']; print('cal max sorted',np.sort(np.max(abs(r),axis=1))[-15:]); print('sweeps',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]); b=s['_calibrate'](c); print('cal coeff',b.round(5)); print('cal residual quantiles',np.quantile(np.max(abs(np.einsum('nck,ck->nc',s['_bridge_design'](l),b)-r),axis=1),[.25,.5,.75,.9,.95,1])); inp=s['_inputs'](tr,x[:len(tr['lab_id'])],b); tau,th=s['_fit'](inp,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('material',tau,th); p,h,z=s['_inputs'](d,xd,b); dr=z@th[2:]; y=d['strain_curves_obs']-d['strain_0'][:,None]; rate=d['instant_rate_obs']; a,g=s['_design'](tau,(p,h,z),dt,t); ar,gr=s['_chamber_response'](tau,th,h,z,t); print('baseline/reset rmse',[(np.sqrt(np.mean((v-y)**2)),np.sqrt(np.mean((w-rate)**2))) for v,w in [(a@th,g@th),(ar,gr)]]); tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; state=p@(-np.expm1(-dt[:,None]/tau)*np.exp(-tail[:,None]/tau)); R=-np.expm1(-t[:,None]/tau); T=np.vstack((np.c_[R,t],np.r_[1/tau,1])); Y=np.c_[y,rate]; print('diagnostic low-rank residual',np.quantile(abs(Y-np.linalg.lstsq(T,Y.T,rcond=None)[0].T@T.T),[.5,.9,.99,1])); print('hold and past',h[:5],p[:5]);\\ndef fit(F):\\n D=(F[:,None,:,:]*T[None,:,:,None]).reshape(len(Y)*T.shape[0],-1); yy=Y.ravel(); b=np.linalg.lstsq(D,yy,rcond=None)[0]; b=least_squares(lambda q:D@q-yy,b,loss='soft_l1',f_scale=.005).x; b=least_squares(lambda q:D@q-yy,b,loss='cauchy',f_scale=.003).x; e=(D@b-yy).reshape(Y.shape); print('coef',b.reshape(3,-1).round(5),'abs qs',np.quantile(abs(e),[.5,.85,.95,1]).round(5),'slice med',np.median(abs(e),axis=0).round(5));\\nfor base in [np.c_[h,dr,np.ones(len(h))],np.c_[h,state,dr,np.ones(len(h))],np.c_[h,p,dr,np.ones(len(h))]]:\\n fit(np.repeat(base[:,None,:],3,axis=1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared benchtop spectrum -> H2 chamber-specific branch amplitudes and drift; diagnostic residuals are not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure whether the benchtop and reset laws explain the current coupons, then test whether deviations arise from branch memory, drift, or a mismatch in the time basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cca9c664e329425881bb4f44078f97c655fd527c87f518f4c8cc32b0b0b766bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29265.22,
+      "usage_known": true,
+      "prompt_tokens": 24316,
+      "cached_tokens": 9344,
+      "completion_tokens": 1071
+    }
+  ]
+}

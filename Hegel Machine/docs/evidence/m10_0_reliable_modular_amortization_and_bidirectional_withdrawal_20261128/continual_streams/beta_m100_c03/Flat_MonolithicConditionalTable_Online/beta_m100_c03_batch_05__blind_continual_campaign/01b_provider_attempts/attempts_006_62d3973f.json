@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62d3973f4724490ba329108834b80312",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:45.516515+00:00",
+  "ended_at_utc": "2026-11-28T03:54:06.526546+00:00",
+  "request_sha256": "3f3800b13914e5072d6bc5752c148503c7037cf84ef9ce0263744532321a2b44",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46012,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27121,
+    "cached_tokens": 9344,
+    "completion_tokens": 778
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json | head -c 3200; echo; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,importlib.util\\np='/tmp/hegel_continual_archive/beta_m100_c03_batch_04_solver.py'; sp=importlib.util.spec_from_file_location('old',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];s=i['study']; print('diagnostic',type(i.get('campaign_diagnostics')),'keys',list(s),'shape',s['source_modes'].shape,s['sensor_ij'].shape,s['Z_nuisance'].shape, 'robin',s['robin_x'],s['robin_y']); c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps'];\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nprint('isolated ref/raw:');print(np.c_[x[:16],y[:16]])\\nfor j in range(4):\\n mask=q['bank_id']==j;print('bank',j,np.c_[q['ref_signal'][mask],q['raw_readout'][mask]].T)\\n a=m._rosette_features(x,j); b=y[:,j]; keep=np.ones(len(b),bool)\\n for k in range(10):\\n  r=b-a@np.linalg.lstsq(a[keep],b[keep],rcond=None)[0]; keep=abs(r)<max(5*np.median(abs(r)),1e-9)\\n print('old basis',j,'retained',keep.sum(),'rms',np.linalg.norm(r[keep])/np.sqrt(keep.sum()),'largest row',np.argmax(abs(r)))\\nz=m._calibrate(s,s['y_obs_raw']);print('old calibrated range',np.min(z),np.max(z))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived cubic calibration → test saturation and opposite-bank coupling; affine worst-channel sweep RMS is 2.549 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The isolated-bank sweeps can expose omitted coupling and distinguish cubic response from saturation. The archived basis residual will determine whether it can be reused; the gate diagnostic may establish how to align the wall telemetry.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "daa75623b8f466ad425fdede1aa1e3cad05cc811523d0499056e64f746d883b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23171.74,
+      "usage_known": true,
+      "prompt_tokens": 27121,
+      "cached_tokens": 9344,
+      "completion_tokens": 778
+    }
+  ]
+}

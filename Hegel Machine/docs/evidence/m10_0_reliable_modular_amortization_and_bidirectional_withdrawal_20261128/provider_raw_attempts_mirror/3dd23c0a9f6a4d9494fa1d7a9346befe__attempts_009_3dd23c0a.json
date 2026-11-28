@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3dd23c0a9f6a4d9494fa1d7a9346befe",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:43.719565+00:00",
+  "ended_at_utc": "2026-11-28T03:34:09.931901+00:00",
+  "request_sha256": "cde1fb811408363a20c4fc35aae21694fd6dc34f3db7f9b930211acefe40c4e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63519,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34280,
+    "cached_tokens": 9344,
+    "completion_tokens": 984
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_joint.py <<'PY'\\nexec(open('/tmp/chamber_basis.py').read().split('for label,y')[0])\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nlabs=dg['lab_id']; n=len(labs); U=m['_features'](dg,dg)[:n]; D=w[2]+U@w[3:]; J=np.isnan(dg['coupon_features_raw']).any(1); one=np.ones(n); z=hold[:,None]-C[:,0,:2]/(-np.expm1(-t[0]/tau)); pastnorm=past/np.std(past,axis=0)\\nfor name,P in [('compact',np.c_[one,hold,D]),('states',np.c_[one,hold,D,z]),('separate features',np.c_[one,hold,U]),('drift plus missing',np.c_[one,hold,D,np.isnan(dg['coupon_features_raw']).astype(float)])]:\\n for mode in ['fixed','free','free no slope']:\\n  def get(ix):\\n   def prof(s):\\n    A=np.c_[f(s[0]),f(s[1]),L] if mode!='free no slope' else np.c_[f(s[0]),f(s[1])]; G=np.linalg.lstsq(P[ix],Y[ix],rcond=None)[0]@np.linalg.pinv(A.T); return A,G\\n   def fun(s):\\n    A,G=prof(s); return (P[ix]@G@A.T-Y[ix]).ravel()\\n   s=tau if mode=='fixed' else least_squares(fun,tau,bounds=([.5,2.5],[.85,6.])).x\\n   A,G=prof(s); return P@G@A.T-Y,s,G\\n  e,s,g=get(np.ones(n,bool)); er=np.zeros_like(Y)\\n  for lab in np.unique(labs):\\n   ix=labs==lab; er[ix]=get(~ix)[0][ix]\\n  print(name,mode,'times',s,'full',np.mean(e**2)**.5,'worst lab',np.max([[np.mean(er[labs==l,:-1]**2)**.5,np.mean(er[labs==l,-1]**2)**.5] for l in np.unique(labs)],axis=0),'present/missing',*[np.sqrt(np.mean(er[j]**2,axis=0))[[-2,-1]] for j in (~J,J)]); print(g.T) if name=='compact' else None\\nprint('missing residual detail'); print(np.c_[np.flatnonzero(J),labs[J],dg['stratum'][J],dg['coupon_features_raw'][J],U[J]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_joint.py; sed -n '55,98p' /tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py; sed -n '1,145p' /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace nominal stress memory and linear drift with a chamber-specific amplitude law; the compact two-state challenger reaches worst held-out lab RMSE 0.01027 for strain and 0.00744 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full stress history as unrestricted regressors\",\"rejected_reason\":\"The observed lab holdouts do not justify the extra degrees of freedom.\"}],\"rationale\":\"Check whether the remaining chamber error comes from missing features or time-basis bias. The result determines whether to retain two stress-history states, a small slope, or neither in the standalone solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9dfc23f93f32d3f411e8596075b3428b7eaf66df0bf4a370a6c316a5e5fd8aaa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28293.05,
+      "usage_known": true,
+      "prompt_tokens": 34280,
+      "cached_tokens": 9344,
+      "completion_tokens": 984
+    }
+  ]
+}

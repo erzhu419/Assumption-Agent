@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3105663b8d494038a02ceeaf95673c84",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:46.576472+00:00",
+  "ended_at_utc": "2026-11-28T03:41:24.947387+00:00",
+  "request_sha256": "61304760e9f58ecf0287c1179c4ccd5b7406844ca1735b99d4f99647d06b5c7e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30247,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22197,
+    "cached_tokens": 9344,
+    "completion_tokens": 1583
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Fit and invert the coupled four-channel rosette response for each study.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\n_I, _J = np.triu_indices(4, k=1)\\n_EYE = np.eye(4)\\n\\n\\ndef _basis(x):\\n    return np.column_stack((np.ones(len(x)), x, x**3, x[:, _I] * x[:, _J]))\\n\\n\\ndef _fit(ref, raw):\\n    design = _basis(ref)\\n    # An initial amplitude screen removes gross EMI before it can pull the fit.\\n    radius = np.linalg.norm(raw - np.median(raw, axis=0), axis=1)\\n    use = radius <= 6 * np.median(radius)\\n    if np.count_nonzero(use) < design.shape[1]:\\n        use = np.ones(len(raw), dtype=bool)\\n    coef = np.linalg.lstsq(design[use], raw[use], rcond=None)[0]\\n    # Downweight whole rows: a burst can contaminate several banks together.\\n    for _ in range(12):\\n        error = np.linalg.norm(raw - design @ coef, axis=1)\\n        scale = max(2.5 * np.median(error), 1e-12)\\n        w = 1 / np.hypot(1, error / scale)\\n        coef = np.linalg.lstsq(design * w[:, None], raw * w[:, None], rcond=None)[0]\\n    return coef\\n\\n\\ndef _invert(raw, coef):\\n    raw = np.asarray(raw, dtype=float)\\n    if raw.size == 0:\\n        return raw.copy()\\n    y = raw.reshape(-1, 4)\\n    x = np.linalg.solve(coef[1:5].T, (y - coef[0]).T).T\\n    for _ in range(36):\\n        residual = _basis(x) @ coef - y\\n        error = np.max(np.abs(residual), axis=1)\\n        active = error > 1e-12 * (1 + np.max(np.abs(y), axis=1))\\n        if not np.any(active):\\n            break\\n        z = x[active]\\n        pairs = (z[:, _I, None] * _EYE[_J] + z[:, _J, None] * _EYE[_I])\\n        # Jacobian axes are (row, output channel, input channel).\\n        jac = (coef[1:5].T + 3 * z[:, None, :]**2 * coef[5:9].T\\n               + np.einsum('npi,po->noi', pairs, coef[9:]))\\n        step = np.linalg.solve(jac, residual[active, :, None])[..., 0]\\n        trial = z - step\\n        best = error[active]\\n        for _ in range(18):\\n            worse = np.max(np.abs(_basis(trial) @ coef - y[active]), axis=1) >= best\\n            if not np.any(worse):\\n                break\\n            step[worse] *= 0.5\\n            trial[worse] = z[worse] - step[worse]\\n        x[active] = trial\\n    return x.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(study: dict) -> dict:\\n    \\\"\\\"\\\"Return the study in canonical readout coordinates without mutating it.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    coef = _fit(ref, np.asarray(sweeps['raw_rosette'], dtype=float))\\n    normalized = dict(sweeps, raw_rosette=ref.copy())\\n    if 'single_bank_sweeps' in sweeps:\\n        single = sweeps['single_bank_sweeps']\\n        normalized['single_bank_sweeps'] = dict(single, raw_readout=np.copy(single['ref_signal']))\\n    result = dict(study, sensor_calibration_sweeps=normalized,\\n                  y_obs_raw=_invert(study['y_obs_raw'], coef))\\n    pulses = study.get('reference_tracer_pulses')\\n    if pulses is not None:\\n        result['reference_tracer_pulses'] = [\\n            dict(pulse, y_pulse_raw=_invert(pulse['y_pulse_raw'], coef))\\n            if pulse is not None and pulse.get('y_pulse_raw') is not None else pulse\\n            for pulse in pulses\\n        ]\\n    return result\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py && sed -n '53,145p' _verified_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine readout -> H2 coupled own-channel cubics and pair products; clean leave-one-out RMSE is at most 1.31e-5 across axial and mixed slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit all cubic interactions and a tanh basis\",\n      \"rejected_reason\": \"The additional terms worsen held-out mixed-row error; own-channel cubics and pair products already predict at the observed noise scale.\"\n    }\n  ],\n  \"rationale\": \"Implement the forward law supported by held-out measurements, fit it with rowwise EMI resistance, and use its analytic Jacobian for inversion. Run the public schema gate on the existing composition before stress-testing the inverse and optional pulse path.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "29eda10c5f57a7cc389b91b62146a384e81deca1e26b389dbfb37f319e3febe7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40490.23,
+      "usage_known": true,
+      "prompt_tokens": 22197,
+      "cached_tokens": 9344,
+      "completion_tokens": 1583
+    }
+  ]
+}

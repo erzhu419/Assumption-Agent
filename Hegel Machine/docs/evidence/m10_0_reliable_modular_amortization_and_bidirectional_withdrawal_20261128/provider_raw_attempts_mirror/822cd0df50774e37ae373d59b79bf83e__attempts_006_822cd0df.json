@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "822cd0df50774e37ae373d59b79bf83e",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:11.185685+00:00",
+  "ended_at_utc": "2026-11-28T04:14:40.945162+00:00",
+  "request_sha256": "7167e212b8ff21a28c37e2c6d4772f4017669cb8d90c1bdeeab783f536e86a5d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48144,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27922,
+    "cached_tokens": 9344,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"mkdir -p /tmp/chamber; sed -n '/^def _design/,/^def _box_simplex/p' /tmp/hegel_continual_archive/beta_m100_c01_batch_03_solver.py; cat > /tmp/chamber/residuals.py <<'PY'\\nimport pickle,runpy,numpy as np\\np='/tmp/hegel_continual_archive/beta_m100_c01_batch_'; m=runpy.run_path(p+'03_solver.py'); t=runpy.run_path(p+'04_solver.py')\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=it['study']; d=s['sensor_calibration_sweeps']; x=d['ref_rosette']; y=d['raw_rosette']; b=d['single_bank_sweeps']; cp=m['_fit_calibration'](x,y); print('coefs',cp); r=y-m['_forward'](x,cp); good=np.abs(y)<5; print('sweep clean rmse/max',np.sqrt(np.mean(r[good]**2)),np.max(abs(r[good]))); print('single bank residuals by bank (excluding large raw offsets):');\\nfor j in range(4):\\n g=(b['bank_id']==j)&(abs(b['raw_readout'])<5); xx=np.zeros((g.sum(),4));xx[:,j]=b['ref_signal'][g]; print(j,np.round(b['raw_readout'][g]-m['_forward'](xx,cp)[:,j],5))\\nS=t['_transport'](s)[0]; ij=s['sensor_ij'];\\nfor i,pu in enumerate(it['campaign_diagnostics']):\\n raw=pu['y_pulse_raw']; xp=(S@pu['w_pulse']).reshape(-1,4); rr=raw-m['_forward'](xp,cp).ravel(); print('PULSE',i,'raw residual quantiles',np.quantile(abs(rr),[0,.25,.5,.75,.9,.95,1]),'by shift',np.sqrt(np.mean(rr.reshape(3,-1)**2,axis=1))); ii=np.argsort(abs(rr))[-7:][::-1]; print('largest',list(zip(ii.tolist(),ij[ii%len(ij)].tolist(),np.round(raw[ii],5),np.round(rr[ii],5))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber/residuals.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin walls -> H2 reflecting walls with cubic rosette calibration; worst nuisance-adjusted pulse RMSE is 0.03696 versus 0.14434 under Robin with the same calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit extra boundary parameters now\",\n      \"rejected_reason\": \"The first pulse already matches reflection to about 0.0017 RMSE. Check whether the other errors are isolated readout deviations or coherent boundary residuals before changing the stencil.\"\n    }\n  ],\n  \"rationale\": \"Compare forward residuals on clean sweeps, single-bank sweeps, and each tracer shift. Structured sweep error calls for a calibration change; coherent wall error calls for a stencil change; isolated pulse deviations should not drive either fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d2679299e2efa17b743ed32a3c4f1c8a8e79895e5b6e02e1efa29c11f824b9dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29721.06,
+      "usage_known": true,
+      "prompt_tokens": 27922,
+      "cached_tokens": 9344,
+      "completion_tokens": 915
+    }
+  ]
+}

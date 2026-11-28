@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "266a94398d1a498ea22dcaaec95b0874",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:13.849873+00:00",
+  "ended_at_utc": "2026-11-28T03:32:40.299143+00:00",
+  "request_sha256": "9ccea48dca990bc32f4f56e08e6b98b7420cef2f1cfe5e49f7c00d68bfe3730d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47646,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28532,
+    "cached_tokens": 9344,
+    "completion_tokens": 1015
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/public_asset_index.json; cat > /tmp/chamber_predictors.py <<'PY'\\nexec(open('/tmp/chamber_basis.py').read().split('for label,y')[0])\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nA=np.column_stack([f(tau[0]),f(tau[1]),L]); _,co=fit(A.T,Y)\\nz=hold[:,None]-C[:,0,:2]/(-np.expm1(-t[0]/tau)); gap=hold[:,None]-z\\nprint('tau',tau,'theta',w,'chamber amplitudes, slope, hold, z, strain0'); print(np.c_[co,hold,z,dg['strain_0']]); print('response coeff correlations',np.corrcoef(np.c_[co,hold,z,past,dg['strain_0'],X].T)[:3,3:]); print('estimated slopes and baseline drift',np.c_[co[:,2],R[:,2:]@w[2:]])\\nfor name,P in [('hold/z',np.c_[hold,z]),('gap',gap),('hold/z/rawpast',np.c_[hold,past]),('hold/z/strain0',np.c_[hold,z,dg['strain_0']]),('hold/z/features',np.c_[hold,z,X]),('hold/z/products',np.c_[hold,z,hold[:,None]*z,z*z,z.prod(1),hold**2]),('hold/z/past squares',np.c_[hold,z,past**2]),('hold/z/last',np.c_[hold,z,past[:,-1]]),('hold/z/zsquare',np.c_[hold,z,z*z]),('hold/z/drift',np.c_[hold,z,R[:,2:]@w[2:]])]:\\n P=np.c_[np.ones(len(P)),P]; coef=np.linalg.lstsq(P,co,rcond=None)[0]; pred=np.zeros_like(Y)\\n for lab in np.unique(dg['lab_id']):\\n  ix=dg['lab_id']==lab; pred[ix]=P[ix]@np.linalg.lstsq(P[~ix],co[~ix],rcond=None)[0]@A.T\\n err=pred-Y; full=P@coef@A.T-Y; print(name,'full',np.sqrt(np.mean(full**2,axis=0))[[0,5,-2,-1]],'outer lab',[(int(l),np.round(np.sqrt(np.mean(err[dg['lab_id']==l]**2,axis=0))[[0,5,-2,-1]],4)) for l in np.unique(dg['lab_id'])]); print('  coeff',coef.T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_predictors.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace direct benchtop transfer with shared-time-constant chamber memory and drift; free per-coupon amplitudes fit both outputs to 0.00254 RMSE, but deployment prediction is not yet validated.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retune chamber relaxation times freely\",\"rejected_reason\":\"Free chamber times produce little improvement over the shared times, and richer time bases are poorly identified.\"}],\"rationale\":\"Test which stress-history coordinates explain chamber amplitudes on held-out labs. If history states alone fail, their residuals will guide the next mechanism test rather than justify unconstrained extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5758871e7594962b393cc0dd3c923535a30686b45088e39048909a1304a1d1a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28511.8,
+      "usage_known": true,
+      "prompt_tokens": 28532,
+      "cached_tokens": 9344,
+      "completion_tokens": 1015
+    }
+  ]
+}

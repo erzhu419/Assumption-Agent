@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c7d7c1580cce4083aa5ebc259f2d00f4",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:49.585330+00:00",
+  "ended_at_utc": "2026-11-28T03:52:36.776019+00:00",
+  "request_sha256": "55fd997940f75cae6a899c9578ae1b38b2b4dc2e19fd95ec167eaefb08ca972a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 36439,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23982,
+    "cached_tokens": 9344,
+    "completion_tokens": 1977
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_structure.py <<'PY'\\nimport numpy as np, pickle\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; X=D['true_channel_loads']; Y=D['bridge_raw']; good=np.max(abs(Y),axis=1)<5\\naxis=np.flatnonzero(good & (np.count_nonzero(X,axis=1)==1)); mix=np.flatnonzero(good & (np.count_nonzero(X,axis=1)!=1)); splits=[('mix',v) for v in np.array_split(np.random.default_rng(49).permutation(mix),4)]+[('axis',axis),('extreme',mix[np.max(abs(X[mix]),axis=1)>1.48])]\\nfor i in range(4):\\n rows=axis[X[axis,i]!=0]; print('axis input',i,'x=',X[rows,i], 'y=',Y[rows].round(6))\\n\\ndef design(x,j,kind,p):\\n s=x[:,j]; t=x[:,(j+2)%4]; a=p[0]; b=p[-1]; A=[np.ones(len(x)),*x.T,np.sin(a*s),t*t]; names=['1',*map(str,range(4)),'sin(own)','cross^2']; cols={\\n 'sin': (np.sin(b*t),'sin(cross)'), 'cos': (np.cos(b*t)-1,'cos(cross)'), 'tanh': (np.tanh(b*t),'tanh(cross)'), 'atan': (np.arctan(b*t),'atan(cross)'), 'soft': (t/np.sqrt(1+b*t*t),'soft(cross)'), 'rat': (t/(1+b*t*t),'rat(cross)'), 'cub': (t**3,'cross^3'), 'own2':(s*s,'own^2'), 'owncos':(np.cos(a*s)-1,'cos(own)'), 'own3':(s**3,'own^3'), 'prod':(s*t,'own*cross'), 'prodsin':(np.sin(a*s)*t,'sin(own)*cross'), 'sinprod':(np.sin(b*s*t),'sin(own*cross)'), 'sum':(np.sin(b*(s+t)),'sin(own+cross)'), 'dif':(np.sin(b*(s-t)),'sin(own-cross)'), 'quadall': (np.column_stack([x[:,i]*x[:,k] for i in range(4) for k in range(i,4) if not i==k==(j+2)%4]),'quad'), 'sinall':(np.sin(b*x[:,[i for i in range(4) if i!=j]]),'sinall')}\\n for k in kind:\\n  col,name=cols[k]; A.append(col); names.append(name)\\n return np.column_stack(A),names\\n\\ndef fit(j,kind,t):\\n def params(p):\\n  B=design(X[t],j,kind,p)[0]; beta=np.linalg.lstsq(B,Y[t,j],rcond=None)[0]; return B@beta-Y[t,j],beta\\n lo=[1.8,.08]; hi=[3.2,6.]; starts=[[2.5,b] for b in (.7,1.5,2.5,4.)] if set(kind)&{'sin','cos','tanh','atan','soft','rat','sinall','sinprod','sum','dif'} else [[2.5,2.5]]\\n obj=min((least_squares(lambda p:params(p)[0],p,bounds=(lo,hi),max_nfev=60) for p in starts),key=lambda r:r.cost); return obj.x,params(obj.x)[1]\\nfor kind in [(),('sin',),('tanh',),('atan',),('rat',),('cub',),('own2',),('owncos',),('prod',),('sinprod',),('sum',),('dif',),('sin','own2'),('sin','owncos'),('sin','prod'),('sin','prodsin'),('sin','cos','own2'),('sin','quadall'),('sinall','quadall')]:\\n errors={}; fits=[]; coef=[]\\n for j in range(4):\\n  p,c=fit(j,kind,good); yh=design(X,j,kind,p)[0]@c; fits.append(np.sqrt(np.mean((Y[good,j]-yh[good])**2))); coef.append([p.round(4).tolist(),c.round(5).tolist()]);\\n  for name,v in splits:\\n   t=good.copy();t[v]=False; q,b=fit(j,kind,t); e=design(X[v],j,kind,q)[0]@b-Y[v,j]; a=errors.setdefault(name,np.zeros(4));a[j]=max(a[j],np.sqrt(np.mean(e*e)))\\n print(kind, 'fit',np.round(fits,6),'CV',{n:v.round(6).tolist() for n,v in errors.items()},'coef',coef,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: affine coupling gives way to a near-common-frequency sinusoidal self-response with structured cross-channel terms; worst blocked forward RMSE fell from 0.2693 to 0.0307.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or low-degree polynomial bridge map captures the clean calibration response across the measured load range.\",\n    \"empirical_witness\": \"Affine and full cubic maps had worst blocked RMSE of 0.2693 and 0.2748; adding a sinusoidal self-response reduced it to 0.0307, still far above the roughly 0.0001 readout scatter.\",\n    \"causal_blanket_diagnosis\": \"The four channels independently favor nearly the same sinusoidal frequency, while the leading nonlinear coupling aligns with channel pairs 0–2 and 1–3.\",\n    \"sublated_pivot\": \"Retain the sinusoidal self-response and test compact cross-channel basis terms inside each calibration fold.\",\n    \"risk_kind\": \"off-manifold calibration bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic or fifth-degree polynomial\",\n      \"rejected_reason\": \"Both extrapolate worse on blocked calibration slices than the compact sinusoidal model.\"\n    }\n  ],\n  \"rationale\": \"The same blocked folds can distinguish a missing cross-channel response from a misspecified self-response. If a compact term brings errors near the readout scatter, use that forward model for the inverse; otherwise retain the best validated basis and quantify inversion error directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "64e691b1cf381cb343164d1e11c0b05973a9c210f0074ba6dfc4e599b2614c1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49274.38,
+      "usage_known": true,
+      "prompt_tokens": 23982,
+      "cached_tokens": 9344,
+      "completion_tokens": 1977
+    }
+  ]
+}

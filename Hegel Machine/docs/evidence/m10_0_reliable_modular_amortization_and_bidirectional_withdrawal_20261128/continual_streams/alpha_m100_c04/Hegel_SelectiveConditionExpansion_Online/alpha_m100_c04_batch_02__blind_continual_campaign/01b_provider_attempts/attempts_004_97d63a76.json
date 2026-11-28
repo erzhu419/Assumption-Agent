@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "97d63a7602c9401a9afb8436b8470522",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:39.505100+00:00",
+  "ended_at_utc": "2026-11-28T03:40:01.730352+00:00",
+  "request_sha256": "4b6020443260e20a4a9784246829cc415b376a312d8d2d476e57a9078560e0cb",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30742,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23155,
+    "cached_tokens": 9344,
+    "completion_tokens": 846
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport itertools as it,pickle,numpy as np\\nc=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; X=np.vstack([x,np.eye(4)[s['lab_id']]*s['true_stress'][:,None]]); Y=np.vstack([y,np.where(np.eye(4,dtype=bool)[s['lab_id']],s['cmd_stress'][:,None],np.nan)]); live=np.isfinite(Y); ok=np.nanmax(abs(Y),axis=1)<8\\nnp.set_printoptions(precision=6,suppress=True)\\nfor deg in [2,3,4]:\\n terms=[()]+[p for k in range(1,deg+1) for p in it.combinations_with_replacement(range(4),k)]\\n A=np.stack([np.prod(X[:,p],axis=1) for p in terms],axis=1)\\n def fit(m):\\n  return np.stack([np.linalg.lstsq(A[m&l],Y[m&l,j],rcond=None)[0] for j,l in enumerate(live.T)],axis=1)\\n B=fit(ok); print('degree',deg,'rank', [np.linalg.matrix_rank(A[ok&l]) for l in live.T]); print('residual quantiles',np.nanquantile(abs((A@B-Y)[ok]),[.5,.95,1])); print('LOO',np.nanquantile(abs(np.array([A[i]@fit(ok&(np.arange(len(X))!=i))-Y[i] for i in np.where(ok)[0]])),[.5,.95,1]));\\n if deg==3:\\n  for p,b in zip(terms,B):print(''.join('abcd'[j] for j in p) or 'bias',b)\\nprint('large rows',np.where(~ok)[0]); print('sweep channel agreement at shared -1.6',Y[80::12]-y[0:16:4]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine or diagonal cubic bridge -> H2 sparse coupled polynomial; worst mixed-channel leave-one-out forward error drops only from 1.047 to 0.893 with diagonal cubic terms.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine cross-talk plus independent channel cubics adequately models the bridge.\",\"empirical_witness\":\"Mixed-channel leave-one-out error has median 0.329 and maximum 0.893 even after adding the independent cubics; three gross spikes instead occur in axis rows with residuals above 27.\",\"causal_blanket_diagnosis\":\"Single-axis anchors can constrain self-response but do not excite mixed-channel nonlinear terms.\",\"sublated_pivot\":\"Use mixed probes to identify interaction terms and test whether single-channel sweeps provide valid extra constraints.\",\"risk_kind\":\"Unmodeled calibration interaction\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add higher powers before analyzing interactions\",\"rejected_reason\":\"Axis observations show near-linear off-diagonal responses; the gap appears mainly when channels are excited together.\"}],\"rationale\":\"Fit candidate bases after separating the obvious spikes, then inspect coefficient structure and held-out errors. If sweep measurements disagree with the bridge at shared loads, exclude them from the bridge fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ab494d485553c81a46984a1b86b52bc2517fd163412e4558fdd0ad59c7fcf299",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24327.22,
+      "usage_known": true,
+      "prompt_tokens": 23155,
+      "cached_tokens": 9344,
+      "completion_tokens": 846
+    }
+  ]
+}

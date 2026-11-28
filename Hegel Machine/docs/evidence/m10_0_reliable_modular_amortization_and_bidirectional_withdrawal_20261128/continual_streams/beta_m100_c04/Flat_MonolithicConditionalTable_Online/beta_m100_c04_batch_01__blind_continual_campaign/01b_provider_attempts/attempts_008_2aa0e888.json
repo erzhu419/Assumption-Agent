@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2aa0e888c4ef45158424d49b4d7fa07d",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:16.653098+00:00",
+  "ended_at_utc": "2026-11-28T03:33:50.632548+00:00",
+  "request_sha256": "9239001cf23d00642a541352a3e192bd9fc513be87f264e1f782721d54d5381c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25272,
+    "cached_tokens": 9344,
+    "completion_tokens": 1360
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_rosette.py <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=d['study']; c=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; bank=b['bank_id']; print('bank ids',np.unique(bank,return_counts=True)); bank=bank-np.min(bank); br=b['ref_signal']; by=b['raw_readout']; S,_=m._forward(s)\\n\\ndef fit(kind,idx):\\n if kind=='full':\\n  t=np.linalg.lstsq(np.c_[np.ones(len(idx)),x[idx]],y[idx],rcond=None)[0]\\n  return t[0],t[1:],np.zeros(4)\\n pars=[]\\n for j in range(4):\\n  a,z=x[idx,j],y[idx,j]; mask=bank==j\\n  if kind=='bank': a,z=np.r_[a,br[mask]],np.r_[z,by[mask]]\\n  q,g=np.linalg.lstsq(np.c_[np.ones(len(a)),a],z,rcond=None)[0]\\n  if kind=='rational':\\n   q,g,r=least_squares(lambda t:t[0]+t[1]*a/(1+t[2]*a*a)-z,[q,g,0],bounds=([-np.inf,-np.inf,-0.1],[np.inf,np.inf,0.1]),gtol=1e-13).x\\n  else: r=0.\\n  pars.append((q,g,r))\\n q,g,r=np.array(pars).T; return q,np.diag(g),r\\n\\ndef invert(raw,q,A,r):\\n z=np.linalg.solve(A.T,(raw.reshape(-1,4)-q).T).T; v=z.copy()\\n for _ in range(6):\\n  den=1+r*v*v; v-=(v/den-z)*den**2/(1-r*v*v)\\n return v.ravel()\\n\\nwall=((s['sensor_ij']==0)|(s['sensor_ij']==[s['nx']-1,s['ny']-1])).any(1)\\nfor kind in ['full','diagonal','bank','rational']:\\n errs=[]\\n for fold in range(5):\\n  test=np.arange(len(x))%5==fold; q,A,r=fit(kind,np.flatnonzero(~test)); residual=(x[test]/(1+r*x[test]**2))@A+q-y[test]; errs.append(np.sqrt(np.mean(residual**2,axis=0)))\\n q,A,r=fit(kind,np.arange(len(x))); pulse=[]\\n for p in d['campaign_diagnostics']:\\n  e=(S@p['w_pulse']-invert(p['y_pulse_raw'],q,A,r)).reshape(-1,len(wall)); pulse.extend(np.sqrt(np.mean(e[:,mask]**2,axis=1)).max() for mask in [wall,~wall])\\n orig=m._calibrate; m._calibrate=lambda a:invert(a['y_obs_raw'],q,A,r); o=m.solve_batch(s); m._calibrate=orig\\n ref=m.solve_batch(s)\\n print(kind,'worst sweep fold/channel',max(np.ravel(errs)),'worst pulse/shift/wall slice',max(pulse),'weight relative change',np.linalg.norm(o['weights']-ref['weights'])/np.linalg.norm(ref['weights']),'field relative change',np.linalg.norm(o['terminal_field']-ref['terminal_field'])/np.linalg.norm(ref['terminal_field']),'saturation',r)\\n if kind=='full': print('cross-channel terms',A-np.diag(np.diag(A)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Closed walls with full affine calibration → test bank-aligned and saturation alternatives; current worst real pulse RMSE across shift and wall/interior slices is 9.15e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification or relay-mode tests\",\n      \"rejected_reason\": \"This study has continuous sensor observations and a steady boundary-value problem, with no class labels, relay state, or time-evolution operator.\"\n    }\n  ],\n  \"rationale\": \"Check whether pooled affine fitting masks a channel-specific error or saturation. The full affine model already spans linear pairwise channel sums and differences; held-out sweep channels and separate tracer pulses test whether a simpler or nonlinear map improves the inverse outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8b8d51f03448f94e7ddb58bef3de8c59b54ebd5f53842d21c9f695a4d3589a44",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36043.54,
+      "usage_known": true,
+      "prompt_tokens": 25272,
+      "cached_tokens": 9344,
+      "completion_tokens": 1360
+    }
+  ]
+}

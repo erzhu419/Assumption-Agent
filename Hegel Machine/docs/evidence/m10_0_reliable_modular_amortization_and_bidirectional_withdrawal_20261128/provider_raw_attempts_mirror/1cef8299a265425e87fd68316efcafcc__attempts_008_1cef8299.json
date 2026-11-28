@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1cef8299a265425e87fd68316efcafcc",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:51.642221+00:00",
+  "ended_at_utc": "2026-11-28T03:57:21.391930+00:00",
+  "request_sha256": "9709253aa8b74466a4f2bdc5b0c3ef4aa1887968d657846db5264b690c4bd292",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 53009,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31300,
+    "cached_tokens": 9344,
+    "completion_tokens": 1184
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py && python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\n\\nerrors = {}\\ndef record(name, e):\\n    if e.size:\\n        errors[name] = max(errors.get(name, 0.), float(np.max(np.abs(e))))\\n\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    d = item['dataset']\\n    c = d['calibration_load_cells']\\n    s = c['single_channel_sweeps']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    t, z = s['true_stress'], s['cmd_stress']\\n    # Gross-spike labels are used only for scoring, never supplied during fitting.\\n    valid = np.max(np.abs(y), axis=1) < 5\\n    valid_sweep = np.abs(z) < 5\\n    ix, si = np.arange(len(x)), np.arange(len(t))\\n    n_axis = np.count_nonzero(x, axis=1)\\n    splits = [(f'blocked {fold}', ix % 5 == fold, si % 5 == fold) for fold in range(5)]\\n    splits += [('extreme', np.max(np.abs(x), axis=1) >= 1.5, np.abs(t) >= 1.4), ('mixed-only training', n_axis == 1, np.zeros(len(t), bool))]\\n    for name, hold, shold in splits:\\n        fit = u._fit(dict(c, true_channel_loads=x[~hold], bridge_raw=y[~hold], single_channel_sweeps={k: v[~shold] for k,v in s.items()}))\\n        a,k,b,g,h = fit[2]\\n        assert 1 - abs(a*k) - abs(b) - abs(g*h) > 0\\n        for label, mask in [('axis', n_axis == 1), ('mixed', n_axis > 1)]:\\n            m = hold & valid & mask\\n            if m.any():\\n                record(f'{name} {label}', u._invert(y[m], fit) - x[m])\\n        m = shold & valid_sweep\\n        j = s['lab_id'][m]\\n        record(f'{name} sweep raw residual', fit[0][j] + fit[1][j]*(t[m]+a*np.sin(k*t[m])) - z[m])\\n    snapshot = pickle.dumps(d)\\n    # The public batch omits the optional arm; exercise it with real recorded load arrays.\\n    q = u.calibrate_upstream(dict(d, chamber_verification_trials=d['test']))\\n    q0 = u.calibrate_upstream(dict(d, chamber_verification_trials=None))\\n    assert q0['chamber_verification_trials'] is None\\n    assert pickle.dumps(d) == snapshot\\n    np.testing.assert_array_equal(q['calibration_load_cells']['bridge_raw'], x)\\n    np.testing.assert_array_equal(q['calibration_load_cells']['single_channel_sweeps']['cmd_stress'], t)\\n    assert not np.shares_memory(q['calibration_load_cells']['bridge_raw'], x)\\n    assert not np.shares_memory(q['calibration_load_cells']['single_channel_sweeps']['cmd_stress'], t)\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        np.testing.assert_array_equal(q['chamber_verification_trials'][field], q['test'][field])\\n    solve_batch(d)\\nprint('Max absolute errors by held-out slice:', errors)\\nassert max(errors.values()) < 0.002\\nprint('Isolated pipeline, holdout, optional-arm and identity checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine response -> H2 shared sine response with paired cosine coupling; worst clean in-sample raw residual is 2.46e-4 and held-out inverse error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Forward closure shows the inverse converges but cannot detect a miscalibrated map. Refit with blocked, extreme-load, and axis holdouts to measure that error directly. Use the official validator and an isolated process to detect composition and optional-field failures before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f6c71fec9cd0d9a85d1aff281cc8c8e7026ab94e4fc2e9b6ae9f625bcd5e4db0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31856.13,
+      "usage_known": true,
+      "prompt_tokens": 31300,
+      "cached_tokens": 9344,
+      "completion_tokens": 1184
+    }
+  ]
+}

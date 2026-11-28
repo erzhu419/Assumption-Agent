@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b9886b797ce840078ca12980f6134bdf",
+  "call_seq": 2,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:40.951932+00:00",
+  "ended_at_utc": "2026-11-28T03:47:58.354355+00:00",
+  "request_sha256": "5d7c14e9c30c802168185301f2eb0e7de6c4940ee091cca0f912bceae692a0df",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 11736,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15270,
+    "cached_tokens": 0,
+    "completion_tokens": 602
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle, numpy as np, json\\nD=pickle.load(open('public_batch.pkl','rb'))\\ndef describe(d, depth=0):\\n for k,v in d.items():\\n  print(' '*depth,k,type(v).__name__,getattr(v,'shape',''),getattr(v,'dtype',''), (str(v)[:180] if not isinstance(v,(dict,np.ndarray)) else ''))\\n  if isinstance(v,dict): describe(v,depth+2)\\ndescribe(D)\\nc=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; z=np.c_[np.ones(len(x)),x]\\nfor name,a in [('cal true',x),('cal raw',y),('affine residual',y-z@np.linalg.lstsq(z,y,rcond=None)[0])]:\\n print(name,np.quantile(a,[0,.01,.1,.5,.9,.99,1],axis=0).round(6))\\nprint('first calibration rows',np.c_[x,y][:8]); print('affine matrix',np.linalg.lstsq(z,y,rcond=None)[0])\\nfor k in ['train','test','chamber_verification_trials']:\\n s=D.get(k)\\n if isinstance(s,dict):\\n  for f in ('past_channel_raw','hold_channel_raw'):\\n   a=s[f].reshape(-1,4); print(k,f,np.quantile(a,[0,.01,.5,.99,1],axis=0).round(5))\\np='/tmp/hegel_continual_archive/archive_manifest.json'\\na=json.load(open(p)); print('prior manifest summary:',str(a)[:1800])\\nPY\\ncat validate_public_schema.py; tail -35 _verified_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge mixing -> H2 robust nonlinear calibration; no held-out metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Inspect calibration geometry, affine residuals, and trial ranges to distinguish gross spikes from systematic curvature and identify where the inverse must extrapolate. Read the validator to identify the required end-to-end checks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "f54650c6ac699b99009708f82082031cf9eb2d49b1679f635e7d29cfe983c0fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19488.63,
+      "usage_known": true,
+      "prompt_tokens": 15270,
+      "cached_tokens": 0,
+      "completion_tokens": 602
+    }
+  ]
+}

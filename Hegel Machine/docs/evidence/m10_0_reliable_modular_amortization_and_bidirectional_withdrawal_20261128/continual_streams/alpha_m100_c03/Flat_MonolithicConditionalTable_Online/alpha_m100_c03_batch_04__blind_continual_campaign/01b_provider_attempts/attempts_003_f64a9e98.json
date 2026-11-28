@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f64a9e988f464353a27c1f7e4e2d08c0",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:19.019162+00:00",
+  "ended_at_utc": "2026-11-28T03:49:38.247895+00:00",
+  "request_sha256": "b7cc695ef665ce68377800da076c2d1aad895e24cc905418a9dc1d568f3febc8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22910,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18082,
+    "cached_tokens": 9344,
+    "completion_tokens": 611
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; python3 - <<'PY'\\nimport json,numpy as np,pickle\\nnp.set_printoptions(precision=4,suppress=True,linewidth=120)\\nfor r in json.load(open('archive_apparatus_log.json')):\\n print('\\\\nRECORD', {k:v for k,v in r.items() if k!='facility_telemetry_trace'})\\n a=np.asarray(r['facility_telemetry_trace']);print(a.shape,'mean',a.mean(0),'sd',a.std(0),'end',a[-1]);print('block averages:',np.array([b.mean(0) for b in np.array_split(a,4)]))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'];c=d['calibration_load_cells']; print('cal raw and loads',c['bridge_raw'][:5],c['true_channel_loads'][:5]);print('sweeps',{k:(v.shape,v[:12]) for k,v in c['single_channel_sweeps'].items()});print('eval times',d['eval_times']);\\nfor key in ['train','test']:\\n s=d[key]; print(key,'labs',np.unique(s['lab_id'],return_counts=True),'strata',np.unique(s['stratum'],return_counts=True),'refs',s['ref_coupons'][:4],'aux mean/sd',s['aux_chamber_telemetry'].mean(0),s['aux_chamber_telemetry'].std(0))\\nPY\\ncat alpha_m100_c03_batch_03_solver.py; sed -n '95,130p' alpha_m100_c03_batch_01_solver.py; sed -n '95,123p' alpha_m100_c03_batch_02_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived benchtop baseline -> H2 dynamically calibrated material fit with a chamber correction only if telemetry supports transfer; no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the most recent archived chamber law by date alone\",\"rejected_reason\":\"Chronological proximity does not establish that the apparatus state or constitutive law is unchanged.\"}],\"rationale\":\"The earlier archive output was truncated. Summarize each telemetry record and inspect the archived equations to determine whether the blind deployment law has a supported transfer rule. Inspect calibration sweeps to identify the slice that can distinguish affine from nonlinear bridge calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "5d908bf4e13e09112b8732cebf745d95f893a4e85bd970150fc2db4eae32738c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19183.23,
+      "usage_known": true,
+      "prompt_tokens": 18082,
+      "cached_tokens": 9344,
+      "completion_tokens": 611
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64b7b4d8628a4c9e9d6bbb22bcf146d7",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:15.012517+00:00",
+  "ended_at_utc": "2026-11-28T04:03:36.457816+00:00",
+  "request_sha256": "c406aa059bda4e2458521e2837c8ebfef0221530f5dc0798578f514ff58d64e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26968,
+    "cached_tokens": 9344,
+    "completion_tokens": 681
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,90p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; log=json.load(open(p)); print('telemetry keys',list(log[-1])); a=np.array([r['facility_telemetry_trace'] for r in log]); print('telemetry mean',np.round(a.mean(1),3))\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('study count',len(items)); s=items[0]['study']; print('study fields',list(s)); print('tracer diagnostics supplied',items[0].get('campaign_diagnostics') is not None)\\nS,_=m._responses(s); y=m._calibrate(s,s['y_obs_raw']); Z=s['Z_nuisance']; print('nuisance rank and shape',np.linalg.matrix_rank(Z), Z.shape); print('projected design singular values',np.linalg.svd(m._profile(s,S),compute_uv=False)); print('observation scale',np.std(y)); c=s['sensor_calibration_sweeps']; print('sweep count',len(c['raw_rosette']),'full scale counts',((abs(c['raw_rosette'])>5).sum(0)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open-wall Robin → sealed walls on both axes; worst held-out rosette RMSE was 0.011868, pending an audit with the specified two-sided nuisance projection.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or classification accuracy\",\n      \"rejected_reason\": \"The documented task is a continuous steady-state inverse problem. The relevant confounding is overlap between transport responses and nuisance regressors.\"\n    }\n  ],\n  \"rationale\": \"Inspect the implemented sensor basis, calibration coverage, and nuisance overlap. This identifies which omitted sensor terms could affect the observed range and whether the earlier wall ranking needs correction for the nuisance objective used in the held-out fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "61f9784f3d0dd7f0edbe51c23564f4d12a4bb2d73dec5f83ccb12a9d0afd73e5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21398.47,
+      "usage_known": true,
+      "prompt_tokens": 26968,
+      "cached_tokens": 9344,
+      "completion_tokens": 681
+    }
+  ]
+}

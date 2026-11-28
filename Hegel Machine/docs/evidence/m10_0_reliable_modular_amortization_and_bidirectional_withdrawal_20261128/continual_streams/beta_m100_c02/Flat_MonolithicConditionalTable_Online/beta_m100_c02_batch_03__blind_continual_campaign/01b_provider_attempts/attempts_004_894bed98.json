@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "894bed982f664f1c9a9345ad1e785104",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:40.323008+00:00",
+  "ended_at_utc": "2026-11-28T03:42:03.824526+00:00",
+  "request_sha256": "38190e3ca6588c6d6ba1f2e37bcd7d16908e5a437e3394e5232fd64233575e66",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33635,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23357,
+    "cached_tokens": 9344,
+    "completion_tokens": 862
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep -nE 'wall|robin|loss|telemetry|def ' /tmp/hegel_continual_archive/*solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy calibration regression'; cat >/tmp/rosette_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X=a['ref_rosette']; Y=a['raw_rosette']; B=a['single_bank_sweeps']; eye=np.eye(4); print('ref range',np.min(X,0),np.max(X,0)); print('current telemetry',np.round(s['aux_manifold_telemetry'],2));\\nfor i in range(4):\\n ix=B['bank_id']==i; x=B['ref_signal'][ix]; y=B['raw_readout'][ix]; z=np.stack([x**0,x,x**2,x**3],axis=1); good=abs(y)<5; p=np.linalg.lstsq(z[good],y[good],rcond=None)[0]; print('bank',i,'coeff',p.round(6),'resid',(y-z@p).round(5))\\n for name,terms in [('affine',[(j,) for j in range(4)]),('cyclic',[(j,) for j in range(4)]+[(i,i,i),(i,(i+1)%4)]),('quadratics+cubes',list(combinations_with_replacement(range(4),2))+[(j,) for j in range(4)]+[(j,j,j) for j in range(4)]),('all cubic',sum([list(combinations_with_replacement(range(4),k)) for k in (1,2,3)],[]))]:\\n  F=np.column_stack([np.ones(len(X))]+[np.prod(X[:,t],axis=1) for t in terms]); e=[]; pred=np.empty(len(Y)); rng=np.random.default_rng(743)\\n  for test in np.array_split(rng.permutation(len(Y)),5):\\n   train=np.setdiff1d(np.arange(len(Y)),test); train=train[abs(Y[train,i])<8]; v=np.linalg.lstsq(F[train],Y[train,i],rcond=None)[0]; pred[test]=F[test]@v\\n  r=Y[:,i]-pred; good=abs(Y[:,i])<8; v=np.linalg.lstsq(F[good],Y[good,i],rcond=None)[0]; print(name,'cv',np.quantile(abs(r[good]),[.5,.95,1]).round(6),'terms',[(t,round(q,4)) for t,q in zip([()]+terms,v) if abs(q)>.006])\\nPY\\npython3 /tmp/rosette_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived wall and calibration carryover → H2 infer wall regime and refit calibration; naive cyclic calibration has a 13.34 maximum leave-one-out error before separating corrupted sweeps.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate gross readout contamination from missing algebraic terms; the held-out errors determine whether the sparse cyclic model suffices or the calibration needs broader couplings. Inspect all archived wall regimes before committing to sealed walls.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "16153c41e000a5960bf8f58fade1d57ea4b6fd9337e6368e22d1217f16a0c3eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25587.03,
+      "usage_known": true,
+      "prompt_tokens": 23357,
+      "cached_tokens": 9344,
+      "completion_tokens": 862
+    }
+  ]
+}

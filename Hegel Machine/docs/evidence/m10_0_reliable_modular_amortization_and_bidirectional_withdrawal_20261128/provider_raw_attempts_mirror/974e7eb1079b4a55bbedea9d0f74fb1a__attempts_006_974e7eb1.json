@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "974e7eb1079b4a55bbedea9d0f74fb1a",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:14.900864+00:00",
+  "ended_at_utc": "2026-11-28T03:55:48.094806+00:00",
+  "request_sha256": "93c77fea56803ca71b8ac39a63b63ca7c65688d0db21c3e57ff049ca06c541af",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44426,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28575,
+    "cached_tokens": 9344,
+    "completion_tokens": 1340
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.special import erf\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; S=C['single_channel_sweeps']; P=np.array([2,3,0,1]); ok=np.max(abs(Y),axis=1)<5; axes=np.count_nonzero(X,axis=1)==1\\nfamilies={'sin':np.sin,'erf':erf,'tanh':np.tanh,'atan':np.arctan,'gauss':lambda u:u*np.exp(-u*u),'lorentz':lambda u:u/(1+u*u),'softsign':lambda u:u/np.sqrt(1+u*u),'sinx2':lambda u:u*np.sinc(u*u/np.pi),'cos':lambda u:np.cos(u)-1,'gauss_even':lambda u:np.expm1(-u*u),'rational_even':lambda u:-u*u/(1+u*u)}\\n\\ndef profile(blocks, family, powers, bounds):\\n f=families[family]\\n def inner(k, ret=False):\\n  rs=[]; bs=[]\\n  for x,y in blocks:\\n   a=np.column_stack([x**p for p in powers]+[f(k*x)]); b=np.linalg.lstsq(a,y,rcond=None)[0]; rs.extend(y-a@b); bs.append(b)\\n  return np.asarray(bs) if ret else np.mean(np.square(rs))\\n grid=np.linspace(*bounds,50); ds=[inner(k) for k in grid]; i=np.argmin(ds); sol=minimize_scalar(inner,bounds=(grid[max(0,i-1)],grid[min(i+1,len(grid)-1)]),method='bounded'); return np.sqrt(sol.fun),family,powers,sol.x,inner(sol.x,True)\\nblocks=[]\\nfor j in range(4):\\n a=(S['lab_id']==j)&(abs(S['cmd_stress'])<5); b=ok&axes&(X[:,j]!=0); blocks.append((np.r_[S['true_stress'][a],X[b,j]],np.r_[S['cmd_stress'][a],Y[b,j]]))\\nresults=[profile(blocks,f,p,(.12,5)) for f in list(families)[:8] for p in [(0,1),(0,1,3)]]\\nfor r in sorted(results,key=lambda r:r[0])[:10]: print('diag',r[:4],np.round(r[4],6).tolist())\\n_,f,p,k,b=min(results,key=lambda r:r[0]); diag=np.column_stack([np.column_stack([X[:,j]**a for a in p]+[families[f](k*X[:,j])])@b[j] for j in range(4)]); R=Y-diag\\nblocks=[(X[ok,P[j]],R[ok,j]) for j in range(4)]\\nfor f in ['cos','gauss_even','rational_even']:\\n for p in [(1,),(0,1),(1,2),(1,3)]:\\n  r=profile(blocks,f,p,(.15,5)); print('cross',r[:4],np.round(r[4],6).tolist())\\nprint('dataset keys',list(D),'chamber type',type(D.get('chamber_verification_trials')).__name__)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic saturating diagonal and linear mixing -> H2 shared nonlinear diagonal plus parity-paired coupling; current in-sample diagonal maximum error is 0.00093, with held-out inverse validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the unrestricted quartic bridge fit\",\n      \"rejected_reason\": \"Its leading terms point to a single paired load per output, while the numerous smaller interactions risk fitting noise and distorting the inverse.\"\n    }\n  ],\n  \"rationale\": \"Test whether a compact shared diagonal function can reach measurement repeatability and whether a linear-plus-even response explains the paired-channel residual. The results will determine which basis to implement and test on held-out calibration rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "60ca04a36c9512f430f2edf6034f1ebfbd305d81fdfd1ea754d1f88f9ed04924",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35309.48,
+      "usage_known": true,
+      "prompt_tokens": 28575,
+      "cached_tokens": 9344,
+      "completion_tokens": 1340
+    }
+  ]
+}

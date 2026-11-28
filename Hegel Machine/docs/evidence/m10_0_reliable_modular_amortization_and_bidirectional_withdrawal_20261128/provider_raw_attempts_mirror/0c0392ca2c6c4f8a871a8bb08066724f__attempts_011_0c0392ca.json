@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c0392ca2c6c4f8a871a8bb08066724f",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:36.430394+00:00",
+  "ended_at_utc": "2026-11-28T03:58:18.588204+00:00",
+  "request_sha256": "e41db48b4e77aa2ddce06b3855626d2c1930e6d4f876720c7663697011d41835",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64958,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35385,
+    "cached_tokens": 9344,
+    "completion_tokens": 1766
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsrc=/tmp/hegel_continual_archive/alpha_m100_c01_batch_03_solver.py\\ntarget=/holdout_task/batch_solver.py\\nsed '/^def _bridge_forward/,$d' \\\"$src\\\" > \\\"$target\\\"\\ncat >> \\\"$target\\\" <<'PY'\\ndef _bridge_terms(loads, p):\\n    k, ell, a, b, c, d = p[:6]\\n    opposite = np.roll(loads, 2, axis=-1)\\n    return a * loads + b * np.sin(k * loads) + c * opposite + d * (np.cos(ell * opposite) - 1)\\n\\n\\ndef _bridge_forward(loads, p):\\n    return p[6:10] + np.exp(np.r_[0., p[10:]]) * _bridge_terms(loads, p)\\n\\n\\ndef _fit_bridge(raw, loads):\\n    # Identify a shared response in channel-0 units; the other gains are relative.\\n    initial = np.r_[2.4, 2.1, 1.2, .3, .25, .08, np.zeros(4), np.zeros(3)]\\n    bounds = (np.r_[.5, .5, .1, 0., -.8, -.5, np.full(4, -np.inf), np.full(3, -2.)],\\n              np.r_[5., 5., 3., 1., .8, .5, np.full(4, np.inf), np.full(3, 2.)])\\n    result = least_squares(lambda p: (_bridge_forward(loads, p) - raw).ravel(),\\n                           initial, bounds=bounds, loss='soft_l1', f_scale=.002)\\n    err = np.linalg.norm(_bridge_forward(loads, result.x) - raw, axis=1)\\n    # A contaminated sweep is removed as a row, not as independent channels.\\n    keep = err < 12 * np.median(err)\\n    p = least_squares(lambda p: (_bridge_forward(loads[keep], p) - raw[keep]).ravel(),\\n                      result.x, bounds=bounds).x\\n    return p, keep\\n\\n\\ndef _load_from_raw(raw, p):\\n    k, ell, a, b, c, d = p[:6]\\n    y = (raw - p[6:10]) / np.exp(np.r_[0., p[10:]])\\n    loads = y / (a + b*k)\\n    for _ in range(30):\\n        opposite = np.roll(loads, 2, axis=-1)\\n        r = _bridge_terms(loads, p) - y\\n        if np.max(np.abs(r)) < 1e-12:\\n            break\\n        own = a + b*k*np.cos(k*loads)\\n        cross = c - d*ell*np.sin(ell*opposite)\\n        det = own*np.roll(own, 2, axis=-1) - cross*np.roll(cross, 2, axis=-1)\\n        delta = (np.roll(own, 2, axis=-1)*r - cross*np.roll(r, 2, axis=-1)) / det\\n        loads -= np.clip(delta, -.4, .4)\\n    return loads\\n\\n\\ndef _calibrated_inputs(split, features, bridge):\\n    past = _load_from_raw(split['past_channel_raw'], bridge).sum(axis=-1)\\n    hold = _load_from_raw(split['hold_channel_raw'], bridge).sum(axis=-1)\\n    return past, hold, np.column_stack((np.ones(len(features)), features))\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge, _ = _fit_bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_calibrated_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    # The latest apparatus trace shows both chamber indicators at idle.\\n    curve, rate = _design(taus, *_calibrated_inputs(test, xte, bridge), dt, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve @ theta,\\n            'initial_rate_pred': rate @ theta}\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport batch_solver as b,pickle,numpy as np\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; L=C['true_channel_loads']; R=C['bridge_raw']; p,keep=b._fit_bridge(R,L); print('removed',np.flatnonzero(~keep),'fit',np.round(p,6)); print('inverse cal max',abs(b._load_from_raw(R[keep],p)-L[keep]).max());\\nfor s in ('train','test'):\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  r=D[s][k]; print(s,k,'inverse closure',np.max(abs(b._bridge_forward(b._load_from_raw(r,p),p)-r)))\\no=b.solve_batch(D); print('intrinsic',o['estimated_taus'],o['hereditary_weights']); print('pred spans',[(k,np.min(v),np.max(v)) for k,v in o.items()]); print('train labs/strata',[(k,np.unique(D['train'][k],return_counts=True)) for k in ('lab_id','stratum')]); print('eval times',D['eval_times'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic bridge → H2 shared sine/cosine bridge plus idle-chamber relaxation; the sparse Fourier law has held-out RMSE 9.79e-5 and maximum residual 2.34e-4 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add harmonics to the bridge response\",\n      \"rejected_reason\": \"Additional terms did not reduce the worst held-out residual, which is already near the calibration noise floor.\"\n    }\n  ],\n  \"rationale\": \"Implement the noise-floor calibration and verify its inverse on the actual coupon inputs. If closure holds, blocked validation can test material recovery separately from the blind chamber assumption.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3cc134b4dab55f381f798781ea34a2a7e85681c3fa5eb5ba9b8c0f98a0fc608d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44335.63,
+      "usage_known": true,
+      "prompt_tokens": 35385,
+      "cached_tokens": 9344,
+      "completion_tokens": 1766
+    }
+  ]
+}

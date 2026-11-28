@@ -1,0 +1,123 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m100_c01_s00_036e50301545",
+    "source_hash": "036e50301545c79b644ba6285ef3bf747dc4e56a056a0161e3d9ebb7a2870d3b",
+    "parent_ids": [],
+    "source_episode_id": "beta_m100_c01",
+    "task_id": "beta_m100_c01_s00__blind_continual_campaign",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_chamber.py",
+        "archived_relpath": "producers/tmp__audit_chamber.py",
+        "bytes": 3002,
+        "sha256": "ba03cae028afd9ffeae61ecb7e9229fdc7534c515a863faba3dd30ef1453b94b"
+      },
+      {
+        "container_path": "/tmp/probe_chamber.py",
+        "archived_relpath": "producers/tmp__probe_chamber.py",
+        "bytes": 3048,
+        "sha256": "9f17d790b41d57e31cb3f754201774d2fdf9ce52e90d6309e3e0d19f5a13c1d3"
+      },
+      {
+        "container_path": "/tmp/verify_batch_solver.py",
+        "archived_relpath": "producers/tmp__verify_batch_solver.py",
+        "bytes": 4289,
+        "sha256": "15ed3224011a043babaa72b96c6fd35d8803685636312d7e4e633d1e4f7ad8d5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py /holdout_task/public_asset_index.json; for f in /tmp/hegel_continual_archive/*.json; do echo ==== \"$f\"; head -c 6500 \"$f\"; echo; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling'; python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('batch',len(b)); d=b[0];print('item',list(d)); print('diagnostics',type(d.get('campaign_diagnostics'))); s=d['study'];\nfor k,v in s.items():\n print(k, type(v).__name__, getatt",
+      "python3 - <<'PY'\nimport json, pickle, numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print(json.dumps(a,separators=(',',':')))\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']\nfor k,v in c.items():\n print(k,type(v),getattr(v,'shape',None)); print(str(v)[:1200] if k=='single_bank_sweeps' else np.asarray(v)[:5])\nprint('sensors/banks',s['sensor_ij'],s['row_bank_id'].reshape(-1,4)); print('aux first',s['aux_manifold_telemetry'][:4]); print('scipy',__import__('scipy').__version__)\nPY\nPYTHONPATH=/",
+      "cat > /tmp/probe_chamber.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.linalg import null_space\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nc=s['sensor_calibration_sweeps']; ref=c['ref_rosette']; raw=c['raw_rosette']; design=np.c_[np.ones(len(ref)),ref]\ne=[]\nfor i in range(len(ref)):\n keep=np.arange(len(ref))!=i\n e.append(raw[i]-design[i]@np.linalg.lstsq(design[keep],raw[keep],rcond=None)[0])\na=np.linalg.lstsq(design,raw,rcond=None)[0]\nprint",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Steady transport, sweep calibration, and a certified box-simplex fit.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, h, robin):\n    face = 0.5 * (kappa[:-1] + kappa[1:]) / h**2\n    vel = velocity[1:-1] / h\n    left = np.r_[-face[:-1] - np.maximum(vel, 0), -kappa[-1] / h**2]\n    right = np.r_[-kappa[0] / h**2, -face[1:] + np.minimum(vel, 0)]\n    main = np.r_[-right[0] + robin / h, face[:-1] + face[1:] + np.abs(vel),\n                 -left[-1] + robin / h]\n    return ",
+      "cat > /tmp/verify_batch_solver.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\n\np = '/holdout_task/batch_solver.py'\nspec = importlib.util.spec_from_file_location('candidate', p)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nstudy = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\n\ndef axis(k, v, h, r):\n    n = len(k)\n    D = np.zeros((n, n))\n    for i, j in ((0, 1), (n-1, n-2)):\n        D[i, j] = -k[i] / h**2\n        D[i, i] = k[i] / h**2 + r / h\n    for i in range(1, n-1):\n        D[i, i-1] = -(k[i]+k[i-1])/(2*h*h) ",
+      "cat > /tmp/audit_chamber.py <<'PY'\nimport importlib.util\nimport json\nimport pickle\nimport numpy as np\nfrom scipy.linalg import null_space\nfrom scipy.optimize import least_squares\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\ns = item['study']\na = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\nprint('diagnostics:', type(item.get('campaign_diagnostics')).__name__, 'apparatus metadata:', ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/batch_solver.py'\nspec=importlib.util.spec_from_file_location('candidate',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nc=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); d=np.c_[np.ones(len(x)),x]\nf=np.linalg.lstsq(d,y,rcond=None)[0]\nb=c['single_bank_sweeps']; k=np.asarray(b['bank_id']); t=np.asarray(b['ref_signal']); raw=np.asarray(b['raw_readou"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_chamber.py",
+      "primary_producer_container_path": "/tmp/probe_chamber.py",
+      "selected_channels": [
+        "m100_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5004,
+        "sha256": "a6be8b1919518766cab28a24f6ffa2b87adf35b4d36ae1e160060cec0feaa727",
+        "content_addressed_ref": "content_addressed_blobs/a6be8b1919518766cab28a24f6ffa2b87adf35b4d36ae1e160060cec0feaa727.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "rms",
+      "axis",
+      "oracle"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "036e50301545c79b644ba6285ef3bf747dc4e56a056a0161e3d9ebb7a2870d3b",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/batch_solver.py'\nspec=importlib.util.spec_from_file_location('candidate',p)\nm=importlib.util.module_from_spec(spec); spec.loader.ex",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "036e50301545c79b644ba6285ef3bf747dc4e56a056a0161e3d9ebb7a2870d3b",
+        "expected_candidate_sha256": "036e50301545c79b644ba6285ef3bf747dc4e56a056a0161e3d9ebb7a2870d3b",
+        "computed_candidate_sha256": "036e50301545c79b644ba6285ef3bf747dc4e56a056a0161e3d9ebb7a2870d3b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5004
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_036e5030"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "rms",
+        "code": "def rms(e):\n    return np.sqrt(np.mean(e ** 2))"
+      },
+      {
+        "name": "axis",
+        "code": "def axis(k, v, h, r, rob, wall, opp):\n    from scipy.sparse import diags\n    kp = (k[1:-1] + k[2:]) * 0.5\n    km = (k[1:-1] + k[:-2]) * 0.5\n    lower = np.r_[-km / h ** 2 - np.maximum(v[1:-1], 0) / h, -wall[1] * k[-1] / h ** 2]\n    upper = np.r_[-wall[0] * k[0] / h ** 2, -kp / h ** 2 - np.maximum(-v[1:-1], 0) / h]\n    mid = np.r_[rob[0] * r / h - upper[0] + opp[0] * k[0] / h ** 2, (km + kp) / h ** 2 + abs(v[1:-1]) / h, rob[1] * r / h - lower[-1] + opp[1] * k[-1] / h ** 2]\n    A = diags((lower, mid, upper), (-1, 0, 1), format='lil')\n    A[0, -1] = -opp[0] * k[0] / h ** 2\n    A[-1, 0] = -opp[1] * k[-1] / h ** 2\n    return A.tocsc()"
+      },
+      {
+        "name": "oracle",
+        "code": "def oracle(H, c, cap, b):\n    import itertools\n    n = len(c)\n    best = np.inf\n    for t in itertools.product((-1, 0, 1), repeat=n):\n        t = np.asarray(t)\n        w = np.where(t > 0, cap, 0.0)\n        i = np.flatnonzero(t == 0)\n        rem = b - w.sum()\n        if rem < -1e-10 or rem > len(i) * cap + 1e-10:\n            continue\n        if len(i):\n            M = np.ones((len(i) + 1, len(i) + 1))\n            M[:-1, :-1] = H[np.ix_(i, i)]\n            M[-1, -1] = 0.0\n            w[i] = np.linalg.solve(M, np.r_[-c[i] - H[i] @ w, rem])[:-1]\n        if min(w) >= -1e-10 and max(w) <= cap + 1e-10:\n            best = min(best, 0.5 * w @ H @ w + c @ w)\n    return best"
+      }
+    ]
+  }
+}

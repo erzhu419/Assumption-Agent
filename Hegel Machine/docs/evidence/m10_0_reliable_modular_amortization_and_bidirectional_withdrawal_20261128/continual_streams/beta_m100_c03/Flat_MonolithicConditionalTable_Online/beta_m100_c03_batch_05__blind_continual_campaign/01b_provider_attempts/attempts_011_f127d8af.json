@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f127d8afaae042c68553812fb4827acb",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:18.379164+00:00",
+  "ended_at_utc": "2026-11-28T03:57:06.990546+00:00",
+  "request_sha256": "e3bc01f7439a26d48a01feec69f6aed1e8320ac903da4cc6e38856ca02fcf4a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68880,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36334,
+    "cached_tokens": 9344,
+    "completion_tokens": 2129
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,21p' /tmp/hegel_continual_archive/*batch_02_solver.py; python3 - <<'PY'\\nfrom pathlib import Path\\ns=Path('/tmp/hegel_continual_archive/beta_m100_c03_batch_04_solver.py').read_text(); a=s.index('def _rosette_features'); b=s.index('def _profile',a); s=s[:a]+'''def _sensor_fit(study, keep=None):\\n    c = study['sensor_calibration_sweeps']\\n    x, y = np.asarray(c['ref_rosette']), np.asarray(c['raw_rosette'])\\n    clean = np.max(np.abs(y), axis=1) < 5\\n    if keep is not None:\\n        clean &= keep\\n    x, y = x[clean], y[clean]\\n    q = c['single_bank_sweeps']\\n    bank, sx, sy = (np.asarray(q[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    good = abs(sy) < 5\\n    pairs = [(bank == j) & good for j in range(4)]\\n    def features(a, b, f, h):\\n        return np.column_stack((np.ones_like(a), a, np.sin(f*a), b, 1-np.cos(h*b)))\\n    def fit(freq):\\n        coefficients, errors = [], []\\n        for j, m in enumerate(pairs):\\n            ax = np.r_[x[:, j], sx[m]]\\n            bx = np.r_[x[:, (j+2)%4], np.zeros(m.sum())]\\n            target = np.r_[y[:, j], sy[m]]\\n            d = features(ax, bx, *freq)\\n            p = np.linalg.lstsq(d, target, rcond=None)[0]\\n            coefficients.append(p)\\n            errors.append(d @ p - target)\\n        return np.array(coefficients), np.concatenate(errors)\\n    ff = least_squares(lambda f: fit(f)[1], [2.5, 2.], bounds=([1., .5], [4., 4.]), gtol=1e-13).x\\n    p, _ = fit(ff)\\n    def forward(x):\\n        return np.column_stack([features(x[:, j], x[:, (j+2)%4], *ff) @ p[j] for j in range(4)])\\n    return ff, p, forward\\n\\n\\ndef _calibrate(study, raw):\\n    (f, h), p, forward = _sensor_fit(study)\\n    y = np.asarray(raw).reshape(-1, 4)\\n    x = (y - p[:, 0]) / (p[:, 1] + f*p[:, 2])\\n    for _ in range(30):\\n        r = forward(x) - y\\n        if abs(r).max() < 1e-12:\\n            break\\n        jac = np.zeros((len(x), 4, 4))\\n        j = np.arange(4)\\n        jac[:, j, j] = p[:, 1] + f*p[:, 2]*np.cos(f*x)\\n        other = (j+2)%4\\n        jac[:, j, other] = p[:, 3] + h*p[:, 4]*np.sin(h*x[:, other])\\n        x -= np.linalg.solve(jac, r[..., None])[..., 0]\\n    return x.ravel()\\n\\n\\n'''+s[b:]; s=s.replace('from scipy.sparse import','from scipy.optimize import least_squares\\\\nfrom scipy.sparse import',1); s=s.replace('def _responses(study):','def _responses(study, wall=(0., 0.)):'); s=s.replace(\\\"study['L' + d] / (n - 1), 0.0)\\\",\\\"study['L' + d] / (n - 1), wall[i] * study['robin_' + d])\\\"); s=s.replace(\\\"for d, n in zip('xy', (nx, ny)))\\\",\\\"for i, (d, n) in enumerate(zip('xy', (nx, ny))))\\\"); Path('/holdout_task/batch_solver.py').write_text(s)\\nPY\\ncat > /tmp/walls5.py <<'PY'\\nimport sys,pickle,importlib.util,itertools\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; a,b=c['ref_rosette'],c['raw_rosette']; clean=np.max(abs(b),axis=1)<5\\nfor fold in range(4):\\n sel=np.arange(len(a))%4==fold; f,p,F=m._sensor_fit(s,~sel); e=F(a[sel&clean])-b[sel&clean]; print('cal',fold,f,p.round(5) if fold==0 else '',np.sqrt(np.mean(e*e,axis=0)))\\ny=m._calibrate(s,s['y_obs_raw']); z=s['Z_nuisance']; r=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']; ridge=s['nuisance_ridge']; n=len(y)\\ndef compare(S):\\n def solve(t):\\n  A=np.c_[S[t],y[t]]; Z=z[t]; p=np.linalg.solve(Z.T@Z+ridge*np.eye(Z.shape[1]),Z.T); B=A-Z@(p@A); D,b=B[:,:-1],B[:,-1]; w,nu=m._box_qp(D.T@D+r*np.eye(D.shape[1]),-D.T@b,cap,budget); return w,p@(y[t]-S[t]@w),D@w-b\\n w,g,res=solve(np.ones(n,bool)); cv=[]\\n groups=[np.tile(np.arange(n//12),12),np.tile(np.repeat(np.arange(n//12),4),3),np.repeat(np.arange(3),n//3),np.tile(np.arange(n//3),3)]\\n for group in groups[1:]:\\n  out=np.empty(n)\\n  for j in np.unique(group):\\n   sel=group==j; ww,gg,_=solve(~sel); out[sel]=S[sel]@ww+z[sel]@gg-y[sel]\\n  cv.append((np.sqrt(np.mean(out**2)),max(np.sqrt(np.mean(out[group==j]**2)) for j in np.unique(group))))\\n return np.sqrt(np.mean(res**2)),cv,w\\nfor wall in itertools.product([0,1],repeat=2):\\n S,U=m._responses(s,wall); print('wall',wall,compare(S))\\np='/tmp/hegel_continual_archive/beta_m100_c03_batch_02_solver.py'; spec=importlib.util.spec_from_file_location('old',p); old=importlib.util.module_from_spec(spec); spec.loader.exec_module(old); print('archive02',compare(old._responses(s)[0]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/walls5.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sine-plus-linear calibration → opposite-bank linear and cosine terms, then held-out wall comparison; worst bank-specific isolated fit RMS is 1.56e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the high-order proxy for opposite-bank coupling\",\"rejected_reason\":\"The even residual matches a low-dimensional cosine law, which can be tested on unseen mixed sweeps before using it to infer wall physics.\"}],\"rationale\":\"Build the executable solver and test calibration on held-out sweep rows. Compare the sealed, open, mixed-axis, and archived alternate walls on held-out sensors and shifts; the results will determine which boundary to use or whether additional wall parameters are needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1d6caf13ae6aa0e834290945b2530ddf956a8bd3980f96278ca897cc44843ad7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52820.94,
+      "usage_known": true,
+      "prompt_tokens": 36334,
+      "cached_tokens": 9344,
+      "completion_tokens": 2129
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1f9afaaa08ea42aa90881a137d5d1774",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:58.626084+00:00",
+  "ended_at_utc": "2026-11-28T03:58:26.354120+00:00",
+  "request_sha256": "6f5cafc3681c5ec1cf288747bc60dfcfb28054eb9d8c764259851395c72191fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63071,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34144,
+    "cached_tokens": 9344,
+    "completion_tokens": 1014
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py | grep -E '^[0-7] '; sed -n '/^def _chamber_response/,/^def solve_batch/p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_02_solver.py; sed -n '1,39p' /holdout_task/batch_solver.py; cat > /tmp/compact_bridge.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; y=c['true_channel_loads']; r=c['bridge_raw']; keep=abs(r).max(1)<5; y,r=y[keep],r[keep]\\ndef fit(y,r,mode):\\n def design(j,y,p):\\n  x=y[:,j]; z=y[:,(j+2)%4]; f=[np.ones(len(x)),x,np.sin(p[0]*x),z];\\n  if mode==0: f += [z*z,np.cos(p[0]*z)-1]\\n  if mode==1: f += [z*z,np.cos(p[1]*z)-1]\\n  if mode==2: f += [np.logaddexp(p[1]*z,-p[1]*z)-np.log(2)]\\n  if mode==3: f += [np.tanh(p[1]*z)**2]\\n  if mode==4: f += [z*z/(1+p[1]*z*z)]\\n  if mode==5: f += [np.cos(p[1]*z)-1]\\n  if mode==6: f += [np.expm1(-p[1]*z*z)]\\n  if mode==7: f += [z*np.tanh(p[1]*z)]\\n  if mode==8: f += [np.sqrt(1+p[1]*z*z)-1]\\n  return np.stack(f,1)\\n def profile(p):\\n  a=[design(j,y,p) for j in range(4)]; w=[np.linalg.lstsq(v,r[:,j],rcond=None)[0] for j,v in enumerate(a)]; return np.column_stack([v@b for v,b in zip(a,w)])-r,w\\n p=least_squares(lambda p:profile(p)[0].ravel(),[2.5,1.5],bounds=([2,.01],[3,5]),max_nfev=100).x\\n _,w=profile(p); return p,np.array(w),lambda yy:np.column_stack([design(j,yy,p)@w[j] for j in range(4)])\\nif __name__=='__main__':\\n for mode in range(9):\\n  p,w,fn=fit(y,r,mode); e=fn(y)-r; ee=np.zeros_like(e)\\n  for i in range(5):\\n   m=np.arange(len(y))%5!=i; ee[~m]=fit(y[m],r[m],mode)[2](y[~m])-r[~m]\\n  print(mode,p.round(6),'fit cv max',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(ee**2)),abs(ee).max(),'coef',w.round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_bridge.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense sinusoidal and quadratic bridge → H2 sparse opposed-channel coupling; the dense model’s held-out raw-channel RMSE is 0.00158.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep all pairwise interactions\",\"rejected_reason\":\"The single-axis sweeps show coupling concentrated in opposite channels; retain the dense basis only if it predicts held-out calibration rows better.\"}],\"rationale\":\"Test compact opposed-channel responses on held-out sweeps before implementing inversion. Inspect the archived low-low chamber formula separately, because the best bridge does not identify the deployment law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1eedd0558b9c568ce74ee3066ad727a454e3f30835b1f4f449d370fa58b68289",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29822.75,
+      "usage_known": true,
+      "prompt_tokens": 34144,
+      "cached_tokens": 9344,
+      "completion_tokens": 1014
+    }
+  ]
+}

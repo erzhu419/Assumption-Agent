@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51ffe5830dd04c11acaf7c3e164da01a",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__beta_m100_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:11.094164+00:00",
+  "ended_at_utc": "2026-11-28T03:28:46.395251+00:00",
+  "request_sha256": "320ce4213cc3c90207b90ff51a54865c5a3f3f83681a1bf2ae3daee877ac7880",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39425,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26014,
+    "cached_tokens": 10880,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_chamber.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nimport numpy as np\\nfrom scipy.linalg import null_space\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\ns = item['study']\\na = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nprint('diagnostics:', type(item.get('campaign_diagnostics')).__name__, 'apparatus metadata:', [{k: v for k,v in d.items() if 'trace' not in k and len(str(v)) < 400} for d in a])\\nc = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']; single = c['single_bank_sweeps']\\nprint('single-bank sweep schema:', type(single).__name__, [(str(k), np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in single.items()] if isinstance(single,dict) else str(single)[:300])\\n# Fit both candidate calibration grammars inside each held-out sweep split.\\nP = np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i,4)])\\nfor label, D in [('affine', np.c_[np.ones(len(x)),x]), ('pairwise quadratic', np.c_[np.ones(len(x)),x,P]), ('channel saturation', np.c_[np.ones(len(x)),x,x/(1+x*x)])]:\\n    E=[]\\n    for i in range(len(x)):\\n        f=np.arange(len(x))!=i\\n        E.append(y[i]-D[i]@np.linalg.lstsq(D[f],y[f],rcond=None)[0])\\n    print('sweep',label,'worst channel LOO RMSE',np.sqrt(np.mean(np.square(E),axis=0)).max())\\n\\nbase, _ = m._transport(s)\\ny = m._calibrate(s); Z = s['Z_nuisance']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']; nr=s['nuisance_ridge']\\nN = len(s['sensor_ij']); bank=np.asarray(s['row_bank_id']); groups=np.arange(len(y))%N//4\\n\\ndef predict(S, train, nuisance=True):\\n    A=S[train]; b=y[train]; q=Z[train]\\n    if nuisance:\\n        T=np.linalg.solve(q.T@q+nr*np.eye(q.shape[1]), q.T)\\n        A=A-q@(T@A); b=b-q@(T@b)\\n    w,_=m._box_simplex(A.T@A+ridge*np.eye(A.shape[1]),-A.T@b,cap,budget)\\n    gamma=T@(y[train]-S[train]@w) if nuisance else np.zeros(q.shape[1])\\n    return S@w+Z@gamma\\n\\ndef forward(p):\\n    return m._transport(dict(s, robin_x=s['robin_x']*p[0], robin_y=s['robin_y']*p[1]))[0]\\n\\ndef rms(e): return np.sqrt(np.mean(e**2))\\n\\ndef validate(kind):\\n    E=np.zeros(len(y)); vals=[]\\n    for g in np.unique(groups):\\n        train=groups!=g\\n        S=base\\n        if kind=='fit wall + nuisance':\\n            p=least_squares(lambda p:(predict(forward(p), train)-y)[train], np.ones(2), bounds=(.25,4), max_nfev=35).x\\n            vals.append(np.round(p,3).tolist()); S=forward(p)\\n        E[~train]=(predict(S,train,kind!='fixed wall, no nuisance')-y)[~train]\\n    print(kind,'pooled RMSE',rms(E),'worst spatial rosette RMSE',max(rms(E[groups==g]) for g in np.unique(groups)),'bank RMSE',[(int(k),round(rms(E[bank==k]),6)) for k in np.unique(bank)],'fold walls',vals)\\n\\nfor kind in ('fixed wall, no nuisance','fixed wall + nuisance','fit wall + nuisance'):\\n    validate(kind)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed Robin wall and affine rosette calibration -> H2 promote only changes that improve held-out spatial rosettes or calibration sweeps; the previous worst rosette RMSE was 0.01375 and the verified QP stress error was 6.4e-14.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode and classification audits\",\n      \"rejected_reason\": \"This study has neither relay states nor class labels. Held-out rosette errors stratified by sensor bank test the relevant nuisance failure.\"\n    }\n  ],\n  \"rationale\": \"Hold out each spatial rosette across every shift and fit any candidate wall parameters on the remaining observations. Compare nuisance-adjusted and unadjusted errors by bank, and use held-out calibration sweeps to test whether pairwise or saturation terms improve on the affine map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "97cf9b3a7c7137f720a514edfeb7d60694db942f0f5e21af20a921cb16484a39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37402.4,
+      "usage_known": true,
+      "prompt_tokens": 26014,
+      "cached_tokens": 10880,
+      "completion_tokens": 1422
+    }
+  ]
+}

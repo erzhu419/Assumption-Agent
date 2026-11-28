@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e6517efd0b5d4294a7da92f67a46e8ea",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:53.696924+00:00",
+  "ended_at_utc": "2026-11-28T03:33:14.570491+00:00",
+  "request_sha256": "3844457e68ea96bca3f287a3092419fdb2384e1220ded5e58409524a4cfebfab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29083,
+    "cached_tokens": 9344,
+    "completion_tokens": 741
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,52p' /tmp/hegel_continual_archive/*_solver.py; cat > /tmp/chamber_residual.py <<'PY'\\nfrom chamber_probe import *\\nxd=m._features(g,g)[:len(h)]; dr=xd@th[2:]; b=basis(tau); o=n.ones(len(h)); lab=g['lab_id']; mis=n.isnan(g['coupon_features_raw']);\\n# Fit the load response at its material value; this isolates the chamber correction.\\nbase=h[:,None]*(b[:,:2]@th[:2]); target=y-base\\nF=(n.c_[o,dr],n.c_[o,dr],n.c_[o,dr]); A=n.column_stack([(f[:,None,:]*b[None,:,j,None]).reshape(y.size,-1) for j,f in enumerate(F)])\\nq=least_squares(lambda q:A@q-target.ravel(),n.linalg.lstsq(A,target.ravel(),rcond=None)[0],loss='soft_l1',f_scale=.003).x\\nerr=(A@q).reshape(y.shape)-target\\nprint('correction',q); print('lab, drift, missing, hold, residual first/middle/last/rate'); print(n.c_[lab,dr,mis,h,err[:,[0,5,-2,-1]]].round(4));\\nfor group in [tr,te,g]:\\n print('panel stats',[(i,round(n.median(a.mean(0)),4),round(n.median(a.std(0)),4)) for i in n.unique(group['lab_id']) for a in [group['ref_coupons'][group['lab_id']==i]]]); print('features first',group['coupon_features_raw'][:2].round(3));\\nprint('ranges test diag hold',m._loads(c,te)[1].min(),m._loads(c,te)[1].max(),h.min(),h.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_residual.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Joint diagnostic alignment → independently aligned chamber reset; worst held-out-lab RMSE falls to 0.0155 at the final horizon and 0.0081 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the unrestricted stress-history model\",\"rejected_reason\":\"It fits chamber observations slightly better in sample but predicts held-out labs worse than the compact reset law.\"}],\"rationale\":\"Check whether the remaining error tracks missing features or reference-panel shifts before adding constitutive terms, and test whether the reset response can retain the train-estimated load slopes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4faf2e6563797fcdf6a1cf03608561ac734f3f56b69de35d2e03a9fc9d74cb04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22991.66,
+      "usage_known": true,
+      "prompt_tokens": 29083,
+      "cached_tokens": 9344,
+      "completion_tokens": 741
+    }
+  ]
+}

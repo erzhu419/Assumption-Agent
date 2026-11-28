@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd3b6a8eca5d478ab4ef866d99a4f3a8",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:41.127672+00:00",
+  "ended_at_utc": "2026-11-28T03:51:16.779112+00:00",
+  "request_sha256": "ea0f6daa5afb565f728a30bd473ff385e78ce6b710c09a3193a60141c7f7ff60",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49099,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30992,
+    "cached_tokens": 9344,
+    "completion_tokens": 1435
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rosette_sparse.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; d=c['single_bank_sweeps']; z=d['ref_signal'].reshape(4,-1).T; w=d['raw_readout'].reshape(4,-1).T; good=np.max(abs(y),axis=1)<4; qa=abs(w)<4; folds=np.random.default_rng(20).permutation(len(x))%5\\nodd={'exp':lambda x,k:x*np.exp(-k*x*x), 'rat':lambda x,k:x/(1+k*x*x), 'rat2':lambda x,k:x/(1+k*x*x)**2,'rat3':lambda x,k:x/(1+k*x*x)**3,'tanh':lambda x,k:np.tanh(k*x), 'sin':lambda x,k:np.sin(k*x),'exp4':lambda x,k:x*np.exp(-k*x**4),'root':lambda x,k:x/np.sqrt(1+k*x*x)}\\neven={'exp':lambda x,k:-np.expm1(-k*x*x),'rat':lambda x,k:x*x/(1+k*x*x),'cos':lambda x,k:1-np.cos(k*x),'tanh':lambda x,k:np.tanh(k*x*x),'sq':lambda x,k:x*x,'soft':lambda x,k:np.log1p(k*x*x)}\\ndef fit(q,od,ev,extra=None):\\n def des(v,j,k,axis=False):\\n  a=v[:,j]; b=v[:,(j+2)%4]; cols=[np.ones(len(v)),a,odd[od](a,k[0])]\\n  if extra: cols += [odd[extra](a,k[2])]\\n  cols += [b,even[ev](b,k[1])]; out=np.column_stack(cols)\\n  if axis:out[:,-2:]=0\\n  return out\\n def solve(k,ret=False):\\n  rr=[]; ms=[]\\n  for j in range(4):\\n   a=np.vstack((des(x[q],j,k),des(z[qa[:,j]],j,k,True))); t=np.r_[y[q,j],w[qa[:,j],j]]; m=np.linalg.lstsq(a,t,rcond=None)[0]; rr.extend(a@m-t); ms.append(m)\\n  return ms if ret else np.array(rr)\\n starts=[(.8,.8,.3),(1.6,1.6,2.0)] if extra else [(.8,.8)]\\n sols=[least_squares(solve,p,bounds=(.04,8),max_nfev=160) for p in starts]; k=min(sols,key=lambda r:r.cost).x; ms=solve(k,True)\\n return lambda v:np.column_stack([des(v,j,k)@ms[j] for j in range(4)]),k,np.array(ms),np.sqrt(np.mean(solve(k)**2))\\nrows=[]\\nfor od in odd:\\n for ev in even:\\n  f,k,m,r=fit(good,od,ev); rows.append((r,od,ev,None))\\nfor od,e in [('exp','exp'),('exp','rat'),('exp','tanh'),('exp','sin'),('exp','exp4'),('rat','tanh'),('rat','rat'),('tanh','tanh'),('tanh','sin')]:\\n for ev in ('exp','rat','cos'):\\n  f,k,m,r=fit(good,od,ev,e); rows.append((r,od,ev,e))\\nfor r,od,ev,e in sorted(rows,key=lambda r:r[0])[:12]:\\n f,k,m,r=fit(good,od,ev,e); rs=[]\\n for j in range(5):\\n  q=folds==j; g,*_=fit(good&~q,od,ev,e); v=np.linalg.norm(g(x[q&good])-y[q&good],axis=1); rs.append([np.median(v),v.max()])\\n print(od,ev,e,'rmse',r,'cv',np.max(rs,axis=0),'k',k,'coeff',m.round(5).tolist(),flush=True)\\nprint('pulses:',[(p.keys(),np.shape(p.get('y_pulse_raw'))) for p in (s.get('reference_tracer_pulses') or [])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_sparse.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense separable exponential basis → H2 shared diagonal response plus paired-bank coupling; the current worst-fold median/max forward errors are 0.01504/0.03414.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add generic pairwise interactions\",\"rejected_reason\":\"All three tested interaction bases raised the worst-fold median error, while the fitted coefficients point to coupling between opposite banks.\"}],\"rationale\":\"Fit axis and rosette sweeps jointly with a sparse paired-bank model. If the sparse fit loses held-out accuracy, retain the better-supported dense terms; if the residual persists across odd basis choices, inspect the paired-bank term before adding complexity.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "4e5129b89b4e35062812766a57991caa968086613e41456a4d9748c7dd07a422",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37734.58,
+      "usage_known": true,
+      "prompt_tokens": 30992,
+      "cached_tokens": 9344,
+      "completion_tokens": 1435
+    }
+  ]
+}

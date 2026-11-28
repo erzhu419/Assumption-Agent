@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a4e8d76ba904b2d9c78feee945e6439",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:30.139663+00:00",
+  "ended_at_utc": "2026-11-28T03:39:00.125756+00:00",
+  "request_sha256": "7ed761acfb7a67acc62d7af6df49c088521e831787608259629c67bea81e1c6d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38425,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24462,
+    "cached_tokens": 9344,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream, _design, _fit_forward\\n\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    study = item['study']\\n    cal = study['sensor_calibration_sweeps']\\n    ref, raw = cal['ref_rosette'], cal['raw_rosette']\\n    coeff = _fit_forward(ref, raw)\\n    rng = np.random.default_rng(24)\\n    target = np.vstack([rng.uniform(ref.min(axis=0), ref.max(axis=0), (2500, 4)), np.array(np.meshgrid(*zip(ref.min(axis=0), ref.max(axis=0)))).reshape(4, -1).T])\\n    pulse = (_design(target) @ coeff).reshape(-1, 2, 4)\\n    trial = dict(study, reference_tracer_pulses=[None, {'y_pulse_raw': None}, {'y_pulse_raw': pulse, 'tag': 'test'}])\\n    original = copy.deepcopy(trial)\\n    result = calibrate_upstream(trial)\\n    p = result['reference_tracer_pulses']\\n    assert p[:2] == [None, {'y_pulse_raw': None}] and p[2]['tag'] == 'test'\\n    assert p[2]['y_pulse_raw'].shape == pulse.shape\\n    worst = np.max(np.abs(p[2]['y_pulse_raw'].reshape(-1, 4) - target))\\n    assert worst < 1e-8, worst\\n    norm = result['sensor_calibration_sweeps']\\n    for a,b in [(norm['raw_rosette'], cal['ref_rosette']), (norm['single_bank_sweeps']['raw_readout'], cal['single_bank_sweeps']['ref_signal'])]:\\n        np.testing.assert_array_equal(a, b)\\n        assert not np.shares_memory(a, b)\\n    np.testing.assert_array_equal(trial['y_obs_raw'], original['y_obs_raw'])\\n    np.testing.assert_array_equal(cal['raw_rosette'], original['sensor_calibration_sweeps']['raw_rosette'])\\n    np.testing.assert_array_equal(pulse, original['reference_tracer_pulses'][2]['y_pulse_raw'])\\n    assert calibrate_upstream(dict(study, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n    repeat = calibrate_upstream(result)\\n    np.testing.assert_allclose(repeat['y_obs_raw'], result['y_obs_raw'], atol=1e-12, rtol=0)\\n    sol = solve_batch(study)\\n    w = sol['weights']; kkt = sol['kkt_certificate']\\n    cap, budget = study['u_box'], study['total_budget']\\n    assert w.min() >= -1e-10 and w.max() <= cap + 1e-10 and abs(w.sum()-budget) < 1e-10\\n    gap = abs(kkt['primal_objective']-kkt['dual_lower_bound'])\\n    assert gap < 1e-9 and np.isfinite(sol['terminal_field']).all(), gap\\n    print('Pulse box and corner maximum inverse round-trip error:', worst, '; public KKT gap:', gap)\\nsys.argv = ['validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path('/holdout_task/validate_public_schema.py', run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (coupled affine and diagonal cubics) → H2 (add quadratic cross-channel terms): worst leave-one-out clean inverse error was 4.15e-5 on the mixed and extreme slices; public observation round-trip error was 7.02e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Remove the small fitted quadratic coefficients\",\n      \"rejected_reason\": \"They do not cause a demonstrated accuracy or conditioning problem, and sparsifying to this one public fixture could drop terms present in another calibration.\"\n    }\n  ],\n  \"rationale\": \"Held-out measurements verify the expanded basis. The public study omits tracer pulses, so the isolated test covers nullable and multidimensional pulses, checks for wrong-root inversion across the calibrated amplitude box, and verifies that normalization preserves inputs and downstream feasibility.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2a205b3df0e5390f1545b1c98ece508528c14ba51dd1a2044f71a1486158e3c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32090.75,
+      "usage_known": true,
+      "prompt_tokens": 24462,
+      "cached_tokens": 9344,
+      "completion_tokens": 1172
+    }
+  ]
+}

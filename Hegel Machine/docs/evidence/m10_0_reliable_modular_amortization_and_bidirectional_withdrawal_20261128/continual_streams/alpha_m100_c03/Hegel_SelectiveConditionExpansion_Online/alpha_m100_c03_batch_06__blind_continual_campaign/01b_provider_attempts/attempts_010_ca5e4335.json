@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca5e4335c9414f75987f11fad32a1814",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:07:09.633481+00:00",
+  "ended_at_utc": "2026-11-28T04:07:39.619079+00:00",
+  "request_sha256": "75c35f88563bfd9613bceeef87c36ea5e23f26b43e1f341c8edc70f787f1a462",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26775,
+    "cached_tokens": 9344,
+    "completion_tokens": 1094
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task\\nsed -n '/^def _chamber/,$p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,json,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport _verified_upstream as u\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features,_loads,_design\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; raw=item['dataset']; print('chamber labels available:',item.get('campaign_diagnostics') is not None)\\ncal=raw['calibration_load_cells']; truth=cal['true_channel_loads']; obs=cal['bridge_raw']; n=len(truth); err=np.empty_like(truth)\\nfor fold in range(4):\\n m=np.arange(n)%4==fold; err[m]=u._inverse(obs[m],*u._fit(truth[~m],obs[~m]))-truth[m]\\nprint('held-out bridge per-channel p95 AE',np.quantile(abs(err),.95,axis=0),'axial p95/max AE',np.quantile(abs(err.sum(axis=1)),[.95,1]))\\nd=u.calibrate_upstream(raw); tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=_features(tr,te); p,h=_loads(te); out=solve_batch(raw); a,b=out['estimated_taus'],out['hereditary_weights']; t=d['eval_times']; drift=b[2]+x[n:]@b[3:]; baseline_curve,baseline_rate=_design(a,x[n:],p,h,d['past_dt'],t); base=te['strain_0'][:,None]+baseline_curve@b\\nf=-np.expm1(-t[:,None]/a); fraction=np.array([.50075074,.46475238]); challenger=te['strain_0'][:,None]+(h[:,None]*b[:2]+drift[:,None]*fraction*a)@f.T+.031004*drift[:,None]*t; challenger_rate=h*(b[:2]/a).sum()+(fraction.sum()+.031004)*drift\\nfor name,c,r in [('benchtop',base,baseline_rate@b),('archive routing fractions',challenger,challenger_rate)]:\\n for group in np.unique(te['lab_id']):\\n  m=te['lab_id']==group; e=abs(c[m]-out['predicted_strain'][m]); print(name,'lab',group,'max delta across horizon thirds',np.round([w.max() for w in np.array_split(e,3,axis=1)],6),'max rate delta',round(float(abs(r[m]-out['initial_rate_pred'][m]).max()),6))\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); traces=np.array([r['facility_telemetry_trace'] for r in rows]); controls=np.median(traces[:,:,[3,6]],axis=1); print('control medians chronological',np.round(controls,3).tolist()); print('archive analogs in terminal regime',np.flatnonzero(np.linalg.norm(controls-controls[-1],axis=1)<.2).tolist())\\nprint('test time min/max',t.min(),t.max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: calibrated hereditary fit followed by an archive-selected chamber memory reset; worst held-out lab median absolute errors are 0.00996 for strain and 0.00690 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, HJB terms, or classification accuracy\",\n      \"rejected_reason\": \"This dataset contains continuous strain and rate measurements, with no relay state, stochastic control equation, or class labels. The relevant checks are calibrated axial sums and hereditary boundary terms.\"\n    }\n  ],\n  \"rationale\": \"Hold out load-bridge sweep rows to detect calibration error that could justify revisiting the transducer fit. Compare the archived residual linear drift and the benchtop memory law against the candidate by deployment lab and horizon to quantify which assumptions matter. Those differences are sensitivity measures, not deployment errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fcebcc44f45a6fe0d428a1739ce13449dbbac200a8eb4f2c419a7b874915cd18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29940.88,
+      "usage_known": true,
+      "prompt_tokens": 26775,
+      "cached_tokens": 9344,
+      "completion_tokens": 1094
+    }
+  ]
+}

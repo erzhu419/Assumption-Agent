@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "12c3b710e00e4051a6a538e480a2b6a7",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:26.650193+00:00",
+  "ended_at_utc": "2026-11-28T03:33:02.335697+00:00",
+  "request_sha256": "c5ee2c3ddb4391d91788a05a7b56a5caecd313d3845250726858eb2b2516558f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26013,
+    "cached_tokens": 9344,
+    "completion_tokens": 1475
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; nx,ny=s['nx'],s['ny']; n=nx*ny\\nA=np.diag(s['V_reaction_2d'].flatten(order='F'))\\nfor j in range(ny):\\n for i in range(nx):\\n  row=i+nx*j\\n  for axis,k,step in [('x',i,1),('y',j,nx)]:\\n   kap=s['kappa_'+axis]; vel=s['vel_'+axis]; h=s['L'+axis]/(len(kap)-1)\\n   if k==0: edges=[(1,kap[k]/h**2)]\\n   elif k==len(kap)-1: edges=[(-1,kap[k]/h**2)]\\n   else: edges=[(d,(kap[k]+kap[k+d])/(2*h**2)+max(0,-d*vel[k])/h) for d in (-1,1)]\\n   for d,c in edges:\\n    A[row,row]+=c; A[row,row+step*d]-=c\\nrhs=np.column_stack([f.flatten(order='F') for f in s['source_modes']]); ij=s['sensor_ij']; ids=ij[:,0]+nx*ij[:,1]\\nU=[np.linalg.solve(A+mu*np.eye(n),rhs) for mu in s['mu_shifts']]; S=np.concatenate([u[ids] for u in U]); B,F=m.chamber_response(s)\\nassert np.allclose(B,S,rtol=0,atol=1e-13)\\nassert np.allclose(F,np.stack([v.reshape(nx,ny,order='F') for v in U[-1].T]),rtol=0,atol=1e-13)\\nC=s['sensor_calibration_sweeps']; X=C['ref_rosette']; Y=C['raw_rosette']; fit=np.linalg.lstsq(np.column_stack([np.ones(len(X)),X]),Y,rcond=None)[0]\\ndef decode(y): return ((np.asarray(y).reshape(-1,4)-fit[0])@np.linalg.inv(fit[1:])).ravel()\\nerrors=[]\\nfor pulse in item['campaign_diagnostics']:\\n err=(S@pulse['w_pulse']-decode(pulse['y_pulse_raw'])).reshape(len(U),-1)\\n errors.append(np.sqrt(np.mean(err**2,axis=1)))\\nprint('worst exact-wall shift/pulse RMS:',np.max(errors)); assert np.max(errors)<4e-6\\nZ=s['Z_nuisance']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); D=P@S; y=P@decode(s['y_obs_raw']); reg=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']; H=D.T@D+reg*np.eye(S.shape[1]); c=D.T@y\\nout=m.solve_batch(s); w=out['weights']; q=out['kkt_certificate']; g=H@w-c; obj=(np.linalg.norm(D@w-y)**2+reg*(w@w))/2\\nexpected_field=(U[-1]@w).reshape(nx,ny,order='F'); field_err=np.max(np.abs(expected_field-out['terminal_field'])); assert field_err<1e-13\\nlo=np.array(q['lam_lower']); hi=np.array(q['lam_upper']); nu=q['nu_sum']; dual=obj-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nassert np.max(abs(w-np.array(q['weights'])))<1e-14 and min(lo)>=0 and min(hi)>=0\\nassert max(np.max(abs(g-nu-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(cap-w))),abs(q['primal_objective']-obj),abs(q['dual_lower_bound']-dual),abs(obj-dual))<1e-11\\nworst=0.; rng=np.random.default_rng(528)\\nfor target in [c,*[c+rng.normal(0,k,len(c)) for k in (.003,.04,.4) for _ in range(70)]]:\\n for b in (0.,.02,cap,2*cap,budget,cap*len(c)-.02,cap*len(c)):\\n  v,t=m.box_simplex(H,target,cap,b); h=H@v-target\\n  worst=max(worst,abs(v.sum()-b),max(0.,-v.min(),v.max()-cap),np.max(np.maximum(h-t,0)*v),np.max(np.maximum(t-h,0)*(cap-v)))\\nassert worst<1e-11\\nprint('terminal max absolute error:',field_err,'public primal-dual gap:',obj-dual,'worst stress KKT residual:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open-wall Robin) -> H2 (zero-loss walls with dynamic affine calibration); the fitted correction reached 1.28e-6 worst held-pulse RMS, and the exact implementation is pending independent verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check\",\n      \"rejected_reason\": \"The schema check cannot establish field ordering, pulse agreement, or KKT optimality.\"\n    }\n  ],\n  \"rationale\": \"The independent dense stencil can detect an indexing or boundary error that would require a forward-model fix. The certificate and active-set stress tests can detect a separate optimization error, including failures at exact box-simplex vertices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f515fdcef088ff9454001f33d1fa4e9a2c6634fb291d827d4e6cab90b9d837ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37807.19,
+      "usage_known": true,
+      "prompt_tokens": 26013,
+      "cached_tokens": 9344,
+      "completion_tokens": 1475
+    }
+  ]
+}

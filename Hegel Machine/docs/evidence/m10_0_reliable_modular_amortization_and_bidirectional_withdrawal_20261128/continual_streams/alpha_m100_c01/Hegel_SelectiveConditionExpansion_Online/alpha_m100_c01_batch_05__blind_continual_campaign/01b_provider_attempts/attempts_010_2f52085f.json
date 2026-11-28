@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f52085fca904d3da86c2524b96a83f7",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:58.000858+00:00",
+  "ended_at_utc": "2026-11-28T03:54:29.818542+00:00",
+  "request_sha256": "cac82c9c74ba3adcbe3680b3e2afdb7b5352c75e399f88cde3decf206c46a0fe",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 57271,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32561,
+    "cached_tokens": 9344,
+    "completion_tokens": 1278
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\n\\ndef forward(x, beta):\\n    return np.sum(u._design(x.reshape(-1, 4))*beta.T, axis=-1).reshape(x.shape)\\n\\nitems = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nfor i, item in enumerate(items):\\n    d = item['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    beta = u._fit(x, y)\\n    e = np.max(abs(forward(x, beta)-y), axis=1)\\n    clean = e < .002\\n    assert np.mean(clean) >= .75, e\\n    print('batch', i, 'clean rows', np.count_nonzero(clean), 'spike rows', np.flatnonzero(~clean).tolist())\\n    slices = {'boundary': np.max(abs(x), axis=1)>=1.45, 'axis': np.count_nonzero(x, axis=1)==1}\\n    for j, fold in enumerate(np.array_split(np.random.default_rng(819).permutation(len(x)), 5)):\\n        mask = np.zeros(len(x), bool)\\n        mask[fold] = True\\n        slices[f'fold{j}'] = mask\\n    for name, test in slices.items():\\n        fitted = u._fit(x[~test], y[~test])\\n        val = test & clean\\n        error = np.max(abs(u._inverse(y[val], fitted)-x[val]))\\n        print(name, 'held-out inverse max', float(error))\\n        assert error < .002, (name, error)\\n    damaged = y.copy()\\n    ids = np.flatnonzero(clean)[::9]\\n    damaged[ids] += np.array([7., -10., 4., 12.])\\n    spike_error = np.max(abs(u._inverse(y[clean], u._fit(x, damaged))-x[clean]))\\n    print('added spike inverse max', float(spike_error))\\n    assert spike_error < .002\\n    rng = np.random.default_rng(42)\\n    trial_loads = rng.uniform(-4, 4, size=(3, 31, 4))\\n    trial_raw = forward(trial_loads, beta)\\n    trials = [{'past_channel_raw': trial_raw, 'hold_channel_raw': trial_raw[:, -1], 'tag': 'trial'}]\\n    augmented = dict(d, chamber_verification_trials=trials)\\n    out = u.calibrate_upstream(augmented)\\n    recovered = out['chamber_verification_trials'][0]\\n    trial_error = np.max(abs(recovered['past_channel_raw']-trial_loads))\\n    assert trial_error < 1e-9\\n    np.testing.assert_allclose(recovered['hold_channel_raw'], trial_loads[:, -1], atol=1e-9, rtol=0)\\n    assert recovered['tag'] == 'trial' and trials[0]['past_channel_raw'] is trial_raw\\n    for split in ('train', 'test'):\\n        for key in ('past_channel_raw', 'hold_channel_raw'):\\n            v = out[split][key]\\n            original = d[split][key]\\n            delta = np.max(abs(forward(v, beta)-original))\\n            print(split, key, 'forward reconstruction max', float(delta))\\n            assert v.shape == original.shape and delta < 1e-9\\n    normalized = out['calibration_load_cells']\\n    np.testing.assert_array_equal(normalized['bridge_raw'], x)\\n    assert not np.shares_memory(normalized['bridge_raw'], x)\\n    sweeps = normalized['single_channel_sweeps']\\n    np.testing.assert_array_equal(sweeps['cmd_stress'], sweeps['true_stress'])\\n    assert not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\n    second = u.calibrate_upstream(out)\\n    np.testing.assert_array_equal(second['test']['hold_channel_raw'], out['test']['hold_channel_raw'])\\n    print('trial round-trip max', float(trial_error), 'solver fields', list(solve_batch(d)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Paired sinusoidal forward map -> robust coupled inverse; the public schema passes and the worst boundary holdout forward error is 0.000268.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema check does not measure inverse accuracy. Validate the exact saved module in isolated Python on held-out axis and boundary loads, injected calibration spikes, and the optional trial path. A failure would identify whether to revise the robust fit, numerical inverse, or record conversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b644cb051c8430863dd5e19da8ab85eaf834185dce605d5281014c82c17a2f65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33889.35,
+      "usage_known": true,
+      "prompt_tokens": 32561,
+      "cached_tokens": 9344,
+      "completion_tokens": 1278
+    }
+  ]
+}

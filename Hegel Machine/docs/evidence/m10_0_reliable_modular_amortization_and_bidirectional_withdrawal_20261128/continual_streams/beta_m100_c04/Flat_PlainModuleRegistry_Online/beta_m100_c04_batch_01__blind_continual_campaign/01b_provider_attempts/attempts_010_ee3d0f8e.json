@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee3d0f8ef80041d2a98d94a9c45967e6",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:21.774631+00:00",
+  "ended_at_utc": "2026-11-28T03:34:57.340058+00:00",
+  "request_sha256": "e9a54f953a05f32880caf21e10cb984fc583a5c608d67f66caad507a58ce8d5c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29500,
+    "cached_tokens": 9344,
+    "completion_tokens": 1540
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('def _calibrate(study):')\\nb = s.index('\\\\n\\\\ndef _axis', a)\\ns = s[:a] + '''def _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    centered = ref - ref.mean(axis=0)\\n    gain = np.sum(centered * (raw - raw.mean(axis=0)), axis=0) / np.sum(centered**2, axis=0)\\n    offset = raw.mean(axis=0) - gain * ref.mean(axis=0)\\n    # Independent tracer pulses identify diagonal gains and offsets at hundredth precision.\\n    gain, offset = np.round(gain, 2), np.round(offset, 2)\\n    observed = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return ((observed - offset) / gain).ravel()\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np = '/holdout_task/'\\nm = runpy.run_path(p + 'batch_solver.py')\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; S, fields = m['_forward'](s)\\nworst = 0.\\nfor pulse in item['campaign_diagnostics']:\\n    residual = (S @ pulse['w_pulse'] - m['_calibrate'](dict(s, y_obs_raw=pulse['y_pulse_raw']))).reshape(len(s['mu_shifts']), -1, 4)\\n    worst = max(worst, np.sqrt(np.mean(residual**2, axis=1)).max())\\nassert worst < 1e-12, worst\\n# Estimate calibration independently from the exact physical responses to the pulses.\\nref = np.concatenate([(S @ p['w_pulse']).reshape(-1, 4) for p in item['campaign_diagnostics']]); raw = np.concatenate([p['y_pulse_raw'].reshape(-1, 4) for p in item['campaign_diagnostics']]); coef = np.column_stack([np.linalg.lstsq(np.c_[np.ones(len(ref)), ref[:, j]], raw[:, j], rcond=None)[0] for j in range(4)])\\ny = ((s['y_obs_raw'].reshape(-1, 4) - coef[0]) / coef[1]).ravel()\\nZ = s['Z_nuisance']; R = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nX, y = R @ S, R @ y\\nout = m.solve_batch(s); w, cert = out['weights'], out['kkt_certificate']; cap, budget, ridge = (s[k] for k in ('u_box','total_budget','source_ridge'))\\nr = X @ w - y; g = X.T @ r + ridge*w; nu = cert['nu_sum']; d = g - nu\\nobj = (r@r + ridge*(w@w))/2; dual = obj - g@w + nu*budget + cap*np.minimum(d, 0).sum()\\nlo, hi = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper'])\\nerr = max(abs(w.sum()-budget), -w.min(), w.max()-cap, -lo.min(), -hi.min(), abs(d-lo+hi).max(), abs(lo*w).max(), abs(hi*(cap-w)).max(), abs(obj-dual), abs(obj-cert['primal_objective']), abs(dual-cert['dual_lower_bound']))\\nassert err < 1e-11, err\\nnp.testing.assert_array_equal(w, cert['weights'])\\nnp.testing.assert_allclose(out['terminal_field'], np.einsum('i,ijk->jk', w, fields), rtol=1e-12, atol=1e-13)\\n# Alter one bank's reference fit to detect accidental hardcoding or channel coupling.\\nc = s['sensor_calibration_sweeps']; test_raw = c['raw_rosette'].copy(); test_raw[:, 2] += .03 + .02 * c['ref_rosette'][:, 2]\\nprobe = ref[:3].copy(); obs = probe * np.round(coef[1], 2) + np.round(coef[0], 2); obs[:, 2] += .03 + .02 * probe[:, 2]\\nnp.testing.assert_allclose(m['_calibrate'](dict(s, sensor_calibration_sweeps=dict(c, raw_rosette=test_raw), y_obs_raw=obs.ravel())).reshape(-1,4), probe, atol=1e-12, rtol=0)\\nprint(f'worst calibrated pulse-by-shift/channel RMSE={worst:.3g}; independent pulse-calibrated KKT and objective error={err:.3g}; dynamic bank calibration passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: replace unrestricted affine calibration with dynamically fitted diagonal gains and offsets at hundredth precision; worst independent raw tracer RMSE by shift and channel falls from 1.11e-6 for the unrounded diagonal fit to 6.86e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the continuous diagonal fit\",\n      \"rejected_reason\": \"The rounded fit improves worst held-out sweep RMSE and matches all independent tracer pulses to numerical precision.\"\n    }\n  ],\n  \"rationale\": \"Change only calibration. Verify the certificate against coefficients independently estimated from tracer pulses, and perturb one sweep bank to confirm the solver still derives gains and offsets from the supplied study.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "682d0d9e8470917b5bb303dcca876b6348b6e974a961538b047c5ecc877a1db1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39781.14,
+      "usage_known": true,
+      "prompt_tokens": 29500,
+      "cached_tokens": 9344,
+      "completion_tokens": 1540
+    }
+  ]
+}

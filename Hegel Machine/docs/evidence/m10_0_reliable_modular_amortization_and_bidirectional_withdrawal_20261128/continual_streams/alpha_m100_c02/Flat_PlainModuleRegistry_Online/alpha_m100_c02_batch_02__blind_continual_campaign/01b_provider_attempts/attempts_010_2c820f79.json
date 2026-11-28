@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c820f79089741848cb9856e63fd23b5",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:47.874988+00:00",
+  "ended_at_utc": "2026-11-28T03:44:20.972008+00:00",
+  "request_sha256": "989d66b26f07fb0afe3378b70f5a6ae28496909d49846b037a6923cd79671092",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58189,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30220,
+    "cached_tokens": 9344,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _invert\\nfrom batch_solver import solve_batch\\nD = pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\nC=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; A=_basis(X)\\nB=_fit_bridge(X,Y)\\n# Check whether differences supply a missing quadratic direction.\\nP=np.column_stack([(X[:,i]+s*X[:,j])**2 for i,j in combinations(range(4),2) for s in (-1,1)])\\nprint('quadratic pair sum/difference span max residual',np.max(abs(A@np.linalg.lstsq(A,P,rcond=None)[0]-P)))\\n# Known gross spikes are identifiable by raw amplitude, independently of model residuals.\\namp=np.max(abs(Y),axis=1); ordered=np.sort(amp); print('top raw amplitudes',ordered[-7:]); clean=amp<8\\n# Nonzero rational corrections use P(x)/(1+a*Q(x)^2) with the identified sparse polynomial support.\\n# Pairwise directions include both signs and signed unequal weighting.\\nq=np.column_stack([X]+[(X[:,i]+s*c*X[:,j]) for i,j in combinations(range(4),2) for c in (.5,1.,2.) for s in (-1,1)])\\ndens=np.column_stack([np.ones(len(X))]+[1+a*q**2 for a in (1e-5,1e-4,1e-3,1e-2,.1)])\\nrng=np.random.default_rng(19)\\nouter=[(f'fold{i}',t) for i,t in enumerate(np.array_split(rng.permutation(len(X)),5))]\\nouter += [('axes',np.flatnonzero(np.count_nonzero(X,axis=1)==1)),('radius1.2',np.flatnonzero(np.max(abs(X),axis=1)>1.2))]\\nworst=np.zeros(2)\\nfor name,t in outer:\\n tr=np.setdiff1d(np.arange(len(X)),t); t=t[clean[t]]\\n b=_fit_bridge(X[tr],Y[tr]); pred=A[t]@b\\n # Infer sparse support inside each outer fold; select each denominator by inner CV only.\\n use=tr[clean[tr]]; inside=np.array_split(rng.permutation(use),3); alt=np.empty_like(pred); selected=[]\\n for j in range(4):\\n  cols=np.flatnonzero(b[:,j]); design=A[:,cols]; scores=np.zeros(dens.shape[1]);\\n  for val in inside:\\n   fit=np.setdiff1d(use,val)\\n   for k in range(dens.shape[1]):\\n    F=design[fit]/dens[fit,k,None]; coef=np.linalg.lstsq(F,Y[fit,j],rcond=None)[0]\\n    scores[k]+=np.sum((design[val]@coef/dens[val,k]-Y[val,j])**2)\\n  k=int(np.argmin(scores)); selected.append(k)\\n  coef=np.linalg.lstsq(design[use]/dens[use,k,None],Y[use,j],rcond=None)[0]; alt[:,j]=design[t]@coef/dens[t,k]\\n baseline, rational=[np.sqrt(np.mean(np.sum((p-Y[t])**2,axis=1))) for p in (pred,alt)]\\n worst=np.maximum(worst,[baseline,rational]); print(name,'forward RMS polynomial/rational',baseline,rational,'selected nonidentity',sum(k!=0 for k in selected))\\nprint('worst forward RMS polynomial/rational',worst)\\nprint('calibration schema',list(C),'dataset schema',list(D))\\nprint('isolated composed outputs',[(k,v.shape,bool(np.isfinite(v).all())) for k,v in solve_batch(D).items()])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse cyclic polynomial bridge → H2 rational saturation only if it improves held-out accuracy; the current worst held-out load RMSE is 2.33e-4 per channel and 4.31e-4 for the summed load.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, stochastic drift operators, and within-batch classifier recall\",\"rejected_reason\":\"The measured endpoint is continuous bridge voltage versus known load. The upstream schema has no relay state, diffusion dynamics, technical-batch variable, or class label; laboratory reference handling is downstream and already passed the public exchange check.\"}],\"rationale\":\"Test whether pairwise differences or rational saturation expose a missing bridge term. Fit and select denominators inside the training folds, then compare the worst outer-fold error before deciding whether to change the calibrated map.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "05178cc0f507e03d833efa34930c4829d3ad5a977f39bdb985cab334ca74c0d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35162.71,
+      "usage_known": true,
+      "prompt_tokens": 30220,
+      "cached_tokens": 9344,
+      "completion_tokens": 1307
+    }
+  ]
+}

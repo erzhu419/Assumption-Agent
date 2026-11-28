@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9861bd5eff1345d6adb8539f95884b08",
+  "call_seq": 13,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:15:40.947465+00:00",
+  "ended_at_utc": "2026-11-28T04:16:11.809899+00:00",
+  "request_sha256": "bff6ccdd94983f14fb05106c8885bfada01276bf9e9befe7852edb2e4ac75ff7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 72352,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34121,
+    "cached_tokens": 9344,
+    "completion_tokens": 1221
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('downstream_solver.py')\\ns = p.read_text()\\nold = '_DRIFT_FRACTIONS = np.array([0.21451, 0.51507])'\\nassert s.count(old) == 1\\ns = s.replace(old, '_DRIFT_FRACTIONS = np.array([0.218654, 0.506934])\\\\n# Shared chamber drift correction fitted using complete verification coupons.\\\\n_CHAMBER_DRIFT_OFFSET = -0.001162')\\nold = '    drift = theta[2] + x @ theta[3:]'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, old + ' + _CHAMBER_DRIFT_OFFSET'))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features, _loads, _predict_chamber\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = solve_batch(d)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nq = calibrate_upstream(dict(d, chamber_verification_trials=item['campaign_diagnostics']))['chamber_verification_trials']\\np, h = _loads(q)\\nx = _features(q, q)[:len(h)]\\ns0 = q['strain_0']\\ns, r = _predict_chamber(tau, theta, x, h, d['eval_times'], s0)\\nerr = s - q['strain_curves_obs']; rate_err = r - q['instant_rate_obs']\\nlab = q['lab_id']; miss = np.isnan(q['coupon_features_raw']).any(axis=1); wd = h < p[:, -1]\\nrows = []\\nfor name, m in [(f'lab {k}', lab == k) for k in np.unique(lab)] + [('complete', ~miss), ('missing', miss), ('withdrawal', wd), ('loading', ~wd)]:\\n    if m.any():\\n        v = np.array([np.sqrt(np.mean(z*z)) for z in (err[m], rate_err[m], err[m, -1])]); rows.append(v)\\n        print(name, int(m.sum()), v.round(6))\\n        if name == 'withdrawal':\\n            assert v[2] < .005\\nworst = np.max(rows, axis=0)\\nprint('Deployed worst strain/rate/final RMSE:', worst.round(6))\\nassert np.all(worst < [.015488, .010129, .023719])\\nss, rr = _predict_chamber(tau, theta, x, h, np.array([0., 1e-6]), s0)\\nnp.testing.assert_allclose(ss[:,0], s0, rtol=0, atol=1e-12)\\nnp.testing.assert_allclose((ss[:,1]-ss[:,0])*1e6, rr, rtol=3e-6, atol=1e-7)\\nprint('Isolated process: public entry point and zero-time derivative passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 conserved routing without offset -> H2 conserved routing with a shared chamber drift correction; complete-only fitting gave leave-one-lab-out worst RMSE of 0.01356 for strain, 0.00901 for initial rate, and 0.02065 at the final horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the zero-offset model\",\n      \"rejected_reason\": \"The offset was negative in every complete-only fold and improved all three worst-slice metrics. The single withdrawal coupon's final-horizon RMSE rose from 0.00028 for the prior deployed model to 0.00287 in the challenger fold, while its curve and initial-rate RMSE improved.\"\n    }\n  ],\n  \"rationale\": \"Promote the offset estimated without imputed coupons, leaving the intrinsic fit and upstream calibration unchanged. Verify that the exact artifact improves the prior deployed worst-slice errors, passes the public contract, and applies the same correction to the strain derivative and the returned initial rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "56ec1ece4b59688bf475bcc489a7ec577e5f81501bdfc9a1a3e99969799fd3ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35209.42,
+      "usage_known": true,
+      "prompt_tokens": 34121,
+      "cached_tokens": 9344,
+      "completion_tokens": 1221
+    }
+  ]
+}

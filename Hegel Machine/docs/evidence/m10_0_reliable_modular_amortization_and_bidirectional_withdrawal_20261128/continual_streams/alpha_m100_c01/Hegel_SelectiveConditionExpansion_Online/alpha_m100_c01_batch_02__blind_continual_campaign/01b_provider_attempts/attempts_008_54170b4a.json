@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54170b4a4af149288e130873e726e104",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:46.902034+00:00",
+  "ended_at_utc": "2026-11-28T03:42:11.191623+00:00",
+  "request_sha256": "7c1bf0084ec2243340922c4ab0b68f1f87473d5b4929f943b9e2c3d9df45edb5",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28271,
+    "cached_tokens": 5504,
+    "completion_tokens": 914
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cat >/tmp/withdraw_check.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from chamber_probe import *\\nfrom chamber_probe_base import _features\\nfrom scipy.optimize import least_squares\\nxd=_features(q,q)[0]; good=np.isfinite(q['coupon_features_raw']).all(1); dr=augment(xd)@b[2:]; base=intrinsic(q,xd); resid=obs-base\\nprint('times',t,'history dt',dt,'diagnostic lab counts',np.unique(q['lab_id'],return_counts=True))\\ndef shape(tau): return np.r_[t+tau*np.expm1(-t/tau),0.]\\ndef correction(v): return dr[:,None]*v[0]*shape(v[1])\\ndef fit(mask):\\n return least_squares(lambda v:(correction(v)-resid)[mask].ravel(),[-1,1],bounds=([-4,.1],[0,5]),loss='soft_l1',f_scale=.004).x\\nprint('fit complete',fit(good),'fit all',fit(np.ones(len(good),bool)))\\nfor tag,labels in [('coupon',np.arange(len(good))),('lab',q['lab_id']),('stratum',q['stratum'])]:\\n e=np.empty_like(resid); fits=[]\\n for group in np.unique(labels):\\n  held=labels==group; v=fit(good&~held); fits.append(v); e[held]=resid[held]-correction(v)[held]\\n for label,sel in [('complete',good),('missing',~good)]:\\n  a=e[sel]; print(tag,label,'curve/rate rms',np.sqrt(np.mean(a[:,:-1]**2)),np.sqrt(np.mean(a[:,-1]**2)),'worst group curve/rate',np.max([np.r_[np.sqrt(np.mean(e[sel&(labels==g),:-1]**2)),np.sqrt(np.mean(e[sel&(labels==g),-1]**2))] for g in np.unique(labels[sel])],0))\\n print(tag,'parameter ranges',np.min(fits,0),np.max(fits,0))\\ne=resid-correction([-1,1]); print('unit kernel complete per-horizon RMS',np.sqrt(np.mean(e[good]**2,0))); print('unit kernel missing per-case RMS',np.sqrt(np.mean(e[~good]**2,1))); print('rates observed/pred',np.c_[obs[:,-1],base[:,-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/withdraw_check.py; sed -n '1,125p' /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: keep full hereditary memory and exponentially withdraw the intrinsic drift; the unit-timescale kernel is consistent with complete-coupon residual RMS of 0.0043, pending grouped holdouts.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a free correction at every evaluation time\",\"rejected_reason\":\"The exponential withdrawal matches the measured shape and preserves the observed initial rate without tying predictions to a particular time grid.\"}],\"rationale\":\"Hold out coupons, labs, and strata to see whether the withdrawal parameters transfer. Compare the fitted and unit-parameter kernels; retain the unit law if freeing the parameters does not materially improve prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d8dd40afa42cc1c9a74312334aafd3b33c46f9ef115e191237dbc52f35bf4249",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26376.54,
+      "usage_known": true,
+      "prompt_tokens": 28271,
+      "cached_tokens": 5504,
+      "completion_tokens": 914
+    }
+  ]
+}

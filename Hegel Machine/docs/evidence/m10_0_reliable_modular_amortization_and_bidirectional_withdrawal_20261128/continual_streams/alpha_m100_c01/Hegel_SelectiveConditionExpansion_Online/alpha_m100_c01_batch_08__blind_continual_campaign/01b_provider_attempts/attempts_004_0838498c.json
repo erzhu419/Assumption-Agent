@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0838498c54f047b9bcc09272020134dd",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:46.500478+00:00",
+  "ended_at_utc": "2026-11-28T03:57:04.166626+00:00",
+  "request_sha256": "0e39d310d3be448f32c5f0bbd2c210a0531ed748de28cc0283a33b331793352a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 32520,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21752,
+    "cached_tokens": 9344,
+    "completion_tokens": 605
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '1,114p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_02_solver.py; tail -25 /tmp/hegel_continual_archive/alpha_m100_c01_batch_01_solver.py; python3 - <<'PY'\\nimport numpy as np,pickle,json\\nfrom _verified_upstream import calibrate_upstream\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=calibrate_upstream({**i['dataset'],'chamber_verification_trials':i['campaign_diagnostics']});\\nfor k in ['train','test','chamber_verification_trials']:\\n s=d[k]; h=s['hold_channel_raw'].sum(-1); p=s['past_channel_raw'].sum(-1); x=s['coupon_features_raw']; print(k,'lab',np.bincount(s['lab_id']),'missing',np.isnan(x).sum(0),'hold',np.quantile(h,[0,.5,1]),'history',np.quantile(p,[0,.5,1]));\\n if 'aux_chamber_telemetry' in s:\\n  a=s['aux_chamber_telemetry']; print('aux q',np.round(np.quantile(a,[0,.5,1],axis=0),4));print('aux sample',np.round(a[:5],4))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n a=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],np.round(a.mean(0),2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic relaxation → H2 identifiable chamber boundary correction; no held-out error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use auxiliary telemetry as a regression input immediately\",\n      \"rejected_reason\": \"The chamber diagnostics lack this field, so its predictive role is not directly validated by those labels.\"\n    }\n  ],\n  \"rationale\": \"Read the archived feature and chamber formulas, and check whether the calibrated diagnostics cover deployment stress ranges. Those checks determine which boundary laws to compare and where transfer would require extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "daca888c383bfd3b35c171020a5866aacf35a8ddb3d071e382cd62f2e1c3d9d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19757.39,
+      "usage_known": true,
+      "prompt_tokens": 21752,
+      "cached_tokens": 9344,
+      "completion_tokens": 605
+    }
+  ]
+}

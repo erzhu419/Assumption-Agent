@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c810ca659a0e4f56b08ee9284ffb2d9a",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:31.476898+00:00",
+  "ended_at_utc": "2026-11-28T03:54:06.300209+00:00",
+  "request_sha256": "03706c6ce5808a5ed0451ac01e44559a98110ade0c6f65f818bde2280ddbb132",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 52517,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29428,
+    "cached_tokens": 9344,
+    "completion_tokens": 1395
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream, _design, _fit, _inverse\\nstudy = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nsweeps = study['sensor_calibration_sweeps']\\nx, y = map(np.asarray, (sweeps['ref_rosette'], sweeps['raw_rosette']))\\naxis = np.count_nonzero(x, axis=1) == 1\\nlevel = np.max(abs(x), axis=1)\\nspikes = np.max(abs(y - np.median(y, axis=0)), axis=1) > 8*np.median(np.max(abs(y-np.median(y,axis=0)),axis=1))\\nfolds = {f'mixed_{i}': (~axis & (np.arange(len(x)) % 4 == i)) for i in range(4)}\\nfolds.update({f'axis_{i}': (axis & (x[:, i] != 0)) for i in range(4)})\\nfolds['mixed_high_excitation'] = ~axis & (level >= np.quantile(level[~axis], .8))\\nworst = 0\\nfor name, mask in folds.items():\\n    coeff = _fit(x[~mask], y[~mask]); good = mask & ~spikes\\n    inv = _inverse(y[good], coeff) - x[good]\\n    fwd = (_design(x[good])*coeff).sum(-1) - y[good]\\n    rms = np.sqrt(np.mean(inv**2, axis=0)).max(); worst = max(worst, rms)\\n    print(name, 'clean rows', good.sum(), 'worst forward/inverse channel RMSE', np.sqrt(np.mean(fwd**2,axis=0)).max(), rms, 'inverse max', abs(inv).max())\\nprint('screened EMI rows', np.flatnonzero(spikes).tolist(), 'worst held-out inverse channel RMSE', worst)\\nassert worst < 2e-4\\ncoeff = _fit(x,y)\\n_, b, a, d, e = coeff.T\\nq = (2.5*abs(a)+abs(d)+2*abs(e))/abs(b)\\nprint('scaled fixed-point contraction bound by channel', q)\\nassert np.max(q) < 1\\nrng = np.random.default_rng(21)\\nz = np.r_[rng.uniform(-3,3,(4096,4)), np.array(np.meshgrid(*([[-3.,0.,3.]]*4))).reshape(4,-1).T]\\nraw = (_design(z)*coeff).sum(-1)\\ncycle = abs(_inverse(raw,coeff)-z).max(); print('extended-range numerical loop max error', cycle); assert cycle < 1e-8\\np = dict(study, reference_tracer_pulses=[{'y_pulse_raw': raw[:4], 'time': 1}, {'y_pulse_raw': None}, None])\\ncal = calibrate_upstream(p)\\nassert cal['y_obs_raw'].shape == study['y_obs_raw'].shape\\nassert np.allclose(cal['reference_tracer_pulses'][0]['y_pulse_raw'],z[:4],rtol=0,atol=1e-8)\\nassert cal['reference_tracer_pulses'][0]['time'] == 1 and cal['reference_tracer_pulses'][1:] == [{'y_pulse_raw':None},None]\\nassert np.array_equal(p['reference_tracer_pulses'][0]['y_pulse_raw'],raw[:4]) and not np.array_equal(sweeps['raw_rosette'],x)\\ncs = cal['sensor_calibration_sweeps']; cb = cs['single_bank_sweeps']\\nfor ref, obs in ((cs['ref_rosette'],cs['raw_rosette']), (cb['ref_signal'],cb['raw_readout'])):\\n    assert np.array_equal(ref,obs) and not np.shares_memory(ref,obs)\\nassert np.array_equal(calibrate_upstream(cal)['y_obs_raw'],cal['y_obs_raw'])\\nout = solve_batch(copy.deepcopy(study)); print('pipeline KKT certificate',out['kkt_certificate'])\\nassert out['weights'].shape == (len(study['source_modes']),) and out['terminal_field'].shape == (study['nx'],study['ny'])\\nassert all(np.isfinite(out[k]).all() for k in ('weights','terminal_field'))\\nassert np.isclose(out['weights'].sum(),study['total_budget']) and out['weights'].min() >= -1e-9 and out['weights'].max() <= study['u_box'] + 1e-9\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: linear-plus-sine self-response and linear-plus-cosine partner coupling reduced worst fitted channel RMSE to 1.02e-5; public schema passed and blocked inverse validation is next.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Submit on the public schema result alone\",\"rejected_reason\":\"It verifies output shape, but would miss calibration bias on held-out excitation or an incorrect tracer conversion.\"}],\"rationale\":\"The blocked sweeps test whether the fitted response generalizes across excitation patterns. Extended-range round trips isolate numerical inversion failures from model error, and the isolated process verifies both exact artifacts and the tracer and identity contracts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d4f97a9535623ce762aaab71dae9beb31d0923fc4bc95cd633520af85c2a303c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36977.93,
+      "usage_known": true,
+      "prompt_tokens": 29428,
+      "cached_tokens": 9344,
+      "completion_tokens": 1395
+    }
+  ]
+}

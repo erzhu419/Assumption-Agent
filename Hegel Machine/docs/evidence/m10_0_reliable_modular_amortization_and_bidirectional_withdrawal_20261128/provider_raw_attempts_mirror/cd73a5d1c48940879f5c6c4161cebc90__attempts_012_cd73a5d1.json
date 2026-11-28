@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd73a5d1c48940879f5c6c4161cebc90",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:04:28.262560+00:00",
+  "ended_at_utc": "2026-11-28T04:04:52.957089+00:00",
+  "request_sha256": "a0beee30dcb4051b7131c38e8f5be60dbf64c2a80fc294e8f72dfc2760676b85",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64879,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33988,
+    "cached_tokens": 9344,
+    "completion_tokens": 895
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\nassert 'def _loads(' not in s\\np.write_text(s.replace('def _design(', '''def _loads(model, coupons):\\n    past = _invert_bridge(coupons['past_channel_raw'], model).sum(axis=-1)\\n    hold = _invert_bridge(coupons['hold_channel_raw'], model).sum(axis=-1)\\n    return past, hold\\n\\n\\ndef _design(''',1))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; s=c['single_channel_sweeps']; l=c['true_channel_loads']; r=c['bridge_raw']; eligible=np.flatnonzero(np.max(abs(r),axis=1)<4); groups=np.array_split(np.random.default_rng(81).permutation(eligible),5)\\nfor i,g in enumerate(groups):\\n keep=np.ones(len(l),bool); keep[g]=False; sk=np.arange(len(s['lab_id']))%5!=i\\n fit=m._fit_bridge(dict(c,true_channel_loads=l[keep],bridge_raw=r[keep],single_channel_sweeps={k:v[sk] for k,v in s.items()})); inv=m._invert_bridge(r[g],fit); e=inv-l[g]; print('bridge fold',i,'total load abs p90/max',np.quantile(abs(e.sum(1)),[.9,1.]),'channel abs max',np.max(abs(e))); assert np.max(abs(e.sum(1))) < .01\\nfit=m._fit_bridge(c)\\nfor k in ('train','test'):\\n for f in ('hold_channel_raw','past_channel_raw'):\\n  raw=d[k][f]; recovered=m._invert_bridge(raw,fit); err=np.max(abs(m._forward_bridge(recovered,fit)-raw)); print(k,f,'round trip max',err); assert err<1e-9\\nout=m.solve_batch(d); print('taus',out['estimated_taus'],'theta',out['hereditary_weights']); assert .05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nPY\\nsed -n '/^# The last completed apparatus trace/,/^def solve_batch/p' /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial leakage -> H2 sine/cosine opposite-channel bridge; held-out forward RMS is 0.000108 and maximum residual is 0.000347, with inverse total-load validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Restore the omitted load adapter and verify the exact file in an isolated Python process. Held-out inverse errors will show whether small bridge residuals translate into accurate total stresses; a failed specimen round trip would require correcting the inverse before validating the hereditary fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "75cee96629cc82fe398151d5e57c6f48a48f01786acaf8d726c86c33c36da6dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26793.42,
+      "usage_known": true,
+      "prompt_tokens": 33988,
+      "cached_tokens": 9344,
+      "completion_tokens": 895
+    }
+  ]
+}

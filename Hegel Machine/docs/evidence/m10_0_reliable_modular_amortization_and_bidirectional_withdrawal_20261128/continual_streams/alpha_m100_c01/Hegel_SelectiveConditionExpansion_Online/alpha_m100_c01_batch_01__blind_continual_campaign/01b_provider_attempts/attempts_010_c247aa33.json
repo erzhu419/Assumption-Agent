@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c247aa331fe444a2bdac534bc2954bcb",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:30.303009+00:00",
+  "ended_at_utc": "2026-11-28T03:33:59.846733+00:00",
+  "request_sha256": "5310882090b690aceaefe922a55e9aae252da5916ae14ad2a78fe9dc81966738",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55059,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30748,
+    "cached_tokens": 9344,
+    "completion_tokens": 1166
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nfrom chamber import *\\nfrom scipy.optimize import least_squares\\nraw=q['coupon_features_raw']; clean=np.isfinite(raw).all(1)\\nz=h[:,None]-R[:,:2]*T\\nbase=h[:,None]*W[:2]@A[:,:2].T\\nco=(y-base)@np.linalg.pinv(A).T\\nprint('reset residual rank',np.linalg.svd(y-base,compute_uv=False)[:8]); print('reset relative components',np.linalg.lstsq(co[:,0:1],co[:,1:],rcond=None)[0],np.std(co[:,1]-co[:,0]*9.25)); print('lab diagnostic projections',np.c_[q['lab_id'],co,F@W[2:]].round(4))\\nfor name, ref in [('joint',(tr,te)),('diag',(q,)),('train',(tr,)),('all',(tr,te,q))]:\\n xx=raw.copy(); labs=np.concatenate([s['lab_id'] for s in ref]); refs=np.vstack([s['ref_coupons'] for s in ref]);\\n for lab in np.unique(labs):\\n  panel=refs[labs==lab]; m=q['lab_id']==lab; xx[m]=(xx[m]-np.median(panel.mean(0)))/np.median(panel.std(0))\\n f=np.c_[np.ones(len(xx)),xx]@W[2:]; print(name,'projection vs drift',np.linalg.lstsq(np.c_[np.ones(sum(clean)),f[clean]],co[clean],rcond=None)[0].round(5),np.std(co[clean]-f[clean,None]*[.2,1.9,.02],axis=0).round(5));\\n for nz in (0,1,2):\\n  D=[f[:,None]*a for a in A.T]\\n  if nz: D += [z[:,j,None]*A[:,j] for j in ([1] if nz==1 else [0,1])]\\n  D=np.stack(D,axis=-1); E=[]\\n  for i in np.flatnonzero(clean):\\n   m=clean.copy(); m[i]=False; bet=np.linalg.lstsq(D[m].reshape(-1,len(D[0,0])),(y-base)[m].ravel(),rcond=None)[0]; E.append((y-base)[i]-D[i]@bet)\\n  E=np.array(E); B=np.linalg.lstsq(D[clean].reshape(-1,len(D[0,0])),(y-base)[clean].ravel(),rcond=None)[0]; print('history',nz,'b',B.round(5),'RMSE worst',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),np.max(np.sqrt(np.mean(E[:,:-1]**2,1))),np.max(abs(E[:,-1])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic linear correction) → H2 (reset chamber memory with drift coupled into branch amplitudes); previous worst leave-one-out strain RMSE and absolute rate error were 0.404 and 0.356.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep a separate coefficient for every history step\",\n      \"rejected_reason\": \"The fast-branch history coefficients are near zero after including drift. Testing a reset against retained memory on held-out coupons will show whether those history terms help.\"\n    }\n  ],\n  \"rationale\": \"Subtract the zero-memory response to test whether the remaining chamber signal has a shared time shape. Compare reset and retained-memory models on omitted complete coupons so that uncertainties in diagnostic imputation cannot decide the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c9f5d0db6cfd0ff8fe9803012ff4666acb1282bc8a8e630474a885df6f8772eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31628.65,
+      "usage_known": true,
+      "prompt_tokens": 30748,
+      "cached_tokens": 9344,
+      "completion_tokens": 1166
+    }
+  ]
+}

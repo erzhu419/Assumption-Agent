@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01272c8052794656bca34f8f4c2eff90",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:06:16.575713+00:00",
+  "ended_at_utc": "2026-11-28T04:06:52.384162+00:00",
+  "request_sha256": "520f4abdb63629cfe3ceab639305e75f0df5c1444a2877f6f150350b000ca0d1",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49662,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26676,
+    "cached_tokens": 9344,
+    "completion_tokens": 1450
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task\\ncat >> downstream_solver.py <<'PY'\\ndef _predict_chamber(taus, theta, x, hold, times, strain_0):\\n    \\\"\\\"\\\"Reset the branch memory and route the coupon drift into both branches.\\\"\\\"\\\"\\n    drift = theta[2] + x @ theta[3:]\\n    amplitude = hold[:, None] * theta[:2] + 0.5 * drift[:, None] * taus\\n    strain = strain_0[:, None] + amplitude @ (-np.expm1(-times[:, None] / taus)).T\\n    rate = amplitude @ (1.0 / taus)\\n    return strain, rate\\n\\n\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    dt = np.asarray(cal_item['past_dt'], dtype=float)\\n    times = np.asarray(cal_item['eval_times'], dtype=float)\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    past, hold = _loads(train)\\n    taus, theta = _fit(x[:n], past, hold, dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    hold = np.asarray(test['hold_channel_raw'], dtype=float).sum(axis=-1)\\n    strain, rate = _predict_chamber(taus, theta, x[n:], hold, times, test['strain_0'])\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\nPY\\n# The verified upstream entry point now takes just the dataset and fits its own calibration.\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _fit,_features,_loads,_design,_predict_chamber\\nraw=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nout=solve_batch(raw)\\nassert set(out)=={'estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'} and all(np.all(np.isfinite(v)) for v in out.values())\\nd=calibrate_upstream(raw); tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=_features(tr,te); dt,t=d['past_dt'],d['eval_times']; p,h=_loads(tr); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; v=tr['instant_rate_obs']; taus=out['estimated_taus']; theta=out['hereditary_weights']; assert .05<taus[0]<taus[1]<25\\np1,h1=_loads(te); s0=te['strain_0']; eps=1e-6; c,r=_predict_chamber(taus,theta,x[n:],h1,np.array([0.,eps]),s0); assert np.allclose(c[:,0],s0) and np.allclose((c[:,1]-c[:,0])/eps,r,rtol=2e-6,atol=1e-7) and np.allclose(r,out['initial_rate_pred']); print('maximum initial derivative discrepancy:',np.max(abs((c[:,1]-c[:,0])/eps-r)))\\nfor lab in np.unique(tr['lab_id']):\\n keep=tr['lab_id']!=lab; a,b=_fit(x[:n][keep],p[keep],h[keep],dt,t,y[keep],v[keep]); c,r=_design(a,x[:n][~keep],p[~keep],h[~keep],dt,t); e=abs(c@b-y[~keep]); print('held-out lab',lab,'tau',np.round(a,5),'curve horizon-band median AE',np.round([np.median(w) for w in np.array_split(e,3,axis=1)],6),'rate median AE',round(float(np.median(abs(r@b-v[~keep]))),6))\\nprint('test ranges', {k:(float(np.min(out[k])),float(np.max(out[k]))) for k in ('predicted_strain','initial_rate_pred')})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: transfer the archived memory-reset law with equal initial drift routing and refit the intrinsic material; current in-sample median errors are 0.00816 for strain and 0.00452 for rate, with held-out lab metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the fitted archive amplitudes verbatim\",\"rejected_reason\":\"The amplitudes combine chamber behavior with campaign-specific material weights. The archived drift fractions sum to 0.9965 including the small linear term, supporting conservation of the initial drift under transfer.\"}],\"rationale\":\"Use the closest antecedent apparatus state to select the chamber operator, while estimating the material only from calibrated benchtop data. Held-out lab and horizon errors can expose an unstable material fit; the isolated derivative check can expose inconsistent strain and rate formulas. Neither check can measure blind deployment error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "94b694ec5264f7033d6bc73c0c799c62cc8fabf698686e9becdb855ac47cc8b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37887.14,
+      "usage_known": true,
+      "prompt_tokens": 26676,
+      "cached_tokens": 9344,
+      "completion_tokens": 1450
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fdc05f6170694e9cb6499ea1c5d1c31e",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:37.185765+00:00",
+  "ended_at_utc": "2026-11-28T03:41:59.572741+00:00",
+  "request_sha256": "0661e0294aa4e8d496c1caef9b80f3d05cc785d8d7644da4c17a6b9c0196d129",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46664,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27553,
+    "cached_tokens": 5504,
+    "completion_tokens": 722
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _basis,_robust_fit,_fit_bridge,_invert\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; A=_basis(X); b=_fit_bridge(X,Y); clean=np.linalg.norm(A@b-Y,axis=1)<1\\nfor cutoff in [1.,1.1,1.2,1.3,1.4]:\\n tr=np.max(abs(X),axis=1)<=cutoff; te=~tr&clean; ac=A[tr&clean]; bb=_fit_bridge(X[tr],Y[tr]); print('cutoff',cutoff,'fit/clean',tr.sum(),len(ac),'rank',np.linalg.matrix_rank(ac),'singular tail',np.linalg.svd(ac,compute_uv=False)[-4:],'spikes',np.flatnonzero(tr&~clean),'clean bridge RMS',np.sqrt(np.mean(np.sum((A[tr&clean]@bb-Y[tr&clean])**2,axis=1))),'held bridge RMS',np.sqrt(np.mean(np.sum((A[te]@bb-Y[te])**2,axis=1))))\\n if cutoff==1.2:\\n  print('training ranges',np.min(X[tr&clean],axis=0),np.max(X[tr&clean],axis=0)); print('retained terms by output',[np.flatnonzero(bb[:,j]).tolist() for j in range(4)]); print('smallest singular directions',np.round(np.linalg.svd(ac,full_matrices=True)[2][-4:],2));\\nPY\\nsed -n '70,145p' _verified_downstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse polynomial bridge → H2 diagnose whether inner-range fitting loses coefficient identifiability: worst random-fold inverse component RMS is 9.44e-5, but the radius-1.2 holdout reached 1.43.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema and round-trip checks\",\"rejected_reason\":\"A round trip can succeed with an inaccurate fitted map; the large high-load holdout error still needs a diagnosis.\"}],\"rationale\":\"Measure the central calibration design’s rank and conditioning across cutoffs. If the sparse terms remain identifiable, improve the robust fit; if not, distinguish missing calibration support from numerical inversion failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6914ac610782a4525855d736298dff2b4194944cbcd416eb1d3871420f87c1c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22355.17,
+      "usage_known": true,
+      "prompt_tokens": 27553,
+      "cached_tokens": 5504,
+      "completion_tokens": 722
+    }
+  ]
+}

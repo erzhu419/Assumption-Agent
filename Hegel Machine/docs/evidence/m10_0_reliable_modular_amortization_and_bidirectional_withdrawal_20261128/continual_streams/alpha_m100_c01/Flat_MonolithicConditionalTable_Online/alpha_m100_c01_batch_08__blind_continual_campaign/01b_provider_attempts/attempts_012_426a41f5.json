@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "426a41f51e574ad2a4af862d62f037a3",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:15:35.202273+00:00",
+  "ended_at_utc": "2026-11-28T04:16:08.976920+00:00",
+  "request_sha256": "94fff227eba187ef97d1eb56fe92eb30bb5486613c99616fff6a712e377481ac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70191,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36298,
+    "cached_tokens": 9344,
+    "completion_tokens": 1344
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('# Chamber resets')\\nb = s.index('def solve_batch', a)\\ns = s[:a] + '''def _predict_chamber(taus, theta, hold, features, times):\\n    # The chamber resets both history states but retains the material drift score.\\n    amplitude = hold[:, None] * theta[:2]\\n    response = -np.expm1(-times[:, None] / taus)\\n    drift = features @ theta[2:]\\n    # 2*(sqrt(1 + t) - 1), evaluated without cancellation near zero.\\n    ramp = 2 * times / (1 + np.sqrt(1 + times))\\n    return amplitude @ response.T + drift[:, None] * ramp, amplitude @ (1 / taus) + drift\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; g = item['campaign_diagnostics']; t = d['eval_times']\\no = m['solve_batch'](d)\\ntau = o['estimated_taus']; th = o['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(x).all() for x in o.values())\\ncal = d['calibration_load_cells']; bridge, keep = m['_fit_bridge'](cal['bridge_raw'], cal['true_channel_loads'])\\ntr = d['train']; xtr, _ = m['_features'](tr, d['test'])\\np, h, f = m['_calibrated_inputs'](tr, xtr, bridge)\\nc, r = m['_design'](tau, p, h, f, d['past_dt'], t)\\nprint('Intrinsic spectrum:', tau, 'weights:', th)\\nprint('Benchtop median strain/rate error:', np.median(abs(c@th + tr['strain_0'][:, None] - tr['strain_curves_obs'])), np.median(abs(r@th - tr['instant_rate_obs'])))\\nempty = {k: g[k][:0] for k in ('lab_id', 'stratum', 'ref_coupons', 'coupon_features_raw')}\\n_, x = m['_features'](empty, g)\\n_, h, f = m['_calibrated_inputs'](g, x, bridge)\\nc, r = m['_predict_chamber'](tau, th, h, f, t)\\ne = abs(c + g['strain_0'][:, None] - g['strain_curves_obs']); q = abs(r - g['instant_rate_obs'])\\nlabs = g['lab_id']; missing = np.isnan(g['coupon_features_raw']).any(axis=1)\\nfor label, mask in [('all', np.ones(len(labs),bool)), *[(f'lab {lab}', labs == lab) for lab in np.unique(labs)], ('complete features', ~missing), ('missing features', missing)]:\\n    print(label, 'n=', mask.sum(), 'median strain/rate:', np.median(e[mask]), np.median(q[mask]))\\nworst = np.max([[np.median(e[labs==l]), np.median(q[labs==l])] for l in np.unique(labs)], axis=0)\\nprint('Worst-lab medians:', worst, 'worst horizon median strain:', np.median(e,axis=0).max())\\nassert np.all(worst < .007)\\nc0, r0 = m['_predict_chamber'](tau, th, h, f, np.array([0., 1e-7]))\\nassert np.all(c0[:,0] == 0) and np.allclose(c0[:,1]/1e-7, r0, rtol=2e-6, atol=2e-7)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic spectrum and drift weights → H2 chamber memory reset with a unit-time square-root kernel; public diagnostic worst-lab median strain/rate errors are 0.005662/0.005943, with 0.033413/0.029726 on the missing-feature slice for the fitted-kernel variant.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\", \"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the chamber time scale or separate drift weights\",\n      \"rejected_reason\": \"The fixed unit kernel had lower worst-lab and worst-horizon strain error than the fitted-kernel leave-one-lab-out predictions, and separate weights performed worse when the diagnostic panel was standardized on its own.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler chamber law without changing the required pooled train/test normalization. Verify the exact saved solver in an isolated process, including diagnostic lab and missing-feature errors, the initial-rate derivative, and the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c2a5a5c6a233b24823f7376a13be2fec508c4a6027ce06cd3a240c9d37f485a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35927.17,
+      "usage_known": true,
+      "prompt_tokens": 36298,
+      "cached_tokens": 9344,
+      "completion_tokens": 1344
+    }
+  ]
+}

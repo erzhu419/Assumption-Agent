@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d4714b0038e4f3db52af1cb7af327ea",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:52.487061+00:00",
+  "ended_at_utc": "2026-11-28T03:52:30.218354+00:00",
+  "request_sha256": "4ebf6b11890713f05b0a70de7ad97000e995d8066b47e795f44ee06057ca4f03",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 32883,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22582,
+    "cached_tokens": 9344,
+    "completion_tokens": 1532
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_families.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nx0,y0=(lambda c:(c['true_channel_loads'],c['bridge_raw']))(pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells'])\\nkeep=np.max(abs(y0-x0),axis=1)<2; x,y=x0[keep],y0[keep]; pair=list(combinations(range(4),2)); js=np.arange(4); np.set_printoptions(precision=6,suppress=True,linewidth=145)\\nF={'tanh':np.tanh,'atan':np.arctan,'soft':lambda v:v/np.sqrt(1+v*v),'rational':lambda v:v/(1+v*v),'sin':np.sin,'erf':__import__('scipy.special',fromlist=['erf']).erf}\\nrng=np.random.default_rng(405); folds=np.array_split(rng.permutation(len(x)),5)\\ndef features(x,j,p,kind,cross,ix):\\n k,l=p; other=js!=j; z=x[:,j]; u=x[:,other]; h=F[kind](k*z)/k\\n cols=[np.ones(len(x)),h,z] if ix!=3 else [np.ones(len(x)),h]; cols+=[u]\\n if cross=='poly': cols += [u**2,u**3,u**4]\\n if cross=='sin': cols += [np.sin(l*u),np.cos(l*u)-1]\\n if cross=='tanh': cols += [np.tanh(l*u),u**2]\\n if cross=='rat': cols += [u/(1+(l*u)**2),u**2/(1+(l*u)**2)]\\n if ix in (1,2): cols += [np.column_stack([x[:,a]*x[:,b] for a,b in pair])]\\n if ix==2: cols += [np.column_stack([x[:,a]**2*x[:,b] for a in js for b in js if a!=b])]\\n return np.column_stack(cols)\\ndef fit(t,v,j,kind,cross,ix):\\n def pred(p,vv,ret=False):\\n  a=features(x[t],j,p,kind,cross,ix); b=np.linalg.lstsq(a,y[t,j],rcond=1e-10)[0]; return (features(x[vv],j,p,kind,cross,ix)@b,b) if ret else a@b-y[t,j]\\n p=least_squares(pred,[1.,1.],args=(t,),bounds=([.08,.08],[4.,4.]),ftol=1e-9,gtol=1e-10,max_nfev=55).x\\n return (*pred(p,v,True),p)\\nn=np.arange(len(x)); allr=[]\\nfor kind in F:\\n for cross in ('poly','sin','tanh','rat'):\\n  for ix in (0,1,2,3):\\n   out=np.zeros_like(y)\\n   for v in folds:\\n    t=np.setdiff1d(n,v)\\n    for j in js: out[v,j]=fit(t,v,j,kind,cross,ix)[0]-y[v,j]\\n   allr.append((np.mean(out**2)**.5,np.max(abs(out)),kind,cross,ix))\\nfor entry in sorted(allr)[:16]: print(entry)\\nfor _,_,kind,cross,ix in sorted(allr)[:3]:\\n print('best',kind,cross,ix)\\n for j in js:\\n  yy,b,p=fit(n,n,j,kind,cross,ix); print('ch',j,'p',p,'beta',b,'RMSE',np.mean((yy-y[:,j])**2)**.5,'max',max(abs(yy-y[:,j])),'axis err',(yy-y[:,j])[:13])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_families.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Diagonal cubics → separable saturating response with nonlinear cross-channel coupling; cubic leave-one-row-out maximum remains 0.319 bridge units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate model to each single-axis sweep\",\"rejected_reason\":\"The fourth-axis sweep has only one clean bridge row; mixed-load rows must identify that response.\"}],\"rationale\":\"The off-axis sweep responses show nearly proportional, asymmetric curvature. Compare bounded response families and pairwise interactions on held-out rows; coefficient and residual patterns will determine which terms to retain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "43e74c6477b5bfe4851ee5053038576f5da32a95dda89dddecb6f9a6c0101fc0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39815.82,
+      "usage_known": true,
+      "prompt_tokens": 22582,
+      "cached_tokens": 9344,
+      "completion_tokens": 1532
+    }
+  ]
+}

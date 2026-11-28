@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c8e049f28054fe5954a5af7c55d74e9",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:09:32.214824+00:00",
+  "ended_at_utc": "2026-11-28T04:09:58.985911+00:00",
+  "request_sha256": "20825ed489a4ccb093f07a3141ae929ddc9d465fec22a1a9db6e882630bf5e16",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38450,
+    "cached_tokens": 9344,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(p)\\np.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nr = m.solve_batch(s)\\nw, c = r['weights'], r['kkt_certificate']\\nassert abs(w.sum() - s['total_budget']) < 1e-12\\nassert np.min(w) >= -1e-12 and np.max(w) <= s['u_box'] + 1e-12\\nassert np.array_equal(c['weights'], w)\\nassert abs(c['primal_objective'] - c['dual_lower_bound']) < 1e-12\\npred = m._fit_rosette(s['sensor_calibration_sweeps'])\\nerr = np.max(np.abs(pred(m._calibrate(s).reshape(-1, 4)).ravel() - s['y_obs_raw']))\\nassert err < 1e-9, err\\nprint('Maximum public rosette inversion residual:', err)\\n# The public solution is interior. Test active faces against constructed exact optima.\\nrng = np.random.default_rng(1606)\\ncap, ridge = s['u_box'], s['source_ridge']\\nworst = 0.\\nfor x in (np.array([0, cap, 0., .23, .33, cap, 0., 0.]), np.r_[np.full(3, cap), np.zeros(5)], np.zeros(8), np.full(8, cap)):\\n    S = rng.normal(size=(16, len(x)))\\n    H = S.T @ S + ridge * np.eye(len(x))\\n    g = .2 + np.where(x == 0, .8, np.where(x == cap, -1., 0.))\\n    y = np.linalg.lstsq(S.T, H @ x - g, rcond=None)[0]\\n    v, nu = m._qp(S, y, ridge, cap, x.sum())\\n    d = H @ v - S.T @ y - nu\\n    e = max(np.max(np.abs(v - x)), abs(v.sum() - x.sum()), np.max(np.abs(np.maximum(d,0)*v)), np.max(np.abs(np.maximum(-d,0)*(cap-v))))\\n    worst = max(worst, e)\\nassert worst < 1e-10, worst\\nprint('Worst active-face weight, budget, or complementarity residual:', worst)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin and affine readout → H2 closed walls and sweep-fitted nonlinear readout; worst held-out shift RMSE is 0.0089294, and the independent public probe reports relative weight error 9.77e-6 and field error 2.07e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit continuous wall leakage to the public residual\",\n      \"rejected_reason\": \"The independent reference already agrees to within 1e-5 relative error in both outputs; fitting leakage to the noisy observations would risk changing a verified boundary law.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified solver unchanged. The public optimum is interior, so test active bounds and vertex budgets against known optima. Also require the inverse calibration to reproduce all public raw rosettes, which would catch a silently failed root solve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "0e483358cefd7fe0c6f6e3caf9195b89d518b35e539f60a8944ba8067916440d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28923.48,
+      "usage_known": true,
+      "prompt_tokens": 38450,
+      "cached_tokens": 9344,
+      "completion_tokens": 1021
+    }
+  ]
+}

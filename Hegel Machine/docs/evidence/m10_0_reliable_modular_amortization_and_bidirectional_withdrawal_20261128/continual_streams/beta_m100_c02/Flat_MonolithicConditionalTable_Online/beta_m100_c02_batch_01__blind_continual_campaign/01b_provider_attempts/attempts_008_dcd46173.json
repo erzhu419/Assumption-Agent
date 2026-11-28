@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dcd461739c084846a4fb7c8ac2fe2c71",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:21.332597+00:00",
+  "ended_at_utc": "2026-11-28T03:33:53.742091+00:00",
+  "request_sha256": "e1c827c5ada4197737863d1e35ca9e73b03ea03987bde598b46d2fa9bc2c5a69",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42202,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24952,
+    "cached_tokens": 9344,
+    "completion_tokens": 1273
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; cal=s['sensor_calibration_sweeps']; x=np.asarray(cal['ref_rosette']); y=np.asarray(cal['raw_rosette']); S,_=m.chamber_response(s); pulses=item['campaign_diagnostics']; pred=np.stack([S@p['w_pulse'] for p in pulses]); Z=s['Z_nuisance']; ridge=s['nuisance_ridge']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+ridge*np.eye(Z.shape[1]),Z.T)\\nW=np.stack([p['w_pulse'] for p in pulses]); raw=np.stack([p['y_pulse_raw'] for p in pulses]); obs=np.asarray(s['y_obs_raw']); rng=np.random.default_rng(20261128); folds=np.array_split(rng.permutation(len(x)),5); folds.append(np.argsort(np.linalg.norm(x,axis=1))[-max(1,len(x)//5):]); print('calibration rows',len(x),'nuisance columns',Z.shape[1],'pulses',len(pulses),'supported design keys',sorted(s));\\nfor kind in ('diagonal','affine','pair-products','pair-rational'):\\n def features(v,j):\\n  if kind=='diagonal': return np.c_[np.ones(len(v)),v[:,j]]\\n  f=[np.ones(len(v)),*v.T]\\n  if kind=='pair-products': f.extend(v[:,a]*v[:,b] for a,b in combinations_with_replacement(range(4),2))\\n  if kind=='pair-rational': f.extend(v[:,j]/(1+q*q)-v[:,j] for k in range(4) if k!=j for q in (v[:,j]+v[:,k],v[:,j]-v[:,k]))\\n  return np.column_stack(f)\\n def fit(v,t): return [np.linalg.lstsq(features(v,j),t[:,j],rcond=None)[0] for j in range(4)]\\n def apply(v,beta): return np.column_stack([features(v,j)@beta[j] for j in range(4)])\\n errors=[]\\n for test in folds:\\n  train=np.ones(len(x),bool); train[test]=False\\n  e=apply(x[test],fit(x[train],y[train]))-y[test]; errors.append(np.max(np.sqrt(np.mean(e*e,axis=0))))\\n beta=fit(x,y); pulse_err=(apply(pred.reshape(-1,4),beta).reshape(raw.shape)-raw).reshape(len(pulses),len(s['mu_shifts']),-1)\\n print(kind,'worst held-calibration channel RMS',max(errors),'outer-amplitude RMS',errors[-1],'worst independent raw pulse/shift RMS',np.sqrt(np.mean(pulse_err**2,axis=2)).max())\\n if kind in ('diagonal','affine'):\\n  offset=apply(np.zeros((1,4)),beta)[0]; mix=apply(np.eye(4),beta)-offset\\n  decode=lambda v: np.linalg.solve(mix.T,(v.reshape(-1,4)-offset).T).T.ravel()\\n  D=P@S; yy=P@decode(obs); H=D.T@D+s['source_ridge']*np.eye(D.shape[1]); w,nu=m.box_simplex(H,D.T@yy,s['u_box'],s['total_budget']); pe=np.stack([decode(r)-v for r,v in zip(raw,pred)]);\\n  print('  weights relative change vs candidate',np.linalg.norm(w-m.solve_batch(s)['weights'])/np.linalg.norm(w),'calibrated pulse RMS before/after nuisance residualization',np.sqrt(np.mean(pe**2,axis=1)),np.sqrt(np.mean((pe@P.T)**2,axis=1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (zero-loss walls with full affine calibration) -> H2 (retain or simplify calibration based on held-out sweeps and tracer pulses); the verified worst pulse/shift RMS is 1.35e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, HJB, or within-batch classification checks\",\n      \"rejected_reason\": \"The study has no relay state, stochastic control law, or class labels. The relevant nuisance check is whether the specified ridge projection materially changes tracer residuals.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps can reveal calibration structure missed by an affine fit, while independent tracer pulses test whether that structure improves predictions in the chamber’s operating range. Compare the resulting weight shift before changing the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "738d968603afc1093cdb78bc88fa9a5a62f6fd7cc103d2fa2c7f73877eab2c54",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34474.49,
+      "usage_known": true,
+      "prompt_tokens": 24952,
+      "cached_tokens": 9344,
+      "completion_tokens": 1273
+    }
+  ]
+}

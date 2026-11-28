@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a310a53897e14ff69f0f462e545fd663",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:35.514321+00:00",
+  "ended_at_utc": "2026-11-28T03:42:12.067773+00:00",
+  "request_sha256": "2131798691cb6318c20d597b6263022044b84fe1f7c9379c3db0ec336060ad2f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23847,
+    "cached_tokens": 9344,
+    "completion_tokens": 1478
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/audit_bridge.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\\n\\ndef shared(cal, rational=False):\\n    b = _fit_bridge(cal)\\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\\n    s = cal['single_channel_sweeps']; j = np.arange(4); k = (j+1)%4; p = (j-1)%4\\n    ls = s['lab_id']; xs = np.eye(4)[ls]*s['true_stress'][:,None]; ys = s['cmd_stress']\\n    r = np.max(abs(_forward(x,b)-y),axis=1); rs = abs(_forward(xs,b)[np.arange(len(ls)),ls]-ys)\\n    scale = max(np.median(np.r_[r,rs]), 1e-10)\\n    a = r < 8*scale; t = rs < 8*scale\\n    def coeff(v):\\n        c = np.zeros((4,7)); g = v[4:8]; c[:,0] = v[:4]\\n        c[j,j+1] = g; c[j,k+1] = g*v[8]; c[j,p+1] = g*v[9]; c[:,5:] = g[:,None]*v[10:12]\\n        return c\\n    def predict(z,v):\\n        c = coeff(v); q = _forward(z,c)\\n        if rational:\\n            term = c[:,6]*z*np.roll(z,-1,axis=1)\\n            denom = 1+v[12]*(z-np.roll(z,-1,axis=1))**2\\n            q += term*(1/denom-1)\\n        return q\\n    g = b[j,j+1]; v = np.r_[b[:,0],g,np.median(b[j,k+1]/g),np.median(b[j,p+1]/g),np.median(b[:,5:]/g[:,None],axis=0)]\\n    if rational: v = np.r_[v,0.]\\n    def residual(v):\\n        return np.r_[(predict(x[a],v)-y[a]).ravel(),predict(xs[t],v)[np.arange(t.sum()),ls[t]]-ys[t]]\\n    lim = (np.r_[np.full(12,-np.inf),-0.02], np.full(13,np.inf)) if rational else (-np.inf,np.inf)\\n    v = least_squares(residual,v,bounds=lim).x\\n    return coeff(v), lambda z: predict(z,v), v[8:]\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    d=item['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; b=_fit_bridge(c)\\n    clean=np.max(abs(_forward(x,b)-y),axis=1)<1; axis=np.count_nonzero(x,axis=1)<=1\\n    boundary=(~axis)&(np.max(abs(x),axis=1)>1.4)\\n    print('section keys',sorted(d), 'shared ratios',shared(c)[2], 'rational ratios and curvature',shared(c,True)[2])\\n    errors={}\\n    for i in np.flatnonzero(clean):\\n        keep=np.arange(len(x))!=i; cal=dict(c,true_channel_loads=x[keep],bridge_raw=y[keep]); a=_fit_bridge(cal); h, f, _=shared(cal); _, g, _=shared(cal,True)\\n        errors[i]=[np.max(abs(_forward(x[i:i+1],a)-y[i])),np.max(abs(f(x[i:i+1])-y[i])),np.max(abs(g(x[i:i+1])-y[i])),np.max(abs(_inverse(y[i],a)-x[i])),np.max(abs(_inverse(y[i],h)-x[i]))]\\n    for name,m in [('axis',axis),('mixed',~axis),('boundary',boundary)]:\\n        e=np.array([v for i,v in errors.items() if m[i]])\\n        print(name,'n',len(e),'RMSE',np.sqrt(np.mean(e**2,axis=0)),'MAX',e.max(axis=0),'columns: forward sparse/shared/rational; inverse sparse/shared')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 channel-specific cyclic cubic coefficients -> H2 common gain-normalized coefficients; the current model's worst measured mixed-boundary held-out load error is 0.000386.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classifier, relay, or drift-operator diagnostics\",\n      \"rejected_reason\": \"The bridge task has continuous measured loads and a static calibration map, not class labels, relay states, or a drift operator.\"\n    }\n  ],\n  \"rationale\": \"The fitted coefficients suggest a shared gain-normalized law across channels. Refit that law and a pairwise-difference rational extension inside each fold to see whether either improves measured boundary prediction enough to justify changing the verified candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2115ccb2335ae0ff5ccd4d7146fee3c5d0a8866625822cd485dc7777334cdbca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38632.26,
+      "usage_known": true,
+      "prompt_tokens": 23847,
+      "cached_tokens": 9344,
+      "completion_tokens": 1478
+    }
+  ]
+}

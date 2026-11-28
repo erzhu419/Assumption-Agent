@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "24ad1c4f11fc4d2fa587dcb7aa661aa5",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:12:58.618980+00:00",
+  "ended_at_utc": "2026-11-28T04:13:21.984946+00:00",
+  "request_sha256": "20ddd639867364f717a24af56293120bc9c5677872e6bf7f2dfedc08cb5e00b1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27589,
+    "cached_tokens": 9344,
+    "completion_tokens": 889
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; python3 - <<'PY'\\nimport json,pickle,numpy as np,importlib.util,pathlib\\nroot=pathlib.Path('/tmp/hegel_continual_archive'); rows=json.loads((root/'archive_apparatus_log.json').read_text())\\nfor r in rows:\\n a=np.asarray(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'],'mean',np.round(a.mean(0),2),'first/last half',np.round(a[:12].mean(0),2),np.round(a[12:].mean(0),2))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('gross rows',np.flatnonzero(np.max(abs(y),axis=1)>=8)); clean=np.flatnonzero(np.max(abs(y),axis=1)<8); order=np.random.default_rng(8).permutation(clean)\\nfor b in ('02','05','06','07'):\\n p=root/f'alpha_m100_c04_batch_{b}_solver.py'; s=importlib.util.spec_from_file_location('m',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); errs=[]\\n for v in np.array_split(order,5):\\n  tr=np.setdiff1d(np.arange(len(x)),v); z=m._calibrate(dict(c,bridge_raw=y[tr],true_channel_loads=x[tr])); e=m._stress(y[v],z)-x[v].sum(1); errs.append((np.sqrt(np.mean(e**2)),max(abs(e))))\\n z=m._calibrate(c); print(b,'worst clean CV',np.max(errs,axis=0),'cal params',np.round(z,5));\\n if hasattr(m,'_bridge_load'):\\n  for k in ('train','test'):\\n   raw=np.concatenate([d[k]['past_channel_raw'].reshape(-1,4),d[k]['hold_channel_raw']]); load=m._bridge_load(raw,z); print(k,'raw max',abs(raw).max(),'load min/max',load.min(),load.max(),'inverse closure',np.max(abs(m._bridge_raw(load,z)-raw)))\\nPY\\nsed -n '136,157p' /tmp/hegel_continual_archive/alpha_m100_c04_batch_05_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine bridge → H2: nonlinear opposite-channel bridge; preliminary worst-fold axial-load RMSE is 0.0732 versus 2.5871 for affine, pending common clean folds.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Independent affine calibration is adequate for the current bridge.\",\"empirical_witness\":\"Preliminary held-out axial-load RMSE reached 2.5871 for affine and 0.0732 for the archived opposite-channel sinusoidal law.\",\"causal_blanket_diagnosis\":\"Bridge nonlinearity and cross-channel coupling can bias inferred stresses before any chamber correction is applied.\",\"sublated_pivot\":\"Compare nonlinear calibration laws on identical clean folds and verify inversion on deployment readings.\",\"risk_kind\":\"transducer model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Compare all held-out sweeps without separating saturation\",\"rejected_reason\":\"Grossly disturbed sweeps can dominate the metric and conceal the accuracy of the bridge law on the specimen operating range.\"}],\"rationale\":\"Use identical calibration folds to choose the bridge independently of chamber physics. Inverse closure on specimen readings will detect a numerically unreliable inversion, and the full compact telemetry chronology will show whether the latest chamber law has support beyond recency.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "35c4024e15439528120527758ae1735350f0891a8a33fff354800d0ac80ed0b8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25508.25,
+      "usage_known": true,
+      "prompt_tokens": 27589,
+      "cached_tokens": 9344,
+      "completion_tokens": 889
+    }
+  ]
+}

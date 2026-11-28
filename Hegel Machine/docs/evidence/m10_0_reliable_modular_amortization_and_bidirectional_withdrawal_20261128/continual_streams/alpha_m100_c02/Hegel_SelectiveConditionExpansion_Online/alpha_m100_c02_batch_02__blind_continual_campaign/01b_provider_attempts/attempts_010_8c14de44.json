@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c14de44c6f04bfeb1e373f776ef8f59",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:06.186026+00:00",
+  "ended_at_utc": "2026-11-28T03:43:42.426502+00:00",
+  "request_sha256": "25ce9682412f17ebeaf3684d193a080fe6940abeccf80936785e90c7ed107068",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51262,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27492,
+    "cached_tokens": 9344,
+    "completion_tokens": 1502
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('upstream_transducer.py')\\ns = p.read_text()\\nold = '''    # Treat a spike as contamination of the whole calibration row.\\n    for _ in range(16):'''\\nnew = '''    # Start with a robust row-norm fit before stronger spike rejection.\\n    # A least-squares start can mask a spike at a high-leverage load.\\n    for _ in range(32):\\n        coef = np.linalg.lstsq(design * weight[:, None], raw * weight[:, None],\\n                               rcond=None)[0]\\n        error = np.linalg.norm(design @ coef - raw, axis=1)\\n        weight = 1.0 / np.sqrt(np.hypot(error, floor))\\n\\n    # Treat a spike as contamination of the whole calibration row.\\n    for _ in range(16):'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nz = u._basis(x)\\nidx = np.arange(len(x))\\naxis = np.count_nonzero(x, axis=1) == 1\\nmix = idx[~axis]\\nspikes = np.array([13, 14, 15])  # Independently identified by the prior audit.\\nouter = [(f'axis {j+1}', idx[axis & (np.argmax(abs(x), axis=1) == j)]) for j in range(4)]\\nouter += [(f'face {s:+d}/{j+1}', mix[s*x[mix,j] >= np.quantile(s*x[mix,j], .8)]) for j in range(4) for s in (-1, 1)]\\nworst = np.zeros(2)\\nfor name, test in outer:\\n    tr = np.setdiff1d(idx, test)\\n    te = np.setdiff1d(test, spikes)\\n    b = u._fit_bridge(x[tr], y[tr])\\n    e = np.linalg.norm(z[tr] @ b - y[tr], axis=1)\\n    np.testing.assert_array_equal(tr[e > 1], np.intersect1d(tr, spikes))\\n    fw = np.linalg.norm(z[te] @ b - y[te], axis=1).max()\\n    iv = np.linalg.norm(u._invert(y[te], b) - x[te], axis=1).max()\\n    worst = np.maximum(worst, (fw, iv))\\n    print(f'{name}: forward={fw:.7g}, inverse={iv:.7g}')\\nprint('worst blocked forward/inverse:', worst)\\nassert np.all(worst < 0.001)\\nb = u._fit_bridge(x, y)\\nout = u.calibrate_upstream(ds)\\nroundtrip = 0.0\\nfor name in ('train', 'test'):\\n    for key in ('past_channel_raw', 'hold_channel_raw'):\\n        raw, recovered = ds[name][key], out[name][key]\\n        assert raw.shape == recovered.shape\\n        err = np.linalg.norm(u._basis(recovered.reshape(-1, 4)) @ b - raw.reshape(-1, 4), axis=1).max()\\n        roundtrip = max(roundtrip, err)\\n        assert err < 1e-8\\nprint(f'worst public round-trip: {roundtrip:.3g}')\\nnc = out['calibration_load_cells']\\nnp.testing.assert_array_equal(nc['bridge_raw'], x)\\nnp.testing.assert_array_equal(nc['single_channel_sweeps']['cmd_stress'], c['single_channel_sweeps']['true_stress'])\\nassert u.calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nloads = np.random.default_rng(7).uniform(-1.8, 1.8, (128, 6, 4))\\nraw = (u._basis(loads.reshape(-1, 4)) @ b).reshape(loads.shape)\\ntrials = dict(past_channel_raw=raw, hold_channel_raw=raw[:, 0])\\ntrial_out = u.calibrate_upstream(dict(ds, chamber_verification_trials=trials))['chamber_verification_trials']\\nnp.testing.assert_allclose(trial_out['past_channel_raw'], loads, atol=1e-9, rtol=0)\\nnp.testing.assert_allclose(trial_out['hold_channel_raw'], loads[:, 0], atol=1e-9, rtol=0)\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the least-squares start with a robust row-norm start; the challenger reduced worst blocked forward error from 24.4751 to 0.0005730, with worst inverse error 0.0005344.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Initialize by downweighting unusually large raw readings.\",\n      \"rejected_reason\": \"It tied on the measured folds but relies on raw magnitude to distinguish spikes from legitimate large readings.\"\n    }\n  ],\n  \"rationale\": \"On the blocked positive channel-4 face, the original initialization retained a gross spike and rejected clean rows. The robust start recovered all three spike rows without changing the bridge basis. Apply it and rerun the blocked and composed checks on the exact final files.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "45b4b3066f4c0b240a16122d0e2bc9c02e23bed1bcae6cadef7fe8456e920666",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38402.28,
+      "usage_known": true,
+      "prompt_tokens": 27492,
+      "cached_tokens": 9344,
+      "completion_tokens": 1502
+    }
+  ]
+}

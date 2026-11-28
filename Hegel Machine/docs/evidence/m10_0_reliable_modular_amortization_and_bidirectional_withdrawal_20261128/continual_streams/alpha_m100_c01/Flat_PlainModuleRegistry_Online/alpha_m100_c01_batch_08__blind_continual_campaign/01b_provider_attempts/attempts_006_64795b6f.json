@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64795b6f9ae84d56a4544ac6c39d618b",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:27.502266+00:00",
+  "ended_at_utc": "2026-11-28T04:02:05.941317+00:00",
+  "request_sha256": "fe3c32a722970aed62a3ae7e935d955dba7487d7badab028e5bc72a8f56a7ea3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48587,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27527,
+    "cached_tokens": 9344,
+    "completion_tokens": 1446
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_drift.py <<'PY'\\nexec(open('/tmp/probe_chamber.py').read().split('print(\\\\'free amplitudes')[0])\\nfrom scipy.optimize import least_squares\\nL=di['lab_id']; C=np.column_stack((Y,R)); base=(h[:,None]*b[:2])@Q[:,:2].T\\nz=(Z*b[:2])@Q[:,:2].T\\n\\ndef expk(T): return np.r_[-T*np.expm1(-t/T),1.]\\ndef ratk(T): return np.r_[t/(1+t/T),1.]\\ndef pred(q,fam,dv):\\n if fam=='linear': k=np.r_[t,1.]\\n elif fam=='exp': k=expk(q[0])\\n elif fam=='rat': k=ratk(q[0])\\n elif fam=='exp+lin': k=q[1]*expk(q[0])+(1-q[1])*np.r_[t,1.]\\n elif fam=='exp+fast':k=q[1]*expk(q[0])+(1-q[1])*expk(tau[0])\\n elif fam=='exp2': k=q[2]*expk(q[0])+(1-q[2])*expk(q[1])\\n elif fam=='exp+lin+fast': k=q[1]*expk(q[0])+q[2]*np.r_[t,1.]+(1-q[1]-q[2])*expk(tau[0])\\n return base + dv[:,None]*k\\nfamilies={'linear':([],[],[]),'exp':([2],[.08],[30]),'rat':([3],[.08],[50]),'exp+lin':([2,.7],[.08,0],[30,1]),'exp+fast':([3,.7],[.08,0],[30,1]),'exp2':([1,4,.5],[.08,.08,0],[30,30,1]),'exp+lin+fast':([2,.65,.3],[.08,0,0],[30,1,1])}\\nfor tag,dv in [('fixed',F@b[2:]),('pooled_diag',np.c_[np.ones(len(xd)),xd]@b[2:]),('rate_inferred',(C-base)[:,-1])]:\\n print(tag,'rate med/max',np.round(np.quantile(abs((C-base)[:,-1]-dv),[.5,1]),5));\\n for fam,(ini,lo,hi) in families.items():\\n  def fit(m):\\n   return least_squares(lambda q:(pred(q,fam,dv)-C)[m].ravel(),ini,bounds=(lo,hi),loss='soft_l1',f_scale=.006).x if ini else []\\n  err=pred(fit(L>=0),fam,dv)-C; cv=np.zeros_like(err)\\n  for l in np.unique(L): cv[L==l]=(pred(fit(L!=l),fam,dv)-C)[L==l]\\n  print(fam,np.round(fit(L>=0),5),'med/max',np.round(np.quantile(abs(err[:,:-1]),[.5,1]),5),'worst lab RMSE / CV',round(max(np.sqrt(np.mean(cv[L==l,:-1]**2)) for l in np.unique(L)),5))\\nprint('D rate offset by lab',[(l,np.round((C-base)[L==l,-1]-(F@b[2:])[L==l],4)) for l in np.unique(L)])\\nprint('time residual slope',np.round(np.linalg.lstsq((F@b[2:])[:,None],C-base,rcond=None)[0],5))\\nprint('diagnostic intrinsic analytic rate offset if reset',np.round(np.linalg.lstsq(np.c_[h,Z,F],R,rcond=None)[0],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_drift.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: benchtop hereditary memory → H2: chamber resets both branches and changes the drift kernel; reset reduces diagnostic median initial-rate error from 1.609 to 0.0394 but leaves 0.174 median strain error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Deployment preserves the benchtop pre-hold memory and linear drift unchanged.\",\n    \"empirical_witness\": \"On 24 calibrated chamber coupons, removing pre-hold memory cuts median absolute initial-rate error from 1.609 to 0.0394; the remaining median absolute strain error is 0.174 with linear drift.\",\n    \"causal_blanket_diagnosis\": \"Benchtop memory is not transferable as the deployment initial state, and correcting it alone does not recover the chamber time response.\",\n    \"sublated_pivot\": \"Keep the intrinsic parameters fitted on benchtop data, infer a derivative-consistent chamber drift kernel, and compare candidate kernels across left-out diagnostic labs.\",\n    \"risk_kind\": \"constitutive boundary transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the archived reset-plus-two-decay law unchanged\",\n      \"rejected_reason\": \"Reset is supported, but the current chamber curves must distinguish the drift kernel and coefficients.\"\n    }\n  ],\n  \"rationale\": \"Compare exponential, rational, and mixed drift integrals while holding the reset contribution fixed. The rate-inferred drift is a diagnostic control only: it separates kernel error from coupon-standardization error and will not be available at deployment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "363d79b256da7c8847e4f807f60bff80250e0ecca55b112b951a6a6fc24c4e53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40615.06,
+      "usage_known": true,
+      "prompt_tokens": 27527,
+      "cached_tokens": 9344,
+      "completion_tokens": 1446
+    }
+  ]
+}

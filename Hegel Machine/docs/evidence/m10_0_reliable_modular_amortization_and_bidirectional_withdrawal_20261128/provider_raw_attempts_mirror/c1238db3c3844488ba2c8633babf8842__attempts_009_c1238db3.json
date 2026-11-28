@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1238db3c3844488ba2c8633babf8842",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:47.708910+00:00",
+  "ended_at_utc": "2026-11-28T03:59:16.805782+00:00",
+  "request_sha256": "1dd5bdb20428974b58c2de67ae0179d6d9bbccbd37fb4aa60ea564affc7b56f3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58478,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31482,
+    "cached_tokens": 9344,
+    "completion_tokens": 1143
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,87p' downstream_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,sys\\nsys.path.insert(0,'/holdout_task')\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\\ncat >/tmp/chamber_final_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport downstream_solver as s\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd=calibrate_upstream(dict(item['dataset'],chamber_verification_trials=item['campaign_diagnostics']))\\na,b,c=(d[k] for k in ('train','test','chamber_verification_trials'))\\nt,dt=d['eval_times'],d['past_dt'];n=len(a['lab_id']);x=s._features(a,b)[:n];xc=s._features(c,c)[:len(c['lab_id'])]\\ny=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; pp,hh=s._loads(a)\\nu,v=s._fit(x,pp,hh,dt,t,y,r)\\nh=s._loads(c)[1]; cy=c['strain_curves_obs']; cr=c['instant_rate_obs']; ok=np.isfinite(c['coupon_features_raw']).all(axis=1)\\ndef metrics(ry,rr): return np.max(np.sqrt(np.mean(ry**2,axis=0))),np.sqrt(np.mean(rr**2))\\nfor j in np.unique(a['lab_id']):\\n test=a['lab_id']==j; train=~test\\n q,p=s._fit(x[train],pp[train],hh[train],dt,t,y[train],r[train]);A,B=s._design(q,x[test],pp[test],hh[test],dt,t)\\n print('benchtop held-out lab',j,'taus',q,'worst-horizon and rate RMSE',metrics(y[test]-A@p,r[test]-B@p))\\npy,pr=s._predict_chamber(u,v,xc,h,t,c['strain_0']);\\nfor k,m in [('complete',ok),('missing',~ok)]: print('frozen candidate diagnostic',k,'count',m.sum(),'worst-horizon and rate RMSE',metrics((cy-py)[m],(cr-pr)[m]))\\nR=-np.expm1(-t[:,None]/u);D=v[2]+xc@v[3:];E=cy-c['strain_0'][:,None]-(h[:,None]*v[:2])@R.T-D[:,None]*t\\nM=D[:,None,None]*(R*u-t[:,None])[None,:,:]\\nfor mask in (ok,~ok,np.ones(len(ok),bool)):\\n f=np.linalg.lstsq(M[mask].reshape(-1,2),E[mask].ravel(),rcond=None)[0]; print('drift fractions',mask.sum(),f)\\nyp,rp=s._predict_chamber(u,v,xc,h,np.array([0,1e-6]),c['strain_0']);print('derivative max mismatch',np.max(abs((yp[:,1]-yp[:,0])/1e-6-rp)));assert np.max(abs((yp[:,1]-yp[:,0])/1e-6-rp))<1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_final_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged chamber law → H2 reset branch memory plus shared drift kinetics; worst held-out lab RMSE is 0.0171 for strain and 0.00735 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Refit the worst diagnostic lab with its own drift parameters\",\"rejected_reason\":\"First isolate whether the gap comes from the three coupons with missing features; a lab-specific correction could absorb differences in the diagnostic panel rather than chamber physics.\"}],\"rationale\":\"Verify both staged entry points in an isolated Python process. Hold out each benchtop lab to detect unstable material estimates, compare complete and incomplete diagnostic coupons to locate the worst-slice error, and check that the reported initial rate is the derivative of predicted strain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4b508f17a0b9eb9477f284b226bdc11751227f073c402ed9c6be7649bb8a0e5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31209.08,
+      "usage_known": true,
+      "prompt_tokens": 31482,
+      "cached_tokens": 9344,
+      "completion_tokens": 1143
+    }
+  ]
+}

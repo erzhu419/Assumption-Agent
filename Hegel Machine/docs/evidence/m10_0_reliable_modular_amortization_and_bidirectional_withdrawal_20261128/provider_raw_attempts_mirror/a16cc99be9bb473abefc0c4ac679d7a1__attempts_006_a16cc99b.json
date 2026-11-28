@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a16cc99be9bb473abefc0c4ac679d7a1",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:03.297526+00:00",
+  "ended_at_utc": "2026-11-28T03:53:42.561961+00:00",
+  "request_sha256": "2d086138d054e6d9eb69934080ba9f9bf8b1db22df920733d41dea80dab86d38",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42300,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25726,
+    "cached_tokens": 9344,
+    "completion_tokens": 1597
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_structure.py <<'PY'\\nfrom bridge_probe import D,X,Y,N\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nS=D['calibration_load_cells']['single_channel_sweeps']; pair=[2,3,0,1]\\nclean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<8\\nfor j in range(4):\\n m=S['lab_id']==j; print('sweep',j,np.round(np.c_[S['true_stress'][m],S['cmd_stress'][m]],6).tolist()); p=pair[j]; m=(np.count_nonzero(X,axis=1)==1)&(X[:,p]!=0)&clean;print('cross axis',j,np.round(np.c_[X[m,p],Y[m,j]],6).tolist())\\nforms={'sin':np.sin,'tanh':np.tanh,'rat':lambda q:q/(1+q*q),'atan':np.arctan,'zero':lambda q:q*0}\\n\\ndef fit(j,m,f,g,mode,sw=False):\\n p=pair[j]; x=X[m]; a=x[:,j]; b=x[:,p]; t=Y[m,j]\\n if sw:\\n  sm=(S['lab_id']==j)&(abs(S['cmd_stress']-np.median(S['cmd_stress']))<8); ss=S['true_stress'][sm]; a=np.r_[a,ss]; b=np.r_[b,np.zeros_like(ss)]; t=np.r_[t,S['cmd_stress'][sm]]\\n def design(u,v,z):\\n  k,l,h=z; q=u if mode not in ('mixed','both') else u+h*v\\n  cols=[np.ones_like(u),u,v,v*v,forms[f](k*q),forms[g](l*v)]\\n  if mode in ('gate','both'): cols.extend([u*v, v*np.cos(k*q),v*v*np.cos(k*q)])\\n  if mode=='diag2': cols.extend([u*u,u**3,np.sin(l*u)])\\n  return np.array(cols).T\\n def res(z):\\n  A=design(a,b,z); return A@np.linalg.lstsq(A,t,rcond=1e-10)[0]-t\\n p0={'sin':2.5,'tanh':1.5,'rat':.9,'atan':2.,'zero':1.}; bounds=([.2,.2,-.8],[5,6,.8]); sol=min((least_squares(res,[p0[f],l,h],bounds=bounds,max_nfev=100,ftol=1e-10) for l,h in [(p0[g],0.),(2.8,-.15)]),key=lambda r:r.cost); z=sol.x; C=np.linalg.lstsq(design(a,b,z),t,rcond=1e-10)[0]\\n return design(X[:,j],X[:,pair[j]],z)@C,z,C\\n\\nspecs=[(f,g,mode) for f in ['sin','tanh','rat'] for g in ['zero','sin','tanh','rat'] for mode in ['add','mixed','gate','both']]+[(f,'zero','diag2') for f in ['sin','tanh','rat']]\\nfolds=np.random.default_rng(8).permutation(N)%5; edge=np.max(abs(X),axis=1)>=np.quantile(np.max(abs(X),axis=1),.8)\\nfor sw in [False,True]:\\n rows=[]\\n for f,g,mode in specs:\\n  r=[fit(j,clean,f,g,mode,sw) for j in range(4)]; e=np.column_stack([v[0] for v in r])-Y; rows.append((np.sqrt(np.mean(e[clean]**2)),f,g,mode,r))\\n for rms,f,g,mode,r in sorted(rows,key=lambda x:x[0])[:6]:\\n  pred=np.zeros_like(Y)\\n  for fold in range(5):\\n   h=folds==fold\\n   for j in range(4): pred[h,j]=fit(j,clean&~h,f,g,mode,sw)[0][h]\\n  ep=np.column_stack([fit(j,clean&~edge,f,g,mode,sw)[0] for j in range(4)])\\n  print(sw,f,g,mode,'rms/oof p90/max/edge max',rms,*np.quantile(np.linalg.norm((pred-Y)[clean],axis=1),[.9,1]),max(np.linalg.norm((ep-Y)[edge&clean],axis=1)), 'z',np.round([v[1] for v in r],4).tolist())\\n best=min(rows,key=lambda v:v[0]); print('best coeff',np.round(np.array([v[2] for v in best[-1]]),6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive sinusoid plus quadratic terms -> H2 paired nonlinear structure informed by single-channel sweeps; the additive sinusoid has clean high-load holdout maximum forward error 0.089.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply the best in-sample sinusoidal fit immediately\",\n      \"rejected_reason\": \"Its held-out residual remains far above the apparent sweep noise; comparing diagonal sweeps and mixed-load rows can distinguish the missing terms.\"\n    }\n  ],\n  \"rationale\": \"Test whether the unexplained error comes from the diagonal response, paired coupling, or both. The sweep and high-load holdouts determine whether to pool sweep data into the forward fit and which model to invert.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3d9b9268753d0e5921d258bb51dc9c99177cb25045794e86ef33cc63d27f0fad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41390.67,
+      "usage_known": true,
+      "prompt_tokens": 25726,
+      "cached_tokens": 9344,
+      "completion_tokens": 1597
+    }
+  ]
+}

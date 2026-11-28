@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4390b1d9dbcb49b588289ba15f8696f9",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:56.726247+00:00",
+  "ended_at_utc": "2026-11-28T03:51:18.148118+00:00",
+  "request_sha256": "66845a02942b8fca6b6efaea2d449dfbb0a3dfb5611c7f2f3044da88e08f4012",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 26182,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19060,
+    "cached_tokens": 9344,
+    "completion_tokens": 634
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,json,numpy as np\\np=pickle.load(open('public_batch.pkl','rb'))[0]; d=p['dataset']; print('dataset keys:',list(d)); print('diagnostic keys:',list(p['campaign_diagnostics']) if isinstance(p['campaign_diagnostics'],dict) else type(p['campaign_diagnostics']).__name__)\\nc=d['calibration_load_cells']; print('calibration:',[(k,type(v).__name__,np.shape(v)) for k,v in c.items()]); x=c['true_channel_loads']; y=c['bridge_raw']; print('true load quantiles',np.round(np.quantile(x,[0,.05,.5,.95,1],axis=0),5)); print('pairs',np.round(np.c_[x[:8],y[:8]],5)); print('sweeps',[(k,np.shape(v),np.asarray(v).ravel()[:6]) for k,v in c['single_channel_sweeps'].items()]);\\nfor k in ('train','test','chamber_verification_trials'):\\n s=d.get(k); print(k,type(s).__name__,list(s) if isinstance(s,dict) else len(s) if s is not None else None)\\n for a in ([s] if isinstance(s,dict) else list(s[:1]) if s is not None else []):\\n  for f in ('past_channel_raw','hold_channel_raw'):\\n   if f in a: print(f,np.shape(a[f]),np.round(np.quantile(np.asarray(a[f]).reshape(-1,4),[0,.5,1],axis=0),4))\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); t=a[-1]['facility_telemetry_trace']; print('latest telemetry layout:',[(k,np.shape(v)) for k,v in t.items()] if isinstance(t,dict) else len(t))\\nPY\\nsed -n '49,135p' validate_public_schema.py; grep -nEi 'bridge|calibration|upstream' /tmp/hegel_continual_archive/*solver.py | cut -c1-180 | head -20\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Nested public fixture -> coupled robust forward calibration; no held-out error has been measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Inspect the dataset inside the confirmed wrapper. Calibration coverage will determine the boundary holdouts, and the trial layout will determine how to apply the inverse without changing the downstream contract.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4b575315319025715680e26efea9bb0582a9189d6516eb6bc077c0a133ea0fca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21380.45,
+      "usage_known": true,
+      "prompt_tokens": 19060,
+      "cached_tokens": 9344,
+      "completion_tokens": 634
+    }
+  ]
+}

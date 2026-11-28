@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17b44119d17c4f1c9d7ad1db63c764ad",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:15.484769+00:00",
+  "ended_at_utc": "2026-11-28T03:54:38.732247+00:00",
+  "request_sha256": "b4106773aae51755da0c10591148db81f8cb8623916f65910027918ee91a4d7b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30889,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22108,
+    "cached_tokens": 9344,
+    "completion_tokens": 858
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,json,numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; S=C['single_channel_sweeps']; x=C['true_channel_loads']; y=C['bridge_raw']; clean=np.max(abs(y),axis=1)<5; print('excluded',np.flatnonzero(~clean));\\nfor i in range(4):\\n m=S['lab_id']==i; t=S['true_stress'][m]; z=S['cmd_stress'][m]; print('sweep',i,np.round(z,5))\\n for name,f in [('tanh',np.tanh),('atan',np.arctan),('softsign',lambda u:u/np.sqrt(1+u*u)),('erf',__import__('scipy').special.erf)]:\\n  for linear in (False,True):\\n   def pred(p): return p[0]+p[1]*f(p[2]*t)+(p[3]*t if linear else 0)\\n   p=least_squares(lambda p:pred(p)-z,[0,1,1,0][:3+linear],max_nfev=1000).x; print(name,linear,np.round(p,5),np.max(abs(pred(p)-z)))\\nfor k in range(4):\\n print('axis',k)\\n for j in range(4):\\n  m=(np.count_nonzero(x,axis=1)==1)&(x[:,k]!=0)&clean\\n  if j!=k: print(j,np.c_[x[m,k],y[m,j]])\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor q in p:\\n t=q['facility_telemetry_trace']; print(q['completed_campaign_index'],q['completed_campaign_short_name'],list(t) if isinstance(t,dict) else np.shape(t))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge response -> H2 saturating diagonal response with nonlinear cross-channel coupling; held-out inverse error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A single affine transducer map can explain the axis calibration.\",\n    \"empirical_witness\": \"Clean channel-0 axis data have successive direct-response slopes of about 0.719, 1.768, and 0.679, while sweep readouts independently reproduce the large-load endpoint.\",\n    \"causal_blanket_diagnosis\": \"The affine basis omits strong diagonal curvature; gross spikes are a separate contamination process.\",\n    \"sublated_pivot\": \"Identify the diagonal response from dense scalar sweeps before estimating cross-channel terms from clean multi-axis rows.\",\n    \"risk_kind\": \"algebraic_basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit all four channels with a high-order polynomial\",\n      \"rejected_reason\": \"It can approximate calibration points while introducing poorly constrained turning points in the inverse.\"\n    }\n  ],\n  \"rationale\": \"Compare simple saturating functions against the dense sweeps. If none reaches the observed repeatability, expand the scalar basis before attributing residuals to inter-channel coupling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d08142d83854b4f0f1b5f7b4e2441d0e00c8c151c226cedf2bbcd63a300ab43c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25323.94,
+      "usage_known": true,
+      "prompt_tokens": 22108,
+      "cached_tokens": 9344,
+      "completion_tokens": 858
+    }
+  ]
+}

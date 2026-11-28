@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "160703dc01534291a8d851c965c4369f",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:54.671079+00:00",
+  "ended_at_utc": "2026-11-28T03:55:31.806365+00:00",
+  "request_sha256": "90077d2507c441cae11ac9ad91d756c579ef692b6bfbf773cda39d79e6c07030",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53867,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31472,
+    "cached_tokens": 9344,
+    "completion_tokens": 1519
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/transfer2.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X,Y=a['ref_rosette'],a['raw_rosette']; b=a['single_bank_sweeps']; j=(b['bank_id']==1); t=b['ref_signal'][j]; y=b['raw_readout'][j]; np.set_printoptions(precision=6,suppress=True)\\nF={'tanh+cubic':(lambda x,p: np.tanh(p[0]*x)+p[1]*x+p[2]*x**3,[1,.1,.01]),'tanh+atan':(lambda x,p: np.tanh(p[0]*x)+p[1]*np.arctan(p[2]*x),[1,.2,.8]),'tanh+erf':(lambda x,p: np.tanh(p[0]*x)+p[1]*erf(p[2]*x),[1,.2,.8]),'tanh+rational':(lambda x,p: np.tanh(p[0]*x)+p[1]*x/(1+p[2]**2*x*x),[1,.2,.8]),'tanh+sqrt':(lambda x,p: np.tanh(p[0]*x)+p[1]*x/np.sqrt(1+p[2]**2*x*x),[1,.2,.8]),'tanh+quintic':(lambda x,p: np.tanh(p[0]*x)+p[1]*x+p[2]*x**3+p[3]*x**5,[1,.1,.01,0]),'tanh(cubic)+linear':(lambda x,p: np.tanh(p[0]*x+p[1]*x**3)+p[2]*x,[1,0,.1]),'tanh+softsign':(lambda x,p: np.tanh(p[0]*x)+p[1]*x/(1+p[2]*abs(x)),[1,.2,.8]),'tanh+sin':(lambda x,p: np.tanh(p[0]*x)+p[1]*np.sin(p[2]*x),[1,.2,.8]),'tanh+tanh':(lambda x,p: np.tanh(p[0]*x)+p[1]*np.tanh(p[2]*x),[1,.2,.5]),'tanh+asinh':(lambda x,p: np.tanh(p[0]*x)+p[1]*np.arcsinh(p[2]*x),[1,.2,.8]),'tanh+linear+relu2':(lambda x,p: np.tanh(p[0]*x)+p[1]*x+p[2]*x*abs(x),[1,.1,0])}\\nR=[]\\nfor k,(f,p) in F.items():\\n fun=lambda q:q[0]+q[1]*f(t,q[2:])-y\\n q=least_squares(fun,[.07,1.5]+p,max_nfev=1500).x; R.append((np.linalg.norm(fun(q)),k,q));\\nfor row in sorted(R): print(row)\\n_,name,p=min(R); f=F[name][0];\\nfor i in range(4):\\n j=(b['bank_id']==i)&(abs(b['raw_readout'])<5); t=b['ref_signal'][j]; v=b['raw_readout'][j]; off,gain=np.linalg.lstsq(np.c_[np.ones(len(t)),f(t,p[2:])],v,rcond=None)[0]; keep=abs(Y[:,i])<5; x=X[keep]; e=Y[keep,i]-off-gain*f(x[:,i],p[2:]); o=x[:,(i+2)%4]; l=x[:,(i-1)%4]; r=x[:,(i+1)%4]; z=x[:,i];\\n print('bank',i,'scalar',off,gain, 'max',max(abs(v-off-gain*f(t,p[2:]))));\\n for expr in [(o,o*o,l,r),(o,o*o,o**3,l,r),(o,o*o,o**3,l,r,z*o,z*l,z*r),(o,o*o,o**3,l,r,z*o,z*l,z*r,l*r,l*l,r*r),(o,np.maximum(o,0),np.maximum(o,0)**2,l,r,z*o,z*l,z*r),(o,np.maximum(o,0),o*abs(o),l,r,z*o,z*l,z*r)]:\\n  D=np.array(expr).T; c=np.linalg.lstsq(D,e,rcond=None)[0]; print(np.round(c,5),np.quantile(abs(e-D@c),[.5,.95,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/transfer2.py; cat /holdout_task/public_asset_index.json; grep -nE 'wall|robin|periodic' /tmp/hegel_continual_archive/beta_m100_c02_batch_02_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cubic nearest-neighbor rosette → H2: shared saturating bank response with nonlinear opposite-channel coupling; provisional worst held-out sensor-block RMSE is 0.05125.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unconstrained multivariate polynomial\",\n      \"rejected_reason\": \"The isolated banks exhibit a common scaled response, and the unrestricted quartic still leaves sizeable residuals.\"\n    }\n  ],\n  \"rationale\": \"Test compact scalar laws against the isolated sweeps, then inspect coupling residuals independently. A noise-level fit would justify using that calibration for the wall comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6d9c015e9fdb395b6f5849a68146c0bcc682b57a7c0507d5594afa2c275b9973",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39250.54,
+      "usage_known": true,
+      "prompt_tokens": 31472,
+      "cached_tokens": 9344,
+      "completion_tokens": 1519
+    }
+  ]
+}

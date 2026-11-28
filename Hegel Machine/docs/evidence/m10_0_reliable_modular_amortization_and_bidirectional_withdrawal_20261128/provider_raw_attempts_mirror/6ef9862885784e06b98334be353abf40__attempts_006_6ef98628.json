@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ef9862885784e06b98334be353abf40",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:02.629397+00:00",
+  "ended_at_utc": "2026-11-28T03:54:24.482164+00:00",
+  "request_sha256": "a4bc9f1c3fe7795eb3bfa1725cd0a9edc3dd87ace5ef8d6e2e518865ce5828c3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27696,
+    "cached_tokens": 9344,
+    "completion_tokens": 793
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cal_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.stats import spearmanr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X,Y=a['ref_rosette'],a['raw_rosette']; b=a['single_bank_sweeps']; np.set_printoptions(precision=4,suppress=True,linewidth=120)\\nprint('ranges',X.min(0),X.max(0),np.quantile(Y,[0,.05,.5,.95,1],axis=0)); print('ranks',spearmanr(X,Y).statistic[:4,4:]); print('spikes',[(i,row.tolist()) for i,row in enumerate(Y) if np.max(abs(row))>5]);\\nfor i in range(4):\\n j=b['bank_id']==i; print('bank',i,np.array([b['ref_signal'][j],b['raw_readout'][j]]).T)\\nfor d in (1,2,3,4):\\n terms=[t for k in range(d+1) for t in combinations_with_replacement(range(4),k)]; A=np.stack([np.prod(X[:,t],axis=1) for t in terms],axis=1)\\n for j in range(4):\\n  keep=abs(Y[:,j])<5; c=np.linalg.lstsq(A[keep],Y[keep,j],rcond=None)[0]; err=Y[:,j]-A@c\\n  print(d,j,'inlier residual',np.quantile(abs(err[keep]),[.5,.95,1]),'largest',[(t,round(v,5)) for t,v in sorted(zip(terms,c),key=lambda tv:-abs(tv[1]))[:9]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: previous periodic/sealed walls and cubic rosette → H2: Robin walls with a revised rosette law; provisional worst held-out sensor-block RMSE is 0.05125.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived cubic nearest-neighbor rosette basis is sufficient for this batch.\",\"empirical_witness\":\"The archived fit has median absolute sweep residual 0.1385 and 90th percentile 0.3669, while only a small tail shows gross spikes near 13.\",\"causal_blanket_diagnosis\":\"Sensor readout mismatch contaminates the wall comparison, so the calibration law must be identified independently.\",\"sublated_pivot\":\"Separate single-bank transfer from multichannel mixing and test missing polynomial and channel terms before revisiting wall fits.\",\"risk_kind\":\"calibration_model_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the Robin candidate from the initial comparison\",\"rejected_reason\":\"The calibration residual is large enough to obscure differences between Robin wall variants.\"}],\"rationale\":\"Single-bank sweeps can distinguish a wrong scalar transfer law from cross-channel omissions. The multichannel fits will show whether adding discrete algebraic terms resolves the error or whether to test a saturating transfer law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "84eee297bee6f78f16546802eff1cd3f8037e591b8137c4b5cae58ab59443b58",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23931.99,
+      "usage_known": true,
+      "prompt_tokens": 27696,
+      "cached_tokens": 9344,
+      "completion_tokens": 793
+    }
+  ]
+}

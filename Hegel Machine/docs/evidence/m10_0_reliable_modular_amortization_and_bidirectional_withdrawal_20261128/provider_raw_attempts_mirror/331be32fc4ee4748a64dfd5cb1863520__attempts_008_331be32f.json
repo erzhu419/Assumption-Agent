@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "331be32fc4ee4748a64dfd5cb1863520",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:39.232187+00:00",
+  "ended_at_utc": "2026-11-28T03:51:14.597502+00:00",
+  "request_sha256": "471d1d980e663265490882a5d4fb9b429b3fd1ff627abba72b88d26c96ff1eda",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31060,
+    "cached_tokens": 9344,
+    "completion_tokens": 1402
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('campaign_solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: batch=pickle.load(f)\\nworst=np.zeros(5)\\nfor item in batch:\\n s=item['study']; out=m.solve_batch(s); w=out['weights']; c=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; nx,ny=s['nx'],s['ny']\\n A=np.diag(s['V_reaction_2d'].ravel(order='F'))\\n for j in range(ny):\\n  for i in range(nx):\\n   row=i+nx*j\\n   for k,n,L,kap,vel,stride,wrap in [(i,nx,s['Lx'],s['kappa_x'],s['vel_x'],1,True),(j,ny,s['Ly'],s['kappa_y'],s['vel_y'],nx,False)]:\\n    h=L/(n-1)\\n    for d in (-1,1):\\n     nb=k+d\\n     if wrap: nb%=n\\n     elif not 0<=nb<n: continue\\n     if not wrap and k in (0,n-1): flux=kap[k]/h**2\\n     else: flux=(kap[k]+kap[nb])/(2*h**2)+max(0,-d*vel[k])/h\\n     A[row,row]+=flux; A[row,row+(nb-k)*stride]-=flux\\n rhs=np.stack([a.ravel(order='F') for a in s['source_modes']],axis=1)\\n ix=s['sensor_ij']; indices=ix[:,0]+nx*ix[:,1]\\n modes=[np.linalg.solve(A+mu*np.eye(nx*ny),rhs) for mu in s['mu_shifts']]\\n S=np.concatenate([u[indices] for u in modes]); field=modes[-1]@w\\n y=m._calibrate(s); Z=s['Z_nuisance']; B=np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n X=B@S; r=B@y; e=X@w-r; ridge=s['source_ridge']; g=X.T@e+ridge*w; J=(e@e+ridge*(w@w))/2\\n lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); nu=c['nu_sum']\\n assert np.allclose(c['weights'],w,atol=1e-14,rtol=0) and np.min(lo)>=0 and np.min(hi)>=0\\n assert abs(J-c['primal_objective'])<1e-11 and abs(J-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()-c['dual_lower_bound'])<1e-11\\n err=[max(abs(w.sum()-budget),max(0,-w.min(),w.max()-cap)), np.max(np.abs(g-nu-lo+hi)), max(np.max(lo*w),np.max(hi*(cap-w))), abs(J-c['dual_lower_bound']),np.linalg.norm(field-out['terminal_field'].ravel(order='F'))/np.linalg.norm(field)]\\n worst=np.maximum(worst,err)\\nassert max(worst)<1e-10,worst\\nprint('Public studies:',len(batch),'max [feasibility, stationarity, complementarity, gap, relative field assembly error]:',worst)\\nrng=np.random.default_rng(25); maxgap=0.\\nfor n in (3,8,24):\\n for cap in (.25,1.75):\\n  for fraction in (0.,.001,1/n,.5,(n-1)/n,.999,1.):\\n   for scale in (.03,80.):\\n    V=rng.normal(size=(max(2,n//2),n)); H=V.T@V+1e-4*np.eye(n); b=scale*rng.normal(size=n); budget=cap*n*fraction\\n    w,nu=m._box_simplex(H,b,cap,budget); g=H@w-b\\n    gap=g@w-nu*budget-cap*np.minimum(g-nu,0).sum()\\n    assert abs(w.sum()-budget)<1e-11 and np.all((w>=0)&(w<=cap)) and abs(gap)<1e-9\\n    maxgap=max(maxgap,abs(gap))\\nprint('84 QP stress cases; maximum absolute gap:',maxgap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Local endpoint rows → periodic x and closed y; worst held-out tracer RMSE is 1.67e-6, and independent host field relative error is 2.14e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and host probe passed. Run the exact artifact in isolated Python and independently assemble the dense stencil to catch axis or field-ordering errors. Check the certificate on public inputs and stress the active-set solver at tight and saturated budgets; a failure would identify which component to fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "42b01d9563204ba0e8ddf2b66d83e07dd7f2893503cab808837d01fe08f5b5e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37448.94,
+      "usage_known": true,
+      "prompt_tokens": 31060,
+      "cached_tokens": 9344,
+      "completion_tokens": 1402
+    }
+  ]
+}

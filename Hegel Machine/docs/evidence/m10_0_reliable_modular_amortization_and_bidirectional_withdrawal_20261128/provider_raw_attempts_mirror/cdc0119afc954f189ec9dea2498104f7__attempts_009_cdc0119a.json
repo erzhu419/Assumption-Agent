@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cdc0119afc954f189ec9dea2498104f7",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:15:44.141449+00:00",
+  "ended_at_utc": "2026-11-28T04:16:24.044000+00:00",
+  "request_sha256": "2426c565094e82ed32f0ae709b6de5fa73c39f61a7d72f38d7c0083116a879a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65349,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35781,
+    "cached_tokens": 9344,
+    "completion_tokens": 1583
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/sparse_chamber.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for drift in')[0])\\nlabs=d['lab_id']; E=np.r_[t,1.]; xx=m._features(d,d)[:nd]; r=th[2]+xx@th[3:]; F=np.c_[h,r,np.ones(nd)]; Z=h[:,None]-c[:,0,:2]/(-np.expm1(-t[0]/tau));\\ndef fit(tr, kind, qfree):\\n f=F[:,:2] if kind!='offset' else F\\n if kind=='mem': f=np.c_[f,Z]\\n def prof(q):\\n  V=np.vstack([et(a) for a in q]+[E]); B=np.zeros((f.shape[1],3)); B[0,:2]=th[:2];\\n  if kind=='locked':\\n   B[1]=np.linalg.lstsq(V.T, (r[tr] @ (y[tr]-(f@B@V)[tr]))/(r[tr]@r[tr]), rcond=None)[0]\\n  else:\\n   B=np.linalg.lstsq(V.T,np.linalg.lstsq(f[tr],y[tr],rcond=None)[0].T,rcond=None)[0].T\\n   if kind in ('plain','mem'):\\n    A=np.einsum('ni,jk->nkij',f,V).reshape(len(y),len(E),-1); ids=np.arange(B.size)!=2; B.ravel()[2]=0; B.ravel()[ids]=np.linalg.lstsq(A[tr][:,:,ids].reshape(-1,sum(ids)),y[tr].ravel(),rcond=None)[0]\\n  return f@B@V,B\\n q=tau if not qfree else least_squares(lambda q:(prof(q)[0][tr]-y[tr]).ravel(),tau,bounds=([.5,2.5],[.9,5.5])).x\\n Y,B=prof(q);return Y,B,q\\nfor k in ('locked','plain','offset','mem'):\\n for fr in (False,True):\\n  out=np.empty_like(y)\\n  for lab in np.unique(labs):\\n   tr=labs!=lab; out[~tr]=fit(tr,k,fr)[0][~tr]\\n  est,B,q=fit(np.ones(nd,dtype=bool),k,fr); ee=out-y; score=lambda e: [np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]; print(k,fr,q,np.round(B,6), 'full',score(est-y),'OOF',score(ee),'worst',np.max([score(ee[labs==l]) for l in np.unique(labs)],axis=0))\\n  if k=='plain' and not fr: np.save('/tmp/chamber_amplitude.npy',B)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse_chamber.py && python3 - <<'PY'\\nimport numpy as np\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m100_c03_batch_03_solver.py').read_text().split('def solve_batch')[0]\\nb=np.load('/tmp/chamber_amplitude.npy')\\nextra=f'''# Transfer coefficients identified from chamber verification coupons.\\n_CHAMBER_AMPLITUDES = np.array({b.tolist()!r})\\n\\n\\ndef _chamber_response(taus, theta, x, hold, times):\\n    drift = theta[2] + x @ theta[3:]\\n    amplitude = np.column_stack((hold, drift)) @ _CHAMBER_AMPLITUDES\\n    kernel = -np.expm1(-times[:, None] / taus)\\n    strain = amplitude[:, :2] @ kernel.T + amplitude[:, 2, None] * times\\n    rate = amplitude[:, :2] @ (1 / taus) + amplitude[:, 2]\\n    return strain, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    past, hold = _loads(train, bridge)\\n    taus, theta = _fit(x[:n], past, hold, dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    _, hold = _loads(test, bridge)\\n    strain, rate = _chamber_response(taus, theta, x[n:], hold, times)\\n    return {{'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(src+extra)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted chamber amplitudes → H2 hold stress and standardized drift control the amplitudes; panel-only standardization yields held-out-lab worst RMSE of 0.01037 for strain and 0.00685 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add unconstrained loading history and feature interactions\",\n      \"rejected_reason\": \"The simpler hold-and-drift model already transfers across labs; retain additional terms only if they improve the worst strain or rate slice.\"\n    }\n  ],\n  \"rationale\": \"Build a standalone candidate with dynamically calibrated loads and a compact chamber law. Compare fixed intrinsic times and weights against relaxed alternatives to see whether added flexibility helps on held-out labs rather than just fitting the panel.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "91fbe0d6a5a84c0b9f14b05c7493d4f921cc380a9ef8f4a23811873bbff72020",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42061.33,
+      "usage_known": true,
+      "prompt_tokens": 35781,
+      "cached_tokens": 9344,
+      "completion_tokens": 1583
+    }
+  ]
+}

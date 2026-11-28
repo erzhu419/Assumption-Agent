@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4833cdeb90ff4582a786323d591af587",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:59.056056+00:00",
+  "ended_at_utc": "2026-11-28T03:46:38.298589+00:00",
+  "request_sha256": "2b7532b459222a29046940110ad6f8418b44ece0aff44a3b975530403b795b37",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42824,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26464,
+    "cached_tokens": 9344,
+    "completion_tokens": 1660
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Robust four-channel rosette calibration in reference coordinates.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\n_I, _J = np.tril_indices(4, -1)\\n\\n\\ndef _features(x):\\n    return np.column_stack((np.ones(len(x)), x, x**3, x[:, _I] * x[:, _J]))\\n\\n\\ndef _fit(ref, raw):\\n    design = _features(ref)\\n    weight = np.ones(len(ref))\\n    # Score complete rows: EMI in one channel can contaminate the whole sweep.\\n    for _ in range(20):\\n        coef = np.linalg.lstsq(design * weight[:, None], raw * weight[:, None], rcond=None)[0]\\n        error = np.linalg.norm(raw - design @ coef, axis=1)\\n        scale = max(2 * np.median(error), 1e-12)\\n        weight = 1 / (1 + (error / scale)**2)\\n    return coef\\n\\n\\ndef _jacobian(x, coef):\\n    jac = coef[1:5].T[None, :, :] + 3 * coef[5:9].T[None, :, :] * x[:, None, :]**2\\n    for i, j, term in zip(_I, _J, coef[9:]):\\n        jac[:, :, i] += x[:, j, None] * term\\n        jac[:, :, j] += x[:, i, None] * term\\n    return jac\\n\\n\\ndef _invert(raw, coef):\\n    raw = np.asarray(raw, dtype=float)\\n    y = raw.reshape(-1, 4)\\n    x = np.linalg.solve(coef[1:5].T, (y - coef[0]).T).T\\n    for _ in range(35):\\n        residual = _features(x) @ coef - y\\n        error = np.linalg.norm(residual, axis=1)\\n        active = error > 1e-11 * (1 + np.linalg.norm(y, axis=1))\\n        if not np.any(active):\\n            break\\n        xa, ya, ea = x[active], y[active], error[active]\\n        step = np.linalg.solve(_jacobian(xa, coef), residual[active, :, None])[..., 0]\\n        proposal = xa - step\\n        for _ in range(16):\\n            bad = np.linalg.norm(_features(proposal) @ coef - ya, axis=1) >= ea\\n            if not np.any(bad):\\n                break\\n            step[bad] *= 0.5\\n            proposal[bad] = xa[bad] - step[bad]\\n        accepted = np.linalg.norm(_features(proposal) @ coef - ya, axis=1) < ea\\n        if not np.any(accepted):\\n            break\\n        xa[accepted] = proposal[accepted]\\n        x[active] = xa\\n    return x.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(study: dict) -> dict:\\n    \\\"\\\"\\\"Invert observations and tracer pulses without modifying the input study.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    coef = _fit(ref, np.asarray(sweeps['raw_rosette'], dtype=float))\\n    result = dict(study)\\n    result['y_obs_raw'] = _invert(study['y_obs_raw'], coef)\\n    bank = sweeps['single_bank_sweeps']\\n    result['sensor_calibration_sweeps'] = dict(\\n        sweeps, raw_rosette=ref.copy(),\\n        single_bank_sweeps=dict(bank, raw_readout=np.asarray(bank['ref_signal']).copy()),\\n    )\\n    pulses = study.get('reference_tracer_pulses')\\n    if pulses is not None:\\n        result['reference_tracer_pulses'] = [\\n            dict(pulse, y_pulse_raw=_invert(pulse['y_pulse_raw'], coef))\\n            if pulse is not None and pulse.get('y_pulse_raw') is not None else pulse\\n            for pulse in pulses\\n        ]\\n    return result\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _fit,_features,_invert\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x)\\nfor name,g,folds in [('fivefold',np.arange(n)%5,range(5)),('axis',np.count_nonzero(x,axis=1)==1,[True]),('amplitude',np.argsort(np.argsort(np.linalg.norm(x,axis=1)))//16,range(5))]:\\n worst=[]\\n for k in folds:\\n  test=g==k; b=_fit(x[~test],y[~test]); e=np.linalg.norm(_features(x[test])@b-y[test],axis=1); good=e<5\\n  xx=x[test][good]; yy=y[test][good]; recovered=_invert(yy,b)\\n  worst.append((e[good].max(),np.linalg.norm(recovered-xx,axis=1).max(),np.linalg.norm(_features(recovered)@b-yy,axis=1).max()))\\n print(name,'max forward, inverse, reconstruction L2',np.max(worst,axis=0))\\n assert np.max(worst,axis=0)[1]<3e-4 and np.max(worst,axis=0)[2]<1e-8\\nout=solve_batch(s); print(out['kkt_certificate'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive channel response → H2 coupled axis cubics and all pair products; worst held-out forward L2 error across tested public slices was 9.35e-5 before inversion.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Restrict coupling to a fixed cyclic pattern\",\"rejected_reason\":\"The tested restriction exceeded 1.28 raw-coordinate L2 error on a held-out amplitude slice, while the full pair basis stayed below 1e-4.\"}],\"rationale\":\"Implement the validated forward basis with row-level robust weights and a damped analytic inverse. Measure reference-coordinate errors on held-out sweeps to detect convergence to an incorrect root, which the output schema alone would miss.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1015858667bd2ee3cb954cceb62b89dc375ab60ded92d68bc9e12d8ea0ef9c04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42284.26,
+      "usage_known": true,
+      "prompt_tokens": 26464,
+      "cached_tokens": 9344,
+      "completion_tokens": 1660
+    }
+  ]
+}

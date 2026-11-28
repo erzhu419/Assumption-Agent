@@ -1,0 +1,193 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m100_c02_batch_05_b058bfb39980",
+    "source_hash": "b058bfb3998008c4b2da32e87736971a57a89c213f249bad2843f77b1088e018",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m100_c02_batch_05__blind_continual_campaign",
+    "task_id": "alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/bridge_additive.py",
+        "archived_relpath": "producers/tmp__bridge_additive.py",
+        "bytes": 2649,
+        "sha256": "11c7f336f275df25924a127ddee3fa8e64fcae65c61e9e4a110ff85fb6b2a47e"
+      },
+      {
+        "container_path": "/tmp/bridge_compact.py",
+        "archived_relpath": "producers/tmp__bridge_compact.py",
+        "bytes": 2407,
+        "sha256": "6e21d2ab39fc0170aedf1594c307520fef1117abaf2344d1b1d67e5828657a62"
+      },
+      {
+        "container_path": "/tmp/bridge_probe.py",
+        "archived_relpath": "producers/tmp__bridge_probe.py",
+        "bytes": 1897,
+        "sha256": "cbfbba0e7b482df82fa38569aee8823939dbf89c93d9fcb3d3df732d28a944ef"
+      },
+      {
+        "container_path": "/tmp/bridge_shape.py",
+        "archived_relpath": "producers/tmp__bridge_shape.py",
+        "bytes": 2445,
+        "sha256": "5b5608c17bff8ec570acaf7af119bffd87f7623ababff4c95f668dc15419c067"
+      },
+      {
+        "container_path": "/tmp/bridge_structure.py",
+        "archived_relpath": "producers/tmp__bridge_structure.py",
+        "bytes": 2613,
+        "sha256": "355895c342636f22d5b47c7f3167c154b426c81deeb8d7fb6911081f30202eb6"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c02_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c02_batch_01_solver.py",
+        "bytes": 5529,
+        "sha256": "17f0c56b69ab34024bcf6626b1d81996a8fcd5437842bc5614621d25fb56502f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c02_batch_04_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c02_batch_04_solver.py",
+        "bytes": 5375,
+        "sha256": "98b5df1b24d379c127803fe09693cc09556c9f08097c3f224ad741aa34f28d48"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m100_c02_s00_solver.py",
+        "bytes": 4869,
+        "sha256": "02f580e8c9ac7aa0a8b16690745ed1c804007541dd18e96b1b772aad910d80e2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat batch_solver.py _verified_downstream.py validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(x,p='',level=0):\n if isinstance(x,dict) and level<3:\n  for k,v in x.items(): show(v,p+'/'+str(k),level+1)\n elif isinstance(x,np.ndarray):\n  print(p,x.shape,x.dtype, (np.nanmin(x),np.nanmax(x)) if x.size and x.dtype.kind in 'fiu' else '')\n elif isinstance(x,(list,tuple)):\n  print(p,type(x).__name__,len(x))\n  if x and level<3: show(x[0],p+'/0',level+1)\n else: print(p,repr(x)[:220])\nshow(",
+      "cd /holdout_task; cat validate_public_schema.py; tail -28 _verified_downstream.py; python3 - <<'PY'\nimport json,pickle,numpy as np\nfrom pathlib import Path\nD=pickle.load(open('public_batch.pkl','rb'))\nfor k,v in D.items():\n print(k,({kk:(type(vv).__name__,getattr(vv,'shape',None),list(vv) if isinstance(vv,dict) else None) for kk,vv in v.items()} if isinstance(v,dict) else (type(v).__name__,getattr(v,'shape',None))))\nc=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw'];print('loads range',x.min(0),x.max(0),'raw range',y.min(0),y.max(0));print('sweep',[(k,np.shape(v)) for ",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np,json\nfrom pathlib import Path\nbatch=pickle.load(open('public_batch.pkl','rb')); print('items:',len(batch)); d=batch[0]['dataset']; print('dataset keys:',list(d))\nc=d['calibration_load_cells']; print('calibration fields:',[(k,list(v) if isinstance(v,dict) else np.shape(v)) for k,v in c.items()]); x=c['true_channel_loads']; y=c['bridge_raw']; print('calibrated ranges:',x.min(0),x.max(0),'raw ranges:',y.min(0),y.max(0)); print('first 5 calibration pairs:',np.column_stack([x,y])[:5]); s=c['single_channel_sweeps']; print('sweep shapes:'",
+      "cd /holdout_task && grep -nEi 'calibrat|bridge|tanh|sine|irls' /tmp/hegel_continual_archive/*solver.py | head -45; cat > /tmp/bridge_probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\nfrom scipy.linalg import lstsq\nfrom scipy.spatial.distance import cdist\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; X=c['true_channel_loads']; Y=c['bridge_raw']; N=len(X)\n\ndef basis(x,kind):\n cols=[np.ones(len(x)),*x.T]\n if kind!='affine': cols += [x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4)",
+      "cat > /tmp/bridge_shape.py <<'PY'\nfrom bridge_probe import X,Y,N,basis\nfrom itertools import product\nimport numpy as np\nfrom scipy.optimize import minimize\n\n# The three gross bridge spikes are separated from all other measurements by an order of magnitude.\nclean=np.max(np.abs(Y-np.median(Y,axis=0)),axis=1)<8\npair=[2,3,0,1]\nforms={'tanh':np.tanh,'atan':np.arctan,'rat':lambda z:z/(1+z*z),'root':lambda z:z/np.sqrt(1+z*z),'sin':np.sin,'erf':__import__('scipy').special.erf}\n\ndef fit(m,j,diag,cross=None,degree=2,shift=False):\n def des(x,p):\n  u=x[:,j]; v=x[:,pair[j]]\n  cols=[basis(x,'quadratic' if d",
+      "cat > /tmp/bridge_structure.py <<'PY'\nfrom bridge_probe import D,X,Y,N\nimport numpy as np\nfrom scipy.optimize import least_squares\nS=D['calibration_load_cells']['single_channel_sweeps']; pair=[2,3,0,1]\nclean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<8\nfor j in range(4):\n m=S['lab_id']==j; print('sweep',j,np.round(np.c_[S['true_stress'][m],S['cmd_stress'][m]],6).tolist()); p=pair[j]; m=(np.count_nonzero(X,axis=1)==1)&(X[:,p]!=0)&clean;print('cross axis',j,np.round(np.c_[X[m,p],Y[m,j]],6).tolist())\nforms={'sin':np.sin,'tanh':np.tanh,'rat':lambda q:q/(1+q*q),'atan':np.arctan,'zero':lambda q:q*0}\n",
+      "cat > /tmp/bridge_additive.py <<'PY'\nfrom bridge_probe import D,X,Y,N\nimport numpy as np\nfrom scipy.optimize import least_squares\nP=np.array([2,3,0,1]); S=D['calibration_load_cells']['single_channel_sweeps']; SX=np.eye(4)[S['lab_id']]*S['true_stress'][:,None]; SY=S['cmd_stress']; clean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<8; sc=abs(SY-np.median(SY))<8\nforms=[np.sin,np.tanh,np.arctan,lambda q:q/(1+q*q),lambda q:q/np.sqrt(1+q*q)]\ndef fit(j,m,typ,deg,interaction=False,sm=sc):\n p=P[j]; x=np.r_[X[m],SX[sm&(S['lab_id']==j)]]; y=np.r_[Y[m,j],SY[sm&(S['lab_id']==j)]]\n def design(x,z):\n  u=x[:,j];",
+      "cat > /tmp/bridge_compact.py <<'PY'\nfrom bridge_probe import D,X,Y,N\nimport numpy as np\nfrom scipy.optimize import least_squares\nS=D['calibration_load_cells']['single_channel_sweeps']; lab=S['lab_id']; sx=S['true_stress']; sy=S['cmd_stress']; P=[2,3,0,1]\nclean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<8; sc=abs(sy-np.median(sy))<8\nforms={'cos':lambda v,k:1-np.cos(k*v),'rat':lambda v,k:v*v/(1+k*v*v),'exp':lambda v,k:-np.expm1(-k*v*v),'poly':lambda v,k:v**4}\ndef design(u,v,z,g,h):\n a=[np.ones(len(u)),u,np.sin(z[0]*u),v,forms[g](v,z[1])]\n if g=='poly': a.append(v*v)\n if h=='cubic': a.append(u**3)",
+      "cat > /holdout_task/upstream_transducer.py <<'PY'\n\"\"\"Calibrate the paired four-channel load-cell bridge.\"\"\"\nfrom __future__ import annotations\n\nimport numpy as np\n\n_PAIR = np.array([2, 3, 0, 1])\n# Shared frequencies identified from the bridge rows and single-axis sweeps.\n_OWN_FREQ = 2.5\n_PAIR_FREQ = 2.0\n_HISTORY_FIELDS = ('past_channel_raw', 'hold_channel_raw')\n\n\ndef _design(u, v):\n    return np.stack((np.ones_like(u), u, np.sin(_OWN_FREQ * u),\n                     v, 1 - np.cos(_PAIR_FREQ * v)), axis=-1)\n\n\ndef _fit(calibration):\n    x = np.asarray(calibration['true_channel_loads'], dtype=floa",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, pickle, runpy, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as u\nfrom batch_solver import solve_batch\nwith open('public_batch.pkl','rb') as f:\n    d = pickle.load(f)[0]['dataset']\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']; s = c['single_channel_sweeps']\n# Score measured calibration rows, with gross spikes scored separately from inversion accuracy.\nspike = np.max(np.abs(y-np.median(y, axis=0)), axis=1)>8\nfold = np.random.default_rng(8).perm"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m100_c02_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m100_c02_batch_01_solver.py",
+      "selected_channels": [
+        "m100_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 3982,
+        "sha256": "6a25600eb29460e83f3dfd8518abb4082afbe461b6e04d354818da74c1fdfb2f",
+        "content_addressed_ref": "content_addressed_blobs/6a25600eb29460e83f3dfd8518abb4082afbe461b6e04d354818da74c1fdfb2f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "_features",
+      "_loads",
+      "_design",
+      "_fit",
+      "_stress",
+      "_intrinsic",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b058bfb3998008c4b2da32e87736971a57a89c213f249bad2843f77b1088e018",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, pickle, runpy, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as u\nfrom batch_solver import solve_batch\nwith open('public_bat",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b058bfb3998008c4b2da32e87736971a57a89c213f249bad2843f77b1088e018",
+        "expected_candidate_sha256": "b058bfb3998008c4b2da32e87736971a57a89c213f249bad2843f77b1088e018",
+        "computed_candidate_sha256": "b058bfb3998008c4b2da32e87736971a57a89c213f249bad2843f77b1088e018",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 3982
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b058bfb3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(a, b):\n    from scipy.linalg import lstsq\n    keep = np.ones(len(a), bool)\n    for i in range(10):\n        coeff = lstsq(a[keep], b[keep])[0]\n        r = np.linalg.norm(a @ coeff - b, axis=1)\n        k = r < max(0.015, 4 * np.median(r))\n        if np.array_equal(k, keep):\n            break\n        keep = k\n    return coeff"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(train, test):\n    labs = np.concatenate([train['lab_id'], test['lab_id']])\n    strata = np.concatenate([train['stratum'], test['stratum']])\n    refs = np.vstack([train['ref_coupons'], test['ref_coupons']])\n    x = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']]).astype(float)\n    for lab in np.unique(labs):\n        rows = labs == lab\n        panel = refs[rows]\n        center = np.median(panel.mean(axis=0))\n        scale = np.median(panel.std(axis=0))\n        x[rows] = (x[rows] - center) / scale\n    (_, cell, count) = np.unique(np.column_stack([labs, strata]), axis=0, return_inverse=True, return_counts=True)\n    weights = 1.0 / count[cell].reshape(-1, 1)\n    present = ~np.isnan(x)\n    mean = np.nansum(weights * x, axis=0) / np.sum(weights * present, axis=0)\n    return np.column_stack([np.ones(len(x)), np.where(present, x, mean)])"
+      },
+      {
+        "name": "_loads",
+        "code": "def _loads(calibration, split):\n    raw = np.asarray(calibration['bridge_raw'])\n    true = np.asarray(calibration['true_channel_loads'])\n    (bridge, *_) = np.linalg.lstsq(np.column_stack([np.ones(len(true)), true]), raw, rcond=None)\n    total = np.linalg.solve(bridge[1:], np.ones(4))\n    return tuple(((np.asarray(split[key]) - bridge[0]) @ total for key in ('past_channel_raw', 'hold_channel_raw')))"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(log_tau, past, hold, x, dt, times):\n    inv_tau = np.exp(-np.asarray(log_tau))\n    z = np.zeros((len(hold), 2))\n    dz = np.zeros_like(z)\n    for (duration, stress) in zip(dt, past.T):\n        u = duration * inv_tau\n        a = np.exp(-u)\n        dz = a * (dz + u * (z - stress[:, None]))\n        z = a * z - np.expm1(-u) * stress[:, None]\n    gap = hold[:, None] - z\n    u = times[:, None] * inv_tau\n    rise = -np.expm1(-u)\n    curve = np.concatenate((gap[:, None, :] * rise, x[:, None, :] * times[None, :, None]), axis=2)\n    rate = np.column_stack([gap * inv_tau, x])\n    dcurve = -dz[:, None, :] * rise - gap[:, None, :] * u * np.exp(-u)\n    drate = (-dz - gap) * inv_tau\n    return (curve, rate, dcurve, drate)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(past, hold, x, dt, times, y, r):\n    from scipy.optimize import least_squares\n    n_curve = y.size\n    target = np.r_[y.ravel(), r]\n    rate_unit = 1.0 / np.median(times)\n    units = np.r_[np.ones(n_curve), np.full(len(r), rate_unit)]\n    lower = np.r_[np.log(0.05 + 1e-08), np.log(0.05 + 1e-08), np.full(7, -np.inf)]\n    upper = np.r_[np.log(25.0 - 1e-08), np.log(25.0 - 1e-08), np.full(7, np.inf)]\n\n    def arrays(p):\n        (curve, rate, dc, dr) = _design(p[:2], past, hold, x, dt, times)\n        a = np.vstack([curve.reshape(-1, 7), rate])\n        da = np.vstack([dc.reshape(-1, 2), dr])\n        return (a, da)\n\n    def fit(start, scale):\n\n        def residual(p):\n            (a, _) = arrays(p)\n            return (a @ p[2:] - target) / scale\n\n        def jacobian(p):\n            (a, da) = arrays(p)\n            return np.column_stack([da * p[2:4], a]) / scale[:, None]\n        return least_squares(residual, start, jac=jacobian, bounds=(lower, upper), loss='soft_l1', x_scale='jac', max_nfev=250, ftol=1e-10, gtol=1e-10, xtol=1e-10)\n    candidates = []\n    for tau in ((0.25, 1.5), (0.7, 4.0), (0.15, 10.0), (2.0, 15.0)):\n        log_tau = np.log(tau)\n        (a, _) = arrays(log_tau)\n        (theta, *_) = np.linalg.lstsq(a / units[:, None], target / units, rcond=None)\n        candidates.append(fit(np.r_[log_tau, theta], 0.02 * units))\n    p = min(candidates, key=lambda candidate: candidate.cost).x\n    for _ in range(2):\n        (a, _) = arrays(p)\n        err = a @ p[2:] - target\n        scales = []\n        for group in (err[:n_curve], err[n_curve:]):\n            scales.append(max(1e-07, 1.4826 * np.median(np.abs(group - np.median(group)))))\n        p = fit(p, 1.5 * np.repeat(scales, [n_curve, len(r)])).x\n    order = np.argsort(p[:2])\n    return (np.exp(p[:2][order]), np.r_[p[2:4][order], p[4:]])"
+      },
+      {
+        "name": "_stress",
+        "code": "def _stress(block):\n    return tuple((np.asarray(block[key], dtype=float).sum(axis=-1) for key in ('past_channel_raw', 'hold_channel_raw')))"
+      },
+      {
+        "name": "_intrinsic",
+        "code": "def _intrinsic(dataset):\n    (train, test) = (dataset['train'], dataset['test'])\n    (dt, times) = (np.asarray(dataset[key], dtype=float) for key in ('past_dt', 'eval_times'))\n    x = _features(train, test)\n    (past, hold) = _stress(train)\n    n = len(hold)\n    (tau, theta) = _fit(past, hold, x[:n], dt, times, train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\n    return (dt, times, x[n:], tau, theta)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(dataset: dict) -> dict:\n    (train, test) = (dataset['train'], dataset['test'])\n    (dt, times) = (np.asarray(dataset[k]) for k in ('past_dt', 'eval_times'))\n    (past, hold) = _loads(dataset['calibration_load_cells'], train)\n    x = _features(train, test)\n    (tau, theta) = _fit(past, hold, x[:len(hold)], dt, times, train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\n    (past_test, hold_test) = _loads(dataset['calibration_load_cells'], test)\n    (curve, rate, _, _) = _design(np.log(tau), past_test, hold_test, x[len(hold):], dt, times)\n    return {'estimated_taus': tau, 'hereditary_weights': theta, 'predicted_strain': test['strain_0'][:, None] + curve @ theta, 'initial_rate_pred': rate @ theta}"
+      }
+    ]
+  }
+}

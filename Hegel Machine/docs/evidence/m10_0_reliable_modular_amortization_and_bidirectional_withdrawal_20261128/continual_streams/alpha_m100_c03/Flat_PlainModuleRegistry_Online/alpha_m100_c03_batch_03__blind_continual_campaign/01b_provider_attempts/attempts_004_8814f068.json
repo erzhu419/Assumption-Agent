@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8814f068dc3e4340b6d37286543d06a5",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:25.116880+00:00",
+  "ended_at_utc": "2026-11-28T03:46:06.544122+00:00",
+  "request_sha256": "d403cd68623460030e3f01e13943aff5de60ac057d5533a61166366e9ee6a170",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 34457,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23409,
+    "cached_tokens": 11904,
+    "completion_tokens": 1746
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Fit the coupled forward bridge, then recover loads in canonical coordinates.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\n# Input exponents for all monomials through degree three, including the offset.\\n_POWERS = np.array([\\n    np.bincount(term, minlength=4)\\n    for degree in range(4)\\n    for term in combinations_with_replacement(range(4), degree)\\n])\\n_DERIV_POWERS = np.maximum(_POWERS[None, :, :] - np.eye(4, dtype=int)[:, None, :], 0)\\n_DERIV_FACTOR = _POWERS.T\\n\\n\\ndef _basis(x):\\n    return np.prod(x[:, None, :] ** _POWERS, axis=-1)\\n\\n\\ndef _fit(loads, bridge):\\n    a = _basis(loads)\\n    if np.array_equal(loads, bridge):\\n        coef = np.zeros((a.shape[1], 4))\\n        coef[1:5] = np.eye(4)\\n        return coef\\n\\n    # A spike is a bad observation of the whole bridge, not four independent\\n    # errors. Give the row one Cauchy weight using its multichannel residual.\\n    w = np.ones((len(a), 1))\\n    for _ in range(40):\\n        coef = np.linalg.lstsq(w * a, w * bridge, rcond=None)[0]\\n        residual = a @ coef - bridge\\n        radius = np.linalg.norm(residual, axis=1)\\n        scale = max(np.median(radius), 1e-12)\\n        w = (1 / np.hypot(1, radius / (2 * scale)))[:, None]\\n\\n    good = radius < 8 * scale\\n    if np.linalg.matrix_rank(a[good]) < a.shape[1]:\\n        return coef\\n    # Compact each output separately; compare coefficients on their own\\n    # uncertainty scales so differently scaled monomials are treated alike.\\n    clean_a = a[good]\\n    sensitivity = np.linalg.norm(np.linalg.pinv(clean_a), axis=1)\\n    full = np.linalg.lstsq(clean_a, bridge[good], rcond=None)[0]\\n    noise = 1.4826 * np.median(abs(clean_a @ full - bridge[good]), axis=0)\\n    keep = abs(full) > 7 * sensitivity[:, None] * np.maximum(noise, 1e-12)\\n    keep[:5] = True\\n    compact = np.zeros_like(coef)\\n    for j, support in enumerate(keep.T):\\n        compact[support, j] = np.linalg.lstsq(clean_a[:, support], bridge[good, j], rcond=None)[0]\\n    return compact\\n\\n\\ndef _invert(raw, coef):\\n    raw = np.asarray(raw, dtype=float)\\n    y = raw.reshape(-1, 4)\\n    x = np.linalg.solve(coef[1:5].T, (y - coef[0]).T).T\\n    tolerance = 1e-11 * (1 + np.linalg.norm(y, axis=1))\\n    for _ in range(40):\\n        r = _basis(x) @ coef - y\\n        error = np.linalg.norm(r, axis=1)\\n        active = np.flatnonzero(error > tolerance)\\n        if not len(active):\\n            return x.reshape(raw.shape)\\n        z = x[active]\\n        d = np.prod(z[:, None, None, :] ** _DERIV_POWERS, axis=-1) * _DERIV_FACTOR\\n        jacobian = (d @ coef).swapaxes(1, 2)\\n        step = np.linalg.solve(jacobian, r[active, :, None])[..., 0]\\n        # Backtracking keeps Newton on the locally improving branch when a\\n        # reading is well outside the bridge's linear range.\\n        for _ in range(16):\\n            trial = z - step\\n            improved = np.linalg.norm(_basis(trial) @ coef - y[active], axis=1) < error[active]\\n            x[active[improved]] = trial[improved]\\n            if improved.all():\\n                break\\n            active, z, step = active[~improved], z[~improved], step[~improved] / 2\\n    if np.any(np.linalg.norm(_basis(x) @ coef - y, axis=1) > tolerance):\\n        raise ValueError('Coupled bridge inversion did not converge')\\n    return x.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a calibrated dataset without modifying its source arrays.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\\n    coef = _fit(loads, np.asarray(cal['bridge_raw'], dtype=float))\\n    out = dict(dataset)\\n    out['calibration_load_cells'] = dict(\\n        cal, bridge_raw=cal['true_channel_loads'].copy(),\\n        single_channel_sweeps=dict(cal['single_channel_sweeps'],\\n                                  cmd_stress=cal['single_channel_sweeps']['true_stress'].copy()),\\n    )\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        block = dataset.get(name)\\n        if block is not None:\\n            out[name] = dict(block, **{\\n                field: _invert(block[field], coef)\\n                for field in ('past_channel_raw', 'hold_channel_raw')\\n            })\\n    return out\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full robust cubic → H2 uncertainty-pruned cubic; the prior adaptive probe reduced worst clean leave-one-row-out bridge error from 0.000745 to 0.000365.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Hard-code cyclic coupling\",\"rejected_reason\":\"Adaptive support matched cyclic accuracy without assuming the same channel couplings in every calibration panel.\"}],\"rationale\":\"Build the calibration module and run the required composed schema check. Next, measure held-out load recovery using the exact implementation, since a good forward fit alone does not establish stable inversion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "71ece9344ed52e4527ebc90a4408899b56532c64c3fd6473af77cfa165e1c071",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43612.17,
+      "usage_known": true,
+      "prompt_tokens": 23409,
+      "cached_tokens": 11904,
+      "completion_tokens": 1746
+    }
+  ]
+}

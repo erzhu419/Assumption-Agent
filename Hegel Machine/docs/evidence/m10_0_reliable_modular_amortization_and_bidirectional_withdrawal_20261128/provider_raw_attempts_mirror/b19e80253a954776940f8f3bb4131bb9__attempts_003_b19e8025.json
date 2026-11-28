@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b19e80253a954776940f8f3bb4131bb9",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:22.155151+00:00",
+  "ended_at_utc": "2026-11-28T03:40:41.585385+00:00",
+  "request_sha256": "3271f1a612ec38cba3d60dec7d101ad4fbf82348780be9a8202d7ef17831ee4f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 23980,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18143,
+    "cached_tokens": 9344,
+    "completion_tokens": 651
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\nif p.exists():\\n print('archive contents:', [(f.name,f.stat().st_size) for f in p.iterdir()]);\\n for name in ('archive_apparatus_log.json','pre_llm_gate_diagnostic.json','archive_manifest.json'):\\n  f=p/name\\n  if f.exists():\\n   d=json.loads(f.read_text()); print(name, json.dumps(d if not isinstance(d,list) else d[-3:])[-2100:])\\na=pickle.load(open('public_batch.pkl','rb')); print('public cases',len(a)); print('asset keys', list(json.load(open('public_asset_index.json'))))\\nfor i,item in enumerate(a[:4]):\\n d=item['dataset']; print('case',i, 'item keys',list(item),'dataset keys',list(d),'past_dt',d['past_dt']);\\n for k,s in [('train',d['train']),('test',d['test']),('diag',item.get('campaign_diagnostics'))]:\\n  if s is None: print(k,None); continue\\n  print(k,len(s['lab_id']), 'lab counts',np.unique(s['lab_id'],return_counts=True),'stratum counts',np.unique(s['stratum'],return_counts=True));\\n  for x in ('ref_coupons','coupon_features_raw','aux_chamber_telemetry'):\\n   if x in s:\\n    ar=np.asarray(s[x]); print(x, 'first2',np.round(ar[:2],4),'sd',np.round(np.nanstd(ar,axis=0),4),'nan',np.isnan(ar).sum(0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Pooled reference alignment → shared material fit and diagnostic chamber identification; no held-out error measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The previous output omitted the archive details and reference-panel values. Inspect compact summaries to distinguish packed mean/scale columns from raw reference readings before fitting, and determine whether deployment telemetry can be linked to the chamber observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "79fab7eeed7341f617e59c73e7d7a76e50bad96bdc968ca733e1eebf61b3aca7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21477.95,
+      "usage_known": true,
+      "prompt_tokens": 18143,
+      "cached_tokens": 9344,
+      "completion_tokens": 651
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8f9c48228b35458694e0a3a304fc064d",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:55.903605+00:00",
+  "ended_at_utc": "2026-11-28T03:49:34.494788+00:00",
+  "request_sha256": "ada1bf3c0a74548cf8c299393979eba469f9808207b44bac682af3fa26ba7fa2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29415,
+    "cached_tokens": 9344,
+    "completion_tokens": 1497
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(p+'public_batch.pkl', 'rb'))[0]['study']\\na = m.solve_batch(s)\\nw, field, cert = (a[k] for k in ('weights', 'terminal_field', 'kkt_certificate'))\\nnx, ny = s['nx'], s['ny']\\ndef axis(key, n):\\n    k, v = s['kappa_'+key], s['vel_'+key]\\n    h = s['L'+key]/(n-1)\\n    d = np.zeros((n,n))\\n    for i in range(1,n-1):\\n        d[i,i-1] = -(k[i]+k[i-1])/(2*h*h)-max(v[i],0)/h\\n        d[i,i+1] = -(k[i]+k[i+1])/(2*h*h)-max(-v[i],0)/h\\n        d[i,i] = -d[i,i-1]-d[i,i+1]\\n    for i,j in [(0,1),(n-1,n-2)]:\\n        d[i,i] = k[i]/h**2\\n        d[i,j] = -d[i,i]\\n    return d\\nL = np.kron(np.eye(ny),axis('x',nx))+np.kron(axis('y',ny),np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nB = np.stack([u.ravel(order='F') for u in s['source_modes']],axis=1)\\nslots = s['sensor_ij'][:,0]+nx*s['sensor_ij'][:,1]\\nU = [np.linalg.solve(L+t*np.eye(nx*ny),B) for t in s['mu_shifts']]\\nS = np.concatenate([u[slots] for u in U])\\nfields = np.linalg.norm((L+s['mu_shifts'][-1]*np.eye(nx*ny))@field.ravel(order='F')-B@w)/np.linalg.norm(B@w)\\nZ, y = s['Z_nuisance'], m._calibrate(s)\\nprojection = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nD, b = S-Z@(projection@S), y-Z@(projection@y)\\nr = D@w-b\\ng = D.T@r+s['source_ridge']*w\\nJ = (r@r+s['source_ridge']*(w@w))/2\\nnu, cap, budget = cert['nu_sum'], s['u_box'], s['total_budget']\\nll, lu = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper'])\\ndual = J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nkkt = max(abs(w.sum()-budget), max(0,-w.min(),w.max()-cap,-ll.min(),-lu.min()), np.max(abs(g-nu-ll+lu)), np.max(abs(ll*w)), np.max(abs(lu*(cap-w))), abs(J-dual), abs(cert['primal_objective']-J), abs(cert['dual_lower_bound']-dual), np.max(abs(np.asarray(cert['weights'])-w)))\\nassert fields < 1e-11 and kkt < 1e-10, (fields,kkt)\\nprint(f'Independent reflecting stencil terminal relative residual: {fields:.3g}; max certificate discrepancy: {kkt:.3g}')\\n# Explicitly hit the all-bound vertex and the mixed lower/free/upper active set.\\nfor total, target in [(0.,[0,0,0,0]), (1.,[0,0,0,1]), (1.5,[0,0,.5,1]), (4.,[1,1,1,1])]:\\n    z, mult = m._box_simplex(np.eye(4), np.array([4.,2.,-1.,-5.]), 1., total)\\n    np.testing.assert_allclose(z,target,atol=1e-12)\\nprint('QP active-set stress: all 4 budget cases passed')\\nv = s['sensor_calibration_sweeps']; ref, raw = v['ref_rosette'], v['raw_rosette']\\nerr = np.empty(len(ref))\\nfor i in range(len(ref)):\\n    keep = np.arange(len(ref)) != i\\n    fit = m._fit_calibration(ref[keep], raw[keep])\\n    err[i] = np.max(abs(m._forward(ref[i:i+1],fit)-raw[i:i+1]))\\nclean = err < 1e-3\\nfor q in [1,4]:\\n    mask = np.count_nonzero(ref,axis=1)==q\\n    print(f'Calibration leave-one-sweep-out, occupancy {q}: worst clean rosette error {err[mask&clean].max():.3g}; gross outliers {np.count_nonzero(mask&~clean)}')\\nassert clean.sum() >= len(ref)-2 and err[clean].max() < 1e-4\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 Robin or periodic walls → H2 reflecting walls with cyclic calibration; worst held-out bank RMSE is 0.00992, and the independent host probe reports terminal field relative L2 error of 2.71e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Verify the exact artifact in an isolated process. An independent stencil detects field ordering or boundary errors, certificate reconstruction checks the requested objective and signs, and sweep holdouts and active-set cases test behavior beyond the single full-batch fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5a3659a544dc2ff43f60344335004f5a709548b627900bb0079cb6c3a0f4fb2a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40703.45,
+      "usage_known": true,
+      "prompt_tokens": 29415,
+      "cached_tokens": 9344,
+      "completion_tokens": 1497
+    }
+  ]
+}

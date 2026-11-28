@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd51602a9d1f449f939047689203a3bc",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:12:21.725441+00:00",
+  "ended_at_utc": "2026-11-28T04:12:48.868046+00:00",
+  "request_sha256": "88b38163e4eb73e53ce2dae9c23f70f5467f2ab7ff73d4df58933d310621bec4",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51729,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29462,
+    "cached_tokens": 9344,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/profile08.py <<'PY'\\nexec(open('/tmp/probe08.py').read().split(\\\"print('intrinsic'\\\")[0])\\nfrom scipy.optimize import least_squares\\nT=np.r_[t,1.]; E=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); D=E*tau-T[:,None]; ref=h[:,None]*(E@th[:2]); observed=np.c_[y(q),q['instant_rate_obs']]; rr=th[2]+_features(q,q)@th[3:]; rr=rr[:len(h)]; labs=q['lab_id']; groups=np.unique(labs); withdrawal=h<p[:,-1]\\n\\ndef curve(g): return T+D@np.array(g)\\ndef project(g,mask):\\n b=curve(g); Y=observed[mask]-ref[mask]; return Y@b/(b@b), b\\n\\ndef fit(mask):\\n def calc(g):\\n  r,b=project(g,mask); return (ref[mask]+r[:,None]*b-observed[mask]).ravel()\\n return least_squares(calc,[.2,.55],bounds=(0,1),loss='soft_l1',f_scale=.004).x\\n\\ndef report(label, pred):\\n e=pred-observed\\n print(label,'overall curve/rate',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),'lab and withdrawal curve/rate/final',[(int(m.sum()),*[round(np.sqrt(np.mean(a*a)),6) for a in (e[m,:-1],e[m,-1],e[m,-2])]) for m in [*(labs==i for i in groups),withdrawal,~withdrawal]])\\n\\nG=fit(np.ones(len(h),bool)); print('profiled routing',G,'linear',1-sum(G)); rout=np.empty_like(observed)\\nfor i in groups:\\n m=labs==i; gi=fit(~m); rout[m]=ref[m]+rr[m,None]*curve(gi); print('omit lab',i,gi)\\nreport('LOLO amplitudes chosen without holdout responses',rout)\\nreport('fixed (.2,.55)',ref+rr[:,None]*curve([.2,.55])); rlat,b=project(G,np.ones(len(h),bool)); print('profile residual by horizon',np.sqrt(np.mean((ref+rlat[:,None]*b-observed)**2,axis=0))); print('missing counts / discrepancy',np.c_[np.isnan(q['coupon_features_raw']).sum(1),rr,rlat,rlat-rr].round(5)); print('average by lab',[(i,np.mean((rlat-rr)[labs==i])) for i in groups]); print('test missing counts',np.bincount(np.isnan(te['coupon_features_raw']).sum(1)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/profile08.py\\ncd /holdout_task && sed -n '1,145p' validate_public_schema.py && cat batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Reset chamber memory and conserve drift across fast, slow, and linear terms; the current leave-one-lab-out worst-slice RMSE is 0.01117 for strain and 0.00735 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool diagnostic coupons into the train/test reference panel\",\"rejected_reason\":\"Pooling increases worst-slice initial-rate RMSE from 0.00735 to 0.06368; keep the diagnostic panel separate and use the mandated joint panel at deployment.\"}],\"rationale\":\"Profile diagnostic drift amplitudes only in the calibration folds to identify routing without confounding it with panel alignment. Score withheld labs using feature-predicted drift, not profiled amplitudes. Confirm how the schema validator imports the staged adapter before writing the artifacts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6c2ea7aac9efb7c31d20b93ca05aed9fda4ddacb7cda6b844a4f1cab20613991",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29238.8,
+      "usage_known": true,
+      "prompt_tokens": 29462,
+      "cached_tokens": 9344,
+      "completion_tokens": 1070
+    }
+  ]
+}

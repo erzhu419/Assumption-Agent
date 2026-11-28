@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "088cfb2bc59a46228019a07d58ef934d",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:01.642485+00:00",
+  "ended_at_utc": "2026-11-28T03:56:49.988612+00:00",
+  "request_sha256": "e429d094102868af7c4057e1652759e2074b86f486f4cd56128d69af137cd889",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54421,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30969,
+    "cached_tokens": 9344,
+    "completion_tokens": 2144
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/explore_rosette05.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; k=b['bank_id']; t=b['ref_signal']; z=b['raw_readout']; j,v=np.where((x!=0)&((x!=0).sum(1)==1)[:,None]); k=np.r_[k,v]; t=np.r_[t,x[j,v]]; z=np.r_[z,y[j,v]]; m=abs(z)<8; k,t,z=k[m],t[m],z[m]; single=(x!=0).sum(1)==1; clean=(abs(y)<8).all(1); bx=x[single&clean]; by=y[single&clean];\\nbias=np.array([np.median(by[(bx[:,a]==0)&(bx[:,(a+2)%4]==0),a]) for a in range(4)]); print('bias',bias)\\nforms={\\n 'atan+tanh':(lambda t,a,b,d:np.arctan(a*t)+b*np.tanh(d*t),[1.,1.,1.]),\\n 'tanh+linear':(lambda t,a,b:np.tanh(a*t)+b*t,[1.,.2]),\\n 'tanh+rational':(lambda t,a,b,d:np.tanh(a*t)+b*t/(1+d*t*t),[1.3,.15,.5]),\\n 'tanh+cubic':(lambda t,a,b,d:np.tanh(a*t)+b*t+d*t**3,[1.3,.2,0.]),\\n 'erf+cubic':(lambda t,a,b,d:erf(a*t)+b*t+d*t**3,[1.3,.2,0.]),\\n 'atan+cubic':(lambda t,a,b,d:np.arctan(a*t)+b*t+d*t**3,[1.3,.2,0.]),\\n 'tanh_cubicarg+linear':(lambda t,a,b,d:np.tanh(a*t+b*t**3)+d*t,[1.3,0,.15]),\\n 'sinhcosh':(lambda t,a,b:np.sinh(a*t)/(np.cosh(a*t)+b),[1.,.5]),\\n 'sinhcosh+linear':(lambda t,a,b,d:np.sinh(a*t)/(np.cosh(a*t)+b)+d*t,[1.,.5,.2]),\\n 'rational34':(lambda t,a,b,d:t*(1+a*t*t)/(1+b*t*t+d*t**4),[.25,.8,.05]),\\n 'rational56':(lambda t,a,b,d,e,f:t*(1+a*t*t+b*t**4)/(1+d*t*t+e*t**4+f*t**6),[.25,.02,.8,.05,.005]),\\n 'algebraic+linear':(lambda t,a,b:t/np.sqrt(1+a*t*t)+b*t,[1.,.2]),\\n 'odd_poly9':(lambda t,a,b,d,e:t*(1+a*t*t+b*t**4+d*t**6+e*t**8),[-.4,.1,-.02,.001]),\\n}\\nresults=[]\\nfor name,(f,start) in forms.items():\\n def pred(p): return bias[k]+p[:4][k]*f(t,*p[4:]);\\n def fit(mask): return least_squares(lambda p:(pred(p)-z)[mask],np.r_[np.ones(4),start],gtol=1e-12,max_nfev=350).x\\n p=fit(np.ones(len(t),bool)); es=[]\\n for val in np.unique(t):\\n  hold=t==val; es.extend((pred(fit(~hold))-z)[hold]);\\n rms=np.sqrt(np.mean((pred(p)-z)**2)); print(name,p.round(6), 'fit',rms,'held',np.sqrt(np.mean(np.square(es))),np.max(np.abs(es)))\\n results.append((rms,name,p,f))\\nfor _,name,p,f in sorted(results)[:3]:\\n print('\\\\nCROSS',name)\\n X=x[clean]; Y=y[clean]; F=f(X,*p[4:]); rest=Y-bias-p[:4]*F\\n for a in range(4):\\n  g=bx[:,(a+2)%4]!=0\\n  print('isolated cross',a,np.c_[bx[g,(a+2)%4],by[g,a]-bias[a]].round(6))\\n  ix=[a,(a+1)%4,(a+2)%4,(a+3)%4]\\n  for deg in [1,2,3]:\\n   for src in ['raw','sat','both']:\\n    B={'raw':X[:,ix],'sat':F[:,ix],'both':np.c_[X[:,ix],F[:,ix]]}[src]; names=['v','next','opp','prev'] if src!='both' else ['v','next','opp','prev','satV','satN','satO','satP']; design=[]; terms=[]\\n    for d in range(1,deg+1):\\n     for q in combinations_with_replacement(range(B.shape[1]),d):\\n      if all(i in (0,4) for i in q):continue\\n      design.append(np.prod(B[:,q],axis=1)); terms.append('*'.join(names[i] for i in q))\\n    D=np.array(design).T; inds=np.arange(D.shape[1]); A=rest[:,a]; best=[]\\n    for size in range(min(9,len(terms))):\\n     opt=min((np.linalg.norm(D[:,best+[i]]@np.linalg.lstsq(D[:,best+[i]],A,rcond=None)[0]-A),i) for i in inds if i not in best)[1];best.append(opt)\\n    G=D[:,best]; coef=np.linalg.lstsq(G,A,rcond=None)[0]; err=A-G@coef; hat=np.sum(np.linalg.qr(G)[0]**2,axis=1); print(a,deg,src,round(np.std(err),6),round(np.max(abs(err/np.maximum(1-hat,1e-12))),6),[(terms[i],round(v,4)) for i,v in zip(best[:5],coef[:5])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore_rosette05.py > /tmp/rosette05.log; head -41 /tmp/rosette05.log\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent cubic banks → H2 shared saturation with opposite-bank coupling; the best tested simple shared law has worst held-level error 0.02290.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a generic multivariate inverse\",\n      \"rejected_reason\": \"The isolated sweeps identify the bias and coupling topology directly; a generic inverse would discard that structure and be harder to validate at the operating range.\"\n    }\n  ],\n  \"rationale\": \"Test whether a compact shared response explains the remaining isolated-sweep residual, then screen coupling terms on the clean joint sweeps. The resulting terms are candidates for outer-fold validation, not validated selections.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b6b949134e21797e4168d689271e0c21f813412a62ec9532b6b014a9fe5587bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52550.63,
+      "usage_known": true,
+      "prompt_tokens": 30969,
+      "cached_tokens": 9344,
+      "completion_tokens": 2144
+    }
+  ]
+}

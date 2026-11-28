@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "081441393f024053b4a79abb00f4990b",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:59.762117+00:00",
+  "ended_at_utc": "2026-11-28T03:46:33.198234+00:00",
+  "request_sha256": "65f535869cd3ccb00c52559602f641fbbb2c197faa22786e6f6e8bd7f2e16f7a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41522,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25045,
+    "cached_tokens": 9344,
+    "completion_tokens": 1374
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; sweep=c['single_channel_sweeps']\\nfw=np.empty(len(x)); inv=np.empty_like(x)\\nfor te in np.array_split(np.random.default_rng(72).permutation(len(x)),8):\\n    tr=np.setdiff1d(np.arange(len(x)),te)\\n    model=m._fit_bridge(x[tr],y[tr])\\n    fw[te]=np.linalg.norm(m._forward(x[te],model)-y[te],axis=1)\\n    inv[te]=m._inverse(y[te],model)-x[te]\\nspikes=fw>1\\nprint('held-out spike rows',np.flatnonzero(spikes).tolist())\\nfor name, mask in [('clean',~spikes), ('outer-load',(~spikes)&(np.max(np.abs(x),axis=1)>1.4)), ('mixed-load',(~spikes)&(np.count_nonzero(x,axis=1)>1))]:\\n    if mask.any():\\n        print(name, 'n',mask.sum(), 'forward max L2',fw[mask].max(),'inverse channel max',np.max(np.abs(inv[mask]),axis=0).tolist())\\nassert fw[~spikes].max()<0.002 and np.max(np.abs(inv[~spikes]))<0.002\\ncoef=m._fit_bridge(x,y)\\nxs=np.zeros((len(sweep['true_stress']),4)); j=np.asarray(sweep['lab_id'],int); ix=np.arange(len(j)); xs[ix,j]=sweep['true_stress']; e=np.abs(m._forward(xs,coef)[ix,j]-sweep['cmd_stress']); print('independent sweep clean max',e[e<1].max(),'spikes',np.count_nonzero(e>=1)); assert e[e<1].max()<0.002\\ncanonical=m.calibrate_upstream(d)\\nfor part in ('train','test'):\\n    for field in ('past_channel_raw','hold_channel_raw'):\\n        orig=d[part][field]; recovered=canonical[part][field]; assert orig.shape==recovered.shape and np.isfinite(recovered).all()\\n        error=np.max(np.abs(m._forward(recovered.reshape(-1,4),coef).reshape(orig.shape)-orig)); print(part,field,'load abs max',np.max(np.abs(recovered)),'forward closure',error); assert error<1e-9\\nrng=np.random.default_rng(17); limit=max(1.7,*(np.max(np.abs(canonical[p][k])) for p in ('train','test') for k in ('past_channel_raw','hold_channel_raw')))\\ntruth=rng.uniform(-limit,limit,(20,30,4)); hold=np.concatenate((truth[0],np.array(np.meshgrid(*[[-limit,limit]]*4)).reshape(4,-1).T))\\nchamber=dict(past_channel_raw=m._forward(truth.reshape(-1,4),coef).reshape(truth.shape),hold_channel_raw=m._forward(hold,coef))\\nresult=m.calibrate_upstream(dict(d,chamber_verification_trials=chamber)); out=result['chamber_verification_trials']; print('chamber max inverse error', max(np.max(np.abs(out['past_channel_raw']-truth)),np.max(np.abs(out['hold_channel_raw']-hold))))\\nnp.testing.assert_allclose(out['past_channel_raw'],truth,rtol=0,atol=1e-9);np.testing.assert_allclose(out['hold_channel_raw'],hold,rtol=0,atol=1e-9)\\nfor raw, actual in ((result['calibration_load_cells']['bridge_raw'],x),(result['calibration_load_cells']['single_channel_sweeps']['cmd_stress'],sweep['true_stress'])):\\n    assert np.array_equal(raw,actual) and not np.shares_memory(raw,actual)\\nassert m.calibrate_upstream(dict(d,chamber_verification_trials=None))['chamber_verification_trials'] is None\\nout=solve_batch(d); print('isolated composed output shapes', {k:np.shape(v) for k,v in out.items()}); assert all(np.isfinite(v).all() for v in out.values())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense cubic -> H2 cyclic six-term bridge response; public schema and reference exchange pass, and the broader cubic basis has a clean eight-fold maximum forward error of 0.000461.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the schema pass alone\",\n      \"rejected_reason\": \"The schema check cannot detect a poorly calibrated inverse or an omitted chamber branch.\"\n    }\n  ],\n  \"rationale\": \"Withhold calibration rows to measure inverse error on mixed and extreme loads, and use the separate sweeps to check the forward response. If observed-load closure or the chamber test fails, fix the inverse or transformation before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "91eea8594070283694a10376bfe6ed9700b8178bd653a42f551dbbd17678915b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36476.87,
+      "usage_known": true,
+      "prompt_tokens": 25045,
+      "cached_tokens": 9344,
+      "completion_tokens": 1374
+    }
+  ]
+}

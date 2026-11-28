@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cefc9e75e38b4669951ff1b76fab32e0",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:10.903738+00:00",
+  "ended_at_utc": "2026-11-28T03:31:43.919992+00:00",
+  "request_sha256": "f401c3a03b8224483d30e8b38e1ece874efdf49c10a3d54d996d6604f50d5e8b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32264,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22201,
+    "cached_tokens": 9344,
+    "completion_tokens": 891
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '49,160p' /tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py; cat > /tmp/chamber_probe.py <<'PY'\\nimport sys,pickle,json,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport alpha_m100_c02_s00_solver as m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te,g=d['train'],d['test'],p['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; cal=d['calibration_load_cells']; np.set_printoptions(precision=5,suppress=True)\\nout=m.solve_batch(d); tau,th=out['estimated_taus'],out['hereditary_weights']; print('material',tau,th)\\nfor q,x in [(tr,m._features(tr,te)[:len(tr['lab_id'])]),(g,m._features(tr,g)[len(tr['lab_id']):])]:\\n past,hold=m._loads(cal,q); a,b,*_=m._design(np.log(tau),past,hold,x,dt,t); y=q['strain_curves_obs']-q['strain_0'][:,None]; r=q['instant_rate_obs']; e=y-a@th; f=r-b@th; print('base err rmse/median',np.sqrt(np.mean(e**2)),np.median(abs(e)),np.sqrt(np.mean(f**2)),np.median(abs(f))); print('median err by time',np.median(e,axis=0)); print('stress bounds',past.min(),past.max(),hold.min(),hold.max()); print('resid correlations',np.corrcoef(np.c_[past,hold,x[:,1:],f,e[:,-1]].T)[-2:,:-2]);\\n F=np.c_[-np.expm1(-t[:,None]/tau),t]; A=np.vstack([F,np.r_[1/tau,1]]); coeff=np.linalg.lstsq(A,np.c_[y,r].T,rcond=None)[0].T; print('free coupon amplitude median shape error',np.median(abs(np.c_[y,r]-coeff@A.T))); print('amp delta first8', (coeff-np.c_[b[:,:2]*th[:2]*tau,x@th[2:]])[:8]); print('baseline amp first8',np.c_[b[:,:2]*th[:2]*tau,x@th[2:]][:8]); print('missing',np.isnan(q['coupon_features_raw']).sum(0))\\nfor record in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(record['facility_telemetry_trace']); print(record['completed_campaign_short_name'],a.mean(0),a.std(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge plus shared Maxwell response -> H2 chamber-specific memory or drift; affine calibration residual RMS is at most 1.1e-4 per channel, and chamber error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear bridge before probing chamber behavior.\",\"rejected_reason\":\"The observed affine calibration residual is small enough that chamber residual structure is the more informative next check.\"}],\"rationale\":\"Compare benchtop and chamber residuals against the archived law. Free coupon amplitudes test whether the shared exponential time basis is adequate; if it is, focus on the stress-to-amplitude and drift mappings rather than altering the time basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "84bbbd5beee05336b78c4bd1339682d62324c3efffd96a735d4504f09724b291",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35148.52,
+      "usage_known": true,
+      "prompt_tokens": 22201,
+      "cached_tokens": 9344,
+      "completion_tokens": 891
+    }
+  ]
+}

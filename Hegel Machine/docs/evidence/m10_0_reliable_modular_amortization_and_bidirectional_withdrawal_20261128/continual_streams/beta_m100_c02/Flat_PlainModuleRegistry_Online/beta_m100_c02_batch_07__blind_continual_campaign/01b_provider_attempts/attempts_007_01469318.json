@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01469318e7b44d9dbf2472f850bd6296",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:19.584339+00:00",
+  "ended_at_utc": "2026-11-28T04:01:52.479309+00:00",
+  "request_sha256": "62fe431dd7762deb232a4ceb0aeb8c5959bc199068b62f0406f031c2a24eaed9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27216,
+    "cached_tokens": 5504,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the study's sensor readings, then solve in canonical coordinates.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    # Omitting the staged payload selects the live sweep fit.\\n    return solve_downstream(calibrate_upstream(study))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import chamber_response, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nworst = np.zeros(6)\\nfor item in items:\\n    raw = item['study']; cal = calibrate_upstream(raw)\\n    baseline = solve_batch(raw)\\n    changed = copy.deepcopy(raw)\\n    gains = np.array([0.83, 0.91, 0.87, 0.95]); offsets = np.array([0.04, -0.03, 0.02, -0.01])\\n    sweep = changed['sensor_calibration_sweeps']['raw_rosette']\\n    inlier = abs(sweep) <= 8.5\\n    sweep[:] = np.where(inlier, sweep * gains + offsets, sweep)\\n    assert np.array_equal(inlier, abs(sweep) <= 8.5)\\n    changed['y_obs_raw'] = (changed['y_obs_raw'].reshape(-1, 4) * gains + offsets).ravel()\\n    retuned = solve_batch(changed)\\n    for key in ('weights', 'terminal_field'):\\n        worst[0] = max(worst[0], np.max(abs(retuned[key] - baseline[key])))\\n    S, U = chamber_response(cal)\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        y = calibrate_upstream(dict(raw, y_obs_raw=pulse['y_pulse_raw']))['y_obs_raw']\\n        worst[1] = max(worst[1], np.sqrt(np.mean((S @ pulse['w_pulse'] - y)**2)))\\n    Z = cal['Z_nuisance']; R = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + cal['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\n    A = R @ S; cap = cal['u_box']; n = S.shape[1]; ridge = cal['source_ridge']\\n    for i, budget in enumerate([cal['total_budget'], 0, cap*1e-7, 2*cap, 4.5*cap, (n-1e-7)*cap, n*cap]):\\n        y = cal['y_obs_raw'] if not i else cal['y_obs_raw'] + 20*S@(np.arange(n)-n/2)\\n        out = baseline if not i else solve_downstream(dict(cal, total_budget=budget, y_obs_raw=y))\\n        w = out['weights']; c = out['kkt_certificate']; nu = c['nu_sum']; lo = np.array(c['lam_lower']); hi = np.array(c['lam_upper']); r = A @ w - R @ y; g = A.T @ r + ridge*w\\n        obj = (r@r + ridge*(w@w))/2; dual = obj - g@w + nu*budget + cap*np.minimum(0,g-nu).sum()\\n        np.testing.assert_array_equal(w, c['weights'])\\n        worst[2] = max(worst[2], abs(w.sum()-budget), max(-w), max(w-cap))\\n        worst[3] = max(worst[3], max(abs(g-nu-lo+hi)), max(abs(w*lo)), max(abs((cap-w)*hi)), max(-lo), max(-hi))\\n        worst[4] = max(worst[4], abs(obj-dual), abs(obj-c['primal_objective']), abs(dual-c['dual_lower_bound']))\\n        worst[5] = max(worst[5], np.max(abs(out['terminal_field'] - np.einsum('i,ijk->jk',w,U))))\\nprint('worst gain/offset invariance, pulse RMSE, feasibility, KKT, objective/gap, field:', worst)\\nassert np.all(worst < np.array([1e-10, 2e-5, 1e-9, 1e-9, 1e-9, 1e-9])), worst\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 staged calibration coefficients → H2 fit coefficients from each study’s sweeps while retaining the two-axis periodic closure, whose worst held-out pulse RMSE was 5.99e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep passing the staged calibration payload\",\n      \"rejected_reason\": \"The verified transducer bypasses the live sweep fit when supplied gains and offsets, contrary to the dynamic calibration requirement.\"\n    }\n  ],\n  \"rationale\": \"Use the verified transducer’s existing sweep-fit path. A paired change to sweep and observation gains and offsets detects accidental reuse of fixed coefficients; pulse, KKT, field, and schema checks verify the revised composition.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5855b8013f263fad4fc1a18ebf7f8307bdd1ba4de5ec67c4c1776a98b94d95d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37230.15,
+      "usage_known": true,
+      "prompt_tokens": 27216,
+      "cached_tokens": 5504,
+      "completion_tokens": 1425
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71111582a9dd48d6ba7fb52b01978e7a",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:01.101364+00:00",
+  "ended_at_utc": "2026-11-28T03:42:41.491555+00:00",
+  "request_sha256": "34cd99706ae5695c5df6121a8328612e4521fb1d4d869146d815e8a2df43a68d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44692,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24828,
+    "cached_tokens": 9344,
+    "completion_tokens": 1691
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools as it\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _fit_forward, _make_inverse, calibrate_upstream\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']; x = cal['true_channel_loads']; y = cal['bridge_raw']\\nids = np.arange(len(x)); A = _design(x)\\n# Every pairwise sum/difference raised to degree <= 3 is already in A.\\n# Challenge that span with a rational denominator over individual and pairwise loads.\\nq = [x[:, j] for j in range(4)] + [x[:, j] + s*x[:, k] for j, k in it.combinations(range(4), 2) for s in (-1, 1)]\\nR = np.column_stack([v/(1+a*w*w) for w in q for a in (.1, .5, 1.) for v in (w, w*w, w*w*w)])\\n\\ndef pair(tr, te):\\n    b = _fit_forward(x[tr], y[tr]); base = A @ b\\n    r = y[tr] - base[tr]; mag = np.linalg.norm(r, axis=1)\\n    good = tr[mag <= max(8*np.median(mag), 1e-9)]\\n    # Remove the cubic component of these atoms so the comparison isolates added structure.\\n    Z = R - A @ np.linalg.lstsq(A[good], R[good], rcond=None)[0]\\n    scl = np.maximum(np.linalg.norm(Z[good], axis=0), 1e-9)\\n    Z /= scl\\n    u, s, vt = np.linalg.svd(Z[good], full_matrices=False)\\n    rhs = u.T @ (y[good]-base[good])\\n    predictions = [base[te]] + [base[te]+Z[te] @ (vt.T @ ((s/(s*s+lam))[:,None]*rhs)) for lam in (.01, .1, 1., 10.)]\\n    return b, predictions\\n\\naxis = np.count_nonzero(x, axis=1) == 1\\nnorm = np.linalg.norm(x,axis=1)\\nfolds = {'random_%d'%j: t for j,t in enumerate(np.array_split(np.random.default_rng(131).permutation(ids),5))}\\nfolds.update({'outer_mixed_load': ids[~axis][np.argsort(norm[~axis])[-12:]], 'all_axis_sweeps': ids[axis]})\\nworst = 0.\\nfor name, te in folds.items():\\n    tr = np.setdiff1d(ids, te)\\n    inner_scores = np.zeros(5); spike = np.linalg.norm(y,axis=1)>10\\n    for val in np.array_split(np.random.default_rng(13).permutation(tr), 4):\\n        _, pred = pair(np.setdiff1d(tr,val),val)\\n        keep = ~spike[val]\\n        inner_scores += [np.sum((p[keep]-y[val][keep])**2) for p in pred]\\n    # Pick the most promising nonzero correction inside the outer training set.\\n    selected = 1+np.argmin(inner_scores[1:]); b,pred = pair(tr,te)\\n    keep=~spike[te]; clean=te[keep]\\n    e0=np.linalg.norm(pred[0][keep]-y[clean],axis=1)\\n    e1=np.linalg.norm(pred[selected][keep]-y[clean],axis=1)\\n    inv=np.linalg.norm(_make_inverse(b)(y[clean])-x[clean],axis=1)\\n    worst=max(worst,float(inv.max()))\\n    print(name,'n',len(clean),'forward p95 cubic / rational',*(round(float(np.quantile(e,.95)),8) for e in (e0,e1)), 'inverse max',round(float(inv.max()),8),'spikes separated',np.array_equal(np.linalg.norm(pred[0]-y[te],axis=1)>.01,spike[te]))\\nout = calibrate_upstream(ds); b = _fit_forward(x,y)\\nfor split in ('train','test'):\\n    labs = np.asarray(ds[split]['lab_id'])\\n    for lab in np.unique(labs):\\n        errors=[]\\n        for field in ('past_channel_raw','hold_channel_raw'):\\n            raw=ds[split][field][labs==lab].reshape(-1,4); z=out[split][field][labs==lab].reshape(-1,4)\\n            errors.append(np.linalg.norm(_design(z) @ b - raw, axis=1).max())\\n        print('bridge round-trip by lab', split, lab, errors)\\n        assert max(errors)<1e-8\\nres=solve_batch(ds); assert all(np.isfinite(v).all() for v in res.values())\\nprint('Worst expanded held-out load L2:',worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 noise-pruned coupled cubic → H2 added rational bridge curvature only if it improves held-out extremes; the current worst held-out load L2 is 0.000425.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply classification deconfounding, relay-mode or drift-operator probes\",\"rejected_reason\":\"This contract is continuous bridge calibration with no classification labels, relay states, or stochastic drift operator; trial round-trip residuals can instead be checked by the actual lab strata.\"}],\"rationale\":\"Hold out all axis sweeps and the highest mixed loads to detect extrapolation failure that random folds can miss. Select the rational correction within each outer training set; revisit the cubic only if the correction meaningfully improves the stressed slices. A lab-specific round-trip failure would trigger inspection of the affected readings and inverse convergence.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0fe31839dc267824263edb50491390db2eaff062199757ee3e3003adb613c09f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42475.56,
+      "usage_known": true,
+      "prompt_tokens": 24828,
+      "cached_tokens": 9344,
+      "completion_tokens": 1691
+    }
+  ]
+}

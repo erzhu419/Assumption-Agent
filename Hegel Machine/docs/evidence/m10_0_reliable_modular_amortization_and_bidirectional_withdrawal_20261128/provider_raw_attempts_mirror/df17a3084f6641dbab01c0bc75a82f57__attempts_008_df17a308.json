@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df17a3084f6641dbab01c0bc75a82f57",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:16:26.328995+00:00",
+  "ended_at_utc": "2026-11-28T04:17:08.820579+00:00",
+  "request_sha256": "318f172cf6f8c11b378cec9240f5c51def9f1c6f202d9e0ca5e946bf2f8575b9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56148,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31648,
+    "cached_tokens": 9344,
+    "completion_tokens": 1756
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal08.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\ndef data(s):\\n d=s['sensor_calibration_sweeps']; X,Y=np.asarray(d['ref_rosette']),np.asarray(d['raw_rosette']); good=(abs(Y)<5).all(1); X,Y=X[good],Y[good]; D=d['single_bank_sweeps']; ids,t,z=map(np.asarray,(D['bank_id'],D['ref_signal'],D['raw_readout'])); return X,Y,ids[abs(z)<5],t[abs(z)<5],z[abs(z)<5]\\n\\nfamilies={\\n 'rat11': (lambda x,q:[x/(1+q[0]*x*x),x], [1.]),\\n 'rat21': (lambda x,q:[x/(1+q[0]*x*x),x/(1+q[1]*x*x),x], [.5,2.]),\\n 'rat22': (lambda x,q:[x/(1+q[0]*x*x+q[1]*x**4),x**3/(1+q[0]*x*x+q[1]*x**4),x], [1.,.2]),\\n 'erf5': (lambda x,q:[erf(q[0]*x),x,x**3,x**5], [.7]),\\n 'tanh2': (lambda x,q:[np.tanh(q[0]*x),np.tanh(q[1]*x),x], [1.,2.]),\\n 'gauss': (lambda x,q:[x*np.exp(-q[0]*x*x),x], [1.]),\\n 'asinh': (lambda x,q:[np.arcsinh(q[0]*x),x,x/(1+q[1]*x*x)], [1.,1.]),\\n 'ratpow': (lambda x,q:[x/(1+q[0]*x*x)**q[1],x], [1.,1.]),\\n 'atan2': (lambda x,q:[np.arctan(q[0]*x),np.arctan(q[1]*x),x], [1.,2.]),\\n 'soft2': (lambda x,q:[x/np.sqrt(1+q[0]*x*x),x/np.sqrt(1+q[1]*x*x),x], [1.,2.]),\\n 'rat23': (lambda x,q:[x/(1+q[0]*x*x+q[1]*x**4),x**3/(1+q[0]*x*x+q[1]*x**4),x,x**3], [1.,.2]),\\n 'tanh_atan': (lambda x,q:[np.tanh(q[0]*x),np.arctan(q[1]*x),x], [1.,1.]),\\n}\\n\\ndef fit_own(x,y,name):\\n f,p0=families[name]; scale=np.max(abs(x));\\n def var(q):\\n  A=np.column_stack([np.ones_like(x),*f(x,q)]); c=np.linalg.lstsq(A,y,rcond=None)[0]; return A@c-y,c\\n q=least_squares(lambda q:var(q)[0],p0,bounds=(.00001,25),max_nfev=500,gtol=1e-13).x\\n return q,var(q)[1]\\n\\nif __name__=='__main__':\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X,Y,ids,t,z=data(s); axis=np.count_nonzero(X,axis=1)==1\\n for i in [0,1]:\\n  ix=axis&(X[:,i]!=0); a=np.r_[X[ix,i],t[ids==i]]; b=np.r_[Y[ix,i],z[ids==i]]; print('BANK',i)\\n  for name,(f,_) in families.items():\\n   q,c=fit_own(a,b,name); pred=lambda q,c,x:np.column_stack([np.ones_like(x),*f(x,q)])@c\\n   train=np.sqrt(np.mean((pred(q,c,a)-b)**2)); err=[]\\n   for j in range(len(b)):\\n    k=np.arange(len(b))!=j; qq,cc=fit_own(a[k],b[k],name); err.append(pred(qq,cc,a[~k])[0]-b[j])\\n   print(name,'train/loo',round(train,7),round(np.std(err),7),'q',q.round(5),'coef',c.round(6))\\n for i in range(4):\\n  j=(i+2)%4; k=axis&(X[:,j]!=0); print('opp',i,np.c_[X[k,j],Y[k,i]].round(6).tolist())\\n print('clean mixed head',np.c_[X[~axis],Y[~axis]][:8].round(5)); print('study scalars',[(k,v) for k,v in s.items() if np.isscalar(v)]); print('public items',len(pickle.load(open('/holdout_task/public_batch.pkl','rb'))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal08.py; sed -n '19,37p;40,123p' /tmp/hegel_continual_archive/beta_m100_c02_batch_07_solver.py; cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/'\\na=json.load(open(p+'archive_apparatus_log.json')); print('apparatus extra',[(k,v) for k,v in a[-1].items() if k!='facility_telemetry_trace']); print('archive manifest',open(p+'archive_manifest.json').read()[:3100])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic saturation -> H2 compact rational or composite isolated-bank law; the flexible erf model reached 6.9e-5 leave-one-point-out RMSE on bank 0 and 3.0e-5 on bank 1.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the high-order erf fit as the forward calibration law\",\n      \"rejected_reason\": \"Its large canceling coefficients make extrapolation uncertain; test whether a compact response explains the same measurements first.\"\n    }\n  ],\n  \"rationale\": \"Compare rational and composite responses on held-out isolated sweeps, and extract the archived inverse and public contract so the next step can test the wall candidates with a calibrated observation vector.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9b4f875d341014d0e8e94c4dc0da5ffa25f24ccf59a7e531eb5d99013d601507",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44657.24,
+      "usage_known": true,
+      "prompt_tokens": 31648,
+      "cached_tokens": 9344,
+      "completion_tokens": 1756
+    }
+  ]
+}

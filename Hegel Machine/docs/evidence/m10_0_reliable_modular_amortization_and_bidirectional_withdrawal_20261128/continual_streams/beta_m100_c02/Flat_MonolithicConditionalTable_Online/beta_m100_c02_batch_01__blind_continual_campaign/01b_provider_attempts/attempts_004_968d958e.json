@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "968d958ed5fb4ef0a6c07128fa49e123",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:15.136229+00:00",
+  "ended_at_utc": "2026-11-28T03:31:55.735179+00:00",
+  "request_sha256": "aa90c56fd7fbcbdd0ea1204ebf010063bd2139dabe210a3791de5bcfd81d877b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23607,
+    "cached_tokens": 9344,
+    "completion_tokens": 1229
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/wallfit.py <<'PY'\\nimport pickle,numpy as np,importlib.util\\nfrom scipy.optimize import least_squares\\nfrom scipy import sparse\\nfrom scipy.sparse.linalg import splu\\nspec=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/beta_m100_c02_s00_solver.py'); a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];s=i['study']; c=s['sensor_calibration_sweeps']; ref=c['ref_rosette']; raw=c['raw_rosette']; bank=c['single_bank_sweeps'];\\nfor j in range(4):\\n m=bank['bank_id']==j; print('bank',j,np.polynomial.polynomial.polyfit(bank['ref_signal'][m],bank['raw_readout'][m],1))\\nf=np.c_[np.ones(len(ref)),ref]; aff=np.linalg.lstsq(f,raw,rcond=None)[0]; print('affine max/RMS',np.max(abs(f@aff-raw)),np.sqrt(np.mean((f@aff-raw)**2)),aff)\\nY=np.array([a.calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) for p in i['campaign_diagnostics']]).T\\nW=np.array([p['w_pulse'] for p in i['campaign_diagnostics']]).T\\nnx,ny=s['nx'],s['ny']; I=sparse.eye(nx*ny,format='csc'); ij=s['sensor_ij']; sensor=ij[:,0]+nx*ij[:,1]; R=s['source_modes'].reshape(-1,nx*ny,order='F').T@W\\naxes=[a.axis_operator(s['kappa_'+d],s['vel_'+d],s['L'+d]/(s['n'+d]-1),s['robin_'+d]).toarray() for d in 'xy'];\\ndef predict(p,kind):\\n ax=[]\\n for A, pars in zip(axes,p.reshape(4,-1).reshape(2,2,-1)):\\n  B=A.copy()\\n  for k,(row,d) in enumerate([(0,1),(-1,-1)]):\\n   for coeff,tag in zip(pars[k],kind):\\n    col={'d':row,'n':row+d,'w':-1 if row==0 else 0,'s':row+2*d}[tag]; B[row,col]+=coeff\\n  ax.append(sparse.csc_matrix(B))\\n L=sparse.kron(sparse.eye(ny),ax[0],format='csc')+sparse.kron(ax[1],sparse.eye(nx),format='csc')+sparse.diags(s['V_reaction_2d'].ravel(order='F'),format='csc')\\n return np.concatenate([splu(L+mu*I).solve(R)[sensor] for mu in s['mu_shifts']])\\nerr=lambda x: np.sqrt(np.mean(x*x,axis=0))\\nprint('baseline RMS per shift/pulse', [err(b) for b in (predict(np.zeros(4),'d')-Y).reshape(3,32,3)])\\nfor kind in ('d','dn','dw','dnw','dns','dnws'):\\n p0=np.zeros(4*len(kind)); results=[]\\n for held in (None,0,1,2):\\n  use=[j for j in range(3) if j!=held]; fit=least_squares(lambda p:(predict(p,kind)-Y)[:,use].ravel(),p0,max_nfev=110,gtol=1e-13,ftol=1e-12,xtol=1e-12); e=err(predict(fit.x,kind)-Y); results.append(e if held is None else e[held]);\\n  if held is None: print(kind,'deltas',fit.x.reshape(4,-1).round(5),'jac cond',np.linalg.cond(fit.jac), flush=True)\\n print(kind,'in/held RMS',results,flush=True)\\nprint('baseline edge rows',[(A[0,:3],A[-1,-3:]) for A in axes]);print('telemetry study first+mean',s['aux_manifold_telemetry'][:3],s['aux_manifold_telemetry'].mean(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/wallfit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine calibration and open-wall Robin) -> H2 (affine calibration plus identifiable wall-row corrections); leave-one-pulse-out error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear rosette inverse\",\"rejected_reason\":\"Single-channel sweeps are linear and the higher-order coefficients shown are at calibration-noise scale.\"}],\"rationale\":\"Compare diagonal loss, inward coupling, and opposite-wall wrap terms using held-out tracer pulses. If richer boundary rows do not improve held-out error, retain the simpler law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e1b18fc9ad9ccb8851606b2325e35ec9605259bc0430c1333a3cfe8b9d137376",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42727.06,
+      "usage_known": true,
+      "prompt_tokens": 23607,
+      "cached_tokens": 9344,
+      "completion_tokens": 1229
+    }
+  ]
+}

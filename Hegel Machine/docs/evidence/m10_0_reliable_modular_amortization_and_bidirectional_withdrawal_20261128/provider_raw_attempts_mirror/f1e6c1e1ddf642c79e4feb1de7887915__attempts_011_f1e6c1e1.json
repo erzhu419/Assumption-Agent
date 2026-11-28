@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1e6c1e1ddf642c79e4feb1de7887915",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:46.911374+00:00",
+  "ended_at_utc": "2026-11-28T04:03:30.401891+00:00",
+  "request_sha256": "14369ee4a8951c44b61a726e3cad6bb6181549da092ddadfbd12b62d4b78a3e4",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58982,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31799,
+    "cached_tokens": 9344,
+    "completion_tokens": 1775
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/rosette_margin_audit.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _inverse, _design, _PAIR\\nwith open('/holdout_task/public_batch.pkl', 'rb') as stream:\\n    s = pickle.load(stream)[0]['study']\\nc = s['sensor_calibration_sweeps']; X, Y = c['ref_rosette'], c['raw_rosette']\\naxis = np.count_nonzero(X, axis=1) == 1\\nclean = np.max(abs(Y), axis=1) < 4  # Scoring eligibility only; all training rows enter each fit.\\nfold = np.random.default_rng(193).permutation(len(X)) % 5\\n\\ndef robust_profile(x, y, family):\\n    z = x[:, _PAIR]\\n    one = np.ones_like(x)\\n    if family == 'rational':\\n        p = [2.5, .19, .024]; bounds = ([1.8, 0, 0], [3.3, 4, 4])\\n        def basis(v):\\n            k, a, b = v; t = z*z; d = 1 + a*t + b*t*t\\n            return np.stack((one, x, np.sin(k*x), z, t/d, t*t/d), axis=-1)\\n    elif family == 'pair-mix':\\n        p = [2.5, 2., 0., 0.]; bounds = ([1.8, 1.2, -.5, -.5], [3.3, 3., .5, .5])\\n        def basis(v):\\n            k, h, a, b = v\\n            return np.stack((one, x, np.sin(k*(x+a*z)), z, 1-np.cos(h*(z+b*x))), axis=-1)\\n    else:\\n        p = [2.5, 2., .25, .21, -.06]; bounds = ([1.8, 1.2, .05, -.2, -.2], [3.3, 3., .4, .5, .1])\\n        def basis(v):\\n            k, h, a, b, d = v\\n            return np.stack((one, x+a*np.sin(k*x)+b*z+d*(1-np.cos(h*z))), axis=-1)\\n    w = np.ones(len(x))\\n    for _ in range(12):\\n        r = np.sqrt(w)\\n        def prof(v):\\n            A = basis(v).transpose(1, 0, 2)\\n            C = np.stack([np.linalg.lstsq(a*r[:,None], b*r, rcond=None)[0] for a,b in zip(A,y.T)])\\n            return np.einsum('cnp,cp->nc', A, C)-y, C\\n        p = least_squares(lambda v: (prof(v)[0]*r[:,None]).ravel(), p, bounds=bounds, max_nfev=120, ftol=1e-10, gtol=1e-10).x\\n        E, C = prof(p); d = np.linalg.norm(E,axis=1)\\n        w = 1/(1+(d/max(3*np.median(d),1e-10))**2)\\n    return p, C\\n\\ndef predict(x,p,c,family):\\n    z=x[:,_PAIR]\\n    if family=='rational':\\n        k,a,b=p; t=z*z; d=1+a*t+b*t*t\\n        A=np.stack((np.ones_like(x),x,np.sin(k*x),z,t/d,t*t/d),axis=-1)\\n    elif family=='pair-mix':\\n        k,h,a,b=p\\n        A=np.stack((np.ones_like(x),x,np.sin(k*(x+a*z)),z,1-np.cos(h*(z+b*x))),axis=-1)\\n    else:\\n        return np.einsum('cnp,cp->nc',_design(x,p),c)\\n    return np.einsum('ncp,cp->nc',A,c)\\n\\nobs=np.asarray(s['y_obs_raw']); full_f,full_c=_fit(X,Y); base=_inverse(obs,full_f,full_c)\\nfor family in ('current','rational','pair-mix','tied'):\\n    E=np.full(len(X),np.nan); I=E.copy(); jitter=[]\\n    for f in range(5):\\n        tr=fold!=f; te=(~tr)&clean\\n        if family=='current': p,q=_fit(X[tr],Y[tr])\\n        else: p,q=robust_profile(X[tr],Y[tr],family)\\n        if family=='tied':\\n            k,h,a,b,d=p; offset,gain=q.T\\n            p=np.array([k,h]); q=np.stack((offset,gain,a*gain,b*gain,d*gain),axis=1)\\n        E[te]=np.linalg.norm(predict(X[te],p,q,family)-Y[te],axis=1)\\n        if family in ('current','tied'):\\n            I[te]=np.linalg.norm(_inverse(Y[te],p,q)-X[te],axis=1)\\n            jitter.append(np.max(abs(_inverse(obs,p,q)-base)))\\n    print(family,'forward p90 / axis max / mixed max',np.quantile(E[clean],.9),max(E[clean&axis]),max(E[clean&~axis]))\\n    if jitter: print('  inverse axis max / mixed max / max observation shift',max(I[clean&axis]),max(I[clean&~axis]),max(jitter))\\nprint('Study context', list(s), 'row bank counts', np.unique(s['row_bank_id'],return_counts=True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent paired-channel gains → H2 a shared normalized response; the current model’s worst clean held-out inverse row L2 error is 1.17e-4 on mixed sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, drift-operator, or batch-classification tests\",\n      \"rejected_reason\": \"Those mechanisms are not part of the continuous rosette calibration contract. Bank IDs alone are not classification labels or evidence of confounding.\"\n    }\n  ],\n  \"rationale\": \"Fit rational and pair-mixed challengers inside the same folds to detect missing forward terms. Compare shared versus independent channel gains on held-out inverse error and observation stability; promote a challenger only if it addresses a measured calibration weakness without sacrificing another slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "299ac1147c5e722d798bdc4eec16b86bf8da7bc94c4eaf3d6d75613313da9204",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45502.9,
+      "usage_known": true,
+      "prompt_tokens": 31799,
+      "cached_tokens": 9344,
+      "completion_tokens": 1775
+    }
+  ]
+}

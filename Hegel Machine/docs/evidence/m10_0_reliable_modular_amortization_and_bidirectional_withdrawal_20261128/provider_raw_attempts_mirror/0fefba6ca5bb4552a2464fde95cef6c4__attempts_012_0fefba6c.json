@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0fefba6ca5bb4552a2464fde95cef6c4",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:23.309882+00:00",
+  "ended_at_utc": "2026-11-28T03:58:50.981897+00:00",
+  "request_sha256": "47ac658993194ff4969cfb0418e8494d18b933ff0af8a13337b92fbcd74e5cc2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71561,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36472,
+    "cached_tokens": 9344,
+    "completion_tokens": 928
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nb = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(b)\\nd = pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\ntr, te = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\no = b.solve_batch(d)\\nshapes = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(te['strain_0']),len(t)), 'initial_rate_pred': (len(te['strain_0']),)}\\nassert o.keys() == shapes.keys()\\nfor k,shape in shapes.items():\\n    assert o[k].shape == shape and np.all(np.isfinite(o[k])), k\\nassert .05 < o['estimated_taus'][0] < o['estimated_taus'][1] < 25\\ncal=d['calibration_load_cells']; p,keep=b._fit_bridge(cal['bridge_raw'],cal['true_channel_loads']); x,_=b._features(tr,te)\\nP,H,F=b._calibrated_inputs(tr,x,p); Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; full=o['estimated_taus']; worst=[0.,0.,0.,0.]\\nfor axis in ('lab_id','stratum'):\\n    for value in np.unique(tr[axis]):\\n        val=tr[axis]==value; fit=~val\\n        tau,theta=b._fit(P[fit],H[fit],F[fit],dt,t,Y[fit],R[fit]); a,r=b._design(tau,P[val],H[val],F[val],dt,t)\\n        e=np.abs(a@theta-Y[val]); er=np.abs(r@theta-R[val]); m=[np.median(e),np.median(er),np.median(e[:,-3:]),max(abs(tau/full-1))]; worst=np.maximum(worst,m)\\n        print(axis,value,'n',sum(val),'median strain/rate/late-strain; max relative tau shift',np.round(m,6))\\nprint('worst-fold:', worst)\\nprint('isolated process: all four outputs finite with required shapes and ordered taus')\\nassert worst[0]<.04 and worst[1]<.04 and worst[2]<.04 and worst[3]<.20, worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic bridge → H2 shared sine/cosine bridge with idle-chamber relaxation; the host probe measured strain MAE 0.001011, rate MAE 0.000621, and relaxation-time relative error 1.14%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the robust loss using pooled residuals\",\n      \"rejected_reason\": \"The verified candidate has low errors on both outputs; only a material failure on held-out labs or strata would justify retuning.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in an isolated process, then leave out entire labs and strata to detect unstable relaxation estimates or poor late-time or initial-rate predictions that pooled scores could hide. If a slice fails, inspect it before changing the fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1cc3372f488dcbd2f1b33cf67d02b16f474126ffea5953ec324cb4cbc04095d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27628.58,
+      "usage_known": true,
+      "prompt_tokens": 36472,
+      "cached_tokens": 9344,
+      "completion_tokens": 928
+    }
+  ]
+}

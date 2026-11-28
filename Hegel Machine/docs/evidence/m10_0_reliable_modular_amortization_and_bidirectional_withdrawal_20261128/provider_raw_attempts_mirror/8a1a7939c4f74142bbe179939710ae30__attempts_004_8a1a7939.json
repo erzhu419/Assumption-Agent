@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8a1a7939c4f74142bbe179939710ae30",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:36:35.728178+00:00",
+  "ended_at_utc": "2026-11-28T03:36:59.081502+00:00",
+  "request_sha256": "c3477c81c3521b41c07bd763d77be1881800c79207d903cca18f396538c32f65",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34415,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23136,
+    "cached_tokens": 9344,
+    "completion_tokens": 785
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/cal_probe.py <<'PY'\\nimport pickle,json,numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=135)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; D=np.c_[np.ones(len(x)),x]; B=np.linalg.lstsq(D,y,rcond=None)[0]; B=least_squares(lambda b:(D@b.reshape(5,4)-y).ravel(), B.ravel(),loss='cauchy',f_scale=.02).x.reshape(5,4); R=y-D@B\\nprint('affine robust coefficients\\\\n',B); print('row residual norms',np.linalg.norm(R,axis=1).round(4)); print('first 16 residuals\\\\n',R[:16]); print('largest residual rows');\\nfor i in np.argsort(np.linalg.norm(R,axis=1))[-8:]: print(i,x[i],R[i])\\nb=c['single_bank_sweeps']; print('single bank shapes',[(k,v.shape) for k,v in b.items()]); print('single bank first',[(k,v[:6]) for k,v in b.items()]); print('obs range',s['y_obs_raw'].min(),s['y_obs_raw'].max()); print('obs bank pattern',s['row_bank_id'][:32]); print('sensor indices',s['sensor_ij']); print('aux moments',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0));\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'],'mean',a.mean(0),'std',a.std(0))\\nPY\\npython3 /tmp/cal_probe.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unweighted affine calibration → H2 distinguish sparse sweep corruption from nonlinear response; worst held-out raw error was 13.25 for affine and 12.49 for quadratic calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the polynomial basis\",\n      \"rejected_reason\": \"Quadratic terms made held-out RMS worse in all four channels. Inspect residuals from a robust fit before adding terms.\"\n    }\n  ],\n  \"rationale\": \"A few large row residuals would point to corrupted sweeps; systematic residuals across clean rows would point to missing calibration terms. Summarizing telemetry by channel can also reveal a wall-state change without fitting it to source observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "151079e18909b4c2f85e19791cacc329e2f934285e3401480fd4781d37dfff95",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23315.59,
+      "usage_known": true,
+      "prompt_tokens": 23136,
+      "cached_tokens": 9344,
+      "completion_tokens": 785
+    }
+  ]
+}

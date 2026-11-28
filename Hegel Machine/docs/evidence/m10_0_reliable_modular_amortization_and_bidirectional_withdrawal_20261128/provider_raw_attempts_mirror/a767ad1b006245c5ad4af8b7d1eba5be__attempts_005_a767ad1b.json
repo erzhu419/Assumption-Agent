@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a767ad1b006245c5ad4af8b7d1eba5be",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:33.131331+00:00",
+  "ended_at_utc": "2026-11-28T03:44:01.089033+00:00",
+  "request_sha256": "1ea2b77516ee1b644ba70ec132aca128a5748849bd3461d9033bd646cef0021f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42008,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24812,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,39p' /tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py; sed -n '92,125p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_02_solver.py; python3 - <<'PY'\\nimport pickle, numpy as np, importlib.util\\ns=importlib.util.spec_from_file_location('base','/tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; sw=c['single_channel_sweeps']; print('sweeps:',{k:(np.shape(v),np.asarray(v).reshape(-1)[:5]) for k,v in sw.items()}); b=m._bridge(c); e=r@b[:-1]+b[-1]-y.sum(1); print('bridge',b,'calibration RMS/max',np.sqrt(np.mean(e**2)),np.max(abs(e))); tr,te=d['train'],d['test']; x=m._features(tr,te); n=len(tr['lab_id']); p,h=m._loads(tr,b); t=d['eval_times']; dt=d['past_dt']; z=tr['strain_curves_obs']-tr['strain_0'][:,None]; u=tr['instant_rate_obs']; print('tau theta and per-lab residuals (curve MAE, rate MAE, curve 90%, rate 90%)');\\nfor lab in [-1,*np.unique(tr['lab_id'])]:\\n ix=tr['lab_id']!=lab; ex=~ix if lab>=0 else ix; taus,theta=m._fit(x[:n][ix],p[ix],h[ix],dt,t,z[ix],u[ix]); a,v=m._design(taus,x[:n][ex],p[ex],h[ex],dt,t); re=abs(a@theta-z[ex]); ru=abs(v@theta-u[ex]);print(lab,taus,theta,[re.mean(),ru.mean(),np.quantile(re,.9),np.quantile(ru,.9)])\\n if lab==-1:\\n  pe,he=m._loads(te,b); a,v=m._design(taus,x[n:],pe,he,dt,t); delta=(theta[2]+x[n:]@theta[3:])[:,None]*(t+np.expm1(-t)); print('deployment hold range',he.min(),he.max(),'final-horizon inherited-drift bias RMS/max',np.sqrt(np.mean(delta[:,-1]**2)),max(abs(delta[:,-1])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 carry forward saturated drift -> H2 restore linear drift after the post-batch-02 apparatus signal returns to its initialization band; leave-one-lab-out metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the latest completed campaign name as the label for its own telemetry\",\n      \"rejected_reason\": \"The forward alignment better explains both archived changes: the post-s00 excursion precedes the batch-01 chamber coupling, and the post-batch-01 excursion precedes the batch-02 drift saturation.\"\n    }\n  ],\n  \"rationale\": \"Both exceptional telemetry channels return to the initialization band after batch 02, supporting withdrawal of the archived corrections. Test the shared fit on held-out labs and measure how much retaining saturated drift would change deployment predictions. If calibration or benchtop transfer fails, fix that before selecting the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "028b05bd3b9a17d8fca2a5393455ef3e0570dbe6380317f410e2fd415c8566f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27923.89,
+      "usage_known": true,
+      "prompt_tokens": 24812,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb7297b37f834e819384fe1431808a48",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:53.759256+00:00",
+  "ended_at_utc": "2026-11-28T04:02:21.497950+00:00",
+  "request_sha256": "f565050200493ee167e683485503203c33652f19b9e93697cc743c1dcdb7c739",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47632,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26832,
+    "cached_tokens": 9344,
+    "completion_tokens": 908
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; sed -n '21,83p' alpha_m100_c02_batch_05_solver.py; sed -n '22,52p' alpha_m100_c02_batch_03_solver.py; cat >/tmp/chamber_bridge_cv.py <<'PY'\\nimport sys,pickle,importlib,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nmods=[importlib.import_module('alpha_m100_c02_batch_'+i+'_solver') for i in ('02','03','05')]\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; l=c['true_channel_loads']; r=c['bridge_raw']; n=len(l)\\nprint('stress quantiles',np.quantile(l,[0,.1,.5,.9,1],axis=0)); print('nonzero channels per row',np.unique(np.count_nonzero(l,axis=1),return_counts=True))\\nfor m in mods:\\n try:\\n  summaries=[]; residual=np.empty_like(l); total=np.empty(n); sweep=c['single_channel_sweeps']; sl=sweep['true_stress']; sr=sweep['cmd_stress']; ch=sweep['lab_id'];\\n  for k,ids in enumerate(np.array_split(np.random.default_rng(81).permutation(n),5)):\\n   keep=np.ones(n,bool); keep[ids]=False\\n   if m is mods[-1]:\\n    s=np.arange(len(sl))%5!=k; a=m._fit_bridge(l[keep],r[keep],ch[s],sl[s],sr[s]);\\n   else: a=m._fit_bridge(dict(c,true_channel_loads=l[keep],bridge_raw=r[keep]))\\n   e=m._invert_bridge(r[ids],a)-l[ids]; residual[ids]=e; total[ids]=e.sum(axis=1); summaries.append((np.median(abs(e.sum(axis=1))),np.quantile(abs(e.sum(axis=1)),.8)))\\n  print(m.__name__, 'fold median/p80',np.round(summaries,5),'channel abs q',np.quantile(abs(residual),[.5,.8,.9]),'total abs q',np.quantile(abs(total),[.5,.8,.9]));\\n  if m is mods[-1]: print('fit coefficients',np.round(m._fit_bridge(l,r,ch,sl,sr),6))\\n  else: print('fit coefficients',np.round(m._fit_bridge(c),6))\\n except Exception as e: print(type(e).__name__,str(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_bridge_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop deployment -> H2 elevated chamber transfer; predecessor telemetry matches 5/5 archived regime choices, and current chamber error is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the last bridge model without testing\",\n      \"rejected_reason\": \"The current bridge can differ even when the chamber regime repeats; held-out total-load errors will determine which bridge to use.\"\n    }\n  ],\n  \"rationale\": \"Compare archived inverse bridge models on matched held-out calibration rows. Large errors in otherwise clean folds would show that those bridge equations do not transfer and that the current sweeps need a different model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "74f1f5002fca6e5e58eb7223883f5be163541d89007b49c92bf0cd6ed7b687eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27691.5,
+      "usage_known": true,
+      "prompt_tokens": 26832,
+      "cached_tokens": 9344,
+      "completion_tokens": 908
+    }
+  ]
+}

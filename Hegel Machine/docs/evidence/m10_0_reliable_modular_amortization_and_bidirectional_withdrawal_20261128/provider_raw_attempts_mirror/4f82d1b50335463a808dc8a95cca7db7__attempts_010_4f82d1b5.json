@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f82d1b50335463a808dc8a95cca7db7",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:36.104320+00:00",
+  "ended_at_utc": "2026-11-28T03:59:00.839911+00:00",
+  "request_sha256": "e273a707070f829dfe0e9bb3ac8ded1ca0dfb6ba41b79739c70302a39a315d0e",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46216,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25559,
+    "cached_tokens": 9344,
+    "completion_tokens": 927
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom itertools import product\\nimport numpy as np\\nfrom test_wall import s, p, Y, W, Z, ax, forward\\nfrom downstream_solver import _transport\\nfrom batch_solver import solve_batch\\nwinner = ('periodic', 'closed')\\nkinds = ('robin','closed','periodic','periodic-robin')\\nresiduals = {pair: forward(ax('x',pair[0]),ax('y',pair[1])) - Y for pair in product(kinds, repeat=2)}\\nS, _ = _transport(s)\\nnp.testing.assert_allclose(S@W-Y, residuals[winner], rtol=0, atol=1e-12)\\nshifts = np.repeat(np.arange(len(s['mu_shifts'])), len(s['sensor_ij']))\\nassert len(shifts) == len(Y)\\nworst, margin, folds = 0., np.inf, 0\\nfor k, j in product(np.unique(shifts), range(Y.shape[1])):\\n    rows, cols = shifts != k, np.arange(Y.shape[1]) != j\\n    z = Z[rows]\\n    P = np.linalg.solve(z.T@z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T)\\n    for profile in (False, True):\\n        def score(r):\\n            q = r[rows][:,cols]\\n            return np.mean((q-z@(P@q) if profile else q)**2)\\n        best = min(residuals, key=lambda pair: score(residuals[pair]))\\n        assert best == winner, (k,j,profile,best)\\n        # The withheld pulse supplies no fitted nuisance coefficients.\\n        errors = {pair: np.sqrt(np.mean(r[~rows,j]**2)) for pair,r in residuals.items()}\\n        err = errors[winner]\\n        alternative = min(e for pair,e in errors.items() if pair != winner)\\n        assert err < alternative, (k,j,err,alternative)\\n        worst, margin, folds = max(worst,err), min(margin,alternative/err), folds+1\\nout = solve_batch(p['study'])\\nc = out['kkt_certificate']\\ngap = c['primal_objective']-c['dual_lower_bound']\\nassert abs(gap) < 1e-10\\nprint(f'Bundle df94c62983bb5b91 | ng_t05 | {folds} joint shift/pulse fold evaluations | worst held-out RMSE {worst:.9g} | minimum competing-law error ratio {margin:.9g} | KKT gap {gap:.9g}')\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared endpoint law → periodic x and closed y; prior worst held-out bank or boundary pulse RMSE was 2.47×10⁻⁶, with joint shift-and-pulse holdouts pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Exclude an entire resolvent shift and tracer pulse simultaneously to detect a boundary-law choice driven by one shift or source pattern. A changed winner or a collapsed error margin would warrant revisiting the endpoint stencil; otherwise retain the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6de2ec6d00fb5a5b53b6ad24b7f63779b68befac4ac691b26e7403a040a82d36",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26850.03,
+      "usage_known": true,
+      "prompt_tokens": 25559,
+      "cached_tokens": 9344,
+      "completion_tokens": 927
+    }
+  ]
+}

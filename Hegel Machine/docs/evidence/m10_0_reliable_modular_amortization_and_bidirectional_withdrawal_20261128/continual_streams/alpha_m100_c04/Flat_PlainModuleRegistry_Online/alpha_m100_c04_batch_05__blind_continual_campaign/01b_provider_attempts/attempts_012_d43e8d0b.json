@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d43e8d0bfe574b8681f1cd7f49a29398",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:00.566415+00:00",
+  "ended_at_utc": "2026-11-28T03:55:39.230605+00:00",
+  "request_sha256": "89c4ec1f4a9560bb6bab4e6b6eb2b8cd75d4964aeb1bb4bfe83c046eb46bd7e9",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 68994,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33324,
+    "cached_tokens": 9344,
+    "completion_tokens": 1540
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver\\nimport upstream_transducer as u\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']; s = c['single_channel_sweeps']\\nclean = np.max(abs(y), axis=1) < 5; axis = np.count_nonzero(x, axis=1) <= 1\\nrng = np.random.default_rng(131)\\ngroups = [np.array_split(rng.permutation(np.flatnonzero(clean & m)), 8) for m in (axis, ~axis)]\\nstress = np.unique(s['true_stress']); sweep_clean = abs(s['cmd_stress']) < 5\\nforward = np.zeros_like(y); inverse = np.zeros_like(x); sweep = []\\nfor j, parts in enumerate(zip(*groups)):\\n    idx = np.concatenate(parts)\\n    keep = ~np.isin(np.arange(len(x)), idx)\\n    keep_s = ~np.isin(s['true_stress'], stress[j::8])\\n    fit = u._fit({**c, 'true_channel_loads': x[keep], 'bridge_raw': y[keep], 'single_channel_sweeps': {k:v[keep_s] for k,v in s.items()}})\\n    forward[idx] = u._forward(x[idx], *fit) - y[idx]\\n    inverse[idx] = u._invert(y[idx], *fit) - x[idx]\\n    val = ~keep_s & sweep_clean; lab = s['lab_id'][val]\\n    loads = np.eye(4)[lab] * s['true_stress'][val, None]\\n    sweep.extend(abs(u._forward(loads, *fit)[np.arange(len(lab)), lab] - s['cmd_stress'][val]))\\nfor name, grp in [('axis', clean & axis), ('mixed', clean & ~axis), ('high-load mixed', clean & ~axis & (np.max(abs(x), axis=1) > 1.15))]:\\n    fmax = np.max(abs(forward[grp])); imax = np.max(abs(inverse[grp])); print(name, 'jointly held-out forward/inverse max:', fmax, imax)\\n    assert fmax < 0.001 and imax < 0.00166404\\nprint('clean held-out sweep max:', max(sweep)); assert max(sweep) < 0.001\\nfit = u._fit(c); b, p = fit\\nmargin = np.min(b[:,1] - abs(b[:,3]*p[0]) - abs(b[:,2]) - abs(b[:,4]*p[1])); print('minimum Jacobian dominance:', margin); assert margin > 0\\nv = np.linspace(-3, 3, 91); g,h = np.meshgrid(v,v); grid = np.c_[g.ravel(),h.ravel(),h.ravel(),g.ravel()]\\nraw = u._forward(grid,*fit); roundtrip = np.max(abs(u._invert(raw,*fit)-grid)); print('grid inverse round-trip max:', roundtrip); assert roundtrip < 1e-9\\ncorrupt = y.copy(); idx = np.flatnonzero(clean)[::13]\\ncorrupt[idx] += np.random.default_rng(19).choice([-1.,1.], (len(idx),4))*np.array([7.,11.,17.,23.])\\nfor name, altered, limit in [('injected bridge spikes', {**c,'bridge_raw':corrupt}, 0.005), ('removed sweep spikes', {**c,'single_channel_sweeps':{k:v[sweep_clean] for k,v in s.items()}}, 0.001)]:\\n    shift = np.max(abs(u._invert(raw,*u._fit(altered))-grid)); print(name, 'max inverse shift:', shift); assert shift < limit\\ntrial = {k:d['test'][k][:2].copy() for k in ('past_channel_raw','hold_channel_raw')}; trial['marker'] = 'preserved'\\nextended = {**d, 'chamber_verification_trials':trial}; before = pickle.dumps(extended); out = u.calibrate_upstream(extended); assert pickle.dumps(extended)==before\\nnormalized = out['calibration_load_cells']; assert np.array_equal(normalized['bridge_raw'],x) and not np.shares_memory(normalized['bridge_raw'],x)\\ncmd = normalized['single_channel_sweeps']['cmd_stress']; assert np.array_equal(cmd,s['true_stress']) and not np.shares_memory(cmd,s['true_stress'])\\nassert out['chamber_verification_trials']['marker']=='preserved'\\nfor split in ('train','test','chamber_verification_trials'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        actual = out[split][key]; original = extended[split][key]; assert actual.shape==original.shape and np.max(abs(u._forward(actual,*fit)-original))<1e-10\\nresult = batch_solver.solve_batch(d)\\nassert set(result)=={'estimated_taus','hereditary_weights','initial_rate_pred','predicted_strain'} and all(np.isfinite(v).all() for v in result.values())\\nprint('Isolated composed pipeline and optional-trial conversion passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent channel amplitudes → shared gain-normalized sine/cosine response; the matched-fold prototype reduced worst mixed-load inverse error from 0.001664 to 0.001594 load units, pending exact-artifact verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit based on the prototype and public schema pass\",\n      \"rejected_reason\": \"The schema pass does not show whether the exact implementation preserves the measured inverse improvement or spike robustness.\"\n    }\n  ],\n  \"rationale\": \"Reproduce the matched held-out slices on the saved candidate and check that pooling did not weaken inversion, spike rejection, or optional-trial conversion. If the candidate loses its measured advantage or violates a contract check, diagnose the failure before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "bc36b6b9e799f7ef67d143793ea0a52088dd0898440b9196b82cb63b98c7cd52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40781.41,
+      "usage_known": true,
+      "prompt_tokens": 33324,
+      "cached_tokens": 9344,
+      "completion_tokens": 1540
+    }
+  ]
+}

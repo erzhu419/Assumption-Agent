@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb8bc0d839294f7c9754c93e3c55f5dd",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:41.616720+00:00",
+  "ended_at_utc": "2026-11-28T03:34:09.928569+00:00",
+  "request_sha256": "6ed92823749b7ab6bfca1c9ddc1a05e8f63f83556a1ab021ba1068bdb0357cb3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64589,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34344,
+    "cached_tokens": 9344,
+    "completion_tokens": 1108
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/for name,xx/,$d' /tmp/chamber_structure.py > /tmp/chamber_law.py\\ncat >> /tmp/chamber_law.py <<'PY'\\nM=np.isfinite(p['coupon_features_raw']).all(1); xx=s._features(p,p)[:len(h)]; u=theta[2]+xx@theta[3:]; X=np.c_[np.ones(len(h)),u]; labs=p['lab_id']; O=np.outer(h,D[:,:2]@theta[:2]);\\ndef run(label, y, f, mask=M):\\n  co=np.linalg.lstsq(f[mask].reshape(-1,f.shape[-1]),y[mask].ravel(),rcond=None)[0]; err=f@co-y; scores=[]\\n  for l in np.unique(labs):\\n    m=mask&(labs!=l); v=labs==l; c=np.linalg.lstsq(f[m].reshape(-1,f.shape[-1]),y[m].ravel(),rcond=None)[0]; e=f[v]@c-y[v]; complete=mask[v]; scores.append([np.sqrt(np.mean(e[complete,:-1]**2)),np.sqrt(np.mean(e[complete,-1]**2)),np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]);\\n  print(label,'co',co,'worst',np.max(scores,axis=0),'fit',np.sqrt(np.mean(err[M]**2)),'missing',err[~M][:,[-2,-1]])\\nfor variant in ('u only','u with intercept','u with past','separate feature weights'):\\n  Z={'u only':u[:,None],'u with intercept':X,'u with past':np.c_[X,past],'separate feature weights':np.c_[np.ones(len(h)),xx]}[variant]\\n  F=np.einsum('ij,kl->ikjl',Z,D).reshape(len(h),len(D),-1); run(variant,Y-O,F)\\nfor scheme in ('global','lab','cell','balanced'):\\n  x=xx.copy(); missing=~np.isfinite(p['coupon_features_raw']); raw=np.where(missing,np.nan,x); strata=p['stratum'];\\n  for j,k in zip(*np.where(missing)):\\n    selector={'global':np.ones(len(x),bool),'lab':labs==labs[j],'cell':(labs==labs[j])&(strata==strata[j]),'balanced':np.ones(len(x),bool)}[scheme];\\n    if scheme!='balanced' and np.any(np.isfinite(raw[selector,k])): x[j,k]=np.nanmean(raw[selector,k]);\\n  z=theta[2]+x@theta[3:]; yh=O+np.outer(z,D@np.array([.4,1.6,.06])); e=yh-Y; print('fixed law',scheme,np.sqrt(np.mean(e[M]**2)),np.sqrt(np.mean(e[~M]**2)),np.round(e[~M][:,[-2,-1]],4));\\nprint('raw telemetry means and scales',[(np.mean(q['aux_chamber_telemetry'],axis=0),np.std(q['aux_chamber_telemetry'],axis=0)) for q in (tr,te)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_law.py | tail -45\\nsed -n '56,130p' /tmp/hegel_continual_archive/alpha_m100_c04_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 arbitrary history and covariate corrections → H2 hold stress plus a shared material-drift input; diagnostic-native complete-coupon worst held-out-lab curve and rate RMSE are 0.00308 and 0.00375.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Carry free pulse terms into deployment\",\"rejected_reason\":\"The complete-coupon fit is already near the temporal reconstruction error; pulse terms should be retained only if they improve held-out labs.\"}],\"rationale\":\"Compare the rounded three-gain law with intercept, pulse, and feature expansions on held-out labs. Isolate missing-feature errors so they do not induce extra chamber terms or override the specified deployment imputation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5709480de4f288eb7d9f8ca88b4d15f831170be573a5ed3cf9c00fc10974fc7d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30395.38,
+      "usage_known": true,
+      "prompt_tokens": 34344,
+      "cached_tokens": 9344,
+      "completion_tokens": 1108
+    }
+  ]
+}

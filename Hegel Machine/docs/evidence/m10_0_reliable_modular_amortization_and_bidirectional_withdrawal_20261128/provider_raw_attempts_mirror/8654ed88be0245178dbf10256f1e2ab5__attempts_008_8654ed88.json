@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8654ed88be0245178dbf10256f1e2ab5",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:52.253048+00:00",
+  "ended_at_utc": "2026-11-28T03:44:31.573498+00:00",
+  "request_sha256": "9794a96d26ba5323448c0ffb906691fbfc869882f29dff60b436af38f133bbb8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50301,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28606,
+    "cached_tokens": 9344,
+    "completion_tokens": 1638
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/calibration_margin_audit.py <<'PY'\\nimport itertools\\nimport pickle\\nimport runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nsw = s['sensor_calibration_sweeps']\\nx, y = sw['ref_rosette'], sw['raw_rosette']\\nsingle = sw['single_bank_sweeps']\\nleft, right = np.roll(x,1,axis=1), np.roll(x,-1,axis=1)\\nf = np.stack((np.ones_like(x), x,x**3,left,right,x*right),axis=-1)\\nf1 = []\\ny1 = []\\nfor i in range(4):\\n    j = single['bank_id']==i\\n    t = single['ref_signal'][j]\\n    z = np.zeros_like(t)\\n    f1.append(np.column_stack((1+z,t,t**3,z,z,z)))\\n    y1.append(single['raw_readout'][j])\\n\\ndef design(base, extra):\\n    _, a, a3, b, c, ac = base.T\\n    if extra == 'pairwise':\\n        return np.column_stack((base, a*b, b*c, (a-c)**3-a3+c**3))\\n    if extra == 'rational':\\n        q = (a-c)**2\\n        return np.column_stack((base, a*q/(1+q), ac*q/(1+q)))\\n    return base\\n\\ndef fits(fs, ys, extra):\\n    d = [design(a,extra) for a in fs]\\n    co = np.array([m['_fit_sweep'](a,b) for a,b in zip(d,ys)])\\n    if extra != 'shared':\\n        return co\\n    keep = [abs(a@c-b)<1e-4 for a,c,b in zip(d,co,ys)]\\n    d = [a[k] for a,k in zip(d,keep)]\\n    ys = [b[k] for b,k in zip(ys,keep)]\\n    ratios = (co[:,2:]/co[:,1,None]).mean(0)\\n    for _ in range(12):\\n        og = np.array([np.linalg.lstsq(np.column_stack((a[:,0],a[:,1]+a[:,2:]@ratios)),b,rcond=None)[0] for a,b in zip(d,ys)])\\n        ratios = np.linalg.lstsq(np.vstack([p[1]*a[:,2:] for p,a in zip(og,d)]),np.concatenate([b-a[:,:2]@p for a,b,p in zip(d,ys,og)]),rcond=None)[0]\\n    return np.column_stack((og,og[:,1,None]*ratios))\\n\\nfolds = np.array_split(np.random.default_rng(820).permutation(len(x)), 5)\\nfor extra in ('cyclic','pairwise','rational','shared'):\\n    errors = []\\n    for test in folds:\\n        train = np.setdiff1d(np.arange(len(x)),test)\\n        augx = [np.vstack((f[train,i],f1[i])) for i in range(4)]\\n        augy = [np.r_[y[train,i],y1[i]] for i in range(4)]\\n        co = fits(augx,augy,extra)\\n        errors.append(abs(np.column_stack([design(f[test,i],extra)@co[i] for i in range(4)])-y[test]))\\n    pooled = np.vstack(errors)\\n    print(extra,'median/q95/worst clean',np.quantile(pooled[pooled<1],[.5,.95,1]),'worst clean per bank',[max(a[a<1]) for a in pooled.T],'spikes',sum((pooled>=1).ravel()))\\n\\ncal = m['calibrate'](s)\\nz = s['Z_nuisance']; ns = len(s['sensor_ij'])\\nroi = np.arange(len(cal)) % ns // 4\\nshift = np.arange(len(cal)) // ns\\nbase = np.repeat([s['robin_x'],s['robin_y']],2)\\nfor pattern in [(0,0,0,0),(1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1),(1,1,1,1)]:\\n    S,_ = m['chamber_response'](s,base*np.array(pattern))\\n    for use_z in ([True,False] if not any(pattern) else [True]):\\n        report = []\\n        for groups in (shift,roi):\\n            errors = []\\n            for k in np.unique(groups):\\n                j = groups!=k\\n                zz = z if use_z else z[:,:0]\\n                w,_ = m['_inverse']({**s,'Z_nuisance':zz[j]},S[j],cal[j])\\n                Z = zz[j]\\n                gam = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@(cal[j]-S[j]@w))\\n                errors.append(np.sqrt(np.mean((cal[~j]-S[~j]@w-zz[~j]@gam)**2)))\\n            report.append((max(errors),np.mean(errors)))\\n        print('walls',pattern,'nuisance',use_z,'worst/mean by shift and sensor group',report)\\nPY\\npython3 -I /tmp/calibration_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open or asymmetric Robin losses → H2 sealed walls with sweep-fitted cyclic calibration; current worst held-out RMSE is 0.0104.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Use held-out sweeps to test whether pairwise or rational terms fix a calibration error and whether shared bank ratios improve precision. Use held-out shifts and sensor groups to test single-wall losses and nuisance omission. The study has no classification cohorts or relay states; nuisance projection is the relevant confounding check.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "28ed053903bc46ef04ee61b7188d8b6fc014d3248a0f3661f4dd6965d7b15b79",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41378.68,
+      "usage_known": true,
+      "prompt_tokens": 28606,
+      "cached_tokens": 9344,
+      "completion_tokens": 1638
+    }
+  ]
+}

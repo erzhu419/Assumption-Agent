@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d8346f40fdb74f60aaa8dae32c222ab9",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:45.622093+00:00",
+  "ended_at_utc": "2026-11-28T03:47:12.743285+00:00",
+  "request_sha256": "1a9cc06b1499b7ed914be04d512fdaffe7d5852085a4b1f5b52c0d54f0646ebc",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 26567,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19619,
+    "cached_tokens": 9344,
+    "completion_tokens": 1061
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations\\nfrom scipy.linalg import lstsq\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']\\ndef design(X,kind):\\n a=[np.ones(len(X)),*X.T]\\n if kind in ('diag2','full2','diag3','full3','sin','tanh','rational','sin2'): a.extend((X**2).T)\\n if kind in ('full2','full3','sin','tanh','rational','sin2'): a.extend(X[:,i]*X[:,j] for i,j in combinations(range(4),2))\\n if kind in ('diag3','full3'): a.extend((X**3).T)\\n if kind=='full3': a.extend(X[:,i]**2*X[:,j] for i in range(4) for j in range(4) if i!=j); a.extend(X[:,i]*X[:,j]*X[:,k] for i,j,k in combinations(range(4),3))\\n if kind=='sin': a.extend(np.sin(X).T)\\n if kind=='sin2': a.extend(np.sin(2*X).T)\\n if kind=='tanh': a.extend(np.tanh(X).T)\\n if kind=='rational': a.extend((X/(1+X*X)).T)\\n return np.column_stack(a)\\ndef fit(A,Y):\\n w=np.ones(len(Y)); b=lstsq(A,Y)[0]\\n for _ in range(35):\\n  e=np.linalg.norm(A@b-Y,axis=1); s=max(np.median(e),1e-6); w=1/np.sqrt(1+(e/(2*s))**2); b=lstsq(A*w[:,None],Y*w[:,None])[0]\\n return b\\nif __name__=='__main__':\\n print('rows',np.column_stack([X,Y])[::3].round(4)); S=C['single_channel_sweeps']; print('sweep',np.column_stack(list(S.values())).round(4)); print('coverage', np.min(X,axis=0),np.max(X,axis=0))\\n A=design(X,'full2'); b=fit(A,Y); out=np.linalg.norm(A@b-Y,axis=1)>0.6; print('spikes',np.flatnonzero(out), 'coeffs full2',b.round(4))\\n rng=np.random.default_rng(19); folds=[*np.array_split(rng.permutation(len(X)),5),np.argsort(np.linalg.norm(X,axis=1))[-16:],np.where(np.count_nonzero(X,axis=1)<=1)[0]]\\n for k in ['linear','diag2','full2','diag3','full3','sin','tanh','rational','sin2']:\\n  A=design(X,k); print(k,'rank',np.linalg.matrix_rank(A),'by fold med / p90: ',end='')\\n  for te in folds:\\n   tr=np.setdiff1d(np.arange(len(X)),te); e=np.linalg.norm(A[te]@fit(A[tr],Y[tr])-Y[te],axis=1)[~out[te]]; print(np.percentile(e,[50,90]).round(5),end=' ')\\n  print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing -> H2 structured nonlinear forward calibration; worst-slice measurement pending on randomized, high-load, and axial holdouts.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Regress true load directly on raw readings\",\n      \"rejected_reason\": \"Gross spikes in the predictors can have high leverage; the forward fit puts spikes in the residual where they can be downweighted.\"\n    }\n  ],\n  \"rationale\": \"Compare low-order interactions and smooth bridge terms on held-out calibration rows. The high-load and axial holdouts can expose extrapolation failures that would change the model choice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "09a27243eb8aee2f86f4576f08b3f31871ae3cf8effb3205f171c06cfa2de376",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29141.43,
+      "usage_known": true,
+      "prompt_tokens": 19619,
+      "cached_tokens": 9344,
+      "completion_tokens": 1061
+    }
+  ]
+}

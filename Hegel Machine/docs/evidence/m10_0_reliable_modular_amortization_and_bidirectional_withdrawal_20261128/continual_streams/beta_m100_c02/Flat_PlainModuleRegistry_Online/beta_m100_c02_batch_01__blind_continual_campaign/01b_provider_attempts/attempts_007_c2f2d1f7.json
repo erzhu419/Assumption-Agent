@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2f2d1f76180443a95ce75bd8be0e075",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:57.856197+00:00",
+  "ended_at_utc": "2026-11-28T03:33:27.371605+00:00",
+  "request_sha256": "acf5f8424f8b32c22f8fa2b4fbac17ff88ae6d772d937f546ba6e9fcf7f9a668",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41675,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24980,
+    "cached_tokens": 9344,
+    "completion_tokens": 1280
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, y = (np.asarray(c[k]) for k in ('ref_rosette', 'raw_rosette'))\\n    full = np.column_stack((np.ones(len(x)), x))\\n    pairs = [x[:, j]*x[:, k] for j in range(4) for k in range(j+1, 4)]\\n    triples = [x[:, j]*x[:, k]*x[:, l] for j in range(4) for k in range(j+1, 4) for l in range(k+1, 4)]\\n    grammars = {'diagonal': [full[:, [0, j+1]] for j in range(4)], 'affine': [full]*4, 'quadratic': [np.column_stack([full, x*x] + pairs)]*4, 'mixed_cubic': [np.column_stack([full, x*x, x**3] + pairs + triples)]*4}\\n    S, _ = m.chamber_response(s)\\n    pulses = item.get('campaign_diagnostics') or []\\n    refs = [(S @ p['w_pulse']).reshape(-1, 4) for p in pulses]\\n    for name, designs in grammars.items():\\n        loo = []\\n        coefs = []\\n        for j, a in enumerate(designs):\\n            beta = np.linalg.lstsq(a, y[:, j], rcond=None)[0]\\n            q, _ = np.linalg.qr(a, mode='reduced')\\n            loo.append((y[:, j]-a@beta)/(1-np.sum(q*q, axis=1)))\\n            coefs.append(beta)\\n        print(name, 'sweep worst-channel LOOCV RMS', np.sqrt(np.mean(np.array(loo)**2, axis=1)).max())\\n        if name in ('diagonal', 'affine'):\\n            beta = np.array(coefs).T\\n            mixing = np.diag(beta[1]) if name == 'diagonal' else beta[1:]\\n            errors = [np.linalg.solve(mixing.T, (np.asarray(p['y_pulse_raw']).reshape(-1,4)-beta[0]).T).T-r for p,r in zip(pulses,refs)]\\n            if errors:\\n                err = np.array(errors).reshape(len(errors), len(s['mu_shifts']), -1, 4)\\n                print(name, 'worst pulse/shift/channel RMS', np.sqrt(np.mean(err**2,axis=2)).max(), 'pooled RMS', np.sqrt(np.mean(err**2)))\\n    for name in ('x', 'y'):\\n        k = s['kappa_'+name]\\n        op = m.axis_operator(k, s['vel_'+name], s['L'+name]/(len(k)-1))\\n        print(name, 'constant-field transport max', np.max(np.abs(op @ np.ones(len(k)))))\\n    z = s['Z_nuisance']\\n    profile = np.linalg.solve(z.T @ z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T @ S)\\n    profiled = S-z@profile\\n    q = np.linalg.qr(np.column_stack((np.ones(S.shape[1]), np.eye(S.shape[1])[:,1:])), mode='complete')[0][:,1:]\\n    print('fixed-budget source contrast rank', np.linalg.matrix_rank(profiled@q), '/', q.shape[1], 'min singular before/after profiling', np.linalg.svd(S@q,compute_uv=False)[-1], np.linalg.svd(profiled@q,compute_uv=False)[-1])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open Robin walls → zero wall leakage with affine sensor calibration; worst public pulse-by-shift RMS is 1.345e-6 and the independent host field relative L2 error is 1.52e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, classification, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The task has no relay state, class labels, or stochastic drift operator. The applicable confounding check is whether nuisance projection erases fixed-budget source contrasts.\"\n    }\n  ],\n  \"rationale\": \"Use held-out sweep rows to detect missing sensor interactions and known-source tracer slices to test whether diagonal calibration improves the worst channel. Check exact constant-field transport and whether nuisance projection removes identifiable source contrasts. Revisit the solver only if these checks expose a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "30b0319fb29eaddaf55dd2fa053ac23276a5075208ba73bfc16754b9cdb4c000",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33737.95,
+      "usage_known": true,
+      "prompt_tokens": 24980,
+      "cached_tokens": 9344,
+      "completion_tokens": 1280
+    }
+  ]
+}

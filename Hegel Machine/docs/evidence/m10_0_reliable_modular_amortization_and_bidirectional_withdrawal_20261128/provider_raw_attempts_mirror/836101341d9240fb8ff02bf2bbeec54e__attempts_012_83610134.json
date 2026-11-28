@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "836101341d9240fb8ff02bf2bbeec54e",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:58.287953+00:00",
+  "ended_at_utc": "2026-11-28T03:58:27.619225+00:00",
+  "request_sha256": "503359a2520849a986ee5f96e4788eb3e2468cd8da3a01a99a8ec67ec8e31bf7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37165,
+    "cached_tokens": 9344,
+    "completion_tokens": 1143
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; set -e; export OPENBLAS_NUM_THREADS=1; python3 -I validate_public_schema.py; python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\no = m.solve_batch(d)\\ntau = o['estimated_taus']; w = o['hereditary_weights']\\nassert all(np.isfinite(v).all() for v in o.values())\\nassert .05 < tau[0] < tau[1] < 25\\ncoef = m._fit_bridge(*m._bridge_samples(d['calibration_load_cells']))\\nfor split in ('train', 'test'):\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        raw = d[split][field]; loads = m._invert_bridge(raw, coef)\\n        err = np.max(np.abs(m._forward_bridge(loads, np.roll(loads, 2, axis=-1), coef) - raw))\\n        print(split, field, 'max bridge round-trip', err)\\n        assert err < 1e-8\\npast, hold = m._loads(coef, d['test'])\\nx = m._features(d['train'], d['test'])[-len(hold):]\\ncurve, rate, _, _ = m._design(np.log(tau), past, hold, x, d['past_dt'], np.array([0., 1e-6]))\\nslope = ((curve[:, 1] - curve[:, 0]) @ w) / 1e-6\\nassert np.allclose(curve[:, 0] @ w, 0)\\nassert np.allclose(rate @ w, o['initial_rate_pred'])\\nerr = np.max(np.abs(slope - o['initial_rate_pred']))\\nprint('maximum initial derivative discrepancy', err)\\nassert err < 1e-5\\narchive = Path('/tmp/hegel_continual_archive')\\nlog = json.loads((archive / 'archive_apparatus_log.json').read_text())\\nmanifest = json.loads((archive / 'archive_manifest.json').read_text())\\nfor row, prior in zip(log, manifest):\\n    mu = np.mean(row['facility_telemetry_trace'], axis=0)\\n    source = Path(prior['solver_path']).read_text().split('def solve_batch', 1)[1]\\n    evidence = [line.strip() for line in source.splitlines() if 'curve, rate' in line or 'curve_test' in line or '_deployment(' in line or '_CHAMBER' in line or 'gap_test' in line]\\n    print(row['completed_campaign_short_name'], '->', prior['episode_short_name'], mu[[0, 4]].round(3), evidence)\\nprint('current prefix apparatus channels 0 and 4', np.mean(log[-1]['facility_telemetry_trace'], axis=0)[[0,4]].round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cyclic bridge → H2 paired nonlinear bridge with baseline chamber memory; worst-fold total-load RMSE is 0.000672, and worst held-out-lab P90 errors are 0.0241 for strain and 0.0137 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Associate each telemetry record with the campaign it names\",\n      \"rejected_reason\": \"The records name completed campaigns; compare their offsets with the following solvers to test whether the trace instead describes the apparatus state for the next campaign.\"\n    }\n  ],\n  \"rationale\": \"The revised bridge removes the calibration failure and yields stable relaxation estimates across held-out labs. Verify the exact artifact in isolation, check inversion on actual hold as well as past readings, and confirm that the rate output is the initial derivative. A mismatch in archive timing would change the deployment law; no deployment labels are available to settle that directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "3b90cb0d30984a2b43e9596303ab7a21fd6a80ba0f15a38d7a6dfe2886dd35c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31423.57,
+      "usage_known": true,
+      "prompt_tokens": 37165,
+      "cached_tokens": 9344,
+      "completion_tokens": 1143
+    }
+  ]
+}

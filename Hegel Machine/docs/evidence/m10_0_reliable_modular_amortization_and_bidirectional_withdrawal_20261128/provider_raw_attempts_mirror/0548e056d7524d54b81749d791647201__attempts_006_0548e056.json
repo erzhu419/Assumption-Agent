@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0548e056d7524d54b81749d791647201",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:05.070140+00:00",
+  "ended_at_utc": "2026-11-28T03:54:37.294135+00:00",
+  "request_sha256": "41aa484e931dffe6fb93a30efac72a51686421bdef1f6384711df5775efd9c62",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 34030,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23110,
+    "cached_tokens": 9344,
+    "completion_tokens": 1272
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe_profiles.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; clean=np.max(abs(y),axis=1)<4; x,y=x[clean],y[clean]\\nix,jx=np.array(list(combinations_with_replacement(range(4),2))).T\\nfunc={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'rat':lambda z:z/(1+z*z),'root':lambda z:z/np.sqrt(1+z*z),'erf':__import__('scipy').special.erf,'asinh':np.arcsinh}\\ndef basis(x,s,f,degree,linear=True):\\n blocks=[np.ones((len(x),1)),func[f](x*s)]\\n if linear: blocks.append(x)\\n if degree>=2: blocks.append(x[:,ix]*x[:,jx])\\n if degree>=3: blocks.append(np.array([x[:,i]*x[:,j]*x[:,k] for i,j,k in combinations_with_replacement(range(4),3)]).T)\\n return np.column_stack(blocks)\\ndef fit(x,y,f,deg,lin=True):\\n def prof(s,ret=False):\\n  a=basis(x,s,f,deg,lin); b=np.linalg.lstsq(a,y,rcond=None)[0]; return b if ret else (a@b-y).ravel()\\n o=least_squares(prof,[1.]*4,bounds=(.15,4.),max_nfev=60); return o.x,prof(o.x,True)\\nfor deg in (1,2,3):\\n for lin in (False,True):\\n  for f in func:\\n   s,b=fit(x,y,f,deg,lin); r=basis(x,s,f,deg,lin)@b-y\\n   if np.sqrt(np.mean(r*r))>.025: continue\\n   errs=[]\\n   for ii in np.array_split(np.random.default_rng(23).permutation(len(x)),8):\\n    m=np.ones(len(x),bool);m[ii]=0;ss,bb=fit(x[m],y[m],f,deg,lin); errs.extend(zip(ii,basis(x[ii],ss,f,deg,lin)@bb-y[ii]))\\n   errs=np.array([e for _,e in sorted(errs,key=lambda a:a[0])]); print(f,deg,lin,'scales',np.round(s,4),'fit',round(np.sqrt(np.mean(r*r)),7),'oof RMSE',np.round(np.sqrt(np.mean(errs*errs,0)),6),'max',round(np.max(abs(errs)),6))\\n   if np.sqrt(np.mean(r*r))<.006:\\n    print(np.round(b,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_profiles.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust affine mixing → H2 saturating channel response with pairwise interactions; held-out worst-channel RMSE fell from 0.2495 to 0.0263, with axis error still reaching 0.1542.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A robust affine bridge captures the clean calibration response.\",\"empirical_witness\":\"Adding smooth and pairwise terms reduced worst-channel leave-one-out RMSE from 0.2495 to 0.0263; single-axis sweeps also show declining gain at high absolute loads.\",\"causal_blanket_diagnosis\":\"Gross spikes corrupt some rows, but rejecting spikes alone does not explain the repeatable clean-axis curvature.\",\"sublated_pivot\":\"Keep forward regression and rowwise spike handling; identify the saturating response and the smallest interaction basis that validates on held-out loads.\",\"risk_kind\":\"off-support inversion\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a general cubic bridge\",\"rejected_reason\":\"Its worst mixed-row error was 0.696, and unconstrained cubic terms can introduce spurious inverse branches.\"}],\"rationale\":\"Compare rational and saturating profiles with scales re-estimated inside each fold. If a compact profile reaches the calibration noise floor, use it for inversion; otherwise inspect structured residuals before adding terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7f02c01a1fe67f312c33c7e7c1ee78dc5a7587674ab95f69907d3eca7548e36b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34308.62,
+      "usage_known": true,
+      "prompt_tokens": 23110,
+      "cached_tokens": 9344,
+      "completion_tokens": 1272
+    }
+  ]
+}

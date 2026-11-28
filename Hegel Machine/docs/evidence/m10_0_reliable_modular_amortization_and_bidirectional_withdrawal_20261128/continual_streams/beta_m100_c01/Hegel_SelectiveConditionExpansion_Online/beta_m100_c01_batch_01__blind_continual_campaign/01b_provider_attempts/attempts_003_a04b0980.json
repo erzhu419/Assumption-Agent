@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a04b09806c45489eab20ac5bedb909cc",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:48.773200+00:00",
+  "ended_at_utc": "2026-11-28T03:31:06.737683+00:00",
+  "request_sha256": "1c54a509a63fc1f75ac01d08c5b47c0cfd77560841f3f6732e39eee008722234",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19419,
+    "cached_tokens": 9344,
+    "completion_tokens": 642
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport json,pickle,numpy as np,importlib.util\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive'); a=json.load(open(p/'archive_apparatus_log.json')); print('log summaries:');\\nfor e in a:\\n for k,v in e.items(): print(k,repr(v) if len(repr(v))<900 else (np.shape(v),repr(v)[:130]))\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; spec=importlib.util.spec_from_file_location('old',next(p.glob('*solver.py'))); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m); S,_=m._transport(s); ref=s['sensor_calibration_sweeps']['ref_rosette']; raw=s['sensor_calibration_sweeps']['raw_rosette']; b=np.linalg.lstsq(np.c_[np.ones(len(ref)),ref],raw,rcond=None)[0]; Z=s['Z_nuisance'];\\nfor d in i['campaign_diagnostics']:\\n y=np.linalg.solve(b[1:].T,(d['y_pulse_raw'].reshape(-1,4)-b[0]).T).T.ravel(); err=y-S@d['w_pulse']; print('pulse open max/rms, projected rms',max(abs(err)),np.sqrt(np.mean(err**2)),np.std(err-Z@np.linalg.lstsq(Z,err,rcond=None)[0]),'first 8',err[:8]);\\nprint('axes',[(k,s[k]) for k in ('kappa_x','kappa_y','vel_x','vel_y','mu_shifts')]); print('single sweep keys',s['sensor_calibration_sweeps']['single_bank_sweeps'].keys())\\nPY\\nsed -n '38,160p' /tmp/hegel_continual_archive/beta_m100_c01_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open Robin) -> H2 (boundary law inferred from tracer pulses); affine sweep RMS is at most 1.05e-5 across channels, and pulse residuals have not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear rosette before testing the wall\",\"rejected_reason\":\"The affine fit is already at the calibration noise scale.\"}],\"rationale\":\"Measure the open-wall pulse error with and without nuisance projection. If it exceeds calibration noise after projection, fit boundary terms rather than changing the sensor model or the archived QP.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3972403d778ae5c794d4eb0db668de393d08d8ae3a1508b5cc2190b4fed94f42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20073.24,
+      "usage_known": true,
+      "prompt_tokens": 19419,
+      "cached_tokens": 9344,
+      "completion_tokens": 642
+    }
+  ]
+}

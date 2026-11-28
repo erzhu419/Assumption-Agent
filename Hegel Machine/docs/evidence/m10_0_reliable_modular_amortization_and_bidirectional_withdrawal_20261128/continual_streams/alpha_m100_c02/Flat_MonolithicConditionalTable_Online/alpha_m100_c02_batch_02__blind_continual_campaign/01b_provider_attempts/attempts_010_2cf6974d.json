@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2cf6974da09048d5909c6b77b2a10f6f",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:19.277217+00:00",
+  "ended_at_utc": "2026-11-28T03:39:48.535948+00:00",
+  "request_sha256": "60ac56f7b91d1005bcc39d08a835d579bda8f81fd1b05c67a407d1063425bad1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63298,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34393,
+    "cached_tokens": 9344,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    d = item['dataset']; tr = d['train']; te = d['test']; c = d['calibration_load_cells']\\n    out = m['solve_batch'](d)\\n    tau = out['estimated_taus']; w = out['hereditary_weights']\\n    assert 0.05 < tau[0] < tau[1] < 25\\n    assert all(np.isfinite(v).all() for v in out.values())\\n    b = m['_fit_bridge'](c); raw = c['bridge_raw']; true = c['true_channel_loads']\\n    full_err = np.linalg.norm(np.sum(m['_bridge_basis'](true) * b, axis=-1) - raw, axis=-1)\\n    for label, rows in [('isolated', np.count_nonzero(true, axis=1) == 1), ('mixed', np.count_nonzero(true, axis=1) > 1)]:\\n        errs = []\\n        for i in np.flatnonzero(rows & (full_err < .005)):\\n            k = np.arange(len(raw)) != i\\n            q = m['_fit_bridge'](dict(bridge_raw=raw[k], true_channel_loads=true[k]))\\n            errs.append(np.linalg.norm(np.sum(m['_bridge_basis'](true[i])*q, axis=-1) - raw[i]))\\n        print(label, 'clean bridge LOO max', max(errs)); assert max(errs) < .005\\n    x = m['_features'](tr, te); p, h = m['_loads'](b,tr); dt = d['past_dt']; t = d['eval_times']\\n    y = tr['strain_curves_obs'] - tr['strain_0'][:,None]; r = tr['instant_rate_obs']\\n    for lab in np.unique(tr['lab_id']):\\n        k = tr['lab_id'] != lab; v = ~k\\n        q, a = m['_fit'](p[k], h[k], x[:len(h)][k], dt, t, y[k], r[k])\\n        A, R, *_ = m['_design'](np.log(q), p[v], h[v], x[:len(h)][v], dt, t)\\n        err = abs(A@a-y[v]); er = abs(R@a-r[v]); rel = np.max(abs(q/tau-1))\\n        print('held-out lab',lab,'curve median / early median / late median', np.median(err), np.median(err[:,:3]), np.median(err[:,-3:]),'rate median',np.median(er),'max tau shift',rel)\\n        assert np.median(err) < .05 and np.median(er) < .05 and rel < .1\\n    p2, h2 = m['_loads'](b,te)\\n    A0, R0, *_ = m['_design'](np.log(tau), p2, h2, x[len(h):], dt, np.array([0.,1e-6]))\\n    np.testing.assert_allclose(A0[:,0]@w, 0., atol=1e-12)\\n    np.testing.assert_allclose(((A0[:,1]-A0[:,0])@w)/1e-6, out['initial_rate_pred'], rtol=2e-6, atol=1e-8)\\n    print('clean-process deployment rate and zero-time anchor verified for',len(h2),'coupons')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic nonlinear bridge → shared material spectrum with baseline chamber response; the host probe reports strain MAE 0.000983, rate MAE 0.001417, and relative spectrum error 0.001482.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check that the compact bridge holds for both isolated and mixed loads, and that no lab drives the spectrum fit or hides rate error. A failed slice would localize the needed repair; otherwise, the schema and zero-time derivative checks close the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e3d33c1d56bc94735f081100bb002593ba665c1a48b536d34160f1aadeb92525",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31373.16,
+      "usage_known": true,
+      "prompt_tokens": 34393,
+      "cached_tokens": 9344,
+      "completion_tokens": 1144
+    }
+  ]
+}

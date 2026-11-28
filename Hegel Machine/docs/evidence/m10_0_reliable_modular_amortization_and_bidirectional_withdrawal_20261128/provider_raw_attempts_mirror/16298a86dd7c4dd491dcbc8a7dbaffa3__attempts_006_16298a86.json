@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "16298a86dd7c4dd491dcbc8a7dbaffa3",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:35.238654+00:00",
+  "ended_at_utc": "2026-11-28T03:33:02.578475+00:00",
+  "request_sha256": "b706e5b7631912ef74c7b5fe50da0c5e8052b6c1418d1bcafcf62475989c6594",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45557,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26962,
+    "cached_tokens": 9344,
+    "completion_tokens": 1075
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=d['study']; c=s['sensor_calibration_sweeps']; a=c['single_bank_sweeps']; print('bank sweep fields',[(k,np.shape(v)) for k,v in a.items()]); x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); print('reference range',x.min(0),x.max(0)); print('sweep sample count',len(x))\\nS,U=m._forward(s); rng=np.random.default_rng(61); n=s['source_modes'].shape[0]; cap=s['u_box']; gaps=[]; errors=[]; active=[0,0];\\nfor budget in (0.,cap/10,cap,3*cap,s['total_budget'],(n-.1)*cap,n*cap):\\n for j in range(20):\\n  H=S.T@S+s['source_ridge']*np.eye(n); f=rng.normal(size=n)*(.1 if j%2 else 1.)\\n  w,nu=m._box_simplex(H,f,cap,budget); g=H@w+f; delta=g-nu\\n  gaps.append(float(np.maximum(0,delta)@w+np.maximum(0,-delta)@(cap-w))); errors.append(abs(w.sum()-budget)); assert w.min()>=0 and w.max()<=cap\\n  if 0<budget<n*cap: active[0]+=int(np.any(w==0)); active[1]+=int(np.any(w==cap))\\nassert max(gaps)<1e-11 and max(errors)<1e-12 and min(active)>0\\nprint('QP stress cases',len(gaps),'worst gap',max(gaps),'worst budget error',max(errors),'active lower/upper cases',active)\\nfor i,pulse in enumerate(d['campaign_diagnostics']):\\n r=(S@pulse['w_pulse']-m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))).reshape(len(s['mu_shifts']),-1)\\n print('pulse',i,'worst wall and interior RMSE by shift',*[max(np.sqrt(np.mean(r[:,idx]**2,axis=1))) for idx in ((s['sensor_ij'][:,0]==0)|(s['sensor_ij'][:,0]==s['nx']-1)|(s['sensor_ij'][:,1]==0)|(s['sensor_ij'][:,1]==s['ny']-1), (s['sensor_ij'][:,0]>0)&(s['sensor_ij'][:,0]<s['nx']-1)&(s['sensor_ij'][:,1]>0)&(s['sensor_ij'][:,1]<s['ny']-1))])\\n assert np.max(np.sqrt(np.mean(r*r,axis=1)))<2e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open Robin walls → closed walls with dynamic affine calibration; worst public pulse-by-shift RMSE is 7.87e-7, and independent relative errors are 2.15e-6 for the terminal field and 9.89e-6 for the weights.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Force diagonal calibration\",\n      \"rejected_reason\": \"The sweep improvement is small and the full affine fit already matches the independent field and weight targets. Keep cross-channel terms unless the bank sweeps establish a better calibration rule.\"\n    }\n  ],\n  \"rationale\": \"The public solution is interior, so stress active bounds and endpoint budgets before submission. Check wall and interior sensors separately so pooled pulse agreement cannot conceal a boundary error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ffb237d661d6f9bfdc0ff1e62c64bf287dc2cad6218d239c5edf36b3e7e15525",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29460.5,
+      "usage_known": true,
+      "prompt_tokens": 26962,
+      "cached_tokens": 9344,
+      "completion_tokens": 1075
+    }
+  ]
+}

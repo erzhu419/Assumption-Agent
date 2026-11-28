@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ad26d2fc6fd4d51ac2e48b1050ba112",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:48.840790+00:00",
+  "ended_at_utc": "2026-11-28T03:52:28.875561+00:00",
+  "request_sha256": "03f0ef23c9c5ee9cf74999e6ef4819812d3f3e379d0285dc907ca0ae703a80c7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63394,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31496,
+    "cached_tokens": 9344,
+    "completion_tokens": 1616
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\na=s.index('    # Find the intact single-axis')\\nz=s.index('    for j in range(4):\\\\n        cols',a)\\ns=s[:a]+'''    # Screen isolated sweeps using their independently measured diagonal.\\n    # Mixed sweeps then constrain off-diagonal gains even if the last clean\\n    # isolated reading for an axis is held out.\\n    isolated = np.count_nonzero(y, axis=1) == 1\\n    axis = np.argmax(np.abs(y), axis=1)\\n    row = np.arange(len(y))\\n    clean = ~isolated | (np.abs((raw - a @ b)[row, axis]) < .01)\\n'''+s[z:]\\narchive=Path('/tmp/hegel_continual_archive/alpha_m100_c03_batch_01_solver.py').read_text()\\na=archive.index('def _chamber(')\\nz=archive.index('def solve_batch(',a)\\nch=archive[a:z].replace('# Affine chamber transfer identified on the independent verification panel.','# Transfer for the memory-active chamber mode, identified in batch 01.\\\\n# The preceding apparatus trace indicates its reactivation in batch 04.')\\na=s.index('def solve_batch(')\\ns=s[:a]+ch+s[a:]\\na=s.index('    # The blind batch')\\ns=s[:a]+'''    test_hold = _decode(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    curve, rate = _chamber(taus, theta, x[n:], test_hold, times, _CHAMBER_LAW)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom pathlib import Path\\np=Path('/holdout_task');m=runpy.run_path(str(p/'batch_solver.py'));d=pickle.load(open(p/'public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw,y=c['bridge_raw'],c['true_channel_loads']; axis=np.count_nonzero(y,axis=1)==1; clean_rows=[]; decoded=[]; forward=[]\\nfor j in range(len(y)):\\n mask=np.arange(len(y))!=j\\n b=m['_bridge']({**c,'bridge_raw':raw[mask],'true_channel_loads':y[mask]})\\n e=m['_bridge_terms'](y[j:j+1])[0]@b-raw[j]; forward.append(e.sum()); clean_rows.append(max(abs(e))<.01); decoded.append(m['_decode'](raw[j:j+1],b).sum()-y[j].sum())\\nf,cok,err=map(np.asarray,(forward,clean_rows,decoded)); print('held-out differential rows:',np.flatnonzero(~cok).tolist());print('LOO raw-sum RMSE (axis/mixed):',*[np.sqrt(np.mean(f[s]**2)) for s in (axis,~axis)]);print('clean LOO decoded stress max error (axis/mixed):',*[max(abs(err[s&cok])) for s in (axis,~axis)]); assert max(abs(f))<.001 and max(abs(err[cok]))<.001 and (~cok).sum()==3\\nout=m['solve_batch'](d);b=m['_bridge'](c);tr,te=d['train'],d['test'];x=m['_features'](tr,te)[len(tr['lab_id']):];h=m['_decode'](te['hold_channel_raw'],b).sum(-1);tau,w=out['estimated_taus'],out['hereditary_weights'];v,r=m['_chamber'](tau,w,x,h,np.array([0.,1e-6]),m['_CHAMBER_LAW']);print('taus',tau,'weights',w,'initial derivative max discrepancy',max(abs(v[:,1]/1e-6-r)));assert max(abs(v[:,1]/1e-6-r))<1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 baseline deployment and axis-dependent calibration → H2 telemetry-selected memory transfer and joint sparse calibration; before repair, worst held-out raw-sum RMSE was 0.561 on isolated sweeps, with benchtop leave-one-lab-out p90 errors of 0.0221 for strain and 0.0157 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep baseline benchtop deployment\",\n      \"rejected_reason\": \"The preceding trace restores the same column-6 activation that preceded the batch-01 memory law, while the column-3 drift activation remains absent.\"\n    }\n  ],\n  \"rationale\": \"Remove the calibration dependency on a single intact isolated reading by letting mixed sweeps constrain cross-channel gains. Recheck the isolated failure slice and decoded stress, and verify the archived chamber law uses the current calibrated hold load and has a consistent initial derivative. The blind chamber transfer itself has no current labeled verification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a83aa660e13f9230d676f735e24e875946f5b8abe7b2343b28acb60523e59875",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42101.82,
+      "usage_known": true,
+      "prompt_tokens": 31496,
+      "cached_tokens": 9344,
+      "completion_tokens": 1616
+    }
+  ]
+}

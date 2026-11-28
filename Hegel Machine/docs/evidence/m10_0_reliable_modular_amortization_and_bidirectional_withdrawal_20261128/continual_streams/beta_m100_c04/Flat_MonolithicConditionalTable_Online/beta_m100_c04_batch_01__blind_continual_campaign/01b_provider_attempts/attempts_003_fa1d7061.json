@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa1d7061a93d48aa964165876621d35c",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:49.897421+00:00",
+  "ended_at_utc": "2026-11-28T03:31:11.672840+00:00",
+  "request_sha256": "57ea6d78b3b9fc2905edfbfe983097f089070de0d03cb89dee1486e368fb33e5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19724,
+    "cached_tokens": 9344,
+    "completion_tokens": 827
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '29,210p' /tmp/hegel_continual_archive/beta_m100_c04_s00_solver.py; python3 - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/'\\nspec=importlib.util.spec_from_file_location('prior',p+'beta_m100_c04_s00_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nitems=pickle.load(open('public_batch.pkl','rb')); print('items:',len(items))\\nfor i,d in enumerate(items):\\n s=d['study']; print(i,[(k,getattr(v,'shape',v if np.isscalar(v) else list(v) if isinstance(v,dict) else type(v).__name__)) for k,v in s.items()]); print('pulse count',len(d.get('campaign_diagnostics') or []))\\n c=s['sensor_calibration_sweeps']; b=np.linalg.lstsq(np.c_[np.ones(len(c['ref_rosette'])),c['ref_rosette']],c['raw_rosette'],rcond=None)[0]; print('cal rmse',np.sqrt(np.mean((np.c_[np.ones(len(c['ref_rosette'])),c['ref_rosette']]@b-c['raw_rosette'])**2)))\\n S,*_=m._forward(s)\\n for pulse in d.get('campaign_diagnostics') or []:\\n  y=np.linalg.solve(b[1:].T,(pulse['y_pulse_raw'].reshape(-1,4)-b[0]).T).T.ravel(); r=S@pulse['w_pulse']-y; print('archive pulse RMSE',np.sqrt(np.mean(r*r)),'by shift',np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\na=json.load(open(p+'archive_apparatus_log.json')); print('log meta:', {k:v for k,v in a.items() if len(str(v))<800} if isinstance(a,dict) else type(a));\\nfor x in (a if isinstance(a,list) else next((v for v in a.values() if isinstance(v,list) and v and isinstance(v[0],dict)),[])):\\n t=np.array(x['facility_telemetry_trace']); print({k:v for k,v in x.items() if k!='facility_telemetry_trace'},'trace means',np.round(t.mean(0),4),'std',np.round(t.std(0),4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived open-wall operator → pulse-tested wall model; worst reported affine calibration channel RMSE is 1.02e-5, with wall error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the sparse ridge certification primitive\",\n      \"rejected_reason\": \"Its cardinality penalty is unrelated to the required equality-constrained box quadratic.\"\n    }\n  ],\n  \"rationale\": \"Measure the archived model's error on each calibrated pulse and shift. If it exceeds the calibration noise, fit competing wall operators and test them on held-out pulses; otherwise retain the baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c5d942713e024c85d9a3b6b20cc87d3fdcbbbc9f6cd0cc3f049c590682ab579c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23881.14,
+      "usage_known": true,
+      "prompt_tokens": 19724,
+      "cached_tokens": 9344,
+      "completion_tokens": 827
+    }
+  ]
+}

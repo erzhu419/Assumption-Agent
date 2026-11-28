@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d74951bf37664a4591fa6cb78bafe357",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:04.955639+00:00",
+  "ended_at_utc": "2026-11-28T04:02:36.824267+00:00",
+  "request_sha256": "13c41db9c984ef90ebac5884326f27ab48badfca4abded0ca896bf99137d5402",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27381,
+    "cached_tokens": 9344,
+    "completion_tokens": 1187
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nraw, true = c['bridge_raw'], c['true_channel_loads']\\nclean = np.max(np.abs(raw), axis=1) < 8\\nids = np.flatnonzero(clean)\\nfolds = np.array_split(np.random.default_rng(36).permutation(ids), 5)\\npairs = [(i, j) for i in range(4) for j in range(i+1,4)]\\ndef basis(x, kind):\\n    s = np.column_stack([x[:, i] + x[:, j] for i, j in pairs])\\n    q = np.column_stack([x[:, i] - x[:, j] for i, j in pairs])\\n    if kind == 'pairwise':\\n        return np.c_[np.ones(len(x)), x, s*s, q*q, s**3, q**3]\\n    return np.c_[np.ones(len(x)), x, s/(1+q*q), q/(1+s*s)]\\nerrors = {name: np.full(len(raw), np.nan) for name in ('harmonic', 'pairwise', 'rational')}\\nfor val in folds:\\n    tr = np.setdiff1d(ids, val)\\n    p = m._calibrate({'bridge_raw': raw[tr], 'true_channel_loads': true[tr]})\\n    xtr, xv = m._bridge_load(raw[tr], p), m._bridge_load(raw[val], p)\\n    target = (true[tr]-xtr).sum(axis=1)\\n    e = (xv-true[val]).sum(axis=1)\\n    errors['harmonic'][val] = e\\n    for name in ('pairwise','rational'):\\n        design = basis(xtr, name)\\n        coef = np.linalg.lstsq(design, target, rcond=1e-9)[0]\\n        errors[name][val] = e + basis(xv, name) @ coef\\nspread = np.ptp(true[ids], axis=1)\\nextreme = ids[spread >= np.quantile(spread, .75)]\\nrmse = lambda a: np.mean(a*a)**.5\\nfor name, e in errors.items():\\n    print(name, 'OOF RMSE', rmse(e[ids]), 'worst fold RMSE', max(rmse(e[v]) for v in folds), 'high-imbalance RMSE', rmse(e[extreme]))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 missing pairwise or rational bridge terms -> H2 the fitted harmonic bridge is sufficient; its existing worst held-out stress RMSE is 0.000344, with a high-imbalance comparison pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, PDE, or within-batch classification checks\",\n      \"rejected_reason\": \"This task has no relay states, PDE drift operator, or classification labels. The prior leave-one-lab-out regression already tested transfer across the observed lab groups.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted pairwise or rational terms materially reduce held-out summed-load error, especially when channel loads are imbalanced. Fit each correction only on the training rows of its fold. Reopen calibration only if a challenger improves the relevant error margins; verify the saved artifact in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6e3590488ac85667e86520cd0a394c1d25930be682557bc9dc94d64fc668992f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31831.3,
+      "usage_known": true,
+      "prompt_tokens": 27381,
+      "cached_tokens": 9344,
+      "completion_tokens": 1187
+    }
+  ]
+}

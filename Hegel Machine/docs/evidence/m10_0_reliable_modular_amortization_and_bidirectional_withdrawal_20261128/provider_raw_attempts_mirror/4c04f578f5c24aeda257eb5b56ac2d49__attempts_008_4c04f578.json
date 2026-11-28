@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c04f578f5c24aeda257eb5b56ac2d49",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:52:15.655378+00:00",
+  "ended_at_utc": "2026-11-28T03:52:46.631748+00:00",
+  "request_sha256": "1603c2b997814ec3d964c38afcdcdf6723ca1421a677c062db5f152fa979dffb",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 53586,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32429,
+    "cached_tokens": 9344,
+    "completion_tokens": 1212
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/shared.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom numpy.polynomial.chebyshev import chebvander\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];c=s['sensor_calibration_sweeps'];d=c['single_bank_sweeps'];t=d['ref_signal'];r=d['raw_readout'];k=d['bank_id'];m=abs(r)<6;x=c['ref_rosette'];y=c['raw_rosette'];g=np.max(abs(y),1)<6\\n# Anchor gain and offset using one bank, then pool all points on the same amplitude grid.\\nT=np.unique(t); arr=np.array([r[(t==v)] for v in T]); arr[abs(arr)>6]=np.nan\\nfor j in range(4):\\n z=np.isfinite(arr[:,2]+arr[:,j]); b=np.linalg.lstsq(np.c_[np.ones(z.sum()),arr[z,2]],arr[z,j],rcond=None)[0];print('gain,shift',j,b);arr[:,j]=(arr[:,j]-b[0])/b[1]\\nprint('shared curve',np.c_[T,np.nanmean(arr,1)].round(8));\\n# Compact odd rational shape: fit a numerator and denominator with variable projection, including bank offsets/gains.\\nfor p,q in [(0,1),(1,1),(1,2),(2,2),(2,3),(3,3),(0,3),(1,3),(2,4)]:\\n def f(t,a):\\n  return (t+sum(a[i]*t**(2*i+3) for i in range(p)))/(1+sum(a[p+i]*t**(2*i+2) for i in range(q)))\\n def fit(a):\\n  h=np.c_[np.ones(len(t)),f(t,a)];B=np.array([np.linalg.lstsq(h[m&(k==j)],r[m&(k==j)],rcond=None)[0] for j in range(4)]);return (np.sum(h*B[k],1)-r)[m],B\\n opt=least_squares(lambda a:fit(a)[0],np.r_[np.full(p,.02),.6,np.full(q-1,.02)],bounds=(np.r_[np.full(p,-1.),np.zeros(q)],np.full(p+q,20.)),max_nfev=180,gtol=1e-12);e,B=fit(opt.x);v=f(x,opt.x);print('law',p,q,opt.x.round(6),'rms',np.mean(e**2)**.5,'diag/offset',B.round(6).tolist())\\n for label,w in [('v+x2',np.c_[v,x*x]),('v+v2',np.c_[v,v*v]),('v+x2+v2',np.c_[v,x*x,v*v]),('v+x+x2',np.c_[v,x,x*x]),('v+x+x2+v2',np.c_[v,x,x*x,v*v])]:\\n  H=np.c_[np.ones(len(x)),w]; bb=np.linalg.lstsq(H[g],y[g],rcond=None)[0];E=(H@bb-y)[g];print(label,np.sqrt(np.mean(E*E,0)).round(6),round(np.max(abs(E)),6));\\n  if p==2 and q==3 and label=='v+x+x2+v2':print(bb.round(6).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared.py\\npython3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; d=json.load(open(p));print(str(d)[-1700:])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic composite saturation -> H2 shared odd rational saturation with distinct cross-channel terms; the best bank fit RMSE is 8.03e-5, while the best rosette leave-one-out worst-channel RMSE is 0.018224.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the best tanh–square-root bank fit directly\",\"rejected_reason\":\"Its large cancelling coefficients may extrapolate poorly, and a bank-only fit does not resolve the rosette coupling.\"}],\"rationale\":\"Compare compact shared saturation laws and separate odd and even coupling coordinates. This will show whether remaining rosette error comes from the bank curve or from a different cross-channel response.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3a2e9d55d37c8416e7af4c9c9bbe721e8cf26ade42a2b3220dc941d4e3685690",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33061.94,
+      "usage_known": true,
+      "prompt_tokens": 32429,
+      "cached_tokens": 9344,
+      "completion_tokens": 1212
+    }
+  ]
+}

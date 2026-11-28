@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "038ec0ac0e7349ff86a577b60ac6bc31",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:04.554984+00:00",
+  "ended_at_utc": "2026-11-28T03:46:34.943652+00:00",
+  "request_sha256": "257b9ebb611705b64b98ff7da037147a398433285002043cf03581712c57729a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25419,
+    "cached_tokens": 9344,
+    "completion_tokens": 1259
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import _design, _fit, calibrate_upstream\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\na = calibrate_upstream(s)\\nnp.testing.assert_array_equal(a['sensor_calibration_sweeps']['raw_rosette'], c['ref_rosette'])\\nnp.testing.assert_array_equal(a['sensor_calibration_sweeps']['single_bank_sweeps']['raw_readout'], c['single_bank_sweeps']['ref_signal'])\\nassert not np.shares_memory(a['sensor_calibration_sweeps']['raw_rosette'], c['ref_rosette'])\\nassert not np.shares_memory(a['sensor_calibration_sweeps']['single_bank_sweeps']['raw_readout'], c['single_bank_sweeps']['ref_signal'])\\nfor item in (s, a):\\n    o = solve_batch(item)\\n    k, w = o['kkt_certificate'], o['weights']\\n    assert np.isfinite(o['terminal_field']).all()\\n    assert abs(w.sum() - s['total_budget']) < 1e-10\\n    assert w.min() >= -1e-10 and w.max() <= s['u_box'] + 1e-10\\n    assert abs(k['primal_objective'] - k['dual_lower_bound']) < 1e-9\\nx = c['ref_rosette']\\ncoef = _fit(x, c['raw_rosette'])\\nrng = np.random.default_rng(539)\\n# Include mixed-sign corners and stronger pulses than the public observations.\\npulse_x = np.vstack((np.array(list(__import__('itertools').product([-1.35, 1.65], repeat=4))), rng.uniform(-1.35, 1.65, (48, 4)))).reshape(8, 8, 4)\\nobs_x = a['y_obs_raw'].reshape(-1, 4)\\npeak = np.zeros(2)\\nfor _ in range(40):\\n    t = copy.deepcopy(s)\\n    sw = t['sensor_calibration_sweeps']\\n    sw['raw_rosette'] = _design(x) @ coef + rng.normal(0, 1e-5, x.shape)\\n    rows = rng.choice(len(x), 5, replace=False)\\n    sw['raw_rosette'][rows] += rng.choice([-1, 1], (5, 4)) * rng.uniform(7, 15, (5, 4))\\n    t['y_obs_raw'] = (_design(obs_x) @ coef).ravel()\\n    pulse_raw = (_design(pulse_x.reshape(-1,4)) @ coef).reshape(pulse_x.shape)\\n    t['reference_tracer_pulses'] = [{'y_pulse_raw': pulse_raw, 'marker': 3}, {'y_pulse_raw': None}, None]\\n    b = calibrate_upstream(t)\\n    p = b['reference_tracer_pulses']\\n    assert b['y_obs_raw'].shape == t['y_obs_raw'].shape and p[0]['y_pulse_raw'].shape == pulse_x.shape\\n    assert p[0]['marker'] == 3 and p[1] == {'y_pulse_raw': None} and p[2] is None\\n    assert t['reference_tracer_pulses'][0]['y_pulse_raw'] is pulse_raw\\n    peak = np.maximum(peak, [np.max(abs(b['y_obs_raw'] - obs_x.ravel())), np.max(abs(p[0]['y_pulse_raw'] - pulse_x))])\\nprint('40 shifted-EMI trials, worst inverse abs errors [observation, pulse]:', peak)\\nassert np.all(peak < 1e-4)\\nprint('Isolated composition, KKT gap, identity sweeps, and pulse schema passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled affine response -> ring-coupled quadratic and diagonal cubic response; worst held-out inverse error is 3.18e-5 on axis sweeps and 3.02e-5 on mixed sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The real held-out sweeps verify the response model, but the public study has no tracer pulses. Test pulse shape and inversion at mixed-sign corners, move the EMI spikes to check that rejection does not depend on their public locations, and verify the unchanged downstream composition in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c6b6a8491233540ffa66f3b8ca70e76190e45ea93e13640b34867e75e395ba4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33433.59,
+      "usage_known": true,
+      "prompt_tokens": 25419,
+      "cached_tokens": 9344,
+      "completion_tokens": 1259
+    }
+  ]
+}

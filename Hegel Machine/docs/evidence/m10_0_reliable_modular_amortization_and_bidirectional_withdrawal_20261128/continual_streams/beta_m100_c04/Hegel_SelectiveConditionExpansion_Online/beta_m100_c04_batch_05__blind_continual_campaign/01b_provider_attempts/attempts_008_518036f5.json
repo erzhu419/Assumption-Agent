@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "518036f54ca64632be3f33339d81058b",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:58.717446+00:00",
+  "ended_at_utc": "2026-11-28T03:54:30.388301+00:00",
+  "request_sha256": "bacfb1b9d13e8af63f3a83f5f830cc0d51bbf86ce0a3f93fbf10b46cb44b4b91",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 57912,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33264,
+    "cached_tokens": 9344,
+    "completion_tokens": 1246
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nitems = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nfor item in items:\\n    s = item['study']; c = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']; u, v, ids = (b[k] for k in ('ref_signal', 'raw_readout', 'bank_id'))\\n    clean = m._clean(y); bank_clean = np.zeros(len(v), bool)\\n    for j in range(4):\\n        bank_clean[ids == j] = m._clean(v[ids == j, None])\\n    forward = np.zeros(len(x)); inverse = np.zeros(len(x)); bank = np.zeros(len(v))\\n    for fold in range(6):\\n        tr = np.arange(len(x)) % 6 != fold; bt = np.arange(len(v)) % 6 != fold\\n        sh, cf = m._fit(dict(ref_rosette=x[tr], raw_rosette=y[tr], single_bank_sweeps={k: a[bt] for k, a in b.items()}))\\n        test = ~tr & clean; bank_test = ~bt & bank_clean\\n        forward[test] = np.linalg.norm(m._forward(x[test], sh, cf) - y[test], axis=1)\\n        rec = m._inverse(y[test], sh, cf)\\n        inverse[test] = np.max(abs(rec - x[test]), axis=1)\\n        xv = np.zeros((sum(bank_test), 4)); idx = np.arange(len(xv)); jv = ids[bank_test]; xv[idx, jv] = u[bank_test]\\n        bank[bank_test] = abs(m._forward(xv, sh, cf)[idx, jv] - v[bank_test])\\n    amp = np.max(abs(x), axis=1)\\n    for label, sl in [('central', amp <= .75), ('mid', (amp > .75) & (amp <= 1.4)), ('edge', amp > 1.4)]:\\n        sl &= clean\\n        if sl.any():\\n            print(label, 'n', sl.sum(), 'forward row p95/max', np.quantile(forward[sl], [.95, 1]), 'inverse max-channel p95/max', np.quantile(inverse[sl], [.95, 1]))\\n    print('bank forward max by channel', [float(bank[bank_clean & (ids == j)].max()) for j in range(4)])\\n    assert forward[clean].max() < .02 and inverse[clean].max() < .04 and bank[bank_clean].max() < .008\\n    sh, cf = m._fit(c)\\n    for z in (x[clean][:8].reshape(2, 4, 4), x[clean][-8:].reshape(32)):\\n        raw = m._forward(z.reshape(-1, 4), sh, cf).reshape(z.shape)\\n        pulses = [{'y_pulse_raw': raw}, {'y_pulse_raw': None}]\\n        st = dict(s, reference_tracer_pulses=pulses)\\n        out = m.calibrate_upstream(st)\\n        np.testing.assert_allclose(out['reference_tracer_pulses'][0]['y_pulse_raw'], z, atol=1e-8, rtol=0)\\n        assert out['reference_tracer_pulses'][1]['y_pulse_raw'] is None and pulses[0]['y_pulse_raw'] is raw\\n        normalized = out['sensor_calibration_sweeps']\\n        np.testing.assert_array_equal(normalized['raw_rosette'], x)\\n        np.testing.assert_array_equal(normalized['single_bank_sweeps']['raw_readout'], u)\\n        assert not np.shares_memory(normalized['raw_rosette'], x)\\n        assert not np.shares_memory(normalized['single_bank_sweeps']['raw_readout'], u)\\nprint('Isolated validation passed: held-out inverse, pulse layouts, and identity sweeps.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 paired nonlinear calibration; the public schema passes and observation closure is 3.15e-12, while held-out inverse error for the packaged model is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema pass and observation closure\",\n      \"rejected_reason\": \"Closure cannot detect a biased inverse, and the public study contains no tracer pulses.\"\n    }\n  ],\n  \"rationale\": \"Measure reference-space error on held-out real sweep rows. If it grows at the edge, revisit the inverse conditioning or response basis; use synthetic pulses only to check shape preservation and the null-pulse branch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3a56289232e8987219dabf64b8ef6106e4968553e433f536dda1cb2196a838ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33740.25,
+      "usage_known": true,
+      "prompt_tokens": 33264,
+      "cached_tokens": 9344,
+      "completion_tokens": 1246
+    }
+  ]
+}

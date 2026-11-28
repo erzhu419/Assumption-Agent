@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bef402120287467fa51497c99f0b72c4",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:49.764588+00:00",
+  "ended_at_utc": "2026-11-28T03:31:13.859410+00:00",
+  "request_sha256": "1775c58c35c7adcce55f5df47c1679236e8aaf09b984612ca0f1c7f7346145f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19731,
+    "cached_tokens": 9344,
+    "completion_tokens": 888
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport json,pickle,numpy as np,importlib.util\\nnp.set_printoptions(precision=5,suppress=True,linewidth=115)\\nspec=importlib.util.spec_from_file_location('a','/tmp/hegel_continual_archive/beta_m100_c02_s00_solver.py');a=importlib.util.module_from_spec(spec);spec.loader.exec_module(a)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];s=i['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print('archive');\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print({k:v if not isinstance(v,list) else (np.shape(v),v[:2]) for k,v in r.items()})\\nprint('bank', {k:(np.shape(v),np.asarray(v).ravel()[:20]) for k,v in c['single_bank_sweeps'].items()}); print('bank IDs',s['row_bank_id'][:24]); print('cal first',np.c_[x[:18],y[:18]])\\nfrom itertools import combinations_with_replacement\\nA=[];B=a.chamber_response(s)[0]; print('baseline pulse signal ranges',[(np.min(B@p['w_pulse']),np.max(B@p['w_pulse'])) for p in i['campaign_diagnostics']]);\\nfor d in range(5):\\n A.extend([idx for idx in combinations_with_replacement(range(4),d)])\\n F=np.array([np.prod(x[:,idx],axis=1) for idx in A]).T; w=np.linalg.lstsq(F,y,rcond=None)[0]; resid=y-F@w; leverage=(F*np.linalg.pinv(F).T).sum(1); good=leverage<.99999; print('degree',d,'rank',np.linalg.matrix_rank(F),'max',np.max(abs(resid),axis=0),'loo mixed',np.sqrt(np.mean((resid[good]/(1-leverage[good,None]))**2,axis=0)) if good.any() else None)\\n if d in (1,2,3): print('coeff',[(idx,co.tolist()) for idx,co in zip(A,w) if np.max(abs(co))>.003]);\\n if d==1:\\n  for p in i['campaign_diagnostics']:\\n   pred=B@p['w_pulse']; err=a.calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))-pred; print('pulse affine', np.sqrt(np.mean(err.reshape(3,32)**2,axis=1)),err.reshape(3,32)[0], 'nuisance corr',np.linalg.norm(np.linalg.lstsq(s['Z_nuisance'],err,rcond=None)[0]))\\nPY\\nsed -n '51,150p' /tmp/hegel_continual_archive/beta_m100_c02_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived affine calibration and open-wall Robin) -> H2 (separate rosette nonlinearity from boundary changes); pulse and calibration errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a boundary operator to affine-calibrated pulses immediately\",\"rejected_reason\":\"An unmodeled sensor nonlinearity would contaminate the boundary fit.\"}],\"rationale\":\"Test polynomial interaction terms on the independent calibration data, then measure baseline pulse errors by shift to establish whether the remaining discrepancy needs a boundary correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1feddce7024b3b88658eb78984ae970fd7c8492b3d36162eb4c50c689ccd601c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26205.86,
+      "usage_known": true,
+      "prompt_tokens": 19731,
+      "cached_tokens": 9344,
+      "completion_tokens": 888
+    }
+  ]
+}

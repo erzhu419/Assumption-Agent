@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "125e397612904eb291618dccf61cddee",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:53.547866+00:00",
+  "ended_at_utc": "2026-11-28T03:41:29.966356+00:00",
+  "request_sha256": "661d976c7c1b0a1bd1d7034b2f97e2a34f6dab90c27d99ad985078d9943a3b4d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22225,
+    "cached_tokens": 9344,
+    "completion_tokens": 1564
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport pickle,json,numpy as np, pathlib\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; r=a['ref_rosette']; y=a['raw_rosette']; D=np.c_[np.ones(len(r)),r]; b=np.linalg.lstsq(D,y,rcond=None)[0]; print('affine coefficients', b.round(6)); e=y-D@b; print('affine RMSE/max',np.sqrt(np.mean(e**2,axis=0)),np.max(abs(e),axis=0)); z=a['single_bank_sweeps']; print('single type',type(z)); print(str(z)[:2300]); t=s['aux_manifold_telemetry']; print('aux range/mean',t.min(0),t.max(0),t.mean(0)); print('aux vs raw correlations',np.corrcoef(t.T,s['y_obs_raw'].reshape(-1,4).T)[:4,4:]);\\nfor x in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n t=np.asarray(x['facility_telemetry_trace']); print(x['completed_campaign_short_name'],'mean',t.mean(0).round(3),'min',t.min(0).round(2),'max',t.max(0).round(2))\\nfor f in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n print(f.name); print('\\\\n'.join(line for line in f.read_text().splitlines() if 'axes' in line or 'mode' in line or 'robin' in line or 'boundary' in line or 'telemetry' in line))\\nPY\\ncat > /tmp/compare_chamber.py <<'PY'\\nimport pickle,importlib.util,itertools,numpy as np\\nfrom scipy.sparse import diags\\np='/tmp/hegel_continual_archive/beta_m100_c03_batch_02_solver.py'; spec=importlib.util.spec_from_file_location('past',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=m._calibrate(s,s['y_obs_raw']); Z=s['Z_nuisance'];cap=s['u_box'];budget=s['total_budget'];nz=Z.shape[1]\\ndef axis(d,kind):\\n k=s['kappa_'+d];v=s['vel_'+d]; h=s['L'+d]/(len(k)-1); r=s['robin_'+d]; face=(k[:-1]+k[1:])/(2*h*h)\\n if kind=='periodic': return m._axis(k,v,h)\\n l=np.r_[-face[:-1]-np.maximum(v[1:-1],0)/h,-k[-1]/h**2]; u=np.r_[-k[0]/h**2,-face[1:]-np.maximum(-v[1:-1],0)/h]; b=np.r_[-u[0],-l[:-1]-u[1:],-l[-1]]\\n if isinstance(kind,(float,int)): b[[0,-1]]+=kind*r/h\\n if kind=='dirichlet': b[[0,-1]]=1;l[-1]=0;u[0]=0\\n if kind=='absorbing': b[[0,-1]]*=2\\n return diags((l,b,u),(-1,0,1),format='csc')\\ndef evaluate(S, idx, ridge, cap=cap):\\n zz=Z[idx]; a=np.c_[S[idx],y[idx]]; q=a-zz@np.linalg.solve(zz.T@zz+s['nuisance_ridge']*np.eye(nz),zz.T@a); X,b=q[:,:-1],q[:,-1]; w,_=m._box_qp(X.T@X+ridge*np.eye(X.shape[1]),-X.T@b,cap,budget); err=y-S@w; gamma=np.linalg.solve(zz.T@zz+s['nuisance_ridge']*np.eye(nz),zz.T@err[idx]); return err-Z@gamma,w\\nif __name__=='__main__':\\n kinds=[0,.25,.5,1,2,4,16,'periodic','absorbing']; n=len(y); i=np.arange(n); Ax={k:axis('x',k) for k in kinds}; Ay={k:axis('y',k) for k in kinds}\\n for ridge in [s['source_ridge'],1e-6]:\\n  results=[]\\n  for a,b in itertools.product(kinds,repeat=2):\\n   S,_=m._responses(s,(Ax[a],Ay[b])); e,w=evaluate(S,i,ridge); fs=[]\\n   for fold in range(6):\\n    test=(i//4)%6==fold; err,_=evaluate(S,~test,ridge); fs.append(np.sqrt(np.mean(err[test]**2)))\\n   results.append((float(np.mean(fs)),max(fs),float(np.sqrt(np.mean(e**2))),a,b,w.round(3)))\\n  print('ridge',ridge); print(*sorted(results,key=lambda x:x[0])[:14],sep='\\\\n'); print('core',*[r for r in results if r[3] in [0,1,'periodic'] and r[4] in [0,1,'periodic']],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 periodic closure transfers -> H2 a different axis closure or sensor calibration is needed; grouped held-out rosette error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer a wall setting from the largest telemetry channel alone\",\n      \"rejected_reason\": \"The trace does not label its channels with wall settings; compare wall operators against held-out rosettes after checking calibration.\"\n    }\n  ],\n  \"rationale\": \"Check whether affine calibration leaves structured error, then score discrete axis closures on held-out rosettes with weights and nuisance coefficients fitted only on training rows. Compare both prescribed and weak source ridge to see whether regularization changes the closure ranking.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "9e4fafea0b3119dd045ee29807183dde9ab3194693147a6947dc5a8263467116",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40722.52,
+      "usage_known": true,
+      "prompt_tokens": 22225,
+      "cached_tokens": 9344,
+      "completion_tokens": 1564
+    }
+  ]
+}

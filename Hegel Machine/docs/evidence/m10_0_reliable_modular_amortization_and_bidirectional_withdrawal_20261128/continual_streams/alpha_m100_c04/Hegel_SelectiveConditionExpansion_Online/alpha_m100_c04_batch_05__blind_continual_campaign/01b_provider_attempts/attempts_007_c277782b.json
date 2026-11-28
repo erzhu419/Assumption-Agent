@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c277782bed1f42159adc5dc3f799d028",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:24.298921+00:00",
+  "ended_at_utc": "2026-11-28T03:54:58.902121+00:00",
+  "request_sha256": "a40145ce94d207fc4e646776c498a51d69666fb16176823ed4ac4c5990d06f17",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 54734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30763,
+    "cached_tokens": 9344,
+    "completion_tokens": 1393
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _forward, _inverse\\nfrom batch_solver import solve_batch\\n\\nwith open('public_batch.pkl', 'rb') as stream:\\n    ds = pickle.load(stream)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = (cal[k] for k in ('true_channel_loads', 'bridge_raw'))\\nfreq, beta = _fit(cal)\\nclean = np.max(np.abs(y - _forward(x, freq, beta)), axis=1) < 0.01\\naxis = np.count_nonzero(x, axis=1) == 1\\nmixed = np.flatnonzero(~axis)\\nrng = np.random.default_rng(405)\\nfor name, held in [('all axis sweeps', np.flatnonzero(axis)), *((f'mixed fold {j}', idx) for j, idx in enumerate(np.array_split(rng.permutation(mixed), 5), 1))]:\\n    train = ~np.isin(np.arange(len(x)), held)\\n    v = held[clean[held]]\\n    f, b = _fit(dict(true_channel_loads=x[train], bridge_raw=y[train]))\\n    forward_error = np.max(np.abs(_forward(x[v], f, b) - y[v]))\\n    inverse_error = np.max(np.abs(_inverse(y[v], f, b) - x[v]))\\n    print(name, 'n', len(v), 'forward max', forward_error, 'load max', inverse_error)\\n    assert forward_error < 0.001 and inverse_error < 0.003\\n\\nspike = np.flatnonzero(~clean)\\nbad = y.copy()\\nbad[spike] += rng.choice([-100., 100.], size=(len(spike), 4))\\nf, b = _fit(dict(cal, bridge_raw=bad))\\nassert np.max(np.abs(_forward(x[clean], f, b) - _forward(x[clean], freq, beta))) < 1e-8\\nmargin = beta[:, 1] - freq[0]*np.abs(beta[:, 2]) - np.abs(beta[:, 3]) - freq[1]*np.abs(beta[:, 4])\\nassert np.min(margin) > 0\\nprint('minimum global diagonal dominance margin', np.min(margin))\\n\\n# Cover both coupled pairs at once, including the shallow slope on either side of pi/freq.\\nlow = np.pi / freq[0]\\ngrid = np.array([-low, -.65, 0., .35, .9, low-.02, low, low+.02, 1.35])\\nz = np.stack(np.meshgrid(grid, grid, grid, grid), axis=-1).reshape(-1, 4)\\nerror = np.max(np.abs(_inverse(_forward(z, freq, beta), freq, beta) - z))\\nprint('load recovery on', len(z), 'grid rows:', error)\\nassert error < 1e-9\\n\\nkeys = ('past_channel_raw', 'hold_channel_raw')\\ntrials = [{k: ds['test'][k][:3] for k in keys}]\\ninput_case = dict(ds, chamber_verification_trials=trials)\\nbefore = pickle.dumps(input_case)\\nout = calibrate_upstream(input_case)\\nassert before == pickle.dumps(input_case)\\nfor part in ('train', 'test', 'chamber_verification_trials'):\\n    for k in keys:\\n        src, got = (input_case[part], out[part]) if part != 'chamber_verification_trials' else (trials[0], out[part][0])\\n        assert got[k].shape == src[k].shape\\n        assert np.max(np.abs(_forward(got[k].reshape(-1, 4), freq, beta) - src[k].reshape(-1, 4))) < 1e-10\\noc = out['calibration_load_cells']\\nfor a, b in [(oc['bridge_raw'], cal['true_channel_loads']), (oc['single_channel_sweeps']['cmd_stress'], cal['single_channel_sweeps']['true_stress'])]:\\n    np.testing.assert_array_equal(a, b)\\n    assert not np.shares_memory(a, b)\\nassert calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nfor name, value in solve_batch(ds).items():\\n    assert np.all(np.isfinite(value)), name\\nprint('isolated-process composition and field-boundary checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Tied-gain harmonic response → robust independent-gain paired harmonics; public operating readings round-trip within 1.86e-12 bridge units, with a minimum global Jacobian dominance margin of 0.0277.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Round-trip residuals can hide load error near shallow slopes, so measure load recovery on held-out real rows and a grid around those slopes. If either fails, revisit the fit or inverse respectively. Also verify the optional trials and identity copies, which the public schema test does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d93a9044eb0334ae3883d8b4d8ef9da4ae13c027e542b7116a75090d48a9a38d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36693.42,
+      "usage_known": true,
+      "prompt_tokens": 30763,
+      "cached_tokens": 9344,
+      "completion_tokens": 1393
+    }
+  ]
+}

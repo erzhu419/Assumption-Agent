@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6d1e9eaa3244797b4ad3d79b1037c55",
+  "call_seq": 2,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:16.567798+00:00",
+  "ended_at_utc": "2026-11-28T03:39:35.850470+00:00",
+  "request_sha256": "996b053d21467466dc1f3271cb9017fa5e65a746d85f437e8266df85658dabfa",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15041,
+    "cached_tokens": 9344,
+    "completion_tokens": 691
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _verified_downstream.py && tail -60 validate_public_schema.py && cat /tmp/hegel_continual_archive/{archive_manifest,pre_llm_gate_diagnostic}.json && python3 - <<'PY'\\nimport pickle,numpy as np,json\\np=pickle.load(open('public_batch.pkl','rb')); d=p[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('dataset keys',list(d),'cal keys',list(c)); s=c['single_channel_sweeps']; print('sweep keys',[(k,np.shape(v)) for k,v in s.items()]); print('sweep command offset',np.max(abs(s['cmd_stress']-s['true_stress']))); print('calibration design',[(i,int(np.sum(np.count_nonzero(x,axis=1)==i))) for i in range(5)]); print('first 18 true rows',x[:18]); z=np.c_[np.ones(len(x)),x]; w=np.ones(len(x));\\nfor _ in range(12):\\n b=np.linalg.lstsq(z*w[:,None],y*w[:,None],rcond=None)[0]; e=np.linalg.norm(z@b-y,axis=1); w=1/np.sqrt(1+(e/max(np.median(e),1e-9))**2)\\nprint('robust affine coefficients',b); print('affine residual quantiles',np.quantile(e,[0,.25,.5,.75,.9,.95,1])); print('largest rows',[(int(i),round(e[i],5),x[i].tolist()) for i in np.argsort(e)[-12:]])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus top-level',list(a) if isinstance(a,dict) else len(a))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: robust affine coupling is the baseline for a nonlinear forward model; no held-out residual metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible inverse directly from the raw bridge readings.\",\n      \"rejected_reason\": \"Gross spikes would become high-leverage predictors; fitting in the forward direction keeps the known applied loads as predictors.\"\n    }\n  ],\n  \"rationale\": \"The first inspection showed raw calibration readings far outside the trial range. Measure robust affine residuals and inspect the load design to decide which nonlinear terms can be identified separately from spike rows. Read the downstream contract to verify which fields must be replaced and which must be preserved.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "21e08e3875e310327708d5669ff146e46fd7a04d2c1b8d15ddd37b0267784035",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21395.07,
+      "usage_known": true,
+      "prompt_tokens": 15041,
+      "cached_tokens": 9344,
+      "completion_tokens": 691
+    }
+  ]
+}

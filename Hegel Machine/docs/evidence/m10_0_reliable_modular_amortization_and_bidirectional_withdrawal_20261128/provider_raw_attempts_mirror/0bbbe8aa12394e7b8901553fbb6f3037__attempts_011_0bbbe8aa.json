@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bbbe8aa12394e7b8901553fbb6f3037",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:08.347763+00:00",
+  "ended_at_utc": "2026-11-28T04:03:38.589688+00:00",
+  "request_sha256": "f5e1b2cfcc8a602fd4a629f9542d5626fb6b018d125eee8e34ce1e0d7fccc023",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56067,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29026,
+    "cached_tokens": 9344,
+    "completion_tokens": 1209
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nimport numpy as np\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nimport wall_probe as p\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import chamber_response\\nfrom batch_solver import solve_batch\\nraw = p.item['study']\\ns = calibrate_upstream(raw)\\nS, _ = chamber_response(s)\\nY = np.column_stack([calibrate_upstream(dict(raw, y_obs_raw=d['y_pulse_raw']))['y_obs_raw'] for d in p.item['campaign_diagnostics']])\\nZ = s['Z_nuisance']\\nR = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nbanks = np.asarray(raw['row_bank_id']).ravel()\\nif len(banks) != len(Y):\\n    assert len(Y) % len(banks) == 0\\n    banks = np.tile(banks, len(Y) // len(banks))\\nshifts = np.repeat(np.arange(len(s['mu_shifts'])), len(s['sensor_ij']))\\nE = [S @ p.W - Y, p.predict(p.axis('x','WW'),p.axis('y','CC')) - Y, p.predict(p.axis('x','RR'),p.axis('y','RR')) - Y]\\nfor mode, errors in [('unprojected', E), ('ridge-profiled', [R @ e for e in E])]:\\n    rows = []\\n    for b in np.unique(banks):\\n        for k in np.unique(shifts):\\n            mask = (banks == b) & (shifts == k)\\n            if mask.any():\\n                rows.append(np.array([np.sqrt(np.mean(e[mask]**2, axis=0)) for e in errors]))\\n    rows = np.stack(rows)\\n    print(mode, 'bank-by-shift strata', len(rows), 'worst periodic pulse RMSE', rows[:,0,:].max(), 'minimum alternative-minus-periodic RMSE', (rows[:,1:,:]-rows[:,0:1,:]).min())\\n    assert rows[:,0,:].max() < 3e-6\\n    assert np.all(rows[:,0:1,:] < rows[:,1:,:])\\nfor i,j in [(0,1),(0,2),(1,2)]:\\n    contrast = E[0][:,i] - E[0][:,j]\\n    rms = np.sqrt(np.mean(contrast**2))\\n    print('measured pulse contrast', i, j, 'RMSE', rms)\\n    assert rms < 3e-6\\nout = solve_batch(raw)\\nw = out['weights']; c = out['kkt_certificate']; r = R @ (S @ w - s['y_obs_raw'])\\ng = (R @ S).T @ r + s['source_ridge'] * w\\nstationarity = np.max(np.abs(g - c['nu_sum'] - np.asarray(c['lam_lower']) + np.asarray(c['lam_upper'])))\\ngap = c['primal_objective'] - c['dual_lower_bound']\\nprint('clean-process budget error', abs(w.sum()-s['total_budget']), 'stationarity', stationarity, 'duality gap', gap)\\nassert max(abs(w.sum()-s['total_budget']), stationarity, abs(gap)) < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open or x-only periodic walls → H2 periodic walls on both axes with live calibration; worst held-out tracer RMSE is 7.42e-7, versus 2.94e-2 for x-only closure.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear response terms or a batch-centered classifier\",\n      \"rejected_reason\": \"This task is a steady linear transport inverse problem with one public study and continuous tracer measurements. Pulse contrasts test the linear response directly; there are no class labels, stochastic drift, or relay states.\"\n    }\n  ],\n  \"rationale\": \"Check whether pooled pulse error hides a failure in any sensor-bank and shift stratum, before and after nuisance projection. A ranking reversal would reopen boundary selection; a failed pulse contrast would reopen the linear response model. The isolated run also checks the shipped entry point’s stationarity and duality gap without editing either artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "674c814b5d1ede6ddebb9acaba26e3eeafecca24ee51419c244142d9129bcecc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32327.14,
+      "usage_known": true,
+      "prompt_tokens": 29026,
+      "cached_tokens": 9344,
+      "completion_tokens": 1209
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70e013fcff124abc9f48e3ad54dc23e7",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:59.411635+00:00",
+  "ended_at_utc": "2026-11-28T04:15:29.455119+00:00",
+  "request_sha256": "aea96ff26bbefc43b36f3e91344c5ad98fa5db958e5f7fd573563454932041f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68989,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36773,
+    "cached_tokens": 9344,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/coupled08.py <<'PY'\\nexec(open('/tmp/chamber08.py').read().split('ramps=')[0])\\nkeys=('lab_id','stratum','ref_coupons','coupon_features_raw')\\nFdiag=np.c_[np.ones(len(H)),_features({k:g[k][:0] for k in keys},g)[1]]\\nD=Fdiag@th[2:]\\ndef pred(u):\\n    ramp=2*t/(1+np.sqrt(1+t/u))\\n    return base+np.outer(D,np.r_[ramp,1.])\\nprev=runpy.run_path('/holdout_task/batch_solver.py')['_predict_chamber']\\nc0,r0=prev(tau,th,H,Fdiag,t); old=np.c_[c0,r0]\\ndef metrics(e):\\n    return np.round([np.median(abs(e[:,:-1])),np.median(abs(e[:,-1])),max(np.median(abs(e[labs==l,:-1])) for l in np.unique(labs)),max(np.median(abs(e[labs==l,-1])) for l in np.unique(labs)),max(np.median(abs(e[:,:-1]),axis=0))],6)\\nfor label,prediction in [('independent weights',old),('coupled unit kernel',pred(1.))]:\\n    print(label,metrics(prediction-Y),'signed time bias',np.median(prediction-Y,axis=0).round(5))\\ne=np.zeros_like(Y)\\nfor lab in np.unique(labs):\\n    s=labs==lab\\n    u=np.exp(least_squares(lambda v: ((pred(np.exp(v[0]))-Y)[~s]*W).ravel(),[0.],loss='soft_l1',f_scale=.012).x[0]); e[s]=(pred(u)-Y)[s]\\n    print('held-out lab',lab,'kernel time',round(u,6),'strain/rate',np.round([np.median(abs(e[s,:-1])),np.median(abs(e[s,-1]))],6))\\nprint('fitted coupled OOF',metrics(e)); m=np.isnan(g['coupon_features_raw']).any(axis=1)\\nfor label,s in [('missing',m),('complete',~m)]:\\n    print(label,s.sum(),np.round([np.median(abs(e[s,:-1])),np.median(abs(e[s,-1]))],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/coupled08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independently standardized verification coupons → H2 chamber reset with the intrinsic drift weights and a square-root kernel; leave-one-lab-out worst median strain/rate errors are 0.00605/0.00594.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The chamber needs its own coupon drift weights.\",\n    \"empirical_witness\": \"Standardizing the verification cohort on its own reference panel lowers worst-lab median strain/rate errors from 0.04753/0.04130 to 0.00605/0.00594 using the unchanged benchtop weights.\",\n    \"causal_blanket_diagnosis\": \"Mixing verification and benchtop reference panels shifted the coupon features and made a normalization error look like a change in the material drift law.\",\n    \"sublated_pivot\": \"Use each cohort's prescribed reference pool, retain the intrinsic drift weights, and validate only the chamber time kernel.\",\n    \"risk_kind\": \"reference-panel confounding\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep five independently fitted chamber coefficients.\",\n      \"rejected_reason\": \"With the verification panel standardized separately, free coefficients do not improve held-out lab errors.\"\n    }\n  ],\n  \"rationale\": \"Compare the unit-time square-root kernel with times fitted without the held-out lab. If the unit kernel performs comparably across labs, horizons, and missing-feature rows, use it with the shared drift weights and the required pooled train/test normalization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "15d75a14cba4c693ebb5db2cba40f90c7f94e85d766f3deb224e88411959720e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32207.86,
+      "usage_known": true,
+      "prompt_tokens": 36773,
+      "cached_tokens": 9344,
+      "completion_tokens": 1004
+    }
+  ]
+}

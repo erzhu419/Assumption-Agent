@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "302cb8b1d2a34e8a9942670ef171f62f",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:08:47.805423+00:00",
+  "ended_at_utc": "2026-11-28T04:09:10.255679+00:00",
+  "request_sha256": "be463982cd5bc9a6c04cd3539efb6694e9e6e459c2238e1e196d0dada2151d2b",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 61359,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29652,
+    "cached_tokens": 9344,
+    "completion_tokens": 849
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the active load bridge, then solve in physical coordinates.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, sys, pickle\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import _fit_affine\\nes=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\na=np.array([e['facility_telemetry_trace'] for e in es]); print('idx name | channel means | channel 2 first/last | channel 7 first/last | same-trace neighbors')\\nfor i,e in enumerate(es):\\n    dist=np.sqrt(np.mean((a-a[i])**2,axis=(1,2))); print(i,e['completed_campaign_short_name'].rsplit('_',1)[-1],a[i].mean(0).round(3),a[i,[0,-1],2],a[i,[0,-1],7],np.argsort(dist)[1:4],np.sort(dist)[1:4].round(3))\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=raw['calibration_load_cells']; x,y=c['bridge_raw'],c['true_channel_loads']; mask=(abs(x)<=8.5).all(1); g,b=_fit_affine(x[mask],y[mask]); r=abs((x[mask]-b)/g-y[mask]); print('bridge inliers',mask.sum(),'of',len(mask),'gains',g.round(6),'offsets',b.round(6),'actual calibrated residual q90/max',np.quantile(r,[.9,1],axis=0).round(6))\\nPY\\nsed -n '91,126p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 staged calibration and archived chamber reset -> H2 dynamic bridge fit with chamber-law selection kept separate; worst held-out-lab absolute p90 errors are 0.02554 early strain, 0.03136 late strain, and 0.01644 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep fixed gains and offsets in the batch wrapper\",\"rejected_reason\":\"The contract requires fitting the bridge from each dataset, and the staged upstream function already does so when called without a payload.\"}],\"rationale\":\"The held-out labs support the intrinsic fit. Verify the dynamic bridge against the raw sweeps and compare telemetry alignment at completed-campaign indices; only a historically consistent alignment would justify changing the chamber prior.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c40dea7e6df79bc208e0cbd52d00ccc382b9ed7395731fa3257ebb32b1689bca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24557.34,
+      "usage_known": true,
+      "prompt_tokens": 29652,
+      "cached_tokens": 9344,
+      "completion_tokens": 849
+    }
+  ]
+}

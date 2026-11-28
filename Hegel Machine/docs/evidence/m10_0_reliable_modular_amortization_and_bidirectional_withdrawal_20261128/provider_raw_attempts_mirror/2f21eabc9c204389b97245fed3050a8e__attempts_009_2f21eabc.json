@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f21eabc9c204389b97245fed3050a8e",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:06:11.150971+00:00",
+  "ended_at_utc": "2026-11-28T04:06:39.219393+00:00",
+  "request_sha256": "8bf57054856f06c605e60787fa50e3dea3b35fd5dd9eb4c121d2eba6c8a5bfd9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55443,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29386,
+    "cached_tokens": 9344,
+    "completion_tokens": 1110
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _responses\\nfrom _verified_upstream import calibrate_upstream\\nimport wall_cv as cv\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ns = calibrate_upstream(study)\\nout = solve_batch(study)\\nS, terminal_responses = _responses(s)\\nassert np.allclose(S, cv.responses('PP'), rtol=1e-11, atol=1e-12)\\nw = out['weights']; cert = out['kkt_certificate']; cap = s['u_box']; budget = s['total_budget']\\nZ = s['Z_nuisance']; y = s['y_obs_raw']; ridge = s['source_ridge']\\nP = np.eye(len(y)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nD = P @ S; e = P @ (S @ w - y); g = D.T @ e + ridge*w\\nnu = cert['nu_sum']; lo = np.array(cert['lam_lower']); hi = np.array(cert['lam_upper'])\\nJ = .5*(e @ e + ridge*(w @ w)); dual = J - g @ w + nu*budget + cap*np.minimum(0, g-nu).sum()\\nr = max(abs(w.sum()-budget), np.max(np.abs(g-nu-lo+hi)), np.max(np.abs(w*lo)), np.max(np.abs((cap-w)*hi)), abs(J-cert['primal_objective']), abs(dual-cert['dual_lower_bound']), abs(J-dual), np.max(np.abs(out['terminal_field']-np.tensordot(w,terminal_responses,axes=1))))\\nassert np.array_equal(w,cert['weights']) and min(w)>=0 and max(w)<=cap and min(lo)>=0 and min(hi)>=0 and r<1e-10\\nprint('Public field and certificate maximum error:', r)\\nfor law in ('PP', 'NP', 'PN', 'RR'):\\n    _, slices, _ = cv.report(cv.responses(law))\\n    print(law, 'sensor / shift / channel held-out (pooled, worst):', np.round(slices, 7).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived periodic x with reflecting y → periodic seams on both axes; worst held-out public RMSE is 0.02125 and the verified public KKT gap is 4.86e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch to reflecting x and periodic y\",\n      \"rejected_reason\": \"It slightly improves the worst sensor and shift slices, but periodic x gives lower pooled sensor and channel error across the tested ridge strengths. The evidence does not justify a switch.\"\n    }\n  ],\n  \"rationale\": \"The host rejected the prior resolution probe. Check the unchanged deliverables in an isolated process against only the original public input, without generating replacement calibration data or modifying the validator or fixture. This tests the artifact's field and certificate separately from the evidence for adding the y seam.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "672146f198a66536627fe32c551ece66ef6ff3b3d136df604bd4c1c672994f4d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30147.91,
+      "usage_known": true,
+      "prompt_tokens": 29386,
+      "cached_tokens": 9344,
+      "completion_tokens": 1110
+    }
+  ]
+}

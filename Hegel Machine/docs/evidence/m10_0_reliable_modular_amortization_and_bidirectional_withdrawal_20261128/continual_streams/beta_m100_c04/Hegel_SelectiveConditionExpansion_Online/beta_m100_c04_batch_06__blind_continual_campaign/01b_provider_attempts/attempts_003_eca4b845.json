@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eca4b8456af94309a72289ead536eba9",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:20.773129+00:00",
+  "ended_at_utc": "2026-11-28T03:58:40.919898+00:00",
+  "request_sha256": "b198081e8199b7ac92f4f96b161a69bdefbf6ae9685cc7a909211a97995d4bc4",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 23016,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19005,
+    "cached_tokens": 9344,
+    "completion_tokens": 723
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=6,suppress=True,linewidth=150)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]; print('diagnostics',str(s['campaign_diagnostics'])[:1200]); c=s['study']['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; print('nonzero counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('rosette first 38 and EMI indices'); print(np.c_[np.arange(len(x)),x,y][np.r_[np.arange(38),np.flatnonzero(np.max(abs(y),axis=1)>4)]]); print('bank summary');\\nfor k,v in c['single_bank_sweeps'].items():\\n print(k, type(v), ([(a,np.shape(b),np.asarray(b).flatten()[:9]) for a,b in v.items()] if isinstance(v,dict) else (np.shape(v),np.asarray(v).flatten()[:9])))\\nPY\\nsed -n '25,53p' _verified_downstream.py\\npython3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_manifest.json'; a=json.load(open(p)); print(str(a)[:4000])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 structured coupled saturation; affine held-out row L2 p90 was 0.498 versus 0.581 for the unrestricted quadratic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine map or its unrestricted quadratic extension explains the clean rosette response.\",\n    \"empirical_witness\": \"Affine and quadratic held-out median row residuals remain 0.316 and 0.311, respectively, far below gross EMI residuals near 26 but too large to attribute only to those rows.\",\n    \"causal_blanket_diagnosis\": \"Cross-channel linear terms capture mixing but do not resolve the systematic nonlinear response; expanding indiscriminately to quadratic interactions worsens the held-out tail.\",\n    \"sublated_pivot\": \"Use the sweep structure to identify saturation and the ordering of mixing and nonlinearity before choosing a forward law.\",\n    \"risk_kind\": \"calibration_bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote an unrestricted higher-degree polynomial\",\n      \"rejected_reason\": \"With only 80 rows, mixed monomials consume many degrees of freedom and may make inversion unstable; axis sweeps may identify a lower-dimensional law.\"\n    }\n  ],\n  \"rationale\": \"Inspect axis and mixed sweep rows to distinguish pre-mixing from post-mixing saturation. That distinction determines both the fitting basis and the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2619aa1fd5d14e72c1076d1c10ac7170515dd2b105e127c8908e731120bd055c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22245.58,
+      "usage_known": true,
+      "prompt_tokens": 19005,
+      "cached_tokens": 9344,
+      "completion_tokens": 723
+    }
+  ]
+}

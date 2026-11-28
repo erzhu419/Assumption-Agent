@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d751128647f24ff08d138147aaf4f7e4",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:15:03.074704+00:00",
+  "ended_at_utc": "2026-11-28T04:15:37.627326+00:00",
+  "request_sha256": "8b8898901b59aca6ba64ec58ff8d241ff46697d8847dbc3a86ace10cadc7c8c6",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 65047,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31846,
+    "cached_tokens": 9344,
+    "completion_tokens": 1349
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features, _loads, _DRIFT_FRACTIONS\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = solve_batch(d)\\nq = calibrate_upstream(dict(d, chamber_verification_trials=item['campaign_diagnostics']))['chamber_verification_trials']\\ntau, w = out['estimated_taus'], out['hereditary_weights']\\np, h = _loads(q)\\nt = d['eval_times']\\nx = _features(q, q)[:len(h)]\\nr = w[2] + x @ w[3:]\\ny = np.c_[q['strain_curves_obs'] - q['strain_0'][:,None], q['instant_rate_obs']]\\nE = np.vstack((-np.expm1(-t[:,None]/tau), 1/tau))\\nL = np.r_[t, 1.]\\nD = E*tau - L[:,None]\\nbase = h[:,None]*(E@w[:2])\\nlab = q['lab_id']\\ncomplete = ~np.isnan(q['coupon_features_raw']).any(axis=1)\\nwithdrawal = h < p[:,-1]\\nlabels = np.unique(lab)\\nslices = [lab==j for j in labels] + [complete, ~complete, withdrawal, ~withdrawal]\\ndef predict(g, offset):\\n    return base + (r+offset)[:,None]*(L+D@g)\\ndef fit(mask, use_offset):\\n    initial = np.r_[_DRIFT_FRACTIONS, 0.] if use_offset else _DRIFT_FRACTIONS\\n    return least_squares(lambda v: (predict(v[:2], v[2] if use_offset else 0.)[mask]-y[mask]).ravel(), initial, loss='soft_l1', f_scale=.004).x\\ndef report(name, pred):\\n    e = pred-y\\n    def metrics(m):\\n        return [np.sqrt(np.mean(a*a)) for a in (e[m,:-1], e[m,-1], e[m,-2])]\\n    print(name, 'worst strain/rate/final', np.round(np.max([metrics(m) for m in slices if m.any()], axis=0),6), 'complete', np.round(metrics(complete),6), 'withdrawal', np.round(metrics(withdrawal),6))\\nreport('current fixed', predict(_DRIFT_FRACTIONS, 0.))\\nreport('equal routing', predict(np.array([.5,.5]), 0.))\\nfor clean in (False, True):\\n    avail = complete if clean else np.ones(len(h), dtype=bool)\\n    for offset in (False, True):\\n        pred = np.empty_like(y)\\n        for j in labels:\\n            held = lab==j\\n            v = fit(avail & ~held, offset)\\n            pred[held] = predict(v[:2], v[2] if offset else 0.)[held]\\n            print('held lab', j, 'complete-only', clean, 'offset', offset, 'coefficients', np.round(v,6))\\n        report(f'LOLO complete-only={clean} offset={offset}', pred)\\n        print('full diagnostic coefficients', np.round(fit(avail, offset),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 equal routing -> H2 conserved fast, slow, and persistent drift; the deployed law's worst diagnostic strain and initial-rate RMSE are 0.01549 and 0.01013.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote a shared chamber drift offset immediately\",\n      \"rejected_reason\": \"It improved the first audit, but that improvement could be driven by the three imputed diagnostic coupons. Check whether it persists when coefficient fitting uses complete coupons only.\"\n    }\n  ],\n  \"rationale\": \"Compare fold-fitted routing with and without an offset, keeping all held-out coupons in scoring. Promote the offset only if its sign and improvement persist across labs and do not worsen withdrawal or late-horizon predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "214e8000ee5deb514afe5e17e8fe783bd2b8d88fea10d7417c6a24752f2bb575",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36714.36,
+      "usage_known": true,
+      "prompt_tokens": 31846,
+      "cached_tokens": 9344,
+      "completion_tokens": 1349
+    }
+  ]
+}

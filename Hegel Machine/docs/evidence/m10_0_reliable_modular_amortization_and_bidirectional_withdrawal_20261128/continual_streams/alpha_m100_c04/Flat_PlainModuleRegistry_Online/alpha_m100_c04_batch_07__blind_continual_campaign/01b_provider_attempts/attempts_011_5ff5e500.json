@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ff5e50091764d4095ba502b1fb0f7e3",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:21.611833+00:00",
+  "ended_at_utc": "2026-11-28T04:01:50.790273+00:00",
+  "request_sha256": "af7f966273fbcf421d0e4f1ca3022da1c946309a20caf243fbca09110813d68a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 68498,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35634,
+    "cached_tokens": 9344,
+    "completion_tokens": 1146
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _inputs, _chamber\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ndataset, qraw = item['dataset'], item['campaign_diagnostics']\\npred = solve_batch(dataset)\\ntaus, theta = pred['estimated_taus'], pred['hereditary_weights']\\nassert 0.05 < taus[0] < taus[1] < 25\\nassert all(np.isfinite(v).all() for v in pred.values())\\ncal = calibrate_upstream({**dataset, 'chamber_verification_trials': qraw})\\ntr, te, q = (cal[k] for k in ('train', 'test', 'chamber_verification_trials'))\\ndt, t = cal['past_dt'], cal['eval_times']\\nx = _features(tr, te)[len(tr['lab_id']):]\\npast, hold, cov = inp = _inputs(te, x)\\nstate = np.zeros((len(hold), 2))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step / taus)\\n    state = decay * state + (1 - decay) * past[:, j, None]\\namp = (hold[:, None] - state) * theta[:2]\\ndrift = cov @ theta[2:]\\nnp.testing.assert_allclose(pred['predicted_strain'], te['strain_0'][:, None] + amp @ (-np.expm1(-t[None, :] / taus[:, None])) + drift[:, None] * (-np.expm1(-t)), atol=1e-12, rtol=1e-12)\\nnp.testing.assert_allclose(pred['initial_rate_pred'], amp @ (1 / taus) + drift, atol=1e-12, rtol=1e-12)\\nnear, _ = _chamber(taus, theta, inp, dt, np.array([0., 1e-7]))\\nnp.testing.assert_array_equal(near[:, 0], 0.)\\nnp.testing.assert_allclose(near[:, 1] / 1e-7, pred['initial_rate_pred'], atol=1e-6, rtol=1e-6)\\nqx = _features(q, q)[:len(q['lab_id'])]\\nstrain, rate = _chamber(taus, theta, _inputs(q, qx), dt, t)\\ne = np.column_stack((strain + q['strain_0'][:, None] - q['strain_curves_obs'], rate - q['instant_rate_obs']))\\nrmse = lambda a: np.sqrt(np.mean(a**2, axis=0))\\nfor name, groups in [('lab', q['lab_id']), ('stratum', q['stratum']), ('missing feature', np.isnan(q['coupon_features_raw']).any(axis=1))]:\\n    scores = [(str(g), float(rmse(e[groups == g])[:-1].max()), float(rmse(e[groups == g])[-1])) for g in np.unique(groups)]\\n    print(name, 'slice / worst strain horizon RMSE / rate RMSE:', scores)\\n    assert all(max(a,b) < .04 for _, a, b in scores)\\nprint('Pooled diagnostic terminal strain and rate RMSE:', rmse(e)[-2:].tolist())\\nprint('Isolated entrypoint, chronological recurrence, and initial derivative verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: linear chamber drift → H2: one-second saturating drift with unchanged stress memory and initial slope; worst held-out lab/horizon RMSE was 0.01195, pooled initial-rate RMSE was 0.00895, and the saved bundle passed public schema and reference-swap checks.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test the saved entrypoint in an isolated process. An independent chronological recurrence checks pulse ordering, the near-zero derivative checks the rate output, and diagnostic slices check whether pooled errors hide a lab, stratum, or missing-feature failure. If any check fails, revise the implicated stage before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cfbc1ca097fbbe2272e32469cee7771c39bc74462757cdc51b11bb468c433437",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31296.74,
+      "usage_known": true,
+      "prompt_tokens": 35634,
+      "cached_tokens": 9344,
+      "completion_tokens": 1146
+    }
+  ]
+}

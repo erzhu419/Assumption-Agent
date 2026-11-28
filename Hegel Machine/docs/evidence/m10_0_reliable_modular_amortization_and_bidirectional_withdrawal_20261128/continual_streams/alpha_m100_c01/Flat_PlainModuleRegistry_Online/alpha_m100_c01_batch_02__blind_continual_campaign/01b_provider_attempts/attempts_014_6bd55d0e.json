@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6bd55d0e83b7403bb4821314f8a7cb0a",
+  "call_seq": 14,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:20.283340+00:00",
+  "ended_at_utc": "2026-11-28T03:45:47.248730+00:00",
+  "request_sha256": "20fdda6bf29b98b825fee530c05670b7d7788506a12497b85d83f02d96aa010f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 70895,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32637,
+    "cached_tokens": 12672,
+    "completion_tokens": 1036
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys, pickle, json\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream, _features, _fit, _inputs, _chamber, _DRIFT_TIME\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl','rb') as f:\\n    cases=pickle.load(f)\\nwith open('_upstream_param_payload.json') as f:\\n    payload=json.load(f)\\nassert _DRIFT_TIME == 1.014\\nfor item in cases:\\n    raw=item['dataset']; d=calibrate_upstream(raw); out=solve_batch(raw); direct=solve_downstream(d)\\n    n,k=len(raw['test']['lab_id']),len(raw['eval_times'])\\n    shapes={'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(n,k), 'initial_rate_pred':(n,)}\\n    assert out.keys()==shapes.keys()\\n    for key,shape in shapes.items():\\n        assert out[key].shape==shape and np.isfinite(out[key]).all(),key\\n        np.testing.assert_array_equal(out[key],direct[key])\\n    assert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nprint('Isolated batch/downstream composition passed on',len(cases),'public cases')\\nitem=cases[0]; raw=item['dataset']; d=calibrate_upstream(raw); tr,te=d['train'],d['test']\\ns=calibrate_upstream(dict(raw,test=item['campaign_diagnostics']),payload)['test']\\nv,_=_features(tr,te); x,_=_features(s,s); inputs=_inputs(tr,v)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; times=d['eval_times']; dt=d['past_dt']; scores=[]\\nfor lab in np.unique(s['lab_id']):\\n    keep=tr['lab_id']!=lab; sel=s['lab_id']==lab\\n    tau,theta=_fit(*(a[keep] for a in inputs),dt,times,y[keep],tr['instant_rate_obs'][keep])\\n    row=[]\\n    for args in ((),(1.,),(1e8,)):\\n        pred,rate=_chamber(s,x,dt,times,tau,theta,*args)\\n        e=abs(pred[sel]-s['strain_curves_obs'][sel]); er=abs(rate[sel]-s['instant_rate_obs'][sel])\\n        row.append([np.quantile(e,.9),np.quantile(er,.9),np.quantile(e[:,-1],.9),e.max()])\\n    scores.append(row)\\nw=np.max(scores,axis=0)\\nprint('Worst lab: tuned / unit / linear rows; strain P90, rate P90, terminal P90, max strain columns:\\\\n',np.round(w,6))\\nassert w[0,0]<w[1,0] and w[0,2]<w[1,2] and w[0,1]==w[1,1]\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unit decay → diagnostic-calibrated exponential decay: nested held-lab strain P90 improved from 0.013074 to 0.011100 with initial-rate P90 unchanged at 0.007923; verification of the exact 1.014 constant is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Run the public validator as documented, then verify the unchanged candidate in isolated Python with its module directory explicitly on the import path. The previous failure came from isolated mode removing that directory, so no solver or fixture edit is needed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "fe3bee7f8895b393191382d5e3f10437e97693be09d9914d792ca7866c3e1ab9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29145.92,
+      "usage_known": true,
+      "prompt_tokens": 32637,
+      "cached_tokens": 12672,
+      "completion_tokens": 1036
+    }
+  ]
+}

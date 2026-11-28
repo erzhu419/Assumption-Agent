@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "73c80b5cb9534df6be271edaf679b7ea",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__beta_m100_c02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:15.377873+00:00",
+  "ended_at_utc": "2026-11-28T03:28:53.307927+00:00",
+  "request_sha256": "699c99c3436f86ca1061aaf645944929b5a72d778fe48556d3311b2386706e5e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39235,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25119,
+    "cached_tokens": 10880,
+    "completion_tokens": 1548
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nb = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nc = study['sensor_calibration_sweeps']\\nx, y = map(np.asarray, (c['ref_rosette'], c['raw_rosette']))\\nraw = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\nprint('cal span by channel:', np.ptp(x, axis=0), 'operational span:', np.ptp(raw, axis=0))\\nprint('operational entries outside calibration range:', np.count_nonzero((raw < x.min(0)) | (raw > x.max(0))))\\n# Compare affine to fixed weak saturation of pairwise differences. Select\\n# saturation strength on inner folds, not on the reported outer slices.\\na = np.c_[np.ones(len(x)), x]\\nq = np.column_stack([x[:, i]-x[:, j] for i in range(4) for j in range(i+1, 4)])\\nfolds = np.array_split(np.arange(len(x)), 5)\\nfor sat in (False, True):\\n    err = []\\n    chosen = []\\n    for k, test in enumerate(folds):\\n        inner = [f for j,f in enumerate(folds) if j != k]\\n        train = np.concatenate(inner)\\n        def design(alpha):\\n            return np.c_[a, q/(1+alpha*q*q)] if alpha else a\\n        def mse(D, tr, te):\\n            pred = D[te] @ np.linalg.lstsq(D[tr], y[tr], rcond=None)[0]\\n            return np.mean((pred-y[te])**2)\\n        grid = (0., 0.1, 1., 10.) if sat else (0.,)\\n        alpha = min(grid, key=lambda p: np.mean([mse(design(p),np.concatenate([g for j,g in enumerate(inner) if j != i]), f) for i,f in enumerate(inner)]))\\n        chosen.append(alpha)\\n        err.append(mse(design(alpha), train, test))\\n    print('calibration', 'nested rational difference' if sat else 'affine', 'outer worst/pooled RMS', np.sqrt(max(err)),np.sqrt(np.mean(err)),'selected',chosen)\\nsingle = c['single_bank_sweeps']\\nbank, ref, read = [np.asarray(single[k]) for k in ('bank_id','ref_signal','raw_readout')]\\nprint('single-bank shapes:',bank.shape,ref.shape,read.shape)\\nif bank.size == ref.size == read.size:\\n    bank, ref, read = bank.ravel(), ref.ravel(), read.ravel()\\n    for k in np.unique(bank):\\n        mask=bank==k\\n        q0,q1=ref[mask],read[mask]\\n        slope, intercept=np.linalg.lstsq(np.c_[q0,np.ones(len(q0))],q1,rcond=None)[0]\\n        print('single bank',k,'slope/offset/affine RMS',slope,intercept,np.sqrt(np.mean((slope*q0+intercept-q1)**2)))\\n# Ablate nuisance profiling on the same held-out sensors to test whether it\\n# removes a bank-specific error or masks a poor within-bank fit.\\nA,_ = b.chamber_response(study); Y=b.calibrate(study); Z=np.asarray(study['Z_nuisance']); bank=np.asarray(study['row_bank_id']).ravel()\\nids=np.tile(np.arange(len(study['sensor_ij'])),len(study['mu_shifts']))\\nfor profile in (False,True):\\n    residue=np.empty_like(Y)\\n    for i in np.unique(ids):\\n        te=ids==i; tr=~te; z=Z[tr]; D=np.c_[A[tr],Y[tr]]\\n        B=np.linalg.solve(z.T@z+study['nuisance_ridge']*np.eye(z.shape[1]),z.T@D) if profile else np.zeros((z.shape[1],D.shape[1]))\\n        D=D-z@B; p,r=D[:,:-1],D[:,-1]\\n        w,_=b.box_simplex(p.T@p+study['source_ridge']*np.eye(p.shape[1]),p.T@r,study['u_box'],study['total_budget'])\\n        residue[te]=Y[te]-A[te]@w-Z[te]@(B[:,-1]-B[:,:-1]@w)\\n    print('profile',profile,'pooled RMS',np.sqrt(np.mean(residue**2)),'bank RMSEs',[float(np.sqrt(np.mean(residue[bank==k]**2))) for k in np.unique(bank)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosettes and profiled Robin transport -> H2 revise only if independent bank sweeps or nested saturation tests expose a material mismatch; current worst held-out bank RMSE is 0.00993.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat wall-stencil and box-simplex stress tests\",\n      \"rejected_reason\": \"Those checks already passed on the unchanged artifact; they would not test calibration range, single-bank gains, or the effect of nuisance profiling.\"\n    }\n  ],\n  \"rationale\": \"Test three unresolved failure modes on the public measurements: calibration outside the measured range, gain or saturation missed by the joint affine fit, and nuisance profiling that improves pooled fit at a bank's expense. A material discrepancy would direct a targeted calibration or nuisance investigation without changing the prescribed objective.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3116bcd28f4580ba4cc34d0e2f69cf7d8dcedb9ab0633905eef12cdbac27bfdd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40034.16,
+      "usage_known": true,
+      "prompt_tokens": 25119,
+      "cached_tokens": 10880,
+      "completion_tokens": 1548
+    }
+  ]
+}

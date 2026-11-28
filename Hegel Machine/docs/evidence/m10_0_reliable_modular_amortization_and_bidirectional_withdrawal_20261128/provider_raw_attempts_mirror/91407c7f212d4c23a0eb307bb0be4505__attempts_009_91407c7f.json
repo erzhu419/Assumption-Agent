@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "91407c7f212d4c23a0eb307bb0be4505",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:40.918523+00:00",
+  "ended_at_utc": "2026-11-28T04:15:14.887664+00:00",
+  "request_sha256": "da601afdec5a05007e26bc34c9a5910687bfde9d712ca1f6d307dbb279cb77c3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30832,
+    "cached_tokens": 9344,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/wall_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np,json\\nfrom scipy.sparse import diags,eye,kron,coo_matrix\\nfrom scipy.sparse.linalg import splu\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=p['study']; ds=p['campaign_diagnostics']; w=np.stack([d['w_pulse'] for d in ds],axis=1); y=np.stack([m._calibrate(s,d['y_pulse_raw']) for d in ds],axis=1)\\nnx,ny=s['nx'],s['ny']; N=nx*ny; ids=np.arange(N); ix,iy=ids%nx,ids//nx; ind=s['sensor_ij']@[1,nx]; B=np.stack([v.ravel(order='F') for v in s['source_modes']],axis=1)@w\\nL=(kron(eye(ny),m._axis(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1)))+kron(m._axis(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1)),eye(nx))+diags(s['V_reaction_2d'].ravel(order='F'))).tocsc(); I=eye(N,format='csc'); walls=[(ids[ix==0],1),(ids[ix==nx-1],-1),(ids[iy==0],nx),(ids[iy==ny-1],-nx)]; M=[]\\nfor rows,off in walls:\\n a=coo_matrix((np.ones(len(rows)),(rows,rows)),shape=(N,N)).tocsc(); b=coo_matrix((np.ones(len(rows)),(rows,rows+off)),shape=(N,N)).tocsc(); M.extend([a,a-b]);\\ndef pred(A): return np.concatenate([splu(A+mu*I).solve(B)[ind] for mu in s['mu_shifts']])\\ndef op(t,Ms): return L+sum((v*a for v,a in zip(t,Ms)),0)\\npr=lambda r:m._profile(s,r)\\nprint('baseline by pulse',np.sqrt(np.mean(pr(pred(L)-y)**2,axis=0)))\\nfor mode,Ms in [('diag+normal gradient',M),('normal gradient',M[1::2])]:\\n for hold in [-1,0,1,2]:\\n  keep=np.arange(3)!=hold; fit=least_squares(lambda t:pr(pred(op(t,Ms))-y)[:,keep].ravel(),np.zeros(len(Ms)),gtol=1e-12); r=pr(pred(op(fit.x,Ms))-y); print(mode,hold,fit.x.round(7),np.sqrt(np.mean(r*r,axis=0)), 'jac sv',np.linalg.svd(fit.jac,compute_uv=False)[-1])\\nfor a,n in zip('xy',[nx,ny]):\\n h=s['L'+a]/(n-1); k=s['kappa_'+a]; v=s['vel_'+a]; print(a,'h',h,'boundary kappas/h2',k[[0,-1]]/h**2,'face kappas/h2',(k[[0,-1]]+k[[1,-2]])/(2*h*h),'velocity/h',v[[0,-1]]/h,'robin/h',s['robin_'+a]/h)\\nfor f in ['archive_apparatus_log.json','pre_llm_gate_diagnostic.json']:\\n try:\\n  t=json.load(open('/tmp/hegel_continual_archive/'+f)); print(f, ([(r.get('completed_campaign_short_name'),list(r)) for r in t][-2:] if isinstance(t,list) else str(t)[:800]))\\n except FileNotFoundError: pass\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/wall_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sealed boundary rows -> test conservative boundary flux corrections; worst projected pulse RMSE is 0.01027, and the existing solver’s KKT gap is 1.05e-15.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Accept sealed-wall predictions as final\",\"rejected_reason\":\"The largest residuals occur near walls, are coherent across shifts, and remain unchanged after refitting the rosette.\"}],\"rationale\":\"The earlier wall test varied only diagonal leakage. Test boundary face flux separately from leakage and hold out entire pulses; adopt a correction only if it transfers and can be expressed as a rule in the study’s physical coefficients.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "6cac2d78ee9c333f284c54a94a5fb4d8a155c2f7cc8c330bf722625f7a365454",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36133.56,
+      "usage_known": true,
+      "prompt_tokens": 30832,
+      "cached_tokens": 9344,
+      "completion_tokens": 1191
+    }
+  ]
+}

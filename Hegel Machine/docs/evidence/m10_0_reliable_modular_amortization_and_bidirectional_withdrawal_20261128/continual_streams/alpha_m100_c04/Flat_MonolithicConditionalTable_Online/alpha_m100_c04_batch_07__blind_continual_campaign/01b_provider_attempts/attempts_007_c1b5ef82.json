@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1b5ef8211a14616997b1b037c440d26",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:06:43.810803+00:00",
+  "ended_at_utc": "2026-11-28T04:07:14.244937+00:00",
+  "request_sha256": "aa80873fd59a706c5a2e2a9884f96203ec33eaa0df20c64d154e069c0c23b6c1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30954,
+    "cached_tokens": 9344,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber07_law.py <<'PY'\\nexec(open('/tmp/chamber07_affine.py').read().split(\\\"print('bridge',\\\")[0])\\nh=m._stress(z['hold_channel_raw'],b); past=m._stress(z['past_channel_raw'],b); Y=np.c_[z['strain_curves_obs']-z['strain_0'][:,None],z['instant_rate_obs']]; time=np.r_[t,1.]; labs=z['lab_id']; tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; mem=past@(-np.expm1(-dt[:,None]/tau)*np.exp(-tail[:,None]/tau)); A=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); base=((h[:,None]-mem)*theta[:2])@A.T\\nblocks=[('diag',z,z),('train+diag',tr,z),('test+diag',te,z)]\\nfor nm,p1,p2 in blocks:\\n xx=m._features(p1,p2)[len(p1['lab_id']):]; drift=theta[2]+xx@theta[3:]; print(nm,'ranges',drift.min(),drift.max())\\n for law in ['baseline','scalar drift','branch drift','branch drift+intercept','free linear features','quadratic drift','free gaps+branch drift']:\\n  R=Y-base\\n  terms=[drift[:,None]*time]\\n  if law!='scalar drift': terms=[drift[:,None]*v for v in [A[:,0],A[:,1],time]]\\n  if law=='branch drift+intercept': terms += [np.broadcast_to(v,Y.shape) for v in [A[:,0],A[:,1],time]]\\n  if law=='free linear features': terms=[q[:,None]*v for q in np.c_[np.ones(len(h)),xx].T for v in [A[:,0],A[:,1],time]]\\n  if law=='quadratic drift': terms += [drift[:,None]**2*v for v in [A[:,0],A[:,1],time]]\\n  if law=='free gaps+branch drift': terms += [(h-mem[:,j])[:,None]*A[:,j] for j in range(2)]\\n  D=np.stack(terms,axis=-1); oof=np.empty_like(Y); cs=[]\\n  for lab in np.unique(labs):\\n   s=labs==lab; c=np.linalg.lstsq(D[~s].reshape(-1,len(terms)),R[~s].ravel(),rcond=None)[0];oof[s]=(base[s]+D[s]@c-Y[s]) if law!='baseline' else base[s]+drift[s,None]*time-Y[s];cs.append(c)\\n  c=np.linalg.lstsq(D.reshape(-1,len(terms)),R.ravel(),rcond=None)[0]; print(law,'worst',max(np.sqrt(np.mean(oof[labs==j,:-1]**2,axis=0)).max() for j in np.unique(labs)),max(np.sqrt(np.mean(oof[labs==j,-1]**2)) for j in np.unique(labs)),'coef',c.round(5),'fold spread',np.ptp(cs,axis=0).round(5))\\n print('ref means',[(j,round(np.median(p1['ref_coupons'][p1['lab_id']==j].mean(0)),4),round(np.median(z['ref_coupons'][labs==j].mean(0)),4)) for j in np.unique(labs)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber07_law.py | sed -n '/^diag ranges/,$p'; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json | head -55\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited nonlinear bridge → H2 affine bridge with chronological chamber memory; affine calibration lowers the raw p95 residual to 0.000175, and the preliminary chamber model has worst held-lab strain and rate RMSE of 0.0148 and 0.0119.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the chamber spectrum with separately fitted time constants\",\n      \"rejected_reason\": \"The exploratory spectrum fits used free amplitudes per coupon; first test whether the intrinsic spectrum predicts unseen coupons under a shared response law.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire diagnostic labs to test whether the remaining error comes from drift entering the relaxation branches, reference-panel alignment, or altered stress-memory coefficients. Use the simplest law that improves both strain and initial-rate prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "191bbd42ec185322f2146fca79caef6c04517bcd196c5eb6185225126031e7db",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32519.61,
+      "usage_known": true,
+      "prompt_tokens": 30954,
+      "cached_tokens": 9344,
+      "completion_tokens": 1191
+    }
+  ]
+}

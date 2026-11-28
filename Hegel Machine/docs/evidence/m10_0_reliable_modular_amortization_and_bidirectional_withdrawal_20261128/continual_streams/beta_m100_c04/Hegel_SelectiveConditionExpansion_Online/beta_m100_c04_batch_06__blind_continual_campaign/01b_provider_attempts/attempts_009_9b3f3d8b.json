@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b3f3d8bd69c431cb72454068c750eca",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_06__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:56.496882+00:00",
+  "ended_at_utc": "2026-11-28T04:02:33.115287+00:00",
+  "request_sha256": "acc060b76140c380686f52b3d686d7208b5eb23aa5ae8c26661efff497e1bbdf",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 60839,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34770,
+    "cached_tokens": 9344,
+    "completion_tokens": 1379
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _inverse\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as stream:\\n    s = pickle.load(stream)[0]['study']\\nc = s['sensor_calibration_sweeps']; x = c['ref_rosette']; y = c['raw_rosette']\\naxis = np.count_nonzero(x, axis=1) == 1\\nclean = np.max(abs(y), axis=1) < 4\\nfold = np.random.default_rng(193).permutation(len(x)) % 5\\nerr = np.full(len(x), np.nan)\\nfor k in range(5):\\n    train = fold != k; test = ~train & clean\\n    f, p = _fit(x[train], y[train])\\n    err[test] = np.linalg.norm(_inverse(y[test], f, p) - x[test], axis=1)\\nfor name, mask in [('axis', axis), ('mixed', ~axis)]:\\n    worst = np.max(err[mask & clean]); print(name, 'clean OOF max inverse row L2', worst)\\n    assert worst < 2e-4\\n# Independent observation/pulse round trip on the measured response law, including minimum-slope regions.\\ngain = np.array([1.29, .81, .78, 1.27]); bias = np.array([.07, -.08, -.06, .05])\\ndef forward(v):\\n    z = v[:, [2, 3, 0, 1]]\\n    return bias + gain * (v + .25*np.sin(2.5*v) + .21*z - .06*(1-np.cos(2*z)))\\nrng = np.random.default_rng(817)\\nprobe = np.vstack((rng.uniform(-1.4, 1.8, (300, 4)), np.array(np.meshgrid(*([[-1.8, -np.pi/2.5, np.pi/2.5, 1.8]] * 4))).reshape(4, -1).T))\\nraw = forward(probe)\\ny_test = forward(x) + rng.normal(0, 1e-5, y.shape)\\ny_test[[0, 6, 38, 73]] += rng.choice([-12, 12], (4, 4))\\ntrial = dict(s, sensor_calibration_sweeps=dict(c, raw_rosette=y_test), y_obs_raw=raw[:24].ravel(), reference_tracer_pulses=[{'y_pulse_raw': raw[24:].reshape(2, -1, 4), 'tag': 'test'}, {'y_pulse_raw': None}])\\nout = calibrate_upstream(trial)\\nfor name, expected, actual, original in [('observation', probe[:24].ravel(), out['y_obs_raw'], trial['y_obs_raw']), ('pulse', probe[24:].reshape(2,-1,4), out['reference_tracer_pulses'][0]['y_pulse_raw'], trial['reference_tracer_pulses'][0]['y_pulse_raw'])]:\\n    assert actual.shape == original.shape and not np.shares_memory(actual, original)\\n    worst = np.max(abs(actual - expected)); print(name, 'stress max absolute inverse error', worst); assert worst < 2e-4\\nassert out['reference_tracer_pulses'][0]['tag'] == 'test' and out['reference_tracer_pulses'][1]['y_pulse_raw'] is None\\nnew = out['sensor_calibration_sweeps']; assert np.array_equal(new['raw_rosette'], x) and not np.shares_memory(new['raw_rosette'], x)\\nbank = new['single_bank_sweeps']; assert np.array_equal(bank['raw_readout'], bank['ref_signal']) and not np.shares_memory(bank['raw_readout'], bank['ref_signal'])\\nassert np.array_equal(trial['y_obs_raw'], raw[:24].ravel()) and np.array_equal(trial['reference_tracer_pulses'][0]['y_pulse_raw'].reshape(-1,4), raw[24:]) and np.max(abs(y_test)) > 4\\nresult = solve_batch(s); assert set(result) >= {'weights', 'terminal_field', 'kkt_certificate'}\\nassert np.all(np.isfinite(result['weights'])) and np.all(np.isfinite(result['terminal_field']))\\nprint('Isolated composition, pulse handling, and sweep normalization passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 paired sine self-response and cosine-bend crosstalk; clean held-out inverse row L2 error peaked at 1.17e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public validator passed but the public study has no pulses. An isolated run checks both pulse branches, array shape and copy semantics, and inverse stability near minimum slopes with EMI moved to different sweep rows. A failure would identify whether to revise the inverse or the study-field handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "30f91a2a2fc0ad603b124e4ca765ecff1aab58036d309411e2b01bfb999d6802",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36580.72,
+      "usage_known": true,
+      "prompt_tokens": 34770,
+      "cached_tokens": 9344,
+      "completion_tokens": 1379
+    }
+  ]
+}

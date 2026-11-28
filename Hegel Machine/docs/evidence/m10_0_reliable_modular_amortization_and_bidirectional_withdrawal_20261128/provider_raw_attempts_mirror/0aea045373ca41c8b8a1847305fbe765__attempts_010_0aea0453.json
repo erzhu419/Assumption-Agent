@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0aea045373ca41c8b8a1847305fbe765",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:05.820236+00:00",
+  "ended_at_utc": "2026-11-28T03:48:45.909668+00:00",
+  "request_sha256": "e3c55bfe931a144aa5fbcefae77800b96e1a5d7ed5f64dd161c628d37832be3d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28553,
+    "cached_tokens": 9344,
+    "completion_tokens": 1656
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_downstream.py <<'PY'\\nimport pickle\\nimport runpy\\nimport sys\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward, solve_downstream\\nfrom batch_solver import solve_batch\\nfrom probe_boundary import forward as trial_forward\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\npulses = item['campaign_diagnostics']\\nweights = np.stack([p['w_pulse'] for p in pulses])\\nmodes = np.einsum('ab,bij->aij', weights, s['source_modes'])\\ny = np.column_stack([calibrate_upstream(dict(s, y_obs_raw=p['y_pulse_raw']))['y_obs_raw'] for p in pulses])\\nS, _ = _forward(s)\\nfixed = S @ weights.T - y\\nk = s['kappa_x']; v = s['vel_x']; h = s['Lx'] / (s['nx'] - 1)\\nseam = (k[0] + k[-1]) / 2\\np0 = np.array([((k[0]+k[1])/2+h*max(-v[0],0))/k[0], 0, (seam+h*max(v[0],0))/k[0], ((k[-1]+k[-2])/2+h*max(v[-1],0))/k[-1], 0, (seam+h*max(-v[-1],0))/k[-1], 1, 0, 0, 1, 0, 0])\\nZ = s['Z_nuisance']\\nns = len(s['sensor_ij']); nshifts = len(s['mu_shifts']); shift_idx = np.repeat(np.arange(nshifts), ns)\\nxy = np.asarray(s['sensor_ij']); xwall = np.tile(np.isin(xy[:,0], [0,s['nx']-1]), nshifts); ywall = np.tile(np.isin(xy[:,1], [0,s['ny']-1]), nshifts)\\ndef rms(e):\\n    return np.sqrt(np.mean(e**2, axis=0))\\ndef profile(z, e):\\n    return np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ e)\\n\\ndef error(p):\\n    return trial_forward(s, p, modes)[0] - y\\n\\nnp.testing.assert_allclose(error(p0), fixed, atol=1e-13, rtol=0)\\nworst = np.zeros((3, 2))\\nlow = np.tile([.001, 0., 0.], 4); high = np.tile([6., 20., 5.], 4)\\nfor hold in range(nshifts):\\n    train = shift_idx != hold; test = ~train\\n    ztr, zte = Z[train], Z[test]\\n    for j, cols in enumerate(([], [0,2,3,5], list(range(12)))):\\n        p = p0.copy()\\n        if cols:\\n            def loss(x):\\n                trial = p0.copy(); trial[cols] = x\\n                d = error(trial)[train]\\n                return (d - ztr @ profile(ztr, d)).ravel()\\n            fit = least_squares(loss, p0[cols], bounds=(low[cols], high[cols]), gtol=1e-13, ftol=1e-12, xtol=1e-12, max_nfev=120)\\n            p[cols] = fit.x\\n        d = error(p) if j else fixed\\n        raw, adjusted = rms(d[test]), rms(d[test] - zte @ profile(ztr, d[train]))\\n        worst[j] = np.maximum(worst[j], [max(raw), max(adjusted)])\\n        print(f'shift {hold} model {j}: max pulse RMSE raw {max(raw):.3e}, train-only nuisance adjusted {max(adjusted):.3e}')\\nprint('Worst shift/pulse by model [fixed, fitted seam, full wall], columns [raw, adjusted]:', worst.tolist())\\nfor name, gate in [('x-wall', xwall), ('y-wall', ywall), ('interior', ~(xwall | ywall))]:\\n    if gate.any():\\n        print(f'{name} worst pulse RMSE {max(rms(fixed[gate])):.3e}')\\nassert worst[0, 0] < 4e-6\\nout = solve_batch(s); direct = solve_downstream(calibrate_upstream(s))\\nfor field in ('weights', 'terminal_field'):\\n    np.testing.assert_array_equal(out[field], direct[field])\\nassert out['kkt_certificate'] == direct['kkt_certificate']\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (periodic x and reflecting y with no fitted coefficients) → H2 (additional wall terms only if they improve held-out shifts); current worst public pulse/shift RMSE is 2.93e-6 and worst stress-case KKT residual is 1.59e-14.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, drift, or classification checks\",\n      \"rejected_reason\": \"This study is a steady linear transport inverse problem with continuous tracer data and no relay state, drift operator, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire reaction shifts and fit nuisance effects only on training shifts. An improvement from extra wall terms would justify revisiting the stencil only if it closes a meaningful margin on the held-out shifts; elevated wall-only errors would localize the discrepancy. Verify both entry points agree in isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "76ca100509f4fb4a84abe3af3ee02b79e051ff0d0e02d5d6a8ed7a6d80c72b95",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42170.92,
+      "usage_known": true,
+      "prompt_tokens": 28553,
+      "cached_tokens": 9344,
+      "completion_tokens": 1656
+    }
+  ]
+}

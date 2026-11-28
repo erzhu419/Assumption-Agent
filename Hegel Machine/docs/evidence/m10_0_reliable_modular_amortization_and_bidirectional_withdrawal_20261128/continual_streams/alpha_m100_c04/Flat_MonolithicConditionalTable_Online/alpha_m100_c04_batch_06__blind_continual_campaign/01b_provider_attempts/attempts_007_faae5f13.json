@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "faae5f13b7b845559ad59d5f89fc9db8",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:00:52.667144+00:00",
+  "ended_at_utc": "2026-11-28T04:01:25.565118+00:00",
+  "request_sha256": "8e0f4907653e8a48d04ff534a9f4175977f6c23eb80207517e18de1eb58fc9e1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26458,
+    "cached_tokens": 9344,
+    "completion_tokens": 1426
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\narchive = Path('/tmp/hegel_continual_archive')\\nbase = (archive/'alpha_m100_c04_batch_05_solver.py').read_text().split('\\\\ndef solve_batch')[0].rstrip()\\nreset = (archive/'alpha_m100_c04_batch_03_solver.py').read_text().split('\\\\ndef _chamber_response')[1].split('\\\\ndef solve_batch')[0].rstrip()\\nsolve = '''\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt = np.asarray(dataset['past_dt'], dtype=float)\\n    times = np.asarray(dataset['eval_times'], dtype=float)\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    bridge = _calibrate(dataset['calibration_load_cells'])\\n    taus, theta = _fit(_inputs(train, x[:n], bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    hold = _stress(test['hold_channel_raw'], bridge)\\n    covariates = np.column_stack((np.ones(len(hold)), x[n:]))\\n    response, rate = _chamber_response(taus, theta, hold, covariates, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + response,\\n            'initial_rate_pred': rate}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(base + '\\\\n\\\\n\\\\ndef _chamber_response' + reset + solve)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; n=len(tr['lab_id']); x=m._features(tr,te); b=m._calibrate(d['calibration_load_cells']); inp=m._inputs(tr,x[:n],b)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; o=m.solve_batch(d); taus=o['estimated_taus']; theta=o['hereditary_weights']; print('full fit',taus,theta); assert .05 < taus[0] < taus[1] < 25\\nfor label,split in [('lab',tr['lab_id']),('stratum',tr['stratum'])]:\\n for v in np.unique(split):\\n  valid=split==v; train=~valid\\n  q,w=m._fit(tuple(a[train] for a in inp),dt,t,y[train],r[train]); a,c=m._design(q,tuple(z[valid] for z in inp),dt,t)\\n  e=a@w-y[valid]; f=c@w-r[valid]\\n  print(label,v,'n',valid.sum(),'taus',q,'strain med/p90 abs',np.quantile(abs(e),[.5,.9]),'rate med/p90 abs',np.quantile(abs(f),[.5,.9]))\\nfor name,part in [('train',tr),('test',te)]:\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  raw=part[key]; print(name,key,'max inversion residual',e:=np.max(abs(m._bridge_raw(m._bridge_load(raw,b),b)-raw))); assert e<1e-8\\nhold=m._stress(te['hold_channel_raw'],b); cov=np.column_stack((np.ones(len(hold)),x[n:])); h=1e-6\\nsmall,rate=m._chamber_response(taus,theta,hold,cov,np.array([0.,h])); assert np.all(small[:,0]==0.); np.testing.assert_allclose(small[:,1]/h,rate,rtol=2e-6,atol=1e-9); np.testing.assert_allclose(rate,o['initial_rate_pred'])\\nprint('reset initial-rate derivative verified on all deployment coupons')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial bridge and inherited benchtop memory -> H2 harmonic bridge and channel-5 reset law; worst held-out calibration stress RMSE is 0.000344 for the harmonic bridge versus 0.325 affine and 0.347 cubic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or archived cubic bridge basis captures this campaign's load readout.\",\n    \"empirical_witness\": \"Held-out summed-load RMSE was 0.270 affine and 0.273 cubic, versus 0.000291 harmonic on the same five splits.\",\n    \"causal_blanket_diagnosis\": \"The bridge readout requires harmonic self-response and opposite-channel coupling before inferring the physical axial load.\",\n    \"sublated_pivot\": \"Fit the archived harmonic basis to current calibration sweeps and sum the four inverted channel loads.\",\n    \"risk_kind\": \"structural calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the idle apparatus law from batch 05\",\n      \"rejected_reason\": \"The current channel-5 plateau matches archived reset campaigns, not the idle trace.\"\n    }\n  ],\n  \"rationale\": \"Build the solver with the calibration basis selected on held-out loads. Check the public contract and reference symmetry, then use held-out lab and stratum errors to detect material-fit instability. Verify bridge inversion on the actual coupon loads and check that the separate rate output is the derivative of the reset strain law; chamber accuracy itself cannot be measured on this blind batch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5fa948b5750b14a90d8b7648dc387f2c4cb020c115b2214f07256fdd5af9491e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37172.91,
+      "usage_known": true,
+      "prompt_tokens": 26458,
+      "cached_tokens": 9344,
+      "completion_tokens": 1426
+    }
+  ]
+}

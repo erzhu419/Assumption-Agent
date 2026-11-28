@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c6e953d2cf54ec1bcdcd3f057ab20e4",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:27:39.678013+00:00",
+  "ended_at_utc": "2026-11-28T03:28:17.324559+00:00",
+  "request_sha256": "348b0f907c93137fa6cb3f2ec8ff75f1a95911b1aa7fc9a69a724e3c17fa1a8e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24228,
+    "cached_tokens": 6784,
+    "completion_tokens": 1505
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_hereditary.py <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; raw,load=c['bridge_raw'],c['true_channel_loads']; truth=load.sum(axis=1)\\ndef cal(a,degree):\\n    z=[np.ones(len(a)),*a.T]\\n    if degree==2: z.extend(a[:,i]*a[:,j] for i in range(4) for j in range(i,4))\\n    return np.column_stack(z)\\nidx=np.arange(len(raw)); order=np.argsort(truth); fold=np.empty(len(raw),int); fold[order]=idx%5\\nfor degree in (1,2):\\n    A=cal(raw,degree); e=np.zeros(len(raw))\\n    for f in range(5):\\n        m=fold==f; e[m]=A[m]@np.linalg.lstsq(A[~m], truth[~m],rcond=None)[0]-truth[m]\\n    print('bridge degree',degree,'RMSE',np.sqrt(np.mean(e**2)),'max load-quartile p90',max(np.quantile(abs(e[ids]),.9) for ids in np.array_split(order,4)))\\nbridge=s._bridge(c); p,h=s._loads(tr,bridge); x=s._features(tr,te)[:len(h)]; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; labs=tr['lab_id']; aux=tr['aux_chamber_telemetry']; e={k:[] for k in ('specified','lab_intercepts','pressure_grammar','auxiliary_grammar')}\\nfor l in np.unique(labs):\\n    m=labs!=l; tau,theta=s._fit(x[m],p[m],h[m],dt,t,y[m],r[m]); C,R=s._design(tau,x,p,h,dt,t); ey=y-C@theta; er=r-R@theta\\n    delta=h-p[:,-1]; asym=aux[:,0]-aux[:,1]; cross=aux[:,2]*aux[:,3]\\n    # Additive drift challengers; every correction contributes t to strain and one to rate.\\n    Z={'specified':np.empty((len(h),0)), 'lab_intercepts':np.eye(len(np.unique(labs)))[np.searchsorted(np.unique(labs),labs)], 'pressure_grammar':np.c_[delta,delta/(1+h*h),delta*h*p[:,-1]], 'auxiliary_grammar':np.c_[aux,asym/(1+aux[:,2]**2),cross*asym]}\\n    for key,z in Z.items():\\n        a=np.zeros(len(h))\\n        if z.shape[1]:\\n            z=z/(1e-8+np.sqrt(np.mean(z[m]**2,axis=0)))\\n            def res(b):\\n                v=z[m]@b\\n                return np.r_[((v[:,None]*t-ey[m])/.012).ravel(),(v-er[m])/.008]\\n            a=z@least_squares(res,np.zeros(z.shape[1]),loss='cauchy',f_scale=2.5).x\\n        sy=abs(ey[~m]-a[~m,None]*t); sr=abs(er[~m]-a[~m]); e[key].append([max(np.quantile(sy[:,j],.9) for j in np.array_split(np.arange(len(t)),3)),np.quantile(sr,.9),np.median(sy),np.median(sr)])\\n    print('lab',l,'signed median residual strain/rate',np.median(ey[~m]),np.median(er[~m]))\\nfor key,v in e.items(): print(key,'worst lab-horizon p90 strain / worst lab rate p90',np.max(v,axis=0)[:2].round(6),'mean lab median',np.mean(v,axis=0)[2:].round(6))\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n    a=np.asarray(row['facility_telemetry_trace']); print('facility fields',list(row),'samples',len(a),'offsets',a.mean(0).round(4),'centered RMS',a.std(0).round(4))\\nprint('verification coupons available',pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['campaign_diagnostics'] is not None)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_hereditary.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: compare the specified two-branch law with nonlinear calibration and nuisance-drift challengers; current leave-one-lab-out worst p90 is 0.02637 for strain and 0.01476 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run classification, relay-mode, or stochastic-control checks\",\"rejected_reason\":\"The data contain continuous strain and rate outcomes from a deterministic hereditary recurrence. Held-out lab residuals and strain derivative consistency address the applicable nuisance and physical checks.\"}],\"rationale\":\"Cross-validated bridge sweeps will show whether quadratic terms improve calibration. Held-out lab and horizon slices will show whether pressure differences, rational terms, products, or lab offsets explain residual drift better than the specified law. Those tests can justify a benchtop change, but cannot validate a chamber correction without paired chamber responses.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e4d5f634ae1ebeaae46969b0d3f021df81ead556d16afbaf89f6eba9f4c8ffa9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39709.55,
+      "usage_known": true,
+      "prompt_tokens": 24228,
+      "cached_tokens": 6784,
+      "completion_tokens": 1505
+    }
+  ]
+}

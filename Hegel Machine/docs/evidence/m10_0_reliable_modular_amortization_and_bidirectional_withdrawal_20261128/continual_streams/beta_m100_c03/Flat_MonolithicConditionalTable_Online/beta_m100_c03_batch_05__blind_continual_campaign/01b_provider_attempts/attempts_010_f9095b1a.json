@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9095b1ab097403f921a69c37e33e392",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:42.330802+00:00",
+  "ended_at_utc": "2026-11-28T03:56:16.796595+00:00",
+  "request_sha256": "b231e60759532cec9224748f6e2b1c55f60041b459bcdc3a6c6b66a1f212bf2c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60214,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33081,
+    "cached_tokens": 9344,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/mix5.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations, combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps']; keep=np.max(abs(y),axis=1)<5; x,y=x[keep],y[keep]; iso=np.count_nonzero(x,axis=1)==1\\n\\ndef curves():\\n def obj(p):\\n  z=[]\\n  for j in range(4):\\n   m=(q['bank_id']==j)&(abs(q['raw_readout'])<5); a=q['ref_signal'][m]; b=q['raw_readout'][m]; z.extend(p[1+3*j]+p[2+3*j]*a+p[3+3*j]*np.sin(p[0]*a)-b)\\n  return z\\n return least_squares(obj,[2.5]+[0,1,.25]*4,gtol=1e-13).x\\np=curves(); print('curves',p); f=p[0]; u=x; v=np.sin(f*u); e=1-np.cos(f*u); b=y-p[1::3]-u*p[2::3]-v*p[3::3];\\nfor j in range(4):\\n k=(j+2)%4; a=u[:,k]; t=v[:,k]; z=e[:,k]; print('isolated',j,np.c_[a[iso&(a!=0)],b[iso&(a!=0),j]].T)\\n dic={'a':a,'v':t,'even':z,'a2':a*a,'a3':a**3,'a4':a**4,'sinhalf':np.sin(.5*f*a),'coshalf':1-np.cos(.5*f*a),'rat':a/(1+a*a),'rat2':a*a/(1+a*a),'abs':abs(a)}\\n for i,l in combinations(range(4),2):\\n  for m,h in [('x',u),('s',v),('c',e)]:\\n   for n,g in [('x',u),('s',v),('c',e)]:dic[f'{m}{i}{n}{l}']=h[:,i]*g[:,l]\\n for i,l,r in combinations(range(4),3):dic[f'x{i}x{l}x{r}']=u[:,i]*u[:,l]*u[:,r]\\n target=b[:,j]; opts=[]\\n for m,n in combinations(list(dic)[:11],2):\\n  A=np.c_[dic[m],dic[n]]; sel=iso&(a!=0); co=np.linalg.lstsq(A[sel],target[sel],rcond=None)[0]; opts.append((np.linalg.norm(A[sel]@co-target[sel]),m,n,co))\\n print('isolated best',sorted(opts,key=lambda t:t[0])[:5]); sel=[]; A=np.empty((len(u),0));\\n for _ in range(7):\\n  choices=[]\\n  for name,col in dic.items():\\n   if name in sel:continue\\n   B=np.c_[A,col]; co=np.linalg.lstsq(B,target,rcond=None)[0]; choices.append((np.sqrt(np.mean((B@co-target)**2)),name,co,B))\\n  rms,name,co,A=min(choices,key=lambda t:t[0]); sel.append(name); print('mixed',j,sel,rms,co.round(5));\\n print('raw residual quantiles',np.quantile(target,[0,.1,.5,.9,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mix5.py; sed -n '/^def _responses/,+12p' /tmp/hegel_continual_archive/*batch_02_solver.py; grep -n -E 'rob|axes|telemetry' /tmp/hegel_continual_archive/*batch_02_solver.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Pure saturation → shared sine-plus-linear rosette response; worst clean single-bank fit RMS is 1.56e-5, with mixed-bank validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use independent polynomial interpolation by bank\",\"rejected_reason\":\"The shared sine law fits at the measurement noise floor and gives a direct way to isolate coupling.\"}],\"rationale\":\"Subtract the validated single-bank response and compare opposite-bank and mixed terms. If the remaining residual is not near sweep noise, use its structure to revise the coupling rather than trusting it for wall selection. Read the archived wall variant and public schema for the first executable candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b0c3378d2694614f1705f24cfd1e1562e6f50e63d06bff02a62e539314e32369",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36627.18,
+      "usage_known": true,
+      "prompt_tokens": 33081,
+      "cached_tokens": 9344,
+      "completion_tokens": 1401
+    }
+  ]
+}

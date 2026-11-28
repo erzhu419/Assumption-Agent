@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "80d1c60fc370429c8647c282a8419028",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:15.384392+00:00",
+  "ended_at_utc": "2026-11-28T03:42:54.947756+00:00",
+  "request_sha256": "2e1843ad84b3c34dc98d6e91ede1b97bf29daee05325f0128b642fb69d8cde30",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53786,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28176,
+    "cached_tokens": 9344,
+    "completion_tokens": 1624
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _design, _features, _loads, _predict_chamber\\nfrom _verified_upstream import calibrate_upstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = solve_batch(d)\\nq = calibrate_upstream(dict(d, test=item['campaign_diagnostics']))['test']\\nlabs = q['lab_id']\\nx = _features(q, q)[len(labs):]\\npast, hold = _loads(q)\\ndt, t = d['past_dt'], d['eval_times']\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\ny0, y, yr = q['strain_0'], q['strain_curves_obs'], q['instant_rate_obs']\\ncurve, rates = _design(tau, x, past, hold, dt, t)\\nmech = y0[:, None] + curve[..., :2] @ theta[:2]\\ndrift = theta[2] + x @ theta[3:]\\nstate = np.zeros((len(labs), 2))\\nfor j, step in enumerate(dt):\\n    state = np.exp(-step / tau) * state - np.expm1(-step / tau) * past[:, j, None]\\nbasis = -np.expm1(-t[:, None] / tau)\\nnp.testing.assert_allclose(curve[..., :2], (hold[:, None] - state)[:, None, :] * basis)\\npkg_y, pkg_r = _predict_chamber(tau, theta, x, past, hold, dt, t, y0)\\nobs = np.column_stack((y, yr))\\npackaged = np.column_stack((pkg_y, pkg_r))\\nunique = np.unique(labs)\\n\\ndef predict(kind, p):\\n    a = p[0]\\n    f = -a * np.expm1(-t/a)\\n    der = 1.\\n    if kind == 'rational':\\n        f = (t + p[1]*t*t) / (1 + (t/a)**2)\\n    elif kind == 'rational_linear':\\n        f = t / (1+t/a)\\n    pred = mech + drift[:, None] * f\\n    rate = rates @ theta + (der-1) * drift\\n    if kind == 'free_memory':\\n        change = ((p[1:3]-1)*hold[:, None] - (p[3:5]-1)*state)*theta[:2]\\n        pred += change @ basis.T\\n        rate += change @ (1/tau)\\n    return np.column_stack((pred, rate))\\n\\nmodels = {'exp': ([1.], [.05], [25.]), 'within_lab_exp': ([1.], [.05], [25.]), 'rational': ([1., .5], [.05, 0.], [25., 10.]), 'rational_linear': ([1.], [.05], [25.]), 'free_memory': ([1.,1.,1.,1.,1.], [.05,0.,0.,0.,0.], [25.,2.,2.,2.,2.])}\\n\\ndef metrics(err):\\n    return np.array([np.sqrt(np.mean(err[:, :-1]**2, axis=0)).max(), max(np.sqrt(np.mean(err[labs == l, :-1]**2)) for l in unique), max(np.sqrt(np.mean(err[labs == l, -1]**2)) for l in unique)])\\n\\nprint('Worst-horizon strain RMSE, worst-lab strain RMSE, worst-lab rate RMSE')\\nprint('exact packaged', metrics(packaged - obs))\\nfor kind, (start, lower, upper) in models.items():\\n    e = np.empty_like(obs)\\n    fits = []\\n    for held in unique:\\n        keep = labs != held\\n        def res(p):\\n            r = (predict(kind, p) - obs)[keep]\\n            if kind == 'within_lab_exp':\\n                for l in unique[unique != held]:\\n                    m = labs[keep] == l\\n                    r[m] -= r[m].mean(axis=0)\\n            return r.ravel()\\n        p = least_squares(res, start, bounds=(lower, upper), loss='soft_l1', f_scale=.006).x\\n        fits.append(p)\\n        e[~keep] = (predict(kind, p) - obs)[~keep]\\n    score = metrics(e)\\n    print(kind, score, 'fold parameters min/max', np.min(fits, axis=0), np.max(fits, axis=0))\\n    if kind == 'exp':\\n        assert max(score) < .01\\n    if kind == 'within_lab_exp':\\n        print('within-lab drift spread', [round(float(np.std(drift[labs == l])), 5) for l in unique])\\nassert max(metrics(packaged - obs)) < .01\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset or linear drift → H2 retained load memory with exponential drift saturation; worst held-out horizon strain RMSE 0.00583 and worst-lab initial-rate RMSE 0.00652.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, Fokker–Planck operators, and classification recall\",\n      \"rejected_reason\": \"This task predicts continuous strain and rate from load histories; it has no relay state, probability-density dynamics, or class labels. Lab-centered drift fitting tests the relevant nuisance instead.\"\n    }\n  ],\n  \"rationale\": \"Compare rational drift and freely weighted hold–history differences against the packaged exponential law, fitting each candidate inside the diagnostic folds. The within-lab fit tests whether between-lab offsets drive the saturation estimate. Reconsider the packaged law if a challenger materially reduces a worst-slice error or lab centering exposes an unstable estimate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b5f058d97d1826c0f4345a31155da3c17aab4e6e6af02ddbfd82779d28eb5ac6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41654.15,
+      "usage_known": true,
+      "prompt_tokens": 28176,
+      "cached_tokens": 9344,
+      "completion_tokens": 1624
+    }
+  ]
+}

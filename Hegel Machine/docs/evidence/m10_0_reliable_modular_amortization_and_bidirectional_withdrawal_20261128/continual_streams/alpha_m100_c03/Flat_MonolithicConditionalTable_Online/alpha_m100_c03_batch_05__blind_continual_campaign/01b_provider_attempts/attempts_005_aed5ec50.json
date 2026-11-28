@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aed5ec5048e2447e800cd3839c3d5bac",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:30.500829+00:00",
+  "ended_at_utc": "2026-11-28T03:55:53.964829+00:00",
+  "request_sha256": "817941112357098573d298b2c95570fcf081d3731e3bef72c27a329585fe03ea",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40060,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24459,
+    "cached_tokens": 9344,
+    "completion_tokens": 824
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,36p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_03_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; y=c['true_channel_loads']; r=c['bridge_raw']; pairs=[(0,1),(1,2),(2,3),(0,3)]; A=np.c_[np.ones(len(y)),y]; B=np.c_[A,y**3,*[y[:,j]*y[:,k] for j,k in pairs]]; C=np.c_[B,*[y[:,j]*y[:,k] for j,k in [(0,2),(1,3)]],y**2]\\nfor name,d in [('affine',A),('sparse',B),('expanded',C)]:\\n for target in [r,r.sum(1,keepdims=True)]:\\n  good=np.ones(len(y),bool)\\n  for _ in range(5):\\n   coef=np.linalg.lstsq(d[good],target[good],rcond=None)[0]; e=np.amax(abs(target-d@coef),axis=1); good=e<=np.partition(e,65)[65]\\n  print(name,target.shape[1],np.quantile(e,[0,.5,.8,.9,.95,.96,.97,1]).round(6),'flagged',np.flatnonzero(e>.01));\\n  if name=='sparse': print(coef.round(5))\\ns=c['single_channel_sweeps']; print('single sweeps:');\\nfor j in range(4):\\n m=s['lab_id']==j; print(j,np.c_[s['true_stress'][m],s['cmd_stress'][m]].T.round(4))\\nfor key in ('train','test'):\\n s=D[key]; a=s['aux_chamber_telemetry']; print(key,'aux mean, sd',a.mean(0),a.std(0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -22\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 ordinary least-squares bridge → H2 robust sparse nonlinear bridge; the untrimmed sparse fit has a maximum raw-channel residual of 14.03 and a maximum summed residual of 0.325.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the channel sum by ordinary least squares\",\n      \"rejected_reason\": \"Channel errors nearly cancel in the sum, but the remaining error is large enough to test robust fitting before adopting that simplification.\"\n    }\n  ],\n  \"rationale\": \"Compare trimmed affine, sparse, and expanded bridge fits to determine whether a few corrupted sweeps explain the residuals or the calibration basis is missing terms. Inspect the separate single-axis sweeps to see whether they can identify intact readings independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "62b742aa1016e2eb6f48e6719746276e5a2c36e49bb3501385a61011595fc12d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25627.58,
+      "usage_known": true,
+      "prompt_tokens": 24459,
+      "cached_tokens": 9344,
+      "completion_tokens": 824
+    }
+  ]
+}

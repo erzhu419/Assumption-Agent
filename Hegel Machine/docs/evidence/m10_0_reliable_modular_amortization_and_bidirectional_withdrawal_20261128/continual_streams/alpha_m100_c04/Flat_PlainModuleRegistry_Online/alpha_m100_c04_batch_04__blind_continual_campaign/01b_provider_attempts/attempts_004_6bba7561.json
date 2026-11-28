@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6bba7561b448494499995b7e94b799ba",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:48.837298+00:00",
+  "ended_at_utc": "2026-11-28T03:45:15.174660+00:00",
+  "request_sha256": "6bf39fffb6993fff53ef1f13d9512ad85cfa06ec323ed4b2756f62c6776ab2aa",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 28870,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20308,
+    "cached_tokens": 0,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task\\nls -l /tmp/hegel_continual_archive/*solver.py\\ngrep -inE 'bridge_raw|channel_load|sweep|cubic|transduc' /tmp/hegel_continual_archive/*solver.py | cut -c1-180 | head -45\\ncat >/tmp/bridge_probe.py <<'PY'\\nimport pickle\\nfrom itertools import combinations_with_replacement as comb\\nimport numpy as np\\nxdata=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nc=xdata['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']\\nterms=[t for k in range(4) for t in comb(range(4),k)]\\ndef design(x, ts): return np.column_stack([np.prod(x[:,t],axis=1) for t in ts])\\ndef fit(a,y):\\n w=np.ones(len(y))\\n for _ in range(40):\\n  b=np.linalg.lstsq(a*w[:,None],y*w[:,None],rcond=None)[0]\\n  r=np.linalg.norm(a@b-y,axis=1)\\n  w=1/np.maximum(r, max(1e-7,np.median(r)*2))\\n return b\\nb=fit(design(x,terms),y)\\nprint('coefficients and full residuals')\\nfor t,row in zip(terms,b): print(t,np.round(row,6))\\nprint(np.array2string(np.linalg.norm(design(x,terms)@b-y,axis=1),precision=3))\\nfolds=np.random.default_rng(72).permutation(len(x)).reshape(8,10)\\nfor tag,ts in [('affine',terms[:5]),('quadratic',terms[:15]),('pure-cubic-plus-quadratic',[t for t in terms if len(t)<3 or len(set(t))==1]),('pure-cubics-plus-bilinear',[t for t in terms if len(t)<3 or len(set(t))==1]),('all-cubic',terms),('all-cubic-no-three-way',[t for t in terms if len(set(t))<3])]:\\n a=design(x,ts); rr=np.empty(len(x))\\n for te in folds:\\n  tr=np.setdiff1d(np.arange(len(x)),te); rr[te]=np.linalg.norm(a[te]@fit(a[tr],y[tr])-y[te],axis=1)\\n clean=rr[~np.isin(np.arange(len(x)),[13,14,15])]\\n print(tag,'clean median p95 max',np.quantile(clean,[.5,.95,1]),'worst rows',np.argsort(rr)[-10:])\\nprint('sweeps',[(k,np.asarray(v)[:14]) for k,v in c['single_channel_sweeps'].items()])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine mixing -> H2 cubic bridge terms; full-fit clean median residual falls from 0.375 to 0.000046, with out-of-fold error pending.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or degree-two forward map captures the bridge response once spike rows are downweighted.\",\"empirical_witness\":\"Robust median row residual is 0.375 for affine, 0.183 for quadratic, and 0.000046 for the full cubic basis on the 80 calibration rows.\",\"causal_blanket_diagnosis\":\"The lower-degree basis leaves systematic transducer response unexplained; three large spikes remain distinct from the clean residuals.\",\"sublated_pivot\":\"Compare cubic sub-bases on withheld calibration rows before choosing a forward model to invert.\",\"risk_kind\":\"model_basis_incompleteness\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the full cubic immediately\",\"rejected_reason\":\"The full fit has 35 basis columns for 80 rows; withheld errors and coefficient structure can reveal whether a smaller basis will extrapolate better.\"}],\"rationale\":\"Inspect the fitted terms and withheld errors to distinguish true nonlinear coupling from noise and leverage effects. Check prior solvers for a documented bridge convention without importing their fitted parameters.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f01c652a0b3b67a704982c328f2dbdfd1e089e06c4352532546c913ccb6b9dfc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28469.14,
+      "usage_known": true,
+      "prompt_tokens": 20308,
+      "cached_tokens": 0,
+      "completion_tokens": 1004
+    }
+  ]
+}

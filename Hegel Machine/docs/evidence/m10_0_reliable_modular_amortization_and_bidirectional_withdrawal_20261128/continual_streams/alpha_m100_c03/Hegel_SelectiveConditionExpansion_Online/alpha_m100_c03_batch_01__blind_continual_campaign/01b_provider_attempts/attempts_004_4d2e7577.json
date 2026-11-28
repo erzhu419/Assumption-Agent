@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d2e7577f7db4bd69855df1a3049ffc9",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:01.018063+00:00",
+  "ended_at_utc": "2026-11-28T03:31:29.807274+00:00",
+  "request_sha256": "c4fafb1587ae320db10e0de9fcad2b7b3488c328abb0a02b0211d8dd5ec84156",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31470,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20687,
+    "cached_tokens": 9344,
+    "completion_tokens": 1132
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/explore_chamber.py <<'PY'\\nimport pickle,runpy,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; dg=p['campaign_diagnostics']; c=d['calibration_load_cells']; t=d['eval_times']; dt=d['past_dt']; m=runpy.run_path('/tmp/hegel_continual_archive/alpha_m100_c03_s00_solver.py'); np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nfor a,y in [(c['bridge_raw'],c['true_channel_loads']),(c['true_channel_loads'],c['bridge_raw'])]:\\n for deg in [1,2,3]:\\n  from itertools import combinations_with_replacement\\n  X=np.column_stack([np.ones(len(a))]+[np.prod(a[:,cols],axis=1) for k in range(1,deg+1) for cols in combinations_with_replacement(range(4),k)])\\n  H=X@np.linalg.pinv(X); R=(H@y-y)/(1-H.diagonal()[:,None]); print('cal degree',deg,'LOO rmse/std',np.sqrt(np.mean(R**2,axis=0))/y.std(axis=0),'sum rmse',np.sqrt(np.mean(R.sum(1)**2)))\\nb=m['_bridge'](c); x=m['_features'](tr,te); z=m['_features'](tr,dg)[len(tr['lab_id']):]; past,hold=m['_loads'](tr,b); tau,w=m['_fit'](x[:len(hold)],past,hold,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('tau,theta',tau,w)\\nfor split,X in [(tr,x[:len(hold)]),(dg,z)]:\\n past,hold=m['_loads'](split,b); C,R=m['_design'](tau,X,past,hold,dt,t); Y=split['strain_curves_obs']-split['strain_0'][:,None]; V=split['instant_rate_obs']; E=Y-C@w; print('lab,stratum',np.c_[split['lab_id'],split['stratum']][:24].T); print('curve and rate abs residual quantiles',np.quantile(abs(E),[.5,.9,1]),np.quantile(abs(V-R@w),[.5,.9,1])); print('resid sv',np.linalg.svd(E,compute_uv=False)); print('hold range',np.quantile(hold,[0,.5,1]));\\n if split is dg:\\n  A=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t,t*t],np.r_[1/tau,1,0])); W=np.vstack((E.T,V-R@w)); co=np.linalg.lstsq(A,W,rcond=None)[0].T; print('chamber coefficient columns (two amps, slope, quad)',co); print('amplitude-fit abs residual quantiles',np.quantile(abs(W-A@co.T),[.5,.9,1])); print('predictors: hold last avg base_drift x0..x3'); print(np.c_[hold,past[:,-1],past.mean(1),R[:,2:]@w[2:],X]); print('corr',np.corrcoef(np.c_[co,hold,past,R[:,2:]@w[2:],X].T)[:4,4:]); print('strain residual rows',E[:5]); print('rate residual',V-R@w)\\nprint('aux train,test ranges',[(a['aux_chamber_telemetry'].min(0),a['aux_chamber_telemetry'].max(0),a['aux_chamber_telemetry'][:3]) for a in (tr,te)]); print('sweep head', {k:v[:12] for k,v in c['single_channel_sweeps'].items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore_chamber.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test affine bridge calibration against nonlinear alternatives and decompose labeled chamber residuals into relaxation and drift; no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a black-box correction to the 24 chamber coupons\",\"rejected_reason\":\"First determine whether the discrepancies occupy a small, transferable hereditary basis.\"}],\"rationale\":\"Calibration leave-one-out errors can reject the affine bridge, and joint curve/rate residuals can show whether the chamber changes relaxation amplitudes, drift, or time constants.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "fef8dd13dd7d60111f287aa019ccef4f95742f32084046ed7a0240d65c5ef61f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30915.56,
+      "usage_known": true,
+      "prompt_tokens": 20687,
+      "cached_tokens": 9344,
+      "completion_tokens": 1132
+    }
+  ]
+}

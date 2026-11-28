@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a0df8473f245460398437a89720f63d5",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:22.559980+00:00",
+  "ended_at_utc": "2026-11-28T03:32:43.089496+00:00",
+  "request_sha256": "29c81d972881ca654b0ca9789d728e357ed982c602892974eade804b4c6a82f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41295,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25723,
+    "cached_tokens": 9344,
+    "completion_tokens": 725
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -i \\\"/^aux=/c\\\\aux=np.empty((len(p),0)); names=['p'+str(i) for i in range(p.shape[1])]+['h']+['x'+str(i) for i in range(4)]; X=np.c_[p,h,x]\\\" /tmp/chamber.py; cd /tmp; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nfrom chamber import *\\nfor s in (tr,te,q):\\n print('split',len(s['lab_id']),list(s),'missing',np.isnan(s['coupon_features_raw']).sum(0))\\nprint('dataset fields',list(d)); print('correlations',[(n,np.corrcoef(np.c_[X[:,i],v].T)[0,1:].round(3).tolist()) for i,n in enumerate(names)])\\nfor cols in [np.arange(7),np.arange(11),np.r_[5,6,7:11]]:\\n Z=np.c_[np.ones(len(p)),X[:,cols]]; B=np.linalg.lstsq(Z,v,rcond=None)[0]; loo=(e-Z@B@A.T)/(1-np.sum(Z*np.linalg.pinv(Z).T,1))[:,None]; print('cols',[names[i] for i in cols], 'coeff',B,'LOO curve/rate',np.sqrt(np.mean(loo**2,0)),'worst row',max(np.sqrt(np.mean(loo[:,:-1]**2,1))),max(abs(loo[:,-1])))\\nprint('singular',np.linalg.svd(e,compute_uv=False)); print('test ranges',[(k,np.shape(vv)) for k,vv in te.items()]); print('A singular',np.linalg.svd(A,compute_uv=False))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unchanged benchtop law) → H2 (chamber correction from observed history and coupon features); baseline chamber strain and initial-rate RMSE are 0.676 and 1.680.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use per-coupon chamber telemetry as a predictor\",\n      \"rejected_reason\": \"That field is absent from the diagnostic coupons; verify which inputs are shared before fitting.\"\n    }\n  ],\n  \"rationale\": \"Use the linear fits as a diagnostic, not as the final law. If history and feature terms predict both outputs on omitted coupons, inspect their coefficients for a compact physical model. If the errors remain large, test nonlinear terms or a changed time basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8d2685eb4581e98a28d0d4029e55f37e41f1049bbf7eb39927df63ecbf1566b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22587.56,
+      "usage_known": true,
+      "prompt_tokens": 25723,
+      "cached_tokens": 9344,
+      "completion_tokens": 725
+    }
+  ]
+}

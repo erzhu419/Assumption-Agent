@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6ed858db1c54b69b964b18cfe4b1bbf",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:18.390246+00:00",
+  "ended_at_utc": "2026-11-28T03:44:46.027499+00:00",
+  "request_sha256": "10411d3b4b8ed737b4cbd8a37fb1ae81fa53c016be104bf586f4f85dfb96222b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24447,
+    "cached_tokens": 9344,
+    "completion_tokens": 1079
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('batch_solver',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nbase='/tmp/hegel_continual_archive/'\\nfor e in json.load(open(base+'archive_apparatus_log.json')):\\n z=np.asarray(e['facility_telemetry_trace']); print('trace',e['completed_campaign_index'],e['completed_campaign_short_name'],'median',np.round(np.median(z,0),3),'half-block medians (columns 1,5)',[np.round(np.median(q[:,[1,5]],0),3).tolist() for q in np.array_split(z,2)])\\nprint('pre-LLM diagnostic:',open(base+'pre_llm_gate_diagnostic.json').read().strip())\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; good=np.max(abs(y),axis=1)<8; ids=np.flatnonzero(good); x,y=x[ids],y[ids]; base_a=s._bridge_design(x); amp=np.max(abs(x),axis=1); fold=np.empty(len(x),int); fold[np.argsort(amp)]=np.repeat(np.arange(4),[len(a) for a in np.array_split(np.arange(len(x)),4)])\\nfor j in range(4):\\n v=x[:,j]; n=x[:,(j+1)%4]; a=base_a[:,j]; q=v-n\\n models={'cyclic cubic':a,'opposite and triple products':np.c_[a,v*x[:,(j+2)%4],x.prod(1),v*n*x[:,(j+2)%4]],'rational differences':np.c_[a,q/(1+.3*q*q),v**3/(1+.3*v*v)]}\\n for label,b in models.items():\\n  errors=[]\\n  for k in range(4):\\n   m=fold==k; w=np.linalg.lstsq(b[~m],y[~m,j],rcond=None)[0]; errors.append(np.quantile(abs(b[m]@w-y[m,j]),.9))\\n  print('bridge',j,label,'amplitude-slice p90',np.round(errors,6))\\ntr,te=d['train'],d['test']; xx=s._features(tr,te); n=len(tr['lab_id']); inp=s._inputs(tr,xx[:n],s._calibrate(c)); t=d['eval_times']; dt=d['past_dt']; Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; all_e=[]; all_r=[]\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']==lab; taus,theta=s._fit(tuple(a[~m] for a in inp),dt,t,Y[~m],R[~m]); A,B=s._design(taus,tuple(a[m] for a in inp),dt,t); e=A@theta-Y[m]; er=B@theta-R[m]; print('held-out lab',lab,'median signed early/late/rate',np.median(e[:,:3]),np.median(e[:,-3:]),np.median(er)); all_e.append(e); all_r.append(er)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 nonlinear axial calibration and a shared material spectrum → H2 telemetry-selected chamber reset; previous worst held-out p90 was 0.02255 for strain and 0.01729 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test classification balance, relay modes, or HJB operators.\",\"rejected_reason\":\"The documented inputs describe continuous viscoelastic regression without class labels, relay states, or a control PDE.\"}],\"rationale\":\"Compare richer bridge terms on held-out load ranges; a material improvement at the highest loads would justify changing the calibration. Check signed held-out residuals for lab offsets and compare both halves of the apparatus traces to see whether a transient, rather than a sustained plateau, drove the chamber selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2ef027b747732f8efbc78e0f506953ceda3e51caf85e2703e29d41821b1ae051",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29712.72,
+      "usage_known": true,
+      "prompt_tokens": 24447,
+      "cached_tokens": 9344,
+      "completion_tokens": 1079
+    }
+  ]
+}

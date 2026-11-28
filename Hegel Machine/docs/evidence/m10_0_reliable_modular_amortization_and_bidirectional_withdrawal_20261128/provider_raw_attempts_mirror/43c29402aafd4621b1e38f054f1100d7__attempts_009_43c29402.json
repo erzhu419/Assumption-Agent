@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43c29402aafd4621b1e38f054f1100d7",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:18.576015+00:00",
+  "ended_at_utc": "2026-11-28T04:04:02.067929+00:00",
+  "request_sha256": "dc25cb89cedad50b9273904bb70a5284b703bbe73726f3440b326a0974a88134",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 62326,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31823,
+    "cached_tokens": 9344,
+    "completion_tokens": 1750
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '1,92p' downstream_solver.py\\ncat > /tmp/check_downstream.py <<'PY'\\nimport pickle, sys\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nimport _verified_upstream as upstream\\nimport downstream_solver as dn\\nimport batch_solver as batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    p = pickle.load(f)[0]\\nraw = p['dataset']\\nd = upstream.calibrate_upstream(dict(raw, chamber_verification_trials=p['campaign_diagnostics']))\\ntr, te, di = [d[k] for k in ('train', 'test', 'chamber_verification_trials')]\\ndt, t = d['past_dt'], d['eval_times']\\na = batch.solve_batch(raw)\\nb = dn.solve_downstream(d)\\nfor key in a:\\n    np.testing.assert_array_equal(a[key], b[key])\\ntau, theta = a['estimated_taus'], a['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nxt, xv = dn._features(tr, te)\\nzero, rate = dn._chamber(te, xv, np.array([0., 1e-6]), tau, theta)\\nnp.testing.assert_allclose(zero[:, 0], te['strain_0'], atol=1e-12, rtol=0)\\nnp.testing.assert_allclose((zero[:, 1]-zero[:, 0])/1e-6, rate, atol=2e-5, rtol=0)\\ndef rms(a): return np.sqrt(np.mean(a*a))\\nP, H, F = dn._inputs(tr, xt)\\nY = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nR = tr['instant_rate_obs']; L = tr['lab_id']\\nfor l in np.unique(L):\\n    m = L != l\\n    q, w = dn._fit(P[m], H[m], F[m], dt, t, Y[m], R[m])\\n    D, V = dn._design(q, P[~m], H[~m], F[~m], dt, t)\\n    e = D@w-Y[~m]\\n    print('benchtop held-out lab', l, 'taus', np.round(q,5), 'max weight shift',round(np.max(abs(w-theta)),5),'curve RMSE',round(rms(e),5),'curve p90',round(np.quantile(abs(e),.9),5),'rate RMSE',round(rms(V@w-R[~m]),5))\\n# The diagnostics are a separate feature panel. Pairing it with an empty\\n# split applies the exact same standardization rules to that panel alone.\\nempty = {k:v[:0] for k,v in di.items()}\\nxd, _ = dn._features(di, empty)\\nL = di['lab_id']; complete = ~np.isnan(di['coupon_features_raw']).any(axis=1)\\nP,H,F = dn._inputs(di,xd)\\nY = di['strain_curves_obs']-di['strain_0'][:,None]\\nR = di['instant_rate_obs']; C = np.column_stack((Y,R))\\nB = H[:,None]*np.r_[-np.expm1(-t[:,None]/tau)@theta[:2],np.sum(theta[:2]/tau)]\\nE = C-B; D = F@theta[2:]\\nK = np.r_[dn._drift_integral(t,dn._DRIFT),1.]\\nfor name,m in [('complete',complete),('missing',~complete),*[(f'lab {l}',L==l) for l in np.unique(L)]]:\\n    ec=(B+D[:,None]*K-C)[m]; print('exact artifact chamber',name,'curve/rate RMSE',np.round([rms(ec[:,:-1]),rms(ec[:,-1])],6))\\nfor name,init,lo,hi in [('exp',[3.5],[.09],[50]),('exp+linear',[1.4,.56],[.09,0],[25,1]),('dual',[.8,.3,8.5],[.09,0,2],[2,1,50])]:\\n    def kernel(q):\\n        if name=='exp': z=dn._drift_integral(t,(q[0],1.,q[0]))\\n        elif name=='exp+linear': z=dn._drift_integral(t,(q[0],1.,q[0]))*q[1]+t*(1-q[1])\\n        else: z=dn._drift_integral(t,q)\\n        return np.r_[z,1.]\\n    for profile in (False, True):\\n        def fit(m):\\n            def fun(q):\\n                k=kernel(q); e=E[m]; drift=e@k/(k@k) if profile else D[m]\\n                return (drift[:,None]*k-e).ravel()\\n            return least_squares(fun,init,bounds=(lo,hi),loss='soft_l1',f_scale=.005).x\\n        worst=[0.,0.]\\n        for l in np.unique(L):\\n            m=L==l; k=kernel(fit(~m if profile else ~m & complete)); err=D[m,None]*k-E[m]\\n            worst[0]=max(worst[0],rms(err[:,:-1])); worst[1]=max(worst[1],rms(err[complete[m],:-1]))\\n        print('kernel CV',name,'profile',profile,'worst lab all/complete',np.round(worst,6),'full fit',np.round(fit(np.ones(len(L),dtype=bool) if profile else complete),6))\\nprint('isolated composition and zero-time derivative passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: chamber branch reset → H2: two-decay drift with diagnostic-panel normalization; the rate-controlled kernel gave worst held-out-lab curve RMSE 0.00635, and the staged solver passed public schema and pooled reference exchange.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check\",\n      \"rejected_reason\": \"The schema does not test derivative consistency or held-out-lab performance. These checks can distinguish a solver defect from diagnostic imputation error.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifacts in an isolated process and separate benchtop parameter stability, chamber kernel choice, and missing-feature error. Change the model only if the held-out results identify a meaningful improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "67addcc8954dfec9cb3fdc0ce63c7eea422a0366a2576e0568f5114ae013b174",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45574.73,
+      "usage_known": true,
+      "prompt_tokens": 31823,
+      "cached_tokens": 9344,
+      "completion_tokens": 1750
+    }
+  ]
+}

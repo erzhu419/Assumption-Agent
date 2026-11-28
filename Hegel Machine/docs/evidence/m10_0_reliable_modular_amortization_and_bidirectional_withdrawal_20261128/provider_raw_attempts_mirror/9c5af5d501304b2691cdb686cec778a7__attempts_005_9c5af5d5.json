@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c5af5d501304b2691cdb686cec778a7",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:30.978465+00:00",
+  "ended_at_utc": "2026-11-28T03:32:15.198617+00:00",
+  "request_sha256": "1366cd06d69e7886fff059376295ceb6eb2b5975fad376498b6eb29458ea685b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24752,
+    "cached_tokens": 9344,
+    "completion_tokens": 1812
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat public_asset_index.json | tail -85; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -20; cat > /tmp/chamber_probe.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m100_c04_s00_solver as s\\nnp.set_printoptions(precision=5,suppress=True)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; p=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; cal=s._calibration(c); n=len(tr['lab_id']); x=s._features(tr,te); ti=s._inputs(tr,x[:n],cal); tau,theta=s._fit(ti,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('tau theta cal',tau,theta,cal)\\nr=c['bridge_raw']; loads=c['true_channel_loads']; A=np.c_[r,np.ones(len(r))]; Q=np.c_[A,*[r[:,k]*r[:,j] for k in range(4) for j in range(k,4)]]\\nfor mat in [A,Q]:\\n err=(mat@np.linalg.lstsq(mat,loads,rcond=None)[0]-loads)/(1-np.sum(np.linalg.qr(mat,mode='reduced')[0]**2,axis=1))[:,None]; print('bridge LOO RMSE chan and sum',np.sqrt(np.mean(err**2,axis=0)),np.sqrt(np.mean(err.sum(1)**2)))\\nprint('cmd sweeps by lab slopes', [np.polyfit(c['single_channel_sweeps']['cmd_stress'][c['single_channel_sweeps']['lab_id']==j],c['single_channel_sweeps']['true_stress'][c['single_channel_sweeps']['lab_id']==j],1) for j in np.unique(c['single_channel_sweeps']['lab_id'])]);\\npx=s._features(tr,p)[n:]; past,h,cov=s._inputs(p,px,cal); a,b=s._design(tau,(past,h,cov),dt,t); Y=np.c_[p['strain_curves_obs']-p['strain_0'][:,None],p['instant_rate_obs']]; Y0=np.c_[a@theta,b@theta]\\ndef basis(ta): return np.r_[np.c_[-np.expm1(-t[:,None]/ta),t],[[1/ta[0],1/ta[1],1]]]\\ndef temporal(ta):\\n D=basis(ta); return Y.T-D@np.linalg.lstsq(D,Y.T,rcond=None)[0]\\nta=least_squares(lambda z:temporal(z).ravel(),tau,bounds=(.05,25)).x; print('diagnostic temporal fit',ta,'rmse old/new',*[np.sqrt(np.mean(temporal(z)**2)) for z in [tau,ta]])\\nD=basis(tau); V=np.linalg.lstsq(D,(Y-Y0).T,rcond=None)[0].T; Yb=Y-(cov@theta[2:])[:,None]*np.r_[t,1]; gains=np.linalg.lstsq(D,Yb.T,rcond=None)[0].T; print('residual SVD',np.linalg.svd(Y-Y0,compute_uv=False)[:8]); print('baseline rmse',np.sqrt(np.mean((Y-Y0)**2,axis=0))); print('diagnostic source ranges',np.min(past,axis=0),np.max(past,axis=0)); print('test source ranges',*[np.round(getattr(np,k)(s._inputs(te,x[n:],cal)[0],axis=0),3) for k in ['min','max']]);\\nL=np.eye(4)[p['lab_id']][:,1:]; S=np.eye(3)[p['stratum']][:,1:]; one=np.ones(len(past)); a0=b[:,:2]*tau; gap=a0; delta=np.diff(np.c_[past,h],axis=1); raw=p['past_channel_raw']; hold=p['hold_channel_raw']; cols={'past+hold':np.c_[past,h], 'gaps':gap,'cov':px,'lab':L,'stratum':S,'clipped':np.maximum(past,0),'squared':past**2,'signed-square':past*abs(past),'positive-delta':np.maximum(delta,0),'negative-delta':np.minimum(delta,0),'raw hold':hold,'past extrema':np.c_[past.min(1),past.max(1),past.std(1)],'hold*gap':h[:,None]*gap}\\nfor name,z in cols.items():\\n print('corr',name,np.round(np.corrcoef(np.c_[z,V].T)[:-3,-3:],2).T)\\ndef cv(Z,W):\\n pred=np.zeros_like(Y)\\n for j in range(len(Y)):\\n  mask=np.arange(len(Y))!=j; pred[j]=Z[j]@np.linalg.lstsq(Z[mask],W[mask],rcond=None)[0]@D.T\\n er=pred-(Y-Y0); return np.round([np.sqrt(np.mean(er[:,:-1]**2)),np.sqrt(np.mean(er[:,-1]**2)),np.max(np.sqrt(np.mean(er[:,:-1]**2,axis=1)))],5)\\nfor keys in [[],['past+hold'],['gaps'],['cov'],['lab'],['past+hold','cov'],['past+hold','lab'],['past+hold','squared'],['past+hold','clipped'],['past+hold','positive-delta'],['past+hold','hold*gap'],['past+hold','past extrema'],['past+hold','raw hold']]:\\n Z=np.column_stack([one]+[cols[k] for k in keys]); print('LOO',keys,cv(Z,V));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop deployment law → H2 shared relaxation with corrected chamber amplitudes and drift; diagnostic pointwise maximum errors are 2.505 strain and 2.820 rate before correction, versus 0.0122 and 0.0049 after temporal projection only.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The benchtop state and drift law transfers unchanged to this campaign’s chamber.\",\"empirical_witness\":\"Diagnostic median absolute strain and rate errors are 0.521 and 1.327; their residuals project onto the benchtop temporal basis with median discrepancies of 0.00158 and 0.00188.\",\"causal_blanket_diagnosis\":\"The discrepancy is largely in coupon-specific branch amplitudes and drift, not in an unexplained temporal waveform.\",\"sublated_pivot\":\"Keep the train-fitted spectrum and identify a stress-history chamber correction, checking held-out coupons and whether refitting the temporal spectrum materially improves reconstruction.\",\"risk_kind\":\"deployment constitutive shift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use free chamber coefficients for each coupon\",\"rejected_reason\":\"They demonstrate temporal fit but cannot predict deployment coupons without a transferable input law.\"}],\"rationale\":\"Compare exact temporal bases and held-out calibration errors, then use coupon-level predictive errors to locate which known stress-history or covariate structure explains the chamber shift.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "66daa1d89e33eb94a3dc03cc7172b116a1d6e263761b0129c2ff642386c71d8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46239.42,
+      "usage_known": true,
+      "prompt_tokens": 24752,
+      "cached_tokens": 9344,
+      "completion_tokens": 1812
+    }
+  ]
+}

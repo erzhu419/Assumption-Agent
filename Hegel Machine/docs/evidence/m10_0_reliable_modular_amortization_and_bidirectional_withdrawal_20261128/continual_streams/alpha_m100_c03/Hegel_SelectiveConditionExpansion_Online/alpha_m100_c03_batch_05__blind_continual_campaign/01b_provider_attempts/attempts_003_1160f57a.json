@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1160f57a03d446279e67d4153f2e1cb6",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:51.809051+00:00",
+  "ended_at_utc": "2026-11-28T03:58:15.833775+00:00",
+  "request_sha256": "276cd53b75a531da3ce7ba3db34f233f5c753430d7ab3c2a8406cc43711d2ca2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21708,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18521,
+    "cached_tokens": 9344,
+    "completion_tokens": 818
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && tail -28 _verified_downstream.py && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json && grep -inE 'bridge|transduc|saturat|coupl' /tmp/hegel_continual_archive/* | cut -c1-220 | head -55; cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\nxdata=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=xdata['calibration_load_cells']; x0,y0=map(c.get,['true_channel_loads','bridge_raw']); ok=np.max(abs(y0),1)<5; x=x0[ok]; y=y0[ok]; print('removed',np.flatnonzero(~ok)); print('clean axial observations'); print(np.round(np.c_[x[:sum(np.count_nonzero(x,axis=1)<=1)],y[:sum(np.count_nonzero(x,axis=1)<=1)]],6)); print('clean ranges',x.min(0),x.max(0),y.min(0),y.max(0));\\nfor deg in range(1,7):\\n for additive in [True,False]:\\n  if not additive and (deg==1 or deg>4):continue\\n  terms=[()] + [t for k in range(1,deg+1) for t in itertools.combinations_with_replacement(range(4),k) if not additive or t[0]==t[-1]]\\n  A=np.stack([np.prod(x[:,t],axis=1) for t in terms],1); U,s,V=np.linalg.svd(A,full_matrices=False); coef=np.linalg.lstsq(A,y,rcond=None)[0]; r=y-A@coef; loo=r/np.maximum(1e-8,1-(U**2).sum(1))[:,None]; print(deg,additive,len(terms),'RMS',np.round(np.mean(r*r,0)**.5,5),'LOO RMS/worst',np.round(np.mean(loo*loo,0)**.5,5),np.round(np.max(abs(loo),0),5));\\n  if deg in (2,3) and not additive: print([(t,list(row)) for t,row in zip(terms,coef.round(4))]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupled bridge → H2 saturating or polynomial bridge; leave-one-reference-out error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a direct inverse first\",\n      \"rejected_reason\": \"The reference loads are controlled inputs, and the isolated spikes are in the bridge outputs. A forward fit makes their residuals easier to detect.\"\n    }\n  ],\n  \"rationale\": \"Use axial references to distinguish saturation from cross-coupling, and compare polynomial bases by leave-one-reference-out error so a nearly interpolating fit is not mistaken for a reliable calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "cdeea09304c5ce6ca9423e8e00bb98d50d8be472baa85820b838983588e864bb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23982.95,
+      "usage_known": true,
+      "prompt_tokens": 18521,
+      "cached_tokens": 9344,
+      "completion_tokens": 818
+    }
+  ]
+}

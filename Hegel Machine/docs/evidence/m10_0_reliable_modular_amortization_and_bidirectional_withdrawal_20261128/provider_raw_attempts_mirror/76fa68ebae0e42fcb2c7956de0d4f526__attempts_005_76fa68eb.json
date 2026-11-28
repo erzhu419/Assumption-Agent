@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76fa68ebae0e42fcb2c7956de0d4f526",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:33.753344+00:00",
+  "ended_at_utc": "2026-11-28T03:51:12.929062+00:00",
+  "request_sha256": "4f1de10c37bea4a3d3b8b09b6a27309d6acf0107c96781bd50d22a32ac8cf0c6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 36145,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24683,
+    "cached_tokens": 9344,
+    "completion_tokens": 1618
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rosette_models.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X=c['ref_rosette']; Y=c['raw_rosette']; good=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<5\\nX=X[good];Y=Y[good]; inds=np.arange(len(X)); axis=np.count_nonzero(X,axis=1)==1\\nprint('single-bank range',[(j, c['single_bank_sweeps']['raw_readout'][c['single_bank_sweeps']['bank_id']==j].min(),c['single_bank_sweeps']['raw_readout'][c['single_bank_sweeps']['bank_id']==j].max()) for j in range(4)])\\n\\ndef basis(x,k):\\n    return np.column_stack([np.prod(x**p,axis=1) for p in product(range(k+1),repeat=2) if sum(p)<=k])\\n\\ndef f(p,x,kind):\\n    u,v=x.T; a=u+v; b=u-v\\n    if kind.startswith('poly'): return basis(x,int(kind[4:]))@p\\n    if kind=='add': return p[0]+p[1]*np.tanh(p[2]*u)+p[3]*np.tanh(p[4]*v)\\n    if kind=='mix': return p[0]+p[1]*np.tanh(p[2]*a)+p[3]*np.tanh(p[4]*b)\\n    if kind=='mixlin': return f(p,x,'mix')+p[5]*a+p[6]*b\\n    if kind=='mixshift': return p[0]+p[1]*np.tanh(p[2]*a+p[5])+p[3]*np.tanh(p[4]*b+p[6])\\n    if kind=='mixquad': return f(p,x,'mixshift')+p[7]*a+p[8]*b+p[9]*a*a+p[10]*b*b+p[11]*a*b\\n    if kind=='mixrot': return p[0]+p[1]*np.tanh(p[2]*u+p[4]*v+p[3])+p[5]*np.tanh(p[6]*u+p[7]*v+p[8])\\n    if kind=='addrot': return f(p,x,'mixrot')\\n    if kind=='soft': return p[0]+p[1]*a/np.sqrt(1+(p[2]*a)**2)+p[3]*b/np.sqrt(1+(p[4]*b)**2)\\n    if kind=='rat': return p[0]+p[1]*a/(1+(p[2]*a)**2)+p[3]*b/(1+(p[4]*b)**2)\\n\\ndef fit(x,y,kind):\\n    if kind.startswith('poly'): return np.linalg.lstsq(basis(x,int(kind[4:])),y,rcond=None)[0]\\n    p={'add':[0,1.5,1,.3,1],'mix':[0,1,1,.6,1],'mixlin':[0,1,1,.6,1,0,0],'mixshift':[0,1,1,.6,1,0,0],'mixquad':[0,1,1,.6,1,0,0,0,0,0,0,0],'mixrot':[0,1,1,0,1,.6,1,-1,0],'addrot':[0,1.5,1,0,0,.3,0,1,0],'soft':[0,1,1,.6,1],'rat':[0,1,.25,.6,.25]}[kind]\\n    return least_squares(lambda p:f(p,x,kind)-y,p,max_nfev=300).x\\n\\nif __name__=='__main__':\\n rng=np.random.default_rng(2026); fold=np.empty(len(X),int)\\n for mask in (axis,~axis): fold[mask]=rng.permutation(mask.sum())%5\\n for kind in ['poly1','poly3','poly5','add','mix','mixlin','mixshift','mixquad','mixrot','addrot','soft','rat']:\\n    pred=np.empty_like(Y); params=[]\\n    for j in range(4):\\n       x=X[:,[j,j^2]]; y=Y[:,j]; p=fit(x,y,kind); params.append(p)\\n       for k in range(5):\\n          tr=fold!=k; pred[~tr,j]=f(fit(x[tr],y[tr],kind),x[~tr],kind)\\n    e=pred-Y; print(kind,'rms',np.sqrt((e**2).mean(0)).round(6),'axis',round(np.sqrt(np.mean(e[axis]**2)),6),'mixed',round(np.sqrt(np.mean(e[~axis]**2)),6),'max',round(abs(e).max(),6))\\n    if kind in ['mixshift','mixquad','mixrot','addrot']: print(' parameters', np.array(params).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_models.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 all-channel affine response -> H2 nonlinear response in paired channels (0,2) and (1,3); outer-fold errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained four-channel inverse polynomial\",\n      \"rejected_reason\": \"Axis sweeps reveal two channel pairs; forward fits can test that structure before adding unsupported cross-pair terms.\"\n    }\n  ],\n  \"rationale\": \"Compare affine, additive, sum/difference, and saturating forward maps on held-out axis and mixed sweeps. This distinguishes missing response terms from outlier contamination; the three gross rows are well separated from the remaining readings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2b7e2e4fc6d79cf9345c781fef89a7230739cd04a86f3467ed8959abd322525a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41266.32,
+      "usage_known": true,
+      "prompt_tokens": 24683,
+      "cached_tokens": 9344,
+      "completion_tokens": 1618
+    }
+  ]
+}

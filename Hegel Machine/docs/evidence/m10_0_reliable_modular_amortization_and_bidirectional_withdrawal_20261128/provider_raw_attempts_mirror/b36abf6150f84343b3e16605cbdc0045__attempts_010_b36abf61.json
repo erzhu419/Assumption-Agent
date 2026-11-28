@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b36abf6150f84343b3e16605cbdc0045",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:16.429077+00:00",
+  "ended_at_utc": "2026-11-28T03:56:49.919898+00:00",
+  "request_sha256": "40a5b3a69e2929a06120b2454678be13dfd12a587786086a65a9e6d19ae88bf0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 61987,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33733,
+    "cached_tokens": 9344,
+    "completion_tokens": 1408
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']; s = c['single_channel_sweeps']\\n# Score measured calibration rows, with gross spikes scored separately from inversion accuracy.\\nspike = np.max(np.abs(y-np.median(y, axis=0)), axis=1)>8\\nfold = np.random.default_rng(8).permutation(len(x))%5\\nedge = np.max(abs(x),axis=1)>=np.quantile(np.max(abs(x),axis=1),.8)\\nfor name, masks in [('5-fold', [fold==k for k in range(5)]), ('high-load', [edge])]:\\n    errors = []; forward_errors = []; spike_residuals = []\\n    for h in masks:\\n        p = u._fit({**c, 'true_channel_loads':x[~h], 'bridge_raw':y[~h]})\\n        clean = h & ~spike\\n        residual = np.linalg.norm(u._forward(x[h],p)-y[h],axis=1)\\n        forward_errors.extend(residual[~spike[h]])\\n        spike_residuals.extend(residual[spike[h]])\\n        errors.extend(np.max(abs(u._inverse(y[clean],p)-x[clean]),axis=1))\\n    print(name, 'max forward L2', max(forward_errors), 'max load error',max(errors), 'minimum gross-spike residual',min(spike_residuals,default=None))\\n    assert max(forward_errors)<0.001 and max(errors)<0.002 and min(spike_residuals,default=np.inf)>5\\np = u._fit(c)\\na, b, e, q = p[:,1:].T\\nmargin = a - u._OWN_FREQ*abs(b) - abs(e) - u._PAIR_FREQ*abs(q)\\nprint('global Jacobian diagonal-dominance margins',margin)\\nassert np.min(margin)>0\\nrng = np.random.default_rng(581)\\ngrid = np.stack(np.meshgrid(*([np.linspace(-1.7,1.7,9)]*4),indexing='ij'),axis=-1).reshape(-1,4)\\nloads = np.r_[grid, rng.uniform(-3.6,3.6,(2000,4))]\\nerr = np.max(abs(u._inverse(u._forward(loads,p),p)-loads))\\nprint('joint load grid and extrapolation max round-trip error',err)\\nassert err<1e-8\\nfor extra in ('absent','none','present'):\\n    inp = dict(d)\\n    if extra=='none': inp['chamber_verification_trials']=None\\n    if extra=='present': inp['chamber_verification_trials']=copy.deepcopy(d['test'])\\n    before = pickle.dumps(inp)\\n    out = u.calibrate_upstream(inp)\\n    assert before==pickle.dumps(inp)\\n    if extra=='absent': assert 'chamber_verification_trials' not in out\\n    if extra=='none': assert out['chamber_verification_trials'] is None\\n    for key in ('train','test','chamber_verification_trials'):\\n        if inp.get(key) is None: continue\\n        for field in ('past_channel_raw','hold_channel_raw'):\\n            old = inp[key][field]; new = out[key][field]\\n            assert old.shape==new.shape and np.isfinite(new).all()\\n            reencoded = u._forward(new.reshape(-1,4),p).reshape(old.shape)\\n            worst = np.max(abs(reencoded-old))\\n            assert worst<1e-9\\n            if extra=='present': print(key,field,'forward closure',worst)\\n    nc = out['calibration_load_cells']; ns = nc['single_channel_sweeps']\\n    assert np.array_equal(nc['bridge_raw'],x) and not np.shares_memory(nc['bridge_raw'],x)\\n    assert np.array_equal(ns['cmd_stress'],s['true_stress']) and not np.shares_memory(ns['cmd_stress'],s['true_stress'])\\nres = solve_batch(d)\\nassert all(np.isfinite(v).all() for v in res.values())\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired polynomial → H2 compact sine/cosine bridge: clean high-load forward error was at most 0.000528 raw units in the prototype; the exact candidate passed public schema validation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test the exact candidate on held-out measured loads, check its invertibility margin and joint-load round trips, and verify each history field and optional trial mode in an isolated process. A measured error failure would reopen calibration; a closure or field failure would isolate the inverse or schema handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9c8fe0e19e7ca6c40c9fc498685db18709c77df064a2617d1fd5f9ce6f704446",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37701.26,
+      "usage_known": true,
+      "prompt_tokens": 33733,
+      "cached_tokens": 9344,
+      "completion_tokens": 1408
+    }
+  ]
+}

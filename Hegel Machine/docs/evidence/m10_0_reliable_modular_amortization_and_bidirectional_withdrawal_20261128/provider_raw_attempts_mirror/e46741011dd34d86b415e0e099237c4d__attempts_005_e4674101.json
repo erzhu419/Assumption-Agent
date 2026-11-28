@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e46741011dd34d86b415e0e099237c4d",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:19.772450+00:00",
+  "ended_at_utc": "2026-11-28T03:46:45.881043+00:00",
+  "request_sha256": "3e1dc6e38a7962c1d3baf2c2747715de64a35933f321ba06cd65aca439802420",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 40824,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25087,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout_probe.py <<'PY'\\nfrom wall_probe import *\\nfrom _verified_upstream import _fit, _basis\\nimport json\\ns,w,y=load(); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; raw=item['study']; sw=raw['sensor_calibration_sweeps']; x=sw['ref_rosette']; z=sw['raw_rosette']; p=json.load(open('/holdout_task/_upstream_param_payload.json')); np.set_printoptions(precision=5,suppress=True)\\nc=_fit(x,z); print('coef',c); print('sweep fit error percentiles',np.percentile(np.linalg.norm(_basis(x)@c-z,axis=1),[0,25,50,75,90,95,100])); print('single bank fields',[(k,np.shape(v),np.asarray(v).ravel()[:8]) for k,v in sw['single_bank_sweeps'].items()]); print('vel endpoints',[raw['vel_'+q][[0,-1]] for q in 'xy']); print('shifts',s['mu_shifts']); print('ij',s['sensor_ij'].tolist()); print('bank',s['row_bank_id'][:32]);\\nr=np.vstack([d['y_pulse_raw'] for d in item['campaign_diagnostics']]).T; a=((r.reshape(-1,4,3)-np.array(p['offsets'])[None,:,None])/np.array(p['gains'])[None,:,None]).reshape(r.shape); print('raw vs fitted vs payload norms',*[np.linalg.norm(t,axis=0) for t in (r,y,a)]); print('calibrated readout minmax by pulse',y.min(0),y.max(0))\\nfor name,q in [('open',[1]*8),('sealed',[1,1,0,0]*2)]:\\n pred=matrices(s,q)[0]@w\\n for tag,t in [('raw',r),('staged',y),('payload',a)]:\\n  e=t-pred; print(name,tag,'rel',np.linalg.norm(e,axis=0)/np.linalg.norm(t,axis=0),'Z residual',np.linalg.norm(e-s['Z_nuisance']@np.linalg.lstsq(s['Z_nuisance'],e,rcond=None)[0],axis=0),'channel RMSE',np.mean(e.reshape(-1,4,3)**2,axis=0)**.5)\\n print('pred vs calibrated by shift first pulse',np.stack([pred[:,0],y[:,0]],axis=1).reshape(3,32,2)[:,:8,:])\\nfor tag,t in [('staged',y),('payload',a)]:\\n for bounds in [([.01,.01,-2,-2]*2,[10,10,5,5]*2)]:\\n  fit=least_squares(lambda q:(matrices(s,q)[0]@w-t).ravel(),[1,1,.02,.02]*2,bounds=bounds,max_nfev=160)\\n  print('signed stencil',tag,fit.x,np.linalg.norm(fit.fun.reshape(-1,3),axis=0)/np.linalg.norm(t,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 nonnegative two-point wall stencil → H2 distinguish sensor-coordinate mismatch from missing wall terms; worst held-out pulse error was 35.84%, versus 30.32% for sealed walls.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the eight-factor wall fit\",\"rejected_reason\":\"It worsens the worst held-out pulse error and pushes a weakly observed wall factor to its bound.\"}],\"rationale\":\"Compare staged and payload calibration on the same pulses, then localize residuals by bank and shift. This distinguishes a readout mismatch from a wall-law omission before changing the transport operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ac21dc27b4c542098d7ee5d39e9ffc2f815b625b1f3dd4c36a23e22cdadc12a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28129.36,
+      "usage_known": true,
+      "prompt_tokens": 25087,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

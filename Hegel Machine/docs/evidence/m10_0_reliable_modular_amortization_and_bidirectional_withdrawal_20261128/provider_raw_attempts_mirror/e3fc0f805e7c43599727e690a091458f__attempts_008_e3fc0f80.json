@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3fc0f805e7c43599727e690a091458f",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:25.026331+00:00",
+  "ended_at_utc": "2026-11-28T03:50:58.383835+00:00",
+  "request_sha256": "2712d27d90ba130444647bfeae7d7003c05186dc7824059abf2cdc8982fbb621",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25404,
+    "cached_tokens": 9344,
+    "completion_tokens": 1355
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nfor section in ('calibration_load_cells', 'train', 'test', 'chamber_verification_trials'):\\n    print(section, sorted((d.get(section) or {}).keys()))\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log = json.load(f)\\nprint('telemetry tail:', str(log)[-2600:])\\nc=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; z=u._basis(x)\\nb=u._fit_forward(x,y); e=np.linalg.norm(y-z@b,axis=1); clean=e<=8*np.median(e)\\n# Pairwise sums and differences squared already lie in the quadratic span.\\na=x[:,0]; q=x[:,1]; np.testing.assert_allclose((a-0.7*q)**2,a*a-1.4*a*q+.49*q*q,atol=1e-14)\\n# Compare saturating alternatives without changing the baseline fitting procedure.\\ndef design(x, k, mode):\\n    p=u._basis(x)\\n    if mode=='sum': s=(x.sum(axis=1)/2)**2\\n    elif mode=='difference': s=((x[:,0]-x[:,1])/np.sqrt(2))**2\\n    else: s=(x*x).mean(axis=1)\\n    p[:,5:] /= (1+k*s[:,None]); return p\\n\\ndef fit(p,y):\\n    b=np.linalg.lstsq(p,y,rcond=None)[0]\\n    for cutoff in (.4,.1,.02,.004,.001,.00035,.0002):\\n        for _ in range(15):\\n            r=np.linalg.norm(y-p@b,axis=1); w=cutoff/np.hypot(cutoff,r)\\n            b=np.linalg.lstsq(p*w[:,None],y*w[:,None],rcond=None)[0]\\n    r=np.linalg.norm(y-p@b,axis=1); m=r<=8*max(np.median(r),np.finfo(float).eps)\\n    refit,_,rank,_=np.linalg.lstsq(p[m],y[m],rcond=None)\\n    return refit if rank==p.shape[1] else b\\n\\nnorm=np.linalg.norm(x,axis=1)\\nmasks=[np.count_nonzero(x,axis=1)<=1,norm>=np.quantile(norm,.85),np.sum(x,axis=1)>=np.quantile(x.sum(axis=1),.85),np.sum(x,axis=1)<=np.quantile(x.sum(axis=1),.15)]\\nfor mode,k in [('radial',0)]+[(m,k) for m in ('radial','sum','difference') for k in (.001,.01,.1)]:\\n    p=design(x,k,mode); maxima=[]\\n    for held in masks:\\n        bh=u._fit_forward(x[~held],y[~held]) if not k else fit(p[~held],y[~held]); test=held&clean\\n        maxima.append(np.linalg.norm(y[test]-p[test]@bh,axis=1).max())\\n    print(mode,k,'held-out raw maxima (axial, high norm, positive sum, negative sum):',np.round(maxima,7))\\n# Check local invertibility across actual histories and the clean calibration range.\\nv=d['train']; w=d['test']; xx=np.vstack([x[clean]]+[u._inverse(s[key],b).reshape(-1,4) for s in (v,w) for key in ('past_channel_raw','hold_channel_raw')]); jac=np.stack([(u._basis(xx+di)-u._basis(xx-di))@b/(2e-5) for di in 1e-5*np.eye(4)],axis=1)\\nprint('minimum Jacobian singular value on measured support:', np.linalg.svd(jac,compute_uv=False)[:,-1].min())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 coupled quadratic and diagonal-cubic response; the verified maximum clean leave-one-out load error is 0.00042847.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add explicit squared pairwise sums and differences\",\n      \"rejected_reason\": \"The existing quadratic basis already spans them; rational terms along those directions are tested separately.\"\n    },\n    {\n      \"option\": \"Apply classification deconfounding or relay-mode tests\",\n      \"rejected_reason\": \"This is a continuous static bridge calibration, not a classification or switched-control problem; the audit checks the actual schema and telemetry for relevant apparatus strata.\"\n    }\n  ],\n  \"rationale\": \"Compare saturating rational alternatives on withheld measured slices where missing curvature would be most visible. Also check whether the inverse is poorly conditioned on measured support. Promote a challenger only if it improves a meaningful worst-slice error or conditioning margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "345eb2780d68bb29e73765de72cddea697ed39c984fbe20476b7f17b5d291ed1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35447.32,
+      "usage_known": true,
+      "prompt_tokens": 25404,
+      "cached_tokens": 9344,
+      "completion_tokens": 1355
+    }
+  ]
+}

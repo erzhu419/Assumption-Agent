@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f91983aab6dc403a804719e4f751389c",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:59.355293+00:00",
+  "ended_at_utc": "2026-11-28T03:54:27.230679+00:00",
+  "request_sha256": "28eab252ccbd17a067cad9b4194b1d8994d125114cfa3bca4ce4a7f9c013ac9a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46590,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26022,
+    "cached_tokens": 9344,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/hegel_continual_archive/alpha_m100_c04_batch_02_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('    a, b = _design(taus, te, dt, t)\\\\n','    # The latest pre-run trace is idle on both chamber gate channels,\\\\n    # matching the archived full-memory, unmodified-drift regime.\\\\n    a, b = _design(taus, te, dt, t)\\\\n')\\nopen(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr=d['train']; te=d['test']; t=d['eval_times']; dt=d['past_dt']; cal=d['calibration_load_cells']; q=cal['true_channel_loads']; r=cal['bridge_raw']; good=np.max(abs(r),axis=1)<8; A=s._bridge_design(q)\\nfor cols in (5,6,7):\\n errors=[]\\n for i in np.flatnonzero(good):\\n  m=good.copy(); m[i]=False\\n  errors.append([A[i,j,:cols]@np.linalg.lstsq(A[m,j,:cols],r[m,j],rcond=None)[0]-r[i,j] for j in range(4)])\\n print('bridge columns',cols,'LOO channel RMSE, max',np.sqrt(np.mean(np.square(errors))),np.max(np.abs(errors)))\\nfull=s.solve_batch(d); print('material',full['estimated_taus'],full['hereditary_weights'])\\nx=s._features(tr,te); inp=s._inputs(tr,x[:len(tr['lab_id'])],s._calibrate(cal)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; ec=np.zeros_like(y); er=np.zeros_like(rate)\\nfor l in np.unique(tr['lab_id']):\\n m=tr['lab_id']==l; sub=lambda mask: tuple(z[mask] for z in inp)\\n tau,theta=s._fit(sub(~m),dt,t,y[~m],rate[~m]); a,b=s._design(tau,sub(m),dt,t); ec[m]=a@theta-y[m]; er[m]=b@theta-rate[m]; print('held lab',l,'taus',tau,'curve MAE, medianAE, rate MAE, medianAE',np.mean(abs(ec[m])),np.median(abs(ec[m])),np.mean(abs(er[m])),np.median(abs(er[m])))\\nfor k in np.unique(tr['stratum']):\\n m=tr['stratum']==k; print('OOF stratum',k,'curve p90AE, rate p90AE',np.quantile(abs(ec[m]),.9),np.quantile(abs(er[m]),.9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared material spectrum -> H2 full hereditary memory after both chamber gates return to idle; bridge leave-one-sweep-out and material leave-one-lab-out errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the batch 04 chamber reset.\",\n      \"rejected_reason\": \"The plateau that preceded batch 04 disappeared; the current pre-run trace instead matches the archived baseline regime.\"\n    }\n  ],\n  \"rationale\": \"Install the archived baseline law with dynamically fitted calibration. Held-out sweeps will show whether the nonlinear bridge terms generalize, and held-out labs will show whether the fitted material transfers for both strain and initial rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d5c0a7f0068241f9b7794c185355e08c4769c71db2fb4abefdc0156aad5b0cce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29952.38,
+      "usage_known": true,
+      "prompt_tokens": 26022,
+      "cached_tokens": 9344,
+      "completion_tokens": 1072
+    }
+  ]
+}

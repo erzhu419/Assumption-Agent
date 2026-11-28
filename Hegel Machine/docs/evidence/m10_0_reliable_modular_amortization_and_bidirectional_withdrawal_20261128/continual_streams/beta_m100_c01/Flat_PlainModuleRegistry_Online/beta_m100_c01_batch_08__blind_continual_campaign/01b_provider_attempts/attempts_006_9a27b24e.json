@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a27b24e9e564bb9829671bbdf1bfdb4",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:03.260863+00:00",
+  "ended_at_utc": "2026-11-28T03:57:36.219422+00:00",
+  "request_sha256": "f543ec0eb879a91ef431f68389350c4ba23ca5f851968496e93a6de1b1faa001",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 45695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25941,
+    "cached_tokens": 5504,
+    "completion_tokens": 1318
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom itertools import product\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _box_simplex, _transport, solve_downstream\\nfrom test_wall import s, p, Y, W, M, ids, ax, forward\\nkinds = ('robin','closed','periodic','periodic-robin')\\nerrors = {pair: (forward(ax('x',pair[0]),ax('y',pair[1]))-Y)**2 for pair in product(kinds, repeat=2)}\\nheld_out = []\\nfor j in range(Y.shape[1]):\\n    train = np.arange(Y.shape[1]) != j\\n    winner = min(errors, key=lambda pair: errors[pair][:,train].mean())\\n    assert winner == ('periodic','closed'), winner\\n    held_out.append(np.sqrt(errors[winner][:,j].mean()))\\nprint('Worst leave-one-pulse-out RMSE:', max(held_out))\\nS, U = _transport(s)\\nS_ref = forward(ax('x','periodic'), ax('y','closed'), M)\\nnp.testing.assert_allclose(S, S_ref, rtol=0, atol=1e-12)\\nnx, ny = s['nx'], s['ny']\\nL = np.kron(np.eye(ny), ax('x','periodic')) + np.kron(ax('y','closed'),np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nout = solve_batch(p['study'])\\nw = out['weights']; cert = out['kkt_certificate']\\nnp.testing.assert_allclose(w, solve_downstream(s)['weights'], rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(w, cert['weights'], rtol=0, atol=1e-14)\\nnp.testing.assert_allclose(out['terminal_field'], solve(L + s['mu_shifts'][-1]*np.eye(nx*ny),M@w).reshape(nx,ny,order='F'), rtol=0, atol=1e-12)\\nZ = s['Z_nuisance']; P = np.eye(len(Z)) - Z @ solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nres = P @ (S_ref@w - s['y_obs_raw']); g = (P@S_ref).T@res + s['source_ridge']*w\\nJ = 0.5*(res@res + s['source_ridge']*(w@w)); cap=s['u_box']; budget=s['total_budget']; nu=cert['nu_sum']\\nlo,hi=cert['lam_lower'],cert['lam_upper']\\nassert abs(w.sum()-budget) < 1e-10 and np.all((0<=w)&(w<=cap))\\nassert min(lo.min(), hi.min()) >= 0\\nassert np.max(abs(g-nu-lo+hi)) < 1e-10\\nassert max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))) < 1e-10\\nnp.testing.assert_allclose([cert['primal_objective'],cert['dual_lower_bound']], [J,J], rtol=0, atol=1e-10)\\nprint('Public objective / dual gap:',J,J-cert['dual_lower_bound'])\\nrng=np.random.default_rng(103); worst=0.\\nfor _ in range(20):\\n    X=rng.normal(size=(12,8)); H=X.T@X+0.04*np.eye(8); c=3*rng.normal(size=8)\\n    for budget in (0.,0.0001,cap,4*cap,s['total_budget'],8*cap-0.0001,8*cap):\\n        w,nu=_box_simplex(H,c,cap,budget); d=H@w+c-nu\\n        err=max(abs(w.sum()-budget),np.max(np.maximum(0,d)*w),np.max(np.maximum(0,-d)*(cap-w)))\\n        assert np.all((0<=w)&(w<=cap)) and err<1e-10,(budget,err)\\n        worst=max(worst,err)\\nprint('Worst feasibility/complementarity error over 140 QPs:',worst)\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared open-wall prior -> periodic x and closed y; worst calibrated pulse RMSE is approximately 1.5e-6, with held-out selection and numerical stress tests pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact staged artifacts in an isolated Python process. Held-out pulses detect dependence on a single tracer, an independent dense solve detects boundary and ordering errors, and KKT tests detect certificate or active-set failures that the schema check would miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "12bdc11618b278f88d68b4163a47b039ced41ac3654ecd5856b445a8af7faa18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35067.35,
+      "usage_known": true,
+      "prompt_tokens": 25941,
+      "cached_tokens": 5504,
+      "completion_tokens": 1318
+    }
+  ]
+}

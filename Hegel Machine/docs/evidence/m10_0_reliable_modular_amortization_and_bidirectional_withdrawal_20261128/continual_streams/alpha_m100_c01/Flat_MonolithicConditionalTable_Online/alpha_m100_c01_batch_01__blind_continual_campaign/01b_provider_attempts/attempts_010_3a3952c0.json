@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a3952c0a7504041a9f229c558ec180d",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:04.575275+00:00",
+  "ended_at_utc": "2026-11-28T03:34:32.646365+00:00",
+  "request_sha256": "a91ca8c48be8bec6200b3fcfc2fe41b95419d5afc6b5fd6b9144432c7b1394b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32552,
+    "cached_tokens": 9344,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^def solve_batch(/,$d' /tmp/material.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Campaign chamber calibration from the public verification coupons. The\\n# feature-dependent response enters the two saturating branches, not a ramp.\\n_CHAMBER_PROJECTION = np.array([0.188729, 2.002465])\\n\\n\\ndef _predict_chamber(taus, theta, hold, features, times, projection):\\n    drift_score = features @ theta[2:]\\n    amplitude = hold[:, None] * theta[:2] + drift_score[:, None] * projection\\n    response = -np.expm1(-times[:, None] / taus)\\n    return amplitude @ response.T, amplitude @ (1.0 / taus)\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge = _bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    hold = test['hold_channel_raw'] @ bridge[1:] + bridge[0]\\n    features = np.column_stack((np.ones(len(xte)), xte))\\n    curve, rate = _predict_chamber(taus, theta, hold, features, times,\\n                                   _CHAMBER_PROJECTION)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -i '/^from compact_chamber import temporal$/c\\\\def temporal(ta): return np.vstack([np.c_[-np.expm1(-t[:,None]/ta),t],np.r_[1/ta,1]])' /tmp/robust_compare.py\\nsed -i \\\"/print('COMPARE'/c\\\\ print('COMPARE',kind,s,'max rel param spread',round(np.max(abs(np.array(foldparams)/np.r_[ta,th]-1)),4),'train RMSE',metrics(te,tr['lab_id']),'train clipped',metrics(np.clip(te,-.025,.025),tr['lab_id']),'chamber coefficients',co.round(6),'chamber worst',metrics(err,labs),'nominal worst',metrics(fixed,labs),flush=True)\\\" /tmp/robust_compare.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/robust_compare.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop drift and stress memory in deployment -> H2 two chamber projections with a shared train-only spectrum; worst held-out chamber lab RMSE is 0.00609 for strain and 0.00463 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch the material loss based on the parameter estimates alone\",\n      \"rejected_reason\": \"The previous log omitted the held-out errors. Keep the established fit unless the complete comparison shows a meaningful worst-slice improvement.\"\n    }\n  ],\n  \"rationale\": \"Implement the chamber law that reduced held-out errors without changing the train-only material fit. Run the public validator in isolation to catch import, output, or pooled reference-invariance failures, and recover the missing worst-lab metrics before deciding whether to change the material loss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c2080a91c18adf9e0c343824cff53d68aa2657f5f4eee3edd21365df874a84f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30160.44,
+      "usage_known": true,
+      "prompt_tokens": 32552,
+      "cached_tokens": 9344,
+      "completion_tokens": 1074
+    }
+  ]
+}

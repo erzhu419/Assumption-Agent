@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7bff3c596b26480fb6f1e6c933b35a70",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:13:23.417848+00:00",
+  "ended_at_utc": "2026-11-28T04:13:47.210169+00:00",
+  "request_sha256": "afd40c88a34a9f0fa8817aa63ec25e8d59fc745cb8b7a62eb73f5b8f698a463a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57215,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29413,
+    "cached_tokens": 9344,
+    "completion_tokens": 765
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\nroot=Path('/tmp/hegel_continual_archive'); p=Path('/holdout_task/batch_solver.py'); dst=p.read_text(); src=(root/'alpha_m100_c04_batch_06_solver.py').read_text(); dst=dst[:dst.index('def _calibrate(')]+src[src.index('def _bridge_raw('):src.index('def _inputs(')]+dst[dst.index('def _inputs('):]; p.write_text(dst)\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 -I /holdout_task/validate_public_schema.py; cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ==== \\\"$f\\\"; grep -E '^def _calib|^_CHAMBER|^def _chamber|verification|plateau|matching|full.memory|reset|amplitudes =|linear =|_design\\\\(taus, te' \\\"$f\\\"; done; python3 - <<'PY'\\nimport json,numpy as np\\nrows=json.load(open('archive_apparatus_log.json')); a=np.array([r['facility_telemetry_trace'] for r in rows]); hi=np.where(a.mean(1)[:,1]>1)[0]; print('channel 1 plateaus',hi); print('pairwise trace RMSE',np.sqrt(np.mean((a[hi,None]-a[None,hi])**2,axis=(2,3)))); print('plateau channels 1,5 quantiles',np.quantile(a[:,:, [1,5]],[.1,.5,.9],axis=1).round(3).transpose(1,0,2))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine bridge → H2: nonlinear opposite-channel bridge; common clean-fold worst RMSE is 0.000339 versus 1.379 for affine, and specimen inverse closure is below 5×10⁻¹⁴.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Keep the affine bridge because it passes schema validation\",\"rejected_reason\":\"Schema validation does not test calibrated stress; matched calibration folds favor the nonlinear model.\"}],\"rationale\":\"Install the independently validated bridge model and check that the artifact still satisfies the schema. Compare archived chamber laws against the preceding telemetry traces to determine whether the latest plateau selects a unique memory law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b67de9373a276a9ab99b618f032445976b78146ddd1cbeb851f3ba0c0d088fd4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25984.1,
+      "usage_known": true,
+      "prompt_tokens": 29413,
+      "cached_tokens": 9344,
+      "completion_tokens": 765
+    }
+  ]
+}

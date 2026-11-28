@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "03d66db0935544559d7dd76abb4b82e1",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:17.827885+00:00",
+  "ended_at_utc": "2026-11-28T03:41:38.958344+00:00",
+  "request_sha256": "361ddeaa1c304bf42f6bf47368dc48612086513e325e96c2c1ad65bb532c0767",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23825,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19966,
+    "cached_tokens": 9344,
+    "completion_tokens": 784
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/beta_m100_c02_batch_01_solver.py; sed -n '30,200p' /tmp/hegel_continual_archive/beta_m100_c02_batch_02_solver.py; diff -u /tmp/hegel_continual_archive/beta_m100_c02_s00_solver.py /tmp/hegel_continual_archive/beta_m100_c02_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; X=a['ref_rosette']; Y=a['raw_rosette']; t=s['aux_manifold_telemetry']; print('telemetry mean, sd, extrema',t.mean(0),t.std(0),t.min(0),t.max(0)); B=a['single_bank_sweeps']; print('bank sweeps',[(k,np.shape(v), np.asarray(v).ravel()[:6]) for k,v in B.items()]);\\nfor name in ('affine','cyclic','full2','full3'):\\n E=[]\\n for i in range(4):\\n  x=X[:,i]; nxt=X[:,(i+1)%4]; F=np.column_stack([np.ones(len(X)),X]);\\n  if name=='cyclic': F=np.column_stack([np.ones(len(X)),x,x**3,X[:,(i-1)%4],nxt,x*nxt]);\\n  if name in ('full2','full3'): F=np.column_stack([F]+[X[:,j]*X[:,k] for j in range(4) for k in range(j,4)]+([X[:,j]**3 for j in range(4)] if name=='full3' else []));\\n  u,d,v=np.linalg.svd(F,full_matrices=False); U=u[:,d>d[0]*1e-12]; e=(Y[:,i]-U@(U.T@Y[:,i]))/(1-(U**2).sum(1)); E.append(e)\\n E=np.array(E).T; print(name,'LOO abs quantiles',np.quantile(abs(E),[.5,.9,.95,.99,1]),'per bank med',np.median(abs(E),0));\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 carry over the latest wall operator → H2 prioritize zero wall loss given the current telemetry mean of −0.312 versus −0.343 for the archived sealed campaign; no predictive error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Read the archived boundary implementations to identify what the telemetry can support. Compare held-out calibration errors so nonlinear terms are retained only if the current sweeps support them.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6edde8690f41fcba8c7621253996230bbc1259a066eedaac28c95ca096163378",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23273.53,
+      "usage_known": true,
+      "prompt_tokens": 19966,
+      "cached_tokens": 9344,
+      "completion_tokens": 784
+    }
+  ]
+}

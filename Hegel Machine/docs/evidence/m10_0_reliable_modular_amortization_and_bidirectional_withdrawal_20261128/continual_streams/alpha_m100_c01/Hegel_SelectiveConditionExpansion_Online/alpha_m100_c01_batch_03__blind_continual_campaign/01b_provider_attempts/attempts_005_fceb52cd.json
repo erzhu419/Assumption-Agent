@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fceb52cda261458d863a939964d420cf",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:50.087674+00:00",
+  "ended_at_utc": "2026-11-28T03:46:15.584098+00:00",
+  "request_sha256": "10b020bba55a388a6cd77d0fa319f235d8c26f06584e0cbaf8bf0b3638d8cc0d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 34057,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22289,
+    "cached_tokens": 9344,
+    "completion_tokens": 997
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations, combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; S=C['single_channel_sweeps']\\nP=list(combinations(range(4),2)); Q=list(combinations_with_replacement(range(4),3))\\ndef design(x,k):\\n cols=[np.ones(len(x)),*x.T]; cols+=list((x*x).T) if k in (1,2,3,4) else []; cols+=list((x**3).T) if k in (1,2,3) else []\\n if k in (2,3,4): cols += [x[:,i]*x[:,j] for i,j in P]\\n if k==3: cols += [x[:,i]*x[:,j]*x[:,h] for i,j,h in Q if i!=h]\\n return np.column_stack(cols)\\ndef fit(A,y):\\n b=np.linalg.lstsq(A,y,rcond=None)[0]\\n for _ in range(50):\\n  r=np.linalg.norm(A@b-y,axis=1); s=max(1e-4,np.median(r)); w=1/np.hypot(1,r/(2*s)); b=np.linalg.lstsq(A*w[:,None],y*w[:,None],rcond=None)[0]\\n r=np.linalg.norm(A@b-y,axis=1); good=r<max(.002,6*np.median(r)); return np.linalg.lstsq(A[good],y[good],rcond=None)[0]\\nfor j in range(4):\\n z=S['lab_id']==j; t=S['true_stress'][z]; v=S['cmd_stress'][z]; print('sweep',j,[(k,np.max(abs(np.polyval(np.polyfit(t,v,k),t)-v))) for k in range(1,6)],np.polyfit(t,v,3))\\nfor k in (0,4,1,2,3):\\n A=design(X,k); b=fit(A,Y); r=np.linalg.norm(A@b-Y,axis=1); print('model',k,'residual',np.percentile(r,[50,80,90,95,99,100]),'large',np.flatnonzero(r>.1),'rank',np.linalg.matrix_rank(A))\\n if k==2: print('coeff',np.round(b,6)); print('sorted rows',np.round(np.sort(r),5))\\nprint('calibration design: axis rows',np.flatnonzero(np.count_nonzero(X,axis=1)==1),'largest mixed abs coordinate',abs(X[np.count_nonzero(X,axis=1)>1]).max())\\nPY\\npython3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 separable cubic response with cross-channel terms and row-spike rejection; held-out inverse error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine bridge reproduces the single-channel response.\",\n    \"empirical_witness\": \"At loads −1.6, −0.6, 0.7, and 1.7, channel 0 shows successive slopes of 2.174, 1.379, and 2.333 while its other channel responses remain approximately linear or constant.\",\n    \"causal_blanket_diagnosis\": \"The isolated axis sweep separates intrinsic bridge curvature from cross-channel coupling.\",\n    \"sublated_pivot\": \"Retain linear mixing and test cubic self-response plus mixed polynomial terms under robust row weighting.\",\n    \"risk_kind\": \"systematic inverse bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fit the isolated sweeps to identify the self-response degree, then inspect robust mixed-load residuals to determine whether interactions are needed. This distinguishes missing bridge terms from gross calibration spikes before inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c71dff73050e9abb33c015851a997373b90f7b875be22b19def2b94c3173c043",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28518.4,
+      "usage_known": true,
+      "prompt_tokens": 22289,
+      "cached_tokens": 9344,
+      "completion_tokens": 997
+    }
+  ]
+}

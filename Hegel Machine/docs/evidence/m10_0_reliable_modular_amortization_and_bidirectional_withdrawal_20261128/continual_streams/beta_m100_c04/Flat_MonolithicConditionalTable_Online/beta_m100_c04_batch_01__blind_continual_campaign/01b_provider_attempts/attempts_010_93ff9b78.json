@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93ff9b78214943e689980ce474c1fc44",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:05.961697+00:00",
+  "ended_at_utc": "2026-11-28T03:34:39.123279+00:00",
+  "request_sha256": "f307399be651abdf862c79421266c55a4826819d884dc21b3f40e3c335db5b74",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26703,
+    "cached_tokens": 9344,
+    "completion_tokens": 1313
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import linprog\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nfor d in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n s=d['study']; o=m.solve_batch(s); w=np.asarray(o['weights']); c=o['kkt_certificate']; nx,ny=s['nx'],s['ny']; N=nx*ny\\n A=np.diag(s['V_reaction_2d'].ravel(order='F'))\\n for i in range(nx):\\n  for j in range(ny):\\n   row=i+nx*j\\n   for k,a,n,stride in [('x',i,nx,1),('y',j,ny,nx)]:\\n    h=s['L'+k]/(n-1); kap=s['kappa_'+k]; v=s['vel_'+k][a]\\n    if a==0 or a==n-1:\\n     rate=kap[a]/h**2; A[row,row]+=rate; A[row,row+(stride if a==0 else -stride)]-=rate\\n    else:\\n     for sign in (-1,1):\\n      rate=(kap[a]+kap[a+sign])/(2*h*h)+max(0,-sign*v)/h\\n      A[row,row]+=rate; A[row,row+sign*stride]-=rate\\n rhs=np.stack([u.ravel(order='F') for u in s['source_modes']],axis=1)\\n sensors=s['sensor_ij'][:,0]+nx*s['sensor_ij'][:,1]; blocks=[]\\n for mu in s['mu_shifts']:\\n  U=np.linalg.solve(A+mu*np.eye(N),rhs); blocks.append(U[sensors])\\n S=np.concatenate(blocks); field=(U@w).reshape(nx,ny,order='F'); field_err=np.linalg.norm(field-o['terminal_field'])/np.linalg.norm(field)\\n Z=s['Z_nuisance']; y=m._calibrate(s); q=Z.shape[1]; aug=np.vstack([Z,np.sqrt(s['nuisance_ridge'])*np.eye(q)]); data=np.column_stack([S,y]); P=np.linalg.lstsq(aug,np.vstack([data,np.zeros((q,data.shape[1]))]),rcond=None)[0]; D=data-Z@P; resid=D[:,:-1]@w-D[:,-1]\\n g=D[:,:-1].T@resid+s['source_ridge']*w; J=(resid@resid+s['source_ridge']*(w@w))/2\\n lp=linprog(g,A_eq=np.ones((1,len(w))),b_eq=[s['total_budget']],bounds=(0,s['u_box']),method='highs'); assert lp.success\\n dual=J-g@w+lp.fun; station=np.max(np.abs(g-c['nu_sum']-np.asarray(c['lam_lower'])+np.asarray(c['lam_upper']))); assert field_err<1e-11 and station<1e-10 and abs(J-c['primal_objective'])<1e-11 and abs(dual-c['dual_lower_bound'])<1e-10\\n print('independent dense field relative error',field_err,'KKT stationarity',station,'LP tangent gap',J-dual)\\n by_channel=[]\\n for pulse in d.get('campaign_diagnostics') or []:\\n  y=m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw'])); r=(S@pulse['w_pulse']-y).reshape(len(s['mu_shifts']),-1,4); by_channel.append(np.sqrt(np.mean(r*r,axis=1)))\\n if by_channel:\\n  worst=np.max(by_channel,axis=(0,1)); print('worst tracer RMSE by channel across pulses and shifts',worst); assert max(worst)<2e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Closed walls with affine calibration → independent operator and certificate audit; the measured worst pulse slice is 9.15e-7 RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat pooled calibration comparisons\",\n      \"rejected_reason\": \"The earlier held-out audit already tested affine, bank-pooled, and rational fits. This audit tests whether channel pooling, field indexing, or nuisance profiling conceals an error.\"\n    }\n  ],\n  \"rationale\": \"Rebuild the stencil row by row, profile nuisance by augmented least squares, and check the dual bound by linear programming on the real study. A disagreement would identify which part of the solver to fix. Channel-specific pulse errors test for a hidden calibration bottleneck; the study has no classification cohorts or relay states.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e9d67e1ced4eff6d6d983ff230fe7dee6ce62fe9d4f6fde413834b6e602d4ad3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35245.56,
+      "usage_known": true,
+      "prompt_tokens": 26703,
+      "cached_tokens": 9344,
+      "completion_tokens": 1313
+    }
+  ]
+}

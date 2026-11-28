@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4fd4279bdbbb4ba49aa7bff41174d6be",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:37.485490+00:00",
+  "ended_at_utc": "2026-11-28T03:48:18.782466+00:00",
+  "request_sha256": "c7a58bd0009d23aa13eecfe133018fa9c12bde623d8421bc9356eaf0c21d5466",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38317,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25737,
+    "cached_tokens": 9344,
+    "completion_tokens": 1795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat public_asset_index.json && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Fit and invert the coupled load-cell bridge before constitutive fitting.\\\"\\\"\\\"\\nfrom itertools import combinations\\n\\nimport numpy as np\\n\\n_PAIRS = tuple(combinations(range(4), 2))\\n_RAW_KEYS = ('past_channel_raw', 'hold_channel_raw')\\n\\n\\ndef _basis(load):\\n    return np.column_stack((np.ones(len(load)), load,\\n                            *(load[:, i] * load[:, j] for i, j in _PAIRS),\\n                            load ** 3))\\n\\n\\ndef _fit(load, raw):\\n    a = _basis(load)\\n    coef = np.linalg.lstsq(a, raw, rcond=None)[0]\\n    # Rowwise Cauchy weighting: a single spike can hit several bridge channels.\\n    for _ in range(35):\\n        err = np.linalg.norm(a @ coef - raw, axis=1)\\n        scale = max(2 * np.median(err), 1e-9)\\n        w = 1 / np.hypot(1, err / scale)\\n        coef = np.linalg.lstsq(a * w[:, None], raw * w[:, None], rcond=None)[0]\\n    err = np.linalg.norm(a @ coef - raw, axis=1)\\n    clean = err <= max(8 * np.median(err), 1e-8)\\n    a, raw = a[clean], raw[clean]\\n    coef = np.linalg.lstsq(a, raw, rcond=None)[0]\\n    # Refit only resolved terms; otherwise noise in unused powers grows\\n    # when operational loads extend beyond the calibration envelope.\\n    variance = np.sum((a @ coef - raw) ** 2, axis=0) / max(len(a) - a.shape[1], 1)\\n    sensitivity = np.linalg.norm(np.linalg.pinv(a), axis=1)\\n    for channel in range(4):\\n        keep = np.abs(coef[:, channel]) > 5 * np.sqrt(variance[channel]) * sensitivity\\n        keep[:5] = True\\n        coef[:, channel] = 0\\n        coef[keep, channel] = np.linalg.lstsq(a[:, keep], raw[:, channel], rcond=None)[0]\\n    return coef\\n\\n\\ndef _jacobian(load, coef):\\n    # Axes are (sample, bridge output, applied load).\\n    jac = np.broadcast_to(coef[1:5].T, (len(load), 4, 4)).copy()\\n    for term, (i, j) in enumerate(_PAIRS, 5):\\n        jac[:, :, i] += load[:, j, None] * coef[term]\\n        jac[:, :, j] += load[:, i, None] * coef[term]\\n    jac += 3 * load[:, None, :] ** 2 * coef[11:].T\\n    return jac\\n\\n\\ndef _invert(raw, coef):\\n    raw = np.asarray(raw, dtype=float)\\n    target = raw.reshape(-1, 4)\\n    load = np.linalg.solve(coef[1:5].T, (target - coef[0]).T).T\\n    for _ in range(30):\\n        residual = _basis(load) @ coef - target\\n        error = np.linalg.norm(residual, axis=1)\\n        active = error > 1e-11\\n        if not active.any():\\n            break\\n        x, y = load[active], target[active]\\n        step = np.linalg.solve(_jacobian(x, coef), residual[active, :, None])[..., 0]\\n        trial = x - step\\n        old = error[active]\\n        for _ in range(16):\\n            worse = np.linalg.norm(_basis(trial) @ coef - y, axis=1) >= old\\n            if not worse.any():\\n                break\\n            step[worse] *= 0.5\\n            trial[worse] = x[worse] - step[worse]\\n        load[active] = trial\\n    return load.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a calibrated copy of the dataset without modifying its arrays.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    coef = _fit(cal['true_channel_loads'], cal['bridge_raw'])\\n    result = dict(dataset)\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        split = dataset.get(name)\\n        if split is not None:\\n            result[name] = {**split, **{key: _invert(split[key], coef) for key in _RAW_KEYS}}\\n    sweeps = cal['single_channel_sweeps']\\n    result['calibration_load_cells'] = {\\n        **cal,\\n        'bridge_raw': cal['true_channel_loads'].copy(),\\n        'single_channel_sweeps': {**sweeps, 'cmd_stress': sweeps['true_stress'].copy()},\\n    }\\n    return result\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic -> H2 affine mixing plus sparse pair products and channel cubics; unrestricted baseline worst held-out clean-row P90 residual is 0.00206.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain every cubic monomial\",\n      \"rejected_reason\": \"The measured mixed cubic coefficients are at the noise floor; the resolved terms are pair products and pure cubes.\"\n    }\n  ],\n  \"rationale\": \"Fit coefficients from the supplied calibration rows, downweight gross spikes, and invert the fitted map before calling the unchanged downstream solver. The public gate detects schema and coupon-invariance regressions; inverse error and trial handling still need separate verification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "75c9819488a872f6b1b8a7eb0763a7c77ff9106936b08edb06e579d30077e79d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45508.81,
+      "usage_known": true,
+      "prompt_tokens": 25737,
+      "cached_tokens": 9344,
+      "completion_tokens": 1795
+    }
+  ]
+}

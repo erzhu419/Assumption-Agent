@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "90e8b4eb5a4f46078c3f8b1a4eae91bd",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:01.729141+00:00",
+  "ended_at_utc": "2026-11-28T03:56:39.676159+00:00",
+  "request_sha256": "4dc8e87dd28125159f6d9a56a2561df811ac335277738141f8c5d2499e1cb3c8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64465,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34437,
+    "cached_tokens": 9344,
+    "completion_tokens": 1527
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_shared.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; q=c['true_channel_loads']; r=c['bridge_raw']; good=np.max(abs(r),axis=1)<8; ax=(q!=0).sum(1)==1\\nv=np.roll(q,2,axis=1)\\nforms={'exp':lambda v,k:-np.expm1(-k*v*v),'tanh2':lambda v,k:np.tanh(k*v)**2,'cos':lambda v,k:1-np.cos(k*v),'tanhq2':lambda v,k:np.tanh(k*v*v),'rational':lambda v,k:v*v/(1+k*v*v),'softsqrt':lambda v,k:np.sqrt(1+k*v*v)-1,'stretchedexp':lambda v,k:-np.expm1(-k*v*v),'logcosh':lambda v,k:np.logaddexp(k*v,-k*v)-np.log(2)}\\nfor name,E in forms.items():\\n for extra in ('none','odd','even','power','mixed') if name=='exp' else ('none',):\\n  def pred(p):\\n   f,a,k,e,h,j=p[:6]; own=q+a*np.sin(f*q); zz=E(v,k) if extra!='power' else -np.expm1(-k*abs(v)**(2+h)); opp=v-e*zz\\n   if extra=='odd': opp+=h*(np.sin(j*v)-j*v)\\n   if extra=='even': opp+=h*v*v\\n   if extra=='mixed': opp+=h*np.roll(q,1,axis=1)*q\\n   return p[6:10]+p[10:14]*own+p[14:18]*opp\\n  def fit(m):\\n   p=np.r_[2.5,.25,1,.6,0.,1.7,0,0,0,0,1,1,1,1,.2,.2,.2,.2]; lo=np.r_[2,.1,.02,0,-.8,.2,np.full(12,-np.inf)]; hi=np.r_[3,.35,10,5,1.,5,np.full(12,np.inf)]\\n   return least_squares(lambda p:(pred(p)-r)[m].ravel(),p,bounds=(lo,hi),max_nfev=100).x\\n  p=fit(good); e=pred(p)-r; groups=[good&ax,good&~ax]; held=[]\\n  for k2 in range(5):\\n   m=good & (np.arange(len(good))%5==k2); held.extend((pred(fit(good&~m))-r)[m].ravel())\\n  print(name,extra,'params',p.round(6),'rms axis/mixed',*[np.sqrt(np.mean(e[m]**2)) for m in groups],'CV rms/max',np.sqrt(np.mean(np.square(held))),np.max(np.abs(held)))\\n  if name=='exp' and extra=='none':\\n   inds=np.argsort(np.max(abs(e[good]),axis=1))[-8:]; print('worst signed',np.c_[q[good][inds],e[good][inds]].round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_shared.py; grep -nE '^def |np\\\\.(clip|max)|median' /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic bridge -> H2 shared sinusoidal own-channel response plus asymmetric opposite-channel coupling; the new in-sample channel RMSE is about 0.001–0.002, with held-out errors pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an independent nonlinear law for each channel.\",\"rejected_reason\":\"The fitted own-channel frequency and amplitude ratio agree across channels, so a shared response shape is better supported and uses fewer parameters.\"}],\"rationale\":\"The sweep fits show a common own-channel sinusoid and a shared opposing-channel response. Compare the remaining coupling terms on held-out sweep rows to choose the smallest model that closes the calibration gap before refitting the material law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4763d63620912bba57d51208a226db4e3fa56796e49301e42f89aed3c7f40d19",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40019.84,
+      "usage_known": true,
+      "prompt_tokens": 34437,
+      "cached_tokens": 9344,
+      "completion_tokens": 1527
+    }
+  ]
+}

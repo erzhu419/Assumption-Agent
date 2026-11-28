@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d78062bd9844b0eaaa738e793439a14",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:17.484066+00:00",
+  "ended_at_utc": "2026-11-28T03:39:54.123990+00:00",
+  "request_sha256": "2b0efa8cc7e56a3ef329e617878cb8ebb0db17f92ed4c5a8549b070d08a82a72",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 36260,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22987,
+    "cached_tokens": 9344,
+    "completion_tokens": 1495
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _fit_forward, _invert\\nfrom batch_solver import solve_batch\\n\\ndef robust(a, y):\\n    w = np.ones(len(a))\\n    for _ in range(24):\\n        c = np.linalg.lstsq(a*w[:,None], y*w[:,None], rcond=None)[0]\\n        e = np.linalg.norm(y-a@c, axis=1)\\n        med = max(np.median(e), 1e-12)\\n        w = np.minimum(1, 2*med/np.maximum(e, 1e-15))\\n    clean = e < 5*med\\n    return clean, np.linalg.lstsq(a[clean], y[clean], rcond=None)[0]\\n\\nfor item in pickle.load(open('public_batch.pkl','rb')):\\n    s = item['study']; cal = s['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']; a = _design(x)\\n    extra = [k for k in combinations_with_replacement(range(4),3) if len(set(k)) > 1]\\n    cubic = np.c_[a, np.prod(x[:, extra], axis=2)]\\n    axial = np.count_nonzero(x, axis=1) == 1\\n    mixed = np.flatnonzero(~axial)\\n    groups = [(f'axis{j}', axial & (x[:,j]!=0)) for j in range(4)]\\n    groups += [(f'mixed{k}', np.isin(np.arange(len(x)), mixed[k::5])) for k in range(5)]\\n    groups += [('mixed_tail', (~axial) & (np.max(np.abs(x), axis=1)>1.4))]\\n    for name, test in groups:\\n        train = ~test\\n        fit = _fit_forward(x[train],y[train]); pred0 = a[test]@fit\\n        clean_test = np.linalg.norm(y[test]-pred0,axis=1) < 1\\n        clean, _ = robust(a[train],y[train]); at, yt, xt = a[train][clean], y[train][clean], x[train][clean]\\n        c3 = robust(cubic[train],y[train])[1]\\n        sparse = np.zeros_like(fit)\\n        rational = np.empty_like(pred0)\\n        for j in range(4):\\n            keep = np.abs(fit[:,j]) > 1e-4\\n            sparse[keep,j] = np.linalg.lstsq(at[:,keep],yt[:,j],rcond=None)[0]\\n            # Profile P for positive saturation denominators 1 + alpha*x_j^2;\\n            # pick alpha using only this fold's clean training rows.\\n            best = np.inf\\n            for alpha in np.r_[0., np.geomspace(1e-5, 1., 41)]:\\n                d = at/(1+alpha*xt[:,j,None]**2)\\n                c = np.linalg.lstsq(d,yt[:,j],rcond=None)[0]\\n                loss = np.linalg.norm(d@c-yt[:,j])\\n                if loss < best:\\n                    best=loss; rational[:,j]=(a[test]@c)/(1+alpha*x[test,j]**2)\\n        preds = [pred0, cubic[test]@c3, a[test]@sparse, rational]\\n        errs = [np.max(np.abs((p-y[test])[clean_test])) for p in preds]\\n        inv = np.max(np.abs(_invert(y[test][clean_test],fit)-x[test][clean_test]))\\n        print(name, 'clean',sum(clean_test),'forward max [current, full cubic, sparse, rational]', ['%.2g'%v for v in errs], 'current inverse max %.2g'%inv)\\n    coeff = _fit_forward(x,y); print('full-fit row residual scale',np.median(np.linalg.norm(y-a@coeff,axis=1)))\\n    result=solve_batch(s)\\n    assert np.isfinite(result['terminal_field']).all()\\n    print('isolated composed run: finite terminal field')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (complete quadratic plus diagonal cubics) → H2 (additional mixed cubic or rational terms only if grouped holdouts improve); latest worst clean leave-one-out inverse error is 4.15e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay, drift-operator, and classification checks\",\"rejected_reason\":\"This task is continuous rosette calibration, with no relay state, stochastic drift operator, or classification labels in the contract.\"}],\"rationale\":\"Holding out entire axial sweeps and the mixed high-amplitude slice can expose a basis or conditioning failure that leave-one-out hides. Compare signed-interaction capacity through the full cubic basis and profile a positive rational denominator on training rows only; change the artifact only if the grouped results show a meaningful gain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f37ad07691f5784d7c5ecc4b513ea706954071f588f16be1be8cc0809635957b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38760.5,
+      "usage_known": true,
+      "prompt_tokens": 22987,
+      "cached_tokens": 9344,
+      "completion_tokens": 1495
+    }
+  ]
+}

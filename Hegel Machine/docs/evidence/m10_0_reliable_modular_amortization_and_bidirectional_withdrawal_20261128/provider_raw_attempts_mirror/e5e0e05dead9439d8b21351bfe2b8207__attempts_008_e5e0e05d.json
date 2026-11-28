@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5e0e05dead9439d8b21351bfe2b8207",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:57.859573+00:00",
+  "ended_at_utc": "2026-11-28T03:42:29.967966+00:00",
+  "request_sha256": "d43446df77cd4c7d9b72f10493669e7f1717a85169c6a2c31ab693f6595d92b6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24735,
+    "cached_tokens": 9344,
+    "completion_tokens": 1364
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,itertools\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\nc=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']\\nx,y=c['true_channel_loads'],c['bridge_raw']\\na=np.count_nonzero(x,axis=1)==1\\nix=np.arange(len(x))\\ndi=np.flatnonzero(a & (np.argmax(abs(x),axis=1)==3))\\nmix=np.flatnonzero(~a)\\nouter=[('channel-4 axis',di)]+[(f'axis-{j+1}',np.flatnonzero(a & (np.argmax(abs(x),axis=1)==j))) for j in range(3)]\\n# Hold out entire high-amplitude faces, not scattered points from each face.\\nouter += [(f'mixed {sign:+d} face {j+1}',mix[sign*x[mix,j]>=np.quantile(sign*x[mix,j],.8)]) for j in range(4) for sign in (-1,1)]\\nmonomials=[p for p in itertools.combinations_with_replacement(range(4),3) if len(set(p))>1]\\npairs=[x[:,i]+s*x[:,j] for i,j in itertools.combinations(range(4),2) for s in (-1,1)]\\nz0=u._basis(x)\\nmodels={'base':z0,'full-cubic':np.column_stack([z0]+[np.prod(x[:,p],axis=1) for p in monomials])}\\nfor rate in (.3,.7,1.4):\\n    # Saturating cubic corrections along coordinate axes or coupled sum/difference directions.\\n    sat=lambda v:v**3/(1+rate*v*v)\\n    models[f'rational-{rate}']=np.column_stack([z0,sat(x)])\\n    models[f'rational-pair-{rate}']=np.column_stack([z0,sat(x)]+[sat(v) for v in pairs])\\ndef fit(z,rows):\\n    zz,yy=z[rows],y[rows]\\n    w=np.ones(len(rows))\\n    for _ in range(16):\\n        b=np.linalg.lstsq(zz*w[:,None],yy*w[:,None],rcond=None)[0]\\n        e=np.linalg.norm(zz@b-yy,axis=1)\\n        w=1/np.hypot(1,e/max(.3*np.median(e),1e-12))\\n    good=e<=max(6*np.median(e),1e-12)\\n    return np.linalg.lstsq(zz[good],yy[good],rcond=None)[0]\\ndef error(z,tr,te):\\n    return np.linalg.norm(z[te]@fit(z,tr)-y[te],axis=1)\\n# Fix the eligible measured rows for every challenger; the three gross spikes\\n# are identified by the previously verified leave-one-out residual separation.\\nspikes=np.array([i for i in ix if np.linalg.norm(u._basis(x[i:i+1])@u._fit_bridge(x[ix!=i],y[ix!=i])-y[i:i+1])>20])\\neligible=np.setdiff1d(ix,spikes)\\nprint('gross spike rows:',spikes.tolist())\\nworst=np.zeros(3)\\nfor k,(name,te) in enumerate(outer):\\n    tr=np.setdiff1d(ix,te)\\n    te=np.intersect1d(te,eligible)\\n    rng=np.random.default_rng(310+k)\\n    parts=np.array_split(rng.permutation(tr),4)\\n    def inner(key):\\n        gathered=[]\\n        for part in parts:\\n            valid=np.intersect1d(part,eligible)\\n            gathered.extend(error(models[key],np.setdiff1d(tr,part),valid))\\n        return np.quantile(gathered,.95)\\n    rational=min((key for key in models if key.startswith('rational')),key=inner)\\n    errors=[error(models[key],tr,te).max() for key in ('base','full-cubic',rational)]\\n    worst=np.maximum(worst,errors)\\n    print(name,len(te),rational,' '.join(f'{e:.6g}' for e in errors))\\nprint('worst blocked forward error: baseline/full-cubic/nested-rational',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: robust quadratic-plus-coordinate-cubic calibration replaces affine coupling; verified worst clean leave-one-out inverse error is 0.0004972, and the next test holds out entire load slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run cohort classification, relay-state, or stochastic drift diagnostics.\",\n      \"rejected_reason\": \"The upstream task fits a static, continuous four-channel bridge; those diagnostics do not test the calibration contract.\"\n    }\n  ],\n  \"rationale\": \"Leave-one-row-out validation can miss errors that affect a whole load direction. Hold out complete axis sweeps and high-amplitude faces, and select rational basis terms only within the training folds. Change the verified artifact only if a challenger materially improves the worst measured slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b7ede1cb57bce4c29e35dc611c4b86734427c576a2dd7a7db3ab70be7c6d3ce8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36319.0,
+      "usage_known": true,
+      "prompt_tokens": 24735,
+      "cached_tokens": 9344,
+      "completion_tokens": 1364
+    }
+  ]
+}

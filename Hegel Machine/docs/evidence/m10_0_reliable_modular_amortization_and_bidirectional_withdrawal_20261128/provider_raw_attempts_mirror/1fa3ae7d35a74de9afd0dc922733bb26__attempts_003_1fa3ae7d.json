@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1fa3ae7d35a74de9afd0dc922733bb26",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:36.441374+00:00",
+  "ended_at_utc": "2026-11-28T03:50:55.506269+00:00",
+  "request_sha256": "09aa2549e2d569ea114861bc1038bde07587f07de116d82cde3b19b3ef517333",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 23108,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18135,
+    "cached_tokens": 9344,
+    "completion_tokens": 668
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; python3 - <<'PY'\\nimport pickle,json,numpy as np\\np=pickle.load(open('public_batch.pkl','rb')); d=p[0] if isinstance(p,list) else p\\nprint('root',type(p).__name__,list(d)); c=d['calibration_load_cells']; print('cal',[(k,type(v).__name__,np.shape(v)) for k,v in c.items()]); x=c['true_channel_loads']; y=c['bridge_raw']; print('x quantiles',np.round(np.quantile(x,[0,.05,.5,.95,1],axis=0),5)); print('samples',np.round(np.c_[x[:6],y[:6]],5)); print('sweeps',[(k,np.shape(v),np.asarray(v).ravel()[:5]) for k,v in c['single_channel_sweeps'].items()]);\\nfor k in ('train','test','chamber_verification_trials'):\\n s=d.get(k); print(k,type(s).__name__,list(s) if isinstance(s,dict) else (len(s) if s is not None else None));\\n if isinstance(s,dict):\\n  for f in ('past_channel_raw','hold_channel_raw'):\\n   if f in s: print(f,np.shape(s[f]),np.round(np.quantile(s[f].reshape(-1,4),[0,.5,1],axis=0),4))\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in a:\\n t=e['facility_telemetry_trace']; print(e['completed_campaign_short_name'],type(t).__name__,[(k,np.shape(v)) for k,v in t.items()] if isinstance(t,dict) else len(t))\\nPY\\nsed -n '48,135p' validate_public_schema.py; grep -nE 'solve_downstream|verification|sweeps' _verified_downstream.py; grep -nEi 'bridge|calibration|upstream' /tmp/hegel_continual_archive/*solver.py | cut -c1-200 | head -30\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Wrapped public batch -> coupled forward calibration and numerical inversion; worst-slice error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Unwrap the public fixture and check trial layout and operating ranges. The layout determines which arrays to convert; operating points outside calibration support would call for a boundary holdout before choosing a nonlinear model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3e87f64354b5b615081a8eda3f7f1960e401029e13e5284e0a7a5e2863cabbea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21152.94,
+      "usage_known": true,
+      "prompt_tokens": 18135,
+      "cached_tokens": 9344,
+      "completion_tokens": 668
+    }
+  ]
+}

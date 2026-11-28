@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "33363f7194f04bb1af822ca938482bee",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:56.231876+00:00",
+  "ended_at_utc": "2026-11-28T03:55:25.066545+00:00",
+  "request_sha256": "2b75a832a1f8b4aae235526ccd22b747cf58e472edf5e4002bbe1dd065321041",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53410,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29272,
+    "cached_tokens": 0,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; q0=c['true_channel_loads']; r0=c['bridge_raw']; m=np.max(abs(r0),axis=1)<8; q=q0[m]; r=r0[m]\\nnp.set_printoptions(precision=6,suppress=True)\\nfor j in range(4):\\n print('AXIS',j,np.c_[q0[j*4:j*4+4,j],r0[j*4:j*4+4]])\\nodd={'tanh':np.tanh,'atan':np.arctan,'rational':lambda u:u/(1+u*u),'sqrt':lambda u:u/np.sqrt(1+u*u),'asinh':np.arcsinh,'softsign':lambda u:u/(1+abs(u)),'sin':np.sin,'identity':lambda u:u}\\neven={'abs':lambda u,k:abs(u),'q*tanh':lambda u,k:u*np.tanh(k*u),'logcosh':lambda u,k:np.logaddexp(k*u,-k*u)-np.log(2),'square':lambda u,k:u*u,'sat_square':lambda u,k:u*u/(1+k*u*u),'abs_qsat':lambda u,k:abs(u)*(1-np.exp(-k*abs(u)))}\\naxis=(q!=0).sum(1)==1\\nfor j in range(4):\\n u=q[:,j]; v=q[:,(j+2)%4]; n=q[:,(j+1)%4]; y=r[:,j]; results=[]\\n for ok,of in odd.items():\\n  for ek,ef in even.items():\\n   def A(p):\\n    return np.column_stack([np.ones(len(u)),of(p[0]*u),v,ef(v,p[1]),u*n])\\n   def fit(mask):\\n    def calc(p):\\n     a=A(p)[mask]; w=np.linalg.lstsq(a,y[mask],rcond=None)[0]; return a@w-y[mask]\\n    f=least_squares(calc,[1,2],bounds=([.01,.01],[10,100]),max_nfev=100)\\n    a=A(f.x); w=np.linalg.lstsq(a[mask],y[mask],rcond=None)[0]; return f.x,w,a@w-y\\n   p,w,e=fit(np.ones(len(u),bool)); results.append((np.sqrt(np.mean(e**2)),ok,ek,p,w,np.sqrt(np.mean(e[axis]**2))))\\n print('FIT',j,*sorted(results,key=lambda z:z[0])[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cubic bridge -> H2 saturating own-channel response with an asymmetric opposite-channel coupling; current worst clean-sweep LOO error is 0.382.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a higher-degree unrestricted polynomial.\",\"rejected_reason\":\"The sweep errors remain large, while the single-axis traces show structured saturation and opposite-channel asymmetry.\"}],\"rationale\":\"Single-axis sweeps separate own-channel response from opposite-channel coupling. Fit compact candidate laws on the current sweeps; a near-noise-floor fit would warrant a held-out inversion test before changing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "768d49f37feb04d56981b979f31de28dd96e1c7da27a1d00a7f004b0e7565552",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30948.08,
+      "usage_known": true,
+      "prompt_tokens": 29272,
+      "cached_tokens": 0,
+      "completion_tokens": 1151
+    }
+  ]
+}

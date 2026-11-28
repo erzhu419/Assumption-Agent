@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1fdaaf6d82d5446d92d72aa7e9d4710f",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:07.936450+00:00",
+  "ended_at_utc": "2026-11-28T03:47:31.055984+00:00",
+  "request_sha256": "8182f658240bc569438400b49ed3388c93d9e47d98c166296b6ba2b74610730c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33804,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23331,
+    "cached_tokens": 9344,
+    "completion_tokens": 879
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal_probe.py <<'PY'\\nimport numpy as np, pickle\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; single=sw['single_bank_sweeps']; terms=[t for d in range(4) for t in combinations_with_replacement(range(4),d)]\\ndef design(x,terms):\\n return np.column_stack([np.prod(x[:,t],axis=1) if t else np.ones(len(x)) for t in terms])\\nfor j in range(4):\\n m=single['bank_id']==j; solo=np.zeros((m.sum(),4)); solo[:,j]=single['ref_signal'][m]; xx=np.vstack([x,solo]); yy=np.r_[y[:,j],single['raw_readout'][m]]; keep=np.abs(yy)<6; D=design(xx,terms)\\n for _ in range(5):\\n  c=np.linalg.lstsq(D[keep],yy[keep],rcond=None)[0]; r=yy-D@c; keep=np.abs(r)<max(1e-4,8*np.median(abs(r[keep])))\\n old=[(),(j,),((j+1)%4,),((j-1)%4,),tuple(sorted([j,(j+1)%4])),(j,)*3]; P=design(xx,old); oldr=yy-P@np.linalg.lstsq(P[keep],yy[keep],rcond=None)[0]; print(j,'full residual p50/pmax', np.median(abs(r[keep])),max(abs(r[keep])), 'previous residual p50/pmax',np.median(abs(oldr[keep])),max(abs(oldr[keep])), 'excluded',np.flatnonzero(~keep)); print([(t,round(a,6)) for t,a in zip(terms,c) if abs(a)>0.0003]); print('nonpolynomial witness', sorted(abs(r[keep]))[-5:])\\nPY\\npython3 /tmp/cal_probe.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; sed -n '1,53p' \\\"$f\\\" | grep -B 2 -A 15 -E '^def _axis|^def _responses'; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -24\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 previous rosette polynomial -> H2 sparse degree-three calibration with independently selected walls; calibration and wall validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer current walls from campaign order alone\",\n      \"rejected_reason\": \"The archive shows earlier regimes, but wall choice should also predict held-out observations from the current campaign.\"\n    }\n  ],\n  \"rationale\": \"Compare the previous calibration basis with a complete cubic basis after removing gross sweep outliers. A residual reduction would justify testing the newly identified terms on held-out sweeps. Extract the exact archived wall rows for a separate prediction comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "97fea1a820cf173b5c6da55d67df97d7bbfe33f8dc567a745f990122f30a45f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25208.44,
+      "usage_known": true,
+      "prompt_tokens": 23331,
+      "cached_tokens": 9344,
+      "completion_tokens": 879
+    }
+  ]
+}

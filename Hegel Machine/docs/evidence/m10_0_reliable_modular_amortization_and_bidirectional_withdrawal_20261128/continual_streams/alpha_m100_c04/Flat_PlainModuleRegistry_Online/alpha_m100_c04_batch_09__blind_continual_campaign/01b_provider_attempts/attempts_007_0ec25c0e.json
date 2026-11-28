@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ec25c0e87d842daa23216844a279393",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:03.528444+00:00",
+  "ended_at_utc": "2026-11-28T04:05:32.017533+00:00",
+  "request_sha256": "ecf0a833712b73aa44a98e60a0ad6da70619c8dd4184cc6f884c8c1a473245e6",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44866,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25333,
+    "cached_tokens": 9344,
+    "completion_tokens": 1076
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I -c \\\"import runpy,sys; sys.path.insert(0,'/holdout_task'); runpy.run_path('/holdout_task/validate_public_schema.py',run_name='__main__')\\\"\\ncat >/tmp/validate_material.py <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as b\\nm = runpy.run_path('/holdout_task/downstream_solver.py')\\nraw = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nd = b._up.calibrate_upstream(raw, b._PAY)\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']\\nx=m['_features'](tr,te); n=len(tr['lab_id'])\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; lab=tr['lab_id']\\na=m['_inputs'](tr,x[:n])\\nfor split in [None,*np.unique(lab)]:\\n    fit=np.ones(n,bool) if split is None else lab!=split\\n    val=fit if split is None else ~fit\\n    tau,w=m['_fit'](tuple(k[fit] for k in a),dt,t,y[fit],r[fit]); assert .05<tau[0]<tau[1]<25\\n    s,p=m['_design'](tau,tuple(k[val] for k in a),dt,t)\\n    e=s@w-y[val]; er=p@w-r[val]\\n    print('lab', split, 'tau', np.round(tau,5), 'w', np.round(w,6), 'strain/rate absolute q50/q90', np.quantile(abs(e),[.5,.9]),np.quantile(abs(er),[.5,.9]), 'worst time q90',np.quantile(abs(e),.9,axis=0).max())\\nout=b.solve_batch(raw)\\ninp=m['_inputs'](te,x[n:]); tau,w=out['estimated_taus'],out['hereditary_weights']\\nss,rr=m['_chamber'](tau,w,inp,dt,np.array([0.,1.e-6]))\\nnp.testing.assert_allclose(ss[:,0],0,rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(rr,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nprint('deployment derivative max absolute error', np.max(np.abs(ss[:,1]/1.e-6-rr)))\\nnp.testing.assert_allclose(ss[:,1]/1.e-6,rr,rtol=0,atol=2.e-5)\\nPY\\npython3 -I /tmp/validate_material.py\\nhead -c 1800 /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\npython3 - <<'PY'\\nimport json, numpy as np\\nd=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in (d if isinstance(d,list) else next(v for v in d.values() if isinstance(v,list))):\\n a=np.array(e['facility_telemetry_trace']); print(e.get('completed_campaign_short_name'),len(a),np.round(a.mean(axis=0),3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Recurring facility regime -> archived saturating-drift law; reference exchange changed strain and rate predictions by 0.0, and held-out material errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the staged batch wrapper\",\n      \"rejected_reason\": \"The requested validator already passes normally; isolated verification only needs the task directory explicitly added to the import path.\"\n    }\n  ],\n  \"rationale\": \"Run isolated validation with the staged sibling modules visible, then test material-fit stability across labs and verify that the chamber curve has the reported initial derivative. Compare the full telemetry chronology to confirm that the selected archive regime is the closest supported match.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "69f81d81d2d2ab1a01f2b84b97986fe3c3c6398d728889458f9f23082b045474",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30592.42,
+      "usage_known": true,
+      "prompt_tokens": 25333,
+      "cached_tokens": 9344,
+      "completion_tokens": 1076
+    }
+  ]
+}

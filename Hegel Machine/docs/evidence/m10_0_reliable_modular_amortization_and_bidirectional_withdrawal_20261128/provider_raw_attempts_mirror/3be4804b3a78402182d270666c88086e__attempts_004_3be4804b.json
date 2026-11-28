@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3be4804b3a78402182d270666c88086e",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:01.510537+00:00",
+  "ended_at_utc": "2026-11-28T03:31:29.435124+00:00",
+  "request_sha256": "d45db6871abefe415982884c98337189638af7db0828b4e109cfed374d96e6cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30882,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20577,
+    "cached_tokens": 5504,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '54,110p' /tmp/hegel_continual_archive/alpha_m100_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment imputation' | cut -c1-220 | head -5; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m100_c04_s00_solver as s\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; p=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=s._calibration(d['calibration_load_cells']); n=len(tr['lab_id']); x=s._features(tr,te); ti=s._inputs(tr,x[:n],cal); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; tau,theta=s._fit(ti,dt,t,y,tr['instant_rate_obs']); print('tau theta',tau,theta); print('cal',cal)\\nc=d['calibration_load_cells']; r=c['bridge_raw']; v=c['true_channel_loads'].sum(1); a=np.c_[r,np.ones(len(r))]; b=np.c_[a,*[r[:,k]*r[:,j] for k in range(4) for j in range(k,4)]]; perm=np.random.default_rng(41).permutation(len(r)); j,k=perm[:56],perm[56:]; print('cal heldout affine quadratic',[(np.std((z[k]@np.linalg.lstsq(z[j],v[j],rcond=None)[0]-v[k])),np.max(abs(z[k]@np.linalg.lstsq(z[j],v[j],rcond=None)[0]-v[k]))) for z in (a,b)])\\nfor q,xx in [(tr,x[:n]),(p,s._features(tr,p)[n:])]:\\n inp=s._inputs(q,xx,cal); a,b=s._design(tau,inp,dt,t); y=q['strain_curves_obs']-q['strain_0'][:,None]; rate=q['instant_rate_obs']; e=y-a@theta; er=rate-b@theta; print('residual quantiles',np.quantile(abs(e),[.5,.9,.99,1]),np.quantile(abs(er),[.5,.9,.99,1])); print('past/hold ranges',np.quantile(inp[0],[0,.5,1]),np.quantile(inp[1],[0,.5,1])); R=np.c_[-np.expm1(-t[:,None]/tau),t]; fit=np.linalg.lstsq(np.r_[R,[[1/tau[0],1/tau[1],1]]],np.c_[e,er].T,rcond=None)[0].T; print('branch/drift residual quantiles',np.quantile(fit,[0,.25,.5,.75,1],axis=0)); print('projection residual curve/rate',np.quantile(abs(e-fit@R.T),[.5,.9,1]),np.quantile(abs(er-fit@np.r_[1/tau,1]),[.5,.9,1]));\\n if q is p: print('diagnostic lab,stratum,hold,past,amplitude/drift deltas:',np.round(np.c_[q['lab_id'],q['stratum'],inp[1],inp[0],fit],5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared material spectrum -> H2 chamber-specific memory and drift; diagnostic baseline and projection errors are not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a separate chamber relaxation spectrum immediately\",\n      \"rejected_reason\": \"First test whether the shared spectrum already explains the chamber time dependence once branch amplitudes and drift can change.\"\n    }\n  ],\n  \"rationale\": \"Project curve and rate residuals onto the shared temporal basis to distinguish a changed chamber state from changed relaxation dynamics. Held-out bridge sweeps will show whether a nonlinear calibration is warranted.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7031e58b69c940cc5c36a3808dfa32215cd87e3b5a1907a5ed5b81abba863adb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30056.4,
+      "usage_known": true,
+      "prompt_tokens": 20577,
+      "cached_tokens": 5504,
+      "completion_tokens": 1069
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4b22b787f9144828b2c3d82df160214",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:58.235743+00:00",
+  "ended_at_utc": "2026-11-28T03:41:36.235629+00:00",
+  "request_sha256": "7db66fead2101474ee0f39631d88cc256dd86a745320a8a1a6bc72889f42b5a2",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 42752,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26798,
+    "cached_tokens": 9344,
+    "completion_tokens": 1635
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '54,95p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_01_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m100_c03_batch_01_solver.py').read_text()\\ntext='\\\"\\\"\\\"Fit the intrinsic material law and predict calibrated chamber responses.\\\"\\\"\\\"\\\\n'+src[src.index('\\\\nimport numpy'):src.index('\\\\ndef _bridge')]+'''\\ndef _loads(split):\\n    return tuple(np.asarray(split[key], dtype=float).sum(axis=-1)\\n                 for key in ('past_channel_raw', 'hold_channel_raw'))\\n\\n'''+src[src.index('def _design'):src.index('def solve_batch')]+'''\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    dt = np.asarray(cal_item['past_dt'], dtype=float)\\n    times = np.asarray(cal_item['eval_times'], dtype=float)\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    past, hold = _loads(train)\\n    taus, theta = _fit(x[:n], past, hold, dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    past, hold = _loads(test)\\n    a, b = _design(taus, x[n:], past, hold, dt, times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + a @ theta,\\n            'initial_rate_pred': b @ theta}\\n'''\\nPath('downstream_solver.py').write_text(text)\\nPY\\ncat > /tmp/chamber_probe.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _loads, _design, solve_downstream\\nnp.set_printoptions(precision=5,suppress=True)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; rawg=p['campaign_diagnostics']\\nd=calibrate_upstream(d); g=calibrate_upstream({**p['dataset'],'test':rawg})['test']\\ntr,te=d['train'],d['test']; times,dt=d['eval_times'],d['past_dt']; base=solve_downstream(d); tau,w=base['estimated_taus'],base['hereditary_weights']; print('intrinsic',tau,w)\\ny=np.column_stack((g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']))\\npast,h=_loads(g); ones=np.ones_like(h); x=_features(tr,g)[len(tr['lab_id']):]; r=w[2]+x@w[3:]; a,b=_design(tau,x,past,h,dt,times); pred=np.column_stack((a@w,b@w)); gap=b[:,:2]*tau; z=h[:,None]-gap\\n\\ndef stats(v):\\n return [np.sqrt(np.mean(v[:,:-1]**2)),np.sqrt(np.mean(v[:,-1]**2)),np.median(np.abs(v[:,:-1])),np.median(np.abs(v[:,-1]))]\\n\\ndef basis(t):\\n return np.column_stack((np.vstack((-np.expm1(-times[:,None]/t),1/t)),np.r_[times,1.]))\\n\\ndef profile(feat, target, t=tau, scale=.008, free=True, mode='linear'):\\n B=basis(t); M=np.einsum('if,tk->itfk',feat,B).reshape(target.size,-1); Y=target.ravel(); p0=np.linalg.lstsq(M,Y,rcond=None)[0]; opt=least_squares(lambda p:M@p-Y,p0,jac=lambda p:M,loss='cauchy',f_scale=scale,max_nfev=100); return opt.x.reshape(-1,3),opt.fun.reshape(target.shape)\\n\\nif __name__=='__main__':\\n print('baseline',stats(pred-y)); print('diag y sequential range',np.min(y,0),np.max(y,0))\\n for name,f in [('h,r',np.c_[h,r]),('1,h,r',np.c_[ones,h,r]),('h,z,r',np.c_[h,z,r]),('1,h,z,r',np.c_[ones,h,z,r]),('h,z,x',np.c_[h,z,ones,x]),('h,past,x',np.c_[h,past,ones,x]),('past',np.c_[h,past])]:\\n  c,e=profile(f,y); print(name,'fit',np.round(stats(e),5),'coeff',c.tolist())\\n  def obj(logt):\\n   c,e=profile(f,y,np.exp(logt)); return np.log1p((e/.008)**2).sum()\\n  from scipy.optimize import minimize\\n  result=minimize(obj,np.log(tau),method='Nelder-Mead',options={'xatol':1e-5,'maxiter':120}); t=np.exp(result.x); c,e=profile(f,y,t); print(' free',t,np.round(stats(e),5),'coeff',c.tolist())\\n print('baseline per coupon',np.round(np.c_[h,z,r,stats(pred-y)[0]*ones,np.median(pred[:,:-1]-y[:,:-1],axis=1),pred[:,-1]-y[:,-1]],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic relaxation → H2 chamber-specific routing through relaxation and drift; diagnostic residuals are not yet available.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Copy the prior campaign's chamber coefficients\",\n      \"rejected_reason\": \"The current diagnostic responses can distinguish whether the hold load, history, or coupon drift drives the chamber branches.\"\n    }\n  ],\n  \"rationale\": \"Build the intrinsic baseline in calibrated coordinates, then compare nested chamber designs to identify which terms warrant held-out validation. Score strain and initial rate separately so a good trajectory fit cannot mask a poor derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0fba4a71b0017bb34870a2dbeb8cb45f65f825275047229a53f915df32fe71c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42288.55,
+      "usage_known": true,
+      "prompt_tokens": 26798,
+      "cached_tokens": 9344,
+      "completion_tokens": 1635
+    }
+  ]
+}

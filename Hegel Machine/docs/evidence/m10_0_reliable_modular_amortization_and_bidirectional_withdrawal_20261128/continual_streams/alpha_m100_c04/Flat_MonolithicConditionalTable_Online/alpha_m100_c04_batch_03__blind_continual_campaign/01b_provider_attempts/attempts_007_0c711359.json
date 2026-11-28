@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c71135906b44bce8d0fe749c24ef89b",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:35.938185+00:00",
+  "ended_at_utc": "2026-11-28T03:44:02.011460+00:00",
+  "request_sha256": "c092dcb0c87b595c350841983e6d601d87c15b8bc1705b319f604fb867b8943e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44646,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25955,
+    "cached_tokens": 9344,
+    "completion_tokens": 1008
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; x=s._features(tr,te); n=len(tr['lab_id'])\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; q=lambda z: float(np.quantile(np.abs(z),.9)); med=lambda z: float(np.median(np.abs(z)))\\nraw,true=c['bridge_raw'],c['true_channel_loads']; clean=np.max(np.abs(raw),axis=1)<8; cs=[]\\nfor i in range(5):\\n    vl=(np.arange(len(raw))%5==i); b=s._calibrate({'bridge_raw':raw[~vl],'true_channel_loads':true[~vl]}); err=s._stress(raw[vl&clean],b)-true[vl&clean].sum(1); cs.append(max(abs(err)))\\nprint('bridge held-out max absolute axial errors:', cs)\\nassert max(cs)<.002\\nb=s._calibrate(c); inp=s._inputs(tr,x[:n],b); o=s.solve_batch(d); taus,theta=o['estimated_taus'],o['hereditary_weights']; print('full material fit',taus,theta); assert .05<taus[0]<taus[1]<25 and all(np.isfinite(a).all() for a in o.values())\\nprint('held-out lab: sizes, taus, median/p90 strain and rate abs errors, early/late p90')\\nfor lab in np.unique(tr['lab_id']):\\n    vl=tr['lab_id']==lab; tf,th=s._fit(tuple(a[~vl] for a in inp),dt,t,y[~vl],r[~vl]); a,h=s._design(tf,tuple(a[vl] for a in inp),dt,t); e=a@th-y[vl]; er=h@th-r[vl]; print(lab,vl.sum(),tf,[med(e), q(e), med(er),q(er),q(e[:,:3]),q(e[:,-3:])]); assert np.isfinite(e).all() and np.isfinite(er).all()\\nhold=s._stress(te['hold_channel_raw'],b); cov=np.c_[np.ones(len(hold)),x[n:]]; h=1e-6; v,_=s._chamber_response(taus,theta,hold,cov,np.array([0.,h])); rate_diff=np.max(abs((v[:,1]-v[:,0])/h-o['initial_rate_pred'])); print('deployment strain at hold onset and derivative max discrepancies',abs(v[:,0]).max(),rate_diff); assert np.allclose(v[:,0],0) and rate_diff<1e-4\\nprint('current chamber diagnostics present:',item.get('campaign_diagnostics') is not None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear axial calibration and shared material fit → H2 archived chamber reset law; schema passed with zero reference-swap discrepancy, but held-out numerical errors are not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check whether bridge inversion generalizes to unused sweeps, whether any held-out lab exposes an unstable material fit, and whether the deployment initial rate matches the strain derivative. A failure would identify which component needs revision; these checks do not establish blind chamber accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "909b5d9fdd3f0ebddec8144dd24b6af804ac7bd4ea4bf065e55bb8c3f2dbbba9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28139.07,
+      "usage_known": true,
+      "prompt_tokens": 25955,
+      "cached_tokens": 9344,
+      "completion_tokens": 1008
+    }
+  ]
+}

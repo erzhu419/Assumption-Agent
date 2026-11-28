@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e8e8fde037142a380447c9eb4254a5c",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:00:58.361689+00:00",
+  "ended_at_utc": "2026-11-28T04:01:36.612009+00:00",
+  "request_sha256": "56da020cc41345becadb22be6660db6dce6dd8747e776f0d68cb5febd9ae6e33",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54483,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28537,
+    "cached_tokens": 9344,
+    "completion_tokens": 1438
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the supplied load bridge, then solve in physical coordinates.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, re, sys\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nimport downstream_solver as s\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nwith open('_upstream_param_payload.json') as f:\\n    payload = json.load(f)\\nraw = item['dataset']\\ncal = calibrate_upstream(raw)\\nd = calibrate_upstream({**raw, 'test': item['campaign_diagnostics']}, payload)['test']\\ndt, t, _, tau, theta = s._intrinsic(cal)\\npast, hold = s._stress(d)\\nx = s._features(d, d)[:len(hold)]\\norigin = d['strain_0']\\ny = d['strain_curves_obs']\\nr = d['instant_rate_obs']\\nbase, rate = s._chamber_response(past, hold, x, origin, dt, t, tau, theta, np.zeros(2))\\nA = (x @ theta[2:])[:, None, None] * (-np.expm1(-t[:, None] / tau) * tau - t[:, None])\\n\\ndef fit(q):\\n    mat, target = A[q].reshape(-1, 2), (y[q] - base[q]).ravel()\\n    return least_squares(lambda f: mat @ f - target, [.5, .75], loss='soft_l1', f_scale=.004).x\\n\\nfor key in ('lab_id', 'stratum'):\\n    err = np.empty_like(y)\\n    groups = d[key]\\n    for value in np.unique(groups):\\n        q = groups == value\\n        pred, _ = s._chamber_response(past[q], hold[q], x[q], origin[q], dt, t, tau, theta, fit(~q))\\n        err[q] = pred - y[q]\\n        print(key, value, 'median absolute strain and rate errors', np.median(abs(err[q])), np.median(abs(rate[q] - r[q])))\\n    print(key, 'worst evaluation-time median absolute strain error', np.max(np.median(abs(err), axis=0)))\\nf = fit(np.ones(len(hold), dtype=bool))\\nprint('final chamber fractions', f)\\np = Path('downstream_solver.py')\\ntext, count = re.subn(r'^_CHAMBER_FRACTIONS = .*$', f'_CHAMBER_FRACTIONS = np.array([{f[0]:.8f}, {f[1]:.8f}])', p.read_text(), flags=re.M)\\nassert count == 1\\np.write_text(text)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    dataset = pickle.load(f)[0]['dataset']\\na = solve_batch(dataset)\\nb = solve_downstream(calibrate_upstream(dataset))\\nfor key, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(dataset['test']['strain_0']), len(dataset['eval_times'])), 'initial_rate_pred': (len(dataset['test']['strain_0']),)}.items():\\n    assert a[key].shape == shape and np.isfinite(a[key]).all()\\n    np.testing.assert_array_equal(a[key], b[key])\\nassert .05 < a['estimated_taus'][0] < a['estimated_taus'][1] < 25\\nprint('Isolated batch/downstream composition passed; estimated taus:', a['estimated_taus'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset → H2 full history retention with curved drift; fixed-history validation gave worst held-out lab median absolute errors of 0.00473 strain and 0.00239 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the staged fixed-payload wrapper\",\n      \"rejected_reason\": \"It is nearly equivalent on the public bridge, but it would not refit a different supplied calibration sweep as the batch contract requires.\"\n    }\n  ],\n  \"rationale\": \"Use the verified upstream transducer's dynamic-fit path and retain the validated chamber law. Refit only the two chamber fractions, then check lab, stratum, and time slices for errors that pooled validation could conceal. Run the public schema validator and verify the final composition in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dacf412fee0f33112433c111ed7f9ceaa4dec8adf5946e0c32c48ffd97267a2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40375.32,
+      "usage_known": true,
+      "prompt_tokens": 28537,
+      "cached_tokens": 9344,
+      "completion_tokens": 1438
+    }
+  ]
+}

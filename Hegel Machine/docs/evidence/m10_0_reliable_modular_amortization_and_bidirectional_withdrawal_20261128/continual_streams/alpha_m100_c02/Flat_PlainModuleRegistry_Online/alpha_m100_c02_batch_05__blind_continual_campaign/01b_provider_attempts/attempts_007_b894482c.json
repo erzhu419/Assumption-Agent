@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b894482c8f1341b9b11c2ee69926cec8",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:40.329103+00:00",
+  "ended_at_utc": "2026-11-28T03:55:19.949941+00:00",
+  "request_sha256": "4ad315c73881a2ad8b80b4c734b8432e170d6bf38b1d542aef3e7fb44fadec6e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25635,
+    "cached_tokens": 9344,
+    "completion_tokens": 1382
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_structure.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; keep=np.max(abs(y),axis=1)<4; x,y=x[keep],y[keep]; axis=np.count_nonzero(x,axis=1)==1\\nI,J=np.array(list(combinations_with_replacement(range(4),2))).T\\npartners=[2,3,0,1]\\ndef fit(x,y,j,typ):\\n p=partners[j]\\n def design(x,s):\\n  u=x[:,j]; v=x[:,p]; z=u+s[1]*v\\n  a=[np.ones(len(x)),*x.T]\\n  if typ.startswith('single'): a += [np.tanh(s[0]*z+s[2]),np.cos(s[3]*v),np.sin(s[3]*v)]\\n  elif typ.startswith('separate'): a += [np.tanh(s[0]*u+s[2]),np.tanh(s[3]*v),np.cos(s[4]*v),np.sin(s[4]*v)]\\n  elif typ.startswith('double'): a += [np.tanh(s[0]*z+s[2]),np.tanh(s[3]*v),np.cos(s[4]*u),np.cos(s[4]*v)]\\n  elif typ.startswith('fourier'): a += [np.sin(s[0]*u),np.cos(s[0]*u),np.sin(s[3]*v),np.cos(s[3]*v)]\\n  if typ.endswith('q'): a.extend((x[:,I]*x[:,J]).T)\\n  if typ.endswith('pair'): a.extend([u*v,(u*v)**2,u*u*v,u*v*v])\\n  return np.column_stack(a)\\n def profile(s,ret=False):\\n  a=design(x,s); b=np.linalg.lstsq(a,y,rcond=1e-10)[0]; return b if ret else a@b-y\\n o=least_squares(profile,[1.5,0.,0.,1.5,2.],bounds=([.3,-.7,-1.,.3,.4],[4,.7,1.,5.,6.]),max_nfev=80)\\n b=profile(o.x,True); return o.x,b,lambda t:design(t,o.x)@b\\nfor typ in ['single','singlepair','singleq','separate','separatepair','separateq','double','doublepair','doubleq','fourier','fourierpair','fourierq']:\\n r=np.empty_like(y); pars=[]; bs=[]; tr=[]\\n for j in range(4):\\n  s,b,f=fit(x,y[:,j],j,typ); pars.append(s); bs.append(b); tr.append(np.sqrt(np.mean((f(x)-y[:,j])**2)))\\n  for ii in np.array_split(np.random.default_rng(23).permutation(len(x)),8):\\n   m=np.ones(len(x),bool);m[ii]=False; _,_,f=fit(x[m],y[m,j],j,typ);r[ii,j]=f(x[ii])-y[ii,j]\\n print(typ,'fit',np.round(tr,6),'OOF',np.round(np.sqrt(np.mean(r*r,axis=0)),6),'axis/mixed maxima',np.round([abs(r[axis]).max(),abs(r[~axis]).max()],6))\\n if min(tr)<.004: print('params',np.round(pars,4),'coef',np.round(bs,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_structure.py; python3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\ntry:\\n d=json.load(open(p)); print('telemetry preview:',str(d)[-1800:])\\nexcept FileNotFoundError: pass\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent saturation plus quadratic interactions → H2 sparse paired response profiles; H1 worst eight-fold channel RMSE is 0.0250 and worst absolute error is 0.0731.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep a generic cubic basis\",\"rejected_reason\":\"It lowers training residual without improving held-out errors.\"}],\"rationale\":\"Axis sweeps identify two specific cross-channel pairs. Test whether paired saturation or an additional even cross-channel response explains the residual before committing to an inverse model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "fa02c4f4ecb5b802a025c55ad00eba3466a1a7fffcb6b0b5ae02f2140ae65806",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41714.99,
+      "usage_known": true,
+      "prompt_tokens": 25635,
+      "cached_tokens": 9344,
+      "completion_tokens": 1382
+    }
+  ]
+}

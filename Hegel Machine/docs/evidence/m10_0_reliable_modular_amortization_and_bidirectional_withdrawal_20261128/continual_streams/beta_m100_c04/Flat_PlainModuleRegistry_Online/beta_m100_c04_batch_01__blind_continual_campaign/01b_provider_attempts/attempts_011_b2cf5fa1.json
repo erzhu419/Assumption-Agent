@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2cf5fa1e4f1494aa98511aadb55408b",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:59.299892+00:00",
+  "ended_at_utc": "2026-11-28T03:35:27.158592+00:00",
+  "request_sha256": "9628b986c73f4625f0ae7fb74c5dbb27e592e90bb8a08a48df4448cefe592eda",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31486,
+    "cached_tokens": 9344,
+    "completion_tokens": 1086
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; S, fields=m._forward(s); pulses=item['campaign_diagnostics']\\nP=np.array([(S@t['w_pulse']).reshape(-1,4) for t in pulses]); T=np.array([t['y_pulse_raw'].reshape(-1,4) for t in pulses]); K=len(s['mu_shifts'])\\nworst=max(np.sqrt(np.mean((m._calibrate(dict(s,y_obs_raw=t['y_pulse_raw']))-S@t['w_pulse']).reshape(K,-1,4)**2,axis=1)).max() for t in pulses)\\nassert worst<1e-12,worst\\nx,y=P.reshape(-1,4),T.reshape(-1,4)\\ncoef=np.column_stack([np.linalg.lstsq(np.c_[np.ones(len(x)),x[:,j]],y[:,j],rcond=None)[0] for j in range(4)])\\ny=((s['y_obs_raw'].reshape(-1,4)-coef[0])/coef[1]).ravel()\\nZ=s['Z_nuisance']; R=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nX,y=R@S,R@y\\nout=m.solve_batch(s); w,c=out['weights'],out['kkt_certificate']; cap,budget,ridge=(s[k] for k in ('u_box','total_budget','source_ridge'))\\nr=X@w-y; g=X.T@r+ridge*w; nu=c['nu_sum']; d=g-nu\\nobj=(r@r+ridge*(w@w))/2; dual=obj-g@w+nu*budget+cap*np.minimum(d,0).sum()\\nlo,hi=np.asarray(c['lam_lower']),np.asarray(c['lam_upper'])\\nerr=max(abs(w.sum()-budget),-w.min(),w.max()-cap,-lo.min(),-hi.min(),abs(d-lo+hi).max(),abs(lo*w).max(),abs(hi*(cap-w)).max(),abs(obj-dual),abs(obj-c['primal_objective']),abs(dual-c['dual_lower_bound']))\\nassert err<1e-11,err\\nnp.testing.assert_array_equal(w,c['weights'])\\nnp.testing.assert_allclose(out['terminal_field'],np.einsum('i,ijk->jk',w,fields),rtol=1e-12,atol=1e-13)\\nsweep=s['sensor_calibration_sweeps']; newraw=sweep['raw_rosette'].copy(); newraw[:,2]+=.03+.02*sweep['ref_rosette'][:,2]\\nprobe=x[:3]; obs=probe*coef[1]+coef[0]; obs[:,2]+=.03+.02*probe[:,2]\\nrecovered=m._calibrate(dict(s,sensor_calibration_sweeps=dict(sweep,raw_rosette=newraw),y_obs_raw=obs.ravel()))\\nnp.testing.assert_allclose(recovered.reshape(-1,4),probe,atol=1e-12,rtol=0)\\nprint(f'Worst calibrated tracer RMSE by shift/channel: {worst:.3g}; independent pulse-calibrated KKT and objective error: {err:.3g}; dynamic calibration perturbation passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: sweep-fitted diagonal calibration at hundredth precision reduces worst raw tracer RMSE by shift and channel from 1.11e-6 to 6.86e-16; the updated artifact still needs its independent KKT check.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous check stopped because the harness treated a runpy dictionary as a module. Import the unchanged artifact as a module in an isolated process and finish checking that independent tracer calibration reproduces the certificate and that changing a sweep bank changes the fitted calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1c2e5485cc2edb178489b18c666a0d7d4cdfad387b1c1263f1b9f39fa50de138",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29916.1,
+      "usage_known": true,
+      "prompt_tokens": 31486,
+      "cached_tokens": 9344,
+      "completion_tokens": 1086
+    }
+  ]
+}

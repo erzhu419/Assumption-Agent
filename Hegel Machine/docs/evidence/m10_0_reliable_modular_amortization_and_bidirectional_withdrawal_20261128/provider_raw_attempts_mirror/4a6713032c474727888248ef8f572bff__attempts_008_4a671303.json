@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4a6713032c474727888248ef8f572bff",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:51.433970+00:00",
+  "ended_at_utc": "2026-11-28T03:41:29.241380+00:00",
+  "request_sha256": "0cc96f88e6bb8c1ab77d51b4f9f7365b7efbea108480fce849c85de18b030ebe",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54644,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30305,
+    "cached_tokens": 9344,
+    "completion_tokens": 1563
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - /holdout_task/batch_solver.py <<'PY'\\nimport runpy, sys\\nsys.path.insert(0, '/holdout_task')\\nsys.argv = ['/holdout_task/validate_public_schema.py', sys.argv[1]]\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nfrom copy import deepcopy\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as batch\\nimport downstream_solver as dn\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; q_raw = item['campaign_diagnostics']; cal = calibrate_upstream(d)\\nout = batch.solve_batch(d); downstream = dn.solve_downstream(cal)\\nfor k, v in out.items():\\n    np.testing.assert_allclose(v, downstream[k], rtol=0, atol=1e-10)\\n    assert np.isfinite(v).all(), k\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\n# Change the physical bridge encoding while preserving stress. This detects frozen gains or double calibration.\\nchanged = deepcopy(d)\\ng = np.array([1.011, .991, 1.006, .996]); o = np.array([.016, -.01, .012, -.008])\\nraw = changed['calibration_load_cells']['bridge_raw']; inlier = np.all(abs(raw) <= 8.5, axis=1)\\nraw[inlier] = raw[inlier]*g + o\\nassert np.array_equal(inlier, np.all(abs(raw) <= 8.5, axis=1))\\nfor split in ('train','test'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        changed[split][key] = changed[split][key]*g + o\\nalt = batch.solve_batch(changed)\\nfor k, v in out.items():\\n    np.testing.assert_allclose(v, alt[k], rtol=0, atol=2e-7, err_msg=k)\\nprint('dynamic bridge re-encoding max absolute change', max(np.max(abs(v-alt[k])) for k,v in out.items()))\\n# Score the exact packaged chamber function and reselect its one coefficient inside each diagnostic fold.\\nq = calibrate_upstream(dict(d, test=q_raw))['test']; labs = q['lab_id']\\nx = dn._features(q,q)[len(labs):]; past, hold = dn._loads(q)\\ntau = out['estimated_taus']; theta = out['hereditary_weights']; dt, t = d['past_dt'],d['eval_times']\\ny, yr = q['strain_curves_obs'], q['instant_rate_obs']; y0 = q['strain_0']\\npred, rate = dn._predict_chamber(tau,theta,x,past,hold,dt,t,y0)\\ncurve, kr = dn._design(tau,theta*0+x[0,0] if False else x,past,hold,dt,t)\\nlinear = y0[:,None] + curve @ theta\\nmech = y0[:,None] + curve[...,:2] @ theta[:2]; drift = theta[2]+x@theta[3:]\\nerr = np.empty_like(y)\\nfor l in np.unique(labs):\\n    holdout = labs==l\\n    def residual(a):\\n        return mech + drift[:,None]*(-a*np.expm1(-t/a))-y\\n    a = minimize_scalar(lambda a: np.mean(np.sqrt(1+(residual(a)[~holdout]/.006)**2)-1),bounds=(.1,5),method='bounded').x\\n    err[holdout] = residual(a)[holdout]\\n    print('held-out lab', l, 'strain RMSE', np.sqrt(np.mean(err[holdout]**2)), 'rate RMSE', np.sqrt(np.mean((rate[holdout]-yr[holdout])**2)))\\nworst_horizon = np.sqrt(np.mean(err**2,axis=0)).max()\\nworst_rate = max(np.sqrt(np.mean((rate[labs==l]-yr[labs==l])**2)) for l in np.unique(labs))\\nprint('LOLO worst horizon RMSE',worst_horizon,'worst lab rate RMSE',worst_rate,'exact artifact final horizon MAE',np.mean(abs(pred[:,-1]-y[:,-1])),'linear drift final horizon MAE',np.mean(abs(linear[:,-1]-y[:,-1])))\\n_, s1 = dn._predict_chamber(tau,theta,x,past,hold,dt,np.array([1e-6]),y0)\\np1, _ = dn._predict_chamber(tau,theta,x,past,hold,dt,np.array([1e-6]),y0)\\nnp.testing.assert_allclose((p1[:,0]-y0)/1e-6,s1,rtol=2e-6,atol=2e-7)\\nassert worst_horizon < .01 and worst_rate < .01\\nassert np.mean(abs(pred[:,-1]-y[:,-1])) < .01\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained memory with linear drift → H2 retained memory with exponential saturation; prior leave-one-lab-out worst-horizon strain RMSE 0.00585 and worst-lab rate RMSE 0.00651.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate passed but does not verify the chamber law. Test the packaged prediction against diagnostics, refit the saturation constant inside each held-out lab fold, and verify the rate derivative and dynamic bridge calibration independently. Failure would identify which boundary or constitutive term needs correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "affab958c8b65d407d199fe2177abf48498c817f56d826995002a43d75d5380b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42106.58,
+      "usage_known": true,
+      "prompt_tokens": 30305,
+      "cached_tokens": 9344,
+      "completion_tokens": 1563
+    }
+  ]
+}

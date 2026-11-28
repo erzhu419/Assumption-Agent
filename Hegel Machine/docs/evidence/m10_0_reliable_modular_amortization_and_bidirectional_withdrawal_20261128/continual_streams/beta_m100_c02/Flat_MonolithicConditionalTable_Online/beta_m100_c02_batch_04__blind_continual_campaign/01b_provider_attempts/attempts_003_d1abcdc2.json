@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1abcdc2eec3429db5faaf5234371172",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:02.880971+00:00",
+  "ended_at_utc": "2026-11-28T03:47:18.838453+00:00",
+  "request_sha256": "55771f73181fdbe550f052983ca842765961632a7b0db88c21053005a68f9224",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23674,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19281,
+    "cached_tokens": 9344,
+    "completion_tokens": 545
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive && cat beta_m100_c02_batch_03_solver.py && grep -A15 '^def solve_batch' *_solver.py && python3 - <<'PY'\\nimport json,numpy as np,pickle\\np=json.load(open('archive_apparatus_log.json'))\\nif isinstance(p,dict): print('log keys',list(p)); p=next(x for x in p.values() if isinstance(x,list) and x and isinstance(x[0],dict))\\nfor r in p:\\n print({k:v for k,v in r.items() if k!='facility_telemetry_trace'}); a=np.asarray(r['facility_telemetry_trace']); print(a.shape,np.round(a.mean(0),3),np.round(a.std(0),3))\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; r=c['ref_rosette']; y=c['raw_rosette']; a=np.column_stack((r,np.ones(len(r)))); b=np.linalg.lstsq(a,y,rcond=None)[0]; print('affine',np.round(b,5),'rms',np.sqrt(np.mean((a@b-y)**2,axis=0))); print('sweeps',{k:(np.shape(v),np.asarray(v).ravel()[:12]) for k,v in c['single_bank_sweeps'].items()}); t=s['aux_manifold_telemetry']; print('aux stats',t.mean(0),t.std(0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Open-wall baseline -> pulse-tested boundary model with sweep-fitted calibration; held-out pulse error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the archived solver unchanged\",\"rejected_reason\":\"The current chamber and sensor calibration may differ; test the archived stencil against current pulses before adopting it.\"}],\"rationale\":\"The previous output truncated the solver entrypoint and telemetry summaries. Read them separately and measure affine calibration residuals: a poor affine fit would require resolving calibration nonlinearity before attributing tracer mismatch to the walls.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "53a6e3d92677b88faafc00b55967e8425c4ce4179a81dfed71ad912c356f7eaf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18047.99,
+      "usage_known": true,
+      "prompt_tokens": 19281,
+      "cached_tokens": 9344,
+      "completion_tokens": 545
+    }
+  ]
+}

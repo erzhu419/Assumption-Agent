@@ -1,0 +1,8 @@
+import sys,pickle,numpy as np
+sys.path[:0]=['/holdout_task','/tmp/hegel_continual_archive']
+from _verified_upstream import calibrate_upstream
+from alpha_m100_c03_batch_06_solver import _features,_fit,_loads,_design
+z=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=calibrate_upstream({**z['dataset'],'chamber_verification_trials':z['campaign_diagnostics']}); tr,te,q=[d[k] for k in ('train','test','chamber_verification_trials')]; dt,t=d['past_dt'],d['eval_times']; x=_features(tr,te); n=len(tr['lab_id']); xq=_features(tr,q)[n:]; y=lambda s:s['strain_curves_obs']-s['strain_0'][:,None]; tau,th=_fit(x[:n],*_loads(tr),dt,t,y(tr),tr['instant_rate_obs']); p,h=_loads(q); r=th[2]+xq@th[3:]; A,B=_design(tau,xq,p,h,dt,t); tar=np.column_stack((y(q),q['instant_rate_obs'])); print('intrinsic',tau,th); print('diagnostic ranges past, hold, rate, drift',[(a.min(),a.max()) for a in (p,h,tar[:,-1],r)]); print('lab, stratum counts',np.unique(np.c_[q['lab_id'],q['stratum']],axis=0,return_counts=True)); F=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); T=np.r_[t,1.]; D=np.column_stack((F,T)); np.set_printoptions(precision=4,suppress=True)
+for name,mat in [('plain',np.column_stack((A@th,B@th))),('reset',(h[:,None]*th[:2]+.5*r[:,None]*tau)@F.T),('reset linear',(h[:,None]*th[:2])@F.T+r[:,None]*T),('free exp+linear',tar@np.linalg.pinv(D.T)@D.T)]:
+ e=mat-tar; print(name,'rmse',np.sqrt(np.mean(e*e,axis=0)), 'worst',abs(e).max())
+amp=tar@np.linalg.pinv(D.T); print('h, weighted memory gaps, r, fitted amplitudes and drift, residual norm'); print(np.column_stack((h,B[:,:2]*tau*th[:2],r,amp,np.linalg.norm(amp@D.T-tar,axis=1))))

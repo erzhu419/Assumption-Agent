@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81c08be768d3454f9b567ad924098b30",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:22.286887+00:00",
+  "ended_at_utc": "2026-11-28T03:44:44.208063+00:00",
+  "request_sha256": "947a4a0f27102ba60abb89c665135992edf0fd3a67ed807cdd00f8bf8761a8bc",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 62743,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30409,
+    "cached_tokens": 5504,
+    "completion_tokens": 790
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/audit_chamber_basis.py').read_text()\\np=p[p.index('import downstream_solver as m'):]\\np=p.replace('# Use the same reference moments and imputation as prediction on deployment coupons.', '# Use the reference panel supplied with each cohort: train/test pooled for the material fit, diagnostic panel for the separate chamber experiment.')\\np=p.replace(\\\"truth = np.c_[Y, R]\\\", \\\"truth = np.c_[s['strain_curves_obs']-s['strain_0'][:,None], s['instant_rate_obs']]\\\")\\np=p.replace(\\\"for lab in np.unique(labels):\\\", \\\"for lab in np.unique(labels):\\\")\\nhead='''import sys, pickle, json, numpy as np\\nfrom pathlib import Path\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as m\\nroot = Path('/holdout_task')\\nwith (root/'public_batch.pkl').open('rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\ncal = calibrate_upstream(raw)\\npayload = json.loads((root/'_upstream_param_payload.json').read_text())\\ns = calibrate_upstream(dict(raw,test=item['campaign_diagnostics']), payload)['test']\\ntr, te = cal['train'], cal['test']\\ndt, t = cal['past_dt'], cal['eval_times']\\nx = m._features(s,s)[1]\\n'''\\nPath('/tmp/audit_chamber_cohorts.py').write_text(head+p)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber_cohorts.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Linear drift → retained memory with exponential chamber drift; worst held-lab strain P90 was 0.01307 using the diagnostic panel versus 0.11417 when using deployment-panel moments on diagnostics.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the memory-difference correction from the stress audit.\",\n      \"rejected_reason\": \"That audit applied deployment reference moments to a separate diagnostic cohort. The correction must improve held-lab errors with the diagnostic cohort's own reference panel before it can be attributed to chamber mechanics.\"\n    }\n  ],\n  \"rationale\": \"The two audits disagree even on initial rate, which is independent of drift decay. Compare the same algebraic challengers in the diagnostic cohort's reference coordinates to distinguish a real memory correction from compensation for feature misalignment. Leave the candidate, public fixture, and validator unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0f1e79711882a5d1f4997b05b72d3fe076cb776de358fb9b8f88e0f1cb3ab4a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24000.66,
+      "usage_known": true,
+      "prompt_tokens": 30409,
+      "cached_tokens": 5504,
+      "completion_tokens": 790
+    }
+  ]
+}

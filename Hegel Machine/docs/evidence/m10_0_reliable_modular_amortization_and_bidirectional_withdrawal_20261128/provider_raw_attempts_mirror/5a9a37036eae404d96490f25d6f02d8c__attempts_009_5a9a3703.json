@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a9a37036eae404d96490f25d6f02d8c",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:22.479587+00:00",
+  "ended_at_utc": "2026-11-28T03:56:52.969359+00:00",
+  "request_sha256": "525729c1de89a744dc2a14638138c41d55e52ca23d20172fb53f52f7d97ac6d6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56955,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32174,
+    "cached_tokens": 9344,
+    "completion_tokens": 1201
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, copy, itertools\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\np='/holdout_task/public_batch.pkl'\\nfor entry in pickle.load(open(p,'rb')):\\n d=entry['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; n=len(x)\\n b,f=u._fit(x,y); res=np.max(abs(u._forward(x,b,f)-y),axis=1); clean=res<.01\\n print('frequencies',f,'spike rows',np.flatnonzero(~clean),'clean forward max',res[clean].max())\\n axis=(np.count_nonzero(x,axis=1)==1); err=np.zeros_like(x)\\n folds=np.array_split(np.random.default_rng(23).permutation(n),8)\\n for ids in folds:\\n  m=np.ones(n,bool);m[ids]=False\\n  bb,ff=u._fit(x[m],y[m]); jj=ids[clean[ids]]; err[jj]=u._inverse(y[jj],bb,ff)-x[jj]\\n for name,m in [('axis',axis),('mixed',~axis),('boundary',np.max(abs(x),axis=1)>=1.4)]:\\n  e=err[m&clean]; print(name,'OOF inverse worst channel RMSE',np.sqrt(np.mean(e*e,axis=0)).max(),'max',abs(e).max()); assert abs(e).max()<.005\\n for scale in [1.7,2.5,4.0]:\\n  grid=np.array(list(itertools.product(np.linspace(-scale,scale,13),repeat=2))); loads=np.column_stack((grid[:,0],grid[::-1,0],grid[:,1],grid[::-1,1])); raw=u._forward(loads,b,f); recovered=u._inverse(raw,b,f); e=np.max(abs(recovered-loads)); print('stress range',scale,'load error',e,'min sampled singular value',np.linalg.svd(u._jacobian(loads,b,f),compute_uv=False)[:,-1].min()); assert e<1e-7\\n original=copy.deepcopy(d); trial=dict(d, chamber_verification_trials={k:d['test'][k] for k in ('past_channel_raw','hold_channel_raw')}); calibrated=u.calibrate_upstream(trial)\\n for name in ('train','test','chamber_verification_trials'):\\n  for field in ('past_channel_raw','hold_channel_raw'):\\n   q=trial[name][field]; v=calibrated[name][field]; r=abs(u._forward(v.reshape(-1,4),b,f)-q.reshape(-1,4)).max(); print(name,field,'closure',r); assert q.shape==v.shape and r<1e-9\\n assert np.array_equal(calibrated['calibration_load_cells']['bridge_raw'],x) and not np.shares_memory(calibrated['calibration_load_cells']['bridge_raw'],x)\\n s=calibrated['calibration_load_cells']['single_channel_sweeps']; assert np.array_equal(s['cmd_stress'],s['true_stress']) and not np.shares_memory(s['cmd_stress'],s['true_stress'])\\n for name in ('train','test'):\\n  for field in ('past_channel_raw','hold_channel_raw'):\\n   assert np.array_equal(d[name][field],original[name][field]); assert np.array_equal(u.calibrate_upstream(calibrated)[name][field],calibrated[name][field])\\n assert np.array_equal(c['bridge_raw'],original['calibration_load_cells']['bridge_raw']) and np.array_equal(c['single_channel_sweeps']['cmd_stress'],original['calibration_load_cells']['single_channel_sweeps']['cmd_stress'])\\n out=solve_batch(d)\\n print('isolated composed output:',{k:np.shape(v) for k,v in out.items()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 saturating profiles → H2 paired Fourier bridge; worst-channel eight-fold forward RMSE was 0.000122, and the composed public schema passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the saved artifacts in an isolated process. Held-out load errors test accuracy independently of schema validity; a wide load grid tests inverse branch selection; the optional trial and identity cases test conversion coverage and input preservation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4c04dc624a624246bd5df0883c5940550ca85f29e577be383d432317dad245a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32586.04,
+      "usage_known": true,
+      "prompt_tokens": 32174,
+      "cached_tokens": 9344,
+      "completion_tokens": 1201
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0382060fb1f24021a396e7dfb6cc9991",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:02.165681+00:00",
+  "ended_at_utc": "2026-11-28T04:05:38.402892+00:00",
+  "request_sha256": "1bbc7b96193a06239ef9b7997cc712e2892e02da31fb9927dcd14c64c4b70149",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54441,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28107,
+    "cached_tokens": 9344,
+    "completion_tokens": 1470
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_batch06.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; raw=c['bridge_raw']; j=np.arange(4); opp=m._OPPOSITE\\npeak=np.max(abs(raw),axis=1); clean=peak<4*np.median(peak); ids=np.flatnonzero(clean); folds=np.array_split(ids[np.argsort(np.linalg.norm(x[ids],axis=1),kind='stable')],6)\\nlabels=['affine','trigonometric','trig + pairwise','trig + rational']; residuals={k:[] for k in labels}; inverse=[]; total_inv=[]\\nfor idx in folds:\\n fit=np.setdiff1d(ids,idx); b=m._bridge({'true_channel_loads':x[fit], 'bridge_raw':raw[fit]}); f,_=b\\n def design(z,k):\\n  a=m._basis(z,f)\\n  if k==1: return a\\n  u=z; v=z[:,opp]; delta=u-v; pair=np.stack((u*v, delta, (u+v)**2, delta**3, u*u*v, u*v*v),-1)\\n  if k==2: return np.concatenate((a,pair),axis=-1)\\n  return np.concatenate((a,np.stack((u/(1+v*v), v/(1+u*u), delta/(1+delta*delta), (u+v)/(1+delta*delta)),axis=-1)),axis=-1)\\n af=np.c_[np.ones(len(fit)),x[fit]]; aa=np.c_[np.ones(len(idx)),x[idx]]\\n residuals['affine'].append(aa@np.linalg.lstsq(af,raw[fit],rcond=None)[0]-raw[idx]);\\n for k,key in enumerate(labels[1:],1):\\n  af=design(x[fit],k); aa=design(x[idx],k)\\n  res=np.column_stack([aa[:,i]@np.linalg.lstsq(af[:,i],raw[fit,i],rcond=None)[0] for i in j])-raw[idx]\\n  residuals[key].append(res)\\n err=m._inverse(raw[idx],b)-x[idx]; inverse.append(err); total_inv.append(err.sum(1));\\nfor key,rr in residuals.items():\\n print(key,'worst held-out fold/channel forward RMSE',max(np.sqrt(np.mean(r*r,axis=0)).max() for r in rr), 'pooled RMSE',np.sqrt(np.mean(np.concatenate(rr)**2)))\\nprint('calibration out-of-fold inverse worst channel RMSE',max(np.sqrt(np.mean(e*e,axis=0)).max() for e in inverse),'worst total stress RMSE',max(np.sqrt(np.mean(e*e)) for e in total_inv),'max absolute total stress error',max(np.max(abs(e)) for e in total_inv))\\nassert max(np.sqrt(np.mean(e*e)) for e in total_inv)<0.01\\ntr,te=d['train'],d['test']; n=len(tr['strain_0']); X=m._features(tr,te); dt=d['past_dt']; t=d['eval_times']; b=m._bridge(c); past,hold=m._loads(tr,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs'];\\nfor lab in np.unique(tr['lab_id']):\\n sel=tr['lab_id']==lab; other=~sel; tau,w=m._fit(X[:n][other],past[other],hold[other],dt,t,y[other],rate[other]); a,r=m._design(tau,X[:n][sel],past[sel],hold[sel],dt,t); ec=a@w-y[sel]; er=r@w-rate[sel]; print('lab',lab,'OOF signed medians strain/rate',np.median(ec),np.median(er),'rate sign agreement',np.mean(np.sign(r@w)==np.sign(rate[sel])))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); means=np.stack([np.mean(row['facility_telemetry_trace'],axis=0) for row in log]);\\nfor i,row in enumerate(log): print('completed',row.get('completed_campaign_short_name'),'facility means',means[i].round(3),'distance to latest',np.linalg.norm(means[i]-means[-1]).round(3))\\nout=m.solve_batch(d); assert all(np.isfinite(v).all() for v in out.values()); print('isolated process outputs', {k:v.shape for k,v in out.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear bridge calibration and a shared material fit → H2 archived chamber transfer; worst grouped benchtop p90 absolute errors are 0.02185 for strain and 0.01381 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB operators, and balanced classification accuracy\",\n      \"rejected_reason\": \"The contract has no relay, stochastic control operator, or class labels. Held-out signed residuals are the relevant check for lab confounding in this regression.\"\n    }\n  ],\n  \"rationale\": \"Hold out calibration load ranges to test whether pairwise or rational terms improve on the current bridge and whether inversion preserves total stress. Check signed errors on held-out labs for systematic offsets and verify that the precursor match holds across the facility trace means, not just two channels. Change the solver only if these checks expose a consequential failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cd93713b46cb45b54e553542b83b7d6fe1ba72766878ac387f1a1f60630b19dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38348.75,
+      "usage_known": true,
+      "prompt_tokens": 28107,
+      "cached_tokens": 9344,
+      "completion_tokens": 1470
+    }
+  ]
+}

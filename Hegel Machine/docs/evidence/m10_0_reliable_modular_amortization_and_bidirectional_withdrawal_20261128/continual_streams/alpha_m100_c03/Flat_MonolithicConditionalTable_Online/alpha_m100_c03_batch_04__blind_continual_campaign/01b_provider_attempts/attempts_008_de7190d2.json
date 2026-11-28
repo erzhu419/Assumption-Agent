@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de7190d2a55e4a979ac3cab9a9ced997",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:17.790924+00:00",
+  "ended_at_utc": "2026-11-28T03:51:44.375661+00:00",
+  "request_sha256": "b3c59e90e307cdf1113692ba2092425ae249be6188ddbba8a48c99428ead34a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31068,
+    "cached_tokens": 9344,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nA=/tmp/hegel_continual_archive\\nsed -n '/^def _chamber(/,/^def solve_batch/p' \\\"$A/alpha_m100_c03_batch_01_solver.py\\\"\\nsed -n '/^def _design(/,/^def solve_batch/p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, numpy as np, pickle, runpy\\nroot='/holdout_task/'\\nm=runpy.run_path(root+'batch_solver.py'); d=pickle.load(open(root+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; raw,y=c['bridge_raw'],c['true_channel_loads']; i=np.arange(len(y)); axis=np.count_nonzero(y,axis=1)==1\\nerrs=[]\\nfor j in i:\\n subset={**c,'bridge_raw':raw[i!=j],'true_channel_loads':y[i!=j]}\\n b=m['_bridge'](subset); errs.append(m['_bridge_terms'](y[j:j+1])[0]@b-raw[j])\\ne=np.array(errs); ok=np.max(abs(e),axis=1)<.01\\nprint('candidate calibration LOO raw-sum RMSE axis/mixed',*[np.sqrt(np.mean(e[s].sum(1)**2)) for s in (axis,~axis)],'excluded differential rows',np.flatnonzero(~ok).tolist())\\nb=m['_bridge'](c); x=m['_features'](tr,te)[:len(tr['lab_id'])]; p,h=m['_loads'](tr,b); dt,t=d['past_dt'],d['eval_times']; obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']\\nfor l in np.unique(tr['lab_id']):\\n s=tr['lab_id']==l; k=~s; tau,w=m['_fit'](x[k],p[k],h[k],dt,t,obs[k],rate[k]); a,z=m['_design'](tau,x[s],p[s],h[s],dt,t); q=lambda v: np.quantile(abs(v),.9); print('lab',l,'n',s.sum(),'tau',tau,'curve/rate p90',q(a@w-obs[s]),q(z@w-rate[s]))\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor j,row in enumerate(rows):\\n a=np.asarray(row['facility_telemetry_trace']); target=rows[j+1]['completed_campaign_short_name'] if j+1<len(rows) else 'alpha_m100_c03_batch_04'; print('prefix -> target',row['completed_campaign_short_name'],target,'modal medians',np.median(a[:,[3,6]],axis=0).round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear bridge with baseline deployment → H2 nonlinear bridge with the archived memory law selected by the preceding apparatus trace; prior worst calibration-slice raw-sum LOO RMSE was 0.0002165.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Interpret the last telemetry row as evidence only about batch 03\",\n      \"rejected_reason\": \"Indexing each trace as the prefix for the next campaign aligns the earlier column-6 activation with the archived memory law and the column-3 activation with the archived drift law.\"\n    }\n  ],\n  \"rationale\": \"Check the actual candidate on held-out calibration rows and benchtop labs to separate bridge or material errors from deployment transfer. Inspect the archived memory equation to determine which terms can transfer using the current calibrated loads and fitted material parameters.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2fcdddf9ae93d7bba840b008dc0b6b63ea18f3f1a3c1244f928007a858243a4e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28722.94,
+      "usage_known": true,
+      "prompt_tokens": 31068,
+      "cached_tokens": 9344,
+      "completion_tokens": 1021
+    }
+  ]
+}

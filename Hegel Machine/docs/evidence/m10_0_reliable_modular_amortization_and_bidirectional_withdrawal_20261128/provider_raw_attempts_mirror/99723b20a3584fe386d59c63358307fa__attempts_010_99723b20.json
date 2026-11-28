@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99723b20a3584fe386d59c63358307fa",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:49:47.442705+00:00",
+  "ended_at_utc": "2026-11-28T03:50:15.934095+00:00",
+  "request_sha256": "bc69ef10c9678a7827fdf00ddd29f9b71bd5f19bceda2f74cbfb480dbf198c3b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55711,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28555,
+    "cached_tokens": 9344,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit, _invert\\nwith open('public_batch.pkl', 'rb') as f:\\n    c = pickle.load(f)[0]['dataset']['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\na = _basis(x)\\nclean = np.max(np.abs(y), axis=1) < 8\\nfolds = list(np.array_split(np.random.default_rng(19).permutation(len(x)), 5))\\nfolds += [np.argsort(np.linalg.norm(x, axis=1))[-16:], np.flatnonzero(np.count_nonzero(x, axis=1) <= 1)]\\nworst = np.zeros(4)\\nfor hold in folds:\\n    train = np.setdiff1d(np.arange(len(x)), hold)\\n    test = hold[clean[hold]]\\n    b = _fit(x[train], y[train])\\n    good_train = train[clean[train]]\\n    # Give each ablation the clean training rows and refit its remaining terms.\\n    forward = [a[test] @ b]\\n    for cols in [np.r_[0:5, 11:15], np.r_[0:11]]:\\n        bc = np.linalg.lstsq(a[good_train][:, cols], y[good_train], rcond=None)[0]\\n        forward.append(a[test][:, cols] @ bc)\\n    errors = [np.quantile(np.linalg.norm(p-y[test], axis=1), .9) for p in forward]\\n    errors.append(np.quantile(np.linalg.norm(_invert(y[test], b)-x[test], axis=1), .9))\\n    worst = np.maximum(worst, errors)\\nprint('worst held-out P90 [deployed forward, without pair terms, without cubics, deployed inverse]:', worst)\\nassert worst[0] < .001 and worst[3] < .001 and min(worst[1:3]) > 10*worst[0]\\ns = c['single_channel_sweeps']; lab = s['lab_id']; cmd = s['cmd_stress']\\nload = np.zeros((len(lab), 4)); rows = np.arange(len(lab)); load[rows, lab] = s['true_stress']\\nresid = cmd - (_basis(load) @ _fit(x, y))[rows, lab]\\nfor g in np.unique(lab):\\n    r = resid[(lab == g) & (np.abs(cmd) < 8)]\\n    print('matched sweep axis', g, 'median signed residual and absolute P90:', np.median(r), np.quantile(np.abs(r), .9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pair-only or diagonal-cubic calibration -> H2 joint pair interactions and channel cubics; deployed worst held-out P90 is 0.000355 forward and 0.000266 inverse.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add signed-projection or rational corrections\",\n      \"rejected_reason\": \"The fold-selected correction worsened high-load P90 from 0.000342 to 0.000659 without fixing an observed inversion failure.\"\n    }\n  ],\n  \"rationale\": \"Direct ablation of the saved model tests whether either term family can be removed. Matching each lab’s sweep to its observed bridge axis tests whether the apparent lab offsets are due to comparing different axes; a residual offset after matching would warrant investigating lab-specific calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b3aa504a319bdf14b125df2f02b05d97222fb4e1d2c274d025ce15a84dbb3940",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30589.73,
+      "usage_known": true,
+      "prompt_tokens": 28555,
+      "cached_tokens": 9344,
+      "completion_tokens": 1062
+    }
+  ]
+}

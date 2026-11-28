@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a95d4d1a2abb45d5b7192a0b2acefd1a",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:47.202869+00:00",
+  "ended_at_utc": "2026-11-28T03:45:22.140631+00:00",
+  "request_sha256": "8d08992a76e7dadc354bf6097371c367498914ff39e64c69312ad34c3e36afee",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19426,
+    "cached_tokens": 9344,
+    "completion_tokens": 1407
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; head -c 5500 public_asset_index.json; echo; head -c 3500 /tmp/hegel_continual_archive/archive_apparatus_log.json; echo; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust multivariate polynomial Cauchy IRLS calibration' | head -9; cat >/tmp/compact_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement\\nC=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=C['true_channel_loads']; y=C['bridge_raw']\\nterms=[()] + [t for d in (1,2,3) for t in combinations_with_replacement(range(4),d)]\\nA=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); m=np.count_nonzero(x,axis=1)\\ndef fit(a,v):\\n w=np.ones(len(a))\\n for _ in range(40):\\n  b=np.linalg.lstsq(a*w[:,None],v*w[:,None],rcond=None)[0]; r=np.linalg.norm(a@b-v,axis=1); w=1/np.sqrt(1+(r/max(2*np.median(r),1e-12))**2)\\n return b\\n\\ndef sparse(a,v,method):\\n if method=='full': return fit(a,v)\\n if method=='adaptive':\\n  b=fit(a,v); r=np.linalg.norm(a@b-v,axis=1); good=r<8*np.median(r); b0=b.copy(); b[:]=0\\n  for j in range(4):\\n   mask=np.abs(b0[:,j])>max(.001,12*np.median(np.abs((a@b0-v)[good,j]))); b[mask,j]=np.linalg.lstsq(a[good][:,mask],v[good,j],rcond=None)[0]\\n  return b\\n masks=[]\\n for j in range(4):\\n  n=(j+1)%4;p=(j-1)%4\\n  masks.append([terms.index(t) for t in [(),(j,),(n,),(p,),tuple(sorted((j,n))),(j,j,j)]])\\n b=np.zeros((len(terms),4)); w=np.ones(len(a))\\n for _ in range(25):\\n  for j,idx in enumerate(masks): b[idx,j]=np.linalg.lstsq(a[:,idx]*w[:,None],v[:,j]*w,rcond=None)[0]\\n  r=np.linalg.norm(a@b-v,axis=1); w=1/np.sqrt(1+(r/max(2*np.median(r),1e-12))**2)\\n return b\\nb=sparse(A,y,'full'); good=np.linalg.norm(A@b-y,axis=1)<.01\\nprint('gross spike rows:',np.flatnonzero(~good)); print('design counts:',np.unique(m,return_counts=True))\\nfor method in ['full','adaptive','cyclic']:\\n errs=[]\\n for i in np.flatnonzero(good):\\n  idx=np.arange(len(x))!=i; pred=A[i]@sparse(A[idx],y[idx],method); errs.append((i,np.linalg.norm(pred-y[i])))\\n i,e=np.array(errs).T; i=i.astype(int)\\n print(method,'median/p95/max',np.quantile(e,[.5,.95,1]),'axes max', e[m[i]<=1].max(),'mixed max',e[m[i]>1].max())\\nprint('paired sweep range',[(k,np.shape(v)) for k,v in C['single_channel_sweeps'].items()])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic coupled bridge → H2 sparse cubic coupled bridge; full cubic cuts worst clean leave-one-row-out bridge error from 0.755 to 0.000745.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A coupled polynomial through degree two suffices for the bridge response.\",\n    \"empirical_witness\": \"Worst clean leave-one-row-out residual drops from 0.755 to 0.000745 with cubic terms; each channel has a prominent own-channel cubic coefficient.\",\n    \"causal_blanket_diagnosis\": \"Omitted cubic response creates systematic disagreement on clean axis sweeps as well as mixed loads.\",\n    \"sublated_pivot\": \"Compare the full cubic against support refitting and a compact cyclic bridge on held-out rows before implementing inversion.\",\n    \"risk_kind\": \"calibration extrapolation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a smooth inverse directly to raw channels\",\n      \"rejected_reason\": \"The compact forward law is already supported by out-of-fold evidence and avoids treating gross raw spikes as predictor leverage.\"\n    }\n  ],\n  \"rationale\": \"Check whether the observed cubic sparsity survives held-out refitting; if it does, prefer the compact law, while retaining a general cubic fallback for calibration panels that do not support the cyclic structure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "38e75172f89f504c228426df89a1148a6339797d2c65ab9f2fc9e81ce5916f90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37063.98,
+      "usage_known": true,
+      "prompt_tokens": 19426,
+      "cached_tokens": 9344,
+      "completion_tokens": 1407
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "12109af25e0549d5afaf999729de8275",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:39.246683+00:00",
+  "ended_at_utc": "2026-11-28T03:46:02.532251+00:00",
+  "request_sha256": "54703bed2c03b460f1d12c77fa314688dbe42400b9d60a9bed8ee2e42579508a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52429,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28958,
+    "cached_tokens": 5504,
+    "completion_tokens": 773
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/project_bridge.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; y=C['true_channel_loads']; r=C['bridge_raw']; sw=C['single_channel_sweeps']; ps=[()]+[p for k in range(1,4) for p in combinations_with_replacement(range(4),k)]; A=np.column_stack([np.prod(y[:,p],axis=1) for p in ps]); B=np.linalg.lstsq(A,r,rcond=None)[0]; v=np.linalg.svd(r-A@B,full_matrices=False)[2][0]; P=np.eye(4)-np.outer(v,v); print('direction',v,'sum',v.sum()); print('projected significant terms:');\\nfor p,b in zip(ps,B@P):\\n if np.max(np.abs(b))>.001:print(p,b.round(5))\\nprint('scalar nuisance residual vs true load channel 3'); e=(r-A@B)@v\\nfor j in np.argsort(y[:,3]):print(j,round(y[j,3],4),round(e[j],5))\\nprint('sweeps');\\nfor j in range(4):\\n ix=sw['lab_id']==j; print(j,np.c_[sw['true_stress'][ix],sw['cmd_stress'][ix]].round(5).T)\\nprint('isolated channel 3 observed');print(r[12:16]);\\nPY\\npython3 /tmp/project_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full cubic bridge → H2 sparse physical bridge plus a rank-one differential calibration term; summed-output jackknife RMS is 0.000322, while the unexplained residual singular values are 39.6 and 0.000810.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the conserved raw sum alone\",\n      \"rejected_reason\": \"Its cubic coefficients differ by channel, so equal raw sums need not represent equal total loads.\"\n    }\n  ],\n  \"rationale\": \"Project out the differential mode to identify the supported physical terms, then inspect the signed residual and independent sweeps. If the term is confined to calibration, the solver should recover the clean forward map rather than apply that term to coupon readings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7038452fbed48b577b8da46e7f92993ad6662c85af3255497d2fedee82a71d87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23237.5,
+      "usage_known": true,
+      "prompt_tokens": 28958,
+      "cached_tokens": 5504,
+      "completion_tokens": 773
+    }
+  ]
+}

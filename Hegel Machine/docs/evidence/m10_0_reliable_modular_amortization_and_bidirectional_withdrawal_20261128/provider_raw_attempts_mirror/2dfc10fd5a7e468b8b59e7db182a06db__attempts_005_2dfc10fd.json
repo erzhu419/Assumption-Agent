@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2dfc10fd5a7e468b8b59e7db182a06db",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:59.102543+00:00",
+  "ended_at_utc": "2026-11-28T03:41:35.302438+00:00",
+  "request_sha256": "1c28c80c0d3234ad95788c4c867eb604358051fdfb908fc2240d824c956179b7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 41730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24661,
+    "cached_tokens": 9344,
+    "completion_tokens": 1433
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed -n '40,93p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_01_solver.py && cat > /tmp/chamber_probe.py <<'PY'\\nimport sys, pickle, json, numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path[:0]=['/holdout_task','/tmp/hegel_continual_archive']\\nimport alpha_m100_c01_batch_01_solver as a\\nfrom _verified_upstream import calibrate_upstream\\np='/holdout_task/'\\ni=pickle.load(open(p+'public_batch.pkl','rb'))[0]\\nd=calibrate_upstream(i['dataset'],json.load(open(p+'_upstream_param_payload.json')))\\ns=calibrate_upstream(dict(i['dataset'],test=i['campaign_diagnostics']),json.load(open(p+'_upstream_param_payload.json')))['test']\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; xt,xp=a._features(tr,te); b=np.r_[0.,np.ones(4)]; y=tr['strain_curves_obs']-tr['strain_0'][:,None]\\ntau,th=a._fit(*a._inputs(tr,xt,b),dt,t,y,tr['instant_rate_obs']); print('material',tau,th)\\nc,r=a._design(tau,*a._inputs(tr,xt,b),dt,t); e=y-c@th; print('train error quantiles',np.quantile(abs(e),[.5,.8,.9,.95,.99,1]),'rate',np.quantile(abs(tr['instant_rate_obs']-r@th),[.5,.9,.99,1]));\\n# Apply deployment panel normalization estimated jointly from supplied train and test.\\nlab=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); x=s['coupon_features_raw'].copy()\\nfor l in np.unique(lab):\\n R=refs[lab==l]; m=np.median(R.mean(0)); sd=np.median(R.std(0)); x[s['lab_id']==l]=(x[s['lab_id']==l]-m)/sd; raw[lab==l]=(raw[lab==l]-m)/sd\\n_,id,n=np.unique(np.c_[lab,np.r_[tr['stratum'],te['stratum']]],axis=0,return_inverse=True,return_counts=True); w=1/n[id,None]; imp=np.nansum(raw*w,axis=0)/np.sum(w*np.isfinite(raw),axis=0); x=np.where(np.isfinite(x),x,imp)\\npast,hold,f=a._inputs(s,x,b); drift=f@th[2:]; Y=s['strain_curves_obs']-s['strain_0'][:,None]; R=s['instant_rate_obs']; c,r=a._design(tau,past,hold,f,dt,t); base=c@th; rate=r@th; z=hold[:,None]-r[:,:2]*tau; hold_y=-np.expm1(-t[:,None]/tau)@th[:2]; hold_r=sum(th[:2]/tau)\\nfor name,py,pr in [('bench',base,rate),('no-memory linear',hold[:,None]*hold_y+drift[:,None]*t,hold*hold_r+drift),('prior chamber',*a._chamber_response(dict(s,strain_0=np.zeros(len(s['strain_0']))),x,t,b,tau,th))]:\\n print(name,'curve',np.quantile(abs(Y-py),[.5,.9,1]),'rate',np.quantile(abs(R-pr),[.5,.9,1])); print('curve residual avg by time',np.round(np.median(Y-py,0),4))\\nD=np.c_[hold,z,drift]; print('y load/time coeffs',np.round(np.linalg.lstsq(D,Y,rcond=None)[0],4)); print('r coeffs',np.linalg.lstsq(D,R,rcond=None)[0]); print('expected branch coeffs',th[:2]/tau, 'hold',hold_r); print('curve noise after free regression',np.quantile(abs(Y-D@np.linalg.lstsq(D,Y,rcond=None)[0]),[.5,.9,1])); print('rate residual',np.round(R-hold*hold_r-drift,4)); print('note history weight columns',np.round(z[:5],3));\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log keys',list(log) if isinstance(log,dict) else len(log));\\nif isinstance(log,dict):\\n for k,v in log.items():\\n  print(k, type(v).__name__,len(v) if isinstance(v,(list,dict)) else v)\\n  if isinstance(v,list) and v and isinstance(v[0],dict):\\n   for row in v:\\n    print({j:x for j,x in row.items() if j!='facility_telemetry_trace'}, 'telemetry med',np.median(row['facility_telemetry_trace'],0) if 'facility_telemetry_trace' in row else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared material fit → compare benchtop memory, zero-memory linear drift, and the prior chamber kernel on calibrated diagnostics; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the prior chamber constants unchanged.\",\"rejected_reason\":\"The current campaign has labeled chamber diagnostics, so the old law can be tested directly before transfer.\"}],\"rationale\":\"Separate curve and initial-rate residuals reveal whether the discrepancy comes from retained history, the drift kernel, or the reference coordinates. Inspect the telemetry summary only to see whether it provides independent evidence for those mechanisms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5fd69346cffc4c234eebbb20373ceafa40993c43ff81f3f215e4bc1ae0c976de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38348.05,
+      "usage_known": true,
+      "prompt_tokens": 24661,
+      "cached_tokens": 9344,
+      "completion_tokens": 1433
+    }
+  ]
+}

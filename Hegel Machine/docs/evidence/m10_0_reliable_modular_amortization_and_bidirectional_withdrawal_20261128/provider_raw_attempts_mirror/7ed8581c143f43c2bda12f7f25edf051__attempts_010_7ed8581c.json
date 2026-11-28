@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ed8581c143f43c2bda12f7f25edf051",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:43.947576+00:00",
+  "ended_at_utc": "2026-11-28T03:48:12.158736+00:00",
+  "request_sha256": "0eb183ddb9c18d0af1cdb98633fba25360298bdebd9601cafd5fee5f70570cab",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46142,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25454,
+    "cached_tokens": 9344,
+    "completion_tokens": 1038
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rosette_interaction_ablation.py <<'PY'\\nimport pickle\\nimport sys\\n\\nimport numpy as np\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import _design, _fit, _invert, _response\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    study = item['study']\\n    sweeps = study['sensor_calibration_sweeps']\\n    x, y = (np.asarray(sweeps[k]) for k in ('ref_rosette', 'raw_rosette'))\\n    design = _design(x)\\n    mixed = np.flatnonzero(np.count_nonzero(x, axis=1) > 1)\\n    # Score the same held-out rows for all three models. Screen gross EMI\\n    # using the training response only, independently of the ablations.\\n    mixed = mixed[np.argsort(np.linalg.norm(x[mixed], axis=1))]\\n    peaks = np.zeros(3)\\n    inverse_peak = 0.0\\n    counts = []\\n    for test in np.array_split(mixed, 4):\\n        tr = np.setdiff1d(np.arange(len(x)), test)\\n        full, good = _response(design[tr], y[tr])\\n        tr_clean = tr[good]\\n        err_train = np.linalg.norm(design[tr_clean] @ full - y[tr_clean], axis=1)\\n        gate = max(0.01, 20 * np.median(err_train))\\n        test = test[np.linalg.norm(design[test] @ full - y[test], axis=1) < gate]\\n        counts.append(len(test))\\n        assert len(test) >= 12, 'too few accepted held-out mixed sweeps'\\n        candidate = _fit(x[tr], y[tr])\\n        diagonal_only = np.r_[0:5, 5, 9, 12, 14, 15:19]\\n        preds = []\\n        for terms in (np.arange(5), diagonal_only):\\n            coef = np.linalg.lstsq(design[tr_clean][:, terms], y[tr_clean], rcond=None)[0]\\n            preds.append(design[test][:, terms] @ coef)\\n        preds.append(design[test] @ candidate)\\n        errors = np.array([np.max(np.abs(p - y[test])) for p in preds])\\n        peaks = np.maximum(peaks, errors)\\n        inverse_peak = max(inverse_peak, np.max(np.abs(_invert(y[test], candidate) - x[test])))\\n    print('accepted mixed rows by amplitude band:', counts)\\n    print('worst forward absolute error [affine, no cross-products, saved candidate]:', peaks)\\n    print('worst saved-candidate inverse absolute error:', inverse_peak)\\n    assert peaks[-1] < 1e-4 and inverse_peak < 1e-4, 'saved candidate regressed on amplitude-block holdout'\\n    assert peaks[-1] < 0.01 * min(peaks[:2]), 'interaction ablation did not establish a material gain'\\n    result = solve_batch(study)\\n    assert np.isfinite(result['terminal_field']).all()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_interaction_ablation.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine response → ring-coupled quadratic and channelwise cubic response; the latest grouped holdout maximum absolute inverse error is 3.14e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The rational comparison is settled. This ablation tests the remaining specific claim: whether cross-products, rather than channelwise curvature alone, account for the saved candidate’s accuracy on contiguous amplitude bands. If the advantage disappears or the inverse exceeds 1e-4, revisit the basis before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "04dba826feb02a1726a45dd09d384ff41f50d12927684501fd21a0bc718391ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30313.15,
+      "usage_known": true,
+      "prompt_tokens": 25454,
+      "cached_tokens": 9344,
+      "completion_tokens": 1038
+    }
+  ]
+}

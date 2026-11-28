@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27b341d11a1549e1b841cdebb1d89792",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:51.785379+00:00",
+  "ended_at_utc": "2026-11-28T03:39:13.456210+00:00",
+  "request_sha256": "a3f7ad0ca7f2c824dc834d650840ed8f6440d74b8f8668a6692bbfc87680dc71",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52658,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28733,
+    "cached_tokens": 9344,
+    "completion_tokens": 787
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nimport pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; c=d['calibration_load_cells']; g=p['campaign_diagnostics']\\nprint('calibration and diagnostics fields:',list(c),list(g))\\nprint('train/design times:',d['past_dt'],d['eval_times'])\\nfor s in (d['train'],d['test'],g):\\n print('lab counts, feature missingness, bridge range:', np.unique(s['lab_id'],return_counts=True), np.isnan(s['coupon_features_raw']).sum(0),np.quantile(s['past_channel_raw'],[0,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport numpy as np,pickle\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=p['bridge_raw']; y=p['true_channel_loads'].sum(1); z=(x-x.mean(0))/x.std(0); X=np.c_[np.ones(len(x)),z]; terms=np.column_stack([z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]); L=np.lexsort(x.T); groups=np.empty(len(x),int); groups[L]=np.arange(len(x))//max(1,len(x)//5)\\nfor name,design in [('affine',X),('pairwise quadratic',np.c_[X,terms])]:\\n e=np.empty(len(y))\\n for g in np.unique(groups):\\n  m=groups==g; e[m]=design[m]@np.linalg.lstsq(design[~m],y[~m],rcond=None)[0]-y[m]\\n print(name,'blocked stress RMSE',np.sqrt(np.mean(e**2)),'worst block',max(np.sqrt(np.mean(e[groups==g]**2)) for g in np.unique(groups)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine stress calibration plus rate-preserving exponential saturation -> H2 refine only a supported calibration or material-fit bottleneck; current worst held-out horizon and rate RMSE are 0.01289 and 0.00549.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, Fokker–Planck, or classification audits\",\n      \"rejected_reason\": \"This dataset contains neither relay states nor classification labels or stochastic drift observations; the relevant confounding check is held-out laboratory performance.\"\n    }\n  ],\n  \"rationale\": \"The host probe reports 2.19% relative spectrum error. Test whether missing pairwise bridge terms worsen calibration on held-out stress blocks; if the affine fit holds up, focus the remaining audit on material-fit sensitivity across labs rather than changing the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1f390a6fc1fe67d3e9e228de78226732b0d2ab6e327ae02ca7f66afb9b93952a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23771.85,
+      "usage_known": true,
+      "prompt_tokens": 28733,
+      "cached_tokens": 9344,
+      "completion_tokens": 787
+    }
+  ]
+}

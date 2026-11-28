@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3aefca653c704c61b38fac85d3fd8073",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:25.862653+00:00",
+  "ended_at_utc": "2026-11-28T04:05:58.402795+00:00",
+  "request_sha256": "ff6dc31ec1dd0469dd72c94783b5a360a6404a286b80690764ced3da2f997ba9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 66228,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31934,
+    "cached_tokens": 9344,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features,_loads,_fit,_design,_predict_chamber\\nwith open('public_batch.pkl','rb') as f:\\n    raw=pickle.load(f)[0]['dataset']\\nd=calibrate_upstream(raw); a,b=d['train'],d['test']; n=len(a['lab_id']); xx=_features(a,b); x=xx[:n]; p,h=_loads(a); dt,t=d['past_dt'],d['eval_times']; y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; tel=a['aux_chamber_telemetry']\\nfor group in ('lab_id','stratum'):\\n    rows=[]\\n    for g in np.unique(a[group]):\\n        v=a[group]==g; f=~v\\n        tau,th=_fit(x[f],p[f],h[f],dt,t,y[f],r[f]); c,k=_design(tau,x,p,h,dt,t)\\n        z=np.zeros((n,2))\\n        for j,ds in enumerate(dt):\\n            alpha=np.exp(-ds/tau); z=alpha*z+(1-alpha)*p[:,j,None]\\n        gap=h[:,None]-z\\n        np.testing.assert_allclose(k[:,:2],gap/tau,rtol=1e-12,atol=1e-12)\\n        np.testing.assert_allclose(c[:,:,:2],gap[:,None,:]*(1-np.exp(-t[:,None]/tau)),rtol=1e-12,atol=1e-12)\\n        ec=y-c@th; er=r-k@th\\n        def metrics(ec,er):\\n            return [*(np.quantile(abs(ec[v][:,j]),.9) for j in np.array_split(np.arange(len(t)),3)),np.quantile(abs(er[v]),.9)]\\n        row=[metrics(ec,er)]\\n        pairs=np.column_stack([tel[:,i]*tel[:,j] for i in range(4) for j in range(i+1,4)])\\n        u=np.clip((ec@t)/(t@t),-.02,.02); q=np.clip(er,-.035,.035)\\n        for Z in (tel,np.c_[tel,pairs],np.c_[gap/(1+.2*gap**2)-gap,h/(1+.2*h**2)-h]):\\n            A=(Z-Z[f].mean(axis=0))/np.maximum(Z[f].std(axis=0),1e-12); Af=A[f]\\n            G=Af.T@Af+5*np.eye(A.shape[1]); bc=np.linalg.solve(G,Af.T@u[f]); br=np.linalg.solve(G,Af.T@q[f]); row.append(metrics(ec-(A@bc)[:,None]*t,er-A@br))\\n        rows.append(row)\\n    print(group,'worst p90 [early,mid,late,rate]; rows baseline, linear telemetry, pair telemetry, saturating stress:',np.round(np.max(rows,axis=0),6))\\nout=solve_batch(raw); tau=out['estimated_taus']; th=out['hereditary_weights']; _,hold=_loads(b); eps=1e-6\\npred,rate=_predict_chamber(tau,th,xx[n:],hold,np.array([0.,eps]),b['strain_0']); np.testing.assert_allclose(pred[:,0],b['strain_0'],rtol=0,atol=1e-12); delta=np.max(abs((pred[:,1]-pred[:,0])/eps-rate)); print('Boundary derivative max error',delta); assert delta<1e-4\\nnp.testing.assert_allclose(rate,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust two-branch material fit → H2 archive-transferred chamber law; worst held-out benchtop p90 errors are 0.02261 for strain and 0.01376 for initial rate, pending the corrected residual audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the solver in response to the previous audit failure\",\n      \"rejected_reason\": \"The dimension mismatch was in the audit: it combined a fold-restricted design with unrestricted residual targets. No solver failure was observed.\"\n    }\n  ],\n  \"rationale\": \"Restrict both sides of the residual regression to the training fold. Promote a correction only if it improves held-out errors across labs and strata; independently check that chamber strain starts at the measured baseline and its derivative matches the reported initial rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c7ef45d69ddc326a300e3be587f478cb36244fd5cf144b493cbb162909a69ca7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34671.47,
+      "usage_known": true,
+      "prompt_tokens": 31934,
+      "cached_tokens": 9344,
+      "completion_tokens": 1267
+    }
+  ]
+}

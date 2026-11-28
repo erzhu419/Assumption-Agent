@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9cfeaf2a41c484584ac8902a8716cba",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:16:04.606112+00:00",
+  "ended_at_utc": "2026-11-28T04:16:32.470473+00:00",
+  "request_sha256": "353046a1713f14668e589199b70e4f88c46f75be624a1a70cc0c85704d77c23b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68393,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34388,
+    "cached_tokens": 9344,
+    "completion_tokens": 1106
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json,pickle,runpy,numpy as np\\nj=json.load(open('public_asset_index.json')); print('public metadata:',{k:v for k,v in j.items() if not isinstance(v,(list,dict))})\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; print('diagnostics present:', i.get('campaign_diagnostics') is not None)\\nd=i['dataset']; m=runpy.run_path('batch_solver.py'); o=m['solve_batch'](d); tau=o['estimated_taus']; th=o['hereditary_weights']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; b=m['_fit_bridge'](*m['_bridge_samples'](d['calibration_load_cells'])); p,h=m['_loads'](b,te); x=m['_features'](tr,te)[len(tr['lab_id']):]; a,r,*_=m['_design'](np.log(tau),p,h,x,dt,t); f=-np.expm1(-t[:,None]/tau); basis=np.c_[f,t]; rb=np.r_[1/tau,1.]; drift=x@th[2:]; retained=a[:, -1, :2]/f[-1]*th[:2]; reset=h[:,None]*th[:2]; preds={'benchtop':(a@th,r@th)}\\nfor name,amp,c in [('retained_archive07',retained,[.3039,2.5262,-.2612]),('reset_archive04',reset,[.1072787,1.9523576,.2650152])]:\\n  v=np.c_[amp,np.zeros(len(h))]+drift[:,None]*c; preds[name]=(v@basis.T,v@rb)\\nfor name,(y,r) in preds.items():\\n print(name,'ranges strain/rate',np.round([y.min(),y.max(),r.min(),r.max()],4))\\nfor n1,n2 in [('benchtop','retained_archive07'),('retained_archive07','reset_archive04')]:\\n y,r=preds[n1]; yy,rr=preds[n2]; print(n1,n2,'RMS/max differences: strain',np.sqrt(np.mean((y-yy)**2)),abs(y-yy).max(),'rate',np.sqrt(np.mean((r-rr)**2)),abs(r-rr).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop deployment -> H2 archived chamber drift with uncertain stress retention; worst held-out stress RMSE is 0.000963 and worst lab median absolute strain/rate errors are 0.01011/0.00631.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Declare that elevated channel 0 uniquely determines the full chamber law\",\n      \"rejected_reason\": \"An identical precursor trace preceded archived laws with different stress retention. They agree on drift entering the exponential modes, not on whether stress history is reset.\"\n    }\n  ],\n  \"rationale\": \"Measure how much the archived laws disagree on the actual deployment coupons before choosing a transfer. If memory uncertainty dominates the difference, avoid treating either archived reset state as verified for this blind batch. This check measures prediction disagreement, not chamber accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "6b3a2edd10656f3ef64c5ffcb940a6fe3429893fa39d0d369d3b4222a5a87710",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30018.41,
+      "usage_known": true,
+      "prompt_tokens": 34388,
+      "cached_tokens": 9344,
+      "completion_tokens": 1106
+    }
+  ]
+}

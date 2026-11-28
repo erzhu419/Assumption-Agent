@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30247b2f520d4f3db7781dc86d8a0a95",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:56.648022+00:00",
+  "ended_at_utc": "2026-11-28T03:55:22.198744+00:00",
+  "request_sha256": "a0104d0b760c6e39e6a8e5bca32df3b6b2a92aba18e0aeb4605487b89b3c3547",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44466,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26654,
+    "cached_tokens": 9344,
+    "completion_tokens": 978
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for i in 01 03; do echo \\\"### $i\\\"; sed -n '/^def _axis/,/^    L =/p' /tmp/hegel_continual_archive/beta_m100_c04_batch_${i}_solver.py | head -45; done\\npython3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; ids=b['bank_id']; v=b['ref_signal']; r=b['raw_readout']; print('keys',list(s));print('raw obs limits',np.min(s['y_obs_raw']),np.max(s['y_obs_raw']));print('calib shapes',x.shape,y.shape)\\nforms={'cubic':lambda t,a,g:g*t+a*t**3,'quintic':lambda t,a,g,h:g*t+a*t**3+h*t**5,'tanh':lambda t,a,g:g*np.tanh(a*t),'rational':lambda t,a,g:g*t/(1+a*t*t),'asinh':lambda t,a,g:g*np.arcsinh(a*t),'softsign2':lambda t,a,g:g*t/np.sqrt(1+a*t*t),'atan':lambda t,a,g:g*np.arctan(a*t),'sinh':lambda t,a,g:g*np.sinh(a*t)}\\nfor k in range(4):\\n g=(ids==k)&(abs(r)<8); t,z=v[g],r[g]; print('\\\\nbank',k,np.c_[t,z].round(5));\\n for name,f in forms.items():\\n  p=[0.,.6,1.]+([0.] if name=='quintic' else []); lb=[-np.inf]+([0.] if name not in ('cubic','quintic') else [-np.inf])+[-np.inf]*(len(p)-2)\\n  def fit(a,b): return least_squares(lambda q:q[0]+f(a,*q[1:])-b,p,bounds=(lb,np.inf),max_nfev=600,gtol=1e-12).x\\n  q=fit(t,z); errors=[]\\n  for i in range(len(t)):\\n   m=np.arange(len(t))!=i; u=fit(t[m],z[m]); errors.append(u[0]+f(t[i],*u[1:])-z[i]);\\n  print(name, np.round(q,6), 'rms',np.sqrt(np.mean((q[0]+f(t,*q[1:])-z)**2)), 'LOO max',np.max(np.abs(errors)))\\nprint('clean rows by nonzero inputs',np.unique((abs(x)>1e-12).sum(1),return_counts=True))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic rosette → H2 saturating single-bank response with separately identified cross-channel terms; pooled affine RMS is 2.466 with gross faults included, and held-out calibration error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the previous cubic calibration\",\n      \"rejected_reason\": \"The current bank-0 sweep visibly flattens; leave-one-level-out errors can distinguish a valid cubic model from a saturation law.\"\n    }\n  ],\n  \"rationale\": \"Use isolated bank sweeps to test saturation without confounding from other channels. Read the two remaining archived boundary stencils to determine what the preceding telemetry trace predicts for the blind campaign.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2da47aff19f6af72d5a56082951280432ccdde49a380035eb263147731322f10",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27664.28,
+      "usage_known": true,
+      "prompt_tokens": 26654,
+      "cached_tokens": 9344,
+      "completion_tokens": 978
+    }
+  ]
+}

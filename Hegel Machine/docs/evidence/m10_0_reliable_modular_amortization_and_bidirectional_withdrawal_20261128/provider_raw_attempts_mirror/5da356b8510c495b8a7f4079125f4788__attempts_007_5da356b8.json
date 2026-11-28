@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5da356b8510c495b8a7f4079125f4788",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:53.747719+00:00",
+  "ended_at_utc": "2026-11-28T03:33:26.869808+00:00",
+  "request_sha256": "410f99b4753c57c6ca79fc83a428ace34b94d0bd6910face350a74ea8d7d48cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25247,
+    "cached_tokens": 9344,
+    "completion_tokens": 1431
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_chamber.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nS, _ = m._forward(s)\\npulses = item['campaign_diagnostics']\\nW = np.column_stack([p['w_pulse'] for p in pulses])\\nY = np.column_stack([p['y_pulse_raw'] for p in pulses])\\nZ = s['Z_nuisance']\\nM = np.eye(len(Z)) - Z @ np.linalg.pinv(Z)\\nfor d in 'xy':\\n    k = s['kappa_'+d]\\n    a = m._axis(k, s['vel_'+d], s['L'+d]/(len(k)-1))\\n    np.testing.assert_allclose(a @ np.ones(len(k)), 0, atol=1e-11, rtol=0)\\nopen_spec = importlib.util.spec_from_file_location('archived_open', '/tmp/hegel_continual_archive/beta_m100_c04_s00_solver.py')\\nbase = importlib.util.module_from_spec(open_spec)\\nopen_spec.loader.exec_module(base)\\nSo, _ = base._forward(s)\\nC = s['sensor_calibration_sweeps']\\nX, R = C['ref_rosette'], C['raw_rosette']\\n\\ndef design(x, quadratic):\\n    columns = [np.ones(len(x)), *x.T]\\n    if quadratic:\\n        columns += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]\\n    return np.column_stack(columns)\\n\\ndef rms(x):\\n    return np.sqrt(np.mean(x*x))\\n\\nfolds = np.array_split(np.arange(len(X)), 5)\\nfor quadratic in (False, True):\\n    sweep, refl, opened, refl_proj, open_proj = [], [], [], [], []\\n    for fold in folds:\\n        keep = np.ones(len(X), dtype=bool)\\n        keep[fold] = False\\n        T = design(X[keep], quadratic)\\n        assert np.linalg.matrix_rank(T) == T.shape[1]\\n        c = np.linalg.lstsq(T, R[keep], rcond=None)[0]\\n        sweep.append(rms(design(X[fold], quadratic) @ c - R[fold]))\\n        for operator, raw_scores, proj_scores in ((S,refl,refl_proj),(So,opened,open_proj)):\\n            err = np.column_stack([(design(v.reshape(-1,4), quadratic) @ c).ravel() - y for v,y in zip((operator @ W).T,Y.T)])\\n            for sl in np.array_split(np.arange(len(Y)), len(s['mu_shifts'])):\\n                for channel in range(4):\\n                    idx = sl[sl % 4 == channel]\\n                    raw_scores.extend(rms(err[idx,j]) for j in range(Y.shape[1]))\\n            proj_scores.extend(rms(v) for v in (M @ err).T)\\n    print('quadratic', quadratic, 'worst held-out sweep RMS', max(sweep), 'reflect min/max pulse-shift-channel RMS', min(refl), max(refl), 'open min/max', min(opened), max(opened), 'projected pulse reflect/open worst', max(refl_proj), max(open_proj))\\n    if not quadratic:\\n        assert max(refl) < 5e-6 and max(refl) < min(opened)\\n        assert max(refl_proj) < 5e-6 and max(open_proj) > 1e-2\\n\\n_, yp = m._project(s, S, m._calibrate(s))\\ndelta = Z @ np.linspace(-1.,1.,Z.shape[1])\\n_, yq = m._project(s, S, m._calibrate(s) + delta)\\nG = Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1])\\nexpected = s['nuisance_ridge'] * Z @ np.linalg.solve(G, np.linspace(-1.,1.,Z.shape[1]))\\nnp.testing.assert_allclose(yq-yp, expected, atol=2e-12, rtol=0)\\nprint('nuisance direction retained fraction', np.linalg.norm(yq-yp)/np.linalg.norm(delta))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py && python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin loss -> H2 exact reflecting walls; worst held-out pulse RMS is 1.21e-6 and worst stress-test KKT gap is 1.78e-15.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test classification strata, relay states, or stochastic drift terms.\",\"rejected_reason\":\"The supplied task is a steady continuous inverse problem with no class labels, relay state, or time-evolution operator. The relevant checks are wall conservation, sensor interactions, and nuisance sensitivity.\"}],\"rationale\":\"Check whether pooled tracer RMS hides a failing shift or channel, whether quadratic sensor interactions improve held-out calibration, and whether removing the nuisance subspace changes the wall conclusion. A failure would identify which forward-model component to revise.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e95742900fef979f4157f7720ff5f60c399324840847c3ffb58141a1fe54d453",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37343.92,
+      "usage_known": true,
+      "prompt_tokens": 25247,
+      "cached_tokens": 9344,
+      "completion_tokens": 1431
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2663fa012a40409c8558179c12bd07b6",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:26.403623+00:00",
+  "ended_at_utc": "2026-11-28T03:51:08.481873+00:00",
+  "request_sha256": "a7968c46a28dbb2a667677d1b4ee6f57eabd829df9d497019fe418a4f20405f3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 75073,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35539,
+    "cached_tokens": 9344,
+    "completion_tokens": 1763
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I - /holdout_task/batch_solver.py <<'PY'\\nimport sys,runpy\\nsys.path.insert(0,'/holdout_task')\\nrunpy.run_path('/holdout_task/validate_public_schema.py',run_name='__main__')\\nPY\\npython3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _pooled_features,_fit_intrinsic,_predict_chamber,_basis,_loads,solve_downstream\\nfrom batch_solver import solve_batch\\nfrom scipy.optimize import least_squares\\nwith open('public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nr=item['dataset']; ds=calibrate_upstream(dict(r,chamber_verification_trials=item['campaign_diagnostics'])); a,b,c=(ds[k] for k in ('train','test','chamber_verification_trials')); t=np.asarray(ds['eval_times']); dt=ds['past_dt']; x,xb=_pooled_features(a,b); _,xc=_pooled_features(c,c); q,th=_fit_intrinsic(a,x,dt,t)\\n# Duplicating each diagnostic row leaves its local means and standard deviations unchanged;\\n# for the diagnostic-only imputation rule, use an unweighted mean of those standardized rows.\\nfrom downstream_solver import _standardize\\nz=_standardize(c['coupon_features_raw'],c['lab_id'],c['ref_coupons']); valid=np.isfinite(z).all(1); xc=np.c_[np.ones(len(z)),np.where(np.isnan(z),np.nanmean(z,axis=0),z)]\\ndef obs(s):return np.c_[s['strain_curves_obs']-s['strain_0'][:,None],s['instant_rate_obs']]\\ndef err(y,p):return np.array([np.sqrt(np.mean((y[:,:-1]-p[:,:-1])**2)),np.sqrt(np.mean((y[:,-1]-p[:,-1])**2))])\\ndef subset(s,m):return {k:v[m] for k,v in s.items() if isinstance(v,np.ndarray) and v.shape[:1]==m.shape}\\ndef ben(s,x,q,th):\\n p,h=_loads(s); mem=np.zeros((len(h),2))\\n for d,f in zip(dt,p.T):mem=np.exp(-d/q)*mem-np.expm1(-d/q)*f[:,None]\\n return ((h[:,None]-mem)*th[:2])@_basis(q,t).T+(x@th[2:])[:,None]*np.r_[t,1.]\\ny=obs(c); exact=_predict_chamber(c,xc,q,th,t); print('all-bench fit taus/theta',q,th); print('fixed kernel diagnostic RMSE all / complete / missing',err(y,exact),err(y[valid],exact[valid]),err(y[~valid],exact[~valid]))\\nql=[]; el=[]\\nfor lab in np.unique(a['lab_id']):\\n m=a['lab_id']==lab; q1,v=_fit_intrinsic(subset(a,~m),x[~m],dt,t); ql.append(q1); el.append(err(obs(subset(a,m)),ben(subset(a,m),x[m],q1,v))); print('bench held-out lab',lab,'taus',q1,'RMSE',el[-1])\\nprint('max bench tau movement',np.max(abs(np.asarray(ql)-q),axis=0),'bench worst RMSE',np.max(el,axis=0))\\nunit=np.r_[np.ones(len(t)),.5]; trend=np.r_[t,1.]; hold=_loads(c)[1]; reset=hold[:,None]*(_basis(q,t)@th[:2]); drift=xc@th[2:]; E=y-reset; labs=c['lab_id']; scores={}\\nfor kind in ('intrinsic','independent','pointwise','benchtop'):\\n pred=np.empty_like(y); le=[]\\n for lab in np.unique(labs):\\n  test=labs==lab; m=(~test)&valid; G=drift[m]@E[m]/np.sum(drift[m]**2)\\n  def residual(u,final=False):\\n   B=np.c_[_basis(np.exp(u),t),trend]; p=B@np.linalg.lstsq(B*unit[:,None],G*unit,rcond=None)[0]; return p if final else (p-G)*unit\\n  if kind=='benchtop':pred[test]=ben(subset(c,test),xc[test],q,th)\\n  else:\\n   if kind=='intrinsic':G=residual(np.log(q),True)\\n   if kind=='independent':G=residual(least_squares(residual,np.log(q),bounds=(np.log([.08,.9]),np.log([1.5,20.]))).x,True)\\n   pred[test]=reset[test]+drift[test,None]*G\\n  le.append(err(y[test],pred[test]))\\n scores[kind]=np.max(le,axis=0); print(kind,'chamber LOLO overall/worst/missing',err(y,pred),scores[kind],err(y[~valid],pred[~valid]))\\nassert np.all(scores['intrinsic']<.006) and np.all(scores['intrinsic']<scores['benchtop'])\\no=solve_batch(r); e=solve_downstream(calibrate_upstream(r)); assert all(np.array_equal(o[k],e[k]) for k in o); assert 0.05<o['estimated_taus'][0]<o['estimated_taus'][1]<25\\n# Check initial rate against the derivative of the exact implementation's strain increment.\\nslope=_predict_chamber(b,xb,q,th,np.array([1e-6]))[:,0]/1e-6\\nassert np.max(np.abs(slope-o['initial_rate_pred']))<1e-5\\nprint('clean-process calibrated composition and derivative verified; max derivative discrepancy',np.max(np.abs(slope-o['initial_rate_pred'])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 split-local deployment features → H2 pooled deployment features with an independently identified reset/drift kernel; the public reference exchange now changes both outputs by 0.0.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\",\"ng_t08\",\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Submit after schema verification alone\",\"rejected_reason\":\"The schema shows invariance but cannot detect unstable material estimates, a poor held-out chamber kernel, or an incorrect initial derivative.\"}],\"rationale\":\"Run the exact bundle in isolated Python, compare intrinsic and independently fitted chamber kernels with estimation inside held-out-lab folds, and check material stability and the initial-rate derivative separately. A meaningful held-out gain would justify changing the chamber kernel; a composition or derivative failure would require fixing the artifact before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cf0b7f11ab42222b19f1717c2b1a027a41c7ddd8d1b72e4125e05fa28d220f88",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44171.26,
+      "usage_known": true,
+      "prompt_tokens": 35539,
+      "cached_tokens": 9344,
+      "completion_tokens": 1763
+    }
+  ]
+}

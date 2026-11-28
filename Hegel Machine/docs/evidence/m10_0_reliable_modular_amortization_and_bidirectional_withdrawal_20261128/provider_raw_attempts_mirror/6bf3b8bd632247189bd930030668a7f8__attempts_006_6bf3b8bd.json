@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6bf3b8bd632247189bd930030668a7f8",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:38:12.835560+00:00",
+  "ended_at_utc": "2026-11-28T03:38:53.452125+00:00",
+  "request_sha256": "85ef982ded50c5b13a318cb9a9ecb167b6739b50dfbf34cd0390ec6222eff48e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47824,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29116,
+    "cached_tokens": 9344,
+    "completion_tokens": 1692
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/chamber_cv.py <<'PY'\\nfrom chamber_probe import *\\nfrom itertools import combinations\\nlabs=di['lab_id']; n=len(labs); K=len(ts)\\n# Baseline predictions are fixed by the material fit on benchtop coupons.\\nbase=np.c_[A@w,R@w]; target=np.c_[y,r]; residual=target-base\\nprint('per-coupon [g, residual-at-last-time, residual-initial-rate, missing]')\\nprint(np.round(np.c_[g,e[:,-1],er,np.isnan(di['coupon_features_raw']).any(axis=1)],4))\\nprint('channel residual scales by time and rank',np.round(np.median(abs(residual),axis=0),5),np.round(np.linalg.svd(e,compute_uv=False),4))\\nfor name, panel in [('train',tr),('test',te),('diag',di)]:\\n print(name,[(int(l),round(float(np.median(panel['ref_coupons'][panel['lab_id']==l].mean(0))),4),round(float(np.median(panel['ref_coupons'][panel['lab_id']==l].std(0))),4)) for l in np.unique(panel['lab_id'])])\\n\\ndef basis(t):\\n return np.r_[-np.expm1(-ts/t),1/t]\\nlin=np.r_[ts,1.]; cols={'g':g[:,None],'ag':np.c_[np.ones(n),g],'gx':np.c_[g,x[:, :]],'g2':np.c_[g,g*g],'gapg':np.c_[g,gap],'allx':np.c_[np.ones(n),x]}\\n\\ndef run(mode, name, idx):\\n f=cols[name]\\n def design(q):\\n  tt=np.exp(q[0]) if len(q) else 1.\\n  if mode=='ramp': B=np.array([lin-tt*basis(tt)])\\n  elif mode=='free': B=np.array([lin,basis(tt)])\\n  elif mode=='intrinsic': B=np.array([lin,basis(tau[0]),basis(tau[1])])\\n  elif mode=='two_ramps': B=np.array([lin-tt*basis(tt),lin-np.exp(q[1])*basis(np.exp(q[1]))])\\n  elif mode=='intrinsic_rate': B=np.array([lin-tau[0]*basis(tau[0]),lin-tau[1]*basis(tau[1])])\\n  return (f[:,None,:,None]*B.T[None,:,None,:]).reshape(n,K+1,-1)\\n q0={'ramp':[0.], 'free':[0.],'intrinsic':[],'intrinsic_rate':[], 'two_ramps':[-.4,.7]}[mode]\\n b=design(q0); scale=np.r_[np.full(K,.012),.012]; z=b[idx]/scale[None,:,None]; v=residual[idx]/scale\\n c0=np.linalg.lstsq(z.reshape(-1,z.shape[-1]),v.ravel(),rcond=1e-9)[0]\\n lb=np.r_[np.full(len(q0),np.log(.08)),np.full(len(c0),-np.inf)]; ub=np.r_[np.full(len(q0),np.log(15)),np.full(len(c0),np.inf)]\\n def fun(p):return ((design(p[:len(q0)])[idx]@p[len(q0):]-residual[idx])/scale).ravel()\\n fit=least_squares(fun,np.r_[q0,c0],bounds=(lb,ub),loss='soft_l1',f_scale=1,max_nfev=160)\\n return base+design(fit.x[:len(q0)])@fit.x[len(q0):],fit.x\\n\\ndef score(pred):\\n es=pred-target; out=[]\\n for ind in [slice(None),slice(-4,-1),-1]:\\n  z=es if ind==slice(None) else es[:,ind];z=z[:,:-1] if ind==slice(None) else z\\n  scores=[np.sqrt(np.mean(z[labs==l]**2)) for l in np.unique(labs)]; out.extend([np.median(abs(z)),np.sqrt(np.mean(z*z)),max(scores)])\\n return np.round(out,5)\\nprint('metrics triplets median/RMSE/worst-lab RMSE by [curve,late,rate]');print('baseline',score(base))\\nfor mode,name in [('ramp','g'),('free','g'),('intrinsic','g'),('intrinsic_rate','g'),('two_ramps','g'),('ramp','ag'),('free','ag'),('free','g2'),('ramp','allx'),('free','allx'),('free','gapg')]:\\n pred=np.empty_like(base)\\n for l in np.unique(labs):\\n  z,_=run(mode,name,labs!=l); pred[labs==l]=z[labs==l]\\n full,par=run(mode,name,np.ones(n,bool));print(mode,name,score(pred),'pars',np.round(par,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unchanged benchtop response → H2: intrinsic-drift-dependent chamber buildup; baseline chamber RMSE is 0.8050 for strain and 0.0683 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate correction at each sample time\",\"rejected_reason\":\"A shared temporal response can be validated jointly with its analytic initial derivative and needs fewer parameters.\"}],\"rationale\":\"The residual grows after the hold begins and tracks intrinsic drift. Compare derivative-preserving and free-derivative corrections trained within leave-one-lab-out folds; the held-out late-strain and initial-rate errors will determine which law to implement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d25d571449c6d7c4fd44dac40fb09889682bd0edddbac098d81edc5d7a782581",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42600.31,
+      "usage_known": true,
+      "prompt_tokens": 29116,
+      "cached_tokens": 9344,
+      "completion_tokens": 1692
+    }
+  ]
+}

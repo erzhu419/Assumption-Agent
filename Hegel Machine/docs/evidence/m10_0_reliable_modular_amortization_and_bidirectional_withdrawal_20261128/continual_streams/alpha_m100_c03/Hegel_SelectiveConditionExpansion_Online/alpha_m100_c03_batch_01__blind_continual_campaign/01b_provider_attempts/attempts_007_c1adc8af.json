@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1adc8af7f5d4cb28f426b9171b81a04",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:41.836012+00:00",
+  "ended_at_utc": "2026-11-28T03:33:16.957114+00:00",
+  "request_sha256": "99add37e18ec8f44ef827e40645b21abac581542ff75a37f76359e6549bd9a37",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30770,
+    "cached_tokens": 9344,
+    "completion_tokens": 1393
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_compact.py <<'PY'\\nexec(open('/tmp/chamber_basis.py').read().split('for label,y')[0])\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nN=len(hold); labs=dg['lab_id']; one=np.ones(N); P0=np.c_[hold,past]; Z=hold[:,None]-C[:,0,:2]/(-np.expm1(-t[0]/tau)); A=np.c_[f(.65),f(3.87),L]; co=np.linalg.lstsq(A,Y.T,rcond=None)[0].T\\nprint('time/dt',t,dt,'amplitude+drift min/max',co.min(0),co.max(0)); print('leading amplitude equations raw/unweighted',np.linalg.lstsq(np.c_[one,hold,co[:,2]],co,rcond=None)[0]); print('strain0 and amplitude range',np.c_[dg['strain_0'],co][:8]);\\nref=np.vstack([q['ref_coupons'] for q in (tr,te)]); lab=np.r_[tr['lab_id'],te['lab_id']]; x3=m['_features']({'coupon_features_raw':np.vstack([q['coupon_features_raw'] for q in (tr,te)]),'lab_id':lab,'stratum':np.r_[tr['stratum'],te['stratum']],'ref_coupons':ref},dg)[-N:]; xd=m['_features'](dg,dg)[:N]; xr=dg['coupon_features_raw'];\\ncenter=np.array([np.median(ref[lab==l].mean(0)) for l in labs]); scale=np.array([np.median(ref[lab==l].std(0)) for l in labs]); xf=np.where(np.isnan(xr),np.nanmean(x,axis=0),(xr-center[:,None])/scale[:,None]);\\nprint('joint panel center/scale',np.unique(np.c_[labs,center,scale],axis=0)); print('missing rows',np.where(np.isnan(xr).any(1))[0]);\\nfor label,U in [('train+diag',X),('train+test fixed',xf),('all three',x3),('diag',xd),('raw',np.nan_to_num(xr))]:\\n drift=w[2]+U@w[3:];\\n for memory,P in [('no memory',np.c_[one,hold]), ('two states',np.c_[one,hold,Z]),('all history',np.c_[one,P0])]:\\n  for name,Xp in [('drift',np.c_[P,drift]),('feat',np.c_[P,U])]:\\n   def fitpred(ix, jx, free):\\n    def profile(s):\\n     T=np.c_[f(s[0]),f(s[1]),L]; B=np.linalg.lstsq(Xp[ix],Y[ix],rcond=None)[0]; G=np.linalg.lstsq(T,B.T,rcond=None)[0].T; return G,T\\n    if free:\\n     def err(s):\\n      G,T=profile(s); return (Xp[ix]@G@T.T-Y[ix]).ravel()\\n     s=least_squares(err,[.65,3.88],bounds=([.5,2],[.9,5.5])).x\\n    else: s=tau\\n    G,T=profile(s); return Xp[jx]@G@T.T,G,s\\n   for free in (False,True) if label in ('train+diag','train+test fixed') and name=='drift' else (False,):\\n    err=np.zeros_like(Y)\\n    for l in np.unique(labs):\\n     ix=labs!=l; err[~ix]=fitpred(ix,~ix,free)[0]-Y[~ix]\\n    pred,G,s=fitpred(np.ones(N,bool),np.ones(N,bool),free)\\n    print(label,memory,name,free,'fit',round(np.mean((pred-Y)**2)**.5,5),'worst lab strain/rate',np.max([np.r_[np.mean(err[labs==l,:-1]**2)**.5,np.mean(err[labs==l,-1]**2)**.5] for l in np.unique(labs)],axis=0),'times',s)\\n    if label=='train+test fixed' and name=='drift': print('  coefficients',G.T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_compact.py; python3 - <<'PY'\\nimport json,numpy as np\\nfor p in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.asarray(p['facility_telemetry_trace']); print(p['completed_campaign_short_name'],a.shape,'mean',a.mean(0).round(4),'std',a.std(0).round(4)); print(a[[0,-1]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace unrestricted coupon corrections with shared relaxation times and a compact chamber amplitude law; the best reported leave-one-lab-out late-strain and rate RMSEs reach 0.0802 and 0.0491 on the worst lab.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use all history and feature coefficients without constraints\",\"rejected_reason\":\"With only 24 diagnostic coupons, prefer a smaller law if it matches or improves held-out strain and rate.\"}],\"rationale\":\"Diagnostic reference panels differ from deployment panels, so compare alignment conventions and memory terms on held-out labs before freezing chamber coefficients.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "38dd519674bdeb993427718a91953d1625e437b1e1b3e04b008f0b941f843919",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37239.16,
+      "usage_known": true,
+      "prompt_tokens": 30770,
+      "cached_tokens": 9344,
+      "completion_tokens": 1393
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dee01d27f97046d0bb5cd23899350df9",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:17.208755+00:00",
+  "ended_at_utc": "2026-11-28T03:58:50.514530+00:00",
+  "request_sha256": "f8ef61682160e5087936fbd830557b9ffe5f44dc2b4ce473043b7f60511e079c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 31086,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22511,
+    "cached_tokens": 9344,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_family.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; X,Y=c['true_channel_loads'],c['bridge_raw']; keep=np.max(abs(Y),axis=1)<5; X,Y=X[keep],Y[keep]; print('clean n',len(X),'excluded rows',np.flatnonzero(~keep)); print('axial rows',np.round(np.c_[X,Y][(X!=0).sum(1)<=1],5))\\nF={'tanh':np.tanh,'atan':np.arctan,'erf':erf,'sin':np.sin,'rational':lambda t:t/(1+t*t),'sqrt':lambda t:t/np.sqrt(1+t*t)}\\nQ=[(i,j) for i in range(4) for j in range(i,4)]\\ndef design(x,k,j,f,q,scope,offset):\\n    z=x[:,j:j+1] if scope=='diag' else x\\n    if offset: w,b=np.split(k,2)\\n    else: w,b=k,0\\n    sz=w*z+b\\n    return np.column_stack((np.ones(len(x)),x,*[x[:,a]*x[:,b] for a,b in q],F[f](sz)))\\ndef fit(x,y,j,f,q,scope,offset=False):\\n    def mat(k,x=x):return design(x,k,j,f,q,scope,offset)\\n    def coef(a):return np.linalg.lstsq(a,y,rcond=None)[0]\\n    def res(k):\\n        a=mat(k); return a@coef(a)-y\\n    n=1 if scope=='diag' else 4\\n    lo=[.08]*n+([-1.5]*n if offset else []); hi=[2.6]*n+([1.5]*n if offset else [])\\n    ans=min((least_squares(res,[s]*n+([0]*n if offset else []),bounds=(lo,hi),max_nfev=65) for s in ([.45,.95,1.65] if f=='sin' else [.6,1.3])),key=lambda p:p.cost)\\n    return ans.x,coef(mat(ans.x))\\nrows=[]\\nfor f,scope,qn,offset in itertools.product(F,['diag','all'],['none','diag','all'],[False,True]):\\n    if scope=='all' and offset:continue\\n    q=[] if qn=='none' else [t for t in Q if qn=='all' or t[0]==t[1]]\\n    R=[]; H=[]; P=[]\\n    for j in range(4):\\n        args=(j,f,q,scope,offset); k,p=fit(X,Y[:,j],*args); a=design(X,k,*args)\\n        # Tangent-design leverage includes optimized curvature/offset parameters.\\n        h=1e-5; tangent=np.column_stack([((design(X,k+h*e,*args)-design(X,k-h*e,*args))@p)/(2*h) for e in np.eye(len(k))]); u,s,_=np.linalg.svd(np.column_stack((a,tangent)),full_matrices=False); lev=(u[:,s>1e-8]**2).sum(1); r=Y[:,j]-a@p; R.append(r); H.append(r/np.maximum(1e-4,1-lev)); P.append((k,p));\\n    r,h=np.array(R),np.array(H); rows.append((np.max(np.mean(h*h,1)**.5),np.max(abs(h)),f,scope,qn,offset,np.mean(r*r,1)**.5,P))\\nfor t in sorted(rows,key=lambda t:t[0])[:16]: print(t[:7]);\\nfor t in sorted(rows,key=lambda t:t[0])[:3]:\\n    print('COEFS',t[2:6]);\\n    for k,p in t[-1]:print(np.round(k,6),np.round(p,6));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_family.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 compact saturating bridge; worst-channel leave-one-reference-out RMSE fell from 0.219 to 0.0117 with an additive quintic, motivating a test of explicit saturation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine bridge adequately explains the spike-filtered calibration references.\",\n    \"empirical_witness\": \"Worst-channel leave-one-reference-out RMSE is 0.219 for affine versus 0.0117 for additive quintic on the same references.\",\n    \"causal_blanket_diagnosis\": \"Cross-channel linear coupling does not explain the systematic curvature left after gross spike removal.\",\n    \"sublated_pivot\": \"Retain linear coupling and compare compact nonlinear response families with additive and pairwise corrections.\",\n    \"risk_kind\": \"Off-manifold inverse bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the additive quintic immediately\",\n      \"rejected_reason\": \"It predicts references much better than affine, but its high-order tails can turn over and make inversion ambiguous.\"\n    }\n  ],\n  \"rationale\": \"Screen compact saturation families by leverage-adjusted residuals and inspect their coefficients. The strongest candidates can then be tested with actual held-out refits and inverted on the operating data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "c3ef636a2fdc6c44cc4ae5447b0aab70d8df67424871bae4682602a94595e19b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37580.12,
+      "usage_known": true,
+      "prompt_tokens": 22511,
+      "cached_tokens": 9344,
+      "completion_tokens": 1418
+    }
+  ]
+}

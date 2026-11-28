@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c7c8a56e7583499284fa28eb974f804a",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:30:51.056903+00:00",
+  "ended_at_utc": "2026-11-28T03:31:09.591503+00:00",
+  "request_sha256": "bfe6930ab7b7232074acec45a3d5eb73363ae16d1fb3f9c3b85a65e301794bdf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22847,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18744,
+    "cached_tokens": 9344,
+    "completion_tokens": 658
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; c=d['calibration_load_cells']; np.set_printoptions(precision=5,suppress=True)\\nfor k,v in c['single_channel_sweeps'].items():print('sweep',k,{a:np.shape(b) for a,b in v.items()} if isinstance(v,dict) else np.shape(v)); print(str(v)[:300])\\nL=c['true_channel_loads']; R=c['bridge_raw']; A=np.c_[np.ones(len(L)),L]; e=R-A@np.linalg.lstsq(A,R,rcond=None)[0]; print('cal range',L.min(0),L.max(0),'rms',np.std(e,0),'max',np.max(abs(e),0)); print('dt,t',d['past_dt'],d['eval_times']);\\nfor s in ['train','test']:\\n q=d[s]; a=q['aux_chamber_telemetry'];print(s,'aux mean,std,min,max',a.mean(0),a.std(0),a.min(0),a.max(0),'rows',a[:5]);print('cells',np.unique(np.c_[q['lab_id'],q['stratum']],axis=0,return_counts=True))\\nf=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('telemetry keys', list(f) if isinstance(f,dict) else [list(x) for x in f]); print('asset index', {k:str(v)[:320] for k,v in json.load(open('/holdout_task/public_asset_index.json')).items()});\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'hereditary relaxation Maxwell coupon' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived Maxwell law -> H2 chamber law identified from the 24 verification coupons, with material fitted only on benchtop coupons; worst-slice error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Infer chamber behavior only from historical facility telemetry.\",\"rejected_reason\":\"This batch has 24 chamber coupons with observed outcomes, which can distinguish candidate chamber laws directly.\"}],\"rationale\":\"Inspect the prior fit and quantify affine calibration residuals; structured residuals would warrant a nonlinear bridge model before attributing errors to chamber mechanics. Inspect auxiliary telemetry to determine whether it varies by coupon or acts as a campaign-level signal.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "045f6d5c793a9d212a60eb42492bffe5158f98c7481c58913eeca207ed44dda9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20645.14,
+      "usage_known": true,
+      "prompt_tokens": 18744,
+      "cached_tokens": 9344,
+      "completion_tokens": 658
+    }
+  ]
+}

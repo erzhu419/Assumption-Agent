@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d28af861055d44d79182673a0a38eb7d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:46:42.260120+00:00",
+  "ended_at_utc": "2026-11-28T03:47:17.889082+00:00",
+  "request_sha256": "68346e6bec56d8506e593b3a24b94a0a0b337d024e78499322eed459383cfb61",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27215,
+    "cached_tokens": 11904,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _features\\nfrom batch_solver import solve_batch\\nfrom _verified_downstream import solve_downstream\\nbatch = pickle.load(open('public_batch.pkl', 'rb'))\\nworst_pulse = worst_weights = worst_field = worst_gap = 0.\\nfor item in batch:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']; bank = c['single_bank_sweeps']\\n    x = c['ref_rosette']; y = c['raw_rosette']\\n    b = _fit(x, y)\\n    probe = x[np.argsort(np.linalg.norm(x, axis=1))[-8:]]\\n    pulse = {'y_pulse_raw': (_features(probe) @ b).reshape(2, 4, 4), 'tag': 'pulse'}\\n    pulse_before = pulse['y_pulse_raw'].copy()\\n    raw_before = s['y_obs_raw'].copy(); sweep_before = y.copy(); bank_before = bank['raw_readout'].copy()\\n    trial = dict(s, reference_tracer_pulses=[pulse, None, {'y_pulse_raw': None}])\\n    cal = calibrate_upstream(trial)\\n    p, p_none, p_empty = cal['reference_tracer_pulses']\\n    assert p_none is None and p_empty['y_pulse_raw'] is None and p['tag'] == 'pulse'\\n    assert p['y_pulse_raw'].shape == pulse_before.shape\\n    worst_pulse = max(worst_pulse, np.linalg.norm(p['y_pulse_raw'].reshape(-1, 4) - probe, axis=1).max())\\n    assert np.array_equal(pulse['y_pulse_raw'], pulse_before)\\n    normalized = cal['sensor_calibration_sweeps']\\n    for a, ref in [(normalized['raw_rosette'], x), (normalized['single_bank_sweeps']['raw_readout'], bank['ref_signal'])]:\\n        assert np.array_equal(a, ref) and not np.shares_memory(a, ref)\\n    assert np.array_equal(s['y_obs_raw'], raw_before) and np.array_equal(y, sweep_before) and np.array_equal(bank['raw_readout'], bank_before)\\n    assert cal['y_obs_raw'].shape == raw_before.shape\\n    # Canonical observations, forward-encoded without sweep noise, isolate composition error.\\n    reference = np.resize(probe[:, :].ravel(), raw_before.size).reshape(raw_before.shape) * 0.35\\n    encoded = (_features(reference.reshape(-1, 4)) @ b).reshape(reference.shape)\\n    expected = solve_downstream(dict(s, y_obs_raw=reference))\\n    actual = solve_batch(dict(trial, y_obs_raw=encoded))\\n    worst_weights = max(worst_weights, np.max(np.abs(actual['weights'] - expected['weights'])))\\n    worst_field = max(worst_field, np.max(np.abs(actual['terminal_field'] - expected['terminal_field'])))\\n    for out in (actual, solve_batch(s)):\\n        w = out['weights']; cert = out['kkt_certificate']\\n        assert np.isfinite(out['terminal_field']).all()\\n        assert abs(w.sum() - s['total_budget']) < 1e-10 and w.min() >= -1e-12 and w.max() <= s['u_box'] + 1e-12\\n        worst_gap = max(worst_gap, abs(cert['primal_objective'] - cert['dual_lower_bound']))\\n    empty = calibrate_upstream(dict(s, reference_tracer_pulses=None))\\n    assert empty['reference_tracer_pulses'] is None\\nassert max(worst_pulse, worst_weights, worst_field, worst_gap) < 1e-8\\nprint(f'{len(batch)} public studies; worst pulse L2={worst_pulse:.3g}, composition weight/field max errors={worst_weights:.3g}/{worst_field:.3g}, KKT gap={worst_gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive channel response → H2 coupled cubics and pair products; worst clean held-out inverse error was 4.31e-5 L2 across public sweep slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after public schema validation alone\",\n      \"rejected_reason\": \"The public study shown has no tracer pulses, so it does not exercise pulse conversion or shape preservation.\"\n    }\n  ],\n  \"rationale\": \"Keep the validated model unchanged. Exercise non-null and null pulses, identity sweep normalization, and agreement with the canonical downstream solver in an isolated process. A failure would identify which interface needs correction before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "30446404f16613dea42f702762f2715b8d7fe811780d2adaadae5f148256f5a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37652.82,
+      "usage_known": true,
+      "prompt_tokens": 27215,
+      "cached_tokens": 11904,
+      "completion_tokens": 1275
+    }
+  ]
+}

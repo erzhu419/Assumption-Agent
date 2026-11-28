@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1efb941ae9442f79409dac5540f3d79",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:32.537314+00:00",
+  "ended_at_utc": "2026-11-28T03:29:04.093531+00:00",
+  "request_sha256": "bded98c48f586d6c96b0e5c37baf8a4b96d2276969c2fcf635136c709bf91372",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45875,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26527,
+    "cached_tokens": 10880,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_robust_hereditary.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ncal = d['calibration_load_cells']\\nx = s._features(tr, te)[:len(tr['lab_id'])]\\np, h = s._loads(tr, s._bridge(cal))\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\ndt, t = d['past_dt'], d['eval_times']\\nlabs = tr['lab_id']\\nreal_ls = s.least_squares\\nmetrics = {}\\nfor cutoff in (1.5, 2.5, 4.0, None):\\n    def ls(fun, x0, **kw):\\n        if kw['loss'] == 'cauchy':\\n            if cutoff is None:\\n                return real_ls(fun, x0, loss='linear', bounds=kw['bounds'], x_scale=kw['x_scale'], max_nfev=kw['max_nfev'])\\n            kw['f_scale'] = cutoff / 2.5\\n        return real_ls(fun, x0, **kw)\\n    s.least_squares = ls\\n    result = []\\n    for lab in np.unique(labs):\\n        m = labs != lab\\n        tau, theta = s._fit(x[m], p[m], h[m], dt, t, y[m], r[m])\\n        a, b = s._design(tau, x[~m], p[~m], h[~m], dt, t)\\n        ec, er = abs(a @ theta - y[~m]), abs(b @ theta - r[~m])\\n        result.append([max(np.quantile(ec[:, cols], .9) for cols in np.array_split(np.arange(len(t)), 3)), np.quantile(er, .9), np.median(ec), np.median(er), *tau])\\n    v = np.asarray(result)\\n    metrics[cutoff] = v\\n    print('Cauchy cutoff in robust SD', cutoff, 'worst p90 strain/rate', v[:, :2].max(axis=0), 'mean lab median strain/rate', v[:, 2:4].mean(axis=0), 'tau ranges', np.ptp(v[:, 4:], axis=0))\\ns.least_squares = real_ls\\nraw, true = cal['bridge_raw'], cal['true_channel_loads']\\na = np.c_[raw, np.ones(len(raw))]\\ny_total = true.sum(axis=1)\\n# Contiguous stress folds, so the extreme held-out sweep groups test extrapolation.\\norder = np.argsort(y_total)\\nfor i, test in enumerate(np.array_split(order, 5)):\\n    keep = np.ones(len(raw), dtype=bool)\\n    keep[test] = False\\n    affine = np.linalg.lstsq(a[keep], y_total[keep], rcond=None)[0]\\n    err = abs(a[test] @ affine - y_total[test])\\n    print('contiguous load fold', i, 'p90/max total stress error', np.quantile(err, .9), err.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_robust_hereditary.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: stress-test affine calibration on contiguous load ranges and the robust fit against alternative outlier cutoffs; the current worst held-out p90 errors are 0.02637 for strain and 0.01476 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the pressure and telemetry drift comparison or add relay-mode checks\",\n      \"rejected_reason\": \"The drift comparison is already settled on measured responses. The dataset has no relay state, class labels, or stochastic-control equation.\"\n    }\n  ],\n  \"rationale\": \"Interleaved calibration folds can miss bias at the ends of the load range; contiguous folds would expose it. Comparing robust cutoffs on held-out labs tests whether outliers materially bias either response or destabilize the relaxation times. Neither check requires deployment labels or changes to the submitted file.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1a6c14c5d4ad32559f382f5fa7aa690eb53e8687433a121a1f81374169b5eb8a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33702.19,
+      "usage_known": true,
+      "prompt_tokens": 26527,
+      "cached_tokens": 10880,
+      "completion_tokens": 1268
+    }
+  ]
+}

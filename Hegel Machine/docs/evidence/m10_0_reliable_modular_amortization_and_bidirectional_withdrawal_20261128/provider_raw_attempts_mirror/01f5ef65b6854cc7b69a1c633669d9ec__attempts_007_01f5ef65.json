@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01f5ef65b6854cc7b69a1c633669d9ec",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:08.349628+00:00",
+  "ended_at_utc": "2026-11-28T03:50:35.082122+00:00",
+  "request_sha256": "bc6dbb1e813ca466e88db3d8f7923a5060bad0ed55e64d194a732dab5de007b2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26194,
+    "cached_tokens": 9344,
+    "completion_tokens": 1002
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\nbase=(p/'alpha_m100_c01_batch_03_solver.py').read_text().split('\\\\ndef solve_batch',1)[0]\\nprojection=(p/'alpha_m100_c01_batch_01_solver.py').read_text().split('_CHAMBER_PROJECTION =',1)[1].split('\\\\ndef solve_batch',1)[0]\\nbody='''\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    xtr, xte = _features(train, test)\\n    cal = dataset['calibration_load_cells']\\n    bridge, _ = _fit_bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n    taus, theta = _fit(*_calibrated_inputs(train, xtr, bridge), dt, times,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n\\n    # The pre-batch facility trace activates the projection regime observed in batch 01.\\n    # In this regime the chamber resets the hereditary state at entry.\\n    hold = _load_from_raw(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    features = np.column_stack((np.ones(len(xte)), xte))\\n    curve, rate = _predict_chamber(taus, theta, hold, features, times,\\n                                   _CHAMBER_PROJECTION)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(base+'\\\\n\\\\n_CHAMBER_PROJECTION ='+projection.rstrip()+body)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nsed -n '/^_CHAMBER_PROJECTION/,+11p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and benchtop transfer → H2 cyclic bilinear/cubic bridge and lagged-telemetry chamber projection; worst held-out clean calibration residual is approximately 4×10⁻⁴ raw units, with no current chamber labels.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine transducer model suffices for this campaign's load bridge.\",\n    \"empirical_witness\": \"The archived cyclic bilinear/cubic basis, refit on this campaign, predicts held-out clean calibration sweeps within approximately 4×10⁻⁴ raw units and isolates three shared-offset rows near 27.33 raw units; the all-row affine fit has per-channel RMS 2.43–2.75 raw units.\",\n    \"causal_blanket_diagnosis\": \"Bridge nonlinearity and isolated sweep contamination are measurement effects, separable from the material fit and the chamber transfer law.\",\n    \"sublated_pivot\": \"Retain linear adjacent-channel cross-talk, add the calibrated cyclic product and cubic self-response, and invert the fitted forward map before computing total axial stress.\",\n    \"risk_kind\": \"calibration_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the latest archived benchtop deployment law.\",\n      \"rejected_reason\": \"Its preceding facility trace was idle; the current preceding trace instead matches the signature that preceded the archived projection regime.\"\n    }\n  ],\n  \"rationale\": \"Build the solver from independently supported bridge, material, and chamber components. The public validator will catch a contract failure before quantitative coupon-slice validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cb142f3a493c8408cb4654c0fbedecf348571dfe665331233c7e99e96fefb4db",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28813.0,
+      "usage_known": true,
+      "prompt_tokens": 26194,
+      "cached_tokens": 9344,
+      "completion_tokens": 1002
+    }
+  ]
+}

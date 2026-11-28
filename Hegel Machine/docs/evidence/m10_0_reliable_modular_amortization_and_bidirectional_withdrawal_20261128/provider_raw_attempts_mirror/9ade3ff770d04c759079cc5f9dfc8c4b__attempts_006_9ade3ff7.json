@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9ade3ff770d04c759079cc5f9dfc8c4b",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:03.752749+00:00",
+  "ended_at_utc": "2026-11-28T03:32:40.556800+00:00",
+  "request_sha256": "091fa1fbfc2912cce7367a50c47b957f3a49afc26175cb145b6e8c4a7fd2beff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47717,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27974,
+    "cached_tokens": 9344,
+    "completion_tokens": 1520
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_models.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('# Regress each component')[0])\\nfrom scipy.optimize import minimize\\nD=v@w[2:]; P=np.c_[h,p]; idx=np.arange(len(h)); L=q['lab_id']; S=q['stratum']; ONE=np.ones_like(h); BL=np.eye(4)[L][:,1:]; BS=np.eye(3)[S][:,1:]\\n# Fit all times and the initial derivative jointly, rather than regressing poorly conditioned projected amplitudes.\\ndef fit_linear(z, blocks, use, baseline):\\n B=basis(z); F=np.concatenate([J[:,None,:]*B[None,:,j,None] for j,J in enumerate(blocks)],2)\\n a=F[use].reshape(-1,F.shape[-1]); b=(y-baseline)[use].ravel()\\n beta=np.linalg.lstsq(a,b,rcond=None)[0]; return baseline+F@beta,beta\\nC=np.c_[A@w,R@w]; Z=np.empty((len(h),0)); V=np.c_[ONE,D]; G=R[:,:2]*tau; tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]\\ndef state(z):return p@(-np.expm1(-dt[:,None]/z)*np.exp(-tail[:,None]/z))\\ndef model(name,z):\\n if name=='affine':return [np.c_[ONE,P,x],np.c_[ONE,P,x],np.c_[ONE,P,x]],np.zeros_like(y)\\n if name=='affine_lab':return [np.c_[ONE,P,x,BL]]*3,np.zeros_like(y)\\n if name=='pulses_drift':return [np.c_[ONE,p,D],np.c_[ONE,p,D],V],(h[:,None]*w[:2])@basis(z)[:,:2].T\\n if name=='pulses_features':return [np.c_[p,v],np.c_[p,v],v],(h[:,None]*w[:2])@basis(z)[:,:2].T\\n if name=='pulses_drift_lab':return [np.c_[p,V,BL],np.c_[p,V,BL],np.c_[V,BL]],(h[:,None]*w[:2])@basis(z)[:,:2].T\\n if name=='pulses_drift_stratum':return [np.c_[p,V,BS],np.c_[p,V,BS],np.c_[V,BS]],(h[:,None]*w[:2])@basis(z)[:,:2].T\\n if name=='common_state':return [np.c_[state(z),V]]*2+[V],(h[:,None]*w[:2])@basis(z)[:,:2].T\\n if name=='gap_drift':return [np.c_[h,state(z),V]]*2+[V],np.zeros_like(y)\\nfor name in ['affine','affine_lab','pulses_drift','pulses_features','pulses_drift_lab','pulses_drift_stratum','common_state','gap_drift']:\\n def pred(z,ii):\\n  blocks,base=model(name,z); return fit_linear(z,blocks,ii,base)\\n def opt(ii):\\n  return least_squares(lambda z:(pred(z,ii)[0][ii]-y[ii]).ravel(),tau,bounds=([.3,1.5],[1.4,16]),max_nfev=60).x\\n for free in (False,True):\\n  z=opt(idx) if free else tau; f,b=pred(z,idx)\\n  errs=[]\\n  for groups in (idx,L,S):\\n   e=np.zeros_like(y)\\n   for j in np.unique(groups):\\n    m=groups==j; ii=idx[~m]; e[m]=(pred(opt(ii) if free else tau,ii)[0]-y)[m]\\n   errs.append(np.r_[np.sqrt(np.mean(e[:,:-1]**2)),np.max(np.sqrt(np.mean(e[:,:-1]**2,axis=0))),np.sqrt(np.mean(e[:,-1]**2)),np.max(abs(e[:,-1]))])\\n  print(name,'free',free,'tau',z.round(4),'train',np.sqrt(np.mean((f-y)**2)).round(5),'LOO/LOlab/LOstratum',np.array(errs).round(4).tolist());\\n  if free and name in ('affine','pulses_drift','pulses_features','common_state'): print('  coef',b.round(5))\\nprint('train/test keys',list(tr), list(te)); print('diagnostic panel stats vs pooled',[(l,[(np.median(a.mean(0)),np.median(a.std(0))) for a in (ref[labs==l],q['ref_coupons'][L==l])]) for l in np.unique(L)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_models.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -40\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted affine correction → H2 shared chamber stress-history and drift law; the current affine probe has leave-one-coupon-out RMS of 0.0502 for strain and 0.0442 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt lab offsets based on leave-one-coupon-out alone\",\n      \"rejected_reason\": \"That split can reward a lab shortcut; lab-held-out error will show whether the offsets transfer.\"\n    }\n  ],\n  \"rationale\": \"Fit the strain and rate jointly to avoid noise amplification from separately projected amplitudes. Compare constrained history terms, fixed versus free chamber times, and lab or stratum offsets with every fitted parameter selected inside the held-out splits. Keep the returned material parameters train-only.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "77a474e896c50403b4408a1b32a2866aa5db2aaca495fe3c70871084cb669d48",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38860.8,
+      "usage_known": true,
+      "prompt_tokens": 27974,
+      "cached_tokens": 9344,
+      "completion_tokens": 1520
+    }
+  ]
+}

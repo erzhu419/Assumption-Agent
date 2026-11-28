@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e8f78d6072e4f0ca8acb9a7533af690",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:01:42.963957+00:00",
+  "ended_at_utc": "2026-11-28T04:02:16.613844+00:00",
+  "request_sha256": "8ac09736cff6dca1049f841837aed0c7c3ad63734cfcc4d27d3f40359d09ee63",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 61708,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34762,
+    "cached_tokens": 9344,
+    "completion_tokens": 1355
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nD = pickle.load(open('public_batch.pkl', 'rb'))[0]['dataset']\\nC = D['calibration_load_cells']\\nx, y = C['true_channel_loads'], C['bridge_raw']\\nf, p = u._fit(x, y)\\nclean = np.max(np.abs(u._forward(x, f, p) - y), axis=1) < .01\\npred, inv = np.full_like(y, np.nan), np.full_like(x, np.nan)\\nfor i in np.flatnonzero(clean):\\n    keep = np.arange(len(x)) != i\\n    model = u._fit(x[keep], y[keep])\\n    pred[i] = u._forward(x[i:i+1], *model)[0]\\n    inv[i] = u._inverse(y[i:i+1], *model)[0]\\naxial = np.count_nonzero(x, axis=1) <= 1\\nedge = np.max(abs(x), axis=1) >= 1.2\\nfor label, subset in [('all', clean), ('axial', clean & axial), ('mixed', clean & ~axial), ('edge', clean & edge)]:\\n    e, z = pred[subset]-y[subset], inv[subset]-x[subset]\\n    print(label, 'n=', len(e), 'forward worst-channel RMSE=', np.sqrt(np.mean(e*e, axis=0)).max(), 'inverse worst-channel RMSE=', np.sqrt(np.mean(z*z, axis=0)).max(), 'inverse max abs=', abs(z).max())\\n    assert abs(z).max() < .003\\n# Replace the measured spike rows with smaller spikes and move spikes onto\\n# clean axial and mixed rows, without changing the burden of corruption.\\nbaseline = u._forward(x, f, p)\\nrng = np.random.default_rng(21)\\nworst = 0.\\nfor magnitude in (.01, .05, .5, 15.):\\n    for _ in range(8):\\n        rows = np.r_[rng.choice(np.flatnonzero(clean & axial)), rng.choice(np.flatnonzero(clean & ~axial), 2, replace=False)]\\n        yy = np.where(clean[:,None], y, baseline)\\n        yy[rows, rng.integers(0, 4, 3)] += magnitude * rng.choice([-1, 1], 3)\\n        g, q = u._fit(x, yy)\\n        worst = max(worst, np.max(abs(u._inverse(baseline, g, q)-x)))\\nprint('relocated spikes: worst load deviation from unperturbed fit=', worst)\\nassert worst < .001\\n# Exercise positive holds and opposing-channel extrema beyond the observed trajectories.\\na = np.linspace(-2., 2., 81)\\nv, w = (g.ravel() for g in np.meshgrid(a, a))\\ngrid = np.column_stack([v, -v, w, -w])\\nraw = u._forward(grid, f, p)\\nerr = np.max(abs(u._inverse(raw, f, p)-grid))\\nprint('inverse grid max abs=', err)\\nassert err < 1e-8\\nfixture = dict(D, chamber_verification_trials=[dict(past_channel_raw=raw[:12].reshape(2,6,4), hold_channel_raw=raw[12:14])])\\nout = u.calibrate_upstream(fixture)\\ntrial = out['chamber_verification_trials'][0]\\nnp.testing.assert_allclose(trial['past_channel_raw'].reshape(-1,4), grid[:12], atol=1e-8, rtol=0)\\nnp.testing.assert_allclose(trial['hold_channel_raw'], grid[12:14], atol=1e-8, rtol=0)\\nnp.testing.assert_array_equal(out['calibration_load_cells']['bridge_raw'], x)\\nnp.testing.assert_array_equal(out['calibration_load_cells']['single_channel_sweeps']['cmd_stress'], C['single_channel_sweeps']['true_stress'])\\nnp.testing.assert_array_equal(fixture['chamber_verification_trials'][0]['hold_channel_raw'], raw[12:14])\\nagain = u.calibrate_upstream(out)\\nnp.testing.assert_array_equal(again['test']['hold_channel_raw'], out['test']['hold_channel_raw'])\\nprint('verification trial conversion, reference normalization and identity path passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse Chebyshev response → H2 coupled linear-plus-harmonic bridge; public schema passed and the worst operating-trace inverse residual was 2.26e-12, with held-out load error still to measure.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema pass alone\",\n      \"rejected_reason\": \"A small inverse residual only shows that the fitted map was inverted accurately; it does not establish held-out load accuracy or cover the optional trial block.\"\n    }\n  ],\n  \"rationale\": \"Refit while leaving out each clean reference, retaining the measured spikes in training, and measure load error by reference slice. If moved spikes bias the fit, revise rejection; if the grid or trial fails, revise inversion or field handling before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a46ab83ada5ef60b549003066e69638ebd49b90042e2f245b5b5f8205a4f94c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35824.2,
+      "usage_known": true,
+      "prompt_tokens": 34762,
+      "cached_tokens": 9344,
+      "completion_tokens": 1355
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "35bdaa27a544420099374c24334497b9",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:50.707097+00:00",
+  "ended_at_utc": "2026-11-28T03:32:21.224770+00:00",
+  "request_sha256": "4510f771f2692a49443740be3b43f291b16c10a28af2306643fbbd86ce054a4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42057,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25923,
+    "cached_tokens": 9344,
+    "completion_tokens": 1211
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_shapes.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split(\\\"# Diagnostic reference\\\")[0])\\nfrom scipy.optimize import least_squares\\npc,hc=m._loads(c,b); y=c['strain_curves_obs']-c['strain_0'][:,None]; v=c['instant_rate_obs']; Y=np.c_[y,.35*v]; n=len(v)\\ndef shape(taus,drift):\\n    return np.vstack((np.column_stack((-np.expm1(-t[:,None]/taus),t)) if drift else -np.expm1(-t[:,None]/taus),.35*(np.r_[1/taus,1] if drift else 1/taus)))\\ndef fit(taus,drift):\\n    A=shape(taus,drift); co=Y@np.linalg.pinv(A).T; e=co@A.T-Y; return co,e\\nfor drift in [False,True]:\\n    for free in [False,True]:\\n        tt=np.exp(least_squares(lambda p:fit(np.exp(p),drift)[1].ravel(),np.log(tau),bounds=(np.log(.07),np.log(25)),loss='soft_l1',f_scale=.004).x) if free else tau\\n        co,e=fit(tt,drift); print('shape',drift,free,tt,'curve/rate RMS',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))/.35,'column RMS',np.sqrt(np.mean(e**2,axis=0)).round(5));\\n        if not drift:\\n            xc=m._features(c,c)[:n]; ff=np.c_[np.ones(n),hc,pc,xc];\\n            print('co against loads'); print(np.c_[co,hc,pc][:7].round(4));\\n            for name,X in [('hold',ff[:,:2]),('all loads',ff[:,:8]),('features',ff),('baseline gaps',np.c_[np.ones(n),m._design(tau,xc,pc,hc,dt,t)[1][:,:2]*tau]),('hold and past norm',np.c_[ff[:,:2],pc,pc**2]),('saturated',np.c_[ff[:,:2],np.tanh(pc)])]:\\n                coef=np.linalg.lstsq(X,co,rcond=None)[0]; H=np.sum(X*np.linalg.pinv(X).T,axis=1); rr=(X@coef-co)/(1-H[:,None]); print(name,'LOOCV RMS',np.mean(rr**2,axis=0)**.5,'coef',coef.T.round(4));\\nprint('telemetry summaries'); import json\\nfor q in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n    z=np.array(q['facility_telemetry_trace']); print(q['completed_campaign_short_name'],'means',z.mean(0).round(3),'std',z.std(0).round(3))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -20\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_shapes.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared material spectrum and affine bridge → H2: chamber-specific amplitudes and possibly shifted relaxation or suppressed drift; uncorrected diagnostic rate RMSE is 1.653.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The calibrated benchtop law transfers unchanged to the chamber.\",\n    \"empirical_witness\": \"Diagnostic curve and rate RMSEs are 0.798 and 1.653 under direct transfer; freeing coupon amplitudes and drift at the intrinsic time constants reduces them to 0.0022 and 0.0104, respectively.\",\n    \"causal_blanket_diagnosis\": \"Affine bridge residuals near 1e-4 do not account for the chamber error, and a two-branch shape still fits.\",\n    \"sublated_pivot\": \"Keep the intrinsic law for training and identify the chamber response separately from verification coupons.\",\n    \"risk_kind\": \"constitutive_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat material and chamber time constants as different immediately\",\n      \"rejected_reason\": \"The intrinsic spectrum already gives a good free-amplitude fit; test whether shifting it materially improves the curve and rate residuals.\"\n    }\n  ],\n  \"rationale\": \"Compare diagnostic shape residuals with and without drift and free time constants. Use held-out amplitude errors to distinguish a simple calibrated-load correction from a feature fit that only works on the observed coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d755eab9051c52ef6e186547dd86a51b3044ebaa5f0af8284071c05e5ee57c0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32539.74,
+      "usage_known": true,
+      "prompt_tokens": 25923,
+      "cached_tokens": 9344,
+      "completion_tokens": 1211
+    }
+  ]
+}

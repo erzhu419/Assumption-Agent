@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "487faaded75f416698a5872e63f97f5d",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:21.626866+00:00",
+  "ended_at_utc": "2026-11-28T03:48:55.711704+00:00",
+  "request_sha256": "a0c1202e8d0a10edfc0b504a7067309224d2132cc5c036530d48ed3a24c609fa",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27856,
+    "cached_tokens": 9344,
+    "completion_tokens": 1350
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _basis, _invert, calibrate_upstream\\nfrom batch_solver import solve_batch\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\nd = item['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\n# Public spike rows have readings far outside the operating range; keep\\n# them in training wherever the split permits, but not as inverse targets.\\nspike = np.max(np.abs(y), axis=1) > 8\\nprint('gross-spike rows', np.flatnonzero(spike))\\nrng = np.random.default_rng(19)\\nfolds = {f'random-{i}': a for i, a in enumerate(np.array_split(rng.permutation(len(x)), 5))}\\nfolds['high-load'] = np.argsort(np.linalg.norm(x, axis=1))[-16:]\\nfolds['axial'] = np.flatnonzero(np.count_nonzero(x, axis=1) <= 1)\\nworst = [0., 0.]\\nfor name, hold in folds.items():\\n    tr = np.setdiff1d(np.arange(len(x)), hold)\\n    te = hold[~spike[hold]]\\n    b = _fit(x[tr], y[tr])\\n    ef = np.linalg.norm(_basis(x[te]) @ b - y[te], axis=1)\\n    ei = np.linalg.norm(_invert(y[te], b) - x[te], axis=1)\\n    pf, pi = np.quantile(ef, .9), np.quantile(ei, .9)\\n    worst = [max(worst[0], pf), max(worst[1], pi)]\\n    print(name, 'forward P90', pf, 'inverse P90', pi, 'inverse max', ei.max())\\nassert max(worst) < .003, worst\\nb = _fit(x, y)\\nb_clean = _fit(x[~spike], y[~spike])\\nprint('max spike effect on coefficients', np.max(np.abs(b - b_clean)))\\nassert np.max(np.abs(b - b_clean)) < 1e-6\\nbefore = pickle.dumps(d)\\nz = calibrate_upstream(d)\\nassert pickle.dumps(d) == before\\nassert np.array_equal(z['calibration_load_cells']['bridge_raw'], x)\\nassert not np.shares_memory(z['calibration_load_cells']['bridge_raw'], x)\\ns = z['calibration_load_cells']['single_channel_sweeps']\\nassert np.array_equal(s['cmd_stress'], s['true_stress']) and not np.shares_memory(s['cmd_stress'], s['true_stress'])\\nfor name in ['train', 'test']:\\n    for key in ['past_channel_raw', 'hold_channel_raw']:\\n        target = d[name][key]\\n        load = z[name][key]\\n        assert target.shape == load.shape and np.isfinite(load).all()\\n        error = np.max(np.abs(_basis(load.reshape(-1,4)) @ b - target.reshape(-1,4)))\\n        print(name, key, 'forward replay max', error, 'load envelope', (load.min(), load.max()))\\n        assert error < 1e-9\\naxis = np.linspace(-2.0, 2.0, 7)\\ngrid = np.stack(np.meshgrid(axis, axis, axis, axis), axis=-1).reshape(-1,4)\\nerror = np.max(np.abs(_invert(_basis(grid) @ b, b) - grid))\\nprint('expanded signed grid inverse max', error)\\nassert error < 1e-8\\ntrials = {'past_channel_raw': _basis(grid[:12]).dot(b).reshape(2,6,4), 'hold_channel_raw': _basis(grid[-2:]).dot(b), 'tag': 'kept'}\\ntrial_result = calibrate_upstream(dict(d, chamber_verification_trials=trials))['chamber_verification_trials']\\nassert np.allclose(trial_result['past_channel_raw'].reshape(-1,4), grid[:12], atol=1e-9)\\nassert np.allclose(trial_result['hold_channel_raw'], grid[-2:], atol=1e-9)\\nassert trial_result['tag'] == 'kept'\\nassert calibrate_upstream(dict(d, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nout = solve_batch(d)\\nprint('composed outputs', {k: np.shape(v) for k,v in out.items()})\\nprint('worst held-out P90 forward/inverse', worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted cubic -> H2 sparse pair products plus channel cubics; the public schema passed with a worst reference-swap difference of 1.9e-9, and independent inverse stress results are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the exact saved modules in isolated Python. Held-out calibration slices can reveal model bias, while signed-grid and operational replay tests can reveal inverse convergence failures. Exercise the optional trial branch separately because the public batch does not contain trials.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1e5aa5681bd4622f8468e513b580a9c252f11b2104d5df55073b72e6f099a037",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36164.38,
+      "usage_known": true,
+      "prompt_tokens": 27856,
+      "cached_tokens": 9344,
+      "completion_tokens": 1350
+    }
+  ]
+}

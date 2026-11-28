@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31a9efe86b444f3eb1b1d7dcff70f335",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:08:17.281441+00:00",
+  "ended_at_utc": "2026-11-28T04:08:45.513828+00:00",
+  "request_sha256": "116f33675e38ae0822e42be130e1e7d7b868ce44c79f604f59505b516b2e41b8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50747,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26922,
+    "cached_tokens": 9344,
+    "completion_tokens": 1119
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '90,152p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']\\nx,y=c['true_channel_loads'],c['bridge_raw']; p,good=m._fit_bridge(y,x)\\ni,j=np.triu_indices(4,1)\\nsub=x[:,i]-x[:,j]; add=x[:,i]+x[:,j]\\nterms=np.c_[sub,add,sub**2,add**2,sub/(1+sub**2),add/(1+add**2)]\\norder=np.argsort(np.linalg.norm(x,axis=1)); rng=np.random.default_rng(29); labels=np.empty(len(x),int)\\nfor gg in np.array_split(order,8): labels[gg]=rng.permutation(np.arange(len(gg)))%5\\nbase=[]; extension=[]\\nfor g in range(5):\\n    learn=labels!=g; valid=(~learn)&good\\n    p0,k0=m._fit_bridge(y[learn],x[learn]); v=np.flatnonzero(learn)[k0]\\n    e=y-m._bridge_forward(x,p0)\\n    z=terms-terms[v].mean(axis=0); b=np.linalg.lstsq(z[v],e[v],rcond=1e-8)[0]\\n    base.append(np.sqrt(np.mean(e[valid]**2))); extension.append(np.sqrt(np.mean((e[valid]-z[valid]@b)**2)))\\nprint('bridge held-out raw RMSE, base vs pair/rational residual extension:',np.round(base,7),np.round(extension,7))\\na,_=m._features(tr,te); P,H,F=m._calibrated_inputs(tr,a,p); t,dt=d['eval_times'],d['past_dt']; Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; labs=tr['lab_id']; strata=tr['stratum']; et=[]; er=[]\\nfor lab in np.unique(labs):\\n    v=labs==lab; k=~v; tau,w=m._fit(P[k],H[k],F[k],dt,t,Y[k],R[k]); A,B=m._design(tau,P[v],H[v],F[v],dt,t); E=A@w-Y[v]; Q=B@w-R[v]; et.extend(abs(E).ravel()); er.extend(abs(Q))\\n    print('held-out lab',lab,'signed strain median by horizon',np.round(np.median(E,axis=0),4),'signed rate median',round(float(np.median(Q)),4),'rate medians by stratum',[(str(st), round(float(np.median(Q[strata[v]==st])),4)) for st in np.unique(strata[v])]);\\nprint('pooled OOF absolute medians, strain/rate',np.median(et),np.median(er))\\no=m.solve_batch(d); assert all(np.isfinite(v).all() for v in o.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Nonlinear bridge and archive-selected saturation -> audit for missing pairwise/rational calibration terms and lab-dependent residual bias; worst held-out-lab P90 absolute errors are 0.02484 for strain and 0.01653 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay, HJB, or balanced-accuracy checks\",\"rejected_reason\":\"This is a continuous hereditary regression task with no relay states, stochastic control PDE, or class labels.\"}],\"rationale\":\"Test whether extra pairwise and rational terms reduce held-out bridge residuals and whether signed coupon errors show a coherent lab or stratum bias hidden by pooled absolute errors. Only a reproducible improvement or systematic bias would justify changing the verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b26d3f178b1e3383b7e2371e2aedd0a37b3f84eae86f9181f9e12721866e2c53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30376.18,
+      "usage_known": true,
+      "prompt_tokens": 26922,
+      "cached_tokens": 9344,
+      "completion_tokens": 1119
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc15eadb60bb48f1bf8e10eee33f58dd",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:18.625655+00:00",
+  "ended_at_utc": "2026-11-28T03:39:47.831547+00:00",
+  "request_sha256": "607e5a40764633e8fab04e13b011aa211b7d9b32732a4a34a20bba5ef3e2d86f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58538,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30876,
+    "cached_tokens": 9344,
+    "completion_tokens": 1147
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/intrinsic_source.py').read_text(); b=Path('/tmp/bridge_current.py').read_text(); p=p[:p.index('def _calibration(')]+b+'\\\\n\\\\ndef _inputs(part, x, bridge):\\\\n    return (_stress(part[\\\"past_channel_raw\\\"], bridge),\\\\n            _stress(part[\\\"hold_channel_raw\\\"], bridge),\\\\n            np.column_stack((np.ones(len(x)), x)))\\\\n\\\\n\\\\n'+p[p.index('def _design('):]; p=p.replace('cal = _calibration(', 'cal = _calibrate('); Path('batch_solver.py').write_text(p)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nimport batch_solver as m\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nfor v in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(v['facility_telemetry_trace']); print(v['completed_campaign_short_name'],a.shape,'mean',a.mean(0),'std',a.std(0),'edges',a[[0,-1]],'singular',np.linalg.svd(a-a.mean(0),compute_uv=False));print('correlated channels',np.argwhere(np.triu(abs(np.corrcoef(a.T))>.97,1)).tolist())\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m._features(tr,te); dt,t=d['past_dt'],d['eval_times']; cal=m._calibrate(d['calibration_load_cells']); a,b=m._inputs(tr,x[:n],cal),m._inputs(te,x[n:],cal); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d); print('global',out['estimated_taus'],out['hereditary_weights'],'times',t)\\nfor lab in np.unique(tr['lab_id']):\\n k=tr['lab_id']==lab; p,w=m._fit(tuple(z[~k] for z in a),dt,t,y[~k],r[~k]); ds,dr=m._design(p,tuple(z[k] for z in a),dt,t); e=ds@w-y[k]; f=dr@w-r[k]; print('LOLO',lab,'taus',p,'strain med/p90',np.quantile(abs(e),[.5,.9]),'rate med/p90',np.quantile(abs(f),[.5,.9]))\\np,w=out['estimated_taus'],out['hereditary_weights']; past,h,c=b; drift=c@w[2:]; rise=-np.expm1(-t[:,None]/p); A=h[:,None]*w[:2]+drift[:,None]*[.4,1.6]; s=A@rise.T+.06*drift[:,None]*t+te['strain_0'][:,None]; r=A@(1/p)+.06*drift; print('baseline versus prior-reset RMS/max',[(np.mean(z*z)**.5,max(abs(z).ravel())) for z in (s-out['predicted_strain'],r-out['initial_rate_pred'])]); print('test lab feature/drift ranges', [(l,drift[te['lab_id']==l].min(),drift[te['lab_id']==l].max()) for l in np.unique(te['lab_id'])])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine bridge → dynamically fitted cyclic cubic bridge; clean-sweep leave-one-out axial RMSE is 0.000196 and maximum error is 0.000629, versus 0.339 and 1.107 for affine.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the previous reset law immediately\",\n      \"rejected_reason\": \"The archive associates that law with the previous campaign; quantify its effect and compare the chronological telemetry before selecting it for this blind batch.\"\n    }\n  ],\n  \"rationale\": \"Write the calibrated benchtop candidate and verify its public contract. Held-out labs test the intrinsic fit independently of the chamber choice; the telemetry comparison determines whether the previous chamber correction has support beyond recency.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8e0988b6603d87334215b5b230d760da5e162f68ab6caff0b8708a749a75a0ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31321.75,
+      "usage_known": true,
+      "prompt_tokens": 30876,
+      "cached_tokens": 9344,
+      "completion_tokens": 1147
+    }
+  ]
+}

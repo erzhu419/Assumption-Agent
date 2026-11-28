@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "398e04c798734672a24e956c4724256a",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:32.565224+00:00",
+  "ended_at_utc": "2026-11-28T03:48:10.654858+00:00",
+  "request_sha256": "1b439233f30fd9cfdfe47a6d1059f525e152405976377a6eaa870ec8586dc062",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44407,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25105,
+    "cached_tokens": 9344,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/audit_rosette.py <<'PY'\\nimport json\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _features, _invert, _jacobian\\n\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nn = len(x)\\ni, j = np.tril_indices(4, -1)\\naxis = np.count_nonzero(x, axis=1) == 1\\norder = np.argsort(np.argsort(np.linalg.norm(x, axis=1)))\\nsplits = dict(interleaved=(np.arange(n) % 5, range(5)), amplitude=(order * 5 // n, range(5)), axis=(axis, [True]), sweep_order=(np.arange(n) * 5 // n, range(5)))\\n\\ndef design(x, mode):\\n    b = _features(x)\\n    pair_total = x[:, i]**2 + x[:, j]**2\\n    if mode == 'additive':\\n        return b[:, :9]\\n    if mode == 'rational-extra':\\n        return np.c_[b, x**5 / (1 + x*x), b[:, 9:] * pair_total / (1 + pair_total)]\\n    if mode == 'degree3-extra':\\n        return np.c_[b, x*x, *[x[:, a]**2*x[:, d] for a in range(4) for d in range(4) if a != d], *[np.prod(np.delete(x, a, axis=1), axis=1) for a in range(4)]]\\n    return b\\n\\ndef fit(z, yy):\\n    w = np.ones(len(yy))\\n    for _ in range(20):\\n        b = np.linalg.lstsq(z*w[:, None], yy*w[:, None], rcond=None)[0]\\n        e = np.linalg.norm(yy-z@b, axis=1)\\n        w = 1/(1+(e/max(2*np.median(e), 1e-12))**2)\\n    return b\\n\\n# Label gross artifacts using baseline out-of-fold residuals, never in the fit.\\ncv = np.empty(n)\\nfor k in range(5):\\n    te = np.arange(n) % 5 == k\\n    cv[te] = np.linalg.norm(_features(x[te]) @ _fit(x[~te], y[~te]) - y[te], axis=1)\\ngross = cv > 5\\nprint('gross EMI rows:', np.flatnonzero(gross).tolist(), 'L2:', cv[gross], 'clean max:', cv[~gross].max())\\nprint('sweep metadata keys:', list(c), 'study batch/relay keys:', [k for k in s if 'batch' in k or 'relay' in k])\\nlog = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nprint('telemetry structure:', list(log) if isinstance(log, dict) else (type(log).__name__, len(log)))\\nprint('difference basis identity max error:', np.max(np.abs(((x[:,i]+x[:,j])**2-(x[:,i]-x[:,j])**2)/4-x[:,i]*x[:,j])))\\nfor name, (groups, folds) in splits.items():\\n    nums = {}\\n    for mode in ('additive', 'pair', 'rational-extra', 'degree3-extra'):\\n        z = design(x, mode)\\n        errors = []\\n        for k in folds:\\n            te = groups == k\\n            test = te & ~gross\\n            b = fit(z[~te], y[~te])\\n            errors.extend(np.linalg.norm(z[test]@b-y[test],axis=1))\\n        nums[mode] = tuple(float(f'{q:.4g}') for q in (np.median(errors), max(errors)))\\n    inv, bias = [], []\\n    for k in folds:\\n        te = groups == k\\n        test = te & ~gross\\n        d = _invert(y[test], _fit(x[~te], y[~te])) - x[test]\\n        inv.extend(np.linalg.norm(d, axis=1))\\n        bias.append(np.max(np.abs(d.mean(axis=0))))\\n    print(name, 'forward median/max', nums, 'pair inverse max', max(inv), 'max fold axis bias', max(bias))\\ncoef = _fit(x, y)\\nobs = _invert(s['y_obs_raw'], coef).reshape(-1, 4)\\nsv = np.linalg.svd(_jacobian(np.vstack((obs, x[~gross])), coef), compute_uv=False)\\nprint('observed ref range:', obs.min(axis=0), obs.max(axis=0), 'clean sweep ref range:', x[~gross].min(axis=0), x[~gross].max(axis=0))\\nprint('minimum Jacobian singular value:', sv[:, -1].min(), 'maximum condition:', (sv[:, 0]/sv[:, -1]).max())\\nPY\\npython3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive response → H2 coupled cubics and pair products; the verified candidate’s worst clean held-out inverse error is 4.31e-5 L2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode or classification accuracy tests\",\n      \"rejected_reason\": \"The transducer estimates continuous coordinates from static paired sweeps; neither relay modes nor classification labels are part of its interface. Sweep-order folds test the relevant nuisance: acquisition drift or clustered EMI.\"\n    }\n  ],\n  \"rationale\": \"Compare the additive, pair-product, rational, and higher-order bases on the same held-out real sweeps. A systematic improvement across blocked slices would justify changing the calibration; unstable inversion near the actual observations would instead call for an inverse update.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "41cbbf138b328d14055a2475845c240b3710e9b893688834b5adfe63585613bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40179.02,
+      "usage_known": true,
+      "prompt_tokens": 25105,
+      "cached_tokens": 9344,
+      "completion_tokens": 1575
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c04192a6d91842468719ce5607480c4b",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:32.687973+00:00",
+  "ended_at_utc": "2026-11-28T03:54:54.182049+00:00",
+  "request_sha256": "9f6108402f40f0ec83c38fffbf2b6ebb83e5638c106f940cae05368d376be319",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40686,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24508,
+    "cached_tokens": 9344,
+    "completion_tokens": 777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; A=/tmp/hegel_continual_archive; sed -n '1,90p' \\\"$A/alpha_m100_c01_batch_03_solver.py\\\"; for v in batch_02 batch_03 batch_04; do echo \\\"--- $v\\\"; sed -n '/^def solve_batch/,$p' \\\"$A/alpha_m100_c01_${v}_solver.py\\\" | tail -25; done; python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/tmp/hegel_continual_archive/alpha_m100_c01_batch_03_solver.py'; s=importlib.util.spec_from_file_location('arch',p); a=importlib.util.module_from_spec(s); s.loader.exec_module(a)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw,load=c['bridge_raw'],c['true_channel_loads']; b,keep=a._fit_bridge(raw,load); print('bridge',b); print('row residual all',np.quantile(np.linalg.norm(raw-a._bridge_forward(load,b),axis=1),[0,.5,.85,.9,.95,1]),'removed',np.flatnonzero(~keep)); print('load calib range',load.min(0),load.max(0));\\nfor name in ('train','test'):\\n z=d[name]; l=a._load_from_raw(np.vstack((z['hold_channel_raw'],z['past_channel_raw'].reshape(-1,4))),b); print(name,'load range',l.min(0),l.max(0),'inversion max',abs(a._bridge_forward(l,b)-np.vstack((z['hold_channel_raw'],z['past_channel_raw'].reshape(-1,4)))).max()); print('ref',np.isnan(z['ref_coupons']).sum(), 'missing features',np.isnan(z['coupon_features_raw']).sum(0)); print('aux median/sd',np.median(z['aux_chamber_telemetry'],0),np.std(z['aux_chamber_telemetry'],0));\\no=a.solve_batch(d); print('archive baseline taus',o['estimated_taus'],'theta',o['hereditary_weights']);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 intrinsic benchtop relaxation -> H2 baseline deployment under idle apparatus indicators; latest telemetry medians are −0.340 and −0.411, and prediction error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the last solver's reset law\",\n      \"rejected_reason\": \"The last solver applies a reset learned from a different apparatus state; the latest trace is near the earlier idle trace in both indicator channels.\"\n    }\n  ],\n  \"rationale\": \"Test whether the archived bridge basis fits the current calibration and inverts across the actual coupon range. A poor fit would require changing the bridge model before validating material parameters.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fa21ae19f4ff33e5b6f8649ecd2271b5daec0e0db59afc890165235a281802f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23580.9,
+      "usage_known": true,
+      "prompt_tokens": 24508,
+      "cached_tokens": 9344,
+      "completion_tokens": 777
+    }
+  ]
+}

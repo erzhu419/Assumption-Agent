@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfaeac183fa74420bfed138ca039ea58",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:52.234977+00:00",
+  "ended_at_utc": "2026-11-28T04:04:26.512564+00:00",
+  "request_sha256": "0e5b85eb788697269518b766626e45d340cbf2c9d4b262a66936c6c2da9a3b9b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62188,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33623,
+    "cached_tokens": 9344,
+    "completion_tokens": 1380
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsrc=/tmp/hegel_continual_archive/alpha_m100_c02_batch_03_solver.py\\nout=/holdout_task/batch_solver.py\\n# Keep the reference standardization and hereditary fit; replace only the bridge.\\nsed '/^def _bridge_basis/,$d' \\\"$src\\\" > \\\"$out\\\"\\ncat >> \\\"$out\\\" <<'PY'\\ndef _bridge_basis(own, opposite, frequencies):\\n    w, v = frequencies\\n    return np.stack((np.ones_like(own), own, np.sin(w * own), opposite,\\n                     1.0 - np.cos(v * opposite)), axis=-1)\\n\\n\\ndef _fit_bridge(calibration):\\n    raw = np.asarray(calibration['bridge_raw'])\\n    loads = np.asarray(calibration['true_channel_loads'])\\n    sweep = calibration['single_channel_sweeps']\\n    # Grossly corrupted calibration readings are far outside the bridge range.\\n    keep = (np.abs(raw).max(axis=1) < 4.0)\\n    raw, loads = raw[keep], loads[keep]\\n    channels = []\\n    for j in range(4):\\n        take = (sweep['lab_id'] == j) & (np.abs(sweep['cmd_stress']) < 4.0)\\n        isolated = sweep['true_stress'][take]\\n        channels.append((np.r_[loads[:, j], isolated],\\n                         np.r_[loads[:, (j + 2) % 4], np.zeros_like(isolated)],\\n                         np.r_[raw[:, j], sweep['cmd_stress'][take]]))\\n\\n    def profile(frequencies, return_coefficients=False):\\n        result = []\\n        for own, opposite, observed in channels:\\n            design = _bridge_basis(own, opposite, frequencies)\\n            c = np.linalg.lstsq(design, observed, rcond=None)[0]\\n            result.append(c if return_coefficients else design @ c - observed)\\n        return np.stack(result, axis=-1) if return_coefficients else np.concatenate(result)\\n\\n    frequencies = least_squares(profile, [2.5, 2.0], bounds=([2., 1.5], [3., 2.5]),\\n                                gtol=1e-12, ftol=1e-12, xtol=1e-12).x\\n    return frequencies, profile(frequencies, True)\\n\\n\\ndef _forward_bridge(loads, model):\\n    return np.sum(_bridge_basis(loads, np.roll(loads, 2, axis=-1), model[0]) * model[1].T, axis=-1)\\n\\n\\ndef _invert_bridge(raw, model):\\n    (w, v), (offset, gain, sine, cross_linear, cross_even) = model\\n    x = (np.asarray(raw) - offset) / gain\\n    for _ in range(50):\\n        partner = np.roll(x, 2, axis=-1)\\n        residual = _forward_bridge(x, model) - raw\\n        error = np.max(np.abs(residual))\\n        if error < 1e-11:\\n            break\\n        a = gain + w * sine * np.cos(w * x)\\n        b = cross_linear + v * cross_even * np.sin(v * partner)\\n        other_a, other_b, other_r = (np.roll(z, 2, axis=-1) for z in (a, b, residual))\\n        step = (other_a * residual - b * other_r) / (a * other_a - b * other_b)\\n        damping = min(1.0, 0.45 / max(1e-15, np.max(np.abs(step))))\\n        while np.max(np.abs(_forward_bridge(x - damping * step, model) - raw)) >= error:\\n            damping *= 0.5\\n            if damping < 1e-8:\\n                raise ArithmeticError('Bridge inverse did not reduce its residual')\\n        x -= damping * step\\n    return x\\n\\n\\nPY\\nsed -n '/^def _design/,$p' \\\"$src\\\" >> \\\"$out\\\"\\ngrep -A24 '^def solve_batch' \\\"$out\\\"\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial leakage -> H2 sine own response plus linear and even cosine opposite-channel leakage; held-out mixed-load raw RMS fell to 0.000108 and maximum absolute residual to 0.000347.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\n      \"ng_t08\"\n    ]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep polynomial leakage\",\n      \"rejected_reason\": \"The even cosine model reduces held-out forward RMS from 0.001727 to 0.000108 with fewer terms.\"\n    }\n  ],\n  \"rationale\": \"Fit the identified bridge on current calibration data while keeping the train-only material fit and the elevated deployment law supported by the predecessor trace. The schema run will catch interface mismatches before inverse-load and material validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "25a3e174b2f78947501e60674c0e375076df2b9a13b952a6cb8a1d13b00be331",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36411.88,
+      "usage_known": true,
+      "prompt_tokens": 33623,
+      "cached_tokens": 9344,
+      "completion_tokens": 1380
+    }
+  ]
+}

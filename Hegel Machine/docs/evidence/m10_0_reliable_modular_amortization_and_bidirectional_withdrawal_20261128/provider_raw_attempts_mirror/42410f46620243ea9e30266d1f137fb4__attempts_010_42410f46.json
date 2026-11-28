@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42410f46620243ea9e30266d1f137fb4",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:03.860088+00:00",
+  "ended_at_utc": "2026-11-28T03:34:31.547824+00:00",
+  "request_sha256": "f5b3f2d860d3327fc38e8fcdb800518ab676cc43cbe0139ac8ed079775653f89",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49215,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27047,
+    "cached_tokens": 9344,
+    "completion_tokens": 1084
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/compare_bank_cal.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nC = s['sensor_calibration_sweeps']\\nX = np.c_[np.ones(len(C['ref_rosette'])), C['ref_rosette']]\\nR = C['raw_rosette']\\nbank_data = C['single_bank_sweeps']\\nprint('bank keys', list(bank_data))\\nB, V, T = map(np.asarray, bank_data.values())\\nB = B.astype(int)\\nslices = [np.flatnonzero(B == j) for j in range(4)]\\nD = np.zeros((len(B),5))\\nD[:,0] = 1\\nD[np.arange(len(B)),1+B] = V\\nS, _ = m._forward(s)\\nP = item['campaign_diagnostics']\\nW = np.column_stack([p['w_pulse'] for p in P])\\nY = np.stack([p['y_pulse_raw'] for p in P]).reshape(len(P),-1,4)\\nF = (S @ W).T.reshape(Y.shape)\\n\\ndef fit(keep, bank_keep, joint):\\n    cols = []\\n    for j in range(4):\\n        idx = bank_keep & (B == j)\\n        a, y = X[keep], R[keep,j]\\n        if joint:\\n            a, y = np.r_[a,D[idx]], np.r_[y,T[idx]]\\n        cols.append(np.linalg.lstsq(a,y,rcond=None)[0])\\n    return np.array(cols).T\\n\\ndef rms(x):\\n    return np.sqrt(np.mean(x*x))\\n\\nfor joint in (False, True):\\n    sweep, bank, pulse, worst = [], [], [], []\\n    for fold, ix in enumerate(np.array_split(np.arange(len(X)), 6)):\\n        bi = np.concatenate([np.array_split(j,6)[fold] for j in slices])\\n        keep = ~np.isin(np.arange(len(X)),ix)\\n        bk = ~np.isin(np.arange(len(B)),bi)\\n        a = fit(keep,bk,joint)\\n        sweep.append(rms(X[ix]@a-R[ix]))\\n        bank.append(rms((D[bi]@a)[np.arange(len(bi)),B[bi]]-T[bi]))\\n        yc = np.linalg.solve(a[1:].T,(Y-a[0]).reshape(-1,4).T).T.reshape(Y.shape)\\n        e = (yc-F).reshape(len(P),len(s['mu_shifts']),-1,4)\\n        pulse.extend(np.sqrt(np.mean(e**2,axis=(1,2,3))))\\n        worst.append(np.sqrt(np.mean(e**2,axis=2)).max())\\n    a = fit(np.ones(len(X),bool),np.ones(len(B),bool),joint)\\n    print('joint',joint,'worst sweep',max(sweep),'worst bank',max(bank),'pooled pulse',rms(np.array(pulse)),'worst pulse slice',max(worst),'offsets/diagonal',a[0],a[1:].diagonal())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_bank_cal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 rosette-only affine calibration -> H2 joint affine fit with single-bank sweeps; the verified baseline's worst held-out tracer slice is 2.28e-6 RMS.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add the bank measurements directly to the production fit.\",\"rejected_reason\":\"The measurements must agree with the rosette model and improve independent tracer predictions before changing the verified solver.\"}],\"rationale\":\"Hold out rosette blocks and reference levels from each bank, then compare the two fits on independent tracer pulses by shift and channel. A bank mismatch indicates a distinct measurement response; improved bank fit alone does not establish a better chamber calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "451fb71aa934ddb08963b87f2b9268c582bce0e66df569b016637b481813ef22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29781.48,
+      "usage_known": true,
+      "prompt_tokens": 27047,
+      "cached_tokens": 9344,
+      "completion_tokens": 1084
+    }
+  ]
+}

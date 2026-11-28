@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa74135a5ec1416f849486df5b281d2b",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:38.326677+00:00",
+  "ended_at_utc": "2026-11-28T03:35:05.084139+00:00",
+  "request_sha256": "5baec15cb0a36507a014310d7d6ff03cfb6e06c8e70c1579f60e2d3edabc1c38",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70238,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36016,
+    "cached_tokens": 9344,
+    "completion_tokens": 1025
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nout = m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\ntr, te = d['train'], d['test']\\nxtr, xte = m._features(tr, te)\\ncal = d['calibration_load_cells']\\nb = m._bridge(cal['bridge_raw'], cal['true_channel_loads'])\\n_, h, f = m._inputs(te, xte, b)\\neps = 1e-6\\ncurve, _ = m._chamber(tau, theta, h, f, np.array([0., eps, 2*eps]))\\nerr = np.max(abs((-3*curve[:,0] + 4*curve[:,1] - curve[:,2]) / (2*eps) - out['initial_rate_pred']))\\nassert err < 1e-7, err\\npast, hold, feat = m._inputs(tr, xtr, b)\\ndt, t = d['past_dt'], d['eval_times']\\ny, r = tr['strain_curves_obs'] - tr['strain_0'][:,None], tr['instant_rate_obs']\\nprint('initial-rate derivative max error', err)\\nfor lab in np.unique(tr['lab_id']):\\n    k = tr['lab_id'] != lab\\n    T, W = m._fit(past[k], hold[k], feat[k], dt, t, y[k], r[k])\\n    C, R = m._design(T, past[~k], hold[~k], feat[~k], dt, t)\\n    print('omitted lab', lab, 'curve median abs error', np.median(abs(C@W-y[~k])), 'rate RMSE', np.mean((R@W-r[~k])**2)**.5, 'max fractional tau shift', np.max(abs(T/tau-1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (retained chamber memory) → H2 (reset memory with drift coupling); across held-out diagnostic groups, the worst per-coupon strain RMSE was 0.01170 and the worst absolute initial-rate error was 0.00958, both on coupons requiring imputation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add retained-memory terms to reduce diagnostic residuals\",\n      \"rejected_reason\": \"They did not materially improve held-out strain and increased pooled held-out rate error.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved artifact in an isolated Python process. A mismatch between the curve derivative and the reported rate would require correcting the output formula; instability under an omitted benchtop lab would warrant revisiting the intrinsic fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ea0ba6f67a90353a469f4dd6fbb6c055d6f02818806119d493afe07a0220c001",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28843.93,
+      "usage_known": true,
+      "prompt_tokens": 36016,
+      "cached_tokens": 9344,
+      "completion_tokens": 1025
+    }
+  ]
+}

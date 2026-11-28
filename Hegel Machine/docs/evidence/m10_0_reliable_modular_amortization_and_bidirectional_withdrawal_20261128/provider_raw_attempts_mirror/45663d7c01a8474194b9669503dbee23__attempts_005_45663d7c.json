@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45663d7c01a8474194b9669503dbee23",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:48.561367+00:00",
+  "ended_at_utc": "2026-11-28T03:52:18.551355+00:00",
+  "request_sha256": "0f1f9fdd6002766d4f4bddfc2fab471337318a60f4d57885034f50e3ad965951",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44197,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29419,
+    "cached_tokens": 9344,
+    "completion_tokens": 1287
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rosette_basis.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; u,v,j=b['ref_signal'],b['raw_readout'],b['bank_id']; N=len(x)\\ndef mask(y):\\n m=np.median(y,axis=0); return np.max(abs(y-m)/np.maximum(np.median(abs(y-m),axis=0),1e-9),axis=1)<9\\nfns={'tanh':lambda z,a:[np.tanh(a*z)],'tanh+x':lambda z,a:[np.tanh(a*z),z],'tanh+x2':lambda z,a:[np.tanh(a*z),z*z],'tanh+x3':lambda z,a:[np.tanh(a*z),z**3],'tanh+x5':lambda z,a:[np.tanh(a*z),z**5],'tanh+pos3':lambda z,a:[np.tanh(a*z),np.maximum(z,0)**3],'tanh+x+x3':lambda z,a:[np.tanh(a*z),z,z**3],'rat+x':lambda z,a:[z/(1+a*z*z),z], 'atan+x':lambda z,a:[np.arctan(a*z),z], 'tanh+rat':lambda z,a:[np.tanh(a*z),z/(1+z*z)], 'tanh+hinge':lambda z,a:[np.tanh(1.1*z),np.maximum(z-a,0)**2], 'tanh+oddhinge':lambda z,a:[np.tanh(1.1*z),np.sign(z)*np.maximum(abs(z)-a,0)**2]}\\nfor name,fn in fns.items():\\n e=np.zeros_like(y); eb=np.zeros_like(v)\\n for k in range(7):\\n  te=np.arange(N)%6==k if k<6 else np.zeros(N,bool); be=np.arange(len(u))%6==k if k<6 else np.zeros(len(u),bool); tr=~te; tr[tr]=mask(y[tr]); details=[]\\n  def fit(a,write=False):\\n   rss=0.\\n   for h in range(4):\\n    z=x[:,h]; p=x[:,(h+2)%4]; U=u[j==h]; V=v[j==h]; bt=~be[j==h]; bt[bt]=mask(V[bt,None]); A=np.column_stack([np.ones(N),p,p*p,*fn(z,a)]); B=np.column_stack([np.ones(len(U)),np.zeros(len(U)),np.zeros(len(U)),*fn(U,a)]); D=np.r_[A[tr],B[bt]]; Y=np.r_[y[tr,h],V[bt]]; C=np.linalg.lstsq(D,Y,rcond=None)[0]; d=D@C-Y; rss+=d@d\\n    if write:\\n     e[te,h]=A[te]@C-y[te,h]; eb[(j==h)&be]=B[be[j==h]]@C-V[be[j==h]]; details.append(C)\\n   return rss\\n  bounds=(.3,2.3) if 'hinge' not in name else (.25,1.4); grid=np.linspace(*bounds,15); i=np.argmin([fit(a) for a in grid]); a=minimize_scalar(fit,bounds=(grid[max(0,i-1)],grid[min(len(grid)-1,i+1)]),method='bounded').x; fit(a,True)\\n print(name,round(a,4),'rosette p50/95/max',np.round(np.quantile(np.linalg.norm(e[mask(y)],axis=1),[.5,.95,1]),5),'bank p95',round(np.quantile(abs(eb[abs(v)<4]),.95),5),'coef',np.round(np.array(details),5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_basis.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 paired-channel tanh saturation -> H2 paired-channel saturation with a high-amplitude correction; the best prior clean-sweep OOF maximum row error is 0.168.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reject the largest non-EMI residuals\",\"rejected_reason\":\"They recur at positive high amplitudes across multiple channels, so rejecting them could remove evidence about the response curve.\"}],\"rationale\":\"The sparse paired-channel model leaves structured errors at high amplitudes. Compare compact corrections with response-scale fitting and gross-outlier screening inside each fold; retain a correction only if it improves held-out sweeps without worsening the independent bank response.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "a8166bd6e069aad1ad2c8821b22408c84ef16f3281818534c46583a28ee21fa1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34253.48,
+      "usage_known": true,
+      "prompt_tokens": 29419,
+      "cached_tokens": 9344,
+      "completion_tokens": 1287
+    }
+  ]
+}

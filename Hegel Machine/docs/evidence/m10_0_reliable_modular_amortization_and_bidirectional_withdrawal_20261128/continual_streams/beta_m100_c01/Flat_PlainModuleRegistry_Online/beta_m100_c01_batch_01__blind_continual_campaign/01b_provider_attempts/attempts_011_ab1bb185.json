@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab1bb18589c14907ba999fa359d58697",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:34:12.871166+00:00",
+  "ended_at_utc": "2026-11-28T03:34:38.510862+00:00",
+  "request_sha256": "9fd72467952bd804ca09258904337c289ae29bc7db1a8e0cf541bfa3802b49b6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54073,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28471,
+    "cached_tokens": 9344,
+    "completion_tokens": 1010
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compare_bank_calibration.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    st = item['study']\\n    sw = st['sensor_calibration_sweeps']\\n    x, y = sw['ref_rosette'], sw['raw_rosette']\\n    single = sw['single_bank_sweeps']\\n    S, _ = solver._transport(st)\\n    ds = item['campaign_diagnostics']\\n    pulse_x = np.stack([(S @ p['w_pulse']).reshape(-1, 4) for p in ds])\\n    pulse_y = np.stack([p['y_pulse_raw'].reshape(-1, 4) for p in ds])\\n    bands = np.array_split(np.argsort(np.linalg.norm(x, axis=1)), 5)\\n    for model in ('full', 'diagonal', 'joint_diagonal'):\\n        def fit(rows):\\n            if model == 'full':\\n                return np.linalg.lstsq(np.c_[np.ones(len(rows)), x[rows]], y[rows], rcond=None)[0]\\n            b = np.zeros((5, 4))\\n            for j in range(4):\\n                u, v = x[rows, j], y[rows, j]\\n                if model == 'joint_diagonal':\\n                    mask = single['bank_id'] == j\\n                    u = np.r_[u, single['ref_signal'][mask]]\\n                    v = np.r_[v, single['raw_readout'][mask]]\\n                b[[0, j+1], j] = np.linalg.lstsq(np.c_[np.ones(len(u)), u], v, rcond=None)[0]\\n            return b\\n        rms = []\\n        for test in bands:\\n            b = fit(np.setdiff1d(np.arange(len(x)), test))\\n            e = x[test] @ b[1:] + b[0] - y[test]\\n            rms.append(np.sqrt(np.mean(e*e, axis=0)).max())\\n        b = fit(np.arange(len(x)))\\n        residual = pulse_x @ b[1:] + b[0] - pulse_y\\n        e = np.linalg.solve(b[1:].T, residual.reshape(-1,4).T).T.reshape(len(ds), len(st['mu_shifts']), -1, 4)\\n        print(model, 'held-out sweep worst RMS', max(rms), 'independent tracer worst / pooled RMS', np.sqrt(np.mean(e*e,axis=2)).max(), np.sqrt(np.mean(e*e)), 'tracer per-pulse RMS', np.sqrt(np.mean(e*e,axis=(1,2,3))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_bank_calibration.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full affine rosette fit → H2 joint per-bank affine fit; the current worst held-out tracer RMS is 1.19e-6 across shifts and sensor regions.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool calibration sweeps immediately\",\n      \"rejected_reason\": \"The gains agree closely, but independent tracers can test whether pooling improves prediction or whether dropping cross-channel terms introduces bias.\"\n    }\n  ],\n  \"rationale\": \"Compare full, diagonal, and pooled diagonal calibration on held-out amplitude bands and on tracer measurements excluded from calibration. The diagonal-only fit separates the effect of removing cross-channel terms from the effect of adding single-bank data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8cebdaffcc25a0585475a12c304aa29c96ac73960d1269f52a91fb12f3c81026",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27735.13,
+      "usage_known": true,
+      "prompt_tokens": 28471,
+      "cached_tokens": 9344,
+      "completion_tokens": 1010
+    }
+  ]
+}

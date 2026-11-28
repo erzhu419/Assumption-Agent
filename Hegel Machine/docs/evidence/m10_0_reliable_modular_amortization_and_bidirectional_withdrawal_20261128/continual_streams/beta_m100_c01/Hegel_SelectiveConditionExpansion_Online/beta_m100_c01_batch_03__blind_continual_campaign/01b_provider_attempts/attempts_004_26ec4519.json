@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "26ec4519955c4855aaa226f403f62edd",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:45:08.175871+00:00",
+  "ended_at_utc": "2026-11-28T03:45:32.103448+00:00",
+  "request_sha256": "430a698e1b175f7945dc3bfd2d8948bb7965820d13cabab38d4622643591a99f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30729,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22500,
+    "cached_tokens": 0,
+    "completion_tokens": 790
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys\\nsys.path.insert(0,'/tmp')\\nfrom rosette_probe import *\\nA=features(x,'cubic'); C=fit(A,y); r=np.linalg.norm(A@C-y,axis=1); keep=r<.01; C=np.linalg.lstsq(A[keep],y[keep],rcond=None)[0]; print('rank',np.linalg.matrix_rank(A[keep]),'cond',np.linalg.cond(A[keep]),'residual sorted',np.sort(r)[-12:]); names=['1','x0','x1','x2','x3']+[''.join(map(str,t)) for d in (2,3) for t in combinations_with_replacement(range(4),d)]; print('term COEFS'); print('\\\\n'.join(f'{n}: {rr}' for n,rr in zip(names,C))); b=cal['single_bank_sweeps']; ax=np.eye(4)[b['bank_id']]*b['ref_signal'][:,None]; axp=(features(ax,'cubic')@C)[np.arange(len(ax)),b['bank_id']]; print('single residual by bank', (axp-b['raw_readout']).reshape(4,-1)); q=s['y_obs_raw'].reshape(-1,4); seed=np.linalg.solve(C[1:5].T,(q-C[0]).T).T; print('obs seed bounds',seed.min(0), seed.max(0)); print('origin map singular values',np.linalg.svd(C[1:5],compute_uv=False)); print('origin sweep neighbors',np.sort(np.linalg.norm(x,axis=1))[:12]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine and channelwise nonlinear terms → full mixed cubic forward map; worst held-out sweep-block RMSE fell from 0.296 to 3.02e-5.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine coupling plus additive channelwise saturation is an adequate forward model.\",\"empirical_witness\":\"The pure cubic and pure quintic models yield worst held-out block RMSEs of 0.248 and 0.327, whereas the full mixed cubic reaches 3.02e-5.\",\"causal_blanket_diagnosis\":\"Nonlinear response depends on combinations of rosette channels; nonlinear transformations of separate input channels omit those interactions.\",\"sublated_pivot\":\"Keep robust multichannel forward fitting and add mixed polynomial terms; test whether their coefficient structure supports a simpler physically constrained inverse.\",\"risk_kind\":\"mixed_term_omission\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the single-bank measurements as extra fitting rows immediately\",\"rejected_reason\":\"They may be a distinct readout path; compare their predictions against the jointly fitted map before pooling.\"}],\"rationale\":\"Check whether the cubic is well identified, whether its mixed terms admit a simpler structure, and whether the single-bank measurements describe the same response. These determine the forward fit and how to select the inverse branch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "8dcb16a17f92cd7e4843345425b08ac02b098dc3c11ed32f7d11e40d00c33a4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23882.31,
+      "usage_known": true,
+      "prompt_tokens": 22500,
+      "cached_tokens": 0,
+      "completion_tokens": 790
+    }
+  ]
+}

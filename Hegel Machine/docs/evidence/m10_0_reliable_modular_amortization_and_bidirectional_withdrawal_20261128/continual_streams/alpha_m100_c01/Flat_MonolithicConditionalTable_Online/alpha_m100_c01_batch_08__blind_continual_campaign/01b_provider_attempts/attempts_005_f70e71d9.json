@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f70e71d951cf452282494205f6a1e43b",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:11:47.579562+00:00",
+  "ended_at_utc": "2026-11-28T04:12:09.686320+00:00",
+  "request_sha256": "7186cb8e44e8134ea2408e9ad84e5164d3b26ead5535295baf930bfea5fd000a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24371,
+    "cached_tokens": 9344,
+    "completion_tokens": 706
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ==== \\\"$f\\\"; grep -nE '^def |^_[A-Z]|^    (curve|rate|gap|ramp|decay|memory|tau|past|hold|test_load).*=' \\\"$f\\\" | tail -22; done; cat > /tmp/compare08.py <<'PY'\\nimport glob,importlib.util,pickle,numpy as np\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=b['dataset']; g=b['campaign_diagnostics']; c=d['calibration_load_cells']; y=g['strain_curves_obs']; r=g['instant_rate_obs']; al=d['train']; te=d['test'];\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n s=importlib.util.spec_from_file_location('archive',f); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\n try:\\n  p=m.solve_batch(dict(d,test=g)); e=p['predicted_strain']-y; q=p['initial_rate_pred']-r\\n  print(f.split('/')[-1], 'taus',p['estimated_taus'].round(4),'weights',p['hereditary_weights'].round(4),'curve/rate MAD',np.round([np.median(abs(e)),np.median(abs(q))],5),'curve time MAE',np.median(abs(e),axis=0).round(4),'worst lab',max(np.median(abs(e[g['lab_id']==k])) for k in np.unique(g['lab_id'])),flush=True)\\n except Exception as ex: print(f,repr(ex),flush=True)\\nprint('cal range', c['true_channel_loads'].min(0),c['true_channel_loads'].max(0)); print('raw ranges train/test/diag',[(z['past_channel_raw'].min(),z['past_channel_raw'].max(),z['hold_channel_raw'].min(),z['hold_channel_raw'].max()) for z in (al,te,g)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic spectrum → H2 chamber correction selected on current verification coupons; no quantitative chamber residual measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Score archived solvers on the current verification coupons before fitting a new chamber law. Separate time-resolved strain and initial-rate errors to identify whether to revise bridge calibration, memory, or drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "26f9df3aac811276850f09d76fd839c71562ab658848380f4168c523fcb5fdee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22067.22,
+      "usage_known": true,
+      "prompt_tokens": 24371,
+      "cached_tokens": 9344,
+      "completion_tokens": 706
+    }
+  ]
+}

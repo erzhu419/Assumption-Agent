@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e04e082781248ae890ee1cbfc498b37",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:22.988986+00:00",
+  "ended_at_utc": "2026-11-28T03:50:57.979370+00:00",
+  "request_sha256": "58689d5420ae8b6dd92a57d33e66d7ec729110c922a2fcc3b0aa60910c7b46e0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30524,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22523,
+    "cached_tokens": 9344,
+    "completion_tokens": 1414
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; X=D['true_channel_loads']; Y=D['bridge_raw']\\nclean=np.max(abs(Y),axis=1)<5\\nprint('gross spike candidates',np.where(~clean)[0].tolist()); print('calibration slice sizes',int(sum(clean[:16])),int(sum(clean[16:]))); print('possible repeated load rows',[(i,X[i].round(3).tolist()) for i in range(16,80) if np.count_nonzero(X[i])<4 or np.ptp(X[i])<1e-8]);\\npairs=list(combinations_with_replacement(range(4),2)); triples=list(combinations_with_replacement(range(4),3))\\ndef design(x,j,k,p=(),degree=2):\\n z=x[:,j]; A=[np.ones(len(x)),*x.T]\\n if degree>=2:A.extend(x[:,a]*x[:,b] for a,b in pairs)\\n if degree>=3:A.extend(x[:,a]*x[:,b]*x[:,c] for a,b,c in triples)\\n if k=='poly5': return np.column_stack(A+[z**4,z**5])\\n if k not in ('affine','poly','poly3'):\\n  a,b=p; u=a*(z-b)\\n  if k=='tanh': g=np.tanh(u)\\n  if k=='atan': g=np.arctan(u)\\n  if k=='softsign': g=u/np.sqrt(1+u*u)\\n  if k=='sine': g=np.sin(u)\\n  if k=='rational': g=u/(1+u*u)\\n  A.append(g)\\n return np.column_stack(A)\\ndef fit(t,j,k,degree):\\n def predict(p,v):\\n  A=design(X[t],j,k,p,degree); beta=np.linalg.lstsq(A,Y[t,j],rcond=None)[0];return design(X[v],j,k,p,degree)@beta,beta\\n p=();\\n if k not in ('affine','poly','poly3','poly5'):\\n  r=min((least_squares(lambda p:predict(p,t)[0]-Y[t,j], [a,0.],bounds=([.08,-1.],[5.,1.]),max_nfev=90) for a in (.55,1.4,2.8)),key=lambda r:r.cost);p=r.x\\n return predict,p\\nsplits=[]; axis=np.where(clean & (np.arange(80)<16))[0]; mixed=np.where(clean & (np.arange(80)>=16))[0];\\nfor v in np.array_split(np.random.default_rng(49).permutation(mixed),4): splits.append(('mix',v))\\nfor label,v in [('axis',axis),('extreme',mixed[np.max(abs(X[mixed]),axis=1)>1.48])]:splits.append((label,v))\\nfor k,degree in [('affine',1),('poly',2),('poly3',3),('poly5',3),('tanh',2),('atan',2),('softsign',2),('rational',2),('sine',2),('tanh',3),('atan',3)]:\\n err={}; params=[]; coefs=[]; full=[]\\n for j in range(4):\\n  pred,p=fit(clean,j,k,degree); yh,beta=pred(clean); params.append(np.round(p,4).tolist()); coefs.append(beta); full.append(np.sqrt(np.mean((yh-Y[clean,j])**2)))\\n  for group,v in splits:\\n   t=clean.copy();t[v]=False; pred,p=fit(t,j,k,degree);r=pred(v)[0]-Y[v,j];err.setdefault(group,np.zeros(4))[j]=max(err[group][j],np.sqrt(np.mean(r*r)))\\n print(k,degree,'fit',np.round(full,6),'CV',{k:np.round(v,6).tolist() for k,v in err.items()},'params',params)\\n if k in ('tanh','atan','softsign','sine') and degree==2:\\n  print('coef',np.round(np.array(coefs).T,5).tolist())\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -16\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compare affine coupling with saturating self-response and quadratic cross-channel terms; organized calibration holdout error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Learn a separate regime for the extreme sweep readings\",\n      \"rejected_reason\": \"The extreme rows share an almost identical additive displacement across channels, which is more consistent with spike contamination than with the response seen at comparable mixed loads.\"\n    }\n  ],\n  \"rationale\": \"Refit each candidate inside mixed-load, single-axis, and extreme-load folds. This tests whether a physical response basis generalizes beyond the points used to estimate it before committing to a numerical inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4395fe3a60775b9071b770a00270d13439ca9cdfe948c3b8e7bde6a7b2b07311",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37080.3,
+      "usage_known": true,
+      "prompt_tokens": 22523,
+      "cached_tokens": 9344,
+      "completion_tokens": 1414
+    }
+  ]
+}

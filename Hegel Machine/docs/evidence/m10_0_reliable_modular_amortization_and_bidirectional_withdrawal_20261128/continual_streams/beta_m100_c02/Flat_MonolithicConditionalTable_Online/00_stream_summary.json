@@ -1,0 +1,2427 @@
+{
+  "world_id": "beta_m100_c02",
+  "cluster_id": "cluster_m100_06_beta",
+  "family": "beta",
+  "order_mode": "coupled_first",
+  "arm": "Flat_MonolithicConditionalTable_Online",
+  "wall_sec": 3368.64,
+  "strict_passes": 9,
+  "episode_count": 10,
+  "zero_llm_episodes_total": 2,
+  "zero_turn_passed_closures": 2,
+  "total_turns_used": 95,
+  "total_pre_llm_probe_wall_ms": 60065.58,
+  "total_post_llm_probe_wall_ms": 49877.63,
+  "total_localization_probe_wall_ms": 0.0,
+  "total_decomposition_probe_wall_ms": 0.0,
+  "total_coverage_probe_wall_ms": 208694.14,
+  "total_official_verifier_wall_ms": 50454.4,
+  "separability_withdrawal_receipts": [],
+  "autonomous_decomposition_events": [],
+  "lazy_retroactive_projection_events": [],
+  "guard_induction_events": [
+    {
+      "step": 1,
+      "event": "S01_decomp_d1",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Channel 7 log mean is the only feature with empirical spread at least 0.070. Its midpoint, 1.039369, separates the two branches' witnesses with a margin of 1.393554 on each side. Each guard accepts its own witness and rejects the other branch's witness.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_08_log_channel_7_mean",
+            "op": ">",
+            "threshold": 1.039369
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.039369
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "event": "S02_u1_disc",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Adjacent off-diagonal absolute correlation isolates the new branch, and channel 7 log mean isolates the decomposition branch. The baseline requires both indicators to be low. Each guard accepts its own witness and rejects both other witnesses. The smallest clause-to-witness distance is 0.135189, above the required 0.035; both features exceed the 0.070 spread requirement.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+            "op": ">",
+            "threshold": 0.1352
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": "<=",
+              "threshold": 0.1352
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.045
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.045
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "event": "S03_comb_u1_d1",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Two midpoint thresholds separate all four branches: calibration RMS distinguishes the upstream states, and the channel 7 log mean distinguishes the downstream states. Each guard is TRUE on its own witness and FALSE on all three other branch witnesses. The smallest clause margin is 0.1611045, above the required 0.035.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_06_cal_frobenius_rms",
+            "op": ">",
+            "threshold": 1.0931805
+          },
+          {
+            "feature_name": "dn_stat_08_log_channel_7_mean",
+            "op": ">",
+            "threshold": 1.0450805
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 1.0931805
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0450805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 1.0931805
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0450805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": ">",
+              "threshold": 1.0931805
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0450805
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 4,
+      "event": "S04_d2_coupled_first",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "The new branch is isolated by its high log-channel-1 mean. Adjacent off-diagonal absolute correlation and log-channel-7 mean distinguish the four existing branches; the upstream-active, channel-7-low branch also needs a low channel-1 clause to exclude the new branch. Each guard accepts its own witness and rejects all four other witnesses. Every clause has a minimum observed threshold distance greater than 0.130.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_02_log_channel_1_mean",
+            "op": ">=",
+            "threshold": 1.0953275
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": "<",
+              "threshold": 0.1300875
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<",
+              "threshold": 1.0450805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": "<",
+              "threshold": 0.1300875
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">=",
+              "threshold": 1.0450805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": ">=",
+              "threshold": 0.1300875
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<",
+              "threshold": 1.0450805
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<",
+              "threshold": 1.0953275
+            }
+          ]
+        },
+        "mono_r03_S03_comb_u1_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": ">=",
+              "threshold": 0.1300875
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">=",
+              "threshold": 1.0450805
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 5,
+      "event": "S05_u2_disc",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Each guard accepts its own witness and rejects the other five. Every referenced feature has an empirical spread of at least 0.070, and the smallest distance from any witness to any used threshold is 0.0640055, above the required 0.035.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+            "op": ">",
+            "threshold": 0.129083
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9960815
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9960815
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            }
+          ]
+        },
+        "mono_r03_S03_comb_u1_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r04_S04_d2_coupled_first": {
+          "all_of": [
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": ">",
+              "threshold": 1.0953275
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 6,
+      "event": "S06_comb_u2_d1",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Each guard accepts its own witness and rejects all six other supplied branch witnesses, including those not explicitly listed as negatives. Every referenced feature has empirical spread of at least 0.070, and the smallest clause-to-witness distance is 0.0593815. Calibration RMS separates the two baseline branches from the rest; channel 7 separates the two baseline branches from each other. The new branch combines high opposite off-diagonal correlation with high channel 7 mean.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+            "op": ">=",
+            "threshold": 0.129083
+          },
+          {
+            "feature_name": "dn_stat_08_log_channel_7_mean",
+            "op": ">=",
+            "threshold": 1.0452805
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9914575
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9914575
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r03_S03_comb_u1_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r04_S04_d2_coupled_first": {
+          "all_of": [
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": ">=",
+              "threshold": 1.0953275
+            }
+          ]
+        },
+        "mono_r05_S05_u2_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": ">=",
+              "threshold": 0.129083
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<",
+              "threshold": 1.0452805
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 7,
+      "event": "S07_rev_sep_break",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "The new branch shares its downstream measurements with mono_r04, but its adjacent off-diagonal absolute correlation is low (0.000002 versus 0.260173). Combining low adjacent correlation with high channel-1 mean isolates the new branch. Each guard accepts only its own witness among all eight supplied rows. The smallest empirical spread among the features used is 0.22828, and the smallest witness-to-threshold distance is 0.0593815.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+            "op": "<=",
+            "threshold": 0.1535095
+          },
+          {
+            "feature_name": "dn_stat_02_log_channel_1_mean",
+            "op": ">",
+            "threshold": 1.0953275
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9914575
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_06_cal_frobenius_rms",
+              "op": "<=",
+              "threshold": 0.9914575
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.1535095
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r03_S03_comb_u1_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.1535095
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r04_S04_d2_coupled_first": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_03_adj_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.1535095
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": ">",
+              "threshold": 1.0953275
+            }
+          ]
+        },
+        "mono_r05_S05_u2_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.129083
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r06_S06_comb_u2_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.129083
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 8,
+      "event": "S08_comb_u2_d2sep",
+      "layer": "monolithic_table",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "All nine guards accept their own witness and reject every other branch's witness. The minimum distance from any witness to any selected threshold is 0.0815775, exceeding the required 0.035. Baseline cells use paired inactive indicators rather than low-spread features.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+            "op": ">",
+            "threshold": 0.1201075
+          },
+          {
+            "feature_name": "dn_stat_02_log_channel_1_mean",
+            "op": ">",
+            "threshold": 1.0953275
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "mono_r00_S": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": ">=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": "<=",
+              "threshold": 0.1201075
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r01_S01_decomp_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": ">=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": "<=",
+              "threshold": 0.1201075
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r02_S02_u1_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r03_S03_comb_u1_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r04_S04_d2_coupled_first": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": "<",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": ">",
+              "threshold": 1.0953275
+            }
+          ]
+        },
+        "mono_r05_S05_u2_disc": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.1201075
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.0953275
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": "<=",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r06_S06_comb_u2_d1": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": ">",
+              "threshold": 0.1201075
+            },
+            {
+              "feature_name": "dn_stat_08_log_channel_7_mean",
+              "op": ">",
+              "threshold": 1.0452805
+            }
+          ]
+        },
+        "mono_r07_S07_rev_sep_break": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+              "op": ">=",
+              "threshold": -0.12222
+            },
+            {
+              "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+              "op": "<=",
+              "threshold": 0.1201075
+            },
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": ">",
+              "threshold": 1.0953275
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    }
+  ],
+  "empirical_coverage_receipts": [
+    {
+      "receipt_id": "ecov_45d0166b436a9675b71f1a35",
+      "new_binding_id": "mono_r01_S01_decomp_d1",
+      "new_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5866.28,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_5cef982b3dad477a"
+      ]
+    },
+    {
+      "receipt_id": "ecov_e5883ba52897521fbde03919",
+      "new_binding_id": "mono_r02_S02_u1_disc",
+      "new_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 2
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "supported_on_witnesses",
+      "passed_witness_count": 1,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5313.39,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_db6af12f13874045"
+      ]
+    },
+    {
+      "receipt_id": "ecov_9c7c0e45c66b3467089f68b3",
+      "new_binding_id": "mono_r02_S02_u1_disc",
+      "new_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 2
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5680.29,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_ee988718f2754adc"
+      ]
+    },
+    {
+      "receipt_id": "ecov_1e54499accd8a19689804bd8",
+      "new_binding_id": "mono_r03_S03_comb_u1_d1",
+      "new_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 3
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6134.91,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_2d01cbd141694206"
+      ]
+    },
+    {
+      "receipt_id": "ecov_197642f1d11549a1b92010ca",
+      "new_binding_id": "mono_r03_S03_comb_u1_d1",
+      "new_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 3
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "supported_on_witnesses",
+      "passed_witness_count": 1,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6141.91,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_9148aea6ed364187"
+      ]
+    },
+    {
+      "receipt_id": "ecov_7975b64237cef3935cf4a085",
+      "new_binding_id": "mono_r03_S03_comb_u1_d1",
+      "new_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 3
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6338.17,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_e9f9d1a1d70b4583"
+      ]
+    },
+    {
+      "receipt_id": "ecov_485892e5bcd4730444b51d12",
+      "new_binding_id": "mono_r04_S04_d2_coupled_first",
+      "new_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 4
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5812.11,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_6a595de450cf4e28"
+      ]
+    },
+    {
+      "receipt_id": "ecov_c33e2d1bb2b87604e38cc571",
+      "new_binding_id": "mono_r04_S04_d2_coupled_first",
+      "new_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 4
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5678.97,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_715d8ea4b43f4d59"
+      ]
+    },
+    {
+      "receipt_id": "ecov_73891af28fd78dc486a166fc",
+      "new_binding_id": "mono_r04_S04_d2_coupled_first",
+      "new_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 4
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5777.73,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_ca75ecb8d52e43e4"
+      ]
+    },
+    {
+      "receipt_id": "ecov_7bb783c2dd2102311840100b",
+      "new_binding_id": "mono_r04_S04_d2_coupled_first",
+      "new_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "old_binding_id": "mono_r03_S03_comb_u1_d1",
+      "old_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_03"
+      ],
+      "witness_input_sha256s": [
+        "33d785e487d1642c05a842eda7eb2498ddf32ce58e6ce166d3bd49b1fde5c420"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 4
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6581.17,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "93833c0b8c1099a32b6cb5fc8a10029d527559a93f8eb69f80c842eeeb7e7dc0"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "4a9e7999dc4b7450b9014a755798ac0d11cdf0c6cf7ae37a91f991a1fb9d5a7c"
+      ],
+      "dependency_bundle_sha256s": [
+        "6fc9270734c7cb316ce98155bab77803c9f716297b81f907a2856e5c64859690"
+      ],
+      "probe_ids": [
+        "cprobe_06f3b29743d54f0d"
+      ]
+    },
+    {
+      "receipt_id": "ecov_9e5eeca592dd5d067ae6b8de",
+      "new_binding_id": "mono_r05_S05_u2_disc",
+      "new_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 5
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6341.96,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_218f20e4293a4381"
+      ]
+    },
+    {
+      "receipt_id": "ecov_ffa1564e64bb29c904a96e95",
+      "new_binding_id": "mono_r05_S05_u2_disc",
+      "new_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 5
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6254.51,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_e9bbe78cf80042f5"
+      ]
+    },
+    {
+      "receipt_id": "ecov_74158afebd9597493b7135df",
+      "new_binding_id": "mono_r05_S05_u2_disc",
+      "new_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 5
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6232.27,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_1828a961365948ef"
+      ]
+    },
+    {
+      "receipt_id": "ecov_d6bd6482b47b68183ea2abe2",
+      "new_binding_id": "mono_r05_S05_u2_disc",
+      "new_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "old_binding_id": "mono_r03_S03_comb_u1_d1",
+      "old_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_03"
+      ],
+      "witness_input_sha256s": [
+        "33d785e487d1642c05a842eda7eb2498ddf32ce58e6ce166d3bd49b1fde5c420"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 5
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6208.29,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "93833c0b8c1099a32b6cb5fc8a10029d527559a93f8eb69f80c842eeeb7e7dc0"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "4a9e7999dc4b7450b9014a755798ac0d11cdf0c6cf7ae37a91f991a1fb9d5a7c"
+      ],
+      "dependency_bundle_sha256s": [
+        "6fc9270734c7cb316ce98155bab77803c9f716297b81f907a2856e5c64859690"
+      ],
+      "probe_ids": [
+        "cprobe_efb2f6c1070f4c1c"
+      ]
+    },
+    {
+      "receipt_id": "ecov_a24d2a6e8bf93d8e358dfe29",
+      "new_binding_id": "mono_r05_S05_u2_disc",
+      "new_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "old_binding_id": "mono_r04_S04_d2_coupled_first",
+      "old_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_04"
+      ],
+      "witness_input_sha256s": [
+        "b9a60bfe23fd76ad35419a37eb365ad409991b3bc8a3f9af555df69a387b116b"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 5
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6231.91,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "443c1dbd342d744bce0b12ab45acd8dbe4f82339ebf7039da346fdc6a249065e"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "d5fe4e09f9b5fd5fa178497db109133f743db54bf1b97ee7fb605fad23706c43"
+      ],
+      "dependency_bundle_sha256s": [
+        "13c0a810a27793d06774126b16ad5be9ee4d3dc34b80eabdaf783c00555c7dee"
+      ],
+      "probe_ids": [
+        "cprobe_e9dacf6011b34739"
+      ]
+    },
+    {
+      "receipt_id": "ecov_1876e6cb323a83793607c12a",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6449.11,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_d24c3427bc75422c"
+      ]
+    },
+    {
+      "receipt_id": "ecov_2c1437761afc6a1e882d1465",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "supported_on_witnesses",
+      "passed_witness_count": 1,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6102.46,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_bdaa32a8daa44748"
+      ]
+    },
+    {
+      "receipt_id": "ecov_dccda204e7b4079f74bfd1b1",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5738.41,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_77dbc9a1bd704105"
+      ]
+    },
+    {
+      "receipt_id": "ecov_e5fcc92a870d8e7a7792330f",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r03_S03_comb_u1_d1",
+      "old_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_03"
+      ],
+      "witness_input_sha256s": [
+        "33d785e487d1642c05a842eda7eb2498ddf32ce58e6ce166d3bd49b1fde5c420"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5838.78,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "93833c0b8c1099a32b6cb5fc8a10029d527559a93f8eb69f80c842eeeb7e7dc0"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "4a9e7999dc4b7450b9014a755798ac0d11cdf0c6cf7ae37a91f991a1fb9d5a7c"
+      ],
+      "dependency_bundle_sha256s": [
+        "6fc9270734c7cb316ce98155bab77803c9f716297b81f907a2856e5c64859690"
+      ],
+      "probe_ids": [
+        "cprobe_f4fb86c6f34d482b"
+      ]
+    },
+    {
+      "receipt_id": "ecov_bcf006ac0ad79d3062bebadf",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r04_S04_d2_coupled_first",
+      "old_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_04"
+      ],
+      "witness_input_sha256s": [
+        "b9a60bfe23fd76ad35419a37eb365ad409991b3bc8a3f9af555df69a387b116b"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5755.03,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "443c1dbd342d744bce0b12ab45acd8dbe4f82339ebf7039da346fdc6a249065e"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "d5fe4e09f9b5fd5fa178497db109133f743db54bf1b97ee7fb605fad23706c43"
+      ],
+      "dependency_bundle_sha256s": [
+        "13c0a810a27793d06774126b16ad5be9ee4d3dc34b80eabdaf783c00555c7dee"
+      ],
+      "probe_ids": [
+        "cprobe_cdcb221cc01b41c6"
+      ]
+    },
+    {
+      "receipt_id": "ecov_ccb9ffd0fbbb6189c1666469",
+      "new_binding_id": "mono_r06_S06_comb_u2_d1",
+      "new_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "old_binding_id": "mono_r05_S05_u2_disc",
+      "old_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_05"
+      ],
+      "witness_input_sha256s": [
+        "c4142fb8e978863d8413ab6283ff8e8e56cce6ad5ade850697be3ec0ca8592d9"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 6
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5947.23,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "f8e7a8577242b9e20b83dfa48715957ab901a7c2d8a1952e499b23706deed5c3"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "cecaa46386a71ec23a650cb203fb4678ca02eaace5f7ac32b6589c3ae318d001"
+      ],
+      "dependency_bundle_sha256s": [
+        "5574e89bfcd2a5b2f3454c74a6481ae8e71b93f482fb3932fdd389a3be11373a"
+      ],
+      "probe_ids": [
+        "cprobe_ff00be50f8d8474f"
+      ]
+    },
+    {
+      "receipt_id": "ecov_91f0cca3e85932b4ac712d46",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6009.47,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_989271110199494a"
+      ]
+    },
+    {
+      "receipt_id": "ecov_d47114eae10f5607a262ebfd",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5920.75,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_46e9a40d42c74b25"
+      ]
+    },
+    {
+      "receipt_id": "ecov_d872579d5a1a5299288ec8ff",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5426.2,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_9dabc3404d034c75"
+      ]
+    },
+    {
+      "receipt_id": "ecov_ad27624adb6526017b81da3a",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r03_S03_comb_u1_d1",
+      "old_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_03"
+      ],
+      "witness_input_sha256s": [
+        "33d785e487d1642c05a842eda7eb2498ddf32ce58e6ce166d3bd49b1fde5c420"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5306.81,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "93833c0b8c1099a32b6cb5fc8a10029d527559a93f8eb69f80c842eeeb7e7dc0"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "4a9e7999dc4b7450b9014a755798ac0d11cdf0c6cf7ae37a91f991a1fb9d5a7c"
+      ],
+      "dependency_bundle_sha256s": [
+        "6fc9270734c7cb316ce98155bab77803c9f716297b81f907a2856e5c64859690"
+      ],
+      "probe_ids": [
+        "cprobe_76627a36d6494979"
+      ]
+    },
+    {
+      "receipt_id": "ecov_1c83b9d7628fcf4875169c73",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r04_S04_d2_coupled_first",
+      "old_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_04"
+      ],
+      "witness_input_sha256s": [
+        "b9a60bfe23fd76ad35419a37eb365ad409991b3bc8a3f9af555df69a387b116b"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5467.37,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "443c1dbd342d744bce0b12ab45acd8dbe4f82339ebf7039da346fdc6a249065e"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "d5fe4e09f9b5fd5fa178497db109133f743db54bf1b97ee7fb605fad23706c43"
+      ],
+      "dependency_bundle_sha256s": [
+        "13c0a810a27793d06774126b16ad5be9ee4d3dc34b80eabdaf783c00555c7dee"
+      ],
+      "probe_ids": [
+        "cprobe_7d0e5df76cd34e87"
+      ]
+    },
+    {
+      "receipt_id": "ecov_c87c5d02f043dc9df25a48e8",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r05_S05_u2_disc",
+      "old_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_05"
+      ],
+      "witness_input_sha256s": [
+        "c4142fb8e978863d8413ab6283ff8e8e56cce6ad5ade850697be3ec0ca8592d9"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5375.06,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "f8e7a8577242b9e20b83dfa48715957ab901a7c2d8a1952e499b23706deed5c3"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "cecaa46386a71ec23a650cb203fb4678ca02eaace5f7ac32b6589c3ae318d001"
+      ],
+      "dependency_bundle_sha256s": [
+        "5574e89bfcd2a5b2f3454c74a6481ae8e71b93f482fb3932fdd389a3be11373a"
+      ],
+      "probe_ids": [
+        "cprobe_1ffafd27a71e431b"
+      ]
+    },
+    {
+      "receipt_id": "ecov_746511e694b9a191880ffdcb",
+      "new_binding_id": "mono_r07_S07_rev_sep_break",
+      "new_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "old_binding_id": "mono_r06_S06_comb_u2_d1",
+      "old_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_06"
+      ],
+      "witness_input_sha256s": [
+        "a81bb4744ae260ca74727c1eb1aaa3dca874194e93812116faec2ddb39c172ef"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 7
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5557.65,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0d68ffa3c78bff77702b6848396b02034ef334ca44d001a3b251b88cd078fd65"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "b21df17b43c3e284a7433a27b892631ef9e227086cf4f3649a7c42303b022a3b"
+      ],
+      "dependency_bundle_sha256s": [
+        "e5d98e06f1eb98b112f5afe7efae75315c462eb8d7a0b7ffc05b7929ea8f2759"
+      ],
+      "probe_ids": [
+        "cprobe_b42c0382946e418a"
+      ]
+    },
+    {
+      "receipt_id": "ecov_1bca4203d42848df134af706",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r00_S",
+      "old_solver_sha256": "0f7dfb1ab58c4ca1dce7a7a6d63819b1f4aa0264f66a5d5f93714f2271affb0b",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "bdbae23c7daefa7f79790b5d7dd3a7f6ba210f22acbebce03c0f535758da4aaa"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5329.16,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "d5f730b14b996123c39238e7998eba698fd44fd36f4bfdfb4f05ee7689579985"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "5078ab05cddf7046a207c28f649dce0c3b896ae23243627b599a88b1abc7bb19"
+      ],
+      "dependency_bundle_sha256s": [
+        "c01a699e6c4ff775bbaea5273d4f814cdb0c7e58ebc658c6572a23d89a1e1c34"
+      ],
+      "probe_ids": [
+        "cprobe_c398630365804e4a"
+      ]
+    },
+    {
+      "receipt_id": "ecov_8a2782531598c0c2747c24b6",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r01_S01_decomp_d1",
+      "old_solver_sha256": "466eb7abbac0bdcc71d8c8aeed21759b04d3b6705d5fbcf7b8eba5f346db89fc",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "b299c9c34c6393dfcdfdce253bc0dc74bcedc9a39cbcbc5c3a877c66f35d977e"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5380.93,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0668a5a0e0097f8669b6fe13ad421a39f654ec8499a149e6485beab669e67057"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "645a2ce397a3abbf73ded9a2a83b805f1f242d6b06ba0b906e9ba062930ccdd0"
+      ],
+      "dependency_bundle_sha256s": [
+        "ea5aec3a8aab606e72dc9d1473d98a4bb384d465b0abc0142ac86b9979190710"
+      ],
+      "probe_ids": [
+        "cprobe_cd03fdb8c712419c"
+      ]
+    },
+    {
+      "receipt_id": "ecov_e8e2a245838601a2b688a046",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r02_S02_u1_disc",
+      "old_solver_sha256": "22c17537d7b38c2c389dce5e1624d84d6a4c328f3a2e71e37dc5b3b23f3dd24b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "a06703f6bce2e8cccdc51508008d99a440bd1a88c5013746a114319cfff27e03"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5494.73,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "1aed09765388ce3a1c544969894c54b82fcf520f92f84282f82f515f3fa98632"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "1881194ff27101f683bbd320011e81071813ce09b17d5e57c0f156fb08d9bf2a"
+      ],
+      "dependency_bundle_sha256s": [
+        "7ae56c490c5f7c123b47d61315f6d035f2ce2327f87e425de7414e430017bdbc"
+      ],
+      "probe_ids": [
+        "cprobe_1627ef2359e6471f"
+      ]
+    },
+    {
+      "receipt_id": "ecov_77a755145249b4cae969393d",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r03_S03_comb_u1_d1",
+      "old_solver_sha256": "21a6a1c460191d8bf6b120abec858891ab82ba898a549909f0f34bbf81b8e7ac",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_03"
+      ],
+      "witness_input_sha256s": [
+        "33d785e487d1642c05a842eda7eb2498ddf32ce58e6ce166d3bd49b1fde5c420"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5549.85,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "93833c0b8c1099a32b6cb5fc8a10029d527559a93f8eb69f80c842eeeb7e7dc0"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "4a9e7999dc4b7450b9014a755798ac0d11cdf0c6cf7ae37a91f991a1fb9d5a7c"
+      ],
+      "dependency_bundle_sha256s": [
+        "6fc9270734c7cb316ce98155bab77803c9f716297b81f907a2856e5c64859690"
+      ],
+      "probe_ids": [
+        "cprobe_0b68041162fb4b5d"
+      ]
+    },
+    {
+      "receipt_id": "ecov_e29c9aabf3cd993501c324f9",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r04_S04_d2_coupled_first",
+      "old_solver_sha256": "0b91e21234bb87f6529df6213bf6add8e00fb4f925d75c91c3256e36ec7cb503",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_04"
+      ],
+      "witness_input_sha256s": [
+        "b9a60bfe23fd76ad35419a37eb365ad409991b3bc8a3f9af555df69a387b116b"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5543.3,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "443c1dbd342d744bce0b12ab45acd8dbe4f82339ebf7039da346fdc6a249065e"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "d5fe4e09f9b5fd5fa178497db109133f743db54bf1b97ee7fb605fad23706c43"
+      ],
+      "dependency_bundle_sha256s": [
+        "13c0a810a27793d06774126b16ad5be9ee4d3dc34b80eabdaf783c00555c7dee"
+      ],
+      "probe_ids": [
+        "cprobe_1aabe4662d824577"
+      ]
+    },
+    {
+      "receipt_id": "ecov_95987d7da57dc3d3255e5f95",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r05_S05_u2_disc",
+      "old_solver_sha256": "076a1fc79f04ee9cf4ac232d8e7eb900e4e1c08664b82686d4c29bfa9fbaff4b",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_05"
+      ],
+      "witness_input_sha256s": [
+        "c4142fb8e978863d8413ab6283ff8e8e56cce6ad5ade850697be3ec0ca8592d9"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5290.47,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "f8e7a8577242b9e20b83dfa48715957ab901a7c2d8a1952e499b23706deed5c3"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "cecaa46386a71ec23a650cb203fb4678ca02eaace5f7ac32b6589c3ae318d001"
+      ],
+      "dependency_bundle_sha256s": [
+        "5574e89bfcd2a5b2f3454c74a6481ae8e71b93f482fb3932fdd389a3be11373a"
+      ],
+      "probe_ids": [
+        "cprobe_09dc9a44cc6c401c"
+      ]
+    },
+    {
+      "receipt_id": "ecov_cd1a0347929a67d346195b9a",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r06_S06_comb_u2_d1",
+      "old_solver_sha256": "8b1ba1ccdcf80b0792f103b1454d4810887b8a49630ce776129ba35a24b83e32",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_06"
+      ],
+      "witness_input_sha256s": [
+        "a81bb4744ae260ca74727c1eb1aaa3dca874194e93812116faec2ddb39c172ef"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "3badd5dec0ead2590c6d7e4d12a7e7cb3ddecc5e1dce30242c33a3b5fa661b8a"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5316.36,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0d68ffa3c78bff77702b6848396b02034ef334ca44d001a3b251b88cd078fd65"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "b21df17b43c3e284a7433a27b892631ef9e227086cf4f3649a7c42303b022a3b"
+      ],
+      "dependency_bundle_sha256s": [
+        "e5d98e06f1eb98b112f5afe7efae75315c462eb8d7a0b7ffc05b7929ea8f2759"
+      ],
+      "probe_ids": [
+        "cprobe_d8eddf9c0d0c4a6a"
+      ]
+    },
+    {
+      "receipt_id": "ecov_f870cc81846e393f4cf48105",
+      "new_binding_id": "mono_r08_S08_comb_u2_d2sep",
+      "new_solver_sha256": "e0e900bf5cec69e94b9224ead694750d5841eb618294b03aa52d335cecb05209",
+      "old_binding_id": "mono_r07_S07_rev_sep_break",
+      "old_solver_sha256": "991848b02956bae02e867e3cbf998ca315a1218c00f871689b595e3895a97561",
+      "witness_ids": [
+        "wit_beta_m100_c02_batch_07"
+      ],
+      "witness_input_sha256s": [
+        "e563d5048ab79969574bb5c25cbdc3d3563e1c4f4daf62a0a9ab4fbff75cb988"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "flat_cal": 8
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "ecdc9433c50f8c0df38dfd3f83fb0a37cbb03acc9a096a4fb54a9645da671565"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "supported_on_witnesses",
+      "passed_witness_count": 1,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5301.14,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "2a906a3bfbe747fbdbdb422ab70c4574f7edbef4a8a395f226fdbf22481164bc"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "42d68dc73db843c6495f8e53a1427f6807076f524579eeebfba2b445f66aaafa"
+      ],
+      "dependency_bundle_sha256s": [
+        "e5387af17be47a1a3ed7da8792ce5983b74966096e4ba8f0d161d37f60561ca1"
+      ],
+      "probe_ids": [
+        "cprobe_4b7ecfced0224fb4"
+      ]
+    }
+  ],
+  "episodes_meta": [
+    {
+      "stream_step": 1,
+      "causal_event": "S01_decomp_d1",
+      "true_regime": "U0__D1",
+      "event_category": "online_2x2_decomp_and_d1",
+      "task_id": "beta_m100_c02_batch_01__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_01",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 10,
+      "pre_llm_probe_wall_ms": 7908.24,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 2,
+      "causal_event": "S02_u1_disc",
+      "true_regime": "U1__D0",
+      "event_category": "upstream_u1_discovery",
+      "task_id": "beta_m100_c02_batch_02__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_02",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 12,
+      "pre_llm_probe_wall_ms": 5628.65,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 3,
+      "causal_event": "S03_comb_u1_d1",
+      "true_regime": "U1__D1",
+      "event_category": "unseen_separable_comb_1",
+      "task_id": "beta_m100_c02_batch_03__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_03",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 11,
+      "pre_llm_probe_wall_ms": 5587.48,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 4,
+      "causal_event": "S04_d2_coupled_first",
+      "true_regime": "U1__D2_coupled",
+      "event_category": "coupled_d2_first_no_prior_sep",
+      "task_id": "beta_m100_c02_batch_04__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_04",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 11,
+      "pre_llm_probe_wall_ms": 5825.27,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 5,
+      "causal_event": "S05_u2_disc",
+      "true_regime": "U2__D0",
+      "event_category": "upstream_u2_discovery",
+      "task_id": "beta_m100_c02_batch_05__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_05",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": false,
+      "turns_used": 15,
+      "pre_llm_probe_wall_ms": 6400.8,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 6,
+      "causal_event": "S06_comb_u2_d1",
+      "true_regime": "U2__D1",
+      "event_category": "unseen_separable_comb_2",
+      "task_id": "beta_m100_c02_batch_06__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_06",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 11,
+      "pre_llm_probe_wall_ms": 6268.48,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 7,
+      "causal_event": "S07_rev_sep_break",
+      "true_regime": "U0__D2",
+      "event_category": "reverse_interaction_withdrawal",
+      "task_id": "beta_m100_c02_batch_07__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_07",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 11,
+      "pre_llm_probe_wall_ms": 5775.69,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 8,
+      "causal_event": "S08_comb_u2_d2sep",
+      "true_regime": "U2__D2",
+      "event_category": "unseen_separable_comb_3",
+      "task_id": "beta_m100_c02_batch_08__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_08",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 14,
+      "pre_llm_probe_wall_ms": 5541.02,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 9,
+      "causal_event": "S09_revisit_coupled",
+      "true_regime": "U1__D2_coupled",
+      "event_category": "colliding_d2_coupled_revisit",
+      "task_id": "beta_m100_c02_batch_09__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_09",
+      "execution_mode": "zero_llm_public_gate_verified_reuse",
+      "strict_pass": true,
+      "turns_used": 0,
+      "pre_llm_probe_wall_ms": 5650.82,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 10,
+      "causal_event": "S10_revisit_sep",
+      "true_regime": "U0__D2",
+      "event_category": "colliding_d2_separable_revisit",
+      "task_id": "beta_m100_c02_batch_10__blind_continual_campaign",
+      "short_name": "beta_m100_c02_batch_10",
+      "execution_mode": "zero_llm_public_gate_verified_reuse",
+      "strict_pass": true,
+      "turns_used": 0,
+      "pre_llm_probe_wall_ms": 5479.13,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    }
+  ]
+}

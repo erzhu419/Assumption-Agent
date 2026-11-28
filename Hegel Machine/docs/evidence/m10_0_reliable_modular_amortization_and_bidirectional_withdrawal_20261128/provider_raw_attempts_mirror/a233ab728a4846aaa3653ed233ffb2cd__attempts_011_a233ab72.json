@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a233ab728a4846aaa3653ed233ffb2cd",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:03.595146+00:00",
+  "ended_at_utc": "2026-11-28T03:39:30.652117+00:00",
+  "request_sha256": "6d43384886ee267d4f1371772f43119f6d5cd149c0017aa7a57932ca4d6de4f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62388,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31916,
+    "cached_tokens": 9344,
+    "completion_tokens": 1002
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cal_margin_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sweeps=s['sensor_calibration_sweeps']; x,y=map(np.asarray,(sweeps['ref_rosette'],sweeps['raw_rosette'])); bank=sweeps['single_bank_sweeps']; row=np.arange(len(x));\\nfor name in ('sequential','joint','pair_difference','rational'):\\n errors=[]\\n for fold in range(5):\\n  train=row%5!=fold; sw=dict(sweeps,ref_rosette=x[train],raw_rosette=y[train]); p,b=m.calibration_map(sw); F=[]\\n  for j in range(4):\\n   t,u,v=x[:,j],x[:,(j-1)%4],x[:,(j+1)%4]; A=np.column_stack((np.ones(len(x)),t,t**3,u,v,t*v)); base=A@np.r_[p[:,j],b[:,j]]; keep=abs(y[:,j]-base)<1e-3\\n   if name!='sequential':\\n    sel=np.asarray(bank['bank_id'])==j; z=np.asarray(bank['ref_signal'])[sel]; reading=np.asarray(bank['raw_readout'])[sel]; B=np.column_stack((np.ones(len(z)),z,z**3,np.zeros((len(z),3)))); ok=abs(B@np.r_[p[:,j],b[:,j]]-reading)<1e-3\\n    if name=='pair_difference':\\n     A=np.column_stack((A,(u-v)**2,t*(u-v)**2)); B=np.column_stack((B,np.zeros((len(z),2))))\\n    if name=='rational':\\n     # Leading correction from dividing the fitted transfer by 1+a*Q^2.\\n     A=np.column_stack((A,-base*t**2,-base*(u-v)**2)); B=np.column_stack((B,-(B@np.r_[p[:,j],b[:,j]])*z**2,np.zeros(len(z))))\\n    use=train&keep; coef=np.linalg.lstsq(np.vstack((A[use],B[ok])),np.r_[y[use,j],reading[ok]],rcond=None)[0]; base=A@coef\\n   e=(base-y[:,j])[~train&keep]; errors.append((np.sqrt(np.mean(e**2)),len(e)))\\n print(name,'worst bank-fold RMSE',max(v for v,n in errors),'pooled held-out RMSE',np.sqrt(sum(v*v*n for v,n in errors)/sum(n for v,n in errors)),'retained',sum(n for v,n in errors))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cal_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sequential cubic calibration with restored Robin walls → H2 joint calibration only if it improves held-out bank predictions; current worst wall-fold RMSE is 0.01107 and the independent public field error is 6.27e-6 relative.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit classifier confounding, relay modes, or time-dependent drift\",\"rejected_reason\":\"The study contains one steady transport experiment, continuous readings, and no class labels or relay state. The relevant strata are calibration banks and held-out rosettes.\"}],\"rationale\":\"Compare the delivered calibration with joint fitting and plausible omitted cross-channel or rational corrections on held-out real sweeps. A consistent gain would justify testing a calibration update; otherwise retain the verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5ffbdb45d10b66a5c871d6c3a142ad976be8e6e34b841141fd32c175163c5919",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29166.71,
+      "usage_known": true,
+      "prompt_tokens": 31916,
+      "cached_tokens": 9344,
+      "completion_tokens": 1002
+    }
+  ]
+}

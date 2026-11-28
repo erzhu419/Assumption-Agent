@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5338eb1524564183bf3d118d17848748",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:10.324982+00:00",
+  "ended_at_utc": "2026-11-28T03:57:54.182629+00:00",
+  "request_sha256": "cb5168b882661c7d521622eb90427db994c857e0b5f1651ffdfb2a9f810c6964",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63115,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34558,
+    "cached_tokens": 9344,
+    "completion_tokens": 1951
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; python3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m100_c02_batch_02_solver.py').read_text()\\nhead=src[:src.index('def _bridge_basis')].replace('from scipy.optimize import least_squares','from scipy.optimize import least_squares\\\\nfrom numpy.polynomial.chebyshev import chebvander')\\nbridge='''def _bridge_samples(cal):\\n    loads = np.asarray(cal['true_channel_loads'])\\n    raw = np.asarray(cal['bridge_raw'])\\n    sweep = cal['single_channel_sweeps']\\n    # The three corrupted isolated sweeps are outside the active bridge range.\\n    mixed_ok = np.max(np.abs(raw), axis=1) < 4.0\\n    sweep_ok = np.abs(sweep['cmd_stress']) < 4.0\\n    return (loads[mixed_ok], raw[mixed_ok], sweep['lab_id'][sweep_ok],\\n            sweep['true_stress'][sweep_ok], sweep['cmd_stress'][sweep_ok])\\n\\n\\ndef _bridge_basis(u, v):\\n    own = chebvander(u / 1.7, 9)[..., 1::2]\\n    even = chebvander(v / 1.7, 8)[..., 2::2] - [-1, 1, -1, 1]\\n    return np.concatenate((own, v[..., None] / 1.7, even), axis=-1)\\n\\n\\ndef _fit_bridge(loads, raw, channels, sweep_load, sweep_raw):\\n    u = np.r_[loads.ravel(), sweep_load]\\n    v = np.r_[np.roll(loads, 2, axis=1).ravel(), np.zeros_like(sweep_load)]\\n    channel = np.r_[np.tile(np.arange(4), len(loads)), channels]\\n    observations = np.r_[raw.ravel(), sweep_raw]\\n    basis = _bridge_basis(u, v)\\n\\n    def residual(p):\\n        return p[channel] + np.r_[1., p[4:7]][channel] * (basis @ p[7:]) - observations\\n\\n    initial = np.r_[np.zeros(4), np.ones(3), 1.2, np.zeros(9)]\\n    return least_squares(residual, initial, ftol=1e-11, xtol=1e-11, gtol=1e-11).x\\n\\n\\ndef _forward_bridge(u, v, coef):\\n    return coef[:4] + np.r_[1., coef[4:7]] * (_bridge_basis(u, v) @ coef[7:])\\n\\n\\ndef _invert_bridge(raw, coef):\\n    raw = np.asarray(raw)\\n    x = np.zeros_like(raw)\\n    eps = 1e-5\\n    for _ in range(35):\\n        v = np.roll(x, 2, axis=-1)\\n        f = _forward_bridge(x, v, coef) - raw\\n        if np.max(np.abs(f)) < 1e-11:\\n            break\\n        a = (_forward_bridge(x + eps, v, coef) - _forward_bridge(x - eps, v, coef)) / (2 * eps)\\n        b = (_forward_bridge(x, v + eps, coef) - _forward_bridge(x, v - eps, coef)) / (2 * eps)\\n        partner_a = np.roll(a, 2, axis=-1)\\n        step = (partner_a * f - b * np.roll(f, 2, axis=-1)) / (a * partner_a - b * np.roll(b, 2, axis=-1))\\n        x = np.clip(x - np.clip(step, -0.35, 0.35), -1.7, 1.7)\\n    return x\\n\\n\\ndef _loads(coef, split):\\n    return tuple(_invert_bridge(split[k], coef).sum(axis=-1)\\n                 for k in ('past_channel_raw', 'hold_channel_raw'))\\n\\n\\n'''\\nbody=src[src.index('def _design'):].replace(\\\"_fit_bridge(dataset['calibration_load_cells'])\\\", \\\"_fit_bridge(*_bridge_samples(dataset['calibration_load_cells']))\\\")\\nPath('batch_solver.py').write_text(head+bridge+body)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport batch_solver as m, pickle,numpy as np,json\\np=pickle.load(open('public_batch.pkl','rb'))[0]; d=p['dataset']; data=m._bridge_samples(d['calibration_load_cells']); l,r,j,x,y=data\\nfor f in range(5):\\n tr=np.arange(len(l))%5!=f; q=m._fit_bridge(l[tr],r[tr],j,x,y); e=(m._invert_bridge(r[~tr],q)-l[~tr]).sum(axis=1); print('bridge fold',f,'total RMSE',np.sqrt(np.mean(e*e)))\\nq=m._fit_bridge(*data); train=d['train']; test=d['test']; past,hold=m._loads(q,train); dt,times=d['past_dt'],d['eval_times']; x=m._features(train,test)[:len(hold)]; Y=train['strain_curves_obs']-train['strain_0'][:,None]; R=train['instant_rate_obs']; print('times',times)\\nfor lab in [None,*np.unique(train['lab_id'])]:\\n te=np.ones(len(hold),bool) if lab is None else train['lab_id']==lab; tr=te if lab is None else ~te\\n tau,w=m._fit(past[tr],hold[tr],x[tr],dt,times,Y[tr],R[tr]); c,r,_,_=m._design(np.log(tau),past[te],hold[te],x[te],dt,times); e=c@w-Y[te]; er=r@w-R[te]; print('lab',lab,'tau',tau,'weights',w.round(6),'curve MedAE / P90',np.quantile(abs(e),[.5,.9]),'rate MedAE / P90',np.quantile(abs(er),[.5,.9]))\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print('apparatus',a['completed_campaign_index'],np.mean(a['facility_telemetry_trace'],axis=0)[[0,4]].round(3),{k:v for k,v in a.items() if k not in ('facility_telemetry_trace',) and isinstance(v,(str,int,float,bool))})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shifted nonlinear bridge → H2 gain-scaled additive odd self and even-plus-linear opposite responses; the denser unconstrained predecessor achieved 0.000669 worst-fold total-load RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add self–opposite interaction terms\",\n      \"rejected_reason\": \"They had negligible effect on held-out total-load error and did not reduce forward validation error.\"\n    }\n  ],\n  \"rationale\": \"Build the solver with the shared bridge and baseline hereditary law. Held-out bridge inversions test whether the parity constraints preserve calibration accuracy; held-out lab fits test whether the recovered relaxation spectrum transfers across coupons or still needs correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3eefbf97673a81a4575fd5726c4c854d71ecc8769041cf1726e090eec8db32c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48189.84,
+      "usage_known": true,
+      "prompt_tokens": 34558,
+      "cached_tokens": 9344,
+      "completion_tokens": 1951
+    }
+  ]
+}

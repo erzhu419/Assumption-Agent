@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c79d5fbda0f465eaacebaf6be0b6609",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:40:14.774464+00:00",
+  "ended_at_utc": "2026-11-28T03:40:45.161501+00:00",
+  "request_sha256": "00a93a27eb766987d9120e137fcd3d0648a52bcd92380581536b54acb61ab143",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18865,
+    "cached_tokens": 9344,
+    "completion_tokens": 1179
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']\\nkeep=np.linalg.norm(y,axis=1)<10\\nprint('gross rows', np.flatnonzero(~keep)); print('ranges',np.min(x,axis=0),np.max(x,axis=0)); print('readout groups',np.unique(s['row_bank_id'].reshape(-1,4),axis=0)); print('study pulse fields',[k for k in s if 'pulse' in k]); print('sweep pulse fields',[k for k in c if 'pulse' in k]);\\nx,y=x[keep],y[keep]; axial=(np.count_nonzero(x,axis=1)==1)\\nlin=np.c_[np.ones(len(x)),x]; pairs=np.array([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)]).T; cub=np.array([x[:,i]*x[:,j]*x[:,k] for i,j,k in combinations_with_replacement(range(4),3)]).T\\nmodels={'affine':lin,'own_cubes':np.c_[lin,x**3],'cubes_and_square':np.c_[lin,x**3,x**2],'pair_products_and_own_cubes':np.c_[lin,x**3,pairs],'all_cubics':np.c_[lin,pairs,cub],'all_cubics_and_tanh':np.c_[lin,pairs,cub,np.tanh(x)]}\\nfor k,a in models.items():\\n b=np.linalg.lstsq(a,y,rcond=None)[0]; e=np.empty_like(y)\\n for i in range(len(y)):\\n  tr=np.arange(len(y))!=i; e[i]=a[i]@np.linalg.lstsq(a[tr],y[tr],rcond=None)[0]-y[i]\\n print(k,'LOO rmse axial/mixed',*[np.sqrt(np.mean(e[g]**2)) for g in (axial,~axial)],'max held-out per channel',abs(e).max(axis=0),'full residual max',abs(a@b-y).max());\\n if k in ('own_cubes','pair_products_and_own_cubes'): print('coeff',np.round(b,5)); print('worst',[(int(np.flatnonzero(keep)[i]),np.round(e[i],5).tolist()) for i in np.argsort(np.linalg.norm(e,axis=1))[-4:]])\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus log keys', list(log) if isinstance(log,dict) else len(log));\\nif isinstance(log,dict):\\n for k,v in log.items():\\n  if isinstance(v,list):\\n   print(k,'last entry',str(v[-1])[:2800] if v else '')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine readout -> H2 sparse nonlinear readout with EMI rejection; robust affine in-sample row residual is 1.20 at the 95th percentile and 26.04 at the maximum.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A coupled affine map explains the clean calibration response.\",\n    \"empirical_witness\": \"On the first-channel axis sweep, consecutive diagonal slopes are approximately 1.113, 0.841, and 1.188, while the adjacent channel's first two slopes are both approximately 0.186.\",\n    \"causal_blanket_diagnosis\": \"There is systematic diagonal curvature in addition to linear coupling and isolated gross row contamination.\",\n    \"sublated_pivot\": \"Keep the coupled linear terms and compare sparse nonlinear additions on held-out clean axis and mixed rows.\",\n    \"risk_kind\": \"calibration_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible inverse directly\",\n      \"rejected_reason\": \"The calibrated reference is the controlled input; first test whether a sparse forward law predicts held-out measurements and can be inverted in the operating range.\"\n    }\n  ],\n  \"rationale\": \"Held-out axis and mixed sweeps distinguish own-channel curvature from cross-channel interactions. If polynomial terms leave structured residuals rather than measurement-scale noise, test a bounded saturation basis before implementing the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "a6c38ebf14ff785e0f857fdc8bda8f9cd1493376185130ea81e71eede6f43906",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32440.66,
+      "usage_known": true,
+      "prompt_tokens": 18865,
+      "cached_tokens": 9344,
+      "completion_tokens": 1179
+    }
+  ]
+}

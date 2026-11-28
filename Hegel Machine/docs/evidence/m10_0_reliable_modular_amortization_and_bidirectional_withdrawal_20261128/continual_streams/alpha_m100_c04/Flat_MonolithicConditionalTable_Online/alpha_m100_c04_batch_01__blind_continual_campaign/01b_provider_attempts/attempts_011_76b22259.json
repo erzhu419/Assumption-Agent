@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76b222596255464eb72e05d1ca698af8",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:35:11.703844+00:00",
+  "ended_at_utc": "2026-11-28T03:35:35.157992+00:00",
+  "request_sha256": "29d6b1a09f68b07bd2bf82ea39c8cb0aec5c05005364809d1beacc34f1c53ef5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78754,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40650,
+    "cached_tokens": 9344,
+    "completion_tokens": 890
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; diag = item['campaign_diagnostics']; test = d['test']\\nans = s.solve_batch(d); tau = ans['estimated_taus']; theta = ans['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(v).all() for v in ans.values())\\ncal = s._calibration(d['calibration_load_cells']); t = d['eval_times']\\nx = s._features(d['train'], test)[-len(test['lab_id']):]\\n_, hold, v = s._inputs(test, x, cal)\\nresp, rate = s._chamber_response(tau, theta, hold, v, np.array([0., 1e-6]))\\nassert np.max(abs(resp[:, 0])) < 1e-12\\nnp.testing.assert_allclose(resp[:, 1]/1e-6, ans['initial_rate_pred'], atol=1e-5, rtol=0)\\nxq = s._features(diag, diag)[:len(diag['lab_id'])]\\n_, hq, vq = s._inputs(diag, xq, cal)\\ncurve, rate = s._chamber_response(tau, theta, hq, vq, t)\\ne = curve + diag['strain_0'][:, None] - diag['strain_curves_obs']; r = rate - diag['instant_rate_obs']; missing = ~np.isfinite(diag['coupon_features_raw']).all(axis=1)\\nfor name, groups in [('lab', diag['lab_id']), ('stratum', diag['stratum']), ('missing', missing)]:\\n    for g in np.unique(groups):\\n        m = groups == g\\n        print(name, g, 'n', m.sum(), 'worst_horizon_rms', round(np.sqrt(np.mean(e[m]**2, axis=0)).max(), 6), 'rate_rms', round(np.sqrt(np.mean(r[m]**2)), 6))\\nassert np.sqrt(np.mean(e[~missing]**2, axis=0)).max() < .005\\nassert np.sqrt(np.mean(r[~missing]**2)) < .005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop transfer → H2 chamber reset with shared material times and drift coupling; the host measured strain MAE 0.001335 and initial-rate MAE 0.001116 on the saved candidate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact saved solver in an isolated Python process. A derivative mismatch would require fixing the rate output; a complete-coupon regression would require revisiting the rounded gains. Report incomplete verification coupons separately because their imputation mismatch was already identified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b8948fe5e2609396fe7ada565cfe6b06a07552470598e432260fa53aa1d123f1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25517.54,
+      "usage_known": true,
+      "prompt_tokens": 40650,
+      "cached_tokens": 9344,
+      "completion_tokens": 890
+    }
+  ]
+}

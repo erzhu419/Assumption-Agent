@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89935f78dc9f4eb886bbb0986a52d07c",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:42.223950+00:00",
+  "ended_at_utc": "2026-11-28T03:48:13.295861+00:00",
+  "request_sha256": "37372deccd07369e2b152e89bb812041558ee9ad95758b50de19af56ad6d6843",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49091,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25710,
+    "cached_tokens": 9344,
+    "completion_tokens": 1233
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_sweep_fit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x, y = c['true_channel_loads'], c['bridge_raw']\\ns = c['single_channel_sweeps']; u, v, lab = (s[k] for k in ('true_stress', 'cmd_stress', 'lab_id'))\\nj = np.arange(4); nxt = (j+1)%4; prev = (j-1)%4\\n\\ndef joint_fit(x, y, u, v, lab):\\n    a = np.stack((np.ones_like(x), x, x[:,nxt], x[:,prev], x**3, x*x[:,nxt]), axis=1)\\n    b = np.column_stack((np.ones_like(u), u, np.zeros_like(u), np.zeros_like(u), u**3, np.zeros_like(u)))\\n    coeff = m._fit_bridge(x,y)\\n    for _ in range(30):\\n        r = np.linalg.norm(m._forward(x,coeff)-y,axis=1)\\n        e = abs(np.sum(b*coeff[:,lab].T,axis=1)-v)\\n        scale = max(np.median(r)*2.5,1e-9)\\n        w = 1/np.hypot(1,r/scale); ws = 1/np.hypot(1,e/scale)\\n        coeff = np.column_stack([np.linalg.lstsq(np.vstack((a[:,:,k]*w[:,None],b[lab==k]*ws[lab==k,None])),np.r_[y[:,k]*w,v[lab==k]*ws[lab==k]],rcond=None)[0] for k in j])\\n    return coeff\\n\\nspikes = np.isin(np.arange(len(x)), [13,14,15])\\nmixed = np.count_nonzero(x,axis=1)>1\\nfolds = [('random-'+str(i),mask) for i,ids in enumerate(np.array_split(np.random.default_rng(72).permutation(len(x)),8)) for mask in [np.isin(np.arange(len(x)),ids)]]\\nfolds += [('single-axis',~mixed),('outer-mixed',mixed&(abs(x).max(1)>1.4))]\\nfolds += [(f'near-cancel-{k}',(abs(x[:,k]+x[:,nxt[k]])<.4)&(abs(x[:,k])+abs(x[:,nxt[k]])>.7)) for k in j]\\nmaxes = np.zeros((2,2))\\nfor name, te in folds:\\n    tr=~te; keep=te&~spikes\\n    # Exclude sweep points at held-out single-axis calibration coordinates.\\n    sx = np.zeros((len(u),4)); sx[np.arange(len(u)),lab]=u\\n    use = ~np.isclose(sx[:,None],x[te][None]).all(axis=2).any(axis=1)\\n    models = (m._fit_bridge(x[tr],y[tr]),joint_fit(x[tr],y[tr],u[use],v[use],lab[use]))\\n    err = np.array([np.max(abs(m._inverse(y[keep],p)-x[keep]),axis=0) for p in models])\\n    index = int(not name.startswith('random-'))\\n    maxes[index] = np.maximum(maxes[index],err.max(1))\\n    if index: print(name,'baseline vs sweep-augmented per-channel inverse maxima',err.tolist())\\nprint('Worst clean inverse error, columns baseline and sweep-augmented:',dict(zip(('randomized','blocked'),maxes.tolist())))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_sweep_fit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bridge-only cyclic fit -> H2 sweep-augmented cyclic fit if it improves the blocked extreme-mixed inverse error of 0.000304 without introducing a worse slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more nonlinear terms\",\n      \"rejected_reason\": \"The completed blocked audit found no worst-slice improvement from either the dense cubic or the rational extension.\"\n    }\n  ],\n  \"rationale\": \"Test whether the separate real sweeps improve the self-response coefficients enough to reduce the remaining worst-case inverse error. Use paired blocked holdouts and exclude sweep rows that duplicate held-out calibration coordinates. Retain the verified bridge-only fit if augmentation does not improve the limiting slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0de713bc4f9865221aa02e0afcd8fdbcc303e7a199a690e72584909803e36da5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33159.51,
+      "usage_known": true,
+      "prompt_tokens": 25710,
+      "cached_tokens": 9344,
+      "completion_tokens": 1233
+    }
+  ]
+}

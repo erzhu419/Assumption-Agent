@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf7a0c605e5840188a7cab4875198921",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:19.098440+00:00",
+  "ended_at_utc": "2026-11-28T03:31:54.102828+00:00",
+  "request_sha256": "0d82ac6d1b1fc22eb8fe0869a9c810a7a761025383bc9d9dbfde883b2328bcde",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38982,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24373,
+    "cached_tokens": 9344,
+    "completion_tokens": 1038
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/alpha_m100_c01_s00_solver.py /tmp/base.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp'); from base import _features,_bridge,_inputs,_fit,_design\\nnp.set_printoptions(precision=4,suppress=True)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=a['dataset']; tr,te,q=d['train'],d['test'],a['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; b=_bridge(c['bridge_raw'],c['true_channel_loads']); xtr,xte=_features(tr,te)\\nT,W=_fit(*_inputs(tr,xtr,b),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('material',T,W)\\nl=np.r_[tr['lab_id'],te['lab_id']]; r=np.vstack((tr['ref_coupons'],te['ref_coupons'])); x=q['coupon_features_raw'].copy()\\nfor lab in np.unique(l):\\n rr=r[l==lab]; m=q['lab_id']==lab; x[m]=(x[m]-np.median(rr.mean(0)))/np.median(rr.std(0)); print('ref',lab,np.median(rr.mean(0)),np.median(rr.std(0)),np.median(q['ref_coupons'][m].mean(0)),np.median(q['ref_coupons'][m].std(0)))\\nx=np.where(np.isnan(x),np.mean(np.vstack((xtr,xte)),0),x); np.savez('/tmp/material.npz',T=T,W=W,x=x)\\nA=np.vstack((np.c_[-np.expm1(-t[:,None]/T),t],np.r_[1/T,1]));\\nfor s,X in [(tr,xtr),(q,x)]:\\n p,h,F=_inputs(s,X,b); C,R=_design(T,p,h,F,dt,t); y=np.c_[s['strain_curves_obs']-s['strain_0'][:,None],s['instant_rate_obs']]; pred=np.c_[C@W,R@W]; e=y-pred; coef=e@np.linalg.pinv(A).T; rem=e-coef@A.T; print('group',len(p),'RMSE curve/rate',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),'abs quantiles',np.quantile(abs(e),[.5,.9,.95,.99,1]), 'basis residual med/max',np.quantile(abs(rem),[.5,.9,.99,1]));\\n if s is q:\\n  print('resid examples',e[:6]); print('col lab stratum hold coef',np.c_[s['lab_id'],s['stratum'],h,coef]); print('history + hold + features correlations',np.corrcoef(np.c_[p,h,F[:,1:],coef].T)[-3:,:-3]); print('sweep sample',[(k,v[:12]) for k,v in c['single_channel_sweeps'].items()]);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared material fit) → H2 (separate chamber memory and drift residuals); affine bridge calibration has worst channel RMSE 1.29×10⁻⁴.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a chamber correction directly in observation space\",\n      \"rejected_reason\": \"First check whether the observed correction lies in the shared branch-and-drift basis; failure would call for a changed time-response basis rather than just changed amplitudes.\"\n    }\n  ],\n  \"rationale\": \"Fit the intrinsic parameters on train only. Compare baseline residuals on train and chamber coupons, and project chamber residuals onto the two branch shapes and linear drift to determine which parts of the deployment law require adaptation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "33e5be608f5aee73108104b4701448052d9bb00fe489efcc93352764c7ab1ebc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37138.42,
+      "usage_known": true,
+      "prompt_tokens": 24373,
+      "cached_tokens": 9344,
+      "completion_tokens": 1038
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fad4115e458c4c189ae9051876f42426",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:08:21.706740+00:00",
+  "ended_at_utc": "2026-11-28T04:08:44.398564+00:00",
+  "request_sha256": "cff5b22abd18d7109c35f08df00c3df9bbdcf2438544d706b8c96f355d7b7c2f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28299,
+    "cached_tokens": 9344,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/hegel_continual_archive/beta_m100_c03_batch_06_solver.py /holdout_task/batch_solver.py\\nsed -n '17,64p' /holdout_task/batch_solver.py\\ncat /holdout_task/validate_public_schema.py\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); p=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nfor item in p:\\n s=item['study']; o=m['solve_batch'](s); w=o['weights']; c=o['kkt_certificate']; print('weights',w.round(7),'sum error',abs(w.sum()-s['total_budget']),'gap',c['primal_objective']-c['dual_lower_bound'],'terminal range',np.min(o['terminal_field']),np.max(o['terminal_field']))\\n cal=s['sensor_calibration_sweeps']; x,y=cal['ref_rosette'],cal['raw_rosette']; good=np.max(abs(y),axis=1)<5; inv=np.empty_like(x)\\n for k in range(5):\\n  test=np.arange(len(x))%5==k; q=dict(s,sensor_calibration_sweeps=dict(cal,ref_rosette=x[~test],raw_rosette=y[~test])); inv[test&good]=m['_calibrate'](q,y[test&good].ravel()).reshape(-1,4)\\n e=inv[good]-x[good]; print('held-out inverse calibration channel RMS',np.sqrt(np.mean(e**2,axis=0)),'max',np.max(np.abs(e)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open or mixed Robin walls → H2 fully sealed walls; worst held-out rosette RMSE was 0.01584 sealed, 0.06776 for the best mixed stencil, and 0.12807 all-open.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The documented open-wall Robin loss transfers to this campaign.\",\n    \"empirical_witness\": \"With identical calibration and nuisance fitting, all-open walls gave worst held-out rosette RMSE 0.12807 versus 0.01584 for fully sealed walls; none of the 14 mixed stencils improved on the sealed stencil.\",\n    \"causal_blanket_diagnosis\": \"Boundary loss changes held-out sensor responses even after source weights and nuisance terms are refitted.\",\n    \"sublated_pivot\": \"Retain the stated interior operator and remove the Robin loss on all four walls.\",\n    \"risk_kind\": \"boundary-law transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit four continuous Robin multipliers\",\n      \"rejected_reason\": \"The small in-sample improvement includes a negative loss coefficient and has not demonstrated a held-out advantage.\"\n    }\n  ],\n  \"rationale\": \"Install the archived solver that implements the empirically favored stencil and fits calibration from the supplied study. Verify the schema, certificate gap, and held-out inverse calibration before deciding whether any independent check warrants a change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0ad5a57457908de35854d55972381a58e24bd19866f58350fb1731970be9dc2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24843.92,
+      "usage_known": true,
+      "prompt_tokens": 28299,
+      "cached_tokens": 9344,
+      "completion_tokens": 842
+    }
+  ]
+}

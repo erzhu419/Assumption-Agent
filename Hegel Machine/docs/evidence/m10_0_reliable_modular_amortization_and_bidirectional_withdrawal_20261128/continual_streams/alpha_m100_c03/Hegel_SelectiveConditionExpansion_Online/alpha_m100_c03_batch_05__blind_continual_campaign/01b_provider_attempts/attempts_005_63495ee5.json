@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63495ee5b5d940e5b886795de1060862",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:58:53.827830+00:00",
+  "ended_at_utc": "2026-11-28T03:59:25.936716+00:00",
+  "request_sha256": "20f79067ac8328d875e69f16f947f283bc4f9910ed2440aeb6e5a2c3dffdf3a2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41862,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26998,
+    "cached_tokens": 9344,
+    "completion_tokens": 1285
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_shape.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; ok=np.max(abs(y),axis=1)<5; x,y=x[ok],y[ok]\\nF={'sin':np.sin,'atan':np.arctan,'tanh':np.tanh,'erf':erf,'rat2':lambda z:z/(1+z*z),'rat4':lambda z:z/(1+z**4),'sqrt':lambda z:z/np.sqrt(1+z*z),'soft4':lambda z:z/(1+z**4)**.25}\\ndef design(x,j,key,k,nd,nc,mix):\\n z=x[:,j]; cross=np.delete(x,j,axis=1); cols=[np.ones(len(z))]+[z**m for m in range(1,nd+1)]+[cross**m for m in range(1,nc+1)]\\n if mix:cols += [x[:,a]*x[:,b] for a in range(4) for b in range(a+1,4)]\\n cols.extend(F[f](v*z) for f,v in zip(key,k)); return np.column_stack(cols)\\ndef fit(x,y,j,key,nd,nc,mix=False):\\n def vp(k,ret=False):\\n  a=design(x,j,key,k,nd,nc,mix); p=np.linalg.lstsq(a,y,rcond=1e-10)[0]; return p if ret else a@p-y\\n if key:\\n  ans=min((least_squares(vp,s,bounds=(.12,4),max_nfev=100) for s in itertools.product(*([(.5,1.3,2.55)]*len(key)))),key=lambda r:r.cost); k=ans.x\\n else:k=np.array([])\\n return k,vp(k,True)\\nif __name__=='__main__':\\n rec=[]\\n for key in [()]+[(f,) for f in F]+[('tanh','sin'),('tanh','rat2'),('sin','rat2'),('sin','atan')]:\\n  for nd,nc,mix in ([(d,3,False) for d in [3,5,7,9]] if not key else list(itertools.product([1,3],[2,3],[False,True]))):\\n   cfg=(key,nd,nc,mix); errs=[]; loo=[]; params=[]\\n   for j in range(4):\\n    k,p=fit(x,y[:,j],j,*cfg); a=design(x,j,key,k,nd,nc,mix); r=y[:,j]-a@p; t=np.column_stack([a]+[(design(x,j,key,k+e*1e-5,nd,nc,mix)@p-a@p)/1e-5 for e in np.eye(len(k))]); u,s,_=np.linalg.svd(t,full_matrices=False); hh=(u[:,s>1e-8]**2).sum(1); errs.append(r); loo.append(r/(1-hh)); params.append((k,p))\\n   rec.append((max(np.mean(np.array(loo)**2,axis=1)**.5),np.max(abs(np.array(loo))),cfg,np.std(errs,axis=1),params))\\n rec.sort(key=lambda a:a[0]);\\n for row in rec[:18]:print(row[:4]);\\n for row in rec[:3]:\\n  print('PARAMS',row[2]);\\n  for k,p in row[-1]: print(np.round(k,5),np.round(p,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_shape.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single diagonal saturation with quadratic coupling → H2 richer diagonal response and higher-order off-diagonal coupling; current best measured worst-channel reference LOO RMSE is 0.0117.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a fully mixed high-degree bridge\",\"rejected_reason\":\"The mixed quartic had much worse held-out error despite better in-sample fit, whereas the axial observations show sparse coupling.\"}],\"rationale\":\"The first saturation search left residuals far above the axial noise floor. This comparison tests whether the missing terms are higher-order cross-channel response or a second diagonal response component; the result will determine the basis to validate with held-out refits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "54c87b7f0e2a1a38805048ddc81ce5f2ba5f3f2fcdde2d42250e79b7fe59efb7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34232.15,
+      "usage_known": true,
+      "prompt_tokens": 26998,
+      "cached_tokens": 9344,
+      "completion_tokens": 1285
+    }
+  ]
+}

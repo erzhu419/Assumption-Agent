@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5be23cb6dca641cfa45f80fed67283d1",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:11.951619+00:00",
+  "ended_at_utc": "2026-11-28T03:41:48.438052+00:00",
+  "request_sha256": "8952c2c82d1f288e96eb24ee6d4bf45336d81b7f7465baf40442891efb6465ce",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26318,
+    "cached_tokens": 9344,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _axis, _transport, solve_downstream\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f: items=pickle.load(f)\\nwith open('_upstream_param_payload.json') as f: pay=json.load(f)\\nfor idx,item in enumerate(items):\\n s=item['study']; cal=calibrate_upstream(s,pay); dynamic=calibrate_upstream(s)\\n S,U=_transport(cal); Z=s['Z_nuisance']; Q=np.linalg.qr(Z,mode='reduced')[0]\\n nx,ny=int(s['nx']),int(s['ny']); grid=(nx,ny); positions=np.asarray(s['sensor_ij']); obs=positions@[1,nx]\\n mats=[]; locals_=[]\\n for a,n in zip('xy',grid):\\n  h=s['L'+a]/(n-1); k=s['kappa_'+a]; v=s['vel_'+a]; A=_axis(k,v,h); mats.append(A)\\n  W=A.toarray(); W[[0,-1],:]=0.; W[0,1]=-k[0]/h**2; W[-1,-2]=-k[-1]/h**2; W[0,0]=-W[0,1]; W[-1,-1]=-W[-1,-2]; locals_.append(W)\\n  for j in range(n):\\n   expected=np.zeros(n)\\n   for side in (-1,1):\\n    b=(j+side)%n; rate=(k[j]+k[b])/(2*h*h)+max(-side*v[j],0.)/h\\n    expected[j]+=rate; expected[b]-=rate\\n   np.testing.assert_allclose(A.getrow(j).toarray().ravel(),expected,rtol=2e-14,atol=2e-14)\\n I=eye(nx*ny,format='csc'); R=diags(np.asarray(s['V_reaction_2d']).ravel(order='F'),format='csc'); B=np.column_stack([m.ravel(order='F') for m in s['source_modes']])\\n def predict(ax,ay):\\n  L=kron(eye(ny),ax,format='csc')+kron(ay,eye(nx),format='csc')+R\\n  return np.vstack([splu(L+mu*I).solve(B)[obs] for mu in s['mu_shifts']])\\n families={'periodic_xy':S,'periodic_x_only':predict(mats[0],locals_[1]),'periodic_y_only':predict(locals_[0],mats[1]),'reflecting_xy':predict(*locals_)}\\n for name,P in families.items():\\n  scores=[]; projected=[]; channel=[]\\n  for p in item.get('campaign_diagnostics') or []:\\n   y=calibrate_upstream(dict(s,y_obs_raw=p['y_pulse_raw']),pay)['y_obs_raw']; e=P@p['w_pulse']-y\\n   scores.extend(np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1))); projected.append(np.sqrt(np.mean((e-Q@(Q.T@e))**2))); channel.append(np.sqrt(np.mean(e.reshape(-1,4)**2,axis=0)))\\n  if scores:\\n   print(idx,name,'worst pulse/shift RMS',max(scores),'worst projected pulse RMS',max(projected),'worst channel RMS',np.max(channel,axis=0));\\n   if name=='periodic_xy': assert max(scores)<2e-5\\n out=solve_batch(s); alt=solve_downstream(dynamic); print(idx,'calibration staged vs sweep-fit max observation, weight, field deltas',*[np.max(np.abs(a-b)) for a,b in [(cal['y_obs_raw'],dynamic['y_obs_raw']),(out['weights'],alt['weights']),(out['terminal_field'],alt['terminal_field'])]])\\n d=[]\\n for p in item.get('campaign_diagnostics') or []:\\n  y=calibrate_upstream(dict(s,y_obs_raw=p['y_pulse_raw']))['y_obs_raw']; d.extend(np.sqrt(np.mean((S@p['w_pulse']-y).reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\n if d: print(idx,'sweep-fit worst pulse/shift RMS',max(d))\\n print(idx,'active bounds',np.sum(out['weights']<1e-12),np.sum(out['weights']>s['u_box']-1e-12),'KKT gap',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 local wall rows → H2 periodic fluxes on both axes; current worst calibrated pulse-by-shift RMS is 5.17×10⁻⁶, with single-axis alternatives and sweep-refit sensitivity pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Test classification confounding, relay modes, or HJB drift\",\"rejected_reason\":\"This contract is a steady continuous inverse problem with no class labels, relay state, or time dynamics. Nuisance confounding is testable here by comparing tracer residuals before and after nuisance projection.\"}],\"rationale\":\"Use the real tracer pulses to test whether each axis independently needs wrap coupling and whether nuisance projection masks either omission. Compare the staged calibration with a fresh sweep fit to determine whether calibration changes the inferred weights or field enough to warrant action.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "84a6952a3d0b4610faf45ba54360d5a5e27303bd4ae5bd038a9c0c79a3957a24",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38633.87,
+      "usage_known": true,
+      "prompt_tokens": 26318,
+      "cached_tokens": 9344,
+      "completion_tokens": 1462
+    }
+  ]
+}

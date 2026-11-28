@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef3cca446bd24e318caadacaa701de1d",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:07:37.855637+00:00",
+  "ended_at_utc": "2026-11-28T04:07:58.115877+00:00",
+  "request_sha256": "2e7d914b94599e4bfe8a7e364ee6d1b3c192aa8ae27361a1b38234131d057380",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32308,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21397,
+    "cached_tokens": 9344,
+    "completion_tokens": 708
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=3,suppress=True)\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n a=np.asarray(e['facility_telemetry_trace']); print(e['completed_campaign_index'],e['completed_campaign_short_name'],'mean',a.mean(0),'sd',a.std(0))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nprint('dataset',list(d),'train',list(d['train']),'test',list(d['test']))\\nc=d['calibration_load_cells']; a=c['bridge_raw']; y=c['true_channel_loads']; print('bridge first',a[:3],y[:3]); print('sweeps',[(k,np.asarray(v).shape,np.asarray(v).ravel()[:8]) for k,v in c['single_channel_sweeps'].items()]); print('aux mean/sd',d['test']['aux_chamber_telemetry'].mean(0),d['test']['aux_chamber_telemetry'].std(0)); print('dt',d['past_dt'],'times',d['eval_times'])\\nfrom sklearn.model_selection import KFold\\nfrom itertools import combinations_with_replacement\\nfor deg in [1,2,3]:\\n cols=[np.ones(len(y))]; cols += [np.prod(y[:,i],axis=1) for j in range(1,deg+1) for i in combinations_with_replacement(range(4),j)]; X=np.array(cols).T; errors=[]\\n for t,v in KFold(5,shuffle=True,random_state=28).split(X): errors.extend(a[v]-X[v]@np.linalg.lstsq(X[t],a[t],rcond=None)[0])\\n print('forward polynomial',deg,'OOF channel rms',np.sqrt(np.mean(np.array(errors)**2,axis=0)))\\nPY\\nsed -n '1,95p;108,148p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_05_solver.py; sed -n '95,106p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_02_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged chamber law -> H2 transfer only if the current telemetry matches a previously characterized state; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Assume a nonlinear bridge and reuse the latest archived inverse\",\"rejected_reason\":\"The bridge can be tested directly on held-out calibration rows; archived nonlinearity need not recur.\"}],\"rationale\":\"Compact trace moments expose state markers without truncating the current campaign. Held-out bridge residuals determine whether an affine calibration is adequate or a nonlinear basis is warranted.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0be28adcadd6ff3517d2e68f93ae7bb40783f47a79b9852e787339f2dc48f164",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22382.4,
+      "usage_known": true,
+      "prompt_tokens": 21397,
+      "cached_tokens": 9344,
+      "completion_tokens": 708
+    }
+  ]
+}

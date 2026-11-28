@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02b6d5ce49604f40b318bcc984bdb54a",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:21.989057+00:00",
+  "ended_at_utc": "2026-11-28T03:58:06.718554+00:00",
+  "request_sha256": "9df46a17052640dd0d7bfcdd100a119542578e97fca587984c3e396685067e3e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64548,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34985,
+    "cached_tokens": 9344,
+    "completion_tokens": 1869
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal05.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _cal_fit(sweeps, omit=None, degree=9, cross_degree=8, interactions=()):\\n    x = np.asarray(sweeps['ref_rosette'])\\n    y = np.asarray(sweeps['raw_rosette'])\\n    clean = np.max(np.abs(y), axis=1) < 8\\n    if omit is not None:\\n        clean &= ~omit\\n    x, y = x[clean], y[clean]\\n    isolated = np.count_nonzero(x, axis=1) == 1\\n    bank = sweeps['single_bank_sweeps']\\n    k, t, z = (np.asarray(bank[key]) for key in ('bank_id', 'ref_signal', 'raw_readout'))\\n    i, j = np.nonzero(x[isolated])\\n    k, t, z = np.r_[k, j], np.r_[t, x[isolated][i,j]], np.r_[z, y[isolated][i,j]]\\n    good = np.abs(z) < 8\\n    k, t, z = k[good], t[good], z[good]\\n    opp = (np.arange(4)+2)%4\\n    bias = np.array([np.median(y[isolated & (x[:,a]==0) & (x[:,opp[a]]==0),a]) for a in range(4)])\\n    powers = np.arange(1, degree+1, 2)\\n    V = t[:,None]**powers\\n    def residual(p):\\n        return bias[k] + p[k]*(V@np.r_[1.,p[4:]]) - z\\n    p = least_squares(residual, np.r_[np.ones(4), np.zeros(len(powers)-1)], gtol=1e-13).x\\n    def own(v):\\n        return np.polynomial.polynomial.polyval(v, np.ravel(np.column_stack((np.zeros(len(powers)),np.r_[1.,p[4:]]))))*p[:4]\\n    def design(x, a):\\n        v = x[:, (np.arange(4)+a)%4]\\n        w = v[:,2]\\n        return np.column_stack([w**i for i in range(1,cross_degree+1)] + [np.prod(v[:,q],axis=1) for q in interactions])\\n    r = y - bias - own(x)\\n    coeffs = [np.linalg.lstsq(design(x,a), r[:,a], rcond=None)[0] for a in range(4)]\\n    def predict(v):\\n        v = np.atleast_2d(v)\\n        return bias + own(v) + np.column_stack([design(v,a)@coeffs[a] for a in range(4)])\\n    return predict, bias, p, coeffs\\n\\n\\ndef _invert(predict, observed):\\n    observed = observed.reshape(-1,4)\\n    out = []\\n    for row in observed:\\n        res = least_squares(lambda v: predict(v)[0]-row, np.zeros(4), gtol=1e-13, ftol=1e-13, xtol=1e-13)\\n        out.append(res.x)\\n    return np.asarray(out).ravel()\\nPY\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); old=p.read_text(); p.write_text(old[:old.index('def _sensor_features')] + Path('/tmp/cal05.py').read_text() + '\\\\n\\\\ndef _calibrate(study):\\\\n    predict, *_ = _cal_fit(study[\\\\'sensor_calibration_sweeps\\\\'])\\\\n    return _invert(predict, study[\\\\'y_obs_raw\\\\'])\\\\n\\\\n\\\\n' + old[old.index('def _axis'):]); print(old[old.index('def solve_batch'):])\\nPY\\ncat > /tmp/score05.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; clean=(abs(y)<8).all(1)\\nfor d in [6,8,10,12,14]:\\n r=[]\\n for j in np.flatnonzero(clean):\\n  h=np.arange(len(x))==j\\n  p,*_=m._cal_fit(c,h,cross_degree=d); r.append(p(x[j])[0]-y[j]);\\n print(d,'oof RMS/max',np.sqrt(np.mean(np.square(r),axis=0)),np.max(abs(np.array(r)),axis=0))\\np,b,q,co=m._cal_fit(c,cross_degree=8); rem=(y-p(x))[clean]; X=x[clean]; print('self',q,'cross',np.round(co,6)); print('insample',np.std(rem,axis=0));\\nfor a in range(4):\\n v=X[:,(np.arange(4)+a)%4]; allq=[q for d in [1,2,3,4] for q in combinations_with_replacement(range(4),d) if q not in [(0,)*d,(2,)*d]]; G=np.column_stack([np.prod(v[:,q],axis=1) for q in allq]); print('bank',a,sorted([(abs(z),q,z) for z,q in zip(np.corrcoef(np.c_[rem[:,a],G].T)[0,1:],allq)],reverse=True)[:6]); print('cross profile',np.c_[v[:,2],(y-p(x))[clean,a]][np.argsort(v[:,2])][::5].round(5).tolist())\\nprint('obs cal limits',np.min(m._calibrate(s)),np.max(m._calibrate(s))); print('shapes',s['source_modes'].shape,s['sensor_ij'].shape); print('sensor ij',s['sensor_ij'].tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/score05.py\\npython3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic self-response → H2 shared odd self-response with opposite-bank coupling; worst isolated held-level error is 0.000651.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select cross-bank terms from their training fit alone\",\"rejected_reason\":\"Held-out rosette errors and residual structure can distinguish a real interaction from a flexible approximation of opposite-bank response.\"}],\"rationale\":\"Install a data-fitted calibration candidate. Test it on held-out rosettes and inspect its residuals for structured coupling; use the schema check to detect integration failures before comparing wall stencils.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d2e9dcedb839300cd3b7761e305964190792262fc94d455d4205fbe33c88c42f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46916.42,
+      "usage_known": true,
+      "prompt_tokens": 34985,
+      "cached_tokens": 9344,
+      "completion_tokens": 1869
+    }
+  ]
+}

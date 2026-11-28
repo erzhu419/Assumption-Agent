@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "98afc27df71543908c02f2c57afe5468",
+  "call_seq": 13,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:28.875576+00:00",
+  "ended_at_utc": "2026-11-28T04:03:53.811142+00:00",
+  "request_sha256": "9110542984926f95b5dfe15021be013c4e7f5b8cc303a213cbdfe9fe8aeca030",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 67854,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31431,
+    "cached_tokens": 9344,
+    "completion_tokens": 876
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom downstream_solver import _CHAMBER_FRACTIONS, _chamber_response\\n\\ndt = np.array([0.35, 1.1])\\ntimes = np.array([0., 0.3, 2.])\\ntau = np.array([0.55, 3.5])\\ntheta = np.array([0.8, 0.3, 0.12, 0., 0., 0., 0.])\\npast = np.array([[2., 0.], [0., 2.], [0., 0.]])\\nhold = np.full(3, 1.25)\\nx = np.zeros((3, 5))\\nx[:, 0] = 1.\\norigin = np.full(3, 0.1)\\ncurve, rate = _chamber_response(past, hold, x, origin, dt, times, tau, theta, _CHAMBER_FRACTIONS)\\n# Exact convolution weights are independent of the implemented recurrence.\\nsurvival = np.exp(-np.array([dt[1], 0.])[:, None] / tau)\\nstate = past @ ((1. - np.exp(-dt[:, None] / tau)) * survival)\\nexpected_rate = (hold[:, None] - state) @ (theta[:2] / tau) + theta[2]\\nexpected_curve_shift = -(state * theta[:2]) @ (1. - np.exp(-times[:, None] / tau)).T\\nnp.testing.assert_allclose(rate, expected_rate, atol=1e-12, rtol=0.)\\nnp.testing.assert_allclose(curve - curve[2], expected_curve_shift, atol=1e-12, rtol=0.)\\nassert abs(rate[0] - rate[1]) > 0.5\\nprint('ng_t06: chronological convolution agrees with the deployed strain and initial-rate predictions to 1e-12; reversing the same load pulse changes the initial rate by', abs(rate[0] - rate[1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset → H2 retained chronological history with curved drift; worst held-out group median absolute errors were 0.00465 for strain and 0.00273 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the public-data comparison\",\n      \"rejected_reason\": \"The read-only comparison already measured the reset failure. An independent analytical probe can detect a reset or an ordering error in the deployed recurrence without accessing the public data.\"\n    }\n  ],\n  \"rationale\": \"The measured audit did not support a more complex drift law. Because the host did not accept the earlier resolution receipt, check the unchanged solver against an exact, fixture-independent chronological convolution. A mismatch would reopen the recurrence implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "ac5b56a568dbf13b922deac4053e0bc4f081c5fe488c942aef094cb286b7f211",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27015.55,
+      "usage_known": true,
+      "prompt_tokens": 31431,
+      "cached_tokens": 9344,
+      "completion_tokens": 876
+    }
+  ]
+}

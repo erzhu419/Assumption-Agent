@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d370a8e6c50648f5b39984331505a106",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:32.843210+00:00",
+  "ended_at_utc": "2026-11-28T04:03:05.265857+00:00",
+  "request_sha256": "f04b686cd644f9b1584235dadf55deba877b7c099c4194f264013781933ebdd4",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59978,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32545,
+    "cached_tokens": 0,
+    "completion_tokens": 1322
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; cat downstream_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, runpy\\nsys.path.insert(0, '/holdout_task')\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, json, pickle, copy\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _pooled_features, _standardize, _with_drift_intercept, _predict_chamber\\nfrom _verified_upstream import calibrate_upstream\\nfrom scipy.optimize import least_squares\\nimport numpy as np\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; raw=item['dataset']; out=solve_batch(raw)\\npay=json.load(open('_upstream_param_payload.json')); d=calibrate_upstream(raw); g=calibrate_upstream(dict(raw,test=item['campaign_diagnostics']),pay)['test']; t=d['eval_times']; dt=d['past_dt']; tau=out['estimated_taus']; th=out['hereditary_weights']; tr,te=d['train'],d['test']; x,xt=_pooled_features(tr,te)\\nf=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); xf=np.vstack([x,xt]); mu=np.array([xf[~np.isfinite(f[:,j]),j+1][0] if (~np.isfinite(f[:,j])).any() else xf[:,j+1].mean() for j in range(4)])\\ngx=_with_drift_intercept(_standardize(g['coupon_features_raw'],g['lab_id'],g['ref_coupons']),mu)\\ny=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; pred=_predict_chamber(g,gx,tau,th,t,dt); base=_predict_chamber(g,gx,tau,th,t,dt,np.zeros(3)); terms=np.stack([_predict_chamber(g,gx,tau,th,t,dt,e)-base for e in np.eye(3)],axis=-1)\\nw=np.r_[np.ones(len(t)),0.5]; cv=np.empty_like(y); groups=g['lab_id']; rmse=lambda e: np.array([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]); worst=[]\\nfor lab in np.unique(groups):\\n s=groups==lab; A=(terms[~s]*w[None,:,None]).reshape(-1,3); b=((y-base)[~s]*w).ravel(); q=least_squares(lambda p:A@p-b,np.linalg.lstsq(A,b,rcond=None)[0],jac=lambda p:A,loss='soft_l1',f_scale=.012).x; cv[s]=base[s]+terms[s]@q; worst.append(rmse(cv[s]-y[s])); print('held-out lab',lab,'strain/rate RMSE',worst[-1])\\nprint('worst lab',np.max(worst,axis=0),'fixed delivered law',rmse(pred-y)); print('material',tau,th)\\nassert np.all(np.max(worst,axis=0)<[.008,.02]); assert np.all(rmse(pred-y)<[.008,.02])\\n# One chronological stress pulse: verify the public entry point preserves both decay branches and their initial derivative.\\na=copy.deepcopy(raw); a['test']['past_channel_raw'][0,0,0]+=.1; p=solve_batch(a); delta=(calibrate_upstream(a)['test']['past_channel_raw']-te['past_channel_raw'])[0,0].sum(); wt=-np.expm1(-dt[0]/tau)*np.exp(-sum(dt[1:])/tau); curve=(-delta*wt*th[:2])@(-np.expm1(-t[None,:]/tau[:,None])); rate=np.sum(-delta*wt*th[:2]/tau)\\nassert np.allclose(p['predicted_strain'][0]-out['predicted_strain'][0],curve,atol=1e-9); assert np.isclose(p['initial_rate_pred'][0]-out['initial_rate_pred'][0],rate,atol=1e-9); assert np.array_equal(p['predicted_strain'][1:],out['predicted_strain'][1:]); print('public early-pulse convolution and derivative verified')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 reset-only chamber → H2 retained intrinsic memory with panel-aligned drift; prior worst held-out lab strain/rate RMSE was 0.00646/0.01701.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Submit after the schema pass\",\"rejected_reason\":\"Schema and reference symmetry do not establish that the delivered entry point responds correctly to chronological stress history.\"}],\"rationale\":\"Use a clean interpreter and unchanged public files. Diagnostic lab holdouts can expose a drift-response transfer failure, while an early stress pulse through the public entry point can expose a reset, reversed history ordering, or inconsistent rate derivative.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "eb20ef330098fabc2ff184b455b51e8c54989351cb475fb6ba9847eba93918dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35537.72,
+      "usage_known": true,
+      "prompt_tokens": 32545,
+      "cached_tokens": 0,
+      "completion_tokens": 1322
+    }
+  ]
+}

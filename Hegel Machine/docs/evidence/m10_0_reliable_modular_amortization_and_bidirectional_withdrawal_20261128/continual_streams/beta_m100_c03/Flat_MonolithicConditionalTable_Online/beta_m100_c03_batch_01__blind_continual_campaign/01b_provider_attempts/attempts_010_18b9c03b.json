@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "18b9c03be4d44f65a8241157aeaae085",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:56.139600+00:00",
+  "ended_at_utc": "2026-11-28T03:34:18.502059+00:00",
+  "request_sha256": "810c682db981804379133c6846322223c684e6c4b671b113b208885c3eeb1148",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48580,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26535,
+    "cached_tokens": 9344,
+    "completion_tokens": 817
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/def _calibrate/,/^def /p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n s=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; X=np.column_stack((np.ones(len(x)),x)); print('sweep count and affine condition',len(x),np.linalg.cond(X)); base=m.solve_batch(s); S,_=m._responses(s); W=np.array([p['w_pulse'] for p in item['campaign_diagnostics']]).T; raw=np.array([p['y_pulse_raw'] for p in item['campaign_diagnostics']]); bank=np.asarray(s['row_bank_id']).ravel(); print('baseline pulse mean signed bias by bank',[(int(b),float(np.mean((np.array([m._calibrate(s,t) for t in raw])-(S@W).T)[:,bank==b]))) for b in np.unique(bank)])\\n fold=[]\\n for j in np.array_split(np.arange(len(x)),5):\\n  keep=np.ones(len(x),bool);keep[j]=False; st=copy.copy(s);st['sensor_calibration_sweeps']=dict(c,ref_rosette=x[keep],raw_rosette=y[keep]);out=m.solve_batch(st); pulse=np.array([m._calibrate(st,t) for t in raw]); err=pulse-(S@W).T\\n  fold.append([np.linalg.norm(out[k]-base[k])/np.linalg.norm(base[k]) for k in ('weights','terminal_field')]+[max(np.sqrt(np.mean(err[:,bank==b]**2)) for b in np.unique(bank))])\\n print('worst calibration-block deletion: relative weight change, relative field change, within-bank pulse RMSE',np.max(fold,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin → H2 sealed walls with dynamically fitted affine calibration; worst pulse-by-shift RMSE is 9.58e-7 and worst within-bank pulse RMSE is 1.54e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the budget and terminal-field stencil tests\",\n      \"rejected_reason\": \"Those tests already passed on this artifact; they would not reveal sensitivity to the calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"The independent KKT gap is larger than the gap computed under the fitted model. Delete real calibration blocks and measure the resulting changes in weights, terminal field, and within-bank pulse residuals. If one block materially drives the inversion, inspect its leverage before changing the calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7469ca0171cd5f1786ebc2d47d373d6e856f9c5ed66d10e89b60ad63cfd2eaed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24437.92,
+      "usage_known": true,
+      "prompt_tokens": 26535,
+      "cached_tokens": 9344,
+      "completion_tokens": 817
+    }
+  ]
+}

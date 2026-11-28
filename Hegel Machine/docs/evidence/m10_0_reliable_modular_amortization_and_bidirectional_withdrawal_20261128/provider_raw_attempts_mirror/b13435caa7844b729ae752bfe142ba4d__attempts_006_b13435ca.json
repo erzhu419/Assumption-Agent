@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b13435caa7844b729ae752bfe142ba4d",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:13:10.402373+00:00",
+  "ended_at_utc": "2026-11-28T04:13:34.467233+00:00",
+  "request_sha256": "d9ef43c67bbfc0c80306fb34863ca22ae4b293e831a61cc162f1565161b14443",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49374,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27995,
+    "cached_tokens": 9344,
+    "completion_tokens": 750
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rosette_probe.py <<'PY'\\nimport itertools,pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=p['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps']; keep=np.max(abs(y),axis=1)<5\\nfor j in range(4):\\n m=(q['bank_id']==j)&(abs(q['raw_readout'])<5); single=np.zeros((m.sum(),4)); single[:,j]=q['ref_signal'][m]; xx=np.vstack((np.roll(x[keep],-j,axis=1),np.roll(single,-j,axis=1))); yy=np.r_[y[keep,j],q['raw_readout'][m]]; fold=np.r_[np.arange(keep.sum())%5,np.arange(m.sum())%5]; print('BANK',j)\\n for deg in [2,3,4]:\\n  terms=[i for i in itertools.product(range(deg+1),repeat=4) if sum(i)<=deg]; A=np.prod(xx[:,None,:]**np.array(terms)[None,:,:],axis=2)\\n  coef=np.linalg.lstsq(A,yy,rcond=None)[0]; print(deg,'train',np.sqrt(np.mean((A@coef-yy)**2)), 'cv',max(np.sqrt(np.mean((A[fold==k]@np.linalg.lstsq(A[fold!=k],yy[fold!=k],rcond=None)[0]-yy[fold==k])**2)) for k in range(5))); print([(terms[i],round(coef[i],7)) for i in np.argsort(-abs(coef))[:13]])\\n print('single',np.column_stack((q['ref_signal'][m],q['raw_readout'][m])).round(6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sealed walls plus archived rosette basis -> sealed walls plus an independently identified sensor basis; wall corrections worsen pulse 3 when held out (RMSE 0.01048 to 0.01241).\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit four wall corrections to all pulses\",\n      \"rejected_reason\": \"The fitted corrections change substantially between folds and worsen the largest held-out pulse error.\"\n    }\n  ],\n  \"rationale\": \"Test whether the sweep data reveal omitted channel interactions or a different self-response before changing the sealed stencil. If a sparse polynomial does not predict held-out sweep readings, use the single-bank trends to guide a nonpolynomial basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1aa583558cf8c9d448ddbb158d2b24681587d4643a8e1e15ceabca6a36a397dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24028.04,
+      "usage_known": true,
+      "prompt_tokens": 27995,
+      "cached_tokens": 9344,
+      "completion_tokens": 750
+    }
+  ]
+}

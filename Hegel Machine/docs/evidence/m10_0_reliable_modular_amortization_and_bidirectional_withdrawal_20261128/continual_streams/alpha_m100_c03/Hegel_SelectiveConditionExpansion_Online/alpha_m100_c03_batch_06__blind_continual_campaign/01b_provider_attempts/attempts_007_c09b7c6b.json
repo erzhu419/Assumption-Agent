@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c09b7c6b134244398a12616cfa34c73f",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:05:49.361087+00:00",
+  "ended_at_utc": "2026-11-28T04:06:13.930863+00:00",
+  "request_sha256": "0d6c946df6e43e90025563fe09829b1dec81bdc3e2f07cc7b74d258408105cdb",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47099,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26620,
+    "cached_tokens": 9344,
+    "completion_tokens": 812
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; sed -n '86,140p' _verified_upstream.py; cat /tmp/hegel_continual_archive/{archive_manifest,pre_llm_gate_diagnostic}.json; sed '/^# Profiled/,$d' /tmp/hegel_continual_archive/alpha_m100_c03_batch_02_solver.py > downstream_solver.py; tail -6 downstream_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features,_loads,_fit,_design\\nd=calibrate_upstream(pickle.load(open('public_batch.pkl','rb'))[0]['dataset']); tr,te=d['train'],d['test']; x=_features(tr,te)[:len(tr['lab_id'])]; dt,t=d['past_dt'],d['eval_times']; p,h=_loads(tr); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; v=tr['instant_rate_obs']; a,b=_fit(x,p,h,dt,t,y,v); c,r=_design(a,x,p,h,dt,t); print('taus theta',a,b); print('train median absolute fit errors',np.median(abs(c@b-y)),np.median(abs(r@b-v))); print('archived drift routing fractions',np.array([0.325169,1.802240])/np.array([0.649363,3.877850]),'and slope',0.031004); print('archived hold-to-current-weight ratios',np.array([0.751916,0.719527])/b[:2]); print('test load, drift ranges',np.quantile(_loads(te)[1],[0,.5,1]),np.quantile(b[2]+_features(tr,te)[len(x):]@b[3:],[0,.5,1]));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: the terminal trace favors the archived channel-6 chamber law; its mean control distance to the matching predecessor is 0.020, versus 2.808 or more to the other regimes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Copy all archived chamber coefficients verbatim\",\"rejected_reason\":\"The archived coefficients may combine campaign-specific material weights with the chamber operator; compare them to the current intrinsic fit before transferring them.\"}],\"rationale\":\"Stage the verified intrinsic estimator, then check whether archived amplitudes are consistent with a memory reset and whether drift routing preserves the initial-rate contribution. The result determines which quantities should scale with the current material fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ce090567d62857b29d6487cd7a132cd3ba48e09481b60a77ba07306656d7d47d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26733.49,
+      "usage_known": true,
+      "prompt_tokens": 26620,
+      "cached_tokens": 9344,
+      "completion_tokens": 812
+    }
+  ]
+}

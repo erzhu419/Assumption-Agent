@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1324e7416a404d95b5cd4054b5155980",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:55:47.728461+00:00",
+  "ended_at_utc": "2026-11-28T03:56:08.857743+00:00",
+  "request_sha256": "d775441dd1ed4fb5f09984fb5067767d403da800bf8db38458ee3e80fe6fc741",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50608,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26496,
+    "cached_tokens": 9344,
+    "completion_tokens": 792
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat _verified_upstream.py\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; cal=raw['calibration_load_cells']; truth=cal['true_channel_loads']; z=cal['bridge_raw']; ix=np.argsort(np.ptp(truth,axis=1))[:12]; keep=np.ones(len(z),bool); keep[ix]=False\\nfull=calibrate_upstream(dict(raw,test=dict(raw['test'],hold_channel_raw=z)))\\nreduced=calibrate_upstream(dict(raw,calibration_load_cells=dict(cal,bridge_raw=z[keep],true_channel_loads=truth[keep]),test=dict(raw['test'],hold_channel_raw=z[ix])))\\na=full['test']['hold_channel_raw']; b=reduced['test']['hold_channel_raw']\\nfor j,k in enumerate(ix):\\n print('low spread',k,'truth',np.round(truth[k],3),'full max err',round(max(abs(a[k]-truth[k])),5),'reduced total err',round(sum(b[j]-truth[k]),5),'reduced max err',round(max(abs(b[j]-truth[k])),5))\\nfor name in ('train','test'):\\n for kind in ('past','hold'):\\n  w=full[name][kind+'_channel_raw'] if name=='train' or kind=='past' else calibrate_upstream(raw)[name][kind+'_channel_raw']; print(name,kind,'channel range',np.round([w.min(),w.max()],4),'axial and spread quantiles',np.round(np.quantile(w.sum(-1),[0,.1,.5,.9,1]),4),np.round(np.quantile(np.ptp(w,axis=-1),[0,.1,.5,.9,1]),4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated material fit → telemetry-matched chamber transfer; the lowest-imbalance calibration holdout reached 1.887 axial load error, versus 0.000283 on the highest-imbalance holdout.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the staged upstream calibration\",\n      \"rejected_reason\": \"The upstream module is fixed. First determine whether the error also occurs with the full calibration panel or only after withholding low-imbalance sweeps.\"\n    }\n  ],\n  \"rationale\": \"The low-imbalance error is large enough to affect predictions if it occurs at the supplied calibration coverage and coupon loads. Compare full-panel and reduced-panel recovery and locate the failing sweeps relative to the coupon load range before deciding whether this is a limitation of the holdout or of the deployed composition.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "aa63868e85e7c554faffb5d6a0b3b37a9c9c935b55190dfe8a957fd5e4796e2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23294.52,
+      "usage_known": true,
+      "prompt_tokens": 26496,
+      "cached_tokens": 9344,
+      "completion_tokens": 792
+    }
+  ]
+}

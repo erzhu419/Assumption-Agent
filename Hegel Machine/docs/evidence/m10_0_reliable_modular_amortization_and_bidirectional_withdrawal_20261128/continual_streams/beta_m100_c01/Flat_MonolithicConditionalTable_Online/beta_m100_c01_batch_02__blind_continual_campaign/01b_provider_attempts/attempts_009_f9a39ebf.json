@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9a39ebfc0634127807bc8fcfd1ee19a",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:03.140700+00:00",
+  "ended_at_utc": "2026-11-28T03:39:38.369555+00:00",
+  "request_sha256": "0dea5fdaf75ce404c59892c0d91600dfaca565170a0c5cc2e07b8556b2cca2a3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52740,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29529,
+    "cached_tokens": 0,
+    "completion_tokens": 1436
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))):\\n    s = item['study']; c = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']; n = len(x)\\n    X = np.zeros((n+len(b['bank_id']), 4)); X[:n] = x\\n    X[n+np.arange(len(b['bank_id'])), np.asarray(b['bank_id'], int)] = b['ref_signal']\\n    Y = np.full_like(X, np.nan); Y[:n] = y\\n    Y[n+np.arange(len(b['bank_id'])), np.asarray(b['bank_id'], int)] = b['raw_readout']\\n    S, U = m._transport(s); Z = s['Z_nuisance']\\n    pulses = item.get('campaign_diagnostics') or []\\n    r = m.solve_batch(s); weights = r['weights']; cert = r['kkt_certificate']\\n    print('item', i, 'public primal-dual gap', cert['primal_objective']-cert['dual_lower_bound'])\\n    for model in ('diagonal_affine', 'coupled_affine', 'diagonal_quadratic'):\\n        raw_oof = np.empty_like(y); pulse_err = []; weight_err = []; field_err = []; nuisance_err = []\\n        for fold in range(5):\\n            hold = np.arange(n) % 5 == fold\\n            coeff = []\\n            for j in range(4):\\n                features = {'diagonal_affine': X[:,j:j+1], 'coupled_affine': X, 'diagonal_quadratic': np.c_[X[:,j], X[:,j]**2]}[model]\\n                D = np.c_[np.ones(len(X)), features]; train = np.r_[~hold, np.ones(len(X)-n, dtype=bool)] & np.isfinite(Y[:,j])\\n                q = np.linalg.lstsq(D[train],Y[train,j],rcond=None)[0]\\n                coeff.append(q); raw_oof[hold,j] = D[:n][hold]@q\\n            C = np.array(coeff).T\\n            def calibrate(raw):\\n                d = raw.reshape(-1,4)-C[0]\\n                if model == 'coupled_affine':\\n                    return np.linalg.solve(C[1:].T,d.T).T.ravel()\\n                if model == 'diagonal_quadratic':\\n                    return (2*d/(C[1]+np.sqrt(C[1]**2+4*C[2]*d))).ravel()\\n                return (d/C[1]).ravel()\\n            P = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n            A = S-Z@(P@S); obs = calibrate(s['y_obs_raw']); y_fit = obs-Z@(P@obs)\\n            H = A.T@A+s['source_ridge']*np.eye(A.shape[1]); w,_ = m._box_simplex(H,-A.T@y_fit,s['u_box'],s['total_budget'])\\n            weight_err.append(np.linalg.norm(w-weights)/np.linalg.norm(weights))\\n            field_err.append(np.linalg.norm(np.tensordot(w-weights,U,axes=1))/np.linalg.norm(r['terminal_field']))\\n            for p in pulses:\\n                e = calibrate(p['y_pulse_raw'])-S@p['w_pulse']; e_adj = e-Z@(P@e)\\n                pulse_err.append(np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1,4)**2,axis=1)).max())\\n                nuisance_err.append(np.sqrt(np.mean(e_adj.reshape(len(s['mu_shifts']),-1,4)**2,axis=1)).max())\\n        print(model, 'OOF sweep RMSE by bank', np.sqrt(np.mean((raw_oof-y)**2,axis=0)), 'worst bank/shift/pulse RMSE before and after nuisance projection', max(pulse_err,default=float('nan')), max(nuisance_err,default=float('nan')), 'max relative weight/field movement', max(weight_err), max(field_err))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal affine calibration with periodic upwind transport -> H2 coupled or nonlinear calibration only if it improves held-out sweeps and the worst tracer slices; current worst pulse-by-shift RMSE is 9.90e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift equations, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This is a steady transport inverse problem with no relay state, drift equation, or class labels. The relevant strata are sensor bank, tracer pulse, and transport shift.\"\n    }\n  ],\n  \"rationale\": \"A pooled tracer error could hide a bad sensor bank, and nuisance projection could mask a systematic mismatch. Compare worst bank-by-shift tracer errors before and after projection using calibration fits that exclude the held-out sweeps. Change the artifact only if a challenger improves those slices and materially affects the recovered weights or field.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "79c4f8e0ce8db3c8734742804d564727776975ca64165bc573618f8ac5002ba4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37348.13,
+      "usage_known": true,
+      "prompt_tokens": 29529,
+      "cached_tokens": 0,
+      "completion_tokens": 1436
+    }
+  ]
+}

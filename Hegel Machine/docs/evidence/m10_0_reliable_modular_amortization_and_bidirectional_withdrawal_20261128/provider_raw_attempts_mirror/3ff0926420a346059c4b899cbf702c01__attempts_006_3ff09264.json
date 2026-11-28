@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ff0926420a346059c4b899cbf702c01",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:33.579086+00:00",
+  "ended_at_utc": "2026-11-28T04:02:57.173476+00:00",
+  "request_sha256": "069222399f24581db7724b9d4e6b5e5226f714e889bd83b946f47bf5153e0d57",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44107,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26392,
+    "cached_tokens": 9344,
+    "completion_tokens": 935
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for n in 02 03 04; do echo ===$n; sed -n '/^def _fit_sweep/,/^def box_simplex/p; /^def calibration_map/,/^def box_simplex/p' beta_m100_c02_batch_${n}_solver.py | awk '!seen[$0]++'; tail -8 beta_m100_c02_batch_${n}_solver.py; done; cat pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; print({k:v for k,v in s.items() if np.isscalar(v)}); print('shifts',s['mu_shifts']); print('sweep shapes',X.shape,Y.shape,'spikes per channel',(abs(Y)>5).sum(0)); print('single banks',c['single_bank_sweeps']['raw_readout'].reshape(4,-1).round(6)); print('sample mixed (ref, raw)',np.c_[X,Y][:12].round(4));\\nfrom numpy.polynomial.chebyshev import chebvander\\nfor j in range(4):\\n mask=np.abs(Y[:,j])<5; y=Y[mask,j]; x=X[mask]; print('bank',j,'corr',np.corrcoef(np.c_[x,y].T)[-1,:-1].round(3));\\n for deg in (1,3,5,7):\\n  A=np.c_[np.ones(len(x)),*(chebvander(x[:,k]/1.8,deg)[:,1:] for k in range(4))]; errs=[]\\n  for f in range(5):\\n   a=np.flatnonzero(mask)%5!=f; p=np.linalg.lstsq(A[a],y[a],rcond=None)[0]; errs.extend(A[~a]@p-y[~a]);\\n  p=np.linalg.lstsq(A,y,rcond=None)[0]; print(deg,'OOF',np.sqrt(np.mean(np.square(errs))), 'train',np.std(A@p-y),'component std',[round(np.std(A[:,1+k*deg:1+(k+1)*deg]@p[1+k*deg:1+(k+1)*deg]),5) for k in range(4)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared opposite-bank transfer → test bank-specific transfer and cross-channel structure; the archived model's worst-bank held-out RMSE is 0.583 raw units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The prior shared transfer curve with opposite-bank coupling is adequate for the current rosette.\",\"empirical_witness\":\"Five held-out folds gave bank 0 RMSE 0.583 and median absolute error 0.508 on readings inside the physical range, despite an exact inverse round trip.\",\"causal_blanket_diagnosis\":\"An inverse round trip tests agreement with the fitted map, not agreement with the physical calibration sweeps.\",\"sublated_pivot\":\"Use isolated sweeps to anchor the self response and held-out mixed sweeps to identify cross-channel terms.\",\"risk_kind\":\"calibration model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select a wall regime using the archived calibration\",\"rejected_reason\":\"Bank-specific calibration residuals would confound the wall comparison.\"}],\"rationale\":\"Compare additive sweep fits by bank and inspect earlier transfer grammars. The held-out residuals will show whether to pursue a different coupling topology or multichannel interaction terms before fitting the chamber.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "69e5bf9addd6e414acf3753d052270cf69b19f16ee74d0921961961ba216de26",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26711.04,
+      "usage_known": true,
+      "prompt_tokens": 26392,
+      "cached_tokens": 9344,
+      "completion_tokens": 935
+    }
+  ]
+}

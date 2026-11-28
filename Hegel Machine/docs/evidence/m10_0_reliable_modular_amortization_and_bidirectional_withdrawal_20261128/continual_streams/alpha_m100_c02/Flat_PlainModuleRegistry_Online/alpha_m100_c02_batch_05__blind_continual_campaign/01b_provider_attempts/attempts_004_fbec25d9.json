@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbec25d9c0bd45058ac8008b55dcbda2",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:19.275829+00:00",
+  "ended_at_utc": "2026-11-28T03:53:36.475675+00:00",
+  "request_sha256": "04eca801954817b3e64759e3c4879b60c8e30eafa3e6c6a84cfb1d8607dce727",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 25101,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18948,
+    "cached_tokens": 9344,
+    "completion_tokens": 543
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nwith open('public_batch.pkl','rb') as f: batch=pickle.load(f)\\nfor entry in batch:\\n d=entry['dataset']; print('dataset fields',list(d)); c=d['calibration_load_cells']; print('calibration fields',list(c)); x=np.asarray(c['true_channel_loads']); y=np.asarray(c['bridge_raw']); print('cal shape/ranges',x.shape,x.min(0),x.max(0),y.min(0),y.max(0)); print('examples',x[:4],y[:4]); s=c.get('single_channel_sweeps'); print('sweep',None if s is None else {k:np.shape(v) for k,v in s.items()})\\n for k in ('train','test','chamber_verification_trials'):\\n  v=d.get(k); print(k,type(v).__name__,list(v) if isinstance(v,dict) else None)\\n  if isinstance(v,dict):\\n   for j in ('past_channel_raw','hold_channel_raw'):\\n    if j in v:\\n     a=np.asarray(v[j]); b=a.reshape(-1,4); print(j,a.shape,b.min(0),b.max(0))\\n A=np.c_[np.ones(len(x)),x]; B=np.linalg.lstsq(A,y,rcond=None)[0]; r=np.linalg.norm(A@B-y,axis=1); print('OLS coefficients',B); print('OLS residual norm percentiles',np.percentile(r,[0,25,50,75,90,95,100])); print('correlation',np.corrcoef(x.T))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine cross-channel mixing -> H2 smooth nonlinear mixing with rowwise spike rejection; no out-of-fold metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the validator’s documented batch nesting to quantify calibration coverage, residual tails, and trial array shapes. These results will set the basis size and identify which operating ranges need extrapolation tests.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "71076c6c91eb6c7e9736aefff9bf9a6e5f4a26cbad93b12b127aa0a9795cff9c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19323.25,
+      "usage_known": true,
+      "prompt_tokens": 18948,
+      "cached_tokens": 9344,
+      "completion_tokens": 543
+    }
+  ]
+}

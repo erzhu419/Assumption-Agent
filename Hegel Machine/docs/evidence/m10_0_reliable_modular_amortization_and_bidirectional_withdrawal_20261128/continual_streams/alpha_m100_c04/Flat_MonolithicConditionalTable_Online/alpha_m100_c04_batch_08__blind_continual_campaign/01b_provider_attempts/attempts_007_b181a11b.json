@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b181a11bb876488ab775e856ad897f21",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:12:33.134744+00:00",
+  "ended_at_utc": "2026-11-28T04:12:56.114321+00:00",
+  "request_sha256": "dd2feb4612fc99839ffbf6d081fff1ac2a3bf3fd12500997599fbad133a3d15c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47748,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26240,
+    "cached_tokens": 9344,
+    "completion_tokens": 874
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cd /tmp/hegel_continual_archive; for b in 02 06 07; do echo ====bridge-$b; sed -n '/^def _bridge_design/,/^def _inputs/p; /^def _bridge_raw/,/^def _inputs/p' alpha_m100_c04_batch_${b}_solver.py | head -75; done; sed -n '7,31p' alpha_m100_c04_batch_07_solver.py; cp alpha_m100_c04_batch_07_solver.py /holdout_task/batch_solver.py; python3 - <<'PY'\\nimport importlib.util, pathlib, pickle, numpy as np\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('calibration load range',x.min(),x.max(),'raw range',y.min(),y.max()); rng=np.random.default_rng(8)\\nfor p in sorted(pathlib.Path('.').glob('*solver.py')):\\n s=importlib.util.spec_from_file_location('m',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\n if not hasattr(m,'_calibrate'): continue\\n errs=[]\\n for val in np.array_split(rng.permutation(len(x)) if not errs else order,5):\\n  if not errs: order=np.r_[val, np.setdiff1d(np.arange(len(x)),val)]\\n  tr=np.setdiff1d(np.arange(len(x)),val); sub=dict(c,bridge_raw=y[tr],true_channel_loads=x[tr]); err=m._stress(y[val],m._calibrate(sub))-x[val].sum(1); errs.append([np.sqrt(np.mean(err**2)),max(abs(err))])\\n print(p.name,np.round(np.max(errs,axis=0),7))\\nprint('affine residual per channel', np.std(np.c_[np.ones(len(x)),x]@np.linalg.lstsq(np.c_[np.ones(len(x)),x],y,rcond=None)[0]-y,axis=0)); print('sweep shapes', {k:np.shape(v) for k,v in c['single_channel_sweeps'].items()})\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: intrinsic two-branch law → H2: batch 07 full-memory chamber transfer; bridge cross-validation is pending and current chamber labels are unavailable.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the bridge model from the chamber regime\",\n      \"rejected_reason\": \"The bridge has independent labeled calibration sweeps; choose its model by held-out axial-load error.\"\n    }\n  ],\n  \"rationale\": \"Build a runnable candidate from the most recent verified chamber law. Compare archived bridge models on held-out sweeps so a transducer change cannot be mistaken for a chamber effect.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b82a4b40d709dd61478d555acc801b8ddc60ffb4baae96ce1f71756e63a07f2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25078.84,
+      "usage_known": true,
+      "prompt_tokens": 26240,
+      "cached_tokens": 9344,
+      "completion_tokens": 874
+    }
+  ]
+}

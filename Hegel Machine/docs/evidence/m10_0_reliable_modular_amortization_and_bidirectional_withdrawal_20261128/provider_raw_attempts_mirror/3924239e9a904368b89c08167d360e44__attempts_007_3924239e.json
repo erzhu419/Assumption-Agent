@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3924239e9a904368b89c08167d360e44",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:58.423628+00:00",
+  "ended_at_utc": "2026-11-28T04:03:34.034200+00:00",
+  "request_sha256": "f1cb3280912922f45e1392a621d006f8b06d65acbd0cd4183e692d6e15e97b0f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50477,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29018,
+    "cached_tokens": 9344,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /tmp/hegel_continual_archive; for n in 02 03 04; do echo ===$n; grep -A8 '^def solve_batch' beta_m100_c02_batch_${n}_solver.py; done; python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom pathlib import Path\\nfor f in ('archive_manifest.json','pre_llm_gate_diagnostic.json'):\\n d=json.loads(Path(f).read_text()); print(f,str(d)[:3500])\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; print('scalars',[(k,v) for k,v in s.items() if np.isscalar(v)]); print('mode rms',np.sqrt(np.mean(s['source_modes']**2,axis=(1,2))))\\nPY\\ncat > /tmp/fit_cal.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom numpy.polynomial.chebyshev import chebvander\\n\\ndef fit_cal(sweeps, held_out=(), family='tanh', degree=8):\\n    X,Y=(np.asarray(sweeps[k]) for k in ('ref_rosette','raw_rosette'))\\n    s=sweeps['single_bank_sweeps']; models=[]\\n    for j in range(4):\\n        sel=s['bank_id']==j\\n        x=np.r_[s['ref_signal'][sel],X[:,j]]; z=np.r_[np.zeros(sel.sum()),X[:,(j+2)%4]]\\n        y=np.r_[s['raw_readout'][sel],Y[:,j]]; keep=abs(y)<5\\n        keep[sel.sum()+np.asarray(held_out,dtype=int)]=False\\n        x,z,y=x[keep],z[keep],y[keep]\\n        def basis(t):\\n            return (chebvander(t/1.8,degree)-chebvander(0.,degree))[:,1:]\\n        B=basis(z)\\n        if family=='poly':\\n            A=np.c_[np.ones(len(x)),basis(x)[:,::2],B]; p=np.linalg.lstsq(A,y,rcond=None)[0]\\n            def poly(t,u,p=p,basis=basis,n=1+basis(x).shape[1]//2):\\n                t,u=np.asarray(t),np.asarray(u); return p[0]+basis(t)[:,::2]@p[1:n]+basis(u)@p[n:]\\n            models.append(poly);continue\\n        def odd(t,b, family=family):\\n            if family=='tanh': return np.tanh(b*t)\\n            if family=='atan': return np.arctan(b*t)\\n            if family=='rational': return (b*t)/np.sqrt(1+(b*t)**2)\\n        def design(b):return np.c_[np.ones(len(x)),x,odd(x,b),B]\\n        def err(p):return design(p[0])@p[1:]-y\\n        b=least_squares(lambda q: design(q[0])@np.linalg.lstsq(design(q[0]),y,rcond=None)[0]-y,[1.3],bounds=(0.1,8.)).x[0]\\n        p=np.r_[b,np.linalg.lstsq(design(b),y,rcond=None)[0]]\\n        p=least_squares(err,p,loss='soft_l1',f_scale=3e-5,gtol=1e-11,max_nfev=100).x\\n        def fun(t,u,p=p,odd=odd,basis=basis):return p[1]+p[2]*t+p[3]*odd(t,p[0])+basis(u)@p[4:]\\n        fun.par=p;models.append(fun)\\n    return models\\n\\nif __name__=='__main__':\\n    import pickle\\n    s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; ok=abs(Y)<5\\n    for family,degree in [('tanh',4),('tanh',6),('tanh',8),('tanh',10),('atan',8),('rational',8),('poly',8),('poly',10)]:\\n        e=np.empty_like(Y)\\n        for fold in range(5):\\n            i=np.arange(fold,len(X),5); mm=fit_cal(c,i,family,degree)\\n            for b in range(4):e[i,b]=mm[b](X[i,b],X[i,(b+2)%4])-Y[i,b]\\n        print(family,degree,'OOF', [round(np.sqrt(np.mean(e[ok[:,j],j]**2)),8) for j in range(4)],'max',abs(e[ok]).max())\\n        if family!='poly' and degree==8: print('parameters',np.round([m.par for m in fit_cal(c,(),family,degree)],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit_cal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared rosette transfer → per-bank saturating self-response and opposite-bank mixing; the archived model’s worst-bank held-out RMSE is 0.583 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the degree-seven additive fit directly\",\"rejected_reason\":\"It still misses at roughly 0.00146 raw units in the worst bank, and a saturating response can provide a better-conditioned inverse.\"}],\"rationale\":\"Compare saturating self-response families against held-out mixed sweeps while retaining the coupling topology identified by the isolated pulses. The fit must improve forward prediction before it can be used to rank wall regimes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e520e20d1f7521c787e7c8098c968c271ba8484c761d03d008ccfb38bdec13dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37611.36,
+      "usage_known": true,
+      "prompt_tokens": 29018,
+      "cached_tokens": 9344,
+      "completion_tokens": 1451
+    }
+  ]
+}

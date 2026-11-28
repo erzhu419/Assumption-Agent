@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4cf2d93b320541ebaba83ffe65d07577",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:53:29.389217+00:00",
+  "ended_at_utc": "2026-11-28T03:54:04.662898+00:00",
+  "request_sha256": "4709b5a43733bfd0f2d53ad3b714ec0cb4487c67b53291d69287eb1ab4b146a3",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58436,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33614,
+    "cached_tokens": 9344,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport copy, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\ns = pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\nis_axis = np.count_nonzero(x, axis=1) == 1\\nclean = np.max(np.abs(y - np.median(y, axis=0)), axis=1) < 5\\nrng = np.random.default_rng(318)\\nfold = np.empty(len(x), int)\\nfor mask in (is_axis, ~is_axis):\\n    fold[mask] = rng.permutation(mask.sum()) % 5\\npred = np.empty_like(y)\\ninv_err = []\\nfor k in range(5):\\n    tr = fold != k; te = ~tr\\n    b = u._fit(x[tr], y[tr])\\n    pred[te] = np.einsum('njk,jk->nj', u._design(x[te]), b)\\n    inner = te & clean & (np.max(np.abs(x), axis=1) <= .6)\\n    if np.any(inner): inv_err.extend(u._inverse(y[inner], b) - x[inner])\\nmetrics = {name: float(np.sqrt(np.mean((pred[mask & clean]-y[mask & clean])**2, axis=0)).max()) for name,mask in [('axis',is_axis),('mixed',~is_axis)]}\\nassert max(metrics.values()) < 3e-5, metrics\\nassert len(inv_err) and np.max(np.abs(inv_err)) < 8e-5\\nprint('Exact artifact OOF worst-channel RMSE by sweep slice:', metrics, '| direct inverse central-sweep max:', np.max(np.abs(inv_err)), 'rows:', len(inv_err))\\n# Check pulse shape, optional entries, and data ownership on the central operating branch.\\nfrom itertools import product\\nref = np.array(list(product((-.50,-.25,0,.25,.50), repeat=4)))\\np = ref[:, [2,3,0,1]]\\nraw = np.array([.07,-.06,.08,-.05]) + np.array([1.27,.81,1.26,.82])*(ref+.25*np.sin(2.5*ref)+.21*p-.12*np.sin(p)**2)\\nprobe = copy.deepcopy(s)\\nprobe['reference_tracer_pulses'] = [{'y_pulse_raw': raw.reshape(5,125,4)}, {'y_pulse_raw': None}]\\nold_raw = probe['y_obs_raw'].copy(); old_cal = probe['sensor_calibration_sweeps']['raw_rosette'].copy()\\nout = u.calibrate_upstream(probe)\\npulse = out['reference_tracer_pulses'][0]['y_pulse_raw']\\ne = np.max(np.abs(pulse.reshape(-1,4)-ref))\\nassert pulse.shape == (5,125,4) and e < 3e-5, e\\nassert out['reference_tracer_pulses'][1]['y_pulse_raw'] is None\\nassert out['y_obs_raw'].shape == old_raw.shape\\nassert np.array_equal(probe['y_obs_raw'], old_raw) and np.array_equal(probe['sensor_calibration_sweeps']['raw_rosette'],old_cal)\\na = out['sensor_calibration_sweeps']; bank = a['single_bank_sweeps']\\nassert np.array_equal(a['raw_rosette'], a['ref_rosette']) and not np.shares_memory(a['raw_rosette'], a['ref_rosette'])\\nassert np.array_equal(bank['raw_readout'],bank['ref_signal']) and not np.shares_memory(bank['raw_readout'],bank['ref_signal'])\\nprint('625-point pulse grid max inverse error:', e)\\nr = solve_batch(s); w = np.asarray(r['weights']); cert = r['kkt_certificate']; gap = cert['primal_objective'] - cert['dual_lower_bound']\\nassert np.isfinite(r['terminal_field']).all() and w.min() >= -1e-9 and w.max() <= s['u_box'] + 1e-9 and abs(w.sum()-s['total_budget']) < 1e-8 and abs(gap) < 1e-8, (w, gap)\\nprint('Composed solve budget error:', abs(w.sum()-s['total_budget']), 'duality gap:', gap)\\nsys.argv = ['validate_public_schema.py', '/holdout_task/batch_solver.py']; runpy.run_path('/holdout_task/validate_public_schema.py', run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic saturation -> H2 paired linear-plus-sine response; worst discovery-fold forward RMSE is 1.14e-5, and the delivered public observation round-trip maximum is 7.16e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check alone\",\n      \"rejected_reason\": \"The public study has no tracer pulses, and an observation round trip cannot detect a biased fit or a wrong inverse branch.\"\n    }\n  ],\n  \"rationale\": \"Test the exact deliverable in an isolated process. Held-out sweep errors can reveal calibration bias; a pulse grid spanning and extending beyond the public operating range can reveal inverse branch or shape failures; the composed solve checks that normalization preserves feasibility and the certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "dfb530bcb58d7d1239908efc85f5dbc133745608656a53cf42816c41c1f0c511",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37430.63,
+      "usage_known": true,
+      "prompt_tokens": 33614,
+      "cached_tokens": 9344,
+      "completion_tokens": 1434
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fcc12e3bd7304e3da8585d5b5791dcad",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:01.181453+00:00",
+  "ended_at_utc": "2026-11-28T03:43:23.786406+00:00",
+  "request_sha256": "b18b3cea73a010ccbd010d08eccc6972383c360169b3e6ebbc5d424368e2be20",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48019,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28390,
+    "cached_tokens": 9344,
+    "completion_tokens": 845
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -i 's/jac=lambda c: design, loss=/jac=lambda c: design.copy(), loss=/' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np,json\\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); s=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)\\nD=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; P=C['true_channel_loads']; R=C['bridge_raw']; c=s._fit_bridge(C); print('coefs',c); E=np.sum(s._bridge_basis(P)*c,axis=-1)-R; print('gross rows',np.flatnonzero(np.max(abs(E),axis=1)>.1)); print('cal residual quantiles',np.quantile(np.max(abs(E),axis=1),[.5,.9,.95])); ans=s.solve_batch(D); print('tau/theta',ans['estimated_taus'],ans['hereditary_weights']); t=D['train']; p,h=s._loads(c,t); X=s._features(t,D['test'])[:len(h)]; A,B,*_=s._design(np.log(ans['estimated_taus']),p,h,X,D['past_dt'],D['eval_times']); w=ans['hereditary_weights']; print('train residual abs quantiles',*[np.quantile(abs(e),[.5,.9,.95,.99,1]) for e in (A@w+t['strain_0'][:,None]-t['strain_curves_obs'],B@w-t['instant_rate_obs'])]); print('test ranges',*[np.quantile(v,[0,.5,1]) for v in (ans['predicted_strain'][:,-1]-D['test']['strain_0'],ans['initial_rate_pred'])]);\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n z=np.asarray(row['facility_telemetry_trace']);print(row['completed_campaign_short_name'],z.mean(0),z.std(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: sparse cubic calibration with a shared Jacobian buffer -> H2: preserve the physical design during robust optimization; the current artifact has a 95th-percentile rowwise calibration error of 834 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the polynomial basis or tune the outlier cutoff\",\n      \"rejected_reason\": \"The independent probe already fit the sparse cubic to near measurement precision; the discrepancy appeared when the implementation began returning the original design buffer as the Jacobian.\"\n    }\n  ],\n  \"rationale\": \"SciPy can rescale the Jacobian in place for robust loss. Return a copy so that neither subsequent residual evaluations nor the inlier refit use a mutated design. Check that the calibration residual and the independently measured benchtop curve and rate recover before interpreting the chamber telemetry.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "518110385c45af92f7d3872f901731511c7bf328d94306b911e265ac651801df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24700.89,
+      "usage_known": true,
+      "prompt_tokens": 28390,
+      "cached_tokens": 9344,
+      "completion_tokens": 845
+    }
+  ]
+}

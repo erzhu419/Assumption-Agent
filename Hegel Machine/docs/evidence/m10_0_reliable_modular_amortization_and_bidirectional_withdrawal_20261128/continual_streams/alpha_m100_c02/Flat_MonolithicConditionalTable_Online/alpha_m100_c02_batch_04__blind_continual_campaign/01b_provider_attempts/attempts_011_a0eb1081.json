@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a0eb1081d18a4aeaa1f668262415e87d",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:06.063789+00:00",
+  "ended_at_utc": "2026-11-28T03:51:35.903407+00:00",
+  "request_sha256": "e4ddeab8738fbe93226173785082d476fabbd4976dae7059c3883981873baf42",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68105,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34724,
+    "cached_tokens": 0,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ni = s.index('# Chamber amplitude map')\\nj = s.index('\\\\ndef solve_batch', i)\\ns = s[:i] + '''# Public chamber verification identifies a reset of the stress history and\\n# a drift contribution to both transient branches and steady strain rate.\\n_DRIFT_AMPLITUDES = np.array([0.1072787, 1.9523576, 0.2650152])\\n\\n\\ndef _deployment(tau, theta, x, hold, times):\\n    amplitudes = (x @ theta[2:])[:, None] * _DRIFT_AMPLITUDES\\n    amplitudes[:, :2] += hold[:, None] * theta[:2]\\n    basis = np.column_stack([-np.expm1(-times[:, None] / tau), times])\\n    return amplitudes @ basis.T, amplitudes @ np.r_[1.0 / tau, 1.0]\\n\\n''' + s[j:]\\ns = s.replace('_deployment(tau, theta, test, hold_test, times)', '_deployment(tau, theta, x[len(hold):], hold_test, times)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, numpy as np, pickle\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=d['calibration_load_cells']; out=m.solve_batch(d)\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\ncoef=m._fit_bridge(cal); past,hold=m._loads(coef,tr); x=m._features(tr,te)[:len(hold)]; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; scores=[]\\nfor k in ('lab_id','stratum'):\\n for val in np.unique(tr[k]):\\n  test=tr[k]==val; use=~test; tau,w=m._fit(past[use],hold[use],x[use],dt,t,y[use],r[use]); a,b,*_=m._design(np.log(tau),past[test],hold[test],x[test],dt,t); dy,dr=(a@w-y[test]),(b@w-r[test]); scores.append([np.median(abs(dy)),np.median(abs(dr)),*abs(tau/out['estimated_taus']-1),np.max(abs(w-out['hereditary_weights']))])\\nprint('benchtop worst held-out medAE (strain, rate), relative tau shifts (fast, slow), max weight shift:',np.max(scores,axis=0))\\nraw=cal['bridge_raw']; loads=cal['true_channel_loads']; errors=[]\\nfor rows in np.array_split(np.argsort(loads.sum(axis=1)),5):\\n use=np.ones(len(loads),bool); use[rows]=False; c=m._fit_bridge({'bridge_raw':raw[use],'true_channel_loads':loads[use]}); e=m._invert_bridge(raw[rows],c).sum(1)-loads[rows].sum(1); errors.append([np.median(abs(e)),np.quantile(abs(e),.9)])\\nprint('bridge worst held-out load band axial stress median/p90 AE:',np.max(errors,axis=0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: split-local deployment alignment → H2: pooled deployment alignment with a chamber reset and drift-coupled amplitudes; standalone diagnostic worst held-out strain/rate RMSE was 0.00289/0.00225.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use standalone diagnostic imputation at deployment\",\"rejected_reason\":\"The row mean best matches the standalone diagnostic panel, but deployment explicitly requires pooled, cell-balanced imputation.\"}],\"rationale\":\"Use the diagnostics to identify the chamber law, without carrying their split-specific normalization into inference. Verify the exact artifact against the reference-exchange contract, and check held-out calibration load bands and benchtop cohorts for instability that would warrant revisiting the corresponding fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6ccdb01cb277ceafc0ffba7a3d13cd735bcc69931034ce5155e7f514f400c826",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31971.84,
+      "usage_known": true,
+      "prompt_tokens": 34724,
+      "cached_tokens": 0,
+      "completion_tokens": 1151
+    }
+  ]
+}

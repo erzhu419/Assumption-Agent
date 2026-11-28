@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3afd5ce0bd94923a0ad64dfb43f6cb3",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:15.160025+00:00",
+  "ended_at_utc": "2026-11-28T03:33:56.122558+00:00",
+  "request_sha256": "ee0b30f010b40071d28f0610ece0b09d062c7ac94a50bf5cc9b2fcecf0bbc4f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29684,
+    "cached_tokens": 9344,
+    "completion_tokens": 1701
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^def solve_batch(/,$d' /tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Measured on the chamber verification coupons. Fractions refer to initial\\n# slope, so the linear remainder preserves the intrinsic coupon drift rate.\\n_CHAMBER_FRACTIONS = (0.42947, 0.53764)\\n\\n\\ndef _chamber_response(hold, x, strain_0, times, tau, theta, fractions):\\n    drift = x @ theta[2:]\\n    fractions = np.asarray(fractions)\\n    amplitude = hold[:, None] * theta[:2] + drift[:, None] * (tau * fractions)\\n    linear = drift * (1.0 - fractions.sum())\\n    rise = -np.expm1(-times[:, None] / tau)\\n    strain = strain_0[:, None] + amplitude @ rise.T + linear[:, None] * times\\n    rate = hold * np.sum(theta[:2] / tau) + drift\\n    return strain, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = (np.asarray(dataset[k]) for k in ('past_dt', 'eval_times'))\\n    cal = dataset['calibration_load_cells']\\n    past, hold = _loads(cal, train)\\n    x = _features(train, test)\\n    n = len(hold)\\n    tau, theta = _fit(past, hold, x[:n], dt, times,\\n                      train['strain_curves_obs'] - train['strain_0'][:, None],\\n                      train['instant_rate_obs'])\\n    _, hold_test = _loads(cal, test)\\n    strain, rate = _chamber_response(hold_test, x[n:], test['strain_0'],\\n                                     times, tau, theta, _CHAMBER_FRACTIONS)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\nPY\\nsed -n '1,54p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/chamber_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\np = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd, g = p['dataset'], p['campaign_diagnostics']\\no = m.solve_batch(d)\\ntau, theta, t = o['estimated_taus'], o['hereditary_weights'], d['eval_times']\\nassert 0.05 < tau[0] < tau[1] < 25\\n_, h = m._loads(d['calibration_load_cells'], g)\\nx = m._features(g, g)[:len(h)]\\nz = g['strain_0']; y = g['strain_curves_obs']; r = g['instant_rate_obs']\\nrise = -np.expm1(-t[:,None]/tau)\\nanchor = z[:,None]+(h[:,None]*theta[:2]) @ rise.T\\nobserved_drift = r - h*np.sum(theta[:2]/tau)\\nB = rise*tau - t[:,None]\\ndef cv(folds):\\n    e = np.empty_like(y); f = np.empty_like(r)\\n    alphas=[]\\n    for omit in folds:\\n        keep = ~omit\\n        q = observed_drift[keep]\\n        a = np.linalg.lstsq((q[:,None,None]*B).reshape(-1,2), (y[keep]-anchor[keep]-q[:,None]*t).ravel(), rcond=None)[0]\\n        alphas.append(a)\\n        yy, rr = m._chamber_response(h[omit], x[omit], z[omit], t, tau, theta, a)\\n        e[omit] = yy-y[omit]; f[omit] = rr-r[omit]\\n    rmse=lambda a:np.sqrt(np.mean(a*a))\\n    print('pooled strain/rate',rmse(e),rmse(f),'worst fold',max(rmse(e[o]) for o in folds),max(rmse(f[o]) for o in folds),'allocations',np.min(alphas,axis=0),np.max(alphas,axis=0))\\n    return e,f\\nprint('leave coupon out:'); e,f=cv([np.arange(len(h))==i for i in range(len(h))])\\nprint('leave lab out:'); cv([g['lab_id']==lab for lab in np.unique(g['lab_id'])])\\nmissing=np.isnan(g['coupon_features_raw']).any(axis=1)\\nfor name, rows in [('complete',~missing),('missing',missing)]:\\n    print(name,'rows',sum(rows),'strain/rate RMSE',np.sqrt(np.mean(e[rows]**2)),np.sqrt(np.mean(f[rows]**2)))\\nsmall=1e-6\\nys, rs = m._chamber_response(h,x,z,np.array([0.,small]),tau,theta,m._CHAMBER_FRACTIONS)\\nassert np.allclose(ys[:,0],z,atol=1e-12)\\nerr=np.max(np.abs((ys[:,1]-ys[:,0])/small-rs)); print('slope finite-difference max error',err); assert err < 2e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted chamber correction → H2 hold-only activation with conserved initial drift rate; prior compact diagnostic LOO RMSE is 0.00877 strain and 0.00663 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain separate free coefficients for all three temporal terms.\",\n      \"rejected_reason\": \"The measured rate allocations sum to 0.9987 before imposing conservation, so the extra parameter is not supported by the chamber measurements.\"\n    }\n  ],\n  \"rationale\": \"Write the compact chamber law and keep the intrinsic fit on benchtop data. Refit the allocation inside coupon and lab holdouts; if either slice is unstable, revisit the chamber law before submitting. Run the isolated public validator to detect schema or pooled-reference failures, and verify that the returned initial rate is the derivative of the strain curve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "98ac2b5a3758e41adf5d5b49fbb5ecefb1965d837519e29a5449a71e1d34f026",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43022.36,
+      "usage_known": true,
+      "prompt_tokens": 29684,
+      "cached_tokens": 9344,
+      "completion_tokens": 1701
+    }
+  ]
+}

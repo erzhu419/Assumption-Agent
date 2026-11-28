@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0a764e32a7e0406580d7937781823530",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:44:44.755088+00:00",
+  "ended_at_utc": "2026-11-28T03:45:27.510440+00:00",
+  "request_sha256": "8ebe252a50ff3726e029ebe3024829e375151dfb840ccc4d4f18bd3e2c202f9c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66835,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33263,
+    "cached_tokens": 9344,
+    "completion_tokens": 1743
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nimport ast\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\nprior = Path('/tmp/hegel_continual_archive/alpha_m100_c02_batch_01_solver.py')\\nmatrix = next(ast.literal_eval(node.value.args[0]) for node in ast.parse(prior.read_text()).body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '_CHAMBER' for t in node.targets))\\ns = p.read_text()\\na = s.index('    curve, rate, _, _ = _design(np.log(tau), past_test')\\ns = s[:a] + '''    strain, rate = _deployment(tau, theta, x[len(hold):], past_test,\\n                               hold_test, times)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}\\n'''\\npos = s.index('def solve_batch(')\\ns = s[:pos] + '''# The last completed apparatus trace is in the elevated channel-4 regime\\n# (median 2.447), matching the prefix before batch_01 (median 2.434).\\n# Transfer that campaign's verification-coupon response, not its bridge fit.\\n# Rows correspond to intercept, hold stress, intrinsic drift and final stress.\\n_ELEVATED_CHAMBER = np.array(''' + repr(matrix).replace('], [', '],\\\\n                              [') + ''')\\n\\n\\ndef _deployment(tau, theta, x, past, hold, times):\\n    inputs = np.column_stack([np.ones(len(hold)), hold, x @ theta[2:], past[:, -1]])\\n    amplitudes = inputs @ _ELEVATED_CHAMBER\\n    basis = np.column_stack([-np.expm1(-times[:, None] / tau), times])\\n    return amplitudes @ basis.T, amplitudes @ np.r_[1.0 / tau, 1.0]\\n\\n\\n''' + s[pos:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('batch_solver', root/'batch_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith (root/'public_batch.pkl').open('rb') as f: d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; p = c['true_channel_loads']; r = c['bridge_raw']; row = np.arange(len(p)); errors = np.empty_like(r)\\nfor fold in range(5):\\n    sel = row % 5 == fold\\n    coef = s._fit_bridge({'true_channel_loads': p[~sel], 'bridge_raw': r[~sel]})\\n    errors[sel] = np.sum(s._bridge_basis(p[sel]) * coef, axis=-1) - r[sel]\\nq = np.quantile(np.max(abs(errors), axis=1), .95); print('Out-of-fold calibration rowwise absolute p95:', q); assert q < .001\\ncoef = s._fit_bridge(c)\\nfor name in ('train', 'test'):\\n    for key in ('past_channel_raw', 'hold_channel_raw'):\\n        raw = d[name][key]; loads = s._invert_bridge(raw, coef)\\n        residual = np.max(abs(np.sum(s._bridge_basis(loads) * coef, axis=-1) - raw))\\n        print(name, key, 'max reconstruction residual', residual); assert residual < 1e-7\\nans = s.solve_batch(d); tau = ans['estimated_taus']; theta = ans['hereditary_weights']; tr, te = d['train'], d['test']; x = s._features(tr, te)[len(tr['lab_id']):]; past, hold = s._loads(coef, te)\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(a).all() for a in ans.values())\\neps = 1e-5\\ncurve, rate = s._deployment(tau, theta, x, past, hold, np.array([-eps, 0., eps]))\\nerr = np.max(abs((curve[:, 2] - curve[:, 0]) / (2 * eps) - ans['initial_rate_pred']))\\nprint('Deployment onset max central-difference error:', err); assert err < 1e-7 and np.max(abs(curve[:, 1])) == 0\\nprint('Intrinsic taus:', tau, 'test rate range:', (rate.min(), rate.max()))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: transfer the benchtop law unchanged -> H2: transfer the archived chamber response selected by prefix telemetry; worst held-out benchtop rate RMSE is 0.00863 and worst per-time strain p90 absolute error is 0.15664.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the baseline deployment law\",\n      \"rejected_reason\": \"Both archived baseline campaigns followed the low telemetry state; the current prefix matches the elevated state preceding the archived nonbaseline law.\"\n    }\n  ],\n  \"rationale\": \"Keep the material fit independent of chamber selection. Use prefix telemetry to select the prior response, then check held-out bridge accuracy, bridge inversion on both splits, and consistency of the deployment rate with the predicted strain derivative. Blind chamber accuracy remains unmeasured.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c70ea2b5c575dfb2a6bb683a8d7ec2a8cf806db34048e27d9fe27e02e1da5157",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44887.06,
+      "usage_known": true,
+      "prompt_tokens": 33263,
+      "cached_tokens": 9344,
+      "completion_tokens": 1743
+    }
+  ]
+}

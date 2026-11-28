@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bf13616371d41e0bb847459b9346a9c",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:59.888100+00:00",
+  "ended_at_utc": "2026-11-28T03:43:39.737567+00:00",
+  "request_sha256": "542cecfa754730cba659a9053d1ce3bb631038058b4d21f04b46a4288c0e37e4",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51652,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27425,
+    "cached_tokens": 9344,
+    "completion_tokens": 1704
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp upstream_transducer.py /tmp/bridge_independent.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('upstream_transducer.py')\\ns=p.read_text().replace('import numpy as np\\\\n','import numpy as np\\\\nfrom scipy.optimize import least_squares\\\\n',1)\\nold='''    coeff, _ = regress(r <= 8 * scale)\\n    return coeff'''\\nnew='''    coeff, _ = regress(r <= 8 * scale)\\n    _, r = regress(r <= 8 * scale)\\n    clean = r <= 8 * max(np.median(r), 1e-10)\\n\\n    # Channel gains differ, but the normalized cyclic response is shared.\\n    j = np.arange(4)\\n    nxt, prev = (j + 1) % 4, (j - 1) % 4\\n    gains = coeff[j, j + 1]\\n    initial = np.r_[coeff[:, 0], gains,\\n                    np.median(coeff[j, nxt + 1] / gains),\\n                    np.median(coeff[j, prev + 1] / gains),\\n                    np.median(coeff[:, 5:] / gains[:, None], axis=0)]\\n    observed = [(a[clean[idx]], b[clean[idx]]) for a, b, idx in design]\\n\\n    def unpack(params):\\n        c = np.zeros((4, 7))\\n        gain = params[4:8]\\n        c[:, 0] = params[:4]\\n        c[j, j + 1] = gain\\n        c[j, nxt + 1] = gain * params[8]\\n        c[j, prev + 1] = gain * params[9]\\n        c[:, 5:] = gain[:, None] * params[10:12]\\n        return c\\n\\n    def residual(params):\\n        return np.concatenate([a @ c - b for (a, b), c in zip(observed, unpack(params))])\\n\\n    return unpack(least_squares(residual, initial).x)'''\\nassert old in s\\ns=s.replace(old,new).replace('    coeff, _ = regress(r <= 8 * scale)\\\\n    _, r = regress(r <= 8 * scale)','    coeff, r = regress(r <= 8 * scale)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom upstream_transducer import _fit_bridge, _inverse, _forward, calibrate_upstream\\nfrom bridge_independent import _fit_bridge as independent\\nfrom batch_solver import solve_batch\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    d=item['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; b=_fit_bridge(c)\\n    mixed=np.count_nonzero(x,axis=1)>1\\n    masks=[mixed & (np.max(abs(x),axis=1)>1.4)]\\n    for j in range(4):\\n        z=abs(x[:,j]-x[:,(j+1)%4]); masks.append(mixed & (z>=np.quantile(z[mixed],.75)))\\n    for i,m in enumerate(masks):\\n        fold=dict(c,true_channel_loads=x[~m],bridge_raw=y[~m]); old=independent(fold); new=_fit_bridge(fold)\\n        e=[np.max(abs(_inverse(y[m],p)-x[m])) for p in (old,new)]\\n        print('group',i,'load max independent/shared',e); assert e[1]<e[0]\\n    clean=np.max(abs(_forward(x,b)-y),axis=1)<1\\n    loo=[]\\n    for i in np.flatnonzero(clean):\\n        keep=np.arange(len(x))!=i; fold=dict(c,true_channel_loads=x[keep],bridge_raw=y[keep]); loo.append(np.max(abs(_inverse(y[i],_fit_bridge(fold))-x[i])))\\n    print('clean LOO max',max(loo)); assert max(loo)<.001\\n    grid=np.stack(np.meshgrid(*([np.linspace(-1.7,1.7,13)]*4)),axis=-1).reshape(-1,4)\\n    er=np.max(abs(_inverse(_forward(grid,b),b)-grid)); print('box roundtrip max',er); assert er<1e-9\\n    ext=dict(d,chamber_verification_trials=d['test']); a=calibrate_upstream(ext)\\n    assert calibrate_upstream(dict(d,chamber_verification_trials=None))['chamber_verification_trials'] is None\\n    for split in ('train','test','chamber_verification_trials'):\\n        for field in ('past_channel_raw','hold_channel_raw'):\\n            raw=ext[split][field]; result=a[split][field]; assert result.shape==raw.shape\\n            er=np.max(abs(_forward(result.reshape(-1,4),b)-raw.reshape(-1,4))); print(split,field,er); assert er<1e-9\\n    ca=a['calibration_load_cells']; s=c['single_channel_sweeps']; assert np.array_equal(ca['bridge_raw'],x) and not np.shares_memory(ca['bridge_raw'],x)\\n    cmd=ca['single_channel_sweeps']['cmd_stress']; assert np.array_equal(cmd,s['true_stress']) and not np.shares_memory(cmd,s['true_stress'])\\n    result=solve_batch(d); assert all(np.isfinite(v).all() for v in result.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent cyclic coefficients -> H2 shared gain-normalized cyclic response; grouped outer-shell load error fell from 0.000522 to 0.000474 in the audit, with improvements in all four high-contrast groups.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Retain independent coefficients\",\"rejected_reason\":\"The small leave-one-out advantage did not carry over to any of the five grouped extrapolation slices.\"},{\"option\":\"Add a pairwise-difference rational term\",\"rejected_reason\":\"Its fitted curvature was near zero and did not improve the grouped outer-shell forward error.\"}],\"rationale\":\"Promote the shared law because it improves the worst measured region holdout without sacrificing pointwise accuracy materially. Verify that the exact implementation reproduces the grouped gains and still passes the public schema and inverse checks.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ecd7c8a5dff4734a7918ec40a062fc4601a0fa7151adc9679efac8dee255eb13",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44153.1,
+      "usage_known": true,
+      "prompt_tokens": 27425,
+      "cached_tokens": 9344,
+      "completion_tokens": 1704
+    }
+  ]
+}

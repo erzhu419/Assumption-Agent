@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "681afb802d9b4a15af6936af0b291ac0",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__stageS__alpha_m100_c01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:28:23.244879+00:00",
+  "ended_at_utc": "2026-11-28T03:28:52.400252+00:00",
+  "request_sha256": "79d2c4f400347148cb7fccc1a0693ed9610127371deecb644201f9e3bc79068d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47541,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27369,
+    "cached_tokens": 10880,
+    "completion_tokens": 1134
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/check_bridge_transfer.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.spatial import Delaunay\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\ncal = d['calibration_load_cells']\\nraw, loads = cal['bridge_raw'], cal['true_channel_loads']\\nx = np.column_stack((np.ones(len(raw)), raw))\\nbeta = s._bridge(raw, loads)\\nres = x @ beta - loads.sum(axis=1)\\nprint('calibration noise RMS', np.sqrt(np.mean(res**2)))\\nsweeps = cal['single_channel_sweeps']\\nprint('sweep structure', type(sweeps).__name__, list(sweeps) if isinstance(sweeps, dict) else np.shape(sweeps))\\n_, xp = np.linalg.qr(x, mode='reduced')\\nhull = Delaunay(raw)\\ncoef_cov = np.linalg.inv(xp.T @ xp) * (res @ res) / (len(res) - x.shape[1])\\nfor split in ('train', 'test'):\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        rows = d[split][field].reshape(-1, 4)\\n        design = np.column_stack((np.ones(len(rows)), rows))\\n        outside = hull.find_simplex(rows) < 0\\n        se = np.sqrt(np.einsum('ij,jk,ik->i', design, coef_cov, design))\\n        print(split, field, 'outside calibration hull', int(outside.sum()), '/', len(rows), 'max fitted mean SE', float(se.max()))\\n# Recovery with real coupon inputs and known noise-free responses tests against\\n# optimizer basin failures, not against unobserved deployment outcomes.\\ntr, te = d['train'], d['test']\\nxt, xe = s._features(tr, te)\\np, h, f = s._inputs(tr, xt, beta)\\ndt, t = d['past_dt'], d['eval_times']\\nweights = s.solve_batch(d)['hereditary_weights']\\nfor truth in (np.array([.065, .28]), np.array([.16, 20.]), np.array([1.1, 1.55]), np.array([4., 21.])):\\n    c, r = s._design(truth, p, h, f, dt, t)\\n    tau, theta = s._fit(p, h, f, dt, t, c @ weights, r @ weights)\\n    c, r = s._design(truth, *s._inputs(te, xe, beta), dt, t)\\n    cp, rp = s._design(tau, *s._inputs(te, xe, beta), dt, t)\\n    print('truth/fitted taus', truth, tau, 'max transfer curve/rate discrepancy', np.max(abs(cp @ theta - c @ weights)), np.max(abs(rp @ theta - r @ weights)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_bridge_transfer.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and pooled reference standardization -> H2 robust two-branch fit with baseline chamber transfer; worst leave-one-lab-out p90 errors were 0.02715 for strain and 0.01768 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebra and lab-confounding audit\",\n      \"rejected_reason\": \"The prior clean-process audit already compared nonlinear calibration bases, verified the recurrence and derivative, and measured grouped errors. No classifier or relay variables exist in this task.\"\n    }\n  ],\n  \"rationale\": \"Random calibration folds did not test coverage of actual deployment loads. Check calibration support and fitted uncertainty there; if extrapolation is material, inspect the single-channel sweeps before changing the bridge. Separately, test optimizer recovery at short, long, and close branch times using measured coupon inputs and known responses; a material recovery error would warrant changing the initialization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1cc3c9894aee6aa70e17be1b49c3ac888bedb99eb2921d5d91cb28d4573c2295",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31258.7,
+      "usage_known": true,
+      "prompt_tokens": 27369,
+      "cached_tokens": 10880,
+      "completion_tokens": 1134
+    }
+  ]
+}

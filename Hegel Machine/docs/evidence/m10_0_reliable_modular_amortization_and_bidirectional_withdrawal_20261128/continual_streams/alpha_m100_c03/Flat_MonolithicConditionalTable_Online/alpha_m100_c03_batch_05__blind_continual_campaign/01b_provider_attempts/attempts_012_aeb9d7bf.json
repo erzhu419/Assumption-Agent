@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aeb9d7bf801a45b2bd93f1cdc74d7225",
+  "call_seq": 12,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:59:15.218928+00:00",
+  "ended_at_utc": "2026-11-28T03:59:37.804295+00:00",
+  "request_sha256": "bfffc007456ddf3bcadd71b31f539584d36e0dde8470e1f693c7102c00730ca6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74525,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37175,
+    "cached_tokens": 9344,
+    "completion_tokens": 824
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; python3 /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\npath='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',path)\\nb=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; times=d['eval_times']; dt=d['past_dt']\\nout=b.solve_batch(d)\\nassert set(out)=={'estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'}\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nassert all(np.all(np.isfinite(v)) for v in out.values())\\nx=b._features(tr,te)[:len(tr['lab_id'])]; past,hold=b._loads(tr,b._bridge(d['calibration_load_cells'])); obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate_obs=tr['instant_rate_obs']; max_curve=0.; max_rate=0.\\nfor lab in np.unique(tr['lab_id']):\\n    test=tr['lab_id']==lab; train=~test\\n    tau,w=b._fit(x[train],past[train],hold[train],dt,times,obs[train],rate_obs[train]); c,r=b._design(tau,x[test],past[test],hold[test],dt,times)\\n    early=times<=np.median(times); late=~early\\n    errors=[np.median(np.abs((c@w-obs[test])[:,window])) for window in (early,late)]; er=np.median(np.abs(r@w-rate_obs[test])); max_curve=max(max_curve,*errors); max_rate=max(max_rate,er)\\n    print('held-out lab',lab,'early/late curve median AE',errors,'rate median AE',er,'taus',tau)\\nprint('worst held-out curve horizon and rate median AE',max_curve,max_rate)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense nonlinear bridge → H2 calibrated opposite-channel bridge with benchtop deployment transfer; worst held-out total-stress error is 0.00206, and the host probe reports strain MAE 0.000857 and rate MAE 0.000443.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace linear chamber drift with the archived exponential buildup\",\n      \"rejected_reason\": \"The blind batch has no labeled chamber diagnostics supporting that substitution, and the current candidate has low strain and rate errors in the host probe.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact saved artifact in isolated Python and run leave-one-lab-out validation on measured benchtop curves and rates. A schema failure would require an implementation fix; a large error isolated to one lab or horizon would warrant revisiting feature alignment or the intrinsic fit before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "099ddb92a53fbcb735c2699a0b08c9a50e8cc8b3bafc222c54f3eb36b4f1c7a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24705.64,
+      "usage_known": true,
+      "prompt_tokens": 37175,
+      "cached_tokens": 9344,
+      "completion_tokens": 824
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63c236fc7b2049e2936d81fd1e6ad439",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:04:09.013636+00:00",
+  "ended_at_utc": "2026-11-28T04:04:39.134806+00:00",
+  "request_sha256": "9c55a21b6d13159f23453dd3371895e2b8e815364b8763018ea709e5a745d314",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54341,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28715,
+    "cached_tokens": 9344,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; assert i.get('campaign_diagnostics') is None\\nb=m._bridge(d['calibration_load_cells']); k,q=b[0]; a,s,c,l,h=b[1].T\\nmargin=s-abs(c*k)-abs(l)-abs(h*q); print('global bridge Jacobian diagonal-dominance margins',margin); assert np.min(margin)>0\\nfor name,split in [('train',tr),('test',te)]:\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  raw=split[key].reshape(-1,4); inv=m._inverse(raw,b); err=np.max(np.abs(np.sum(m._basis(inv,b[0])*b[1],axis=-1)-raw)); print('bridge closure',name,key,err); assert err<1e-9\\nn=len(tr['strain_0']); x=m._features(tr,te)[:n]; past,hold=m._loads(tr,b); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d)\\nassert out['estimated_taus'].shape==(2,) and out['hereditary_weights'].shape==(7,) and out['predicted_strain'].shape==(len(te['strain_0']),len(t)) and out['initial_rate_pred'].shape==te['strain_0'].shape\\nassert all(np.all(np.isfinite(v)) for v in out.values()) and .05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nprint('material fit',out['estimated_taus'],out['hereditary_weights']); print('archive chamber law',m._CHAMBER_LAW)\\nfor field in ['lab_id','stratum']:\\n for val in np.unique(tr[field]):\\n  idx=tr[field]==val; f=~idx; taus,w=m._fit(x[f],past[f],hold[f],dt,t,y[f],r[f]); a,b_=m._design(taus,x[idx],past[idx],hold[idx],dt,t); ac=np.abs(a@w-y[idx]); ar=np.abs(b_@w-r[idx]); print('held out',field,val,int(idx.sum()),'tau',taus.round(5),'curve abs median and p90',np.quantile(ac,[.5,.9]),'rate abs median and p90',np.quantile(ar,[.5,.9]))\\nht=m._loads(te,b)[1]; xx=m._features(tr,te)[n:]; tiny=1e-6; cc,rr=m._chamber(out['estimated_taus'],out['hereditary_weights'],xx,ht,np.array([0.,tiny]),m._CHAMBER_LAW); print('chamber anchor error',abs(cc[:,0]).max(),'rate finite-difference error',max(abs(cc[:,1]/tiny-rr))); assert max(abs(cc[:,0]))==0 and max(abs(cc[:,1]/tiny-rr))<1e-5; assert np.allclose(rr,out['initial_rate_pred'])\\nPY\\nsed -n '/^def _chamber/,/^def solve_batch/p' /tmp/hegel_continual_archive/alpha_m100_c03_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dynamically calibrated nonlinear bridge and shared material fit → H2 chamber transfer by matched predecessor state; maximum non-outlier independent sweep error was 0.000302, with grouped material validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the schema result alone\",\n      \"rejected_reason\": \"The schema check does not detect unstable bridge inversion, material fit dependence on a single lab or stratum, or disagreement between the chamber strain curve and its reported initial rate.\"\n    }\n  ],\n  \"rationale\": \"Test the exact artifact in an isolated Python process. Inverse closure and Jacobian margins test whether the recovered loads are reliable; grouped holdouts test whether the material fit depends on one lab or stratum; the derivative check verifies the independent rate output. The blind deployment law remains an archive-based inference.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "480178bd3dd2f9ea260b56c61678ec4318e66588a73ace6eb4bf3afc594000bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32216.49,
+      "usage_known": true,
+      "prompt_tokens": 28715,
+      "cached_tokens": 9344,
+      "completion_tokens": 1186
+    }
+  ]
+}

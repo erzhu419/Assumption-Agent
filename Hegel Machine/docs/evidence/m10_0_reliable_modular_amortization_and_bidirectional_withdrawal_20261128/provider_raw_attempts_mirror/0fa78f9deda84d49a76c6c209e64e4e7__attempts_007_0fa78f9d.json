@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0fa78f9deda84d49a76c6c209e64e4e7",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:12:23.286843+00:00",
+  "ended_at_utc": "2026-11-28T04:13:05.352676+00:00",
+  "request_sha256": "750e80da87987cc300b7db228af945ce9fc98d2ccfa75a1d7a9a571f74a09421",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29329,
+    "cached_tokens": 9344,
+    "completion_tokens": 1738
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat _upstream_param_payload.json\\ncat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate each study's rosettes and solve in canonical coordinates.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(study))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nfrom scipy.linalg import solve\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import box_simplex, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\n\\nstudy = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ns = calibrate_upstream(study)\\nout = solve_batch(study)\\nw = out['weights']; cert = out['kkt_certificate']\\nassert np.array_equal(w, solve_downstream(s)['weights'])\\n\\ndef periodic(k, v, h):\\n    n = len(k); A = np.zeros((n,n))\\n    for i in range(n):\\n        for j, speed in (((i-1)%n, v[i]), ((i+1)%n, -v[i])):\\n            rate = (k[i]+k[j])/(2*h*h) + max(speed,0)/h\\n            A[i,j] -= rate\\n            A[i,i] += rate\\n    return A\\nnx, ny = s['nx'], s['ny']\\naxes = [periodic(s['kappa_'+d], s['vel_'+d], s['L'+d]/(s['n'+d]-1)) for d in 'xy']\\nL = np.kron(np.eye(ny), axes[0]) + np.kron(axes[1], np.eye(nx)) + np.diag(s['V_reaction_2d'].flatten(order='F'))\\nI = np.eye(nx*ny)\\nrhs = np.column_stack([u.flatten(order='F') for u in s['source_modes']])\\nix, iy = s['sensor_ij'].T\\nU = [solve(L+mu*I,rhs) for mu in s['mu_shifts']]\\nS = np.concatenate([u[ix+nx*iy] for u in U]); Z = s['Z_nuisance']\\nR = np.eye(len(Z)) - Z @ solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nerr = R@(S@w-s['y_obs_raw']); g = (R@S).T@err + s['source_ridge']*w\\nobj = (err@err+s['source_ridge']*(w@w))/2\\nnu = cert['nu_sum']; lo = np.asarray(cert['lam_lower']); hi = np.asarray(cert['lam_upper']); cap = s['u_box']; budget = s['total_budget']\\nfield_error = np.max(np.abs(out['terminal_field'].flatten(order='F')-U[-1]@w))\\nstat = np.max(np.abs(g-nu-lo+hi)); comp = max(np.max(lo*w), np.max(hi*(cap-w)))\\ndual = obj - g@w + nu*budget + cap*np.minimum(0,g-nu).sum()\\nassert np.array_equal(w, cert['weights'])\\nassert abs(w.sum()-budget) < 1e-12 and np.min(w) >= 0 and np.max(w) <= cap\\nassert lo.min() >= 0 and hi.min() >= 0\\nassert max(field_error, stat, comp, abs(obj-cert['primal_objective']), abs(dual-cert['dual_lower_bound']), abs(obj-dual)) < 1e-11\\nprint('dense-reference terminal max error',field_error,'stationarity',stat,'complementarity',comp,'primal-dual gap',obj-dual)\\n\\nchanged = copy.deepcopy(study)\\nraw = changed['sensor_calibration_sweeps']['raw_rosette']\\nscale = np.array([0.71,1.17,0.92,1.09]); shift = np.array([0.19,-0.13,0.22,-0.17])\\nchanged['sensor_calibration_sweeps']['raw_rosette'] = raw*scale+shift\\nchanged['y_obs_raw'] = (study['y_obs_raw'].reshape(-1,4)*scale+shift).ravel()\\nalt = solve_batch(changed)\\nassert np.allclose(alt['weights'], w, atol=2e-12,rtol=0)\\nassert np.allclose(alt['terminal_field'], out['terminal_field'], atol=2e-12,rtol=0)\\nprint('per-study calibration invariance max weight error',np.max(np.abs(alt['weights']-w)))\\n\\nrng = np.random.default_rng(283)\\nworst=0\\nfor n in (2, 8, 20):\\n    for fraction in (0., 1e-8, .125, .5, .875, 1-1e-8, 1.):\\n        for _ in range(30):\\n            X = rng.normal(size=(n,n)); H = X.T@X+0.04*np.eye(n)\\n            c = 2*rng.normal(size=n); b = fraction*n*cap\\n            x, eta = box_simplex(H,c,cap,b)\\n            d = H@x+c-eta\\n            gap = d@x-cap*np.minimum(0,d).sum()\\n            mismatch = max(abs(gap), abs(x.sum()-b), max(0,-x.min(),x.max()-cap))\\n            assert mismatch < 2e-10, (n,fraction,mismatch)\\n            worst=max(worst,mismatch)\\nprint('630 QP stress cases, worst error',worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open walls → H2 periodic walls on both axes; LOSO RMSE 0.00811 and worst-sensor RMSE 0.01442.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Keep fixed gains and offsets in the wrapper\",\"rejected_reason\":\"The task explicitly requires fitting each study's sweeps, and the staged upstream module already provides that fit when called without a fixed payload.\"}],\"rationale\":\"Use the existing upstream fit rather than implementing calibration twice. Verify the revised wrapper under changed gains and offsets, and use an independent dense stencil and active-bound stress cases to detect indexing, certificate, or optimizer errors before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f9e6d6f8dd9639d0f7d5fabf8980c3a896566f2d6cfb6694b5c482ed2b447211",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44163.1,
+      "usage_known": true,
+      "prompt_tokens": 29329,
+      "cached_tokens": 9344,
+      "completion_tokens": 1738
+    }
+  ]
+}

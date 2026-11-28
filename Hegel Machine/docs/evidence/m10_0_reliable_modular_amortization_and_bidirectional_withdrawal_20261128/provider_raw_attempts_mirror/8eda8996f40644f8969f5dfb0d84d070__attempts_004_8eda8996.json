@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8eda8996f40644f8969f5dfb0d84d070",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:12.343166+00:00",
+  "ended_at_utc": "2026-11-28T03:39:36.568380+00:00",
+  "request_sha256": "9e07f2c829691b0428f7c41fe6e9fafcc4d7ce6e5799036e42776e2455e26d85",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 31099,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21980,
+    "cached_tokens": 9344,
+    "completion_tokens": 931
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys, json, pickle, numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport beta_m100_c03_s00_solver as op, beta_m100_c03_batch_01_solver as sealed\\nfrom _verified_upstream import calibrate_upstream\\np=pickle.load(open('public_batch.pkl','rb'))[0]; s=p['study']; pay=json.load(open('_upstream_param_payload.json')); pulses=p['campaign_diagnostics']; W=np.array([d['w_pulse'] for d in pulses]).T; z=s['Z_nuisance']; ij=s['sensor_ij']; print('coordinates per wall',[(ij[:,i]==v).sum() for i,n in enumerate((s['nx'],s['ny'])) for v in (0,n-1)]); print('pulse calibration comparison')\\nY=[]; Ydyn=[]\\nfor d in pulses:\\n q={**s,'y_obs_raw':d['y_pulse_raw']}; Y.append(calibrate_upstream(q,pay)['y_obs_raw']); Ydyn.append(calibrate_upstream(q)['y_obs_raw'])\\ny=np.array(Y).T; yd=np.array(Ydyn).T; print('dynamic-fixed RMS',np.sqrt(np.mean((yd-y)**2)), 'pulse RMS',np.sqrt(np.mean(y**2,axis=0)))\\nref=s['sensor_calibration_sweeps']['ref_rosette']; raw=s['sensor_calibration_sweeps']['raw_rosette']; good=np.all(abs(raw)<=8.5,axis=1); print('calibration fixed max residual',np.max(abs(raw[good]-ref[good]*pay['gains']-pay['offsets']),axis=0)); print('robin',s['robin_x'],s['robin_y'])\\na=[op._axis(s['kappa_'+d],s['vel_'+d],s['L'+d]/(s['n'+d]-1),s['robin_'+d]) for d in 'xy']; b=[sealed._axis(s['kappa_'+d],s['vel_'+d],s['L'+d]/(s['n'+d]-1)) for d in 'xy'];\\nfor i in range(2):\\n for j in range(2):\\n  S,_=op._responses(s,[([a,b][i])[0],([a,b][j])[1]]); E=S@W-y; gamma=np.linalg.lstsq(z,E,rcond=None)[0]; Ep=E-z@gamma; print('sealed x/y',i,j,'raw pulse RMS',np.sqrt(np.mean(E**2,axis=0)),'no nuisance RMS',np.sqrt(np.mean(Ep**2,axis=0)),'profile gamma norm',np.linalg.norm(gamma,axis=0),'maximum projected residual',abs(Ep).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived open or sealed walls on both axes → independent per-axis variants if needed; calibrated pulse residuals are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the latest sealed-wall solver unchanged\",\n      \"rejected_reason\": \"The three calibrated pulses can distinguish sealed, open, and mixed-axis walls directly.\"\n    }\n  ],\n  \"rationale\": \"Compare both calibration paths and all four combinations of archived wall operators, with and without nuisance projection. This tests whether a residual requires a new boundary mechanism before fitting one.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d8f19617b4b7137a66b03011969223c513edf0be976da5d44f645353c137ea57",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26342.82,
+      "usage_known": true,
+      "prompt_tokens": 21980,
+      "cached_tokens": 9344,
+      "completion_tokens": 931
+    }
+  ]
+}

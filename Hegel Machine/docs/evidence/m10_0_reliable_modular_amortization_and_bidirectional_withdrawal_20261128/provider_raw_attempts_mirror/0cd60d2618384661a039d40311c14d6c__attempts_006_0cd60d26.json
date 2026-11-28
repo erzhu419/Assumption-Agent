@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0cd60d2618384661a039d40311c14d6c",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:07:56.993758+00:00",
+  "ended_at_utc": "2026-11-28T04:08:25.362410+00:00",
+  "request_sha256": "c1f82960a4c7f4dcc4ab929101e936de856221961b63a5c728f0f69ff74d3942",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46216,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28328,
+    "cached_tokens": 9344,
+    "completion_tokens": 1107
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '95,175p' /tmp/hegel_continual_archive/alpha_m100_c02_batch_05_solver.py; cat > /tmp/chamber07.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe07 import *\\nfrom scipy.optimize import least_squares\\nfrom numpy.linalg import lstsq\\nprint('panel conventions: lab, train/test (center, scale), diag (center, scale)')\\nfor lab in np.unique(labs):\\n def ms(a): return np.array([np.median(a.mean(0)), np.median(a.std(0))])\\n print(lab,ms(refs[labs==lab]),ms(g['ref_coupons'][g['lab_id']==lab]))\\nbase=np.c_[(h[:,None]-z)*th[:2], np.zeros(len(h))]@basis.T\\nXs={'train/test':x,'diag':m._features(g,g)[:len(h),1:],'diag with train':m._features(tr,g)[len(H):,1:]}\\nfor align,xx in Xs.items():\\n dd=np.c_[np.ones(len(h)),xx]@th[2:]; one=np.ones(len(h))\\n for name,W in [('drift',dd[:,None]),('offset',np.c_[dd,one]),('quadratic',np.c_[dd,dd**2,one]),('hold',np.c_[dd,h,one]),('memory',np.c_[dd,h,z,one]),('feature',np.c_[dd,xx,one])]:\\n  full=(W[:,:,None,None]*basis.T[None,None,:,:]).transpose(0,3,1,2).reshape(len(h),len(t)+1,-1)\\n  def fit(f):\\n   a=full[f].reshape(-1,full.shape[-1]); b=(v-base)[f].ravel(); start=lstsq(a,b,rcond=None)[0]; return least_squares(lambda c:a@c-b,start,jac=lambda c:a,loss='soft_l1',f_scale=.009).x\\n  err=np.zeros_like(v)\\n  for lab in np.unique(g['lab_id']):\\n   f=mask&(g['lab_id']!=lab); e=g['lab_id']==lab; err[e]=(base+full@fit(f)-v)[e];\\n  print(align,name,'coef',fit(mask).round(4),'LOLO',np.round([max(np.sqrt(np.mean(err[mask&(g['lab_id']==lab),a]**2)) for lab in np.unique(g['lab_id'])) for a in [slice(None,-1),-1]],4),'p50,90,100',np.quantile(np.sqrt(np.mean(err[mask]**2,axis=1)),[.5,.9,1]).round(4))\\n  if name=='drift': print('coupon err',np.c_[dd, err[:,-2:]].round(4).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop creep -> H2 retained hereditary memory with chamber-specific drift-to-mode transfer; current worst held-out lab RMSE is 0.0641 strain and 0.0778 initial rate for a flexible linear memory fit.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The intrinsic benchtop law, including a purely linear time drift, also describes the chamber.\",\"empirical_witness\":\"Baseline RMSE grows to 1.20786 at the last sample on complete diagnostics, while projecting onto the two intrinsic exponentials and a linear term leaves last-sample RMSE 0.00637.\",\"causal_blanket_diagnosis\":\"The intrinsic time basis remains viable, but the chamber redistributes coupon effects across that basis; omitting inherited state also drives held-out lab errors sharply higher.\",\"sublated_pivot\":\"Retain the intrinsic kernels and calibrated chronological memory, and fit a sparse chamber-specific map for the amplitudes.\",\"risk_kind\":\"deployment_transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit the relaxation times to the chamber coupons\",\"rejected_reason\":\"The fixed time basis already fits individual curves near sensor noise; the larger error is in predicting amplitudes.\"}],\"rationale\":\"Compare constrained amplitude maps directly against strain and rate in held-out labs. Testing reference-panel conventions alongside the maps distinguishes a systematic alignment error from additional chamber terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7af2eb46ec52dba5d7a2a60277b00b2056ee0a1f9d46d56407a984b57dd1e558",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30523.4,
+      "usage_known": true,
+      "prompt_tokens": 28328,
+      "cached_tokens": 9344,
+      "completion_tokens": 1107
+    }
+  ]
+}

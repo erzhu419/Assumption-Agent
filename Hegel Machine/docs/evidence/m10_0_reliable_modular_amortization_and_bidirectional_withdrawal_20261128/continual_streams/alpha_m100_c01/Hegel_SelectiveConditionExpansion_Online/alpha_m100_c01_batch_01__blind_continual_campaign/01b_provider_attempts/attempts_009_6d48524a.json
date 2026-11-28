@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d48524a92654090af8c37bfb75dc708",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:05.283307+00:00",
+  "ended_at_utc": "2026-11-28T03:33:28.910170+00:00",
+  "request_sha256": "9f94d9e9f6621c9f59b40b39df520d620a615c3c9c732ca1a95792c89020e3ff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47461,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28330,
+    "cached_tokens": 9344,
+    "completion_tokens": 874
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nfrom chamber import *\\nfrom scipy.optimize import least_squares\\nclean=np.isfinite(q['coupon_features_raw']).all(1); V=y@np.linalg.pinv(A).T; B=(y-0.02*(F@W[2:])[:,None]*A[:,2])@np.linalg.pinv(A[:,:2]).T\\nprint('dt, t, material',dt,t,T,W); print('drift fit and sd',np.linalg.lstsq(np.c_[np.ones(sum(clean)),(F@W[2:])[clean]],V[clean,2],rcond=None)[0],np.std(V[clean,2]-0.02*(F@W[2:])[clean])); print('clean',sum(clean))\\nfor j in range(2):\\n base=(np.c_[C@W,R@W] if False else None); z=h-R[:,j]*T[j]; print('branch',j,'absolute stress fit',np.linalg.lstsq(np.c_[np.ones(len(h)),h,p],B[:,j],rcond=None)[0]); print('branch clean full fit',np.linalg.lstsq(np.c_[np.ones(len(h)),h,p,x][clean],B[clean,j],rcond=None)[0]); print('gap drift',np.linalg.lstsq(np.c_[np.ones(len(h)),h,z,F@W[2:]][clean],B[clean,j],rcond=None)[0]);\\n for name,M in [('allhist',np.c_[np.ones(len(h)),h,p]),('drift_gap',np.c_[np.ones(len(h)),h,z,F@W[2:]]),('drift_hist',np.c_[np.ones(len(h)),h,p,F@W[2:]])]:\\n  M=M[clean]; b0=np.linalg.lstsq(M,B[clean,j],rcond=None)[0]; er=B[clean,j]-M@b0; print(name,'rmse',np.mean(er**2)**.5,'loo',max(abs(er/(1-(M*np.linalg.pinv(M).T).sum(1))))); print('coeffs',b0)\\nprint('first rows fast residual versus W0*h',B[:,0]-W[0]*h); print('slow residual versus baseline slow plus scaled drift',np.c_[B[:,1]-R[:,1]*T[1]*W[1],F@W[2:]])\\nPY\\nsed -n '1,110p' /tmp/base.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted linear correction) → H2 (modified fast memory, slow amplitude coupled to drift, and suppressed linear drift); current worst held-out strain RMSE is 0.404 and worst initial-rate error is 0.356.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the diagnostic-only reference panel for deployment\",\"rejected_reason\":\"Deployment must use the pooled train/test panel; complete diagnostic coupons can distinguish a chamber law from artifacts of diagnostic imputation.\"}],\"rationale\":\"Estimate the two absolute branch amplitudes after accounting for suppressed drift, then compare calibrated-history and drift-coupled models on complete diagnostic coupons. This test distinguishes a compact chamber law from coefficients compensating for missing features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "88090a3bc71ff967eb718f6ae77930954da74138b5582e7e02780b983bacecf9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25687.85,
+      "usage_known": true,
+      "prompt_tokens": 28330,
+      "cached_tokens": 9344,
+      "completion_tokens": 874
+    }
+  ]
+}

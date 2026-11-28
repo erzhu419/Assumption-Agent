@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a55f5ad931594facb8872672bd66b570",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:08.463931+00:00",
+  "ended_at_utc": "2026-11-28T03:50:28.309587+00:00",
+  "request_sha256": "65ad0fe9d14677842aced1416680cfff3a92f6e11ba553d2ce815ff023be5b97",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 28607,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21093,
+    "cached_tokens": 9344,
+    "completion_tokens": 710
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); np.set_printoptions(precision=5,suppress=True)\\nprint('shape',x.shape,y.shape,'range',x.min(0),x.max(0),'raw',y.min(0),y.max(0)); print('first ref/raw',x[:4],y[:4]); print('ref rank',np.linalg.svd(x-x.mean(0),compute_uv=False)); print('banks',s['row_bank_id'].reshape(-1,4)[:5]); b=c['single_bank_sweeps']; print('bank container',type(b).__name__); print('bank entries',[(k,[(a,np.shape(v),np.asarray(v).ravel()[:4].tolist()) for a,v in d.items()]) for k,d in (b.items() if isinstance(b,dict) else enumerate(b))][:4]);\\na=np.c_[np.ones(len(x)),x]; w=np.ones(len(x));\\nfor _ in range(12):\\n coef=np.linalg.lstsq(a*w[:,None],y*w[:,None],rcond=None)[0]; r=np.linalg.norm(y-a@coef,axis=1); w=1/np.sqrt(1+(r/max(np.median(r),1e-12))**2)\\nprint('affine coef',coef);print('affine residual quantiles',np.quantile(r,[0,.25,.5,.75,.9,.95,.98,1])); print('worst rows (index, residual)',[(int(i),round(r[i],5)) for i in np.argsort(r)[-12:]]);print('observation range',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine mixing → H2 structured saturation if paired-sweep residuals support it; held-out inverse error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived independent-channel calibrator\",\n      \"rejected_reason\": \"It cannot represent the cross-channel coupling requested here; the paired sweeps can establish whether that coupling is measurable.\"\n    }\n  ],\n  \"rationale\": \"The public fixture contains paired sweeps. Check their rank and affine residuals to separate insufficient coverage, nonlinear response, and gross spikes; inspect the single-bank layout to implement identity normalization without changing the schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f0e79ec79f5ab2614a760f2c684a948c76329f7da5a0eb642adf49aaa6504894",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21928.39,
+      "usage_known": true,
+      "prompt_tokens": 21093,
+      "cached_tokens": 9344,
+      "completion_tokens": 710
+    }
+  ]
+}

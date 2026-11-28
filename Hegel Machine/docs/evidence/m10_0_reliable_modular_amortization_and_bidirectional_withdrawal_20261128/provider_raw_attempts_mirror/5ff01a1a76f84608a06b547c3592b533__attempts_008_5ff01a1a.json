@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ff01a1a76f84608a06b547c3592b533",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:32:56.711416+00:00",
+  "ended_at_utc": "2026-11-28T03:33:38.165372+00:00",
+  "request_sha256": "1314b9e20c8d2597bb0485daf294006e72e9fb8e84b75ef7ab48139148fa8b70",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44366,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25878,
+    "cached_tokens": 9344,
+    "completion_tokens": 1829
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_sealed.py <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems=pickle.load(open(root+'public_batch.pkl','rb'))\\nfor j,item in enumerate(items):\\n    s=item['study']; c=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); x=(x-x.mean(0))/x.std(0)\\n    X=np.column_stack((np.ones(len(x)),x)); pairs=[(a,b) for a in range(4) for b in range(a+1,4)]\\n    XX=np.column_stack((X,x*x,*[x[:,a]*x[:,b] for a,b in pairs]))\\n    errors=[]\\n    for test in np.array_split(np.arange(len(x)),5):\\n        train=np.setdiff1d(np.arange(len(x)),test)\\n        B=np.linalg.lstsq(X[train],y[train],rcond=None)[0]\\n        D=np.linalg.lstsq(XX[train],y[train],rcond=None)[0]\\n        # Per-channel saturating gain: affine numerator, fitted squared-input denominator.\\n        def rat(p,idx):\\n            return (X[idx]@p[:-4].reshape(5,4))/(1+x[idx]**2*p[-4:])\\n        fit=least_squares(lambda p:(rat(p,train)-y[train]).ravel(),np.r_[B.ravel(),np.zeros(4)],bounds=(np.r_[np.full(20,-np.inf),np.zeros(4)],np.inf),gtol=1e-11)\\n        errors.append([np.sqrt(np.mean((pred-y[test])**2,axis=0)).max() for pred in (X[test]@B,XX[test]@D,rat(fit.x,test))])\\n    print('item',j,'sweep worst blocked RMSE affine/pair-interaction/rational',np.max(errors,axis=0))\\n    S,U=m._responses(s)\\n    pulses=item.get('campaign_diagnostics') or []\\n    if pulses:\\n        errors=np.stack([m._calibrate(s,p['y_pulse_raw'])-S@p['w_pulse'] for p in pulses]); print('worst pulse by (shift,rosette) RMSE',np.sqrt(np.mean(errors.reshape(len(pulses),len(s['mu_shifts']),-1,4)**2,axis=-1)).max())\\n        if 'row_bank_id' in s:\\n            bank=np.asarray(s['row_bank_id']).ravel()\\n            print('pulse RMSE within banks',[(str(b),float(np.sqrt(np.mean(errors[:,bank==b]**2)))) for b in np.unique(bank)])\\n    # Independent application of the sealed transport stencil to the returned field.\\n    def apply_axis(f,d):\\n        a=f if d=='x' else f.T\\n        k=np.asarray(s['kappa_'+d]); v=np.asarray(s['vel_'+d]); h=s['L'+d]/(len(k)-1)\\n        dd=(a[1:]-a[:-1])/h\\n        flux=.5*(k[1:]+k[:-1])[:,None]*dd\\n        z=np.empty_like(a); z[0]=-k[0]*dd[0]/h; z[-1]=k[-1]*dd[-1]/h\\n        z[1:-1]=(flux[:-1]-flux[1:])/h+np.maximum(v[1:-1],0)[:,None]*dd[:-1]+np.minimum(v[1:-1],0)[:,None]*dd[1:]\\n        return z if d=='x' else z.T\\n    cap=s['u_box']; total=len(s['source_modes'])*cap; worst=np.zeros(4)\\n    for budget in (0.,.03*total,.5*total,.97*total,total,s['total_budget']):\\n        st=copy.copy(s); st['total_budget']=budget\\n        o=m.solve_batch(st); w=o['weights']; f=o['terminal_field']; k=o['kkt_certificate']; lo=np.asarray(k['lam_lower']); hi=np.asarray(k['lam_upper']); nu=k['nu_sum']\\n        rhs=np.tensordot(w,s['source_modes'],axes=(0,0))\\n        fp=apply_axis(f,'x')+apply_axis(f,'y')+(s['V_reaction_2d']+s['mu_shifts'][-1])*f\\n        z=np.asarray(s['Z_nuisance']); D=np.column_stack((S,m._calibrate(s,s['y_obs_raw']))); D-=z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@D); A,ycal=D[:,:-1],D[:,-1]; r=A@w-ycal\\n        g=A.T@r+s['source_ridge']*w; J=.5*(r@r+s['source_ridge']*(w@w)); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n        assert min(w)>=0 and max(w)<=cap and min(lo)>=0 and min(hi)>=0 and np.array_equal(w,k['weights'])\\n        assert abs(k['dual_lower_bound']-dual)<1e-10 and abs(k['primal_objective']-J)<1e-10\\n        worst=np.maximum(worst,[abs(w.sum()-budget),np.max(np.abs(fp-rhs)),np.max(np.abs(g-nu-lo+hi)),max(abs(J-dual),np.max(abs(lo*w)),np.max(abs(hi*(cap-w))))])\\n    print('budget/field PDE/stationarity/complementarity-gap worst',worst)\\n    assert np.all(worst<1e-9)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_sealed.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin → H2 sealed walls with unchanged boundary diffusion; worst pulse-by-shift RMSE was 9.58e-7, with independently measured relative L2 errors of 7.81e-6 for weights and 3.58e-6 for the terminal field.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classifier confounding or relay modes\",\n      \"rejected_reason\": \"This study has continuous tracer measurements and no class labels or relay state. Within-bank pulse residuals are the relevant check for a pooled calibration error.\"\n    }\n  ],\n  \"rationale\": \"A blocked sweep comparison tests whether rational or pairwise terms improve calibration, while within-bank pulse errors reveal whether pooling hides a mismatch. Applying the stencil independently to the returned field and checking KKT conditions near both budget limits can catch indexing or active-set errors that the nominal public solve would miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "db9e1187526a334fe530e409bc419d923961051b7c956864c9a3dede9c1c1b5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45675.95,
+      "usage_known": true,
+      "prompt_tokens": 25878,
+      "cached_tokens": 9344,
+      "completion_tokens": 1829
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "940ee6b27af44628944ac4227956ff5e",
+  "call_seq": 8,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:54:33.461017+00:00",
+  "ended_at_utc": "2026-11-28T03:54:59.752240+00:00",
+  "request_sha256": "2a91a9f8a135cca239cd53189386003a46e2e8151de24c6060a41086dc8858d6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28936,
+    "cached_tokens": 9344,
+    "completion_tokens": 1012
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal5.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\n\\ndef experiment(s):\\n c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps']; clean=np.max(abs(y),axis=1)<5; isolated=np.count_nonzero(x,axis=1)==1\\n def shape(t,k):return np.tanh(k*t)\\n rates=[]\\n for j in range(4):\\n  m=(q['bank_id']==j)&(abs(q['raw_readout'])<5); a=q['ref_signal'][m]; b=q['raw_readout'][m]; fit=least_squares(lambda p:p[0]+p[1]*shape(a,p[3])+p[2]*a-b,[0,1,0,1.4],bounds=([-1,-10,-5,.1],[1,10,5,8]),gtol=1e-14,xtol=1e-14,ftol=1e-14);print('own',j,fit.x,'rms',np.sqrt(np.mean(fit.fun**2))); rates.append(fit.x[-1])\\n for j in range(4):\\n  for k in range(4):\\n   m=clean&isolated&(x[:,k]!=0); a=x[m,k]; b=y[m,j]; print('isolated',j,k,np.round(b,5))\\n rates=np.array(rates); print('aux head',s['aux_manifold_telemetry'][:5]); print('bank',s['row_bank_id'][:40])\\n u=x[clean]; cy=y[clean]; v=shape(u,rates); base=np.c_[np.ones(len(u)),u,v]; cols=[]\\n for i,j in combinations(range(4),2):\\n  for n,a,b in [('xx',u[:,i],u[:,j]),('xt',u[:,i],v[:,j]),('tx',v[:,i],u[:,j]),('tt',v[:,i],v[:,j])]:cols.append((f'{n}{i}{j}',a*b))\\n for j in range(4):\\n  b=cy[:,j]; A=base.copy(); chosen=[]\\n  for _ in range(8):\\n   p=np.linalg.lstsq(A,b,rcond=None)[0]; e=b-A@p; print('mixed',j,chosen,'rms',np.sqrt(np.mean(e**2)))\\n   if np.sqrt(np.mean(e**2))<3e-5:break\\n   opts=[]\\n   for name,col in cols:\\n    if name not in chosen:\\n     B=np.c_[A,col]; opts.append((np.linalg.norm(b-B@np.linalg.lstsq(B,b,rcond=None)[0]),name,col))\\n   _,name,col=min(opts,key=lambda v:v[0]); chosen.append(name); A=np.c_[A,col]\\n  print('coef',np.round(p,6))\\nif __name__=='__main__':\\n import pickle\\n experiment(pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal5.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy nonlinear calibration' | head -6\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Pure saturation → saturation plus a linear tail and mixed-bank interactions; pure softsign still leaves up to 0.00742 RMS on isolated sweeps.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose the lowest-RMS pure saturation curve\",\"rejected_reason\":\"Even the best pure curve misses clean sweeps by orders of magnitude above their visible measurement noise.\"}],\"rationale\":\"Fit the isolated sweep with an added linear tail and screen pairwise terms for mixed sweeps. If the residual does not approach the sweep noise, inspect the remaining structure before interpreting chamber residuals.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d53d35099f5a5292429298babaafea50fde812b1f76823c4001f417e97e07991",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28375.51,
+      "usage_known": true,
+      "prompt_tokens": 28936,
+      "cached_tokens": 9344,
+      "completion_tokens": 1012
+    }
+  ]
+}

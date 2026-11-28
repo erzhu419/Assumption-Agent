@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c071135cd244b43a6b1adc081ffaf3f",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:31:01.018822+00:00",
+  "ended_at_utc": "2026-11-28T03:31:25.364130+00:00",
+  "request_sha256": "f84962e8deddc434eea41b23465a97bb38516f62cb55fed23d7c7c9d73ef2602",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32114,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20874,
+    "cached_tokens": 5504,
+    "completion_tokens": 840
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '44,180p' /tmp/hegel_continual_archive/alpha_m100_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy IRLS'; python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m100_c04_s00_solver as s\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; q=p['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; out=s.solve_batch(d); tau=out['estimated_taus']; w=out['hereditary_weights']; print('tau,w',tau,w)\\nx=s._features(d['train'],d['test']); c=s._calibration(d['calibration_load_cells']); a,b=s._design(tau,s._inputs(d['train'],x[:len(d['train']['lab_id'])],c),dt,t); tr=d['train']; print('train residual medabs', np.median(abs(a@w+tr['strain_0'][:,None]-tr['strain_curves_obs']),axis=0), np.median(abs(b@w-tr['instant_rate_obs'])))\\nxx=s._features(d['train'],q)[len(tr['lab_id']):]; z=s._inputs(q,xx,c); a,b=s._design(tau,z,dt,t); y=q['strain_curves_obs']-q['strain_0'][:,None]; e=y-a@w; er=q['instant_rate_obs']-b@w; print('diag residual percentiles',np.percentile(e,[0,25,50,75,100],axis=0).round(4)); print('rate residual',er.round(4)); B=np.c_[-np.expm1(-t[:,None]/tau),t]; coef=np.linalg.lstsq(B,e.T,rcond=None)[0].T; print('resid after basis',np.sqrt(np.mean((e-coef@B.T)**2,axis=0)).round(6)); print('rate mismatch after basis',(er-coef@np.r_[1/tau,1]).round(5)); print('basis coef with lab, stratum, hold and recent stress'); print(np.c_[q['lab_id'],q['stratum'],z[1],z[0][:,-2:],coef].round(4)); print('aux train/test',[(k,np.percentile(d[k]['aux_chamber_telemetry'],[0,50,100],axis=0)) for k in ('train','test')])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived benchtop law -> H2 chamber-specific memory and drift corrections; affine calibration residual is at most 1.07e-4 RMS per bridge channel, and chamber error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear bridge\",\"rejected_reason\":\"Affine sweep residuals are already about 1e-4 per raw bridge channel; check the chamber residual before adding calibration terms.\"}],\"rationale\":\"Project verification residuals onto the shared relaxation and drift basis. If that basis explains strain and its implied derivative also explains the measured initial rate, fit a chamber input correction; otherwise test a change in relaxation time or a new time-dependent term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "60793dc8fcf197491bdf92b433176e665607946b8c757ea9dd9547070178dca7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24308.06,
+      "usage_known": true,
+      "prompt_tokens": 20874,
+      "cached_tokens": 5504,
+      "completion_tokens": 840
+    }
+  ]
+}

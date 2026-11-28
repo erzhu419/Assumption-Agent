@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2911e2a700f452595be7814b7a8e51b",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:54.995431+00:00",
+  "ended_at_utc": "2026-11-28T03:48:21.481764+00:00",
+  "request_sha256": "6b81d2a24a3f66d92c72b16f293ae3234c13b59ad9efd957b42211281edcb168",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54649,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30160,
+    "cached_tokens": 12672,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/drift_probe.py <<'PY'\\nfrom chamber_probe import *\\nq,th=fit(); _,h=load(c); valid=np.isfinite(c['coupon_features_raw']).all(1); reset=h[:,None]*(basis(q)@th[:2]); E=yc-reset\\nu,s,vh=np.linalg.svd(E*unit,full_matrices=False); w=vh[0]/unit; w*=np.sign(w[-1]); amp=(E*unit)@(w*unit); print('singular values',np.round(s,5),'shape / rate',np.round(w/w[-1],6)); print('rank1 residual',err(yc,reset+amp[:,None]*w)); labs=c['lab_id']; B=np.c_[basis(q),np.r_[t,1]]; print('shape coefficients divided by rate',np.linalg.lstsq(B,w/w[-1],rcond=None)[0]);\\nfor label,z in [('train-test',xc),('train-diag',features(a,c)[1]),('diag-only',features(c,c)[0]),('all',features(a,dict(b,**{k:np.concatenate((b[k],c[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}))[1][-len(h):])]:\\n pred=z@th[2:]; m=np.column_stack((pred,np.ones(len(h)))); sc,inter=np.linalg.lstsq(m[valid],amp[valid],rcond=None)[0]; e=amp-m@[sc,inter]; print(label,'fit',sc,inter,'complete/missing RMSE',np.sqrt(np.mean(e[valid]**2)),np.sqrt(np.mean(e[~valid]**2))); print('rows',np.round(e,4)); print('coeff complete',np.linalg.lstsq(z[valid],amp[valid],rcond=None)[0]/sc)\\nfor l in np.unique(labs):\\n print('lab',l,'panel center and scale train-test / diagnostics / train-diag',[(round(np.median(r.mean(0)),5),round(np.median(r.std(0)),5)) for r in (np.vstack([a['ref_coupons'][a['lab_id']==l],b['ref_coupons'][b['lab_id']==l]]),c['ref_coupons'][labs==l],np.vstack([a['ref_coupons'][a['lab_id']==l],c['ref_coupons'][labs==l]]))]); m=(labs==l)&valid; print('complete residual train-test',np.round((amp/(w[-1]**-1)-(xc@th[2:]))[m],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/drift_probe.py; python3 - <<'PY'\\nimport json,numpy as np\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_index'],np.round(a.mean(0),4),np.round(a.std(0),4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset plus pooled drift → H2 reset plus a separate drift response with diagnostic panel alignment; reset/free-drift worst-lab RMSE is 0.100 strain and 0.062 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add history or polynomial load–drift terms\",\n      \"rejected_reason\": \"Both worsened held-out errors, while the fitted hold response remained close to the material reset.\"\n    }\n  ],\n  \"rationale\": \"Subtract the material reset and test whether the remaining chamber signal has one shared time response. Compare panel conventions on complete coupons before interpreting missing-feature errors as evidence for a different chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bc13363a24100c30582b2134725951b7a59762c9c2c3566cb15df50cbb300325",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28569.24,
+      "usage_known": true,
+      "prompt_tokens": 30160,
+      "cached_tokens": 12672,
+      "completion_tokens": 1009
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62266428bcd7482b95d6a193b3c710fe",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:03:13.523730+00:00",
+  "ended_at_utc": "2026-11-28T04:03:36.934679+00:00",
+  "request_sha256": "a89c046326996a7904d28c328e55196e8d64d8a305cd3b557d91db3da7a426e0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47037,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26755,
+    "cached_tokens": 9344,
+    "completion_tokens": 899
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /tmp/hegel_continual_archive\\nsed -n '38,149p' alpha_m100_c03_batch_05_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom pathlib import Path\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['true_channel_loads']; r=C['bridge_raw']; clean=np.max(abs(r),axis=1)<4*np.median(np.max(abs(r),axis=1)); print('excluded rows',np.flatnonzero(~clean))\\nfor name in ('05','03'):\\n p=Path(f'alpha_m100_c03_batch_{name}_solver.py'); spec=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n B=m._bridge(C); f=m._inverse if hasattr(m,'_inverse') else m._decode; err=f(r[clean],B)-x[clean]; print(name,'inverse RMSE channels and sum, max sum',np.sqrt(np.mean(err**2,0)),np.sqrt(np.mean(err.sum(1)**2)),max(abs(err.sum(1))));\\n if name=='05':\\n  print('fitted frequency and coefficients',B); print('forward clean RMSE',np.sqrt(np.mean((np.sum(m._basis(x[clean],B[0])*B[1],axis=-1)-r[clean])**2,0)))\\n  sw=C['single_channel_sweeps']; k=np.asarray(sw['lab_id'],int); z=np.asarray(sw['true_stress']); y=np.asarray(sw['cmd_stress']); coef=B[1][k]; q=coef[:,0]+coef[:,1]*z+coef[:,2]*np.sin(B[0][0]*z); ee=q-y; print('independent single sweeps by channel (median, worst excluding gross outliers):',[(float(np.median(abs(ee[k==i]))),float(max(abs(ee[(k==i)&(abs(ee)<.5)])))) for i in np.unique(k)]); print('single sweep gross outliers',np.flatnonzero(abs(ee)>.5))\\n for s in ('train','test'):\\n  a,b=m._loads(D[s],B); print(name,s,'past/hold load range', (a.min(),a.max()),(b.min(),b.max()))\\n o=m.solve_batch(D); print(name,'material',o['estimated_taus'],o['hereditary_weights'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 an opposite-channel nonlinear bridge identifies the current material → H2 the matched predecessor state supports batch 01 chamber transfer; affine calibration’s worst channel RMSE is 0.530.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt batch 05’s bridge solely because it is the most recent\",\"rejected_reason\":\"The independent single-channel sweeps can detect a wrong forward model even if it fits the main panel.\"}],\"rationale\":\"Compare the two archived nonlinear bridge families on the current panel and use the independent sweeps to test the leading model. If it transfers, combine its dynamically fitted calibration and benchtop material fit with the chamber law linked to the matched predecessor state.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7c62c41ddcb41340ce47a17536b85f30b67c6b671887dd4d35440de01f8ef588",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25496.75,
+      "usage_known": true,
+      "prompt_tokens": 26755,
+      "cached_tokens": 9344,
+      "completion_tokens": 899
+    }
+  ]
+}

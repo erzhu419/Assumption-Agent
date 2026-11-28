@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8dd1f0b5f6994d93bc140dee425a7690",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:14:43.906591+00:00",
+  "ended_at_utc": "2026-11-28T04:15:08.558788+00:00",
+  "request_sha256": "135eeaf64474282a15f8e54644d220374d94caf79176a0b1e35ae2ddd5214c32",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26149,
+    "cached_tokens": 9344,
+    "completion_tokens": 623
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *_solver.py; do echo ==== $f; sed -n '/^def chamber_response/,/^    reaction/p' \\\"$f\\\"; sed -n '/^def _basis/,/^def box_simplex/p' \\\"$f\\\" | head -75; if ! grep -q '^def _basis' \\\"$f\\\"; then sed -n '/^def calibration_map/,/^def box_simplex/p' \\\"$f\\\" | grep -E 'def |basis|features|cross|\\\\*\\\\*|tanh|fit|lstsq'; fi; done; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['sensor_calibration_sweeps']; x,y=d['ref_rosette'],d['raw_rosette']; print('quantiles ref/raw:'); print(np.quantile(x,[0,.25,.5,.75,1],axis=0)); print(np.quantile(y,[0,.25,.5,.75,1],axis=0)); print('obs range',np.quantile(s['y_obs_raw'],[0,.5,1])); q=d['single_bank_sweeps'];\\nfor i in range(4):\\n t=q['bank_id']==i; print('single',i,np.c_[q['ref_signal'][t],q['raw_readout'][t]].round(4).tolist())\\nprint('cal first rows',np.c_[x[:10],y[:10]].round(3)); print('aux singular',np.linalg.svd(s['aux_manifold_telemetry'],compute_uv=False))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'sensor calibration nonlinear four channel rosette ridge nuisance projection'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine rosette and persistent periodic walls -> H2 recover nonlinear calibration and compare archived wall laws; affine in-sample RMSE is 2.35–2.56 across banks.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select walls from the live auxiliary column means\",\"rejected_reason\":\"The live channels do not match the archived regime traces directly, so their means cannot establish which boundary stencil is active.\"}],\"rationale\":\"Single-bank sweep curves can distinguish nonlinear self-response from cross-channel effects or bad sweep rows. Extract the exact archived wall variants now so they can be compared on calibrated observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e08a8340b1de4cddd9c63bd17a2efb8e7e2e8d6bdfe16ba6f330e5a184ec8d5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24609.78,
+      "usage_known": true,
+      "prompt_tokens": 26149,
+      "cached_tokens": 9344,
+      "completion_tokens": 623
+    }
+  ]
+}

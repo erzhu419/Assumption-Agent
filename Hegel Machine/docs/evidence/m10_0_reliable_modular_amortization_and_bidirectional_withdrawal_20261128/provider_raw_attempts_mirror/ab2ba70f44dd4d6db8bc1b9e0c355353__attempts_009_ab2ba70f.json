@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab2ba70f44dd4d6db8bc1b9e0c355353",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:56:37.017249+00:00",
+  "ended_at_utc": "2026-11-28T03:56:59.042098+00:00",
+  "request_sha256": "ba4b1e633375a16fd543d758d26a408cc1074e054e554367f645f22e1632e6d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59196,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32547,
+    "cached_tokens": 9344,
+    "completion_tokens": 815
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/decompose.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.interpolate import BSpline\\nfrom scipy.optimize import least_squares\\nC=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; X,Y=C['true_channel_loads'],C['bridge_raw']; ok=np.max(abs(Y),1)<5; ids=np.nonzero(ok)[0]; X,Y=X[ok],Y[ok]; Z=np.roll(X,2,axis=1)\\nfor n in (3,5,7,9,13):\\n def basis(x): return BSpline.design_matrix(x,np.r_[[-1.8]*4,np.linspace(-1.8,1.8,n+2)[1:-1],[1.8]*4],3).toarray()\\n errors=[]\\n for j in range(4):\\n  a,b=basis(X[:,j]),basis(Z[:,j]); M=np.c_[a,b[:,1:]]; y=Y[:,j]; errs=[]\\n  for fold in range(4):\\n   keep=ids%4!=fold; p=np.linalg.lstsq(M[keep],y[keep],rcond=None)[0]; errs.extend((M[~keep]@p-y[~keep]).tolist())\\n  p=np.linalg.lstsq(M,y,rcond=None)[0]; errors.append([np.std(M@p-y),np.std(errs),max(abs(np.array(errs)))]);\\n  if n==9:\\n   grid=np.arange(-1.6,1.61,.1); base=basis(grid)-basis(np.array([0.])); own=base@p[:a.shape[1]]; cross=base[:,1:]@p[a.shape[1]:]; print('ch',j,'own',np.round(own,4),'cross',np.round(cross,4))\\n print(n,np.round(errors,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/decompose.py; sed -n '1,105p' /tmp/hegel_continual_archive/alpha_m100_c01_batch_03_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared smooth saturation → H2 recover the own-channel and cross-channel curve shapes separately; worst held-out residual is still 0.0181 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Continue testing single saturation functions\",\"rejected_reason\":\"Several families leave similar residuals; estimating both component curves directly can reveal which shape or coupling is missing.\"}],\"rationale\":\"If the additive spline decomposition predicts held-out sweeps well, its component curves can expose the missing shape. If it does not, test a joint dependence on the paired channels before committing to an inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3bf7a1dcc299815f3efd1ac82ca79acf00367b74521c6a1156b15ebffd74f0cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24115.89,
+      "usage_known": true,
+      "prompt_tokens": 32547,
+      "cached_tokens": 9344,
+      "completion_tokens": 815
+    }
+  ]
+}

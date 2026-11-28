@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "076488b516d7430892203fa8f9a5f21f",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:02:34.405817+00:00",
+  "ended_at_utc": "2026-11-28T04:03:05.033090+00:00",
+  "request_sha256": "e7298a9365b483fa4896259acff708c42e0f7ceab02ec895c410a818ce45bdab",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 63707,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33625,
+    "cached_tokens": 9344,
+    "completion_tokens": 1227
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\nfrom collections import defaultdict\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X,Y=C['true_channel_loads'],C['bridge_raw']; O=[2,3,0,1]\\nprint('dataset fields', sorted(D)); print('reference fields', sorted(C)); print('split fields', sorted(D['train'])); print('sweep fields',sorted(C['single_channel_sweeps']))\\nf,p=u._fit(X,Y); clean=np.max(abs(u._forward(X,f,p)-Y),axis=1)<.005\\naxial=np.count_nonzero(X,axis=1)<=1; edge=np.max(abs(X),axis=1)>=1.2\\nrng=np.random.default_rng(701); folds=[[] for _ in range(5)]\\nfor mask in [clean&axial,clean&~axial&edge,clean&~axial&~edge]:\\n for k,ids in enumerate(np.array_split(rng.permutation(np.flatnonzero(mask)),5)): folds[k].extend(ids)\\n\\ndef extra(x,kind):\\n    v=x[:,O]; d=x-v; s=x+v\\n    if kind=='pair': return np.stack((x*v, d**3, s**3),-1)\\n    return np.stack((x/(1+x*x),v/(1+v*v),(1/(1+v*v)-1),d/(1+d*d),s/(1+s*s)),-1)\\n\\nerrors={k:np.full_like(Y,np.nan) for k in ('base','pair','rational')}\\nfor ids in folds:\\n    keep=np.ones(len(X),bool); keep[ids]=False\\n    fr,co=u._fit(X[keep],Y[keep]); a,b=X[keep],Y[keep]\\n    ok=np.max(abs(u._forward(a,fr,co)-b),axis=1)<.005\\n    errors['base'][ids]=u._forward(X[ids],fr,co)-Y[ids]\\n    for kind in ('pair','rational'):\\n        fit=np.concatenate((u._design(a[ok],fr),extra(a[ok],kind)),axis=-1)\\n        pred=np.concatenate((u._design(X[ids],fr),extra(X[ids],kind)),axis=-1)\\n        coeff=np.stack([np.linalg.lstsq(fit[:,j],b[ok,j],rcond=None)[0] for j in range(4)])\\n        errors[kind][ids]=np.sum(pred*coeff,axis=-1)-Y[ids]\\nfor kind,e in errors.items():\\n    metrics={name:(float(np.sqrt(np.mean(e[m]**2,axis=0)).max()),float(abs(e[m]).max())) for name,m in [('axial',clean&axial),('mixed',clean&~axial),('edge',clean&edge)]}\\n    print(kind,'(worst-channel RMSE, max abs)',metrics)\\n# Check held-out raw residual bias for the grouping variables actually carried\\n# by the reference records; lab IDs in downstream split records are not labels.\\nfor key,g in C.items():\\n    g=np.asarray(g) if not isinstance(g,dict) else np.empty(0)\\n    if g.shape==(len(X),) and len(np.unique(g))<=12:\\n        for group in np.unique(g):\\n            m=clean&(g==group)\\n            if m.any(): print('reference residual by',key,group,m.sum(),np.mean(errors['base'][m],axis=0))\\n# Uniform lower bound on strict diagonal dominance for the fitted map.\\nmargin=p[:,1]-abs(f[0]*p[:,3])-abs(p[:,2])-abs(f[1]*p[:,4]); print('uniform Jacobian dominance lower bound',margin.min()); assert margin.min()>.03\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse harmonic bridge → H2 pairwise or rational correction only if held-out references improve; current worst-slice load RMSE is 0.000273 on mixed references.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, drift operators, or balanced classification accuracy\",\"rejected_reason\":\"The upstream task is a static load-to-bridge regression, not a relay, drift, or classification problem. Reference-group residual bias is the applicable nuisance check.\"}],\"rationale\":\"Compare fixed pairwise and rational basis expansions on the same held-out axial, mixed, and edge slices. Promote a challenger only if it removes measurable residual structure without sacrificing inversion stability; the analytic Jacobian bound checks that stability beyond the sampled grid.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b96e90c9f11006abc31fd851b64dd2eb5d14ed2c3006ad7957abcbbd6d214835",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33735.89,
+      "usage_known": true,
+      "prompt_tokens": 33625,
+      "cached_tokens": 9344,
+      "completion_tokens": 1227
+    }
+  ]
+}

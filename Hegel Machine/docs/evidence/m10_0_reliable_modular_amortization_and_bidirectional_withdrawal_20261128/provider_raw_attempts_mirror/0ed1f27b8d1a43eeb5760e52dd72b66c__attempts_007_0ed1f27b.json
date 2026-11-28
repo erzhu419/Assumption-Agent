@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ed1f27b8d1a43eeb5760e52dd72b66c",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:37:36.604249+00:00",
+  "ended_at_utc": "2026-11-28T03:37:59.737767+00:00",
+  "request_sha256": "3c6f744e5a0edc140d7dc7c61766896b5b2beff6237ce64f283b691d9df1105a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37979,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24921,
+    "cached_tokens": 9344,
+    "completion_tokens": 785
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,100p' /tmp/hegel_continual_archive/alpha_m100_c02_s00_solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; z=x.sum(1); sw=(x!=0).sum(1)==1\\nprint('load range',x.min(0),x.max(0)); print('single-channel bridge points',np.c_[x[sw],y[sw]].round(3)); print('sweep polynomial errors')\\ns=c['single_channel_sweeps'];\\nfor l in np.unique(s['lab_id']):\\n m=s['lab_id']==l; a=s['true_stress'][m]; b=s['cmd_stress'][m]; keep=abs(b-np.median(b))<6; p=np.polynomial.polynomial.polyfit(a[keep],b[keep],3); print(l,p,np.max(abs(np.polynomial.polynomial.polyval(a[keep],p)-b[keep])))\\nA={'affine':np.c_[np.ones(len(x)),x],'elementwise cubic':np.c_[np.ones(len(x)),x,x**3],'elementwise quadratic+cubic':np.c_[np.ones(len(x)),x,x*x,x**3],'total quadratic+cubic':np.c_[np.ones(len(x)),x,z*z,z**3],'elementwise cubic and total cubic':np.c_[np.ones(len(x)),x,x**3,z**3]}\\n# Refit after excluding gross row errors, independently in each fold.\\nfor name,a in A.items():\\n e=np.empty(len(x))\\n for i in range(len(x)):\\n  m=np.arange(len(x))!=i\\n  for _ in range(5):\\n   b=np.linalg.lstsq(a[m],y[m],rcond=None)[0]; r=np.linalg.norm(a@b-y,axis=1); m=(np.arange(len(x))!=i)&(r<4)\\n  e[i]=r[i]\\n print(name,'LOO bridge error p50/90/95/max',np.quantile(e,[.5,.9,.95,1]),'single max inliers',max(e[sw&(e<4)])); print(np.round(b,5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust affine bridge → sparse nonlinear bridge if held-out sweeps support it; robust affine still leaves clean-row residual norms up to 0.99.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a robust affine map and stop\",\"rejected_reason\":\"Three gross outliers explain the largest errors but not the remaining sub-unit residuals; the independent sweeps also show smooth curvature.\"}],\"rationale\":\"Single-channel sweeps distinguish channelwise nonlinearities from total-load effects. Leave-one-row-out bridge errors with outlier rejection inside each fold will determine which calibration law to implement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8c395ca44d634bd902fadd2ec488afdf5a3ebda2b4e57a4aa50a0c5f55036565",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23093.59,
+      "usage_known": true,
+      "prompt_tokens": 24921,
+      "cached_tokens": 9344,
+      "completion_tokens": 785
+    }
+  ]
+}

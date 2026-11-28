@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a6ddc699ca2040ce9edd0a979223728e",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:43:56.477630+00:00",
+  "ended_at_utc": "2026-11-28T03:44:27.314491+00:00",
+  "request_sha256": "87140b788fd35cbe5a526997c62c7ddead05acae382fbeaa291a24d0f71a1272",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47082,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26494,
+    "cached_tokens": 9344,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; Y=C['bridge_raw']; L=C['true_channel_loads']; terms=[()]+[p for k in range(1,4) for p in combinations_with_replacement(range(4),k)]; A=np.array([np.prod(L[:,p],axis=1) for p in terms]).T\\nB=np.linalg.lstsq(A,Y,rcond=None)[0]; R=Y-A@B; print('cubic OLS residual sv',np.linalg.svd(R,compute_uv=False)); v=np.linalg.svd(R,full_matrices=False)[2][0]; print('principal offset',v,'sum',v.sum()); print('sum coefficients',[(str(p),round(b,6)) for p,b in zip(terms,B.sum(1)) if abs(b)>.0005]);\\n# Scalar robust cubic along the disturbance direction; orthogonal components can be fitted without trimming.\\nz=Y@v; f=least_squares(lambda b:A@b-z,B@v,jac=lambda b:A,loss='cauchy',f_scale=.002,max_nfev=500); u=z-A@f.x; good=abs(u)<.008; print('clean count',good.sum(),'suspect rows',np.where(~good)[0]); print('offsets',np.round(u[~good],4)); print('projected residual quantiles',np.quantile(np.linalg.norm(R-np.outer(R@v,v),axis=1),[0,.5,.95,1]));\\nfor name,sel in [('affine',[len(p)<=1 for p in terms]),('diagonal cubic',[len(set(p))<=1 for p in terms]),('quadratic',[len(p)<=2 for p in terms]),('full cubic',[True]*len(terms))]:\\n a=A[:,sel]; b=np.linalg.lstsq(a[good],Y[good],rcond=None)[0]; e=Y-a@b; u2,s2,v2=np.linalg.svd(e,full_matrices=False); print(name,'clean rank',np.linalg.matrix_rank(a[good]),'clean median/max',np.median(np.linalg.norm(e[good],axis=1)),np.max(np.linalg.norm(e[good],axis=1)),'residual sv',s2.round(5),'offset direction',v2[0].round(5));\\n if name in ('diagonal cubic','full cubic'):\\n  for p,w in zip(np.array(terms,dtype=object)[sel],b):\\n   if np.max(abs(w))>.001: print(p,w.round(6))\\nfor ch in range(4):\\n s=C['single_channel_sweeps']; j=s['lab_id']==ch; t=s['true_stress'][j]; q=s['cmd_stress'][j]; b=np.polynomial.polynomial.polyfit(t[abs(q)<5],q[abs(q)<5],3); print('single sweep',ch,'coeffs',b.round(6),'deviations',(q-np.polynomial.polynomial.polyval(t,b)).round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine inverse bridge → H2 cubic forward bridge with a low-rank additive disturbance; the forward cubic sum has held-out max error 0.00134, but individual channel errors reach 19.32.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a higher-degree direct inverse\",\n      \"rejected_reason\": \"Held-out total-load error worsens above degree two, and the unusually large channel readings mostly cancel in the raw sum.\"\n    },\n    {\n      \"option\": \"Invert only the raw sum\",\n      \"rejected_reason\": \"A cubic fit to that sum does not establish that it depends on total physical load alone; unequal channel sensitivities or cross terms could make the scalar inverse ambiguous.\"\n    }\n  ],\n  \"rationale\": \"Check whether the large forward residuals share one direction, then use the unaffected contrasts and single-channel sweeps to identify the smallest supported bridge model. That determines whether deployment loads can be recovered by removing an offset, projecting it out, or explicitly fitting it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "295aaecad0b1bb2e5ef03b067ff0a18563c07a870b1cd3ec33b31f506feaaf9d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32903.63,
+      "usage_known": true,
+      "prompt_tokens": 26494,
+      "cached_tokens": 9344,
+      "completion_tokens": 1186
+    }
+  ]
+}

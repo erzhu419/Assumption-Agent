@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee9269f787604caaa311e9615c4beed1",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:10.944809+00:00",
+  "ended_at_utc": "2026-11-28T03:57:43.070774+00:00",
+  "request_sha256": "aca6f1cb0807f70657996968f16f212e8be8c20bad2d07d0597c5c99f51b99bc",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 59555,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31471,
+    "cached_tokens": 9344,
+    "completion_tokens": 1286
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor entry in batch:\\n    d = entry['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    b, f = u._fit(x, y)\\n    a = b[:, 1:5]\\n    diagonal_min = np.diag(a) - abs(b[:, 5] * f[0])\\n    off_diagonal_max = abs(a - np.diag(np.diag(a))).sum(axis=1) + abs(b[:, 6] * f[1])\\n    margin = diagonal_min - off_diagonal_max\\n    print('Global Jacobian diagonal dominance margins:', margin)\\n    assert np.min(margin) > 0, 'Global uniqueness not certified; inspect paired Jacobian bounds before accepting the inverse.'\\n    # Fixed measurement-magnitude cutoff labels only the gross spikes for scoring.\\n    clean = np.max(abs(y), axis=1) < 4\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    extreme = np.max(abs(x), axis=1) >= 1.4\\n    for name, hold in [('all axis loads', axis), ('all high loads', extreme)]:\\n        keep = ~hold\\n        score = hold & clean\\n        bf, ff = u._fit(x[keep], y[keep])\\n        e = u._inverse(y[score], bf, ff) - x[score]\\n        base = u._forward(x[score], bf, ff) - y[score]\\n        train_error = y[keep] - u._forward(x[keep], bf, ff)\\n        # Check whether rational and pairwise contrast terms explain reproducible\\n        # residual structure, fitting their coefficients only on the outer training set.\\n        challenged = base.copy()\\n        train_clean = clean[keep]\\n        for j, p in enumerate(u._PARTNER):\\n            def extra(t):\\n                z, w = t[:, j], t[:, p]\\n                return np.column_stack((z / (1 + z*z), w / (1 + w*w), z*w,\\n                                        (z-w) / (1 + (z-w)**2), (z+w) / (1 + (z+w)**2)))\\n            terms = extra(x[keep])[train_clean]\\n            basis = u._basis(x[keep], j, ff)[train_clean]\\n            projection = np.linalg.lstsq(basis, terms, rcond=None)[0]\\n            terms -= basis @ projection\\n            coeff = np.linalg.lstsq(terms, train_error[train_clean, j], rcond=None)[0]\\n            challenged[:, j] += (extra(x[score]) - u._basis(x[score], j, ff) @ projection) @ coeff\\n        rmse = lambda z: np.sqrt(np.mean(z*z, axis=0)).max()\\n        print(name, 'n=', np.count_nonzero(score), 'worst inverse RMSE=', rmse(e), 'max inverse error=', abs(e).max(), 'worst forward RMSE Fourier / augmented=', rmse(base), rmse(challenged))\\n        assert abs(e).max() < .005, 'Grouped holdout exceeds the prior inverse stress-test margin.'\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 saturating profiles → H2 paired Fourier bridge; the worst eight-fold inverse RMSE was 0.000296 load units, with maximum error 0.000902.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay states, drift operators, or within-batch classification\",\n      \"rejected_reason\": \"The upstream contract is a static continuous calibration map with no relay state, drift equation, or classification target.\"\n    }\n  ],\n  \"rationale\": \"The prior stress grid sampled inverse uniqueness but did not establish it between samples. Bound the fitted Jacobian globally, then withhold entire axis and high-load groups to detect extrapolation failures. Reconsider the basis only if rational or pairwise terms improve held-out error on those groups.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9a458453bcefe63e641d5b17ca21734faf4a232c840334982130f3c922096466",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34231.53,
+      "usage_known": true,
+      "prompt_tokens": 31471,
+      "cached_tokens": 9344,
+      "completion_tokens": 1286
+    }
+  ]
+}

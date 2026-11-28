@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "194d702cf2294cc89641747ad20cf7e0",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:42:15.989335+00:00",
+  "ended_at_utc": "2026-11-28T03:42:45.196392+00:00",
+  "request_sha256": "2060cc3bb990642e8e407ae2d9787e6a23bb302f62a736108db624d159d5a4ec",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44687,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25131,
+    "cached_tokens": 9344,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\n\\n# Compare the missing interaction terms on identical blocked splits and trims.\\ndef robust_fit(A, raw):\\n    w = np.linalg.lstsq(A, raw, rcond=None)[0]\\n    for _ in range(24):\\n        r = np.linalg.norm(A @ w - raw, axis=1)\\n        c = max(1.5 * np.median(r), 1e-12)\\n        sw = np.sqrt(c / np.maximum(r, c))[:, None]\\n        w = np.linalg.lstsq(A * sw, raw * sw, rcond=None)[0]\\n    r = np.linalg.norm(A @ w - raw, axis=1)\\n    keep = r <= max(6 * np.median(r), 1e-11)\\n    return np.linalg.lstsq(A[keep], raw[keep], rcond=None)[0]\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; cal = s['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    d = u._design(x)\\n    ablated = np.column_stack((d[:, :5], x**2, x**3))\\n    gross = np.max(np.abs(y), axis=1) > 8\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    coupling = np.max(np.abs(d[:, 5:11]), axis=1)\\n    high = mixed & (coupling >= np.quantile(coupling[mixed], .75))\\n    ea, ep, ei = (np.full(len(x), np.nan) for _ in range(3))\\n    for block in np.array_split(np.arange(len(x)), 5):\\n        tr = np.ones(len(x), dtype=bool); tr[block] = False\\n        v = block[~gross[block]]\\n        wa = robust_fit(ablated[tr], y[tr])\\n        wp = u._fit(x[tr], y[tr])\\n        ea[v] = np.max(np.abs(ablated[v] @ wa - y[v]), axis=1)\\n        ep[v] = np.max(np.abs(d[v] @ wp - y[v]), axis=1)\\n        ei[v] = np.max(np.abs(u._invert(y[v], wp) - x[v]), axis=1)\\n    for label, mask in [('single channel', ~mixed), ('mixed channel', mixed), ('highest coupling quartile', high)]:\\n        k = mask & ~gross\\n        print(label, 'n', k.sum(), 'ablated/candidate forward p90', np.quantile(ea[k], .9), np.quantile(ep[k], .9), 'candidate max inverse', np.max(ei[k]))\\n    k = high & ~gross\\n    assert np.quantile(ep[k], .9) < .01 * np.quantile(ea[k], .9), 'pair terms failed the strongest interaction slice'\\n    assert np.nanmax(ei) < 2e-4, 'held-out inverse exceeds stress threshold'\\n    assert solve_batch(s), 'composed solver returned no results'\\n    print('ng_t05: matched blocked ablation and isolated composed solver passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: pairwise coupling plus channelwise cubes yields a worst blocked inverse error of 4.39e-5; the matched ablation tests whether that improvement holds on the strongest measured interaction slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational audit or run relay and classification checks\",\n      \"rejected_reason\": \"The rational comparison already found no worst-slice improvement, and this calibration dataset has no relay modes or classification labels.\"\n    }\n  ],\n  \"rationale\": \"The earlier audit compared rational extensions but did not directly isolate the missing pairwise terms under identical blocked splits and EMI treatment. If the terms fail to improve the strongest measured interaction slice, revisit the basis; otherwise keep the verified artifacts unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "81a13c15df80dd668742a4a90ed9e3957738eab98bb800a8e1fec114ddd8779c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31282.56,
+      "usage_known": true,
+      "prompt_tokens": 25131,
+      "cached_tokens": 9344,
+      "completion_tokens": 1151
+    }
+  ]
+}

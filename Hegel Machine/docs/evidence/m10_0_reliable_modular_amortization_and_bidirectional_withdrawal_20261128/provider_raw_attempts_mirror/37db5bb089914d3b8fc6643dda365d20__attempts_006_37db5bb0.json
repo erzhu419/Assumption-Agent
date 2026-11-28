@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "37db5bb089914d3b8fc6643dda365d20",
+  "call_seq": 6,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:51:19.317594+00:00",
+  "ended_at_utc": "2026-11-28T03:51:57.980317+00:00",
+  "request_sha256": "d3a5dd9062654498301542ddf045bf71109ec0a955472195bc57fa2fecfe3b6a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39537,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26417,
+    "cached_tokens": 9344,
+    "completion_tokens": 1578
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rosette_discover.py <<'PY'\\nfrom rosette_models import X,Y,axis,basis\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nrng=np.random.default_rng(2026); fold=np.empty(len(X),int)\\nfor mask in (axis,~axis): fold[mask]=rng.permutation(mask.sum())%5\\n# Saturation with additive corrections, then test whether off-axis terms are needed.\\ndef sat(z,k,kind):\\n if kind=='t':return np.tanh(k*z)\\n if kind=='r':return z/(1+(k*z)**2)\\n if kind=='s':return z/np.sqrt(1+(k*z)**2)\\n if kind=='a':return np.arctan(k*z)\\n if kind=='e':return z*np.exp(-(k*z)**2)\\ndef design(x,p,spec):\\n ku,kv,nu,nv,cross=spec;u,v=x.T\\n cols=[np.ones(len(u))]+[u**i for i in range(1,nu+1)]+[v**i for i in range(1,nv+1)]\\n if ku:cols.append(sat(u,p[0],ku))\\n if kv:cols.append(sat(v,p[1],kv))\\n if cross:cols += [u*v,u*u*v,u*v*v]\\n return np.column_stack(cols)\\ndef fit(x,y,spec):\\n def coef(p):\\n  D=design(x,p,spec);return np.linalg.lstsq(D,y,rcond=1e-10)[0]\\n def err(p):return design(x,p,spec)@coef(p)-y\\n p=least_squares(err,[1.1,.8],bounds=(.1,4),max_nfev=70).x\\n return p,coef(p)\\nspecs=[(a,b,nu,nv,c) for a in ('t','r','s','a','e') for b in ('t','r','s','a','e') for nu,nv in [(0,2),(1,2),(2,2),(3,3)] for c in (False,True)]+[(None,None,6,6,False),(None,None,9,9,False)]\\nfor j in range(4):\\n x=X[:,[j,j^2]]; y=Y[:,j]; results=[]\\n for sp in specs:\\n  p,b=fit(x,y,sp); e=design(x,p,sp)@b-y\\n  results.append((np.median(abs(e)),np.sqrt(np.mean(e**2)),sp,p,b,e))\\n print('CHANNEL',j)\\n for med,rms,sp,p,b,e in sorted(results,key=lambda r:r[1])[:8]:\\n  print(sp,'med/rms/max',np.round([med,rms,max(abs(e))],7),'largest rows',np.argsort(abs(e))[-4:].tolist(),'p',p.round(5),'b',b.round(5))\\n  pred=np.empty_like(y)\\n  for k in range(5):\\n   tr=fold!=k; pp,bb=fit(x[tr],y[tr],sp);pred[~tr]=design(x[~tr],pp,sp)@bb\\n  print('OOF rms axis/mixed',*[round(np.sqrt(np.mean((pred[m]-y[m])**2)),7) for m in (axis,~axis)])\\n print('extreme exact-ish raw values',[(int(i),round(y[i],6),x[i].round(4).tolist()) for i in np.where(abs(y*100-np.round(y*100))<.002)[0] if not axis[i]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_discover.py; grep -inE 'tanh|rosette|saturat' /tmp/hegel_continual_archive/*_solver.py | head -25\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine or simple additive saturation -> H2 additive saturation with asymmetric channel corrections; the affine worst channel OOF RMSE is 0.215 and simple additive tanh still reaches 0.0581.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine map or a sum of two zero-centered tanh responses captures the paired sensor response.\",\"empirical_witness\":\"After gross EMI removal, affine mixed-sweep OOF RMSE is 0.18558 and additive tanh mixed-sweep RMSE is 0.049506, far above the approximately 0.00001 variation at repeated axis baselines.\",\"causal_blanket_diagnosis\":\"Axis sweeps identify channel pairs; asymmetric residuals remain on mixed sweeps after gross EMI exclusion.\",\"sublated_pivot\":\"Keep paired coupling and test rational or saturating components with asymmetric additive and interaction corrections.\",\"risk_kind\":\"calibration_bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the degree-five polynomial now\",\"rejected_reason\":\"Its mixed-sweep OOF RMSE is 0.0225 with a 0.267 maximum error, leaving room to identify a better-conditioned forward map.\"}],\"rationale\":\"Fit candidate saturation families with linear variable projection, report held-out axis and mixed errors, and identify repeated worst residual rows that could instead reflect clipping or remaining corruption.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e4e0354242f1ffad0337c4bf1493758d258f5c7f48ba0bd9c9fa2c886a806a65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40789.48,
+      "usage_known": true,
+      "prompt_tokens": 26417,
+      "cached_tokens": 9344,
+      "completion_tokens": 1578
+    }
+  ]
+}

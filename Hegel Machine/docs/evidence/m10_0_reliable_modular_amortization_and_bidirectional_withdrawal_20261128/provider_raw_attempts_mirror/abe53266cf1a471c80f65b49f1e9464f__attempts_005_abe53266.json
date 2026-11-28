@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abe53266cf1a471c80f65b49f1e9464f",
+  "call_seq": 5,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:48:54.275813+00:00",
+  "ended_at_utc": "2026-11-28T03:49:33.967824+00:00",
+  "request_sha256": "97a02879cc5de8d1b2dd782f45f3a66592e2cc79cddab86dd3d4db2efc6c8dd5",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41329,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26170,
+    "cached_tokens": 9344,
+    "completion_tokens": 1647
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Calibrate coupled load bridges before fitting the chamber response.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\n_I, _J = np.triu_indices(4)\\n_EYE = np.eye(4)\\n\\n\\ndef _basis(x):\\n    return np.column_stack((np.ones(len(x)), x, x[:, _I] * x[:, _J], x**3))\\n\\n\\ndef _fit_forward(loads, raw):\\n    design = _basis(loads)\\n    coef = np.linalg.lstsq(design, raw, rcond=None)[0]\\n    # Downweight complete rows: a calibration spike can affect all four bridges.\\n    scale = np.max(np.quantile(raw, .9, axis=0) - np.quantile(raw, .1, axis=0)) / 4\\n    for frac in (.4, .1, .02, .004, .001, .00035, .0002):\\n        cutoff = max(frac * scale, np.finfo(float).eps)\\n        for _ in range(15):\\n            error = np.linalg.norm(raw - design @ coef, axis=1)\\n            weight = cutoff / np.hypot(cutoff, error)\\n            coef = np.linalg.lstsq(design * weight[:, None], raw * weight[:, None], rcond=None)[0]\\n    error = np.linalg.norm(raw - design @ coef, axis=1)\\n    # Once isolated, spikes carry no information about the clean forward map.\\n    clean = error <= 8 * max(np.median(error), np.finfo(float).eps * max(1., scale))\\n    clean_coef, _, rank, _ = np.linalg.lstsq(design[clean], raw[clean], rcond=None)\\n    return clean_coef if rank == design.shape[1] else coef\\n\\n\\ndef _inverse(raw, coef):\\n    shape = raw.shape\\n    y = np.asarray(raw, dtype=float).reshape(-1, 4)\\n    if not len(y):\\n        return y.reshape(shape)\\n    linear = coef[1:5]\\n    quadratic = np.zeros((4, 4, 4))\\n    quadratic[_I, _J] += coef[5:15]\\n    quadratic[_J, _I] += coef[5:15]\\n    cubic = coef[15:]\\n    x = np.linalg.solve(linear.T, (y - coef[0]).T).T\\n    tolerance = 1e-11 * (1 + np.linalg.norm(y, axis=1))\\n    for _ in range(40):\\n        resid = _basis(x) @ coef - y\\n        error = np.linalg.norm(resid, axis=1)\\n        active = np.flatnonzero(error > tolerance)\\n        if not len(active):\\n            break\\n        z = x[active]\\n        deriv = (linear + np.einsum('nk,kio->nio', z, quadratic)\\n                 + (3 * z**2)[:, :, None] * _EYE * cubic)\\n        step = np.linalg.solve(deriv.transpose(0, 2, 1), resid[active, :, None])[..., 0]\\n        for _ in range(24):\\n            trial = x[active] - step\\n            better = np.linalg.norm(_basis(trial) @ coef - y[active], axis=1) < error[active]\\n            x[active[better]] = trial[better]\\n            active = active[~better]\\n            if not len(active):\\n                break\\n            step = .5 * step[~better]\\n    if np.any(np.linalg.norm(_basis(x) @ coef - y, axis=1) > 10 * tolerance):\\n        raise ValueError('Load bridge inverse did not converge')\\n    return x.reshape(shape)\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a copy with all load histories and sweeps in canonical coordinates.\\\"\\\"\\\"\\n    calibration = dataset['calibration_load_cells']\\n    loads = np.asarray(calibration['true_channel_loads'], dtype=float)\\n    coef = _fit_forward(loads, np.asarray(calibration['bridge_raw'], dtype=float))\\n\\n    result = dict(dataset)\\n    for key in ('train', 'test', 'chamber_verification_trials'):\\n        split = dataset.get(key)\\n        if split is not None:\\n            result[key] = dict(split, **{\\n                field: _inverse(np.asarray(split[field]), coef)\\n                for field in ('past_channel_raw', 'hold_channel_raw')\\n            })\\n\\n    sweeps = calibration['single_channel_sweeps']\\n    result['calibration_load_cells'] = dict(\\n        calibration, bridge_raw=calibration['true_channel_loads'].copy(),\\n        single_channel_sweeps=dict(sweeps, cmd_stress=sweeps['true_stress'].copy()),\\n    )\\n    return result\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 affine mixing with quadratic interactions and diagonal cubics; leave-one-out raw residual P95 fell from 1.104 to 0.000425, excluding three gross spikes from that percentile by rank.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Full cubic forward basis\",\n      \"rejected_reason\": \"Its leave-one-out P95 residual rises to 0.000726 despite a smaller training residual.\"\n    }\n  ],\n  \"rationale\": \"Implement the smaller basis supported by withheld calibration rows, reject spikes at the row level, and invert with a damped analytic Newton solve. The public validator will detect composition or output-schema failures before targeted inverse stress tests.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "43fa697bd7f9b7e628ad9e129c29a8ac8784efcfab31b192c349d7b87144e38b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41802.9,
+      "usage_known": true,
+      "prompt_tokens": 26170,
+      "cached_tokens": 9344,
+      "completion_tokens": 1647
+    }
+  ]
+}

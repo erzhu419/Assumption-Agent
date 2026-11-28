@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb19035dcca144b881adb8eefaa14659",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:57:34.567273+00:00",
+  "ended_at_utc": "2026-11-28T03:58:05.327094+00:00",
+  "request_sha256": "da16ce8b1740d862926e1b7c78252bb1fc83c4c7316de9d2a02b5786d4e1995d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28386,
+    "cached_tokens": 9344,
+    "completion_tokens": 1232
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_reset.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/chamber_probe.py').read())\\nfrom scipy.optimize import least_squares\\nP,H=load(di); L=np.r_[1,t]; Y=np.column_stack((di['instant_rate_obs'],y(di)))\\nF=lambda q:np.r_[1/q,-np.expm1(-t/q)]\\nB=np.array([F(v) for v in taus]); E=Y-(H[:,None]*th[:2])@B\\nu,s,v=np.linalg.svd(E,full_matrices=False); f=v[0]/v[0,0]; g=E@f/(f@f)\\nprint('reset residual singular values',s.round(5)); print('drift temporal',f.round(5)); print('rank1 errors',np.sqrt(np.mean((E-g[:,None]*f)**2,axis=0)).round(5));print('drift rates',g.round(4))\\nfor tag,mat in [('exp', lambda q:[q*F(q)]),('exp+linear',lambda q:[q*F(q),L]),('two branch+linear',lambda q:[*B,L]),('exp+two branch+linear',lambda q:[q*F(q),*B,L])]:\\n def fit(q):\\n  V=np.array(mat(float(q[0]))); return V.T@np.linalg.lstsq(V.T,f,rcond=None)[0]\\n q=least_squares(lambda q:fit(q)-f,[1],bounds=(.05,25)).x\\n print(tag,q,np.round(fit(q)-f,5))\\nvariants={'train+diag':m._features(tr,di)[n:],'diag':m._features(di,di)[:len(H)],'deploy scalers':None,'deploy+diag':m._features(te,di)[len(te['lab_id']):]}\\nraw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw'],di['coupon_features_raw']]); ref=np.vstack([tr['ref_coupons'],te['ref_coupons']]); lab=np.r_[tr['lab_id'],te['lab_id'],di['lab_id']]; lab0=lab[:len(ref)]; strata=np.r_[tr['stratum'],te['stratum']];\\nfor j in np.unique(lab):\\n a=ref[lab0==j]; raw[lab==j]=(raw[lab==j]-np.median(a.mean(0)))/np.median(a.std(0))\\n_,i,c=np.unique(np.c_[lab0,strata],axis=0,return_inverse=True,return_counts=True); w=1/c[i,None]; fill=np.nansum(raw[:len(ref)]*w,0)/np.sum(w*~np.isnan(raw[:len(ref)]),0); variants['deploy scalers']=np.where(np.isnan(raw[len(ref):]),fill,raw[len(ref):]);\\nXraw=np.asarray(di['coupon_features_raw']); complete=np.isfinite(Xraw).all(1); print('raw feature correlations and complete fits by lab')\\nfor j in np.unique(di['lab_id']):\\n a=(di['lab_id']==j)&complete; print(j,'n',sum(a),'g',g[a].round(4),'theta offset residual',(g[a]-np.nansum(Xraw[a]*th[3:],axis=1)).round(4))\\nfor tag,X in variants.items():\\n D=th[2]+X@th[3:]; p=np.c_[np.ones(len(H)),D]; b=np.linalg.lstsq(p,g,rcond=None)[0]; rr=g-p@b; print(tag,'affine drift',b.round(4),'rmse',np.sqrt((rr**2).mean()).round(5),'by lab',[(j,np.round(rr[di['lab_id']==j],3).tolist()) for j in np.unique(di['lab_id'])]);\\nprint('upstream',__import__('_verified_upstream').__file__)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_reset.py\\nsed -n '78,145p' /holdout_task/_verified_upstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 history-dependent chamber branches → H2 reset branches plus a separate drift response; the exploratory fixed-branch regression has initial-rate RMSE 0.0103 and final-time RMSE 0.0263 in sample.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use free chamber relaxation times and all six history coordinates\",\"rejected_reason\":\"The slow time constant hits the search boundary with no material error reduction; hold coefficients already match the train-derived branch weights.\"}],\"rationale\":\"Subtract the independently fitted zero-memory branch response and check whether the remaining chamber signal separates into one coupon amplitude and one time response. Compare normalization conventions to distinguish drift kinetics from reference-panel or missing-feature effects before fitting a deployment correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "649e3c97a6a6eca318988977a61746b2072f6873f48684806ed621c51513771d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32947.1,
+      "usage_known": true,
+      "prompt_tokens": 28386,
+      "cached_tokens": 9344,
+      "completion_tokens": 1232
+    }
+  ]
+}

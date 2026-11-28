@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a444a93dafdc44bc9694c0238ed06895",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:50:45.085879+00:00",
+  "ended_at_utc": "2026-11-28T03:51:19.983031+00:00",
+  "request_sha256": "43eeebc32ed61a106bd0f74f62a172b03d3ca35633be60eaa3e1e682a13a3dd0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22624,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19211,
+    "cached_tokens": 9344,
+    "completion_tokens": 1420
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; d=json.load(open(p)); print('telemetry structure:',[(k,type(v).__name__,len(v) if hasattr(v,'__len__') else None) for k,v in d.items()] if isinstance(d,dict) else len(d)); rows=d if isinstance(d,list) else next((v for v in d.values() if isinstance(v,list)),[]); print('current record:',str(rows[-1])[:3700] if rows else None)\\nPY\\ncat >/tmp/saturation.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; bank=c['single_bank_sweeps']; n=len(x)\\nq=np.column_stack([x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])\\n# Fixed redescending initialization from the gross deviation relative to the sweep cloud.\\ndef screen(y):\\n m=np.median(y,axis=0); mad=np.median(abs(y-m),axis=0); return np.max(abs(y-m)/np.maximum(mad,1e-12),axis=1)<9\\nprint('screened rows',np.where(~screen(y))[0]); print('observation quantiles',np.quantile(s['y_obs_raw'].reshape(-1,4),[0,.5,1],axis=0));\\nfns={'tanh':lambda z,a:np.tanh(a*z), 'rat2':lambda z,a:z/(1+a*z*z),'sqrt':lambda z,a:z/np.sqrt(1+a*z*z),'atan':lambda z,a:np.arctan(a*z),'erf':None}\\nfrom scipy.special import erf\\nfns['erf']=lambda z,a:erf(a*z)\\nfor name,fn in fns.items():\\n for linear in [False,True]:\\n  r=np.zeros_like(y); scales=[]; coefs=[]; rb=[]\\n  for k in range(6):\\n   te=np.arange(n)%5==k if k<5 else np.ones(n,bool); tr=~te if k<5 else te.copy(); tr[tr]=screen(y[tr]); aa=[]; bb=[]\\n   for j in range(4):\\n    z=x[:,j]; A=np.c_[np.ones(n),x if linear else np.delete(x,j,axis=1),q];\\n    def run(a,out=False):\\n     D=np.c_[A,fn(z,a)]; b=np.linalg.lstsq(D[tr],y[tr,j],rcond=None)[0]; e=D[tr]@b-y[tr,j]; return (D,b) if out else e@e\\n    a=minimize_scalar(run,bounds=(.07,5),method='bounded').x; D,b=run(a,True); aa.append(a);bb.append(b);r[te,j]=D[te]@b-y[te,j] if k<5 else r[te,j]\\n    if k==5:\\n     mask=bank['bank_id']==j; z=bank['ref_signal'][mask]; xx=np.zeros((len(z),4));xx[:,j]=z; qq=np.column_stack([xx[:,i]*xx[:,l] for i,l in itertools.combinations_with_replacement(range(4),2)]); pred=np.c_[np.ones(len(z)),xx if linear else np.delete(xx,j,axis=1),qq,fn(z,a)]@b; e=pred-bank['raw_readout'][mask];rb.append(np.round(np.sort(abs(e))[[5,9,11]],4))\\n   scales.append(aa);coefs.append(bb)\\n  good=screen(y); z=np.linalg.norm(r,axis=1); print(name,linear,'oof p50/p95/max',np.round(np.quantile(z[good],[.5,.95,1]),5),'alpha',np.round(scales[-1],3),'bank med/2ndtail/max',np.array(rb).tolist());\\n  if name in ('tanh','rat2'): print('coef',np.round(coefs[-1],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/saturation.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling -> H2 channel-wise saturation plus sparse interactions; clean sweep OOF maximum row error fell from 0.563 to 0.168 with the fixed rational-plus-quadratic basis.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine cross-channel map adequately describes the rosette forward response after rejecting gross EMI rows.\",\n    \"empirical_witness\": \"Clean held-out row p95 error was 0.536 for the affine fit versus 0.108 for a rational-plus-quadratic fit; the three gross EMI rows had residual norms near 26 and do not explain the affine error.\",\n    \"causal_blanket_diagnosis\": \"The affine map pools small-signal gain and amplitude-dependent saturation into one slope.\",\n    \"sublated_pivot\": \"Keep cross-channel coupling and estimate channel-wise saturation scales inside each training fold; use independent single-bank sweeps to check the diagonal response.\",\n    \"risk_kind\": \"systematic inverse bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a dense cubic model\",\n      \"rejected_reason\": \"Its clean OOF worst error was 0.641, worse than affine and far worse than the structured saturation models.\"\n    }\n  ],\n  \"rationale\": \"The fixed-basis results establish nonlinearity but do not distinguish the saturation laws. Fitting their scales within folds and checking independent axis sweeps will determine which forward model to invert.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2dc13a2f1f40f85d9d6722a6e9c9e0fefc8d8c9cd9323e63d8854b4602acbe41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36983.89,
+      "usage_known": true,
+      "prompt_tokens": 19211,
+      "cached_tokens": 9344,
+      "completion_tokens": 1420
+    }
+  ]
+}

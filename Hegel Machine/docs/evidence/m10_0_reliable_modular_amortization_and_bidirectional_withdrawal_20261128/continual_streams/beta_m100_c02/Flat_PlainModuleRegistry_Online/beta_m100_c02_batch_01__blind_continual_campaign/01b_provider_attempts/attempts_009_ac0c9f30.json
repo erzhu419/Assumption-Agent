@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac0c9f30eea745c9a51d58cdb0a8a7a1",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:43.399886+00:00",
+  "ended_at_utc": "2026-11-28T03:34:14.465127+00:00",
+  "request_sha256": "32e2d250d762308178b67603a06950f4ec35168457e85c92131d2ce87ccaa130",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44998,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25063,
+    "cached_tokens": 9344,
+    "completion_tokens": 1235
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\n\\ndef design(x, pair=None, a=0.):\\n    p = np.column_stack((np.ones(len(x)), x))\\n    if pair is None:\\n        return p\\n    j,k,sign = pair\\n    q = x[:,j] if j == k else (x[:,j] + sign*x[:,k])/np.sqrt(2.)\\n    return np.column_stack((p, q**3/(1+a*q*q), q**2/(1+a*q*q)))\\n\\ndef rmse(e):\\n    return np.sqrt(np.mean(e*e, axis=0)).max()\\n\\npairs = [(j,j,1) for j in range(4)] + [(j,k,sgn) for j in range(4) for k in range(j+1,4) for sgn in (-1,1)]\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, y = (np.asarray(c[k]) for k in ('ref_rosette','raw_rosette'))\\n    group = np.random.default_rng(123).permutation(len(x)) % 5\\n    def select(train):\\n        scores = []\\n        for pair in pairs:\\n            for a in (.03,.3,3.):\\n                A = design(x,pair,a)\\n                errs = []\\n                for fold in np.unique(group[train]):\\n                    fit = train & (group != fold)\\n                    val = train & (group == fold)\\n                    b = np.linalg.lstsq(A[fit],y[fit],rcond=None)[0]\\n                    errs.append(rmse(A[val]@b-y[val]))\\n                scores.append((max(errs),pair,a))\\n        return min(scores)[1:]\\n    models = {'affine': [], 'rational': []}\\n    for fold in range(5):\\n        train = group != fold\\n        for label, args in (('affine', ()), ('rational', select(train))):\\n            A = design(x,*args)\\n            b = np.linalg.lstsq(A[train],y[train],rcond=None)[0]\\n            models[label].append(rmse(A[~train]@b-y[~train]))\\n    S, _ = m.chamber_response(s)\\n    for label, args in (('affine', ()), ('rational', select(np.ones(len(x), dtype=bool)))):\\n        b = np.linalg.lstsq(design(x,*args),y,rcond=None)[0]\\n        errs = []\\n        for p in item.get('campaign_diagnostics') or []:\\n            ref = (S@p['w_pulse']).reshape(-1,4)\\n            err = (design(ref,*args)@b-np.asarray(p['y_pulse_raw']).reshape(-1,4)).reshape(len(s['mu_shifts']),-1,4)\\n            errs.extend(rmse(e) for e in err)\\n        print(label, 'worst nested sweep fold/channel RMS', max(models[label]), 'worst external pulse/shift/channel raw RMS', max(errs, default=float('nan')), 'selected terms', args)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 zero-leakage walls with sweep-fitted affine calibration; worst calibrated tracer RMS across pulse, shift, and channel is 2.153e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the transport, nuisance, and KKT checks\",\n      \"rejected_reason\": \"Those checks are already verified on the unchanged artifact. The outstanding calibration question is whether saturating pairwise terms improve independent tracer prediction.\"\n    }\n  ],\n  \"rationale\": \"Test for missed sensor saturation by selecting rational pairwise terms inside the sweep folds, then score the selected model on independent tracer pulses. Revisit calibration only if the challenger materially improves the worst tracer slice without worsening held-out sweep performance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9b92da628a9fd3712752740d68b88636623187811d40b7405c23fd64bfd3be1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33139.74,
+      "usage_known": true,
+      "prompt_tokens": 25063,
+      "cached_tokens": 9344,
+      "completion_tokens": 1235
+    }
+  ]
+}

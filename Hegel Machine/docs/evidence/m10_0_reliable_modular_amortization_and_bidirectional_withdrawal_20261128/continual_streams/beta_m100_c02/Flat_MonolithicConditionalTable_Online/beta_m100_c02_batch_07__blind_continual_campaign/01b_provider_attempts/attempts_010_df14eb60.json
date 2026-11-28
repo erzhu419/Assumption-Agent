@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df14eb60e057468fb386ace76f39b61a",
+  "call_seq": 10,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c02__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:11:00.627005+00:00",
+  "ended_at_utc": "2026-11-28T04:11:32.098268+00:00",
+  "request_sha256": "760132c3dd384d65079f0dda59ad8363655bf6fe270dd3b54a85d7b23315e4ca",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53291,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29287,
+    "cached_tokens": 9344,
+    "completion_tokens": 1213
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; single=c['single_bank_sweeps']; S,_=m.chamber_response(s)\\n# Split each bank by its own reference signal, leaving each signal range out in turn.\\n# Compare the affine law with cross-bank sums/differences and a saturating quotient.\\nfor family in ('affine','pairs','quotient'):\\n    slices=[]\\n    for k in range(4):\\n        groups=np.array_split(np.argsort(X[:,k]),5)\\n        use=single['bank_id']==k\\n        singles=np.eye(4)[[k]]*single['ref_signal'][use,None]\\n        for held in groups:\\n            train=np.ones(len(X),bool); train[held]=False\\n            # Exclude single-bank points in the same held-out voltage interval.\\n            lo,hi=X[held,k].min(),X[held,k].max()\\n            keep=(singles[:,k]<lo)|(singles[:,k]>hi)\\n            x=np.r_[X[train],singles[keep]]; y=np.r_[Y[train,k],single['raw_readout'][use][keep]]\\n            def features(a):\\n                t=a[:,k]; other=np.delete(a,k,axis=1)\\n                if family=='pairs':\\n                    return np.column_stack((np.ones(len(t)),t,other,(t[:,None]+other)**2,(t[:,None]-other)**2))\\n                return np.column_stack((np.ones(len(t)),t))\\n            if family=='quotient':\\n                def pred(a,p):\\n                    t=a[:,k]; return p[0]+p[1]*t/(1+p[2]*t*t)\\n                b=np.linalg.lstsq(features(x),y,rcond=None)[0]\\n                p=least_squares(lambda p:pred(x,p)-y,np.r_[b,0.],bounds=([-np.inf,-np.inf,0.],[np.inf,np.inf,np.inf]),gtol=1e-13).x\\n                residual=pred(X[held],p)-Y[held,k]\\n            else:\\n                b=np.linalg.lstsq(features(x),y,rcond=None)[0]\\n                residual=features(X[held])@b-Y[held,k]\\n            slices.append(np.sqrt(np.mean(residual**2)))\\n    print(f'{family}: worst held-out bank/range RMSE {max(slices):.3e}; median {np.median(slices):.3e}')\\n# Check the specified ridge residualizer against independent SVD coordinates.\\n# A mismatch would point to a missing ridge factor, transposition or repeated projection.\\nZ=s['Z_nuisance']; U,d,_=np.linalg.svd(Z,full_matrices=False); alpha=s['nuisance_ridge']; C=np.column_stack((S,m.calibrate(s)))\\nF=C-Z@np.linalg.solve(Z.T@Z+alpha*np.eye(Z.shape[1]),Z.T@C)\\nG=C-U@((d*d/(d*d+alpha))[:,None]*(U.T@C))\\nnp.testing.assert_allclose(F,G,rtol=0,atol=1e-12)\\nprint(f'Residualizer direct vs SVD max error {np.max(abs(F-G)):.3e}; nuisance design rank {np.linalg.matrix_rank(Z)}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additional wall or readout terms -> H2 exact two-axis periodic stencil and affine readout; worst public tracer slice RMSE is 1.154e-6 and maximum QP stress error is 2.576e-14.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"This is a steady continuous inverse problem with no relay state, class labels, or classification cohorts.\"\n    }\n  ],\n  \"rationale\": \"The earlier calibration folds interleaved the signal range. Holding out whole voltage ranges can reveal a nonlinear readout term that those folds missed; a clear worst-slice improvement would justify testing it end to end. An independent SVD calculation checks the continuous nuisance adjustment against the specified ridge projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d3abb4ba4b69e3509db7a8931ee9b23826f529cb8cc32bf73ddb991cd3430444",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33607.97,
+      "usage_known": true,
+      "prompt_tokens": 29287,
+      "cached_tokens": 9344,
+      "completion_tokens": 1213
+    }
+  ]
+}

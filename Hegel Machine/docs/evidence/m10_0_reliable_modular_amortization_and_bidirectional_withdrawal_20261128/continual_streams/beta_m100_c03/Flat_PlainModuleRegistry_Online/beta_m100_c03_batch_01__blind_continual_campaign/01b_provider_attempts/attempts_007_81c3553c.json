@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81c3553c32f748fca4d2a360973132f0",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:33:08.394250+00:00",
+  "ended_at_utc": "2026-11-28T03:33:32.331908+00:00",
+  "request_sha256": "3e87fca17a03c63e8d9d98c825c9fc1322af09fd79efb86440596afb1b6afcdc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41825,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25027,
+    "cached_tokens": 9344,
+    "completion_tokens": 897
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\na=runpy.run_path(p+'batch_solver.py'); item=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); z=s['Z_nuisance']; S,_=a['_responses'](s)\\nprint('calibration layout',x.shape, {k:np.asarray(v).shape for k,v in c['single_bank_sweeps'].items()}); print('rosette banks',[(k,np.shape(s[k]),np.unique(s[k],return_counts=True)) for k in ('row_bank_id',) if k in s]); print('pulse shapes',S.shape,z.shape)\\nD=np.c_[np.ones(len(x)),x]; q=np.column_stack([x[:,j]*x[:,k] for j in range(4) for k in range(j,4)]); scores={}\\nfor name,F in [('affine',D),('quadratic',np.c_[D,q]),('pairwise rational corrections',np.c_[D,*[(x[:,j]+sgn*x[:,k])/(1+(x[:,j]-sgn*x[:,k])**2) for j in range(4) for k in range(j+1,4) for sgn in (-1,1)]])]:\\n e=np.array([F[i]@np.linalg.lstsq(np.delete(F,i,axis=0),np.delete(y,i,axis=0),rcond=None)[0]-y[i] for i in range(len(x))]); scores[name]=np.sqrt(np.mean(e**2,axis=0)); print('out-of-fold calibration',name,scores[name]);\\nQ=np.linalg.qr(z,mode='reduced')[0]; banks=np.asarray(s.get('row_bank_id',np.zeros(len(z)))).ravel();\\nfor h,pulse in enumerate(item['campaign_diagnostics']):\\n e=S@pulse['w_pulse']-a['_calibrate'](s,pulse['y_pulse_raw']); r=e-Q@(Q.T@e); print('pulse',h,'raw and nuisance-orthogonal RMSE',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(r**2))); print('bank RMSE',[(bank,np.sqrt(np.mean(e[banks==bank]**2))) for bank in np.unique(banks)] if len(banks)==len(e) else 'bank labels not at observation granularity')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open-wall Robin) -> H2 (zero leakage and affine rosette); worst held-out pulse RMSE is 8.77e-7 and worst calibration-channel LOOCV RMSE is 1.12e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, stochastic drift, or class-balanced accuracy\",\"rejected_reason\":\"The supplied model is a steady transport inverse problem with continuous measurements and no relay states or class labels.\"}],\"rationale\":\"Check whether omitted sensor nonlinearities improve out-of-fold calibration and whether pooled pulse residuals hide a bad bank or nuisance-aligned error. A repeatable improvement would justify changing the calibration; otherwise retain the already verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "44fd6212f0ad2d78bc98be70fef205a5f47ad11e5e27a7c520f4674c426db380",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26002.05,
+      "usage_known": true,
+      "prompt_tokens": 25027,
+      "cached_tokens": 9344,
+      "completion_tokens": 897
+    }
+  ]
+}

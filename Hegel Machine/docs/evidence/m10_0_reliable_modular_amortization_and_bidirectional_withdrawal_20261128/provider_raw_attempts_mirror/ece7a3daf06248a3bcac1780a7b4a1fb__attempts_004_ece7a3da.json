@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ece7a3daf06248a3bcac1780a7b4a1fb",
+  "call_seq": 4,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:37:17.553891+00:00",
+  "ended_at_utc": "2026-11-28T03:37:35.263248+00:00",
+  "request_sha256": "bf558e2ac8999c9e6909cc26aecd3e5155e622465d5f5878947824f8e31d539d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31916,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22157,
+    "cached_tokens": 9344,
+    "completion_tokens": 616
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; diff -u *_s00_solver.py *_batch_01_solver.py | grep -E '^[+-][^+-]' | tail -85; python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True)\\nfor e in json.load(open('archive_apparatus_log.json')):\\n a=np.array(e['facility_telemetry_trace']); u,s,v=np.linalg.svd(a-a.mean(0),full_matrices=False); print(e['completed_campaign_short_name'], 'mean',a.mean(0),'std',a.std(0),'sv',s); print('pair differences',(a[:,0]-a[:,3]).std(),(a[:,0]+a[:,6]).std(),'state channels',a[:,[1,5]].mean(0)); print('top fft',np.argmax(abs(np.fft.rfft(a-a.mean(0),axis=0))[1:],axis=0)+1)\\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; cal=x['calibration_load_cells']; a,b=cal['bridge_raw'],cal['true_channel_loads']; D=np.c_[a,np.ones(len(a))]; r=b-D@np.linalg.lstsq(D,b,rcond=None)[0]; print('bridge affine RMSE/max',np.sqrt(np.mean(r**2,axis=0)),np.abs(r).max()); print('single sweeps',[(k,v.shape) for k,v in cal['single_channel_sweeps'].items()]);\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge and archived intrinsic law → test whether facility telemetry supports chamber transfer; no out-of-fold metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Infer chamber adjustments directly from telemetry channel means\",\"rejected_reason\":\"The archived traces change regime, but their means have not been linked to a constitutive coefficient.\"}],\"rationale\":\"The compact archive diff can expose a transferable chamber term; the bridge residuals determine whether affine calibration needs a nonlinear candidate. Telemetry contrasts check for repeated or withdrawn regimes without treating unlabeled traces as chamber outcomes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d12dbaba177c9e6eed5364d7a0a7261e2daedccddb5d6d37740a5bab0fdedf5c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19795.88,
+      "usage_known": true,
+      "prompt_tokens": 22157,
+      "cached_tokens": 9344,
+      "completion_tokens": 616
+    }
+  ]
+}

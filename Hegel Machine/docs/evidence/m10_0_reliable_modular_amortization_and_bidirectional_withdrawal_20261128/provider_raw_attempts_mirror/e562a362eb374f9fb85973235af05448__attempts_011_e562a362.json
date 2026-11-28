@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e562a362eb374f9fb85973235af05448",
+  "call_seq": 11,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c03__Flat_MonolithicConditionalTable_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c03_batch_10__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T04:22:03.899800+00:00",
+  "ended_at_utc": "2026-11-28T04:22:26.745409+00:00",
+  "request_sha256": "ad21f0b3a3e0689304821eeaf1238159752998d612c28f11b8663af080252494",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31143,
+    "cached_tokens": 9344,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '27,95p' batch_solver.py; for b in 01 02 07; do f=/tmp/hegel_continual_archive/alpha_m100_c03_batch_${b}_solver.py; echo ==== $b; sed -n '/^def _bridge(/,/^def _loads(/p' \\\"$f\\\" | head -44; done; python3 - <<'PY'\\nimport json,numpy as np\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive'); log=json.loads((p/'archive_apparatus_log.json').read_text()); a=np.array([r['facility_telemetry_trace'] for r in log]); ids={r['episode_short_name'] for r in json.loads((p/'archive_manifest.json').read_text())};\\nfor i in range(1,len(log)):\\n k=log[i]['completed_campaign_short_name']; print(k,'verified' if k in ids else 'no solver','prior trace index',i-1,'distance to current',round(np.sqrt(np.mean((a[i-1]-a[-1])**2)),6))\\nprint('same prior traces for batch 02 and batch 08:',np.array_equal(a[2],a[8]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust benchtop kinetics → H2 archive-based chamber transfer; worst held-out lab MAE at the 90th percentile is 0.02313 for strain and 0.01306 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"An identical pre-campaign facility trace uniquely determines the chamber response law.\",\n    \"empirical_witness\": \"The pre-campaign traces for batch 02 and batch 08 have zero maximum elementwise difference, but their verified solvers use history-dependent relaxation with saturating drift and hold-driven relaxation with linear drift, respectively.\",\n    \"causal_blanket_diagnosis\": \"The facility trace does not capture every state variable that governs the chamber law.\",\n    \"sublated_pivot\": \"Keep the validated benchtop fit and compare archive transfer candidates without treating telemetry as a definitive label.\",\n    \"risk_kind\": \"unobserved chamber regime\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit benchtop kinetics\",\n      \"rejected_reason\": \"Leave-one-lab-out fits are stable; the archived chamber laws differ far more than the benchtop fits do.\"\n    }\n  ],\n  \"rationale\": \"Check whether differences in the empirical bridge models offer independent evidence for selecting a chamber law. If they do not, retain an archive-based prediction and report chamber accuracy as unverified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8febd54b08b9830166ac5f6449ff9fdd0f467bd4374b60d12901679bd7ea0af2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25036.08,
+      "usage_known": true,
+      "prompt_tokens": 31143,
+      "cached_tokens": 9344,
+      "completion_tokens": 842
+    }
+  ]
+}

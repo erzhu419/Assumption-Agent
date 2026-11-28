@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "078bac769cd34adba2438d5e99d1c2f4",
+  "call_seq": 7,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__alpha_m100_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m100_c02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:41:59.480265+00:00",
+  "ended_at_utc": "2026-11-28T03:42:30.690556+00:00",
+  "request_sha256": "0464ce54693f1b2ed26c9b51a083dd12e5c9f7b425f58cbf26f38ff298c4e521",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 48612,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28491,
+    "cached_tokens": 9344,
+    "completion_tokens": 1157
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _basis,_robust_fit,_fit_bridge,_invert,_PAIRS\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; A=_basis(X)\\ncols=[np.r_[np.arange(5),5+np.flatnonzero(np.all(_PAIRS==sorted((j,(j+1)%4)),axis=1))[0],15+j] for j in range(4)]\\ndef seed(a,y):\\n    b=np.zeros((a.shape[1],4))\\n    for j,k in enumerate(cols): b[k,j]=_robust_fit(a[:,k],y[:,j:j+1])[:,0]\\n    return b\\nclean=np.linalg.norm(A@_fit_bridge(X,Y)-Y,axis=1)<1\\nfolds=[('random'+str(i),t) for i,t in enumerate(np.array_split(np.random.default_rng(42).permutation(len(X)),5))]\\nfolds += [('mixed only train',np.flatnonzero(np.count_nonzero(X,axis=1)==1))] + [(f'cut {c}',np.flatnonzero(np.max(abs(X),axis=1)>c)) for c in [1.,1.2,1.3,1.4]]\\nfor label,t in folds:\\n    tr=np.setdiff1d(np.arange(len(X)),t); te=t[clean[t]]; a,y=A[tr],Y[tr]\\n    b=seed(a,y); r=np.linalg.norm(a@b-y,axis=1); keep=r<=6*max(np.median(r),2e-7)\\n    for j,k in enumerate(cols): b[k,j]=np.linalg.lstsq(a[keep][:,k],y[keep,j],rcond=None)[0]\\n    g=_fit_bridge(X[tr],y); rg=np.linalg.norm(a@g-y,axis=1)\\n    dx=_invert(Y[te],b)-X[te]; e=A[te]@b-Y[te]; print(label,'seed/broad train median',np.median(r),np.median(rg),'seed rejects',tr[~keep].tolist(),'held bridge, load, sum RMS',np.sqrt(np.mean(np.sum(e**2,axis=1))),np.sqrt(np.mean(dx**2)),np.sqrt(np.mean(dx.sum(1)**2)))\\nPY\\npython3 - <<'PY'\\nimport json\\np=json.load(open('public_asset_index.json')); print('asset keys',list(p)); print('chamber metadata',[(k,v) for k,v in p.items() if 'chamber' in k])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 broad sparse-polynomial IRLS → H2 low-leverage cyclic-polynomial initialization; baseline inverse component RMS is 9.44e-5 worst random-fold but 1.43 when training is restricted to radius 1.2.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the general bridge with fixed cyclic support\",\"rejected_reason\":\"A cyclic fit could initialize spike rejection, but forcing its support would discard other interactions that a future calibration panel can resolve.\"}],\"rationale\":\"At radius 1.2 the clean design has rank 19 but only 21 clean records; the broad fit absorbs high-leverage spikes before it can select terms. Test whether the compact structure independently identifies the spike rows and restores high-load accuracy before using it to initialize the general fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "95200768ce812c12b23e6265fc5bdbf5ff76310c9a09de33e428430af5a246c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31169.67,
+      "usage_known": true,
+      "prompt_tokens": 28491,
+      "cached_tokens": 9344,
+      "completion_tokens": 1157
+    }
+  ]
+}

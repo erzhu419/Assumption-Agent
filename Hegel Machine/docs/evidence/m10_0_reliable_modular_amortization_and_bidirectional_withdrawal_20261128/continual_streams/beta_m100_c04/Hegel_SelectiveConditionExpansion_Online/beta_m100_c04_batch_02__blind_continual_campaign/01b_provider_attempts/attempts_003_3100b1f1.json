@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3100b1f184f441a7afe6045b22e0ffc8",
+  "call_seq": 3,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c04__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c04_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:39:12.341697+00:00",
+  "ended_at_utc": "2026-11-28T03:39:31.854397+00:00",
+  "request_sha256": "a59492cdc1bc528d89bdf21318297f48bc994dd2a764f15e31446cbcd2249ee0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21437,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18745,
+    "cached_tokens": 9344,
+    "completion_tokens": 687
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed -n '22,53p' _verified_downstream.py && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json && grep -nE 'calibr|rosette|tanh|pulse' /tmp/hegel_continual_archive/*solver.py; cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; a=c['ref_rosette']; b=c['raw_rosette']; y=s['y_obs_raw'].reshape(-1,4)\\nfor name,x in [('ref',a),('raw',b),('obs',y)]: print(name,np.quantile(x,[0,.1,.5,.9,1],axis=0))\\nprint('ref first',a[:5]); print('ref every 10',a[::10]); print('corr',np.corrcoef(a.T)); X=np.c_[np.ones(len(a)),a]; W=np.linalg.lstsq(X,b,rcond=None)[0]\\nfor i in range(10):\\n r=np.linalg.norm(X@W-b,axis=1); k=r<=np.quantile(r,.85); W=np.linalg.lstsq(X[k],b[k],rcond=None)[0]\\nr=X@W-b; print('trimmed affine coef',W); print('residual abs quantile',np.quantile(abs(r),[.1,.5,.75,.9,.95,1],axis=0)); print('largest rows', np.argsort(np.linalg.norm(r,axis=1))[-12:]); print('pulse key',s.get('reference_tracer_pulses')); print('sweep nested', {k:(v.shape, v[:3].tolist()) for k,v in c['single_bank_sweeps'].items()})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: use robust affine residuals to separate cross-channel response, smooth curvature, and EMI; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear inverse directly to all calibration rows\",\"rejected_reason\":\"EMI would contaminate the inverse predictors; first characterize residuals in the forward direction, where reference predictors are clean.\"}],\"rationale\":\"The compact readout will identify whether a coupled affine baseline needs curvature terms and show whether the observation range requires extrapolation. The downstream and archive snippets clarify the coordinate contract without pulling additional data.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "9aae213483a6af87807dad85e325145f16bd5e61a9a849b1f00c895855971454",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21628.37,
+      "usage_known": true,
+      "prompt_tokens": 18745,
+      "cached_tokens": 9344,
+      "completion_tokens": 687
+    }
+  ]
+}

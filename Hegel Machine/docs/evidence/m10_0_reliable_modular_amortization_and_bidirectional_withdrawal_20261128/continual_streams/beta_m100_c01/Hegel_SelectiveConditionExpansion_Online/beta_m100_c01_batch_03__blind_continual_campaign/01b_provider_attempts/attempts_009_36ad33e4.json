@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36ad33e4b0ff482c868b62a498e36f96",
+  "call_seq": 9,
+  "stage_subdir": "m100_confirmation_20261128T032437Z_6dc6e01a__beta_m100_c01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m100_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:47:36.631799+00:00",
+  "ended_at_utc": "2026-11-28T03:48:07.900356+00:00",
+  "request_sha256": "13543191b9b942109a1856ad3fbfe499d32368cc45dfe4a8f1636db8f55c708d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44472,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24843,
+    "cached_tokens": 9344,
+    "completion_tokens": 1220
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_rosette_resolution.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit, _invert, _TERMS, calibrate_upstream\\nfrom _verified_downstream import solve_downstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as stream:\\n    studies = [item['study'] for item in pickle.load(stream)]\\nkeep = np.array([True] + [len(set(t)) == 1 for t in _TERMS])\\nfor st in studies:\\n    cal = st['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    a = _basis(x)\\n    blocks = np.arange(len(x)) // 10\\n    baseline = calibrate_upstream(st)\\n    w0 = solve_downstream(baseline)['weights']\\n    measurements = []\\n    for fold in np.unique(blocks):\\n        train = blocks != fold\\n        mixed = _fit(x[train], y[train])\\n        # Gross EMI is separated by orders of magnitude; use the same rows for both models.\\n        clean = np.linalg.norm(a @ mixed - y, axis=1) < .01\\n        test = ~train & clean\\n        fit_rows = train & clean\\n        additive = np.linalg.lstsq(a[fit_rows][:, keep], y[fit_rows], rcond=None)[0]\\n        rms = lambda z: np.sqrt(np.mean(z*z))\\n        study = dict(baseline, y_obs_raw=_invert(st['y_obs_raw'], mixed))\\n        weights = solve_downstream(study)['weights']\\n        row = [rms(a[test][:, keep] @ additive - y[test]), rms(a[test] @ mixed - y[test]), rms(_invert(y[test], mixed) - x[test]), np.max(np.abs(weights-w0))]\\n        measurements.append(row)\\n        print('block', fold, 'EMI rows', int(np.count_nonzero(~train & ~clean)), 'additive forward / mixed forward / mixed inverse / weight drift:', *row)\\n    worst = np.max(measurements, axis=0)\\n    print('worst across blocks:', *worst)\\n    assert worst[1] < 1e-4 and worst[2] < 1e-4 and worst[0] > 100 * worst[1]\\n    b = cal['single_bank_sweeps']\\n    j = np.asarray(b['bank_id'], dtype=int)\\n    amp = b['ref_signal']\\n    axes = np.eye(4)[j] * amp[:, None]\\n    single_errors = []\\n    for bank in range(4):\\n        # Hold out all corresponding axis-only rosette rows before checking the independent bank sweep.\\n        other = np.arange(4) != bank\\n        train = np.any(x[:, other] != 0, axis=1)\\n        c = _fit(x[train], y[train])\\n        rows = j == bank\\n        err = (_basis(axes[rows]) @ c)[:, bank] - b['raw_readout'][rows]\\n        clean = abs(err) < .01\\n        single_errors.extend(err[clean])\\n        print('independent bank', bank, 'retained', clean.sum(), '/', len(err), 'RMSE', rms(err[clean]))\\n    print('independent bank sweep RMSE:', rms(np.asarray(single_errors)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_resolution.py\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Additive channel response → robust mixed cubic; verified worst held-out inverse RMSE is 2.06e-5, and the new audit measures how calibration uncertainty propagates into the recovered weights.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational challenger or test label and relay controls\",\n      \"rejected_reason\": \"The rational challenger already failed to improve the worst held-out error, and the study has no cohort labels or relay states.\"\n    }\n  ],\n  \"rationale\": \"Compare additive and mixed terms on identical held-out rows to isolate the effect of coupling. Check whether withholding calibration blocks destabilizes the downstream weights, and use the separate bank sweeps to catch axis-specific bias that joint sweep averages could miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3fb8a315bb5953aa3a19b62275c26757e81b40d2f54f398fabd707ce7ee1bb23",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33355.54,
+      "usage_known": true,
+      "prompt_tokens": 24843,
+      "cached_tokens": 9344,
+      "completion_tokens": 1220
+    }
+  ]
+}
