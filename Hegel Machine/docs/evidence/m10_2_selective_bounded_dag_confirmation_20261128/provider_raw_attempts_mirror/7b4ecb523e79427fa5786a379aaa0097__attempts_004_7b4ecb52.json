@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b4ecb523e79427fa5786a379aaa0097",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:58.196155+00:00",
+  "ended_at_utc": "2026-11-28T15:17:32.464857+00:00",
+  "request_sha256": "f4ec9202e0943d9cb485f2196fd62825e7f1b694cd8eb2c745245be15f49a7ae",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30250,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24039,
+    "cached_tokens": 5504,
+    "completion_tokens": 1475
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/dag_probe.py <<'PY'\\nimport sys, pickle, numpy as np, importlib.util\\nfrom itertools import combinations_with_replacement\\nfrom pathlib import Path\\nR=Path('/holdout_task')\\ns=pickle.load(open(R/'public_batch.pkl','rb'))[0]['study']\\ndef load(p):\\n spec=importlib.util.spec_from_file_location(p.stem,p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nmods=[load(R/'_frozen_nodes'/f'node_{i:02}.py') for i in range(3)]\\nlst=lambda x,y: np.linalg.lstsq(x,y,rcond=1e-9)[0]\\nT=np.column_stack((s['train']['y'],s['train']['traj'])); n=len(T)\\nW=mods[0].run_node({'__input__':s})['calibrated'][:n]\\nprint('calibrated ranges', W.min(0),W.max(0),'singular',np.linalg.svd(W-W.mean(0),compute_uv=False))\\nwith np.printoptions(precision=5):\\n p=s['panel_a']; z=mods[0]._align(p,p['v']); print('alignment quantiles',np.quantile(np.linalg.norm(z-p['u'],axis=1),[0,.25,.5,.75,.90,.95,.98,1])); print('time singular',np.linalg.svd(T[:,1:],compute_uv=False))\\ndef designs(W,tr):\\n z=(W-W[tr].mean(0))/np.maximum(.1,W[tr].std(0)); a=np.column_stack((np.ones(len(z)),z)); powers=[q for d in (2,3) for q in combinations_with_replacement(range(8),d)]; poly=np.column_stack([np.prod(z[:,q],axis=1) for q in powers]); return a,poly,powers\\n\\ndef path(a,p,y,k):\\n # Orthogonalized forward selection gives scale-invariant block improvement.\\n a=a.copy(); p=p.copy(); y=y.copy(); q=np.linalg.qr(a,mode='reduced')[0]; p-=q@(q.T@p); y-=q@(q.T@y); cols=[]\\n for _ in range(k):\\n  norm=np.linalg.norm(p,axis=0); score=np.sum((p.T@y)**2,axis=1)/np.maximum(1e-20,norm**2); score[norm<1e-9]=-np.inf; j=np.argmax(score); cols.append(j); q=p[:,j]/norm[j]; p-=np.outer(q,q@p); y-=np.outer(q,q@y); p[:,j]=0\\n return cols\\n\\ndef setup(tr,va):\\n a,p,terms=designs(W,tr)\\n b=mods[1]._time_basis(s['eval_times'],T[tr,1:]); q=np.linalg.qr(b)[0]; Y=np.column_stack((T[:,0],T[:,1:]@q)); z=a[:,1:]; fit=mods[2].run_node({'node_00':{'features':z[np.r_[tr,va]]},'node_01':{'targets':T[tr]}})['fit']; return a,p,terms,q,Y,np.column_stack((fit[:,0],fit[:,1:]@q))\\n\\ndef check(tr,va,debug=False):\\n a,p,terms,q,Y,kern=setup(tr,va); errs={}\\n def score(name,pred):\\n  err=pred-Y[va]; errs[name]=[np.mean(abs(err[:,0])),np.mean(abs(err[:,1:]@q.T))]\\n score('kernel',kern)\\n for nterm in (36,len(terms)):\\n  yy=[]\\n  for k in (0,1,2,3,4,6,8,12):\\n   pred=[]; select=[]\\n   for sl in (slice(0,1),slice(1,3)):\\n    cs=path(a[tr],p[tr,:nterm],Y[tr,sl],k); f=np.column_stack((a,p[:,cs])); pred.append(f[va]@lst(f[tr],Y[tr,sl])); select.append([terms[j] for j in cs]);\\n   score((nterm,k),np.column_stack(pred))\\n   if debug and k in (2,4,8): print(nterm,k,select,np.round(errs[nterm,k],5))\\n f=np.column_stack((a,p[:,:36])); score('fullquad',f[va]@lst(f[tr],Y[tr]));\\n return errs\\n\\nif __name__=='__main__':\\n tr=np.arange(52); va=np.arange(52,n); e=check(tr,va,True); print('official',e)\\n from sklearn.model_selection import RepeatedKFold\\n splits=list(RepeatedKFold(n_splits=4,n_repeats=5,random_state=11).split(T)); es=[check(tr,va) for tr,va in splits]; print('repeated mean / worst')\\n for k in e:\\n  out=np.array([r[k] for r in es]); print(k, np.round(out.mean(0),5),np.round(out.max(0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared fixed interactions → H2 separate sparse interaction models for scalar response and trajectory amplitudes; worst-fold MAE is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the frozen kernel alone\",\n      \"rejected_reason\": \"Keep it as a comparator while testing whether sparse algebraic terms yield better held-out predictions.\"\n    }\n  ],\n  \"rationale\": \"Compare quadratic and cubic interaction dictionaries against the frozen kernel. Refit the time basis and select terms using only each fold’s training data, then score the scalar and reconstructed trajectory separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "1a79249afa2a39dfff6a834bbbe952cb01eddea98187286027cfd50cc91bda53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34669.33,
+      "usage_known": true,
+      "prompt_tokens": 24039,
+      "cached_tokens": 5504,
+      "completion_tokens": 1475
+    }
+  ]
+}

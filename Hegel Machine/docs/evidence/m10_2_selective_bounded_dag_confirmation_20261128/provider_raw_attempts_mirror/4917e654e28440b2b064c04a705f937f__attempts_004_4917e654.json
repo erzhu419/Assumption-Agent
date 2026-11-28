@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4917e654e28440b2b064c04a705f937f",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:16.211869+00:00",
+  "ended_at_utc": "2026-11-28T15:42:40.287876+00:00",
+  "request_sha256": "67e90d4e5375044041567d9a59d5f5ff8b8367ced8abda6249e78abaf9a45e8a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29040,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24024,
+    "cached_tokens": 12672,
+    "completion_tokens": 948
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*01_solver.py /tmp/hegel_continual_archive/*03_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\\ndef I(x):return np.c_[np.ones(len(x)),x]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef pair(u):return np.column_stack([u[:,i]*u[:,j] for i in range(4) for j in range(i+1,4)])\\nprint('T,telemetry',s['eval_times'],s['telemetry_vec'])\\nfor k,vk in [('panel_a','v'),('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u=s[k]['u'];v=s[k][vk]; mu=I(u); print(k,vk,'std',u.std(0),v.std(0));\\n for key,f in [('linear',lambda x:x),('poly2',lambda x:np.c_[x,x*x,pair(x)]),('univ3',lambda x:np.c_[x,x*x,x**3]),('univ5',lambda x:np.c_[x,x*x,x**3,x**4,x**5]),('roll2',lambda x:np.c_[x,x*x,x*np.roll(x,1,axis=1),x*np.roll(x,2,axis=1)])]:\\n  d=I(f(u)); mask=np.ones(len(u),bool)\\n  for _ in range(7 if k=='panel_a' else 1):\\n   c=ls(d[mask],v[mask]); r=np.sqrt(np.mean((d@c-v)**2,axis=1)); h=np.median(r[mask]); new=r<max(.02,4*h)\\n   if new.sum()<=d.shape[1] or np.array_equal(mask,new):break\\n   mask=new\\n  err=d@c-v; print(key,mask.sum(),np.sqrt(np.mean(err[mask]**2,axis=0)),np.median(r),np.max(r));\\n  if key in ('linear','univ3'): print(c.T)\\nt=s['eval_times']; tr=s['train']['traj'];\\nfor f,p in [(lambda a:np.c_[-np.expm1(-a[0]*t),-np.expm1(-a[1]*t)],[1,4]),(lambda a:np.c_[-np.expm1(-a[0]*t),np.sin(a[1]*t)],[1,1]),(lambda a:np.c_[-np.expm1(-a[0]*t),t],[1]),(lambda a:np.c_[-np.expm1(-a[0]*t),np.exp(-a[0]*t)*t],[1])]:\\n r=least_squares(lambda a:(f(a)@ls(f(a),tr.T)-tr.T).ravel(),p);print('time',r.x,np.sqrt(2*r.cost/tr.size))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived end-to-end models -> independently identify panel maps and shared temporal basis; best archived 52/20 MAEs are 0.109019 for y and 0.104353 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight unrelated time regressions\",\"rejected_reason\":\"The measured centered trajectory has two singular values above 1 and all others below 0.05.\"}],\"rationale\":\"Fit the calibration dictionaries and time basis separately so each can be tested against its own measurements before composing the forward law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e889629cd36268d2ffc1eaaad7e73927f872b14c07531110fbe6872e700db50e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24624.15,
+      "usage_known": true,
+      "prompt_tokens": 24024,
+      "cached_tokens": 12672,
+      "completion_tokens": 948
+    }
+  ]
+}

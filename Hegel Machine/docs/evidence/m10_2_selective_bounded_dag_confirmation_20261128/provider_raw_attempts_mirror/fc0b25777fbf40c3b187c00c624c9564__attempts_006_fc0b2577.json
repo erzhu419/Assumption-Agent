@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc0b25777fbf40c3b187c00c624c9564",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:47:48.240328+00:00",
+  "ended_at_utc": "2026-11-28T15:48:26.031008+00:00",
+  "request_sha256": "1ff3d748205296d25bcd14cfd246092e3e44ca617f6fa7f18d0581acdfd2fcbd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43155,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24136,
+    "cached_tokens": 5504,
+    "completion_tokens": 1604
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat >/tmp/graph.py <<'PY'\\nimport numpy as np,pickle,glob,importlib.util\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom itertools import combinations_with_replacement as cwr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef ls(d,y):return np.linalg.lstsq(d,y,rcond=None)[0]\\ndef pairs(x):return np.column_stack([x[:,i]*x[:,j] for i,j in cwr(range(x.shape[1]),2)])\\ndef cal(panel,x):\\n def design(z):\\n  q=np.roll(z,-1,axis=-1);return np.stack([np.ones_like(z),z,q,z*q,z**3],axis=-1)\\n u,v=panel['u'],panel['v']; d=design(u); co=[]\\n for j in range(4):\\n  a=d[:,j]; b=v[:,j]; ids=np.arange(len(a));\\n  for _ in range(15):\\n   w=ls(a[ids],b[ids]); e=abs(a@w-b);ids=np.argsort(e)[:40]\\n  ids=e<max(.001,8*np.median(e));co.append(ls(a[ids],b[ids]))\\n co=np.array(co)\\n from scipy.optimize import root\\n def inv(row):\\n  fun=lambda z: (design(z)*co).sum(-1)-row\\n  r=root(fun,row,tol=1e-10)\\n  return r.x if max(abs(r.fun))<1e-8 else least_squares(fun,row,gtol=1e-12).x\\n return np.array([inv(row) for row in x]).reshape(-1,4)\\ndef dead(x):return np.sign(x)*np.maximum(abs(x)-.35,0)**1.5\\nb=s['panel_b']; c=s['panel_c'];u=c['u']; z=cal(s['panel_a'],np.r_[tr['x'],s['test']['x']]); w=aff(dead(z))@ls(aff(dead(b['u'])),b['v']); print('ranges',z.min(0),z.max(0),w.min(0),w.max(0))\\nfeatures={}\\nfor name,f in {'tanh':lambda x,k:np.tanh(k*x),'atan':lambda x,k:np.arctan(k*x),'asinh':lambda x,k:np.arcsinh(k*x),'sin':lambda x,k:np.sin(k*x),'softabs':lambda x,k:x/(1+k*abs(x)),'softsquare':lambda x,k:x/(1+k*x*x),'sqrt':lambda x,k:x/np.sqrt(1+k*x*x),'erf':lambda x,k:__import__('scipy').special.erf(k*x)}.items():\\n for plus in [False,True]:\\n  def d(x,k):return aff(np.c_[x,f(x,k)] if plus else f(x,k))\\n  v=c['v1']; opt=minimize_scalar(lambda k:np.mean((d(u,k)@ls(d(u,k),v)-v)**2),bounds=(.03,5),method='bounded');k=opt.x\\n  features[name+str(plus)]=(np.sqrt(opt.fun),k,d(w,k)@ls(d(u,k),v),d(z,k)@ls(d(u,k),v))\\nprint('C1',[(a,round(q[0],7),round(q[1],5)) for a,q in sorted(features.items(),key=lambda it:it[1][0])]);\\nfor name,f in {'quad':lambda x:np.c_[x,pairs(x)],'cyc':lambda x:np.c_[x,x*np.roll(x,-1,axis=1)],'opp':lambda x:np.c_[x,x[:,0]*x[:,2],x[:,1]*x[:,3]],'tanhquad':lambda x:np.c_[x,pairs(x),np.tanh(1.25*x)],'pure':lambda x:x*np.roll(x,-1,axis=1)}.items():\\n d=aff(f(u));v=c['v2'];co=ls(d,v); print('C2',name,np.sqrt(np.mean((d@co-v)**2))); \\n if name in ('quad','cyc','opp'):print(np.round(co,4))\\n features['v2_'+name]=(0,0,aff(f(w))@co,aff(f(z))@co)\\ndef score(d,y,n=52):\\n return np.mean(abs(d[n:72]@ls(d[:n],y[:n])-y[n:72]))\\ncoords={'z':z,'w':w,'dead_z':dead(z),'dead_w':dead(w)}\\nfor k,(err,t,g,h) in features.items():coords[k+'(w)']=g;coords[k+'(z)']=h\\nfor key in ['y','traj']:\\n ranks=[];y=tr[key]\\n for name,x in coords.items():\\n  for suffix,d in [('lin',aff(x)),('quad',aff(np.c_[x,pairs(x)])),('opp',aff(np.c_[x,x[:,0]*x[:,2],x[:,1]*x[:,3]])),('cyc',aff(np.c_[x,x*np.roll(x,-1,axis=1)])),('tanh',aff(np.tanh(1.25*x))),('atan',aff(np.arctan(1.25*x))),('asinh',aff(np.arcsinh(1.25*x))),('mix',aff(np.c_[w,x])),('xz',aff(np.c_[x,x*np.roll(z,-1,axis=1)])),('xw',aff(np.c_[x,x*np.roll(w,-1,axis=1)]))]:\\n   ranks.append((score(d,y),name,suffix))\\n print(key,sorted(ranks)[:22])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 archived cyclic calibration and B dead-zone -> H2 identify C operators and test their downstream readouts; best unchanged archive MAEs are 0.25910 scalar and 0.27325 trajectory.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Assume both C outputs are active\",\"rejected_reason\":\"A good panel fit establishes the operator but not whether the prediction graph uses it.\"}],\n  \"rationale\":\"The cyclic cubic calibration fits panel A near measurement precision. Invert it, fit candidate C operators to panel measurements, and screen stage-specific readouts on both labeled outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ca59e4a1c0a9f1b84f6a7713752c3589f6c43b29ae1efb260abfe788de5bfa9f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38226.96,
+      "usage_known": true,
+      "prompt_tokens": 24136,
+      "cached_tokens": 5504,
+      "completion_tokens": 1604
+    }
+  ]
+}

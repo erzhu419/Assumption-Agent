@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "602db447ae754b3698b06aca1afabe28",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:08.948809+00:00",
+  "ended_at_utc": "2026-11-28T15:25:31.850059+00:00",
+  "request_sha256": "d0d359498e100272d3a64efcd6f037b9970a430a28969e01661387551cf17952",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37013,
+    "cached_tokens": 12672,
+    "completion_tokens": 806
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\nroot=Path('/holdout_task')\\ndef load(name,path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)\\n    return module.run_node\\nfrozen=load('frozen',root/'_frozen_nodes/node_00.py'); sink=load('sink',root/'node_01.py')\\nwith (root/'public_batch.pkl').open('rb') as fd: s=pickle.load(fd)[0]['study']\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; n=len(y)\\nz=frozen({'__input__':s})['z'][:n]\\nperm=np.random.default_rng(325).permutation(n)\\nslices=[('official',np.arange(n-20,n))]+[(f'random-{i}',v) for i,v in enumerate(np.array_split(perm,4))]+[(f'outer-shell-{j}',np.argsort(abs(z[:,j]))[-12:]) for j in range(z.shape[1])]\\nscores=[]\\nfor name,te in slices:\\n    tr=np.setdiff1d(np.arange(n),te)\\n    summary=np.array([y[tr].mean(),y[tr].std(),t[tr,-1].mean(),t[tr,-1].std()])\\n    st={**s,'train':{'x':x[tr],'y':y[tr],'traj':t[tr],'summary':summary},'test':{'x':x[te]}}\\n    o=sink({'__input__':st,'node_00':frozen({'__input__':st})})\\n    yh,sp,d=(o[k] for k in ['y_hat','state_pred','diagnostics_vec'])\\n    assert yh.shape==y[te].shape and sp.shape==t[te].shape and d.shape==(4,)\\n    assert all(np.isfinite(a).all() for a in (yh,sp,d))\\n    np.testing.assert_allclose(d,[yh.mean(),yh.std(),sp[:,-1].mean(),sp[:,-1].std()])\\n    e=abs(sp-t[te]); score=np.array([abs(yh-y[te]).mean(),e.mean(),e.mean(0).max()]); scores.append(score)\\n    print(name, 'response / trajectory / worst horizon',*(f'{v:.6f}' for v in score))\\nprint('worst across slices',np.max(scores,axis=0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 incomplete product–cosine basis → H2 a shared latent residual with branch-aware kernels; official held-out response and trajectory MAEs are 0.009910 and 0.009674.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The saved candidate already passed the isolated official harness. Without modifying it, test disjoint random folds and coordinate-edge slices, and check trajectory error at each horizon and the diagnostics contract.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b153dedf19f1d6f28c4c34712333977105cd1d4fcb30fe000e63976a1601f42d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22899.94,
+      "usage_known": true,
+      "prompt_tokens": 37013,
+      "cached_tokens": 12672,
+      "completion_tokens": 806
+    }
+  ]
+}

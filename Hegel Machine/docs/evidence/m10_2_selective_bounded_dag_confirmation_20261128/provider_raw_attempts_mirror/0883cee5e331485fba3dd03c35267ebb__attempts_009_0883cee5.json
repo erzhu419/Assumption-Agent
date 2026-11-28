@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0883cee5e331485fba3dd03c35267ebb",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:24:19.570881+00:00",
+  "ended_at_utc": "2026-11-28T15:24:57.568991+00:00",
+  "request_sha256": "05aa29710ecd56733d26dc5bedb4134fffad05285da0d723b98c90dd1315191a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51636,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34322,
+    "cached_tokens": 12672,
+    "completion_tokens": 1639
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,225p' /holdout_task/test_dag_candidate.py; cat /holdout_task/public_asset_index.json; sed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py > /holdout_task/node_01.py; cat >> /holdout_task/node_01.py <<'PY'\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    op = inputs['node_00']\\n    tr = study['train']\\n    raw = np.vstack((tr['x'], study['test']['x']))\\n    q = _invert(raw, _fit_calibration(study['panel_a']))\\n    scale, power, exponent = op['p']\\n    h = q * np.exp(exponent * np.logaddexp(0, power * np.log(np.maximum(scale * np.abs(q), 1e-300))))\\n    b = np.c_[np.ones(len(q)), q, h] @ op['w']\\n    f = _design(b, 15)\\n    n = len(tr['y'])\\n    y = f[n:] @ _ls(f[:n], tr['y'])\\n    t = f[n:] @ _ls(f[:n], tr['traj'])\\n    return {'y_hat': y, 'state_pred': t, 'diagnostics_vec': np.array([np.std(y), np.std(t), np.mean(y), np.mean(t)])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py | tail -65\\ncat >/tmp/mix06.py <<'PY'\\nexec(open('/tmp/chains06.py').read().split(\\\"trans={'B'\\\")[0])\\nfrom itertools import combinations\\nn=len(y); splits=[(np.arange(52),np.arange(52,n)),(np.arange(20,n),np.arange(20))]\\nA=design(B,1); Q=design(B,2); O={'q':q,'B':B,'BC':C1(B),'BD':C2(B),'C':C1(q),'D':C2(q)}\\nfor u in ('BC','BD','C','D'):\\n for v in ('B','q'):\\n  for a in (1,-1,.25,-.25): O[f'{v}+{a}{u}']=O[v]+a*O[u]\\nY=np.c_[y,tr]; scores=[]\\ndef test(f, idx):\\n result=[]\\n for i,j in splits:\\n  sc=np.linalg.norm(f[i],axis=0).clip(1e-10); a=f/sc\\n  p=a[j]@np.linalg.solve(a[i].T@a[i]+idx*np.eye(a.shape[1]),a[i].T@Y[i]); r=np.mean(abs(p-Y[j]),axis=0);result.append([r[0],np.mean(r[1:])])\\n return np.max(result,axis=0)\\ndef push(name,f):\\n for ridge in (1e-7,.0005,.005,.025): scores.append((test(f,ridge),name,ridge))\\nfor k,h in O.items():\\n push((k,'quad'),design(h,2))\\n for d in (1,2):\\n  push((k,'augment',d),np.c_[Q,design(h,d)[:,1:]])\\n for i in range(4):\\n  for s in (.8,2,4,8,16):\\n   for p in (np.tanh,np.sin,lambda v:1/(1+v*v)):\\n    g=p(s*h[:,i:i+1]);push((k,i,s,p.__name__),np.c_[Q,A*g]);\\n for p in (np.tanh,np.sin,lambda v:1/(1+v*v),lambda v:v**3,lambda v:abs(v)):\\n  for s in (1,3,8):\\n   g=p(s*h);push((k,s,p.__name__,'elem'),np.c_[Q,g]);push((k,s,p.__name__,'elemprod'),np.c_[Q,g,*[h[:,i:i+1]*g for i in range(4)]]);\\nfor ii in (0,1): print('TOP',ii,sorted(scores,key=lambda s:s[0][ii])[:14]);\\n# Fit gates with the quadratic base on B and the score in a separate coordinate system.\\nfrom scipy.optimize import least_squares\\n_,_,vv=np.linalg.svd(tr,full_matrices=False)\\nfor label,target in [('y',y),('t',tr@vv[0])]:\\n out=[]\\n for name in ('q','B','BC','BD','C','D'):\\n  h=O[name]; H=design(h,1); sols=[]\\n  for i,j in splits:\\n   def ff(p):return np.c_[Q,A*np.tanh(H@p)[:,None]]\\n   def res(p):\\n    f=ff(p)[i];return f@ls(f,target[i])-target[i]\\n   pp=np.vstack([np.eye(5)[1:]*s for s in (2,7,14)] + [np.random.default_rng(901).normal(0,3,(10,5))]); o=min((least_squares(res,p,bounds=(-25,25),max_nfev=95) for p in pp),key=lambda r:r.cost); f=ff(o.x); sols.append((np.mean(abs(f[j]@ls(f[i],target[i])-target[j])),np.sqrt(np.mean(o.fun**2)),o.x.round(3)))\\n  print('GATE',label,name,sols,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mix06.py | grep -E '^(TOP|GATE)'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic operator readout -> H2 operator interactions with a gate in a separate coordinate system; baseline worst-slice MAEs are 0.126178 scalar and 0.078321 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a gate and quadratic base in the same operator coordinates\",\"rejected_reason\":\"The unconstrained ridge and gated bases did not consistently improve held-out errors.\"}],\"rationale\":\"Save the strongest known baseline now. Then test mixed-coordinate gates and explicit operator interactions on held-out rows to see what improves each readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "730ac78a4b3230250dc819af552538b00a75065817791c8aafad54c23ffc7009",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37996.9,
+      "usage_known": true,
+      "prompt_tokens": 34322,
+      "cached_tokens": 12672,
+      "completion_tokens": 1639
+    }
+  ]
+}

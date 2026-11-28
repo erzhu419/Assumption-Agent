@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27b38985e2534b4882b649f0e98feeb3",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:57.902150+00:00",
+  "ended_at_utc": "2026-11-28T15:05:21.180015+00:00",
+  "request_sha256": "b3e08e7b4c247f22f18ba7fd132fe355707d42bb4ab29af09b492a6728bc77e7",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68620,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39949,
+    "cached_tokens": 12672,
+    "completion_tokens": 851
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; m=runpy.run_path(p+'node_01.py'); f=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']; tr=s['train']; n=len(tr['y']); ix=np.arange(n)\\nb=s['panel_b']; w=f({'__input__':s})['w'][:n]; a=m['_fit'](m['_aff'](b['u']),b['v']); z=np.linalg.solve(a[1:].T,(w-a[0]).T).T; h=m['_calibrate'](b['u'],b['v'],z)\\nsplits=[('official',ix[-20:])]+[(f'interleave{i}',ix[i::4]) for i in range(4)]+[(name,np.argsort(key)[-14:]) for name,key in [('raw-corners',np.linalg.norm(z,axis=1)),('channel-edge',np.abs(z).max(axis=1)),('mixed-edge',np.linalg.norm(h,axis=1))]]\\nworst=np.zeros(3)\\nfor label,va in splits:\\n ti=np.setdiff1d(ix,va); case={**s,'train':{k:tr[k][ti] for k in ('x','y','traj')},'test':{'x':tr['x'][va]}}; pred=m['run_node']({'__input__':case,'node_00':f({'__input__':case})}); y=pred['y_hat']; t=pred['state_pred']; assert set(pred)=={'y_hat','state_pred','diagnostics_vec'} and y.shape==tr['y'][va].shape and t.shape==tr['traj'][va].shape and np.isfinite(y).all() and np.isfinite(t).all(); np.testing.assert_allclose(pred['diagnostics_vec'],[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]); e=abs(t-tr['traj'][va]); vals=np.array([abs(y-tr['y'][va]).mean(),e.mean(),e.mean(axis=0).max()]); worst=np.maximum(worst,vals); print(label,'scalar/trajectory/worst horizon',vals.round(6)); assert max(vals[:2])<=.038\\nprint('Worst over stress slices:',worst.round(6))\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fifth-order calibration -> H2 shared saturating panel response; the edited node passed official holdout at 0.016035 scalar MAE and 0.019653 trajectory MAE, with exact-artifact stress checks pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add batch_solver.py for the legacy schema validator\",\n      \"rejected_reason\": \"It is not a permitted deliverable; the DAG validator checks the sink contract directly.\"\n    }\n  ],\n  \"rationale\": \"Leave the improved artifact unchanged. Complete the interleaved and boundary checks skipped by the previous command, audit all three outputs, and finish with the isolated DAG acceptance test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "17ef3dd51545251ec468a519cd9beb5844953b89d219e8ba655743eb73e287c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23790.27,
+      "usage_known": true,
+      "prompt_tokens": 39949,
+      "cached_tokens": 12672,
+      "completion_tokens": 851
+    }
+  ]
+}

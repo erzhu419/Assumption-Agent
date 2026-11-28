@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f72768e79024bf2911ada35c1bb8884",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:52:54.335115+00:00",
+  "ended_at_utc": "2026-11-28T14:53:35.998624+00:00",
+  "request_sha256": "718c8d549e032baff2a87e7831d3eff7801e1b831569e0a544b025589446ed04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42155,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31112,
+    "cached_tokens": 12672,
+    "completion_tokens": 1843
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cfit.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ndef lin(f,y): return np.linalg.lstsq(f,y,rcond=1e-9)[0]\\ndef one(z): return np.c_[np.ones(len(z)),z]\\n\\ndef fitc(p,verbose=False):\\n u=p['u']; v=p['v1']; inds=np.arange(len(u)); models=[]\\n funcs={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'sinh':np.sinh,'asinh':np.arcsinh,'rational':lambda x:x/(1+x*x),'erf':lambda x: __import__('scipy').special.erf(x)}\\n for typ,fun in funcs.items():\\n  for mode in ['shared','scale','shift','rotation','rotshift']:\\n   if mode.startswith('rot') and typ not in ['tanh','atan','sin','erf']:continue\\n   def feat(x,h,mode=mode,fun=fun):\\n    if mode=='shared':w=x*h[0]\\n    elif mode=='scale':w=x*h\\n    elif mode=='shift':w=x*h[:4]+h[4:]\\n    else:w=x@h[:16].reshape(4,4)+(h[16:] if mode=='rotshift' else 0)\\n    return np.c_[one(x),fun(w)]\\n   init={'shared':[1.6],'scale':[1.6]*4,'shift':[1.6]*4+[0]*4,'rotation':(1.6*np.eye(4)).ravel(),'rotshift':np.r_[(1.6*np.eye(4)).ravel(),[0]*4]}[mode]\\n   def train(i,init):\\n    def err(h):\\n     f=feat(u[i],h);return (f@lin(f,v[i])-v[i]).ravel()\\n    z=least_squares(err,init,bounds=(-5,5),max_nfev=120);return z.x,lin(feat(u[i],z.x),v[i]),np.sqrt(np.mean(z.fun**2))\\n   hv,b,e=train(inds,init)\\n   if not np.isfinite(e):continue\\n   cv=[]\\n   for j in np.array_split(np.random.default_rng(42).permutation(inds),4):\\n    h,q,_=train(np.setdiff1d(inds,j),init);cv.extend((feat(u[j],h)@q-v[j]).ravel())\\n   score=np.sqrt(np.mean(np.array(cv)**2));models.append((score,e,typ,mode,hv,b,feat));\\n   if verbose:print(typ,mode,'panel fit and cv',round(e,6),round(score,6),'params',hv.round(3),flush=True)\\n models.sort(key=lambda z:z[0]);return [(lambda x,f=f,h=h,b=b:f(x,h)@b) for _,_,_,_,h,b,f in models[:3]]\\nPY\\nsed '/from scipy.linalg import polar/,$d' /tmp/stage4.py >/tmp/stage5.py\\ncat >>/tmp/stage5.py <<'PY'\\nfrom cfit import fitc\\nfrom sklearn.model_selection import KFold\\nfrom scipy.spatial.distance import cdist\\np=s['panel_c'];u=p['u'];v=p['v2'];m=len(u);cs=fitc(p,True)\\ndef sq(z):return np.c_[np.ones(len(z)),z,z*z]\\ndef cub(z):return np.c_[sq(z),z**3]\\nfor fn in [sq,cub,lambda z:np.c_[sq(z),np.tanh(z)],lambda z:np.c_[sq(z),np.sin(z)],lambda z:np.c_[sq(z),np.tanh(z)**2]]:\\n f=fn(u);w=hat(f,v);E=v-f@w;h=np.sum(f*np.linalg.pinv(f).T,axis=1);print('v2 fit loo',np.std(E),np.std(E/(1-h[:,None])))\\nq=hat(sq(u),v);print('v2 square coefficients',q);print('v2 residual',np.linalg.svd(v-sq(u)@q,compute_uv=False))\\nY=np.c_[y,T];splits=list(KFold(4,shuffle=True,random_state=813).split(np.arange(52)));rows=[]\\nfor name,z in [('raw',x),('Ai',(x-a)@np.linalg.inv(A)),('AiB',((x-a)@np.linalg.inv(A))@B+b),('Af',x@A+a)]:\\n for k,cf in enumerate(cs):\\n  c=cf(z);d=sq(z)@q\\n  for key,w in [('C',c),('D',d),('CD',np.c_[c,d]),('ACD',np.c_[z,c,d]),('CDB',np.c_[c,d,z@B+b]),('CBDB',np.c_[c@B+b,d@B+b]),('CofD',np.c_[c,cf(d)]),('DofC',np.c_[c,sq(c)@q])]:\\n   w=(w-w[:52].mean(0))/np.maximum(w[:52].std(0),.1);G=w@w.T/w.shape[1];D=cdist(w,w,'sqeuclidean')/w.shape[1]\\n   for typ in range(4):\\n    for l in (.06,.12,.25,.5):\\n     K=[(1+l*G)**3,np.exp(-l*D),(1+.25*G)**2+np.exp(-l*D),(1+l*G)**4][typ]\\n     for alp in (.00003,.0003,.003):\\n      def e(i,j):return Y[j]-K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+alp*np.eye(len(i)),Y[i])\\n      r=np.mean(abs(np.vstack([e(i,j) for i,j in splits])),axis=0);h=np.mean(abs(e(np.arange(52),np.arange(52,72))),axis=0)\\n      rows.append((max(r[0],r[1:].mean()),name,k,key,typ,l,alp,r[0],r[1:].mean(),h[0],h[1:].mean()))\\nprint('joint');print(*sorted(rows)[:12],sep='\\\\n');print('y');print(*sorted(rows,key=lambda z:z[-4])[:8],sep='\\\\n');print('traj');print(*sorted(rows,key=lambda z:z[-3])[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stage5.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 polynomial approximation of panel C -> H2 identifiable nonlinear panel operators and compositional predictors; best inner-fold y and trajectory MAE are 0.0500 and 0.0512, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the current kernel surrogate\",\"rejected_reason\":\"Its best inner-fold errors still exceed tolerance, and the panel C response is not yet identified.\"}],\"rationale\":\"Use panel-only cross-validation to distinguish saturating and polynomial operators, then test whether better panel recovery improves both downstream outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d1a959a1a7f0ed0ceff272af0baf925130ee0bbdedf5ae3a3963a2ef110d8693",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41662.49,
+      "usage_known": true,
+      "prompt_tokens": 31112,
+      "cached_tokens": 12672,
+      "completion_tokens": 1843
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0474f2867d5d4f2ba71aaab46cb1f05b",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:48.110913+00:00",
+  "ended_at_utc": "2026-11-28T16:11:20.871852+00:00",
+  "request_sha256": "aaac96aa8bd3beee6f61ed773e845bbdbb8e9e2021ae280d76701b9c58b9eca4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52790,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33089,
+    "cached_tokens": 12672,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/compare13.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; I=m._intercept; ls=m._ls; z=m._calibrate(s['panel_a'],t['x']); y=np.c_[t['y'],t['traj']]; rng=np.random.default_rng(709); splits=[np.arange(len(z))]+[rng.permutation(len(z)) for _ in range(32)]+[np.argsort(np.linalg.norm(z,axis=1))]+[np.argsort(sign*z[:,j]) for j in range(4) for sign in (-1,1)]; p=s['panel_b']; c=s['panel_c']\\ndef design(h):return I(np.c_[z,h,(z[:,:,None]*h[:,None,:]).reshape(len(z),16)])\\ndef score(d,reg=0):\\n a=[]\\n for p in splits:\\n  i,j=p[:52],p[52:]; _,_,v=np.linalg.svd(y[i,1:],full_matrices=False); target=np.c_[y[i,0],y[i,1:]@v[:2].T]; x=d[i]; coef=ls(x,target) if reg==0 else np.linalg.solve(x.T@x+np.diag(np.r_[0,np.full(x.shape[1]-1,reg)]),x.T@target); pred=d[j]@coef; e=abs(np.c_[pred[:,0],pred[:,1:]@v[:2]]-y[j]); a.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()]);\\n return np.round(a[0],6),np.round(np.max(a,axis=0),6)\\ndef csoft(a,q):return I(np.c_[a,a/(1+q*abs(a))])\\nw=m._operator(p,'v',lambda a,q:I(np.cos(q*a)),2.6,(1.5,3.5),z)\\nfor name,b in [('cos',w),('identity',z),('sine',m._operator(p,'v',lambda a,q:I(np.c_[a,np.sin(q*a)]),10.87,(9,13),z)),('even rational',m._operator(p,'v',lambda a,q:I(1/(1+(q*a)**2)),1.16,(.3,3),z))]:\\n h=m._operator(c,'v1',csoft,.83,(.2,2.5),b); print('B ablation',name,score(design(h)))\\nfor name,fn,q0 in [('baseline',lambda a,q: csoft(a,q[0]),[.83]),('odd quotient',lambda a,q:I(np.c_[a,a/(1+q[0]*abs(a)+q[1]*a*a)]),[.93,.34]),('linear-plus-squared-softsign',lambda a,q:I(np.c_[a,a/(1+q[0]*abs(a))**2]),[.6]),('linear-plus-cubed-softsign',lambda a,q:I(np.c_[a,a/(1+q[0]*abs(a))**3]),[.32])]:\\n u,v=c['u'],c['v1']; fit=least_squares(lambda q: (fn(u,q)@ls(fn(u,q),v)-v).ravel(),q0,bounds=(.05,4)); h=fn(w,fit.x)@ls(fn(u,fit.x),v); d=design(h); print('C and penalty sweep',name,fit.x,np.std(fit.fun));\\n b=ls(d[:52],y[:52]); print('y bilinear singular values',np.linalg.svd(b[9:,0].reshape(4,4),compute_uv=False));\\n for lam in [0,.00001,.0001,.001,.005,.02]: print(lam,score(d,lam))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cosine–saturation bilinear graph -> H2 controlled operator ablation and a better-calibrated saturation law; current worst stress MAEs are 0.02125 for y and 0.01713 at any trajectory timestamp.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add pairwise products or difference quotients to the readout\",\n      \"rejected_reason\": \"The measured extrapolation errors increased substantially, despite the extra flexibility.\"\n    }\n  ],\n  \"rationale\": \"Hold the calibration, split definitions, and downstream feature grammar fixed to test whether the cosine operator matters for both predictions. Compare more accurate panel-C fits and modest regularization on the same splits before changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c111c919e9092f335a0790fd3e7a2dd61a66f01305c05f199800751f2242bf0b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33441.54,
+      "usage_known": true,
+      "prompt_tokens": 33089,
+      "cached_tokens": 12672,
+      "completion_tokens": 1319
+    }
+  ]
+}

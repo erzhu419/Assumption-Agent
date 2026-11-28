@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9542ed9b05924ffd996ff799fcc4c4f2",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:58.573981+00:00",
+  "ended_at_utc": "2026-11-28T14:59:18.924008+00:00",
+  "request_sha256": "b3eca665c68886dd1596e8253c1e098b8a26251f483aad979c82d6e307d4d9a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21383,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21446,
+    "cached_tokens": 12672,
+    "completion_tokens": 818
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np, pickle\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\\ndef design(x,d=1): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,idx],axis=1) for n in range(1,d+1) for idx in cr(range(x.shape[1]),n)])\\ndef hold(f,y,n=52):\\n c=np.linalg.lstsq(f[:n],y[:n],rcond=None)[0]; return np.mean(abs(y[n:]-f[n:]@c))\\nprint('times',s['eval_times'])\\nfor p in ['panel_a','panel_b','panel_c']:\\n u=s[p]['u']; print(p, 'u range',u.min(0),u.max(0)); print('u ex',u[:3]);\\n for k,v in s[p].items():\\n  if k=='u':continue\\n  print(k,'v ex',v[:3]);\\n  for fun in [lambda x:x,np.tanh,np.sin,lambda x: x/(1+abs(x)),lambda x: x/(1+x*x)]:\\n   f=design(fun(u)); c=np.linalg.lstsq(f,v,rcond=None)[0]; r=np.linalg.norm(v-f@c,axis=1); keep=np.argsort(r)[:int(.88*len(r))]; c=np.linalg.lstsq(f[keep],v[keep],rcond=None)[0]; print(fun.__name__, 'r med,max',np.median(np.linalg.norm(v-f@c,axis=1)),np.max(r),'coef',c if fun.__name__=='<lambda>' and fun(u) is u else '')\\n  print('poly held', [hold(design(u,d),v,int(.75*len(u))) for d in (1,2)])\\nt=s['train']; x=t['x']; y=t['y']; z=t['traj']; print('poly CV',[(d,hold(design(x,d),y),hold(design(x,d),z)) for d in range(1,5)]);\\nprint('affine y+traj',np.linalg.lstsq(design(x),np.c_[y,z[:,0],z[:,-1]],rcond=None)[0]);print('y poly',np.linalg.lstsq(design(x,2),y,rcond=None)[0]);\\nPY\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -25\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine input map -> H2 nonlinear spatial amplitudes with rank-two temporal evolution; the archived validation MAEs are 0.179389 for y and 0.222635 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The sharp temporal rank break isolates two spatial amplitudes; panel residuals and polynomial held-out errors will show where the nonlinearity enters.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "f526d6351f73bf15f6e66f00464ac27e15ab2e6e64a75fbc97f88e3247c07466",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20854.46,
+      "usage_known": true,
+      "prompt_tokens": 21446,
+      "cached_tokens": 12672,
+      "completion_tokens": 818
+    }
+  ]
+}

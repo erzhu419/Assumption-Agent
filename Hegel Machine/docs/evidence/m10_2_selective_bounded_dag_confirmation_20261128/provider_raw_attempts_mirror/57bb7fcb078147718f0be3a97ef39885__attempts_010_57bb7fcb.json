@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "57bb7fcb078147718f0be3a97ef39885",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:36:14.351286+00:00",
+  "ended_at_utc": "2026-11-28T15:36:48.788516+00:00",
+  "request_sha256": "5bf0a74e964df7d5ad50e5fb80128de32c0c61c2527f3604f1f90b4b17af0649",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55482,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29701,
+    "cached_tokens": 7552,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ratchet10.py <<'PY'\\nexec(open('/tmp/cv10.py').read().split(\\\"print('official'\\\")[0])\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nz=m._calibration(s['panel_a'])(x); p=s['panel_b']; u0,v=p['u'],p['v']; A=m._design; fit=m._fit; y=u['y']; c=m._operator(s['panel_c'],'v1',lambda x,k:np.arcsinh(k*x),(.05,6.))(z)\\nops={};\\nfor name,g,p0,lo,hi in [('sin',lambda x,p:np.sin(p[0]*x)+p[1]*x,[2.8,-2.5],[.5,-10],[5,10]),('rat',lambda x,p:x/(1+p[0]*x*x)+p[1]*x,[.75,-.94],[.01,-5],[5,5]),('tanh',lambda x,p:np.tanh(p[0]*x)+p[1]*x,[1.4,-1.3],[.05,-10],[5,10]),('rat3',lambda x,p:x**3/(1+p[0]*x*x),[.75],[.01],[8]),('cub',lambda x,p:x**3+p[0]*x,[.1],[-5],[5]),('rat2',lambda x,p:x*(1+p[1]*x*x)/(1+p[0]*x*x+p[2]*x**4),[.75,-10,.05],[.01,-100,0],[8,10,8])]:\\n def res(p,coef=False):\\n  d=A(g(u0,p)); b=fit(d,v); return b if coef else (d@b-v).ravel()\\n r=least_squares(res,p0,bounds=(lo,hi),max_nfev=400); ops[name]=A(g(z,r.x))@res(r.x,True); print(name,np.round(r.x,5),np.sqrt(np.mean(r.fun**2)))\\nfor name,g in [('R',lambda x,k:x/(1+k*x*x)),('S',lambda x,k:np.sin(k*x))]: ops[name]=m._operator(p,'v',g,(.05,4.))(z)\\nrng=np.random.default_rng(5012); rand=[rng.permutation(idx) for _ in range(25)]; splits=[(idx[:52],idx[52:])]+[(i[:52],i[52:]) for i in rand]; tails=[]\\nfor w in [*x.T,np.linalg.norm(x,axis=1)]:\\n j=np.argsort(w); tails.extend([(j[:52],j[52:]),(j[20:],j[:20])]);\\nquad=lambda z:np.column_stack([z[:,i]*z[:,j] for i,j in combinations_with_replacement(range(4),2)])\\nres=[]\\nfor kn,b in ops.items():\\n for an,a in [('x',x),('z',z),('c',c),('b',b)]:\\n  for qn,q in [('none',None),('square',a*a),('pair',quad(a)),('cross',(b[:,:,None]*a[:,None,:]).reshape(-1,16)),('bpair',quad(b)),('prodopp',a*np.roll(a,2,axis=1)),('abs',abs(a)),('sin',np.sin(2*a)),('tanh',np.tanh(a)),('three',a**3),('mixed',np.column_stack((quad(a),quad(b))))]:\\n   f=A(b,a,*([q] if q is not None else []))\\n   for l in [.0001,.003,.02,.08,.25]:\\n    E=np.array([abs(f[j]@fit(f[i],y[i],l)-y[j]).mean() for i,j in splits+tails]); res.append((max(E),E[0],E[1:26].max(),E[26:].max(),E[26:].argmax(),kn,an,qn,l,E[1:26].mean()))\\nprint('baseline',next(r for r in res if r[5:9]==('R','x','pair',.0001)))\\nfor i in sorted(res)[:20]: print(i)\\nprint('best means');\\nfor i in sorted(res,key=lambda r:r[-1])[:12]: print(i)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/ratchet10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (dense quadratic scalar correction) -> H2 (shared panel-B nonlinearity and compact scalar readout); the current artifact passes 52/20 at y MAE 0.01784 and trajectory MAE 0.01136, but one coordinate-tail split reaches y MAE 0.04554.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the verified baseline now\",\"rejected_reason\":\"The designated split passes, but the withheld low third-coordinate slice exposes a scalar extrapolation weakness worth addressing.\"}],\"rationale\":\"Panel B’s linear and nonlinear coefficient matrices are nearly proportional. Test whether sharing their shape across output channels and simplifying the scalar correction improves extrapolation without changing the verified trajectory readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "43354db1119fd58cb49a6099102f946660d1b0464ef8904bddbbc3b4b5d18c2a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34967.49,
+      "usage_known": true,
+      "prompt_tokens": 29701,
+      "cached_tokens": 7552,
+      "completion_tokens": 1434
+    }
+  ]
+}

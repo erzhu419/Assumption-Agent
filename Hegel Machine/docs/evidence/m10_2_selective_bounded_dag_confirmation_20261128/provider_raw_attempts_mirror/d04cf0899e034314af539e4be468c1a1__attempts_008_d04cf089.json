@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d04cf0899e034314af539e4be468c1a1",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:19:03.627728+00:00",
+  "ended_at_utc": "2026-11-28T15:19:43.034423+00:00",
+  "request_sha256": "51df84e0f56e82e861559dc94dbfae7277a549707d41177bd88a386812662e71",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44466,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30015,
+    "cached_tokens": 12672,
+    "completion_tokens": 1557
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_b05.py <<'PY'\\nimport itertools as it\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ls=m['_least']; aff=m['_affine']; solve=m['solve_batch']\\np=s['panel_a']; u=p['u']; v=p['v']; w=m['_calibrate'](p); G=[m['_calibration_design'](u,j) for j in range(4)]; pred=np.column_stack([a@w[:,j] for j,a in enumerate(G)]); err=np.linalg.norm(pred-v,axis=1); clean=err<6*np.median(err)\\nfor n in [3,4,5]:\\n e=[]\\n for j,a in enumerate(G):\\n  a=a[:,:n]\\n  for r in np.flatnonzero(clean):\\n   k=clean.copy(); k[r]=False; e.append(a[r]@ls(a[k],v[k,j])-v[r,j])\\n print('reference LOO columns, rows, RMSE, max:',n,clean.sum(),np.std(e),max(abs(np.array(e))))\\nb=s['panel_b']; op=ls(aff(b['u']),b['v']); print('panel B affine RMS:',np.std(aff(b['u'])@op-b['v'])); print('study keys:',sorted(s),'train keys:',sorted(tr)); print('times:',s['eval_times'])\\nx=m['_inverse'](tr['x'],w); g=aff(x)@op; y=tr['y']; z=tr['traj']; t=s['eval_times']; pairs=list(it.combinations_with_replacement(range(4),2)); Q=np.column_stack([g[:,i]*g[:,j] for i,j in pairs]); L=aff(g)\\ndef assess(i,j):\\n d=dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]}); out=solve(d); base=np.mean(abs(out['y_hat']-y[j])); state=np.mean(abs(out['state_pred']-z[j])); p=ls(np.c_[L,Q][i],y[i]); selected=abs(p[5:])>.04; M=np.c_[L,Q[:,selected]]; coef=ls(M[i],y[i]); e=y[i]-M[i]@coef\\n def candidate(i,j):\\n  # Fit a nested residual correction; its size and direction are chosen inside training.\\n  H=np.c_[L,Q]; pp=ls(H[i],y[i]); R=np.c_[L,Q[:,abs(pp[5:])>.04]]; best=(np.inf,None,None)\\n  for a,b in it.combinations(range(4),2):\\n   for c in (-2,-1,-.5,.5,1,2):\\n    q=g[:,a]+c*g[:,b]\\n    for lam in (.05,.2,1.):\\n     D=R/(1+lam*q[:,None]**2); B=np.c_[R,D]; fit=ls(B[i],y[i]); r=y[i]-B[i]@fit; leverage=np.sum(np.linalg.svd(B[i],full_matrices=False)[0]**2,axis=1); score=np.mean(r*r)/(1-B.shape[1]/len(i))**2\\n     if score<best[0]: best=(score,B,fit)\\n  return np.mean(abs(best[1][j]@best[2]-y[j]))\\n rat=candidate(i,j)\\n cubic=np.column_stack([g[:,a]*g[:,b]*g[:,c] for a,b,c in it.combinations_with_replacement(range(4),3)]); C=np.c_[M,cubic]; cc=ls(C[i],y[i]); cubic_mae=np.mean(abs(C[j]@cc-y[j])); simple=np.mean(abs(L[j]@ls(L[i],z[i])-z[j])); print('split [scalar, trajectory, rational, cubic, unconstrained time]',*(round(k,7) for k in (base,state,rat,cubic_mae,simple)),'active pairs',[p for p,k in zip(pairs,selected) if k]); return base,state\\nassess(np.arange(52),np.arange(52,72)); rng=np.random.default_rng(473); \\nfor _ in range(5):\\n p=rng.permutation(72); assess(p[:52],p[52:])\\nA=aff(g); C=ls(A[:52],z[:52]);\\ndef f(p): return -np.expm1(-t[:,None]*np.exp(p))\\ndef res(p): return (f(p)@ls(f(p),C.T)-C.T).ravel()\\np=least_squares(res,np.log([.4,1.8])).x; print('rates and projected trajectory RMS:',np.exp(p),np.std(res(p)),'trajectory observation residual RMS:',np.std(z[:52]-m['_trajectory'](g[:52],g[:52],t,z[:52])))\\no=solve(s); assert np.array_equal(o['diagnostics_vec'],np.array([o['y_hat'].mean(),o['y_hat'].std(),o['state_pred'][:,-1].mean(),o['state_pred'][:,-1].std()])); assert all(np.isfinite(v).all() for v in o.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_b05.py && python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse cyclic calibration and compact readouts -> H2 test for omitted pairwise, rational, and cubic effects; the verified worst-slice MAE is 0.00623 against a 0.038 gate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classifier confounding or relay modes\",\n      \"rejected_reason\": \"This study has continuous scalar and trajectory outputs, one apparatus vector, and no batch labels, control inputs, or relay states.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration orders by leave-one-reference-out error and challenge the readout with training-selected pairwise rational and cubic alternatives. Compare the exponential trajectory model against unconstrained time coefficients on the same held-out rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3158a5aa35b95820e58ebb3852d05a0cbf82de1dbd25584bb0de910f4d5d6482",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40224.74,
+      "usage_known": true,
+      "prompt_tokens": 30015,
+      "cached_tokens": 12672,
+      "completion_tokens": 1557
+    }
+  ]
+}

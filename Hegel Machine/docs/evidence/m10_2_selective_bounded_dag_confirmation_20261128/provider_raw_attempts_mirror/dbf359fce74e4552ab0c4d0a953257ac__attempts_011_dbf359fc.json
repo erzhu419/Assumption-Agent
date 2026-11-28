@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dbf359fce74e4552ab0c4d0a953257ac",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:32.548589+00:00",
+  "ended_at_utc": "2026-11-28T15:26:11.962076+00:00",
+  "request_sha256": "afc034ac8bb64218f15b4d6fa7f8231ca39617b8519285a1e1af4d30340b081f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39722,
+    "cached_tokens": 12672,
+    "completion_tokens": 1596
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/batch_solver_v02.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py'); s=p.read_text(); s=s[:s.index('def _operator')]; s=s.replace('from itertools import combinations_with_replacement\\\\n','').replace('from scipy.optimize import minimize_scalar','from scipy.optimize import least_squares'); p.write_text('\\\"\\\"\\\"Calibrate inputs and fit a shared nonlinear operator with separate readouts.\\\"\\\"\\\"\\\\n'+s[s.index('import numpy'):])\\nPY\\ncat >> batch_solver.py <<'PY'\\ndef _activation(x, params):\\n    knee, linear, shoulder = params\\n    excess = np.maximum(np.abs(x) - knee, 0.0)\\n    return x**3 + linear*x + shoulder*np.sign(x)*excess**2\\n\\n\\ndef _fit_operator(panel, u, traj):\\n    p, v = panel['u'], panel['v']\\n\\n    def profile(params, coefficients=False):\\n        a = _affine(_activation(u, params))\\n        b = _affine(_activation(p, params))\\n        state_weights = _least(a, traj)\\n        operator_weights = _least(b, v)\\n        if coefficients:\\n            return operator_weights, state_weights\\n        return np.concatenate(((a @ state_weights - traj).ravel(),\\n                               (b @ operator_weights - v).ravel()))\\n\\n    params = least_squares(profile, [.6, -.07, -1.2],\\n                           bounds=([.1, -.5, -5], [1.2, .5, 1])).x\\n    return params, *profile(params, coefficients=True)\\n\\n\\ndef _scalar_features(g):\\n    a, b, c, d = g.T\\n    return np.column_stack((g, a*c, b*d))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    calibration = _calibrate(study['panel_a'])\\n    u = _inverse(train['x'], calibration)\\n    test = _inverse(study['test']['x'], calibration)\\n    params, operator, state = _fit_operator(study['panel_b'], u, train['traj'])\\n    a = _affine(_activation(u, params))\\n    b = _affine(_activation(test, params))\\n    scalar = _least(_scalar_features(a @ operator), train['y'])\\n    y = _scalar_features(b @ operator) @ scalar\\n    t = b @ state\\n    return {'y_hat': y, 'state_pred': t, 'diagnostics_vec':\\n            np.array([y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, importlib.util, numpy as np\\n\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location('solver',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod\\nold=load('/tmp/batch_solver_v02.py'); new=load('/holdout_task/batch_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; u=old._inverse(x,old._calibrate(s['panel_a'])); g=old._operator(s['panel_b'],u)\\nfolds={'required':[(np.arange(52),np.arange(52,72))], 'random':[], 'tail':[], 'novel_tail':[]}\\nfor seed in range(100):\\n    p=np.random.default_rng(seed).permutation(72); folds['random'].append((p[:52],p[52:]))\\nfor key, vs in [('tail',[*u.T,*g.T,np.linalg.norm(u,axis=1),np.linalg.norm(g,axis=1)]),('novel_tail',[*x.T,*[u[:,i]+sg*u[:,j] for i in range(4) for j in range(i+1,4) for sg in [-1,1]]])]:\\n    for v in vs:\\n        p=np.argsort(v); folds[key].extend([(p[:52],p[52:]),(p[20:],p[:20])])\\nfor label, mod in [('baseline',old),('candidate',new)]:\\n    for key, pairs in folds.items():\\n        scores=[]\\n        for i,j in pairs:\\n            q=dict(s,train=dict(tr,x=x[i],y=tr['y'][i],traj=tr['traj'][i]),test={'x':x[j]})\\n            o=mod.solve_batch(q); ys=o['y_hat']; ts=o['state_pred']; assert np.isfinite(ys).all() and np.isfinite(ts).all()\\n            np.testing.assert_allclose(o['diagnostics_vec'],[ys.mean(),ys.std(),ts[:,-1].mean(),ts[:,-1].std()]); e=abs(ts-tr['traj'][j]).mean(0)\\n            scores.append([abs(ys-tr['y'][j]).mean(),e.mean(),max(e)])\\n        print(label,key,len(pairs),'worst(y,traj,time)=',np.max(scores,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: a shared cubic with a fitted shoulder, an affine trajectory readout, and two scalar interactions reduced the worst screened coordinate-tail aggregate MAE from about 0.101 to 0.019; verify the exact artifact on broader slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t10\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rational activation with the new readouts\",\n      \"rejected_reason\": \"It improved tail stability, but the fitted cubic shoulder gave lower panel residuals and better required-split predictions.\"\n    }\n  ],\n  \"rationale\": \"Fit the nonlinear parameters inside each fold and verify the exact solver against the archived baseline on the required split, 100 random splits, and additional pairwise-tail splits. Report scalar, trajectory, and single-timestamp errors separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c248f5bb329fbcb161db4b7d12e0e6f0a4f32588c5a3d79b83ab9a3f3f878590",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39412.17,
+      "usage_known": true,
+      "prompt_tokens": 39722,
+      "cached_tokens": 12672,
+      "completion_tokens": 1596
+    }
+  ]
+}

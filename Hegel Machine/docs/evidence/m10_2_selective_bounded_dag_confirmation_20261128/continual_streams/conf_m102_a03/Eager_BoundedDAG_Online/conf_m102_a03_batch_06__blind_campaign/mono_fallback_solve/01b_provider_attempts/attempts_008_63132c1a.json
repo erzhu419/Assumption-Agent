@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63132c1a28d3474fa5f1b9dd4f1224b5",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:51.863256+00:00",
+  "ended_at_utc": "2026-11-28T15:32:27.628753+00:00",
+  "request_sha256": "9e5d37896efc71206503c9b86d812c9cc5f8280d014d46f7021faafa4b445dfb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39164,
+    "cached_tokens": 12672,
+    "completion_tokens": 1563
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure.py <<'PY'\\nexec(open('/tmp/latent.py').read().split(\\\"print('cal'\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nI=np.arange(52); J=np.arange(52,72)\\nfunc={'linear':lambda x:x,'tanh':np.tanh,'sin':np.sin,'rat':lambda x:x/(1+x*x),'cube':lambda x:x**3,'abs':np.abs,'relu':lambda x:np.maximum(x,0),'atan':np.arctan}\\ndef loo(A,Y):\\n Q=np.linalg.qr(A)[0]; return np.mean(((Y-Q@(Q.T@Y))/np.maximum(1e-6,1-(Q**2).sum(1))[:,None])**2)**.5\\nops={}\\nfor pn,key in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n p=s[pn];u=p['u'];Y=p[key]; opts=[]\\n for name,fn in func.items():\\n  for k in [.5,1,1.25,1.5,2,2.5,3.14]:\\n   for form in ['add','pure','post']:\\n    if form=='post':\\n     if name in ('abs','relu','cube','linear'):continue\\n     if np.max(abs(Y))>=k and name in ('sin','tanh'):continue\\n     invf={'sin':np.arcsin,'tanh':np.arctanh,'atan':np.tan}.get(name)\\n     if invf is None:continue\\n     if name=='atan' and np.max(abs(Y/k))>=1.4:continue\\n     A=aff(u);C=ls(A,invf(Y/k)); R=k*fn(A@C)-Y;err=np.mean((R/(1-np.sum(np.linalg.qr(A)[0]**2,1))[:,None])**2)**.5;Z=k*fn(aff(z)@C)\\n    else:\\n     D=fn(k*u);A=aff(D) if form=='pure' else np.c_[aff(u),D];\\n     if np.linalg.matrix_rank(A)<A.shape[1]:continue\\n     err=loo(A,Y); C=ls(A,Y); Z=(aff(fn(k*z)) if form=='pure' else np.c_[aff(z),fn(k*z)])@C\\n    opts.append((err,name,k,form,Z))\\n # affine + nonlinear per input, choose by multioutput LOO\\n print(pn,key,'aff',loo(aff(u),Y),'best',[(round(a,5),b,c,d) for a,b,c,d,_ in sorted(opts,key=lambda p:p[0])[:10]])\\n ops[key+pn[-1]]=sorted(opts,key=lambda p:p[0])[:3]\\n for i in range(4):\\n  Oo=[]\\n  for name,fn in func.items():\\n   for k in [.75,1.25,2,3.14]:\\n    for j in range(4):\\n     a=np.c_[aff(u),fn(k*u[:,j])];\\n     if np.linalg.matrix_rank(a)==a.shape[1]:Oo.append((loo(a,Y[:,i:i+1]),name,k,j))\\n  print('column',i,sorted(Oo)[:4])\\nT=t@np.linalg.svd(t[:52],full_matrices=False)[2][0]; T/=np.std(T[:52]);rng=np.random.default_rng(456)\\ndef test(X,Y,kind,deg,H,ntry=16):\\n A=PolynomialFeatures(deg).fit_transform(X); B=aff(X); A0=A[I];B0=B[I];Y0=Y[I]; opts=[]\\n def F(B,W):\\n  v=B@W; return np.abs(v) if kind=='abs' else np.tanh(v) if kind=='tanh' else expit(v)\\n for _ in range(ntry):\\n  def calc(p,return_pred=False):\\n   W=p.reshape(B.shape[1],H); G=F(B0,W);\\n   D=np.c_[A0,G] if kind!='switch' else np.c_[A0,A0[:,1:]*G,G]; c0=ls(D,Y0); R=D@c0-Y0; \\n   if return_pred:\\n    G=F(B,W); return (np.c_[A,G] if kind!='switch' else np.c_[A,A[:,1:]*G,G])@c0\\n   return np.r_[R,.002*p]\\n  p=least_squares(calc,rng.normal(size=B.shape[1]*H),max_nfev=180).x; pred=calc(p,True); opts.append((np.mean(abs(pred[I]-Y[I])),np.mean(abs(pred[J]-Y[J])),p))\\n a,b,p=min(opts,key=lambda x:x[0]);return np.round([a,b],4),np.round(p,2)\\nfor Xname,X in [('z',z),('x',x)]:\\n for Yname,Y in [('y',y),('T',T)]:\\n  for kind,deg,H in [('abs',1,2),('abs',2,1),('abs',1,3),('tanh',1,2),('tanh',2,1),('switch',1,1),('switch',2,1)]:\\n   print(Xname,Yname,kind,deg,H,*test(X,Y,kind,deg,H),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated quadratic → H2 additive auxiliary operators or gated readouts; current holdout MAEs are 0.1911 for y and 0.1776 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Greedy hinge terms and persistent panel residuals motivate testing compact gated readouts and cross-validating additive auxiliary operator forms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4ddcba353b48b69a4572221416a83a0745a1612ca972f9a5c973654e149f2874",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35764.2,
+      "usage_known": true,
+      "prompt_tokens": 39164,
+      "cached_tokens": 12672,
+      "completion_tokens": 1563
+    }
+  ]
+}

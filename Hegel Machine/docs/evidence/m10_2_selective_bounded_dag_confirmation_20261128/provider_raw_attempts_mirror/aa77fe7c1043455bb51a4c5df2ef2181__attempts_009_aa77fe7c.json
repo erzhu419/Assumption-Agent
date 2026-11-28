@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa77fe7c1043455bb51a4c5df2ef2181",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:05:59.032896+00:00",
+  "ended_at_utc": "2026-11-28T16:06:24.664126+00:00",
+  "request_sha256": "1bd1c92bfddcaef97f2069b239639b1f977acaa3628e80bc5a9b206da945c076",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56230,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36720,
+    "cached_tokens": 12672,
+    "completion_tokens": 985
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; traj=t['traj']; n=len(x)\\nmod=runpy.run_path('/holdout_task/node_01.py'); raw=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; sink=runpy.run_path('/holdout_task/_frozen_nodes/node_02.py')['run_node']; fit=mod['_fit']; M=mod['_features'](s,x)\\nrng=np.random.default_rng(2718); idx=np.arange(n); groups=[('official',idx[-20:])]+[('random',rng.permutation(n)[:20]) for _ in range(64)]; groups += [('edge',a) for col in x.T for a in (np.argsort(col)[:14],np.argsort(col)[-14:])]; groups += [('block',idx[k:k+12]) for k in range(0,n,12)]\\nmodels={'artifact':None,'quad/affine':(np.arange(15),np.arange(5)), 'paired/affine':([0,1,2,3,4,7,11],np.arange(5))}\\nfor name,spec in models.items():\\n results=[]\\n for label,j in groups:\\n  i=np.setdiff1d(idx,j)\\n  if spec is None:\\n   st=dict(s,train={k:v[i] for k,v in t.items() if k in ('x','y','traj')},test={'x':x[j]}); rr=raw({'__input__':st}); out=sink({'node_00':rr,'node_01':mod['run_node']({'__input__':st,'node_00':rr})}); yp,tp=out['y_hat'],out['state_pred']\\n  else:\\n   a,b=spec; yp=M[j][:,a]@fit(M[i][:,a],y[i]); tp=M[j][:,b]@fit(M[i][:,b],traj[i])\\n  e=np.abs(tp-traj[j]); results.append((label,[np.mean(np.abs(yp-y[j])),e.mean(),e.mean(0).max()]))\\n for label in ('official','random','edge','block'):\\n  e=np.array([val for k,val in results if k==label]); print(name,label,'mean',np.round(e.mean(0),6),'worst',np.round(e.max(0),6))\\n if spec is None:\\n  assert np.max([val for _,val in results]) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cyclic operators → H2 robust diagonal calibration and cosine-state readouts; the current artifact passed official CV at 0.003678 endpoint and 0.004891 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The exact artifact has not yet been checked on coordinate-extreme slices or by individual forecast horizon.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the saved node through the frozen DAG on random, contiguous, and coordinate-extreme holdouts. Compare simpler readout bases without editing the artifact to see whether the panel-C terms improve generalization or merely fit noise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "77bec0df28deb4ce0343cc96c8f78a37be7af35360cb6d1ef4c70dc349e2a5de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26544.74,
+      "usage_known": true,
+      "prompt_tokens": 36720,
+      "cached_tokens": 12672,
+      "completion_tokens": 985
+    }
+  ]
+}

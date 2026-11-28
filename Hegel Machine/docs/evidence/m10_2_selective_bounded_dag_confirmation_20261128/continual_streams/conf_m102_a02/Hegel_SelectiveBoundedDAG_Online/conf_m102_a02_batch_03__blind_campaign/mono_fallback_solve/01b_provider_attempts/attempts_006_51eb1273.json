@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51eb1273dfc3445283a7b509f5e3a113",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:21.846891+00:00",
+  "ended_at_utc": "2026-11-28T15:13:58.269893+00:00",
+  "request_sha256": "318e5c6e88c3bb2be7969178dcc41e00f9be22c6fea88fb519b37245f2abda92",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45124,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31824,
+    "cached_tokens": 12672,
+    "completion_tokens": 1586
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Invert the reference-panel calibration and fit separate scalar and state readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import root\\n\\n\\n_TERMS = tuple(term for degree in range(4)\\n               for term in combinations_with_replacement(range(4), degree))\\n\\n\\ndef _design(x, size):\\n    x = np.atleast_2d(x)\\n    return np.column_stack([np.prod(x[:, term], axis=1) for term in _TERMS[:size]])\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _fit_calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    delta = np.linalg.norm(v - u, axis=1)\\n    med = np.median(delta)\\n    good = delta <= med + max(1., 8 * np.median(np.abs(delta - med)))\\n    f = _design(u[good], len(_TERMS))\\n    coef = _ls(f, v[good])\\n    # Refit the resolved monomials without the weakly identified dense terms.\\n    leverage = np.linalg.pinv(f)\\n    sigma = np.sqrt(np.sum((v[good] - f @ coef)**2, axis=0) / max(1, len(f) - f.shape[1]))\\n    cutoff = np.maximum(0.002, 6 * np.linalg.norm(leverage, axis=1)[:, None] * sigma)\\n    for j in range(v.shape[1]):\\n        keep = np.abs(coef[:, j]) >= cutoff[:, j]\\n        coef[~keep, j] = 0\\n        coef[keep, j] = _ls(f[:, keep], v[good, j])\\n    return coef\\n\\n\\ndef _invert(x, coef):\\n    initial = np.linalg.solve(coef[1:5].T, (x - coef[0]).T).T\\n    def transform(row, start):\\n        residual = lambda q: (_design(q, len(_TERMS)) @ coef)[0] - row\\n        fit = root(residual, start, tol=1e-10)\\n        return fit.x if np.linalg.norm(residual(fit.x)) < 1e-7 else start\\n    return np.array([transform(row, start) for row, start in zip(x, initial)]).reshape(-1, 4)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    coef = _fit_calibration(study['panel_a'])\\n    q = _invert(train['x'], coef)\\n    qt = _invert(study['test']['x'], coef)\\n    y = _design(qt, 15) @ _ls(_design(q, 15), train['y'])\\n    z = train['traj']\\n    modes = np.linalg.svd(z, full_matrices=False)[2][:2].T\\n    state = (_design(qt, 5) @ _ls(_design(q, 5), z @ modes)) @ modes.T\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];coef=m._fit_calibration(s['panel_a']); print('Calibration terms'); print([(term,np.round(b,6).tolist()) for term,b in zip(m._TERMS,coef) if np.any(b)]);q=m._invert(s['train']['x'],coef);f=m._design(q,15); print('Quadratic readout',np.round(m._ls(f[:52],s['train']['y'][:52]),5)); print('Temporal modes (fitted spatial coefficient matrix)',np.round(m._ls(f[:52,:5],s['train']['traj'][:52]),4));\\ntr=s['train']; z=tr['traj']; y=tr['y'];\\nfor seed in range(-1,8):\\n p=np.arange(len(y)) if seed<0 else np.random.default_rng(seed).permutation(len(y)); a,b=p[:52],p[52:]; o=m.solve_batch(dict(s,train={k:tr[k][a] for k in ['x','y','traj']},test={'x':tr['x'][b]})); dy=np.abs(o['y_hat']-y[b]); dz=np.abs(o['state_pred']-z[b]); print(seed,'scalar',dy.mean(),'trajectory',dz.mean(),'worst horizon',dz.mean(0).max(),'max row',dy.max(),dz.mean(1).max());\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense inverse cubic calibration → sparse inverse cubic calibration with quadratic scalar and rank-two affine state readouts; dense-calibration 52/20 MAEs are 0.00481 scalar and 0.00444 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Dense cubic spatial readouts\",\n      \"rejected_reason\": \"After inverse calibration, cubic readouts nearly double the designated split errors relative to the lower-order readouts.\"\n    },\n    {\n      \"option\": \"Add auxiliary panel operators\",\n      \"rejected_reason\": \"The calibrated low-order readouts already approach the observed noise floor; auxiliary stages are not needed unless they improve held-out prediction.\"\n    }\n  ],\n  \"rationale\": \"The inverse cubic map reduces the state error from 0.2052 on raw affine inputs to 0.00444 in calibrated coordinates. Refit the supported calibration terms, then verify both outputs on the prescribed split and on additional splits and horizons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "87ae4b96622651c0b87a806ae76c5633a536b4601d7c17e748d8031c3f47277d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36421.89,
+      "usage_known": true,
+      "prompt_tokens": 31824,
+      "cached_tokens": 12672,
+      "completion_tokens": 1586
+    }
+  ]
+}

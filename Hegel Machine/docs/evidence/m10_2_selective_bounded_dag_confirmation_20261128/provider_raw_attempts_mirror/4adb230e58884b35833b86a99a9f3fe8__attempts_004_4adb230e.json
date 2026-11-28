@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4adb230e58884b35833b86a99a9f3fe8",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:55.826382+00:00",
+  "ended_at_utc": "2026-11-28T15:41:15.458542+00:00",
+  "request_sha256": "efc75ae6591b95b69feaf0a50ce136317d75d3d1d86e8ba35ef6a2d0987135b5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24044,
+    "cached_tokens": 12672,
+    "completion_tokens": 745
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep -nE '^def |lambda |return.*(tanh|cos|sin|abs|roll|exp)' /tmp/hegel_continual_archive/*solver.py | sed 's@/tmp/hegel_continual_archive/conf_m102_b03_batch_@@'; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as n,importlib.util,glob\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];t=s['train']; print('telemetry',s['telemetry_vec'],'traj svd',n.linalg.svd(t['traj'],compute_uv=False)); cv=dict(s,train={k:v[:52] if len(v)==72 else v for k,v in t.items()},test={'x':t['x'][52:]});\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  p=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(p);p.loader.exec_module(m);r=m.solve_batch(cv);print(f.split('_')[-2],*(n.abs(r[a]-t[b][52:]).mean() for a,b in [('y_hat','y'),('state_pred','traj')]))\\n except Exception as e: print(repr(e))\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u'];w=n.roll(u,-1,axis=1);I=n.ones(len(u)); d=n.c_[I,u];\\n for c in p.keys()-{'u'}:\\n  v=p[c];print(k,c,'affine RMSE',n.sqrt(n.mean((d@n.linalg.lstsq(d,v,rcond=None)[0]-v)**2))); \\n  if k=='panel_a':\\n   for offset in [1,2,3]:\\n    r=[]\\n    for j in range(4):\\n     a,b=u[:,j],u[:,(j+offset)%4]; q=n.c_[I,a,b,a*b,a**3]; rng=n.random.default_rng(2); co=min((n.linalg.lstsq(q[i],v[i,j],rcond=None)[0] for i in (rng.choice(len(u),8,False) for _ in range(150))),key=lambda z:n.median(abs(q@z-v[:,j]))); r.append(n.median(abs(q@co-v[:,j])))\\n    print('calib offset',offset,r)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: isolate the calibration and temporal families before fitting the response chain; the pre-existing 52/20 worst-target MAE is 0.150819.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Focus the diagnostic output on the quantities that distinguish mechanisms: calibration residuals by coordinate convention, trajectory singular values, and comparable held-out errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0e3dae95c9876c0c93b0ce71f8aa2e33cc479d410f758c82273937a8edfaac4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20180.29,
+      "usage_known": true,
+      "prompt_tokens": 24044,
+      "cached_tokens": 12672,
+      "completion_tokens": 745
+    }
+  ]
+}

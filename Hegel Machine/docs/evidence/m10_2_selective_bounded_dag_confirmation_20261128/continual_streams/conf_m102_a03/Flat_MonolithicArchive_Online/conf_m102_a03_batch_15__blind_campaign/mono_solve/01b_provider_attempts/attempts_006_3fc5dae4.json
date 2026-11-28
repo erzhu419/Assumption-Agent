@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3fc5dae4d5ad4e8f9a95465132de936b",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:07.971658+00:00",
+  "ended_at_utc": "2026-11-28T16:18:35.327332+00:00",
+  "request_sha256": "fbec228f3f5fcdf8cdcc59692c5574c8a511284b1b35fe189a3e3ca3d14a21d0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45180,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29762,
+    "cached_tokens": 12672,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfrom pathlib import Path\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; arc='/tmp/hegel_continual_archive/conf_m102_a03_batch_'\\nm=runpy.run_path(arc+'14_solver.py'); z=m['_decode'](tr['x'],m['_calibration'](s['panel_a']))\\nfit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\naff=lambda a:np.c_[np.ones(len(a)),a]\\ndef panel(p,k,d):\\n u=p['u']; v=p[k]; a=aff(d(u)); c=fit(a,v); return aff(d(z))@c,np.sqrt(np.mean((a@c-v)**2))\\nb,eb=panel(s['panel_b'],'v',lambda x:np.cos(2.6*x));\\nfor ii in [2,6,8,10,12,14]:\\n print(ii,Path(arc+f'{ii:02d}_solver.py').read_text().split('def _calibration')[1].split('def solve_batch')[0].split('def _operator')[-1][-1750:]) if False else None\\nu=s['panel_c']['u']; v=s['panel_c']['v1']; w=s['panel_c']['v2'];\\nc,ec=panel(s['panel_c'],'v1',lambda x:np.c_[x,np.arctan(4.5*x),np.sin(2.56*x)]); d,ed=panel(s['panel_c'],'v2',lambda x:x+.2*np.cos(1.3*x)); print('panel errors',eb,ec,ed)\\nF=-np.expm1(-np.outer(t,[.41255,1.81505])); A=fit(F,tr['traj'].T).T; Y=np.c_[tr['y'],A];\\nif __name__=='__main__':\\n print('y/amps scale',Y.std(0));\\n X={'z':z,'b':b,'c':c,'d':d}; pairs={}\\n for k,p in X.items():\\n  for l,q in X.items():\\n   if k>l:continue\\n   pairs[k+l]=(p[:,:,None]*q[:,None,:]).reshape(len(z),16) if k!=l else np.column_stack([p[:,i]*p[:,j] for i,j in combinations_with_replacement(range(4),2)])\\n def report(name,G):\\n  G=aff(G); coef=fit(G[:52],Y[:52]); e=G@coef-Y; return (np.round(np.mean(abs(e[52:]),0),4),np.round(np.std(e[:52],0),4),name, G.shape[1])\\n print('single and paired main effects')\\n for k in X:\\n  for l in X:\\n   if k>l:continue\\n   print(report(k+l,np.c_[X[k],X[l]]))\\n print('quadratic candidates')\\n L=[]\\n for k in X:\\n  for l in X:\\n   if k>l:continue\\n   for r,P in pairs.items():L.append(report(k+l+'+'+r,np.c_[X[k],X[l],P]))\\n for i in range(3):print('top',i,sorted(L,key=lambda q:q[0][i])[:7])\\n print('all linear + each product')\\n for r,P in pairs.items():print(report(r,np.column_stack(list(X.values())+[P])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py; for i in 02 06 08 10; do echo ===$i; sed -n '/^def _warp/,/^def solve_batch/p' /tmp/hegel_continual_archive/conf_m102_a03_batch_${i}_solver.py | grep -E '(^def |return|start|bounds)' | tail -45; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation two rate variable projection' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independently calibrated operators → sparse spatial readouts for the scalar and two temporal amplitudes; two-rate trajectory projection RMSE is 0.00445 before spatial fitting.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit spatial candidates to the two amplitudes separately and compare linear and pairwise operator compositions on the fixed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e419eb3717274b5a2a9daf53170d19036a340c3ca0e2337e41a849115f0222a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27810.54,
+      "usage_known": true,
+      "prompt_tokens": 29762,
+      "cached_tokens": 12672,
+      "completion_tokens": 1144
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "92b4962969e14293ac7b081941d3059e",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:37:26.286087+00:00",
+  "ended_at_utc": "2026-11-28T16:37:56.803308+00:00",
+  "request_sha256": "799d081f0c523cd6cb09e3994256d48c72a5b7cca56123e04d809fffec637a31",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41350,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30149,
+    "cached_tokens": 12672,
+    "completion_tokens": 1277
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the input, apply the measured mixing operator, and predict two shared temporal modes.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _design(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _coordinates(study, x):\\n    panel = study['panel_a']\\n    a, v = _design(panel['u']), np.asarray(panel['v'])\\n    keep = np.ones(len(a), dtype=bool)\\n    for _ in range(10):\\n        coef = np.linalg.lstsq(a[keep], v[keep], rcond=None)[0]\\n        e = np.linalg.norm(a @ coef - v, axis=1)\\n        new = e < max(.001, 3 * np.median(e))\\n        if np.array_equal(new, keep) or new.sum() < a.shape[1]:\\n            break\\n        keep = new\\n    z = np.linalg.solve(coef[1:].T, (x - coef[0]).T).T\\n    panel = study['panel_b']\\n    mix = np.linalg.lstsq(_design(panel['u']), panel['v'], rcond=None)[0]\\n    return _design(z) @ mix\\n\\n\\ndef _kernel(x, w):\\n    return (1 + x @ w.T / x.shape[1]) ** 2\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = np.asarray(train['x']), np.asarray(study['test']['x'])\\n    n = len(x)\\n    b = _coordinates(study, np.concatenate((x, xt)))\\n    h = np.column_stack((.4 * b, np.arcsinh(2 * b)))\\n    k = _kernel(h[:n], h[:n])\\n    kt = _kernel(h[n:], h[:n])\\n    traj = np.asarray(train['traj'])\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    y = kt @ np.linalg.solve(k + 2e-7 * np.eye(n), train['y'])\\n    modes = kt @ np.linalg.solve(k + 4e-6 * np.eye(n), traj @ basis.T)\\n    state = modes @ basis\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/stress11.py <<'PY'\\nimport pickle,numpy as np,importlib.util\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); rng=np.random.default_rng(811)\\nbs=m._coordinates(s,tr['x']); splits=[np.arange(n)]+[rng.permutation(n) for _ in range(20)]+[np.argsort(np.linalg.norm(bs,axis=1))]\\nerrors=[]\\nfor p in splits:\\n i,j=p[:52],p[52:]; q={**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':tr['x'][j]}}; out=m.solve_batch(q)\\n e=np.abs(out['state_pred']-tr['traj'][j]); errors.append([np.abs(out['y_hat']-tr['y'][j]).mean(),e.mean(),e[:,-1].mean(),max(e.mean(axis=0))])\\ne=np.array(errors); print('fixed, random mean, random worst, radial extrapolation', np.vstack((e[0],e[1:-1].mean(0),e[1:-1].max(0),e[-1]))); print('fixed horizon errors checked through worst horizon above')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress11.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 generic multi-panel regression -> H2 affine calibration and mixing followed by a quadratic compressed-coordinate two-mode head; preliminary fixed trajectory MAE 0.01990 and five-split worst trajectory MAE 0.03562.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Include the dual auxiliary panel\",\"rejected_reason\":\"Tested auxiliary-feature kernels did not improve either head over the measured affine mixing coordinates.\"},{\"option\":\"Fix the dynamics to estimated exponential rates\",\"rejected_reason\":\"A rank-two basis fitted solely on each training fold preserves the observed dynamics without requiring identification of two close, correlated rate parameters.\"}],\n  \"rationale\":\"Build a self-contained candidate with the empirically strongest coordinate representation and check fixed, randomized, and outer-radius slices before deciding whether to refine the spatial law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "bbaa42e2d20f33aa4cee750f39acbaf665ddca70313c1cc350342b12877be943",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30515.84,
+      "usage_known": true,
+      "prompt_tokens": 30149,
+      "cached_tokens": 12672,
+      "completion_tokens": 1277
+    }
+  ]
+}

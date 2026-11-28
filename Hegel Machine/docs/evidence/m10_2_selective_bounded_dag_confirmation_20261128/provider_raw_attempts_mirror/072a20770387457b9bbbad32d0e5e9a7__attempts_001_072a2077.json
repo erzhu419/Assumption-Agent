@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "072a20770387457b9bbbad32d0e5e9a7",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__init_decomp_conf_m102_a03_batch_03",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:37.920403+00:00",
+  "ended_at_utc": "2026-11-28T15:12:25.587582+00:00",
+  "request_sha256": "45e3b2c70f2833827485877a42e74293bbd2dfe989a1c1b76c60d8d120ab5ba0",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4549,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14097,
+    "cached_tokens": 0,
+    "completion_tokens": 1760
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The solver separates cleanly into shared feature construction, supervised fitting, and prediction. Both heads use the same calibrated features, so the encoding runs once. The split preserves the original calibration, least-squares fits, rank truncation, predictions, and diagnostics; it does not retune the solver for the shifted batch. Source CV was not rerun.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    a = _affine(u)\\n    coef = _fit(a, v)\\n    for _ in range(24):\\n        residual = np.linalg.norm(a @ coef - v, axis=1)\\n        scale = max(float(np.median(residual)), 1e-12)\\n        weight = np.sqrt(np.minimum(1., 1.5 * scale / np.maximum(residual, 1e-12)))\\n        coef = _fit(a * weight[:, None], v * weight[:, None])\\n    residual = np.linalg.norm(a @ coef - v, axis=1)\\n    good = residual <= 5 * max(float(np.median(residual)), 1e-12)\\n    if good.sum() >= a.shape[1] and np.linalg.matrix_rank(a[good]) == a.shape[1]:\\n        coef = _fit(a[good], v[good])\\n        mat = coef[1:]\\n        off = mat - np.diag(np.diag(mat))\\n        if np.linalg.norm(off) <= 5 * max(float(np.median(residual)), 1e-12):\\n            for j in range(u.shape[1]):\\n                coef[0, j], coef[j + 1, j] = _fit(a[good][:, [0, j + 1]], v[good, j])\\n            coef[1:] = np.diag(np.diag(coef[1:]))\\n    return coef\\n\\n\\ndef _readout(z):\\n    return np.column_stack((z, z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.asarray(study['train']['x'], dtype=float)\\n    target = np.asarray(study['test']['x'], dtype=float)\\n    a = _calibration(study['panel_a'])\\n    b = _fit(_affine(study['panel_b']['u']), study['panel_b']['v'])\\n\\n    def encode(rows):\\n        calibrated = np.linalg.solve(a[1:].T, (rows - a[0]).T).T\\n        return _affine(calibrated) @ b\\n\\n    z, zt = encode(x), encode(target)\\n    return {'z': z, 'zt': zt, 'readout_train': _readout(z), 'readout_test': _readout(zt)}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    features = inputs['node_00']\\n    readout_coef = _fit(features['readout_train'], train['y'])\\n    q, r = np.linalg.qr(features['z'], mode='reduced')\\n    u, sv, vh = np.linalg.svd(q.T @ train['traj'], full_matrices=False)\\n    rank = min(2, len(sv))\\n    state_coef = _fit(r, (u[:, :rank] * sv[:rank]) @ vh[:rank])\\n    return {'readout_coef': readout_coef, 'state_coef': state_coef}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    params = inputs['node_01']\\n    yh = features['readout_test'] @ params['readout_coef']\\n    sp = features['zt'] @ params['state_coef']\\n    diag = np.array([yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\\n    return {'y_hat': yh, 'state_pred': sp, 'diagnostics_vec': diag}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "353e52f6ecab92e5926d8ecdbda9220013f23d8ed9b1ae66e4527e46eab840fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48068.53,
+      "usage_known": true,
+      "prompt_tokens": 14097,
+      "cached_tokens": 0,
+      "completion_tokens": 1760
+    }
+  ]
+}

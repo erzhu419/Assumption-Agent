@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a5d842e016644d4ca58354846269a658",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:52.118031+00:00",
+  "ended_at_utc": "2026-11-28T15:09:35.363630+00:00",
+  "request_sha256": "a0243941be25c53714abcf49d6df2bb31ced0b5dea2c9e1a4f02e86495aab519",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 44327,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31026,
+    "cached_tokens": 0,
+    "completion_tokens": 1800
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Fit a rational endpoint readout and the shared rank-two trajectory.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit_readout(a, q, y):\\n    def solve(p):\\n        z = a @ p\\n        f = np.column_stack((a, q / (1.0 + z[:, None] ** 2)))\\n        coef = np.linalg.lstsq(f, y, rcond=1e-9)[0]\\n        return f @ coef - y, coef\\n\\n    # Profile out the linear coefficients for each projected coordinate.\\n    # Initialize the projection along the strongest affine endpoint direction.\\n    w = np.linalg.lstsq(a, y, rcond=None)[0][1:]\\n    norm = np.linalg.norm(w)\\n    if norm < 1e-10:\\n        return np.zeros(a.shape[1]), np.r_[np.linalg.lstsq(a, y, rcond=None)[0], np.zeros(q.shape[1])]\\n    direction = w / norm\\n    best = None\\n    for scale in (0.55, 1.25, 2.2):\\n        start = np.r_[0.0, scale * direction]\\n        opt = least_squares(lambda p: solve(p)[0], start, bounds=(-4.0, 4.0), max_nfev=100)\\n        if best is None or opt.cost < best.cost:\\n            best = opt\\n    return best.x, solve(best.x)[1]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    design = inputs['node_00']\\n    a, q = design['a'], design['q']\\n    projection, readout = _fit_readout(a, q, np.asarray(train['y'], dtype=float))\\n    state_coef = np.linalg.lstsq(a, train['traj'], rcond=None)[0]\\n    _, _, modes = np.linalg.svd(a @ state_coef, full_matrices=False)\\n    basis = modes[:2].T\\n    return {'projection': projection, 'readout': readout,\\n            'state_coef': state_coef, 'state_basis': basis}\\nPY\\ncat > /holdout_task/node_02.py <<'PY'\\n\\\"\\\"\\\"Apply the learned endpoint and trajectory maps on the test design.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    design = inputs['node_00']\\n    fit = inputs['node_01']\\n    a, q = design['a_test'], design['q_test']\\n    z = a @ fit['projection']\\n    features = np.column_stack((a, q / (1.0 + z[:, None] ** 2)))\\n    y = features @ fit['readout']\\n    basis = fit['state_basis']\\n    state = (a @ fit['state_coef'] @ basis) @ basis.T\\n    final = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py\\ncat > /tmp/stress_dag.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom runpy import run_path\\nroot='/holdout_task/'\\nn0=run_path(root+'_frozen_nodes/node_00.py')['run_node']\\nn1=run_path(root+'node_01.py')['run_node']\\nn2=run_path(root+'node_02.py')['run_node']\\nst=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; tr=st['train']; x,y,t=(tr[k] for k in ('x','y','traj')); i=np.arange(len(x)); rng=np.random.default_rng(235)\\nfolds={'interleaved':[i%6==k for k in range(6)],'contiguous':[i//12==k for k in range(6)],'random':[np.isin(i,rng.choice(i,20,replace=False)) for _ in range(30)],'feature_tails':[(x[:,j] <= np.quantile(x[:,j],.2) if s<0 else x[:,j]>=np.quantile(x[:,j],.8)) for j in range(x.shape[1]) for s in [-1,1]],'public':[i>=52]}\\nfor name, masks in folds.items():\\n rows=[]\\n for v in masks:\\n  train={'x':x[~v],'y':y[~v],'traj':t[~v]}; study=dict(st,train=train,test={'x':x[v]}); p0=n0({'__input__':study}); p1=n1({'__input__':study,'node_00':p0}); out=n2({'node_00':p0,'node_01':p1}); rows.append([np.mean(abs(out['y_hat']-y[v])),np.mean(abs(out['state_pred']-t[v]))]); assert all(np.all(np.isfinite(z)) for z in out.values())\\n rows=np.array(rows); print(name,'mean',rows.mean(axis=0).round(6),'max',rows.max(axis=0).round(6),'worst endpoint fold',np.argmax(rows[:,0]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_dag.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full quadratic -> H2 affine plus a projected rational readout: the prototype reached 0.01169 public endpoint MAE and 0.01667 worst interleaved endpoint MAE; archived public trajectory MAE was 0.004042.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use an axis-aligned rational readout\",\"rejected_reason\":\"Its worst interleaved MAE was 0.04266; fitting the projection improved all measured margins.\"},{\"option\":\"Use the quadratic-plus-tanh prototype\",\"rejected_reason\":\"Its public MAE was similar, but its worst interleaved MAE was higher at 0.01898.\"}],\"rationale\":\"Implement the lower-worst-error rational model in both editable nodes, preserving the frozen design and archived trajectory fit. Verify the actual DAG and stress-test it on contiguous, random, and feature-tail holdouts with coefficients refit in each fold.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "bf4df0a46cbce8c9fadb1fce43d0e97c20baa8a838d8afea4d1c48ea4034dc77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43816.42,
+      "usage_known": true,
+      "prompt_tokens": 31026,
+      "cached_tokens": 0,
+      "completion_tokens": 1800
+    }
+  ]
+}

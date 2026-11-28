@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c03a5a8ed93347898dab8ae1b55f7099",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:48.201790+00:00",
+  "ended_at_utc": "2026-11-28T15:33:22.417114+00:00",
+  "request_sha256": "76bd9cb1db6acc6299f4abceefe66448e31458661f53c8c48e8bfe18bbc114cf",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56374,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37143,
+    "cached_tokens": 12672,
+    "completion_tokens": 1473
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/combine.py <<'PY'\\nexec(open('/tmp/invert.py').read().split('for d in range(1,5):')[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.linear_model import orthogonal_mp, Ridge\\nfrom sklearn.model_selection import KFold\\nnp.set_printoptions(precision=4,suppress=True)\\ndef sd(u,d):return np.column_stack([np.ones(len(u))]+[u**k for k in range(1,d+1)])\\ndef check(A,V):\\n B=np.linalg.lstsq(A,V,rcond=None)[0]; Q=np.linalg.qr(A)[0]; return np.mean(abs((V-A@B)/np.maximum(.002,1-(Q*Q).sum(1))[:,None])),B\\nF={'z':z};\\nfor k,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[k]['u'],s[k][j]; out=[]\\n def candidate(n,fn):\\n  A=fn(u); e,b=check(A,v);out.append((e,n,fn(z)@b,b));\\n for d in range(1,6):candidate('poly'+str(d),lambda x,d=d:sd(x,d))\\n for g in [.5,.75,1,1.25,1.5,1.75,2,2.5,3,3.5,4,4.5,5,5.5,6]:\\n  for n,f in [('fourier',lambda x:np.c_[np.ones(len(x)),np.sin(x),np.cos(x)]),('tanh',lambda x:np.c_[np.ones(len(x)),np.tanh(x),np.tanh(x)**2]),('sincos+x',lambda x:np.c_[np.ones(len(x)),x,np.sin(x),np.cos(x)])]:candidate(n+str(g),lambda x,g=g,f=f:f(g*x))\\n for e,n,w,b in sorted(out,key=lambda a:a[0])[:5]: print(k,j,n,e,b if n.startswith('poly') else '')\\n e,n,w,b=min(out,key=lambda a:a[0]);F[k+j]=w\\n # Check for an entrywise output link after affine mixing.\\n for n,T in [('tanh',np.arctanh),('sin',np.arcsin)]:\\n  if abs(v).max()<1:\\n   print(k,j,n,check(sd(u,1),T(v))[0],check(sd(u,2),T(v))[0])\\nprint('target range',Y.min(0),Y.max(0),'times',s['eval_times'])\\nfrom itertools import combinations\\nsplits=list(KFold(4,shuffle=True,random_state=23).split(z))+[(np.arange(N),np.arange(N,len(z)))]\\ndef trial(name,A,alphas=(0,),omp=False):\\n result=[]\\n for alpha in alphas:\\n  em=[]\\n  for tr,va in splits:\\n   m=A[tr,1:].mean(0);sc=np.maximum(A[tr,1:].std(0),1e-8); D=(A[:,1:]-m)/sc;ym=Y[tr].mean(0)\\n   if omp:\\n    # use three high-SNR targets, with trailing trajectory channels projected onto their training temporal modes\\n    _,_,vt=np.linalg.svd(Y[tr,1:]-ym[1:],full_matrices=False); V=np.c_[Y[tr,0]-ym[0],(Y[tr,1:]-ym[1:])@vt[:2].T]; B=orthogonal_mp(D[tr],V,n_nonzero_coefs=int(alpha)); P=D[va]@B; P=np.c_[P[:,0],P[:,1:]@vt[:2]]+ym\\n   else:\\n    B=(np.linalg.lstsq(D[tr],Y[tr]-ym,rcond=1e-9)[0] if alpha==0 else np.linalg.solve(D[tr]@D[tr].T+alpha*np.eye(len(tr)),Y[tr]-ym)); P=D[va]@B+ym if alpha==0 else (D[va]@D[tr].T)@B+ym\\n   E=abs(P-Y[va]);em.append([E[:,0].mean(),E[:,1:].mean()]);\\n  result.append((name,alpha,np.round(np.mean(em[:-1],0),5),np.round(em[-1],5)))\\n return result\\nres=[]\\nfor k in range(1,5):\\n for keys in combinations(F,k):\\n  W=np.column_stack([F[k] for k in keys]); A=np.column_stack([np.prod(W[:,j],1) for d in range(3) for j in cwr(range(W.shape[1]),d)]);res+=trial(str(keys),A,(0,.001,.03,.3,3));res+=trial(str(keys)+' omp',A,(5,10,15,20),True)\\nfor c in (0,1):\\n for row in sorted(res,key=lambda a:a[2][c])[:12]: print('score',c,row)\\nnp.savez('/tmp/features.npz',**F)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/combine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic calibrated polynomial -> H2 combined reference-panel readouts; calibrated quartic public holdout MAEs are 0.21997 and 0.16823.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use only one panel's transformed coordinates\",\"rejected_reason\":\"The single-panel trials have not shown enough predictive accuracy; the panel maps may supply complementary terms.\"}],\"rationale\":\"Select panel maps by their independent reference errors, then compare joint and sparse readout bases across several held-out splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e91be6cd350c59e30d25f992ac56e4bd002c09d85de7de3fef50101d7b1a0698",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34214.03,
+      "usage_known": true,
+      "prompt_tokens": 37143,
+      "cached_tokens": 12672,
+      "completion_tokens": 1473
+    }
+  ]
+}

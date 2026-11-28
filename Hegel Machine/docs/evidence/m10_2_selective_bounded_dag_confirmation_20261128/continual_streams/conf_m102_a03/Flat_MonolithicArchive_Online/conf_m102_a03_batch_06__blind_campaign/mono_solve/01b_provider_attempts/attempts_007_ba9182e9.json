@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ba9182e9fb474a23934c9f0ed2545d16",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:11.119841+00:00",
+  "ended_at_utc": "2026-11-28T15:23:45.795417+00:00",
+  "request_sha256": "ded900ad00738251df5e30a6b7170c4ece7422431a68667237d641bc81c1c803",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47810,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32263,
+    "cached_tokens": 12672,
+    "completion_tokens": 1339
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/joint.py <<'PY'\\nexec(open('/tmp/readout.py').read().split('for nam,a0')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import eigh\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nU,S,V=np.linalg.svd(T,full_matrices=False); L=U[:,:3]*S[:3]; Y=np.c_[y,L];\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec']); print('time modes',V[:4]); print('y/trajectory correlations',np.corrcoef(Y.T));\\nfor d in (1,2,3):\\n q=af(polys(L,d)); p=q@fit(q[ix],y[ix]); print('score predicts y',d,np.mean(abs(p[val]-y[val])),np.mean(abs(p[ix]-y[ix])))\\nq=af(polys(w,2)); co=fit(q[ix],Y[ix]); print('quadratic coefficients',co); er=Y-q@co; print('resid corr',np.corrcoef(er.T)); print('rows [w,y,yres,modes,mode_res]',np.c_[w,y,er[:,0],L,er[:,1:]][:25])\\n# Profile low-dimensional nonlinearities over calibrated B outputs.\\nfor base in (w,h):\\n for deg in (1,2):\\n  q=af(polys(base,deg)); norm=np.maximum(base.std(0),.01); b=base/norm; \\n  for kind,F in [('tanh',np.tanh),('sin',np.sin),('dead',lambda a:np.sign(a)*np.maximum(abs(a)-.35,0)**1.5),('softplus',lambda a:np.logaddexp(0,a)),('hinge',lambda a:np.maximum(0,a)),('sigmoid',lambda a:1/(1+np.exp(-np.clip(a,-60,60)))),('squarehinge',lambda a:np.maximum(0,a)**2),('abs',abs),('sat',lambda a:a/np.sqrt(1+a*a))]:\\n   def design(p):return np.c_[q,F(af(b)@p)]\\n   def res(p):\\n    a=design(p)[ix]; return ((a@fit(a,Y[ix])-Y[ix])/np.array([1.,1.,.1,.1])).ravel()\\n   rng=np.random.default_rng(88); r=min((least_squares(res,p,max_nfev=100) for p in np.r_[np.c_[np.zeros(4),np.eye(4)],rng.normal(size=(9,5))]),key=lambda r:r.cost); q1=design(r.x); pred=q1@fit(q1[ix],Y[ix]); print('ridge function',base is w,deg,kind,'val',np.mean(abs(pred[val]-Y[val]),0),'train',np.mean(abs(pred[ix]-Y[ix]),0),'param',r.x)\\n# Kernel family on the strongly supported panel-B features, and on B plus raw coordinates.\\nfrom scipy.spatial.distance import cdist\\nout=[]\\nfor name,H in [('w',w),('h',h),('hz',np.c_[h,z*.5]),('wz',np.c_[w,z*.5])]:\\n H=H/H[ix].std(0); d=cdist(H,H); q=af(polys(H,2)); q/=q[ix].std(0).clip(0.3); qk=q@q.T\\n for le in (.55,.9,1.3,1.8,2.5,3.5,5.):\\n  a=d/le\\n  for kn,K in [('rbf',np.exp(-a*a/2)),('M32',(1+a)*np.exp(-a)),('M52',(1+a+a*a/3)*np.exp(-a))]:\\n   for lin in (0, .1, 1):\\n    k=K+lin*qk; e,u=eigh(k[np.ix_(ix,ix)]); pred=k[np.ix_(val,ix)]@u\\n    for n0 in (1e-5,.001,.014,.07):\\n     p=pred@((u.T@Y[ix])/(e[:,None]+n0)); er=np.mean(abs(p-Y[val]),0); out.append((er[0],np.mean(abs((p[:,1:]-L[val])@V[:3])),name,le,kn,lin,n0))\\nprint('kernel top', sorted(out)[:10]); print('kernel state top',sorted(out,key=lambda r:r[1])[:5]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic panel-B readout -> H2 shared nonlinear readout identified using trajectory modes; best measured 52/20 MAEs are 0.088834 for y and 0.062746 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel B reproduces the independent measurements to about 0.000096 RMSE. Identify the remaining readout by testing nonlinear terms shared with trajectory modes, and compare with a kernel baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "fcf14d9f1502bfb1357d320d3f4b009d20300bee563afa99330bfd15c86ac8f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35240.39,
+      "usage_known": true,
+      "prompt_tokens": 32263,
+      "cached_tokens": 12672,
+      "completion_tokens": 1339
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e4b06fb30254f088889da8ae240c21c",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:50.458959+00:00",
+  "ended_at_utc": "2026-11-28T15:21:23.792313+00:00",
+  "request_sha256": "9774fd1304b6a0547b541481a94ec886bff335247fca8d869edf3c3110725092",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52830,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33870,
+    "cached_tokens": 5504,
+    "completion_tokens": 1406
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/invariant03.py <<'PY'\\nimport numpy as np\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\ndef _models(w,n):\\n    for u in (w, w[:,:4],w[:,4:]):\\n        uc = u-u[:n].mean(0)\\n        _, sv, vt = np.linalg.svd(uc[:n], full_matrices=False)\\n        for frac in ((1., .18, .003) if u.shape[1]==8 else (1.,.15)):\\n            v = uc @ vt.T / np.sqrt((sv*sv/n+frac)**.65)\\n            v /= np.sqrt(np.mean(np.sum(v[:n]**2,axis=1)))+1e-12\\n            g=v @ v[:n].T\\n            d=cdist(v,v[:n],'sqeuclidean')\\n            yield g, 'linear'\\n            yield g+.35*g*g, 'quadratic'\\n            for t in (.2,.8,2.):\\n                yield np.exp(-t*d)+.45*g, 'rbf+linear'\\n                s=np.sqrt(t*d)\\n                yield (1+s)*np.exp(-s)+.45*g, 'matern+linear'\\n\\ndef _predict(w, target, n, groups):\\n    center=target.mean(0)\\n    Y=target-center\\n    eye=np.eye(n)\\n    records=[]\\n    for K,name in _models(w,n):\\n        for noise in (.02,.09,.28,.75,1.65):\\n            C=cho_factor(K[:n]+noise*eye+3.)\\n            ki=cho_solve(C,eye)\\n            a=ki@Y\\n            res=np.abs(a/ki.diagonal()[:,None])\\n            scores=np.array([res[:,j].mean() for j in groups])\\n            pred=(K[n:]+3.)@a+center\\n            records.append((scores,pred,name,noise))\\n    scores=np.stack([z[0] for z in records])\\n    ans=np.empty((len(w)-n,target.shape[1]))\\n    for i,g in enumerate(groups):\\n        idx=np.argsort(scores[:,i])[:18]; s=scores[idx,i]; scale=max(.025*s[0],1e-12)\\n        weights=np.exp(-(s-s[0])/scale); weights/=weights.sum()\\n        ans[:,g]=np.tensordot(weights,np.stack([records[j][1][:,g] for j in idx]),axes=1)\\n    return ans\\n\\ndef run_node(inputs: dict) -> dict:\\n    feature_data=inputs['node_00']\\n    w=np.asarray(feature_data['features'],dtype=float)\\n    n=int(feature_data['n_train'])\\n    temporal=inputs['node_01']\\n    y=np.asarray(temporal['targets'],dtype=float)\\n    basis=np.asarray(temporal['basis'],dtype=float)\\n    prior=np.asarray(inputs['node_02']['fit'],dtype=float)\\n    q=np.linalg.qr(basis,mode='reduced')[0]\\n    proj=q@q.T\\n    traj=y[:,1:]\\n    smooth=traj@proj\\n    tail=traj-smooth\\n    pred=_predict(w,np.column_stack((y[:,0],smooth,tail)),n,([0],slice(1,1+traj.shape[1]),slice(1+traj.shape[1],None)))\\n    yh=pred[:,0]\\n    sp=pred[:,1:1+traj.shape[1]]+pred[:,1+traj.shape[1]:]\\n    # Limit the influence of the extrapolating upstream fit when accounting for its disagreement.\\n    radius=np.maximum(np.std(y,axis=0),1e-12)\\n    delta=prior-np.column_stack((yh,sp))\\n    correction=.015*radius*np.tanh(delta/radius)\\n    yh=yh+correction[:,0]\\n    sp=sp+correction[:,1:]\\n    diag=np.array([yh.mean(),yh.std(),sp[:,-1].mean(),sp[:,-1].std()]) if len(yh) else np.zeros(4)\\n    return {'y_hat':yh,'state_pred':sp,'diagnostics_vec':diag}\\nPY\\ncp /tmp/invariant03.py /holdout_task/node_03.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed -n '17,120p' /tmp/hegel_continual_archive/conf_m102_a04_batch_00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Frozen kernel → regularized sign-invariant ensemble; archived public MAEs were 1.870574 scalar and 1.238196 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Infer the missing global sign from frozen predictions\",\"rejected_reason\":\"The frozen regression output is itself a deterministic function of the sign-invariant features and training labels.\"}],\"rationale\":\"Fit a contract-compliant baseline with model weighting determined by training-only leave-one-out errors. This tests how much prediction accuracy the frozen representation supports without assuming access to the missing orientation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7ad6e75525794f9a2df727e2377f0e93fc645b399e40b17948c56e2f21712e6f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33747.77,
+      "usage_known": true,
+      "prompt_tokens": 33870,
+      "cached_tokens": 5504,
+      "completion_tokens": 1406
+    }
+  ]
+}

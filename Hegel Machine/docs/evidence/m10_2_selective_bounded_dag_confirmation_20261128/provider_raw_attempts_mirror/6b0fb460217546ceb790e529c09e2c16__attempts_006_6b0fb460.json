@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b0fb460217546ceb790e529c09e2c16",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:47:25.278890+00:00",
+  "ended_at_utc": "2026-11-28T15:47:51.551487+00:00",
+  "request_sha256": "916bd49ed8f3b973e7483a4990e3fbd59a653acb4551c94082f41ee52853a2c4",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29900,
+    "cached_tokens": 5504,
+    "completion_tokens": 922
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nfrom sklearn.model_selection import KFold\\nroot = '/holdout_task/'\\nn0 = runpy.run_path(root + '_frozen_nodes/node_00.py')['run_node']\\nn1 = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\nn2 = runpy.run_path(root + 'node_02.py')['run_node']\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nmetrics = []\\nfor a, b in KFold(5, shuffle=True, random_state=99).split(train['x']):\\n    s = copy.deepcopy(study)\\n    s['train'] = {k: train[k][a].copy() for k in ('x', 'y', 'traj')}\\n    y, t = s['train']['y'], s['train']['traj']\\n    s['train']['summary'] = np.array([y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])\\n    s['test'] = {'x': train['x'][b].copy()}\\n    c = n0({'__input__': s})\\n    g = n1({'__input__': s, 'node_00': c})\\n    p = n2({'__input__': s, 'node_00': c, 'node_01': g})\\n    yh, tp = p['y_hat'], p['state_pred']\\n    assert yh.shape == train['y'][b].shape and tp.shape == train['traj'][b].shape\\n    assert np.isfinite(yh).all() and np.isfinite(tp).all()\\n    np.testing.assert_allclose(p['diagnostics_vec'], [yh.mean(), yh.std(), tp[:, -1].mean(), tp[:, -1].std()])\\n    metrics.append([np.mean(np.abs(yh-train['y'][b])), np.mean(np.abs(tp-train['traj'][b]))])\\nprint('endpoint and trajectory MAE by fold:', np.round(metrics, 6).tolist())\\nprint('worst:', np.round(np.max(metrics, axis=0), 6).tolist())\\nassert np.max(metrics) <= 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cyclic endpoint basis → H2 sparse nonlinear corrections: the isolated official evaluator accepted endpoint MAE 0.026456 and trajectory MAE 0.012970; the worst exploratory endpoint fold was 0.03308.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The official split passed; checking both outputs on alternate folds with the unchanged artifact will verify worst-fold performance.\"\n    }\n  ],\n  \"rationale\": \"Run the exact saved sink and both frozen nodes in an isolated process across five alternate splits, independently checking endpoint error, trajectory error, and diagnostic consistency without editing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "73246af2dd7ac9dab50a2123fbf7409c9827777ecaeff21e37b1435826e47ea3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26270.93,
+      "usage_known": true,
+      "prompt_tokens": 29900,
+      "cached_tokens": 5504,
+      "completion_tokens": 922
+    }
+  ]
+}

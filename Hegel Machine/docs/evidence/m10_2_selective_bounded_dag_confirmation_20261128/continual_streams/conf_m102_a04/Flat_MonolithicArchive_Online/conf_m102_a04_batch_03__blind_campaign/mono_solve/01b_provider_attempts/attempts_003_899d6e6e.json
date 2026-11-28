@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "899d6e6e3fe84958a38c01cb74880e8f",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:33.343190+00:00",
+  "ended_at_utc": "2026-11-28T15:04:00.875920+00:00",
+  "request_sha256": "443d1a2003201f218a8cd5417aea509644e103080d41c791405c62c710806238",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21414,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22019,
+    "cached_tokens": 12672,
+    "completion_tokens": 1153
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m102_a04_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -25; cat > /tmp/explore.py <<'PY'\\nimport pickle,sys,runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import qr\\np='/tmp/hegel_continual_archive/'\\na=runpy.run_path(p+'conf_m102_a04_batch_00_solver.py')\\nb=runpy.run_path(p+'conf_m102_a04_batch_01_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; t=s['eval_times']; X=d['x']; Y=d['y']; T=d['traj']; N=len(X)\\nlin=lambda x,y:np.linalg.lstsq(x,y,rcond=1e-9)[0]\\none=lambda x:np.c_[np.ones(len(x)),x]\\no,k=a['_align'](s['panel_a']); Z=(X-o)/k\\npb=s['panel_b']; W=one(Z)@lin(one(pb['u']),pb['v']); C=a['_panel_maps'](s['panel_c'],Z)\\nprint('times, tele, align',t,s['telemetry_vec'],o,k)\\ndef basis(r):return -np.expm1(-t[:,None]*r)\\ndef res(r):\\n f=basis(r); return (f@lin(f,T.T)-T.T).ravel()\\nrr=least_squares(res,[.4,1.8],bounds=([.01,.5],[2,10]),gtol=1e-13).x\\nF=basis(rr); A=lin(F,T.T).T\\nprint('rates',rr,'noise',np.std(res(rr)),'amp',A.std(0),'y correlation',np.corrcoef(np.c_[Y,A].T))\\nprint('range W C',W.min(0),W.max(0),C.min(0),C.max(0))\\nfor archived in [a,b]:\\n sc=dict(s,train={k:v[:52] if k!='summary' else v for k,v in d.items()},test={'x':X[52:]}); out=archived['solve_batch'](sc); print('archived',np.mean(abs(out['y_hat']-Y[52:])),np.mean(abs(out['state_pred']-T[52:])))\\nif __name__=='__main__':\\n for name,q in [('Z',Z),('W',W),('C1',C[:,:4]),('C2',C[:,4:]),('C',C),('ZC',np.c_[Z,C]),('WC',np.c_[W,C])]:\\n  for degree in range(1,4):\\n   P=PolynomialFeatures(degree).fit_transform(q); scale=np.maximum(P[:52].std(0),.1); scale[0]=1;P=P/scale\\n   for reg in [0.01,1.]:\\n    K=P@P.T; D=np.c_[Y,T]; fit=K[:, :52]@np.linalg.solve(K[:52,:52]+reg*np.eye(52),D[:52]); print(name,degree,reg,'fit',np.round(np.mean(abs(fit[:52]-D[:52]),axis=0)[[0,1,8]],4),'val',np.round([np.mean(abs(fit[52:,0]-Y[52:])),np.mean(abs(fit[52:,1:]-T[52:]))],4))\\n print('linear coefficients for Y and amplitudes');print(lin(one(Z),np.c_[Y,A]));print(lin(one(C),np.c_[Y,A]));print(lin(one(W),np.c_[Y,A]));print(np.c_[Z,W,Y,A][:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared two-mode trajectory -> H2 identify its panel-conditioned amplitudes and scalar readout; the archived gate MAEs are 0.140860 for y and 0.073028 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit each timestamp independently\",\n      \"rejected_reason\": \"Two singular values dominate the measured trajectories; a shared basis can separate measurement noise from amplitude prediction error.\"\n    }\n  ],\n  \"rationale\": \"Estimate the time basis and compare archived solvers and panel-specific algebraic features on the same split to locate the bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c9d6d79b4db6a58b4c2303e07cfe007879ca2b18f71cfe48f055b0930a8b0f49",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27531.72,
+      "usage_known": true,
+      "prompt_tokens": 22019,
+      "cached_tokens": 12672,
+      "completion_tokens": 1153
+    }
+  ]
+}

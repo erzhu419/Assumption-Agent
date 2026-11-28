@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e2dd4ccd00546d7b9bb4383d84ff6cc",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:50.809450+00:00",
+  "ended_at_utc": "2026-11-28T15:18:31.499851+00:00",
+  "request_sha256": "6010aee40bdc5e12db441fb81cdcb1d31f876818ad6860dffcc1da02c093e806",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30135,
+    "cached_tokens": 12672,
+    "completion_tokens": 1721
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/compose04.py <<'PY'\\nfrom panel04 import *\\nfrom scipy.optimize import minimize_scalar\\n\\ndef calibrate(a,x):\\n out=[]\\n for u,v,z in zip(a['u'].T,a['v'].T,x.T):\\n  d=aff(u); q=ls(d,v)\\n  for _ in range(10):\\n   i=np.argsort(abs(d@q-v))[:40];q=ls(d[i],v[i])\\n  i=abs(d@q-v)<.002;q=ls(d[i],v[i]);out.append((z-q[0])/q[1])\\n return np.array(out).T\\n\\ndef c1d(x):return np.c_[np.ones(len(x)),x[:,0]*x[:,1],x[:,0]*x[:,3],x[:,1]*x[:,2],x[:,2]*x[:,3]]\\n\\ndef operators(s):\\n b=s['panel_b'];c=s['panel_c'];u=c['u']\\n _,_,_,B=fit(b['u'],b['v'],*funcs['dead'])\\n C=lambda x:c1d(x)@ls(c1d(u),c['v1'])\\n specs={\\n 'r2':(lambda x,p:np.c_[np.ones(len(x)),x/(1+p[0]*x*x),x*x/(1+p[0]*x*x)],[.02],([-.4],[1.])),\\n 'r4':(lambda x,p:np.c_[np.ones(len(x)),x/(1+p*x*x),x*x/(1+p*x*x)],[.02]*4,([-.4]*4,[1.]*4)),\\n 'r6':(lambda x,p:np.c_[np.ones(len(x)),x/(1+p[0]*x*x+p[1]*x**4),x*x/(1+p[0]*x*x+p[1]*x**4)],[.02,0],([-.2,-.1],[1.,1.])),\\n 'root':(lambda x,p:np.c_[np.ones(len(x)),x/(1+p[0]*x*x)**p[1],x*x/(1+p[0]*x*x)**p[1]],[.04,.5],([0,.05],[2.,6.])),\\n 'ratabs':(lambda x,p:np.c_[np.ones(len(x)),x/(1+p[0]*abs(x)+p[1]*x*x),x*x/(1+p[0]*abs(x)+p[1]*x*x)],[.03,.03],([-.4,-.4],[2.,2.])),\\n 'trig':(lambda x,p:np.c_[np.ones(len(x)),np.sin(p[0]*x)/p[0],(1-np.cos(p[0]*x))/p[0]**2],[.2],([.001],[4.])),\\n 'cubic':(lambda x,p:np.c_[np.ones(len(x)),x+p[0]*x**3,x*x+p[1]*x**4],[-.02,0],([-1,-1],[1,1])),\\n 'quartic':(lambda x,p:np.c_[np.ones(len(x)),x,x*x,x**3,x**4],[0],([-1],[1.])),\\n 'ratioMix':(lambda x,p:np.c_[np.ones(len(x)),x,x*x]/(1+p[0]*np.sum(x*x,axis=1,keepdims=True)),[.02],([-.1],[1.])),\\n }\\n best=(np.inf,None)\\n for name,spec in specs.items():\\n  r,l,p,f=fit(u,c['v2'],*spec)\\n  if __name__=='__main__':print('C2',name,round(r,7),round(l,7),p)\\n  if l<best[0]:best=(l,f)\\n return {'B':B,'C':C,'D':best[1]}\\n\\nif __name__=='__main__':\\n tr=s['train'];t=s['eval_times']; y=tr['y'];T=tr['traj']; z=calibrate(s['panel_a'],tr['x']); ops=operators(s)\\n paths={'':z}\\n for k in range(1,4):\\n  for seq in itertools.permutations(ops,k):\\n   name=''.join(seq);paths[name]=ops[name[-1]](paths[name[:-1]])\\n paths.update({a+'+'+b:np.c_[paths[a],paths[b]] for a,b in itertools.combinations(list(paths),2) if (a[:-1]==b[:-1] or a=='' or b=='' or (a[1:]==b[1:] and a[1:]))})\\n for target in [y,T]:\\n  results=[]\\n  for name,w in paths.items():\\n   ds={'lin':aff(w),'quad':poly(w),'pair':np.c_[aff(w),w[:,0]*w[:,2],w[:,1]*w[:,3]],'abs':np.c_[aff(w),abs(w)],'tanh':aff(np.tanh(2*w))}\\n   for kind,d in ds.items():\\n    if d.shape[1]>45:continue\\n    q=ls(d[:52],target[:52]);err=np.mean(abs(d[52:]@q-target[52:]));trerr=np.mean(abs(d[:52]@q-target[:52]));results.append((err,trerr,name or 'A',kind))\\n  print('target',target.shape); print(*sorted(results)[:22],sep='\\\\n')\\n _,sing,v=np.linalg.svd(T,full_matrices=False);print('trajectory svd',sing);print('modes',v[:3]);print('mean',T.mean(0));print('basis fits')\\n for name,g in [('t',t),('sqrt',np.sqrt(t)),('log',np.log1p(t)),('ones',np.ones_like(t))]:\\n  def loss(k):\\n   a=np.c_[1-np.exp(-k*t),g];return np.mean((ls(a,T.T).T@a.T-T)**2)\\n  r=minimize_scalar(loss,bounds=(.05,8),method='bounded');print(name,r.x,np.sqrt(r.fun))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compose04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic nonlinear panel fits -> H2 dead-zone B and sparse quadratic C1 with separately fitted C2; B panel leave-one-out RMSE is 0.000120, and composition validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fit panel operators independently, then test serial paths and parallel branches against both readouts. Trajectory rank and shared time profiles provide a separate check on the composition.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "10995d67f754cb2998a807248edf56c7b2ba137bc7c7d885e48bc9f693ffbb77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41115.32,
+      "usage_known": true,
+      "prompt_tokens": 30135,
+      "cached_tokens": 12672,
+      "completion_tokens": 1721
+    }
+  ]
+}

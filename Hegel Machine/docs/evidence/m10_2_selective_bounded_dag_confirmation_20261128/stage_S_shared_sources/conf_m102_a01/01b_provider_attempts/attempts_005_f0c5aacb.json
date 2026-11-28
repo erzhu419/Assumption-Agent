@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0c5aacb9c404092b71fd24bc8de85e6",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:52:50.062792+00:00",
+  "ended_at_utc": "2026-11-28T14:53:25.731388+00:00",
+  "request_sha256": "5604941571275b2e9c2aec53a025cf295a33043ea8d07d6677673ad1c97183fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41489,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31708,
+    "cached_tokens": 12672,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/operator_search.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; T=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; a=s['panel_a']; b=s['panel_b']; c=s['panel_c']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\naug=lambda u:np.c_[np.ones(len(u)),u]\\nlin=lambda u,v:np.linalg.lstsq(aug(u),v,rcond=None)[0]\\nm=lin(a['u'],a['v']); good=np.linalg.norm(a['v']-aug(a['u'])@m,axis=1)<2; A=lin(a['u'][good],a['v'][good]); B=lin(b['u'],b['v']); forward=lambda z,M:aug(z)@M; inverse=lambda z,M:(z-M[0])@np.linalg.inv(M[1:]);\\nfor name in ('v1','v2'):\\n u=c['u']; v=c[name]; print('\\\\n',name)\\n for d in range(1,6):\\n  F=np.column_stack([np.ones(len(u))]+[u**k for k in range(1,d+1)]); w=np.linalg.lstsq(F,v,rcond=None)[0]; h=np.sum(F*np.linalg.pinv(F).T,axis=1); print('separable',d,'rms',np.std(v-F@w),'loo',np.std((v-F@w)/(1-h[:,None])))\\n P=PolynomialFeatures(2); F=P.fit_transform(u); w=np.linalg.lstsq(F,v,rcond=None)[0]; W=w[5:]@np.linalg.inv(w[1:5]); print('quadratic unmixed', list(zip(P.get_feature_names_out()[5:],W)))\\n print('c matrices',w[:5]); print('diag ratios',np.diag(W[[0,4,7,9]]));\\n for transform in (lambda u:u,lambda u:forward(u,A),lambda u:inverse(u,A),lambda u:forward(u,B),lambda u:inverse(u,B)):\\n  z=transform(u); cv=[]\\n  for func in (lambda z:z,lambda z:z*z,lambda z:np.tanh(z),lambda z:np.sin(z)):\\n   F=np.c_[aug(u),func(z)]; w=np.linalg.lstsq(F,v,rcond=None)[0]; cv.append(np.std(v-F@w));\\n  print('coordinate reduced residuals',cv)\\nE=lambda k:-np.expm1(-np.outer(t,k)); g=least_squares(lambda k:(T-T@np.linalg.pinv(E(k).T)@E(k).T).ravel(),[.22,1.52]); print('rates',g.x); Y=np.c_[y,T@np.linalg.pinv(E(g.x).T)];\\nfor desc,z in [('raw',x),('a',forward(x,A)),('ai',inverse(x,A)),('b',forward(x,B)),('bi',inverse(x,B)),('aib',forward(inverse(x,A),B)),('ab',forward(forward(x,A),B)),('aibi',inverse(inverse(x,A),B))]:\\n F=PolynomialFeatures(2).fit_transform(z); w=np.linalg.lstsq(F,Y,rcond=None)[0]; print(desc,'coefficients',w.T)\\n for k in (6,8,10,12):\\n  errs=[]\\n  for j in range(3):\\n   cols=list(range(5));\\n   while len(cols)<k:\\n    choices=[]\\n    for i in set(range(F.shape[1]))-set(cols):\\n     ff=F[:52,cols+[i]]; ww=np.linalg.lstsq(ff,Y[:52,j],rcond=None)[0]; choices.append((np.linalg.norm(ff@ww-Y[:52,j]),i))\\n    cols.append(min(choices)[1]);\\n   ww=np.linalg.lstsq(F[:52,cols],Y[:52,j],rcond=None)[0]; errs.append(np.mean(abs(F[52:,cols]@ww-Y[52:,j])));\\n  print('sparse',k,errs)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/operator_search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent quadratic regressions → two shared relaxation modes plus a nonlinear readout; fixed-split MAE is 0.0221 for readout and 0.0271 at the worst trajectory timestamp.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an unrestricted cubic panel fit\",\"rejected_reason\":\"With 24 rows, exact interpolation is not evidence of a valid operator.\"}],\"rationale\":\"The two-exponential basis explains trajectory variation to about 0.0044 RMS. Test which operator coordinates simplify its amplitudes and the readout, while checking panel reconstructions out of sample.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c976754d8634c9b28a4c1a68e7323ecd35bf427a8cac1dc95d426ea057aa65f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35667.69,
+      "usage_known": true,
+      "prompt_tokens": 31708,
+      "cached_tokens": 12672,
+      "completion_tokens": 1341
+    }
+  ]
+}

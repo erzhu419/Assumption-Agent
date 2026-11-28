@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fcea1417890a4fcd8fef606ded801851",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:37.579238+00:00",
+  "ended_at_utc": "2026-11-28T15:05:11.637068+00:00",
+  "request_sha256": "83ebb03f3c895b890dc010e7b55ad7259238d186745b64eb0f252f1d81e02a74",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30935,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25313,
+    "cached_tokens": 12672,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('A=old._calibration')[0]);from scipy.optimize import least_squares\\nA=old._calibration(s['panel_a']);z=old._decode(x,A);pb=s['panel_b']; B=fit(poly(pb['u'],1),pb['v']);w=poly(z,1)@B\\npc=s['panel_c']; U=pc['u']; Ub=poly(U,1)\\nfor field in ('v1','v2'):\\n V=pc[field]\\n print('\\\\n',field)\\n for label, P in [('pure2',np.c_[Ub,U**2]),('pure3',np.c_[Ub,U**2,U**3]),('odd3',np.c_[Ub,U**3]),('quad+pure3',np.c_[poly(U,2),U**3])]:\\n  E=P@fit(P,V)-V;print(label,'rms',np.mean(E**2)**.5,'loo',np.mean(abs(E)/(1-np.diag(P@np.linalg.pinv(P)))[:,None]));\\n print('v transformed to estimated linear basis:',(V-fit(Ub,V)[0]) @ np.linalg.inv(fit(Ub,V)[1])) if False else None\\n for fun in [np.sin,np.tanh,lambda a:a/(1+a*a),np.sinh,np.cos]:\\n  for combo in (0,1):\\n   def solve(p,ret=False):\\n    P=np.c_[Ub,fun(U*p[:4]+p[4:])] if combo else np.c_[np.ones(len(U)),fun(U*p[:4]+p[4:])]\\n    return (P@fit(P,V)-V).ravel()\\n   for mag in [0.65,2.,3.5] if fun==np.sin else [0.65]:\\n    rr=least_squares(solve,np.r_[[mag]*4,[.1]*4],max_nfev=350); print(fun.__name__,combo,np.mean(rr.fun**2)**.5,rr.x.round(3))\\nfor label,F in [('z',z),('w',w)]:\\n print('\\\\n',label)\\n for kind,P in [('aff',poly(F,1)),('squares',np.c_[poly(F,1),F**2]),('cubes',np.c_[poly(F,1),F**3]),('sq+cube',np.c_[poly(F,1),F**2,F**3]),('cross+cube',np.c_[poly(F,2),F**3]),('degree3',poly(F,3))]:\\n  C=fit(P[:52],y[:52]);print(kind,cv(P),np.mean(abs(P[:52]@C-y[:52])),C.round(4))\\n F0=poly(F,1)\\n for kind,fn in [('sin',np.sin),('tanh',np.tanh),('rational',lambda h:h/(1+h*h)),('cos',np.cos)]:\\n  def project(p,sub):\\n   P=np.c_[F0,fn(F@p[:4]+p[4])];return P,fit(P[sub],y[sub]);\\n  sub=np.arange(52); best=None\\n  for k in range(10):\\n   rng=np.random.default_rng(k)\\n   def err(p):\\n    P,C=project(p,sub); return P[sub]@C-y[sub]\\n   rr=least_squares(err,rng.normal(0,1.5,5),max_nfev=350)\\n   if best is None or np.linalg.norm(rr.fun)<np.linalg.norm(best.fun):best=rr\\n  P,C=project(best.x,sub);print(kind,cv(P),np.mean(abs(best.fun)),best.x.round(3),C.round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived bilinear readout (0.100279 MAE) -> H2 test restricted separable and ridge nonlinearities after diagonal calibration; unrestricted cubic reaches 0.058289, above the 0.038 gate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived affine-transport bilinear feature spans the current scalar readout.\",\"empirical_witness\":\"Transported bilinear y MAE is 0.100279, versus 0.065005 for a full quadratic and 0.058289 for a full cubic on the same 52/20 split; trajectory MAE from an affine spatial design is 0.004086.\",\"causal_blanket_diagnosis\":\"The scalar mismatch is not shared by the trajectory output and is unlikely to arise from calibration error; the archived scalar interaction is too restrictive.\",\"sublated_pivot\":\"Preserve the calibrated trajectory stage and identify structured nonlinear scalar features or an auxiliary-panel composition.\",\"risk_kind\":\"readout basis misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the full cubic\",\"rejected_reason\":\"It still misses the public gate and uses 35 coefficients on 52 fitting rows.\"}],\"rationale\":\"Separate out-of-fold panel identifiability from target fitting and look for low-dimensional nonlinear bases before increasing model capacity.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b7e17c80f8baf487c72b602daa7f2237256269d7815a0c9af59bb4b71c88043d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34570.77,
+      "usage_known": true,
+      "prompt_tokens": 25313,
+      "cached_tokens": 12672,
+      "completion_tokens": 1341
+    }
+  ]
+}

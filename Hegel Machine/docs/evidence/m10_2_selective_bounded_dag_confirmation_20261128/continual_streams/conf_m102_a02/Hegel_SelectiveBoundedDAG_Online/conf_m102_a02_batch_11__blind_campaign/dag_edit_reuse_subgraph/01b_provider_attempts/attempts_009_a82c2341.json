@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a82c2341254b46d09c2b0b51cdcd83e3",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:56.156851+00:00",
+  "ended_at_utc": "2026-11-28T15:58:39.970589+00:00",
+  "request_sha256": "8b793dfdb45cb88760b311e9f57f3b7bb489d741a1621f7eb740ffec41b6a476",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57295,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35641,
+    "cached_tokens": 12672,
+    "completion_tokens": 1956
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*batch_02_solver.py; sed -n '149,165p' /holdout_task/test_dag_candidate.py; cat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares, root\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _coords(study):\\n    u, v = [np.asarray(study['panel_a'][k]) for k in ('u','v')]\\n    r = np.linalg.norm(v-u, axis=1)\\n    med = np.median(r)\\n    keep = r <= med + max(1., 8*np.median(abs(r-med)))\\n    u, v = u[keep], v[keep]\\n    def features(q, p, j):\\n        return np.c_[np.ones(len(q)), q[:,j], np.tanh(p[0]*q[:,j]), np.sin(p[1]*q[:,(j+2)%4])]\\n    def residual(p):\\n        return np.column_stack([f@_ls(f,v[:,j])-v[:,j] for j in range(4) for f in [features(u,p,j)]]).ravel()\\n    p = least_squares(residual, [1.8,2.4], bounds=([.7,1.4],[3.,3.4])).x\\n    w = np.array([_ls(features(u,p,j),v[:,j]) for j in range(4)])\\n    bias, gain, amp, cross = w.T\\n    n = len(study['train']['x'])\\n    x = np.vstack([study['train']['x'],study['test']['x']])\\n    def forward(q):\\n        return bias+gain*q+amp*np.tanh(p[0]*q)+cross*np.sin(p[1]*np.roll(q,2))\\n    q = np.array([root(lambda q: forward(q)-r,(r-bias)/(gain+amp)).x for r in x])\\n    return q,n\\n\\n\\ndef _features(q, b, c, t):\\n    o = np.ones(len(q)); lin = np.c_[o,q,b,c]\\n    quad = np.column_stack([np.prod(q[:,i],axis=1) for m in range(3) for i in combinations_with_replacement(range(4),m)])\\n    gs = [1/(1+t[i]*q[:,i]**2) for i in range(4)]\\n    for i in range(4):\\n        for k in t[:2]:\\n            gs.append(1/(1+k*q[:,i]**2))\\n    for i in range(4):\\n        for j in range(i+1,4):\\n            for r in [-1.,.5,1.]:\\n                for k in t[:2]: gs.append(1/(1+k*(q[:,i]+r*q[:,j])**2))\\n    for g in list(gs)[:12]:\\n        yield np.c_[o,c,b*g[:,None]]\\n        for m in [2,3]:\\n            yield np.c_[o,c,b*g[:,None],b*q[:,0,None]**m*g[:,None]]\\n        yield np.c_[quad,lin*g[:,None]]\\n    for g in gs[12:]:\\n        yield np.c_[o,c,b*g[:,None]]\\n        yield np.c_[quad,np.c_[o,q]*g[:,None]]\\n    for i in range(4):\\n        for j in range(4):\\n            for g in (gs[i]*gs[j],gs[i]):\\n                yield np.c_[o,c,b*g[:,None],b*q[:,j,None]**3*g[:,None],b*gs[j][:,None]]\\n    yield quad\\n    yield np.c_[quad,b,c]\\n\\n\\ndef _scalar(q,b,c,t,y):\\n    n=len(y)\\n    candidates=[]\\n    for f in _features(q,b,c,t):\\n        train=f[:n]; pinv=np.linalg.pinv(train); w=pinv@y\\n        lev=np.einsum('ij,ji->i',train,pinv)\\n        err=np.mean(abs((y-train@w)/np.maximum(1-lev,.025)))\\n        candidates.append((err,f[n:]@w))\\n    lin=np.c_[np.ones(len(q)),q,b,c]; L=lin/np.maximum(lin[:n].std(0),.07); L[:,0]=1\\n    for Q in [q, np.c_[q,b/4], np.c_[q,b/2]]:\\n        d=cdist(Q,Q,'sqeuclidean')\\n        for length in [.5,1.,2.,4.]:\\n            R=np.sqrt(d)/length\\n            for K in [np.exp(-.5*R**2),(1+R+R**2/3)*np.exp(-R)]:\\n                K=K+L@L.T\\n                for noise in [1e-5,.0005,.01,.05]:\\n                    A=np.linalg.inv(K[:n,:n]+noise*np.eye(n)); w=A@y\\n                    candidates.append((np.mean(abs(w/A.diagonal())),K[n:,:n]@w))\\n    candidates.sort(key=lambda v:v[0]); best=candidates[0][0]\\n    top=[(e,p) for e,p in candidates[:8] if e<=1.15*best]\\n    return np.average([p for _,p in top],axis=0,weights=[(best/max(e,1e-12))**8 for e,_ in top])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, upstream = inputs['__input__'], inputs['node_00']\\n    q,n = _coords(study)\\n    a,k,e = upstream['p']\\n    h = q*np.exp(e*np.logaddexp(0,k*(np.log(a)+np.log(np.maximum(abs(q),1e-100)))))\\n    b = np.c_[np.ones(len(q)),q,h]@upstream['w']\\n    c = b*np.roll(q,-1,axis=1)\\n    tr = study['train']\\n    state = np.c_[np.ones(len(q)),b,c.sum(1)]\\n    state = state[n:]@_ls(state[:n],tr['traj'])\\n    y = _scalar(q,b,c,study['telemetry_vec'],tr['y'])\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single rational scalar gate (best worst-split MAE 0.07185) -> H2 compare gated interactions and regularized residual models; corrected trajectory worst-split MAE is 0.00440.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Save the panel-validated inversion and trajectory map now. Select the provisional scalar estimator using training-only leave-one-out error, then measure its official holdout error and inspect the prior tilted-gate formula.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cc605e5305fd6c001bd62223e2a76639fe82c057c8be61b229b6db47ac87edc3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44362.95,
+      "usage_known": true,
+      "prompt_tokens": 35641,
+      "cached_tokens": 12672,
+      "completion_tokens": 1956
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "627955a358e941898581482f4b0109cb",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:14.273681+00:00",
+  "ended_at_utc": "2026-11-28T15:10:51.185046+00:00",
+  "request_sha256": "b7dde988af85f6d38371afacd519e0a948d23b991db47ed36727db3e30903931",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57238,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36514,
+    "cached_tokens": 12672,
+    "completion_tokens": 1609
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _pairs(x):\\n    return np.column_stack([x[:, i] * x[:, j]\\n                            for i in range(x.shape[1])\\n                            for j in range(i + 1, x.shape[1])])\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a, y):\\n    return np.linalg.lstsq(a, y, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    w = np.asarray(inputs['node_00']['w'], dtype=float)\\n    train = study['train']\\n    panel = study['panel_c']\\n    n = len(train['y'])\\n\\n    # Identify the calibrated quadratic coordinates using the reference panel.\\n    ref = _pairs(np.asarray(panel['u'], dtype=float))\\n    v1 = np.asarray(panel['v1'], dtype=float)\\n    strength = np.linalg.norm(_fit(_affine(ref), v1)[1:], axis=1)\\n    keep = strength > 0.01 * strength.max()\\n    raw_pairs = _pairs(w)\\n    z = _affine(raw_pairs[:, keep]) @ _fit(_affine(ref[:, keep]), v1)\\n\\n    # The scalar response couples pairs of panel coordinates; the trajectory\\n    # is affine in those coordinates at each sampled time.\\n    scalar_basis = np.column_stack((_affine(raw_pairs), _pairs(z)))\\n    trajectory_basis = _affine(z)\\n    y = scalar_basis[n:] @ _fit(scalar_basis[:n], train['y'])\\n    state = trajectory_basis[n:] @ _fit(trajectory_basis[:n], train['traj'])\\n    tail = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    study = pickle.load(f)[0]['study']\\nnode = runpy.run_path('/holdout_task/node_01.py')['run_node']\\ncal = runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__': study})\\ntrain = study['train']; y = train['y']; tr = train['traj']; w = cal['w']; d = np.arange(len(y))\\nout = node({'__input__': study, 'node_00': cal})\\nassert out['y_hat'].shape == (len(w)-len(d),) and out['state_pred'].shape == (len(w)-len(d), tr.shape[1])\\nassert out['diagnostics_vec'].shape == (4,) and all(np.isfinite(z).all() for z in out.values())\\ndef err(v):\\n    t = np.setdiff1d(d,v)\\n    st = dict(study, train={k: train[k][t] for k in ('x','y','traj')})\\n    p = node({'__input__':st,'node_00':{'w':w[np.r_[t,v]]}})\\n    return np.r_[np.mean(abs(p['y_hat']-y[v])), np.mean(abs(p['state_pred']-tr[v])), np.mean(abs(p['state_pred']-tr[v]), axis=0)]\\nrepeated = [v for seed in range(30,50) for v in np.array_split(np.random.default_rng(seed).permutation(d),6)]\\nnorm = np.argsort(np.linalg.norm(w[:len(d)],axis=1))\\ngeom = [norm[-18:], norm[:18]]\\nfor col in w[:len(d)].T:\\n    ix = np.argsort(col); geom.extend([ix[:12], ix[-12:]])\\nfor label,folds in [('random',repeated),('ordered tails',[d[k:] for k in (48,52,54,60)]),('geometry',geom)]:\\n    es = np.array([err(v) for v in folds]); print(label,'mean heads',es.mean(0)[:2].round(6),'worst heads',es.max(0)[:2].round(6),'worst by time',es.max(0)[2:].round(6)); assert es[:,:2].max() < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the raw quadratic scalar head with pair products of Panel C coordinates; the panel-based probes reached worst random-fold MAE of 0.00630 for y and 0.00470 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Raw quadratic interactions alone capture the scalar response to measurement precision.\",\n    \"empirical_witness\": \"Adding cross-products of Panel C's fitted quadratic coordinates reduced high-norm y MAE from 0.04423 to 0.00491 and worst random-fold MAE from 0.04229 to 0.00630.\",\n    \"causal_blanket_diagnosis\": \"The scalar sink omitted interactions between panel-derived coordinates, while the trajectory is well represented by an affine readout of the same coordinates.\",\n    \"sublated_pivot\": \"Recover the reference coordinates from Panel C, fit separate readouts, and verify the final artifact on the public split and geometry stress slices.\",\n    \"risk_kind\": \"Omitted interactions between calibrated quadratic coordinates\",\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use selected high-degree raw monomials\",\n      \"rejected_reason\": \"The selected monomials varied across folds and gave substantially higher held-out error than the panel-derived interaction basis.\"\n    }\n  ],\n  \"rationale\": \"Panel C identifies the low-dimensional coordinate map independently of the training targets. Its interaction basis materially improves the scalar bottleneck, while its affine trajectory readout preserves near-noise-level error. Verify both improvements on the exact artifact before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c0380436a41f86e1ecf6766f2cee7c14f2650515528cc8612de6c8ed202243c8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37468.13,
+      "usage_known": true,
+      "prompt_tokens": 36514,
+      "cached_tokens": 12672,
+      "completion_tokens": 1609
+    }
+  ]
+}

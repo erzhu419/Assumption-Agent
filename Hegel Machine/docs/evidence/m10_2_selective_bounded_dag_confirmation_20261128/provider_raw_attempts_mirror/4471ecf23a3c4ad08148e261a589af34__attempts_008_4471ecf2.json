@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4471ecf23a3c4ad08148e261a589af34",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:12.967997+00:00",
+  "ended_at_utc": "2026-11-28T15:08:51.681434+00:00",
+  "request_sha256": "cc98f2c95b043fde64cb39aca29c60839ec7b248bc8edc2270822db16069f03e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49081,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33923,
+    "cached_tokens": 12672,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/joint.py <<'PY'\\nexec(open('/tmp/explore.py').read().split(\\\"p=s['panel_c'];\\\")[0])\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nS=t['traj'];U,d,V=np.linalg.svd(S[:52],full_matrices=False);Y=np.c_[t['y'],S@V[:2].T];print('SVD',d,'corr',np.corrcoef(Y.T)); print('times',s['eval_times']);print('B',b)\\nfor g in [x,z,h,q,f(x)@b]:\\n A=np.c_[f(g),Y[:,1:]]; print('y conditional state+linear',np.linalg.lstsq(A[:52],Y[:52,0],rcond=None)[0],np.mean(abs(A[52:]@np.linalg.lstsq(A[:52],Y[:52,0],rcond=None)[0]-Y[52:,0])))\\n break\\nrng=np.random.default_rng(502); splits=[(np.arange(52),np.arange(52,72))]+[(a[:40],a[40:]) for a in [rng.permutation(52) for _ in range(5)]]\\n# Stationary kernels on affine, saturating and interaction geometries, with profiled ridge.\\ncoords=[x,z,h,q,f(x)@b,f(q)@b]; ks=[]\\nfor j,g in enumerate(coords):\\n for typ,v in [('raw',g)]+[(name+str(c),fun(g,c)) for c in [.22,.65,1.25,2.2] for name,fun in [('rat',lambda a,c:a/(1+c*a*a)),('tanh',lambda a,c:np.tanh(c*a)),('sin',lambda a,c:np.sin(c*a))]]:\\n  G=v@v.T; D=np.maximum(G.diagonal()[:,None]+G.diagonal()[None,:]-2*G,0)\\n  for ell in [.45,.75,1.15,1.7,2.5,4]: ks.append(((j,typ,'rbf',ell),np.exp(-D/(2*ell**2))))\\n  for c in [.1,1,10]:ks.append(((j,typ,'poly',c),(1+c*G)**4))\\nbase=1+x@x.T; R=[]\\nfor name,k in ks:\\n k=k/np.mean(k.diagonal()[:52]);\\n for lam in [.0003,.003,.03]:\\n  errs=[]; pred=[]\\n  for tr,te in splits:\\n   mat=(base+k)[np.ix_(tr,tr)]+lam*np.eye(len(tr)); p=(base+k)[np.ix_(te,tr)]@solve(mat,Y[tr],assume_a='pos');errs.append(np.mean(abs(p-Y[te]),0));pred.append(p)\\n  e=np.array(errs);R.append((name,lam,e,pred))\\nfor j in [0,1]:\\n for sl in [slice(0,1),slice(1,None)]:\\n  print('kernel',j,sl,[(n,l,e[0,:2].round(4),e[1:,:2].mean(0).round(4)) for n,l,e,p in sorted(R,key=lambda r:r[2][sl,j].mean())[:8]])\\n for count in [5,20,50]:\\n  ps=sorted(R,key=lambda r:r[2][1:,j].mean())[:count];print('ens',j,count,np.mean(abs(np.mean([r[3][0][:,j] for r in ps],0)-Y[52:,j])))\\n# Exact univariate response grammar with free per-coordinate coefficients, plus products.\\nfrom itertools import combinations\\nij=np.array(list(combinations(range(4),2))); i,j=ij.T\\nfor ycol in [0,1]:\\n out=[]\\n for k,g in enumerate(coords):\\n  for nm,fun in [('rat',lambda a,c:a/(1+c*a*a)),('tanh',lambda a,c:np.tanh(c*a)),('sin',lambda a,c:np.sin(c*a)),('gate',lambda a,c:a*(1+.22*np.tanh(c*a))),('pair',lambda a,c:a)]:\\n   for mode in [0,1,2,3]:\\n    def F(c):\\n     v=fun(g,c[0]); a=np.c_[f(v),v[:,i]*v[:,j],v*v];\\n     if mode==1:return np.c_[a,g]\\n     if mode==2:return np.c_[a,g,g[:,i]*g[:,j]]\\n     if mode==3:return np.c_[a,g,np.prod(v[:,np.array(list(combinations(range(4),3)))],axis=2)]\\n     return a\\n    es=[]\\n    for tr,te in splits:\\n     def run(c,ret=False):\\n      A=F(c); w=np.linalg.lstsq(A[tr],Y[tr,ycol],rcond=1e-8)[0];return A[te]@w if ret else A[tr]@w-Y[tr,ycol]\\n     sol=least_squares(run,[1.25],bounds=(.06,4),max_nfev=40);es.append(np.mean(abs(run(sol.x,True)-Y[te,ycol])))\\n    out.append((k,nm,mode,es[0],np.mean(es[1:])))\\n print('param',ycol,sorted(out,key=lambda a:a[-1])[:12],sorted(out,key=lambda a:a[-2])[:8])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isolated panel compositions -> H2 separate readout and trajectory-amplitude laws; archived 52/20 MAEs remain 0.039229 and 0.022093.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a panel-C composition directly\",\"rejected_reason\":\"The tested compositions did not beat archive transfer on the required holdout.\"}],\"rationale\":\"Check whether the trajectory amplitude explains the readout, then compare fold-fitted response grammars and regularized kernels separately for both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "88b4692da4588024c79c89a2a84d7144e23f18c479f883cdf53e2d80419f135f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38712.31,
+      "usage_known": true,
+      "prompt_tokens": 33923,
+      "cached_tokens": 12672,
+      "completion_tokens": 1550
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc8f3afbd0bb4aa2a1ebbb79a521cd05",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_16__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:35.028272+00:00",
+  "ended_at_utc": "2026-11-28T15:17:58.603751+00:00",
+  "request_sha256": "efd7c9d7c5cf8ae0d8b29c66bb1bb71550cd59fd53cee30eead40a4aaeae9788",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72232,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41920,
+    "cached_tokens": 12672,
+    "completion_tokens": 899
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_v01_backup.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('    g = a @ b\\\\n')\\nstop = s.index('\\\\n    t =', start)\\ns = s[:start] + '''    h = np.linalg.solve(b[1:].T, (x - b[0]).T).T\\n\\n    def readout(coord):\\n        q = _terms(coord, 2)\\n        predictions = []\\n        for scale, ridge, qw in ((.7, .02, 1.), (.85, .045, .55), (1., .09, .7), (.7, .02, .15)):\\n            f = np.sin(scale * coord)\\n            predictions.append(_fit([(a, 1e4), (q, qw), (f, 1.), (_terms(f, 2), 1.)],\\n                                    n, train['y'], ridge))\\n        return np.mean(predictions, axis=0)\\n\\n    # The inverse coordinates provide a complementary extrapolation basis.\\n    y = .7 * readout(a @ b) + .3 * readout(h)\\n''' + s[stop:]\\ns = s.replace(\\\"    amp = measured @ profile / (profile @ profile)\\\\n    h = np.linalg.solve(b[1:].T, (x - b[0]).T).T\\\\n\\\", \\\"    amp = measured @ profile / (profile @ profile)\\\\n\\\")\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nif ! python3 -I /holdout_task/validate_public_schema.py | tee /tmp/schema13.json || ! grep -q '\\\"schema_valid\\\": true' /tmp/schema13.json; then\\n    cp /tmp/batch_solver_v01_backup.py /holdout_task/batch_solver.py\\n    python3 -I /holdout_task/validate_public_schema.py\\nfi\\npython3 -I /tmp/stress11.py | sed -n '/CURRENT y, state, terminal/,+10p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Forward-only Panel B readout → 70/30 forward–inverse blend: exploratory 52/20 scalar MAE is 0.03418, worst shuffled MAE is 0.05736, and high-norm MAE drops from 0.10518 to 0.08941.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a second temporal mode\",\n      \"rejected_reason\": \"It lowered mean trajectory error slightly but increased worst-fold and high-norm terminal error, so the trajectory model stays unchanged.\"\n    }\n  ],\n  \"rationale\": \"The fixed blend improved every shuffled fold and the high-norm slice while remaining below the 0.038 scalar gate. Verify the exact saved artifact in an isolated Python process and remeasure scalar, trajectory, and terminal errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "cc5481a66c01a51c91caf60ca408a48d713c730d5fe0fefa7902f64a37943c60",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23573.78,
+      "usage_known": true,
+      "prompt_tokens": 41920,
+      "cached_tokens": 12672,
+      "completion_tokens": 899
+    }
+  ]
+}

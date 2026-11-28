@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b49152960004205835e995c1da4e671",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:58.643920+00:00",
+  "ended_at_utc": "2026-11-28T15:21:44.873774+00:00",
+  "request_sha256": "48a512ee0b58ec532ba263a1a8359cf993402fed51896fa63acecd8fa568ad7b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35966,
+    "cached_tokens": 12672,
+    "completion_tokens": 2070
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cat /holdout_task/_frozen_nodes/node_02.py; sed -n '150,230p' /holdout_task/test_dag_candidate.py; sed '/^def _predict/,$d' /tmp/hegel_continual_archive/conf_m102_b03_batch_00_solver.py >/holdout_task/node_00.py; cat >>/holdout_task/node_00.py <<'PY'\\n\\n\\ndef _kernel(u):\\n    delta = u[:, None] - u[None, :]\\n    return np.exp(-np.sum(delta**2, axis=2) / 4.5)\\n\\n\\ndef _fit_kernel(u, f, target, n):\\n    K = _kernel(u)\\n    L = K[:n, :n] + .003*np.eye(n)\\n    F = f[:n]\\n    v = np.linalg.solve(L, np.column_stack((target, F)))\\n    beta = _ls(F.T @ v[:, 1:], F.T @ v[:, 0])\\n    return f[n:] @ beta + K[n:, :n] @ (v[:, 0] - v[:, 1:] @ beta)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    train, test = s['train'], s['test']\\n    n = len(train['x'])\\n    x = np.vstack((train['x'], test['x']))\\n    a, b = _align(s['panel_a'])\\n    z = (x-a)/b\\n    c, d = (_branch(s['panel_c'], z, k) for k in (1, 2))\\n    yz = np.c_[z,c,d]\\n    yz /= np.maximum(yz[:n].std(0), 1e-8)\\n    f = _ones(np.c_[c,d,np.sum(c*d,axis=1)])\\n    y = _fit_kernel(yz, f, train['y'], n)\\n    c, d = (_branch(s['panel_c'], x, k) for k in (1, 2))\\n    cross = (d[:,:,None]*c[:,None,:]).reshape(len(x), -1)\\n    f = _ones(np.c_[d,c,cross])\\n    state = f[n:] @ _ls(f[:n],train['traj'])\\n    return {'y_hat': y, 'TRAJECTORY_KEY': state}\\nPY\\npython3 - <<'PY'\\nimport ast\\np='/holdout_task/_frozen_nodes/node_02.py'; t=ast.parse(open(p).read());print([(ast.unparse(n.value),n.slice.value) for n in ast.walk(t) if isinstance(n,ast.Subscript) and isinstance(n.slice,ast.Constant)])\\nPY\\nkey=$(python3 - <<'PY'\\nimport re\\ns=open('/holdout_task/_frozen_nodes/node_02.py').read(); m=re.findall(r'''([A-Za-z_][A-Za-z_0-9]*)\\\\[['\\\"]([^'\\\"]+)['\\\"]\\\\]''',s); a=next(v for v,k in m if k=='y_hat'); print(next(k for v,k in m if v==a and k!='y_hat'))\\nPY\\n); sed -i \\\"s/TRAJECTORY_KEY/$key/\\\" /holdout_task/node_00.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py || true\\ncat >/tmp/mix9.py <<'PY'\\nexec(open('/tmp/panel_search.py').read().split('C={')[0])\\nfrom itertools import combinations\\nfrom scipy.special import expit\\nfrom scipy.spatial.distance import cdist\\nnp.set_printoptions(precision=5,suppress=True)\\nprint('align',a,b,'sv',np.linalg.svd(t,compute_uv=False),'n',len(y),'times',s['eval_times']);print('summary matches',np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]))\\nY=np.c_[y,t]; i=np.arange(52);j=np.arange(52,72); print('ranges',z.min(0),z.max(0))\\nR=[]\\nfor ws,w in [('z',z),('x',x),('b',z@B+h),('r',(z-h)@P)]:\\n c,d=(f(w) for f in funcs); cr=(c[:,:,None]*d[:,None,:]).reshape(len(w),-1); base=ones(np.c_[c,d,(c*d).sum(1)]); trend=ones(np.c_[c,d,cr]);\\n def eval(F):\\n  coef=ls(F[i],Y[i]); E=abs(F@coef-Y); return E[j,0].mean(), E[j,1:].mean(), E[i,0].mean(), E[i,1:].mean()\\n for k in range(4):\\n  if ws=='z':\\n   E=Y-trend@ls(trend,Y); ii=np.argsort(w[:,k]);print('bins',k,[np.round(E[b][:,[0,-1]].mean(0),3) for b in np.array_split(ii,8)])\\n projections=[(str(k),w[:,k]) for k in range(4)];\\n for k,m in combinations(range(4),2):\\n  for sign in [-1,1]:projections.append((f'{k}{sign:+d}{m}',w[:,k]+sign*w[:,m])); projections.append((f'{k}*{m}',w[:,k]*w[:,m]));\\n projections += [('dot',(c*d).sum(1)), ('sum',w.sum(1)), ('norm',(w*w).sum(1)),('cnorm',(c*c).sum(1)),('dnorm',(d*d).sum(1))];\\n for pn,p in projections:\\n  for shift in [0.,np.median(p),np.quantile(p,.3),np.quantile(p,.7)]:\\n   h=(p-shift)/max(p.std(),.0001)\\n   for gn,g in [('hard',h>0),('logit',expit(2.15*h)),('fast',expit(8*h)),('rat',1/(1+2.15*h*h)),('soft',h/(1+2.15*abs(h)))]:\\n    for dn,D in [('only',np.ones((len(w),1))),('z',ones(w)),('c',ones(c)),('d',ones(d)),('cd',ones(np.c_[c,d]))]:\\n     for bn,b in [('base',base),('trend',trend)]:R.append((*eval(np.c_[b,g[:,None]*D]),ws,pn,round(shift,3),gn,dn,bn))\\nprint('y',sorted(R)[:10]);print('t',sorted(R,key=lambda v:v[1])[:10]);print('train y',sorted(R,key=lambda v:v[2])[:5]);print('train t',sorted(R,key=lambda v:v[3])[:5]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mix9.py | tail -14\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 smooth residuals -> H2 localized branch gating; best measured four-fold scalar and trajectory MAEs are 0.07889 and 0.05591.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Gate the final scalar prediction\",\n      \"rejected_reason\": \"The fitted single-index saturation models did not beat the smooth residual model.\"\n    }\n  ],\n  \"rationale\": \"Save an executable baseline, check the frozen output contract, and test whether telemetry-sensitive gating modifies branch features before the scalar and trajectory readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "fefd9bb0364aec27b82dd3d4317d38f6ff5d932ece63a5b6199935181a3388bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47127.53,
+      "usage_known": true,
+      "prompt_tokens": 35966,
+      "cached_tokens": 12672,
+      "completion_tokens": 2070
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d2a2bee3d5d44ccea51bfe18f57ebaf5",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:55.122667+00:00",
+  "ended_at_utc": "2026-11-28T15:18:28.000511+00:00",
+  "request_sha256": "6a38ac4e85feb264c3e520a4dc56fc96a8d10c7cc1db7c7322231d85997cca20",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41474,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29055,
+    "cached_tokens": 12672,
+    "completion_tokens": 1217
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph.py <<'PY'\\nfrom probe import *\\nfrom itertools import combinations_with_replacement as cr, combinations\\nZ=np.load('/tmp/z.npy'); u=s['panel_b']['u']; v=s['panel_b']['v']; uc=s['panel_c']['u'];\\ncpairs=list(zip(range(4),[1,2,3,0])); cd=lambda x:ic(np.column_stack([x[:,i]*x[:,j] for i,j in cpairs])); cq=ls(cd(uc),s['panel_c']['v1']); C=lambda x:cd(x)@cq\\nG=opfit(uc,s['panel_c']['v2'],fs['exp'],True,False)[0];\\nprint('C coefficients',cq,'C2')\\noperators={}\\nfor name in ['sin','erf','tanh']:\\n f,e,q=opfit(u,v,fs[name],True,False); operators[name]=f\\n d=ic(np.c_[u,fs[name](u*q)]); print(name,e,ls(d,v).round(3))\\nfor nam in ['sin','tanh','rat','erf','asinh']:\\n fn=fs[nam]; best=[]\\n for j in range(4):\\n  def d(a,q):return ic(np.c_[a,fn(a@q[:4]+q[4])]);\\n  def residual(q):\\n   aa=d(u,q);return aa@ls(aa,v[:,j])-v[:,j]\\n  bestfit=min((least_squares(residual,q,max_nfev=180) for q in np.vstack([np.c_[2*np.eye(4),np.zeros(4)],np.random.default_rng(1).normal(size=(10,5))])),key=lambda f:f.cost); best.append(bestfit.x)\\n def build(nam,best):\\n  fn=fs[nam]; return lambda a:np.column_stack([ic(np.c_[a,fn(a@q[:4]+q[4])])@ls(ic(np.c_[u,fn(u@q[:4]+q[4])]),v[:,j]) for j,q in enumerate(best)])\\n op=build(nam,best); print('ridge',nam,np.sqrt(np.mean((op(u)-v)**2)),np.array(best).round(2)); operators[nam+'-ridge']=op\\nYY=np.c_[Y,T]; out=[]\\nfor nam,B in operators.items():\\n D={'z':Z,'b':B(Z),'c':C(Z),'g':G(Z),'cb':C(B(Z)),'gb':G(B(Z)),'bc':B(C(Z)),'bg':B(G(Z)),'gc':G(C(Z)),'cg':C(G(Z))};\\n def score(n,f):\\n  d=ic(f); c=ls(d[:52],YY[:52]); E=abs(d[52:]@c-YY[52:]).mean(0); ee=abs(d[:52]@c-YY[:52]).mean(0); out.append([*E[[0]],E[1:].mean(),ee[0],ee[1:].mean(),nam,n,d.shape[1]])\\n for l in range(1,4):\\n  for names in combinations(D,l):\\n   mats=[D[k] for k in names]; base=np.column_stack(mats); score('+'.join(names),base)\\n   for i,j in combinations_with_replacement(range(l),2):\\n    p=mats[i]*mats[j]; ab=names[i]+'*'+names[j]; score('+'.join(names)+'+dot'+ab,np.c_[base,p.sum(1)]);score('+'.join(names)+'+had'+ab,np.c_[base,p]);score('+'.join(names)+'+cross'+ab,np.c_[base,(mats[i][:,:,None]*mats[j][:,None,:]).reshape(len(Z),-1)])\\nfor key in [lambda a:a[0],lambda a:a[1],lambda a:max(a[:2])]:\\n print('best');\\n for a in sorted(out,key=key)[:12]:print(np.round(a[:4],5),a[4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separable panel C v1 -> H2 cyclic quadratic v1 with panel leave-one-out RMSE 0.000123; calibrated quadratic baseline 52/20 MAE is 0.1017 for y and about 0.086 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Higher-order polynomial in calibrated coordinates alone\",\"rejected_reason\":\"The quadratic and cubic bases both miss the prescribed response MAE threshold by more than 0.06.\"}],\"rationale\":\"Use the recovered cyclic products and independently measured second branch to identify which panel compositions and pairwise couplings improve held-out response and trajectory predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a274507380f750af59307e171254c7e68d85e8206a13eb8ce56e4a7e6694bc0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33303.02,
+      "usage_known": true,
+      "prompt_tokens": 29055,
+      "cached_tokens": 12672,
+      "completion_tokens": 1217
+    }
+  ]
+}

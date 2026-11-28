@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86520531e2144b9fb963645727cb9074",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:18.469968+00:00",
+  "ended_at_utc": "2026-11-28T15:17:55.841487+00:00",
+  "request_sha256": "14d95d2b6a0788436ee786a37371472c47a252831f569c9566fd55dc8e951036",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37038,
+    "cached_tokens": 12672,
+    "completion_tokens": 1589
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/stress.py <<'PY'\\nimport sys, pickle, importlib.util\\nimport numpy as np\\npath='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; original=s['train']; x=original['x']; n=len(x); H=np.c_[original['y'],original['traj']]\\ndef diag(h): return np.array([h[:,0].mean(),h[:,0].std(),h[:,-1].mean(),h[:,-1].std()])\\ndef audit(o):\\n assert set(o)=={'y_hat','state_pred','diagnostics_vec'}\\n assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in o.values())\\n y,T=o['y_hat'],o['state_pred']; assert y.ndim==1 and T.shape==(len(y),len(s['eval_times'])) and o['diagnostics_vec'].shape==(4,)\\n np.testing.assert_allclose(o['diagnostics_vec'],diag(np.c_[y,T]),rtol=0,atol=1e-14)\\n return np.c_[y,T]\\npanel=s['panel_c']; u=panel['u']; v=panel['v1']; pairs=((0,1),(0,3),(1,2),(2,3)); affine=mod._affine_design(u); bilinear=np.column_stack([np.ones(len(u)),*[u[:,i]*u[:,j] for i,j in pairs]])\\nfor name,d in [('affine',affine),('four-product',bilinear)]:\\n inv=np.linalg.pinv(d); err=(v-d@inv@v)/(1-(d*inv.T).sum(axis=1))[:,None]; print('PANEL v1 LOO',name,'MAE',abs(err).mean(),'max channel MAE',abs(err).mean(axis=0).max(),'median row L2',np.median(np.linalg.norm(err,axis=1)))\\ncal=mod._calibrate(s['panel_a'],x); b=s['panel_b']; op=np.linalg.lstsq(mod._affine_design(b['u']),b['v'],rcond=None)[0]; mixed=mod._affine_design(cal)@op; D=mod._design(mixed)\\nrng=np.random.default_rng(159); block={'fixed':[np.arange(n)],'random52/20':[rng.permutation(n) for _ in range(100)],'tail52/20':[]}; xc=(mixed-mixed.mean(0))/mixed.std(0); radii=np.linalg.norm(xc,axis=1)\\nfor v in [radii,*xc.T,*(-xc.T)]: block['tail52/20'].append(np.argsort(v))\\nfor label,splits in block.items():\\n scores={key:[] for key in ('artifact','rank2','rank2_oraclefit','quadratic','cubic')}\\n from itertools import combinations_with_replacement as cwr\\n polynomial=lambda degree:np.column_stack([np.ones(n)]+[np.prod(mixed[:,c],axis=1) for k in range(1,degree+1) for c in cwr(range(4),k)])\\n for order in splits:\\n  tr,te=order[:52],order[52:]; h=H[te]; public={**s,'train':{**original,**{key:val[tr] for key,val in original.items() if key!='summary'}},'test':{'x':x[te]}}\\n  preds={'artifact':audit(mod.solve_batch(public))}\\n  cp=preds['artifact']; _,_,V=np.linalg.svd(H[tr,1:],full_matrices=False); V=V[:2]; preds['rank2']=np.c_[cp[:,0],cp[:,1:]@V.T@V];\\n  f=D[tr]@np.linalg.lstsq(D[tr],H[tr,1:],rcond=None)[0]; _,_,V=np.linalg.svd(f,full_matrices=False); V=V[:2]; preds['rank2_oraclefit']=np.c_[cp[:,0],cp[:,1:]@V.T@V]\\n  for name,degree in [('quadratic',2),('cubic',3)]:\\n   d=polynomial(degree); preds[name]=d[te]@np.linalg.lstsq(d[tr],H[tr],rcond=None)[0]\\n  for key,p in preds.items():\\n   e=abs(p-h);scores[key].append(np.r_[e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max(),abs(diag(h)-diag(p))])\\n for key,q in scores.items(): print(label,key,'avg',np.round(np.mean(q,0),6),'worst',np.round(np.max(q,0),6))\\n if label=='fixed': assert max(scores['artifact'][0][:3])<=.038\\np=audit(mod.solve_batch(s)); print('FULL',p.shape,diag(p)); assert p.shape==(len(s['test']['x']),1+len(s['eval_times']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unconstrained cubic) → H2 (21-term bilinear-path readout); fixed-split y MAE is 0.00520 and the worst trajectory horizon is 0.00780.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Project trajectories onto the two dominant time modes\",\"rejected_reason\":\"The near-rank-two fit is promising, but projection should be adopted only if it improves worst-slice error rather than just smoothing the training trajectories.\"}],\"rationale\":\"Test the exact artifact under isolated Python, compare readout alternatives on random and extrapolation-heavy folds, and verify the four-product panel structure with leave-one-out predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "46a7b5e818e5ce4e653a8378e73227cc5cc7d181a63744e0423d28b59ec94ac0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37771.8,
+      "usage_known": true,
+      "prompt_tokens": 37038,
+      "cached_tokens": 12672,
+      "completion_tokens": 1589
+    }
+  ]
+}

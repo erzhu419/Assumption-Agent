@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce88ed341d6440baa917efafce0203e8",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:10.986774+00:00",
+  "ended_at_utc": "2026-11-28T15:00:43.490499+00:00",
+  "request_sha256": "a8b8e27b7fb96fd3990fb168c4ada4772a244b28ea7917744a07d0e00e096582",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30371,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24278,
+    "cached_tokens": 12672,
+    "completion_tokens": 1362
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util, itertools\\nfrom scipy.linalg import solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; n=len(y)\\ndef load(p):\\n sp=importlib.util.spec_from_file_location('mod',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m);return m\\nm=load('/holdout_task/_frozen_nodes/node_00.py'); arc=load('/tmp/hegel_continual_archive/conf_m102_b04_batch_00_solver.py'); F=m.run_node({'__input__':s}); np.set_printoptions(precision=4,suppress=True)\\ndef affine(u):return np.c_[np.ones(len(u)),u]\\ndef basis(u,d):return np.column_stack([np.ones(len(u))]+[np.prod(u[:,j],axis=1) for i in range(1,d+1) for j in itertools.combinations_with_replacement(range(u.shape[1]),i)])\\nQ={}; matrices={}\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u'];f=affine(u)\\n for g,v in p.items():\\n  if g=='u':continue\\n  w=np.linalg.lstsq(f,v,rcond=None)[0]; e=np.linalg.norm(f@w-v,axis=1)\\n  print(k,g,'affine',w,'residual quantiles',np.quantile(e,[0,.5,.8,.9,1]),'cubic res',np.mean(abs(basis(u,2)@np.linalg.lstsq(basis(u,2),v,rcond=None)[0]-v)))\\n  matrices[k+g]=w\\np=s['panel_a']; u=p['u'];v=p['v'];f=affine(u); w=matrices['panel_av']\\nfor _ in range(10):\\n keep=np.argsort(np.linalg.norm(f@w-v,axis=1))[:39];w=np.linalg.lstsq(f[keep],v[keep],rcond=None)[0]\\nprint('A robust',w,'range x',x.min(0),x.max(0),'y quantiles',np.quantile(y,np.linspace(0,1,11)),'state svals',np.linalg.svd(z,compute_uv=False))\\nQ['x']=x;Q['caldiag']=(x-w[0])/w[1:].diagonal();Q['calfull']=(x-w[0])@np.linalg.inv(w[1:]);Q['inversecal']=affine(x)@w\\nfor b in list(Q):\\n for k,W in matrices.items():\\n  if k=='panel_av':continue\\n  Q[b+k]=affine(Q[b])@W\\n  Q[b+k+'inv']=(Q[b]-W[0])@np.linalg.pinv(W[1:])\\nrng=np.random.default_rng(20); splits=[np.arange(n)]+[rng.permutation(n) for _ in range(14)]; splits=[(p[:52],p[52:]) for p in splits]\\ndef stat(p):return (np.mean(p),p[0],max(p))\\nfor name,f in F.items():print(name,f.shape)\\na=[]\\nfor tr,te in splits:\\n d=dict(s,train={k:s['train'][k][tr] for k in ('x','y','traj')},test={'x':x[te]});p=arc.solve_batch(d);a.append((np.mean(abs(p['y_hat']-y[te])),np.mean(abs(p['state_pred']-z[te]))))\\nprint('archive',stat(np.array(a)[:,0]),stat(np.array(a)[:,1]))\\ndef score(K,pen):\\n return stat([np.mean(abs(K[np.ix_(te,tr)]@solve(K[np.ix_(tr,tr)]+pen*np.eye(len(tr)),y[tr],assume_a='pos')-y[te])) for tr,te in splits])\\nres=[]\\nfor k,f in F.items():\\n for pen in np.logspace(-6,0,13):res.append((*score(f[:n]@f[:n].T,pen),k,pen))\\nfor k,u in Q.items():\\n for mag in [0,.09,.3,1]:\\n  uq=u/np.sqrt(1+mag*u*u)\\n  for d in (2,3,4):\\n   f=basis(uq,d); K=f@f.T\\n   for pen in (1e-5,.001,.01,.1):res.append((*score(K,pen),(k,mag,d),pen))\\nfor ranking in (lambda a:a[0],lambda a:a[1],lambda a:a[2]):\\n print('best');print(*sorted(res,key=ranking)[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived scalar blend -> H2 panel-informed scalar basis or penalty; multi-split MAEs are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune on the official tail split alone\",\"rejected_reason\":\"A single split cannot distinguish a durable improvement from split-specific tuning.\"}],\"rationale\":\"Replay the archived heads across 15 splits and test whether panel coordinates or cubic basis regularization explain the scalar failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "857c4873f8abf1cb50450252dcc578fe3c9857c9e2be54603267cccfc7e98416",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32502.72,
+      "usage_known": true,
+      "prompt_tokens": 24278,
+      "cached_tokens": 12672,
+      "completion_tokens": 1362
+    }
+  ]
+}

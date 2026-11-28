@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ef5e8b30c0c436d90679aaf130b15a5",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:10.063491+00:00",
+  "ended_at_utc": "2026-11-28T15:44:34.464621+00:00",
+  "request_sha256": "9068046e22859655c6ea521d36cecd7c873991968fa2447e8e8081a68bcb320b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54648,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33663,
+    "cached_tokens": 12672,
+    "completion_tokens": 969
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/sparse_readout_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; x,y=(s['train'][k] for k in ('x','y')); n=len(x)\\na,g=m._calibration(s['panel_a']); b=m._operator(s['panel_b'],(x-a)/g); F=m._quadratic(b)\\ndef ls(f,y): return np.linalg.lstsq(f,y,rcond=None)[0]\\ndef select(f,y):\\n    cols=list(range(5)); remaining=list(range(5,f.shape[1])); n=len(y)\\n    def bic(cols):\\n        a=f[:,cols]; r=y-a@ls(a,y)\\n        return n*np.log(max(np.mean(r*r),1e-30))+len(cols)*np.log(n)\\n    while remaining:\\n        j=min(remaining,key=lambda j:bic(cols+[j]))\\n        if bic(cols+[j])>=bic(cols): break\\n        cols.append(j); remaining.remove(j)\\n    return sorted(cols)\\ngroups={'prescribed':[np.arange(52,72)],'blocked':[np.arange(i,i+20) for i in (0,13,26,39,52)],'random':[np.random.default_rng(i).permutation(n)[:20] for i in range(30)],'coordinate_tails':[np.argsort(sign*x[:,j])[-20:] for j in range(4) for sign in (-1,1)],'radial_tail':[np.argsort(np.linalg.norm(x,axis=1))[-20:]]}\\nfor name,slices in groups.items():\\n    metrics=[]; picked={}\\n    for j in slices:\\n        i=np.setdiff1d(np.arange(n),j); cols=select(F[i],y[i]); key=tuple(cols[5:]); picked[key]=picked.get(key,0)+1\\n        dense=F[j]@ls(F[i],y[i]); q=F[:,cols]; sparse=q[j]@ls(q[i],y[i]); errors=np.abs(np.column_stack((dense,sparse))-y[j,None]); metrics.append(np.r_[errors.mean(0),errors.max(0)])\\n    print(name, 'dense/sparse MAE then dense/sparse max abs; worst',np.max(metrics,axis=0),'mean',np.mean(metrics,axis=0),'selected quadratic indices',picked)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/sparse_readout_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Full quadratic readout → test whether two dominant pairwise interactions generalize better; verified worst scalar MAE is 0.00588 and worst per-timestamp trajectory MAE is 0.00660.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Add rational or pairwise-square features\",\"rejected_reason\":\"Nested validation selected no denominator in all 12 outer slices, and adding pairwise squares did not increase the feature rank.\"},{\"option\":\"Replace the trajectory basis with a constrained time law\",\"rejected_reason\":\"The best tested alternative changed worst trajectory MAE only from 0.004565 to 0.004559 on the audited slices.\"}],\"rationale\":\"The final operator's squared-sine basis reduced true panel B leave-one-row-out RMSE from 0.518112 to 0.000116. The scalar fit has two dominant quadratic interactions; test a smaller readout with feature selection performed independently inside each training split before deciding whether to change the verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "67d0db08092f908cb1b69f146fc07e4a21c9ae055e49a5263ac43b21c3639311",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24399.25,
+      "usage_known": true,
+      "prompt_tokens": 33663,
+      "cached_tokens": 12672,
+      "completion_tokens": 969
+    }
+  ]
+}

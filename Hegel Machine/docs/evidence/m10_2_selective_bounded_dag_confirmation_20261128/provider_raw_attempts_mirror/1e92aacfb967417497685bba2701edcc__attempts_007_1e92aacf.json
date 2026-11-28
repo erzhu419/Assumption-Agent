@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e92aacfb967417497685bba2701edcc",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:19:04.776469+00:00",
+  "ended_at_utc": "2026-11-28T15:19:30.736032+00:00",
+  "request_sha256": "0ff21816bd9b8beb52dad7edafe29d368546be498b1c8c2bb98322c622a6dc46",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48184,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31887,
+    "cached_tokens": 12672,
+    "completion_tokens": 861
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\nm=runpy.run_path(root+'node_00.py'); up=m['run_node']; sink=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; p=s['panel_a']; X=np.vstack([s['train']['x'],s['test']['x']]); z=m['_calibrate'](p,X)\\nf=up({'__input__':s}); assert set(f)=={'z','L','Q','R','product','cosine'} and all(a.shape==(len(X),4) and np.isfinite(a).all() for a in f.values())\\nworst=0.\\nfor i in range(len(p['u'])):\\n    keep=np.arange(len(p['u']))!=i\\n    zi=m['_calibrate']({k:v[keep] for k,v in p.items()},X)\\n    worst=max(worst,float(np.max(np.abs(zi-z))))\\nassert worst<.001\\nprint('Panel A jackknife worst latent shift:',worst)\\nt=s['train']; n=len(t['x']); errors=[]; horizons=[]\\nsplits=list(np.array_split(np.random.default_rng(143).permutation(n),4)); splits.extend([np.argsort(np.linalg.norm(z[:n],axis=1))[-12:],np.argsort(np.linalg.norm(z[:n],axis=1))[:12]])\\nfor k,ids in enumerate(splits):\\n    keep=np.setdiff1d(np.arange(n),ids); st=copy.deepcopy(s)\\n    st['train']={key:(value[keep] if key in ('x','y','traj') else value) for key,value in t.items()}; st['test']={'x':t['x'][ids]}\\n    ff=up({'__input__':st})\\n    for key,a in ff.items(): np.testing.assert_allclose(a,f[key][np.r_[keep,ids]],rtol=0,atol=1e-11)\\n    pred=sink({'__input__':st,'node_00':ff}); e=np.abs(pred['state_pred']-t['traj'][ids]); errors.append((np.mean(abs(pred['y_hat']-t['y'][ids])),np.mean(e))); horizons.append(e.mean(0)); print('split',k,errors[-1], 'worst horizon',horizons[-1].max())\\nprint('Worst split scalar and trajectory MAE:',np.max(errors,axis=0)); print('Worst horizon MAE:',np.max(horizons)); assert np.max(errors)<=.038 and np.max(horizons)<=.038\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust affine → H2 robust cyclic cubic with frozen product/cosine features; public scalar and trajectory MAE are 0.004641 and 0.004726.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"Verify the accepted artifact in an isolated Python process, then stress-test calibration stability, row ordering, and downstream accuracy on random folds and latent-radius extremes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bcfeeb9667ada00dcd085050bb92ca6dda366fe1be9ce8b6070c94e46b185f24",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25958.29,
+      "usage_known": true,
+      "prompt_tokens": 31887,
+      "cached_tokens": 12672,
+      "completion_tokens": 861
+    }
+  ]
+}

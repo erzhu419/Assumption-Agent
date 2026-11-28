@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7aa736ed35a845719f26c3095ddf578e",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:48.772379+00:00",
+  "ended_at_utc": "2026-11-28T15:05:29.202157+00:00",
+  "request_sha256": "7da5c295d44bb9adf0faeb2f46c0365d465ded5d7cefde7c67ad43a87f6f9960",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45449,
+    "cached_tokens": 12672,
+    "completion_tokens": 1678
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated kernel regression for the scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _least(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    # Initialize a diagonal calibration with high-breakdown pair slopes.\\n    i, j = np.triu_indices(len(u), 1)\\n    du, dv = u[i] - u[j], v[i] - v[j]\\n    gain = np.array([np.median(dv[abs(du[:, k]) > .1, k] / du[abs(du[:, k]) > .1, k]) for k in range(u.shape[1])])\\n    offset = np.median(v - u * gain, axis=0)\\n    residual = np.linalg.norm(v - offset - u * gain, axis=1)\\n    median = np.median(residual)\\n    keep = residual <= max(8 * median, 1e-3)\\n    if keep.sum() >= 2 * u.shape[1]:\\n        coef = [_least(_affine(u[keep, k:k+1]), v[keep, k]) for k in range(u.shape[1])]\\n        offset, gain = np.array(coef).T\\n    cal = (x - offset) / gain\\n    b = study['panel_b']\\n    op = _least(_affine(b['u']), b['v'])\\n    return x, cal, _affine(x) @ op, _affine(cal) @ op\\n\\n\\ndef _panel_features(study, coords):\\n    c = study['panel_c']\\n    def design(w):\\n        return np.column_stack((_affine(w), np.expm1(-.29 * w * w)))\\n    coef = _least(design(c['u']), c['v2'])\\n    return tuple(np.column_stack((p, p*p)) for p in (design(w) @ coef for w in coords))\\n\\n\\ndef _sqdist(z):\\n    return np.sum((z[:, None] - z[None, :])**2, axis=2)\\n\\n\\ndef _predict(kernel, target, n, penalty):\\n    avg = target.mean(axis=0)\\n    k = kernel[:n, :n].copy()\\n    k.flat[::n+1] += penalty\\n    return avg + kernel[n:, :n] @ np.linalg.solve(k, target - avg)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    coords = _coordinates(study, x)\\n    c = _panel_features(study, coords)\\n    r = [np.exp(-_sqdist(z) / 4) for z in coords[2:]]\\n    g = [f @ f.T for f in c]\\n    y = .30 * _predict(r[0] + .25*g[0], train['y'], n, .0003)\\n    y += .35 * _predict(r[0] + .25*g[2], train['y'], n, .0003)\\n    y += .35 * _predict(r[1] + .25*g[3], train['y'], n, .0003)\\n    traj = np.asarray(train['traj'])\\n    st = .30 * _predict(r[0] + 2*g[2], traj, n, .0003)\\n    st += .70 * _predict(r[1] + 2*g[3], traj, n, .0003)\\n    return {'y_hat': y, 'state_pred': st, 'diagnostics_vec': np.array([y.mean(), y.std(), st[:, -1].mean(), st[:, -1].std()])}\\nPY\\ncat > /tmp/finalcv.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; Y=np.c_[tr['y'],tr['traj']]\\ndef run(splits):\\n E=[]\\n for i,j in splits:\\n  pred=m.solve_batch(dict(s,train={**tr,**{k:tr[k][i] for k in ['x','y','traj']}},test={'x':x[j]})); err=abs(np.c_[pred['y_hat'],pred['state_pred']]-Y[j]);E.append(np.r_[err[:,0].mean(),err[:,1:].mean(),err[:,1:].mean(0),err[:,0].max()]);\\n return np.array(E)\\nsp=[(np.arange(52),np.arange(52,72))]; rng=np.random.default_rng(31903)\\nfor k in range(32):\\n p=rng.permutation(72);sp.append((p[:52],p[52:]))\\nif __name__=='__main__':\\n e=run(sp); print('required',e[0]); print('random mean',e[1:].mean(0),'max',e[1:].max(0)); print('B coordinates span',[np.ptp(w,axis=0) for w in m._coordinates(s,x)]); print('test output', m.solve_batch(s)['diagnostics_vec'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/finalcv.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: add panel C’s nonlinear v2 features in parallel with panel B; the prior component screen reached scalar MAE 0.0259 on 52/20 and trajectory MAE 0.01905 on its worst random split, on different candidates.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use a single serial panel C operator\",\"rejected_reason\":\"Parallel nonlinear v2 features improve both prediction targets without discarding panel B coordinates.\"}],\"rationale\":\"Install the best-supported model family as a reproducible baseline and measure both outputs on a fresh stress suite before considering further changes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "27b5f7000ab572c25f0f8b8c3dc59dc7a4452a81e56c7df1fde894151df63b04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40942.29,
+      "usage_known": true,
+      "prompt_tokens": 45449,
+      "cached_tokens": 12672,
+      "completion_tokens": 1678
+    }
+  ]
+}

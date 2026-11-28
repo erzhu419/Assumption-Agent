@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd3b0598f943453195a37d563d65ce0f",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:13.494470+00:00",
+  "ended_at_utc": "2026-11-28T15:06:54.445362+00:00",
+  "request_sha256": "b6e6dbbda17a19fd83f33d6462f7247b25953a47b9dbe27f564f0dcd4de796fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49053,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33816,
+    "cached_tokens": 12672,
+    "completion_tokens": 1648
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/T=s\\\\[/,$d' /tmp/rational.py >/tmp/exact.py; cat >>/tmp/exact.py <<'PY'\\np=s['panel_c']; u=p['u']; one=lambda q:np.ones((len(q),1)); hh=lambda q,par:q*np.exp(par[1]*np.log1p(par[0]*abs(q)**par[2])); funs={'soft':(lambda q,k:q/np.sqrt(1+k*q*q),[3.5],([.02],[50])),'tanh':(lambda q,k:np.tanh(k*q),[2],([.02],[20])),'atan':(lambda q,k:np.arctan(k*q),[2],([.02],[20])),'cos':(lambda q,k:np.cos(k*q),[1.25],([.02],[8])),'exp':(lambda q,k:np.exp(-k*q*q),[.75],([.02],[8])),'general':(lambda q,*k:hh(q,k),[3.5,-.5,2],([.02,-5,.25],[50,3,7])),'logcosh':(lambda q,k:np.logaddexp(k*q,-k*q),[1],([.02],[8])),'sin':(lambda q,k:np.sin(k*q),[1.25],([.02],[8]))}; models=[]\\nfor key in ('v1','v2'):\\n v=p[key]; fit=[]\\n for n,(f,init,bounds) in funs.items():\\n  for extra in (0,1,2):\\n   def D(q,k): return np.c_[one(q),*[q] * (extra>=1),*[q*q] * (extra>=2), f(q,*k)]\\n   opt=least_squares(lambda k:(D(u,k)@ls(D(u,k),v)-v).ravel(),init,bounds=bounds,ftol=1e-12,gtol=1e-12); k=opt.x; H=D(u,k); coef=ls(H,v); err=np.mean(abs(H@coef-v)); fit.append((err,n,extra,k,coef))\\n fit.sort(key=lambda z:z[0]); print(key,[(round(e,7),n,d,k.round(5)) for e,n,d,k,c in fit[:10]]); print('top coefficients',fit[0][-1].round(5)); print('simple coefficients',min([z for z in fit if z[0]<max(0.00014,fit[0][0]*1.15)],key=lambda z:z[2]+len(z[3]))[-1].round(4)); best=min([z for z in fit if z[0]<max(0.00014,fit[0][0]*1.15)],key=lambda z:z[2]+len(z[3])); e,n,d,k,c=best; models.append(lambda q,n=n,d=d,k=k,c=c:np.c_[one(q),*[q]*(d>=1),*[q*q]*(d>=2),funs[n][0](q,*k)]@c)\\nsplits=[(np.arange(52),np.arange(52,72)),*KFold(4,shuffle=True,random_state=12).split(x)]; L=lambda x:poly(x,1); Q=lambda x:poly(x,2)\\ndef score(F):\\n e=[np.mean(abs(F[b]@ls(F[a],y[a])-y[b])) for a,b in splits]; return tuple(np.round([e[0],np.mean(e[1:]),max(e[1:]),np.std(y-F@ls(F,y))],5))\\ncoords={'raw':x,'invA':ai(x),'A':af(x),'BA':bf(af(x)),'BinvA':bf(ai(x)),'Braw':bf(x),'invBA':(af(x)-B[0])@np.linalg.inv(B[1:]),'invBinvA':(ai(x)-B[0])@np.linalg.inv(B[1:])}; results=[]\\nfor nm,q in coords.items():\\n v,w=[f(q) for f in models]; branch={'v':v,'w':w,'vw':v*w,'vpw':v+w,'vmw':v-w,'v2':v*v,'w2':w*w,'all':np.c_[v,w],'v/w':v/(1+.22*w*w),'w/v':w/(1+.22*v*v),'vw2':v*w*w,'wv2':w*v*v,'tanhv':np.tanh(1.25*v),'tanhw':np.tanh(1.25*w),'w-v2':w-v*v}\\n for name,z in branch.items():\\n  for dn,F in [('lin',L(z)),('quad',Q(z)),('xlin',np.c_[L(q),z]),('xquad',np.c_[Q(q),z]),('xquadF',np.c_[Q(q),Q(z)[:,1:]])]:\\n   if F.shape[1]<49: results.append((score(F),nm,name,dn))\\n for i in range(4):\\n  for g in [.22,.8,1.25,2,4]:\\n   for name,z in [('soft',q[:,i]/np.sqrt(1+g*q[:,i]**2)),('cos',np.cos(g*q[:,i])),('exp',np.exp(-g*q[:,i]**2)),('rat',1/(1+g*q[:,i]**2))]:\\n    for typ,G in [('L',L(q)),('Q',Q(q)),('C',np.c_[L(q),v,w])]: results.append((score(np.c_[Q(q),z[:,None]*G]),nm,i,g,name,typ))\\nprint('best',*sorted(results,key=lambda r:max(r[0][0],r[0][2]))[:25],sep='\\\\n'); print('split',*sorted(results,key=lambda r:r[0][0])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/exact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (coordinate-wise rational modulation) -> H2 (measurement-identified nonlinear C operators and compact scalar compositions); current scalar MAE is 0.02880 on 52/20 and 0.04242 on the worst shuffled fold.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the best rational fit as the final scalar readout\",\"rejected_reason\":\"It passes the prescribed split, but its worst shuffled fold exceeds the tolerance and panel C now shows strong evidence of recoverable nonlinear structure.\"}],\"rationale\":\"Fit candidate panel laws against independent measurements, then test whether their outputs explain scalar variation more consistently than a raw-coordinate rational expansion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6d479ed28a15e565c2f7ac701dddf1753cfc5929e1600ee9b852ac840f8ce414",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40949.77,
+      "usage_known": true,
+      "prompt_tokens": 33816,
+      "cached_tokens": 12672,
+      "completion_tokens": 1648
+    }
+  ]
+}

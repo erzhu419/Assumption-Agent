@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "92ddecf5b7ed443eab67280f32648453",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:08:30.084962+00:00",
+  "ended_at_utc": "2026-11-28T16:09:15.412658+00:00",
+  "request_sha256": "e8822705bd1c30673ae92ded1ca02d04258e6c2197fd80f11ca4844f02184d6a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44219,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29792,
+    "cached_tokens": 12672,
+    "completion_tokens": 2004
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '49,170p' /tmp/hegel_continual_archive/*batch_10_solver.py; sed -n '50,160p' /tmp/hegel_continual_archive/*batch_11_solver.py; cat > /tmp/graph_probe.py <<'PY'\\nimport numpy as np,pickle,sys,glob,importlib.util,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj'];\\nf=glob.glob('/tmp/hegel_continual_archive/*batch_09_solver.py')[0]; sp=importlib.util.spec_from_file_location('calmod',f); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\nz=m._decode(np.r_[tr['x'],s['test']['x']],m._calibration(s['panel_a']))\\naf=lambda u: np.c_[np.ones(len(u)),u]; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nF={'sin':lambda u,p:np.sin(p*u),'tanh':lambda u,p:np.tanh(p*u),'cos':lambda u,p:np.cos(p*u),'atan':lambda u,p:np.arctan(p*u),'softsign':lambda u,p:u/(1+p*abs(u)), 'rat':lambda u,p:u/(1+p*u*u),'threshold':lambda u,p:np.sign(u)*np.maximum(abs(u)-p,0),'clip':lambda u,p:np.clip(u,-p,p),'asinh':lambda u,p:np.arcsinh(p*u)}\\ndef panel(key,out):\\n u=s[key]['u'];v=s[key][out]; results=[]\\n def search(name,fn,starts,bounds):\\n  def residual(p, mask=slice(None)):\\n   a=af(fn(u,p))[mask]; return (a@fit(a,v[mask])-v[mask]).ravel()\\n  sol=min((least_squares(residual,p,bounds=bounds,max_nfev=100) for p in starts),key=lambda q:q.cost); p=sol.x; A=af(fn(u,p)); B=fit(A,v); e=np.std(A@B-v); results.append((e,name,p,lambda x,fn=fn,p=p,B=B:af(fn(x,p))@B))\\n for k,f in F.items():\\n  for style in [0,1,2]:\\n   for phase in [False] if style!=2 else [True,False]:\\n    if style==0: fn=lambda u,p,f=f:f(u,p[0]); starts=[[p] for p in [.3,1,2,3,5]]; bounds=([.01],[7])\\n    elif style==1: fn=lambda u,p,f=f:np.c_[u,f(u,p[0])]; starts=[[p] for p in [.3,1,2,3,5]]; bounds=([.01],[7])\\n    elif not phase: fn=lambda u,p,f=f:u+p[1]*f(u,p[0]); starts=[[p,a] for p in [.3,1.25,2.15,3,5] for a in [-.6,.4]]; bounds=([.01,-5],[7,5])\\n    else: fn=lambda u,p,f=f:f(u+p[1],p[0]); starts=[[p,a] for p in [1,2.15,3] for a in [-.3,.2]]; bounds=([.01,-2],[7,2])\\n    search(k+str(style)+str(phase),fn,starts,bounds)\\n for k,l in [('sin','tanh'),('sin','cos'),('sin','atan'),('tanh','cos'),('atan','cos')]:\\n  search(k+'+'+l, lambda u,p,k=k,l=l:np.c_[u,F[k](u,p[0]),F[l](u,p[1])],[[1.25,2.15],[2.15,1.25],[2.8,1.5],[1.5,2.8]],([.1,.1],[6,6]))\\n results.sort(key=lambda j:j[0]); print(key,out,[(round(a,7),b,np.round(c,4)) for a,b,c,_ in results[:14]],flush=True); return results\\nB=panel('panel_b','v'); C=panel('panel_c','v1'); D=panel('panel_c','v2')\\nops={k+str(i):f for k,res in [('B',B),('C',C),('D',D)] for i,(_,_,_,f) in enumerate(res[:4])}\\nspaces={'z':z,**{k:f(z) for k,f in ops.items()}}; spaces.update({i+j:ops[j](spaces[i]) for i,j in itertools.product(ops,repeat=2) if i[0]!=j[0] and i[1]=='0' and j[1]=='0'});\\nfor k in list(spaces):\\n if len(k)==4:\\n  for j in ['B0','C0','D0']:\\n   if j[0] not in k: spaces[k+j]=ops[j](spaces[k])\\ndef quad(a): return np.column_stack([a[:,i]*a[:,j] for i in range(a.shape[1]) for j in range(i,a.shape[1])]);\\ndef assess(a):\\n d=af(a); c=fit(d[:52],np.c_[y,T][:52]); e=d[52:72]@c-np.c_[y,T][52:72]; return np.mean(abs(e[:,0])),np.mean(abs(e[:,1:]))\\nR=[]\\nfor k,a in spaces.items():\\n for p,d in [('lin',a),('pair',np.c_[a,a[:,0]*a[:,2]+a[:,1]*a[:,3],a[:,0]*a[:,1]+a[:,2]*a[:,3],a[:,0]*a[:,3]+a[:,1]*a[:,2]]),('quad',np.c_[a,quad(a)])]: R.append((*assess(d),k,p))\\nfor i,j in itertools.combinations(['z','B0','C0','D0','B1','C1','D1','B0C0','C0B0','D0B0','B0D0'],2):\\n a,b=spaces[i],spaces[j];\\n for p,d in [('lin',np.c_[a,b]),('pair',np.c_[a,b,a*b]),('cross',np.c_[a,b,(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)]),('quad',np.c_[a,b,quad(np.c_[a,b])])]:R.append((*assess(d),i+' '+j,p))\\nfor l in [0,1]:print('ranking',l,sorted(R,key=lambda r:r[l])[:22]);\\nnp.savez('/tmp/spaces.npz',**spaces)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration → H2 nonlinear opposite-channel calibration with distinct downstream operators; median inlier inverse error is 0.000195, but calibrated quadratic 52/20 MAEs remain 0.31036 for y and 0.13871 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Regress both outputs directly on calibrated coordinates\",\n      \"rejected_reason\": \"Affine and quadratic readouts both fail the fixed-split gate despite an accurate calibration inverse.\"\n    }\n  ],\n  \"rationale\": \"Profile nonlinear panel operators and check serial, parallel, and pairwise feature graphs separately for the scalar and trajectory outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "575ab17866fc6b2c382811f090b4b1e3ff171229bcc52da3ec7448d2a38ae0a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45954.84,
+      "usage_known": true,
+      "prompt_tokens": 29792,
+      "cached_tokens": 12672,
+      "completion_tokens": 2004
+    }
+  ]
+}

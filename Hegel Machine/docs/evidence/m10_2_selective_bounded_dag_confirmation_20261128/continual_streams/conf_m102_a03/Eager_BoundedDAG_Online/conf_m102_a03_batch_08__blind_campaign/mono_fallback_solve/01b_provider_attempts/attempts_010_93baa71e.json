@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93baa71eb0fe4269b09d4cc42b1ae644",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:23.710130+00:00",
+  "ended_at_utc": "2026-11-28T15:51:56.135657+00:00",
+  "request_sha256": "eef6e87328b72374e1e2e48b00c07000613d51a2b0c29bd32cd918e4d2844e1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64477,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41374,
+    "cached_tokens": 12672,
+    "completion_tokens": 1406
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/deep9.py | grep -E '^source|^panel best|^readout best' | cut -c1-2200; cat >/tmp/mix10.py <<'PY'\\nexec(open('/tmp/graph7.py').read().split(\\\"B=auxiliary\\\")[0]); from scipy.optimize import least_squares\\nfrom itertools import combinations\\npair=lambda u:np.array([u[:,i]*u[:,j] for i,j in combinations(range(4),2)]).T\\nD={}\\nfor pn,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n U,V=s[pn]['u'],s[pn][j]; n=U.shape[1]; S=[]\\n fs={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'cos':np.cos,'rat':lambda x:x/(1+x*x),'sqrt':lambda x:x/np.sqrt(1+x*x),'cubic':lambda x:x**3,'rat3':lambda x:x**3/(1+x*x),'softplus':lambda x:np.logaddexp(x,0),'sinh':np.sinh}\\n for mode,f in fs.items():\\n  for extras in ('none','lin','linpair'):\\n   def bas(u):return {'none':np.ones((len(u),1)),'lin':aff(u),'linpair':aff(np.c_[u,pair(u)])}[extras]\\n   A=bas(U); results=[]; out=[]\\n   for k in range(4):\\n    v=V[:,k]; d=ls(aff(U),v); w=d[1:]/np.linalg.norm(d[1:]);\\n    def calc(q,u=U):return np.c_[bas(u),f(np.clip(u@q[:4]+q[4],-8,8))]\\n    def err(q):\\n     X=calc(q);return X@ls(X,v)-v\\n    ini=[np.r_[sc*w,b] for sc in [.5,1.5,3] for b in [0,.5,-.5]]\\n    r=min((least_squares(err,q,max_nfev=100,bounds=(-7,7)) for q in ini),key=lambda h:np.linalg.norm(h.fun));results.append(r.fun);out.append(calc(r.x,z)@ls(calc(r.x),v))\\n   err0=np.std(results);S.append((err0,mode,extras)); D[pn,j,mode,extras]=np.array(out).T\\n print(pn,j,'postmix',sorted(S)[:7]);\\n for e,mode,ex in sorted(S)[:3]:\\n  h=D[pn,j,mode,ex]; F=PolynomialFeatures(2).fit_transform(h); R=abs(F[52:]@ls(F[:52],Y[:52])-Y[52:]);print('down',mode,ex,R[:,0].mean(),R[:,1:].mean())\\n# Try componentwise shifted functions before mixing with optional genuine interactions.\\nU,V=s['panel_b']['u'],s['panel_b']['v']; M=[]\\nfor name,f in fs.items():\\n for ex in ('none','lin','pair','sq','linpair','full'):\\n  def feat(u,p):\\n   b={'none':np.empty((len(u),0)),'lin':u,'pair':pair(u),'sq':u*u,'linpair':np.c_[u,pair(u)],'full':np.c_[u,u*u,pair(u)]}[ex];return aff(np.c_[b,f(np.clip(u*np.exp(p[:4])+p[4:],-8,8))])\\n  def err(p):\\n   X=feat(U,p);return (X@ls(X,V)-V).ravel()\\n  r=min((least_squares(err,np.r_[np.full(4,a),np.full(4,b)],bounds=(-4,2),max_nfev=120) for a,b in [(0,0),(.7,0),(-.6,.15)]),key=lambda r:np.linalg.norm(r.fun)); A=feat(U,r.x); h=feat(z,r.x)@ls(A,V); F=PolynomialFeatures(2).fit_transform(h); E=abs(F[52:]@ls(F[:52],Y[:52])-Y[52:]); M.append((np.std(r.fun),E[:,0].mean(),E[:,1:].mean(),name,ex,np.round(r.x,3)))\\nprint('premix panel',sorted(M,key=lambda a:a[0])[:10]);print('premix y',sorted(M,key=lambda a:a[1])[:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/mix10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Compare nonlinearities before and after panel mixing; the best confirmed 52/20 MAEs are 0.103811 for y and 0.049830 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The auxiliary panel errors are much larger than panel A’s recovered noise floor. Test whether mixing before the activation or coordinate-specific shifts explain the remainder before fitting more complex readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4c094a560883046f25bc0e75397e2e06cf1818ea1ba20cfd87febfa90ce9734d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32953.41,
+      "usage_known": true,
+      "prompt_tokens": 41374,
+      "cached_tokens": 12672,
+      "completion_tokens": 1406
+    }
+  ]
+}

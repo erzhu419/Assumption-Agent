@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "642e9db3da304acdad6acd7bbb941219",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:59.651144+00:00",
+  "ended_at_utc": "2026-11-28T16:03:28.690379+00:00",
+  "request_sha256": "4ea06d7899deabaf537902617bd9323cdd9dd9a812a2896c9147747e9bfa0e74",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54745,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34850,
+    "cached_tokens": 12672,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/verify_batch13.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',path)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); ix=np.arange(n)\\nf,b=m._cosine_operator(s['panel_b']); cal=m._calibration(s['panel_a']); z=m._decode(tr['x'],cal); w=m._affine(np.cos(f*z))@b\\nA=m._affine(w); B=m._scalar_design(w)\\ndef check(data):\\n    o=m.solve_batch(data); y=o['y_hat']; T=o['state_pred']; last=T[:,-1]; d=np.array([y.mean(),y.std(),last.mean(),last.std()]); assert isinstance(y,np.ndarray) and isinstance(T,np.ndarray) and isinstance(o['diagnostics_vec'],np.ndarray); assert y.shape==(len(data['test']['x']),) and T.shape==(len(y),len(data['eval_times'])); assert np.isfinite(y).all() and np.isfinite(T).all(); np.testing.assert_allclose(o['diagnostics_vec'], d, rtol=0, atol=1e-13); return y,T\\ncheck(s)\\nrng=np.random.default_rng(5520)\\nsplits=[('public',ix[52:])]+[(f'block-{i}',ix[i:i+18]) for i in (0,18,36,54)]+[(f'random-{i}',rng.choice(n,20,replace=False)) for i in range(8)]+[('high-latent-norm',np.argsort(np.linalg.norm(z,axis=1))[-20:]),('high-cosine-norm',np.argsort(np.linalg.norm(w,axis=1))[-20:]),('phase-boundary',np.argsort(np.max(np.abs(z),axis=1))[-20:])]\\nworst=np.zeros(3)\\nfor name,j in splits:\\n    i=np.setdiff1d(ix,j); ty=tr['y'][i]; tt=tr['traj'][i]; train={k:tr[k][i] for k in ['x','y','traj']}; train['summary']=np.array([ty.mean(),ty.std(),tt[:,-1].mean(),tt[:,-1].std()]); y,T=check({**s,'train':train,'test':{'x':tr['x'][j]}}); ey=np.mean(abs(tr['y'][j]-y)); et=np.mean(abs(tr['traj'][j]-T),axis=0); base=np.mean(abs(B[j]@m._fit(B[i],ty)-tr['y'][j])); print(f'{name}: nonlinear scalar {ey:.6f}; affine-plus-pair scalar {base:.6f}; trajectory {et.mean():.6f}; worst horizon {et.max():.6f}'); worst=np.maximum(worst,[ey,et.mean(),et.max()]); assert max(ey,et.max()) < .038\\nprint('worst scalar / trajectory aggregate / horizon:',worst)\\n# Check reference-panel jackknife robustness without reusing held-out panel targets.\\nu,v=(s['panel_a'][k] for k in ('u','v')); x=s['test']['x']; z0=m._decode(x,cal); shifts=[]\\nfor j in range(len(u)):\\n    k=np.arange(len(u))!=j; q=m._calibration({'u':u[k],'v':v[k]}); shifts.append(np.max(abs(m._decode(x,q)-z0)))\\nprint('maximum leave-one-calibration-row-out latent shift:',max(shifts)); assert max(shifts)<.002\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch13.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full cubic readout → H2 symmetric-pair projection with a tanh correction; public 52/20 MAEs are 0.00497 for the scalar and 0.00406 for the trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Replace the passing readout with the shared-projection arctangent variant\",\"rejected_reason\":\"Its advantage on the public split is below 0.001 MAE and has not been established across stress slices.\"}],\"rationale\":\"Verify the saved artifact in an isolated process on blocked, random, and high-leverage holdouts. Measure the nonlinear correction against the refitted simpler baseline and audit every trajectory horizon and diagnostic separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cdbdf8831373172dd71a81467b9c069650d5ed98f5484c6763382438e58287f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29633.83,
+      "usage_known": true,
+      "prompt_tokens": 34850,
+      "cached_tokens": 12672,
+      "completion_tokens": 1191
+    }
+  ]
+}

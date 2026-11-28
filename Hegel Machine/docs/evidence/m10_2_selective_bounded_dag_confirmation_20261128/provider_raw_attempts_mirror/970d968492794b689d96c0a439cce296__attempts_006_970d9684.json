@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "970d968492794b689d96c0a439cce296",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:30.676370+00:00",
+  "ended_at_utc": "2026-11-28T15:31:57.524896+00:00",
+  "request_sha256": "9b1a02f7b48000f1405acac21c68e1673abd9606f6a7e4f354c0e1d3f95d4284",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44701,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31374,
+    "cached_tokens": 14720,
+    "completion_tokens": 1096
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/struct11.py <<'PY'\\nimport numpy as np, pickle, itertools as it\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef one(f):return np.c_[np.ones(len(f)),f]\\ndef ls(f,y):return np.linalg.lstsq(f,y,rcond=1e-10)[0]\\ndef fit(fn,u,y,q,bounds=(-np.inf,np.inf)):\\n def r(q):\\n  f=fn(u,q);return (f@ls(f,y)-y).ravel()\\n p=least_squares(r,q,bounds=bounds,gtol=1e-13,ftol=1e-12,xtol=1e-12).x; f=fn(u,p); w=ls(f,y); e=y-f@w; h=np.einsum('ij,ji->i',f,np.linalg.pinv(f)); return p,w,np.mean(e**2)**.5,np.mean((e/((1-h) if y.ndim==1 else (1-h)[:,None]))**2)**.5\\nif __name__=='__main__':\\n a=s['panel_a']; keep=np.linalg.norm(a['v'],axis=1)<5; u,v=a['u'][keep],a['v'][keep];\\n for i in range(4):\\n  z=u[:,[i,(i+2)%4]]\\n  for kind,g,q,b in [('sin',lambda x,q:np.sin(q*x),2.5,(.2,5)),('tanh',lambda x,q:np.tanh(q*x),1.2,(.1,4)),('rat',lambda x,q:x/(1+q*x*x),.6,(.01,4)),('soft',lambda x,q:x/(1+q*abs(x)),.8,(.01,4))]:\\n   for mode in [0,1,2]:\\n    def fn(z,q):\\n     x,y=z.T;return one(np.c_[x,x**3,g(y,q[0]),*([] if mode==0 else [y,x*y]),*([] if mode<2 else [x*x,y*y,x**5])])\\n    p,w,e,l=fit(fn,z,v[:,i],[q],b);print(i,kind,mode,p.round(5),w.round(5),round(e,7),round(l,7))\\n p=s['panel_c'];u=p['u'];\\n for key,fun,q,b in [('v1',lambda w,q:one(w/(1+q[0]*abs(w))+q[1]*w),[.8,.2],([.05,-2],[5,2])),('v2rat',lambda w,q:np.c_[one(w),w*w,w*w/(1+q[0]*w*w)],[.25],(.01,2)),('v2cos',lambda w,q:np.c_[one(w),w*w,np.cos(q[0]*w)],[2.5],(.1,5))]:\\n  k=key[:2]; pp,ww,e,l=fit(fun,u,p[k],q,b); print(key,pp,e,l,ww.round(6))\\n t=s['eval_times']; Y=s['train']['traj'].T; f=lambda t,q:-np.expm1(-t[:,None]*q); q,w,e,l=fit(f,t,Y,[.4,1.8],(.01,8));print('TIME',q,e,l,'amp std',w.std(1),'y correlations',np.corrcoef(np.vstack([w,s['train']['y']]))[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic cubic inverse -> H2 self-cubic plus opposite-coordinate nonlinear coupling; best archived 52/20 MAEs remain 0.1610 scalar and 0.1882 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the panel-C affine fits\",\"rejected_reason\":\"Their residuals are orders of magnitude larger than those of the softsign and even rational transforms.\"}],\"rationale\":\"Separate the self-coordinate cubic from the opposite-coordinate nonlinearity, test shared panel-C transform constraints, and quantify the two-rate trajectory fit before searching downstream compositions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "29b6ae7cb6f8bfb1da14441dfd35a3eb86cc147712ea60ec4eaeba1c5294ba66",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26846.72,
+      "usage_known": true,
+      "prompt_tokens": 31374,
+      "cached_tokens": 14720,
+      "completion_tokens": 1096
+    }
+  ]
+}

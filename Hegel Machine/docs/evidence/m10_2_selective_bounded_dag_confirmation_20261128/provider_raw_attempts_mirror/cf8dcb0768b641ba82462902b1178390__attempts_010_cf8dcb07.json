@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf8dcb0768b641ba82462902b1178390",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:14.865800+00:00",
+  "ended_at_utc": "2026-11-28T15:45:49.157142+00:00",
+  "request_sha256": "207f7dea0644b98e188758119bde1e73b24687f0a0b340ade6085c87bf819ca2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65084,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42810,
+    "cached_tokens": 12672,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,85p' /tmp/search.out; for f in /tmp/hegel_continual_archive/*solver.py; do echo ====; grep -A24 '^def _readout' \\\"$f\\\"; done; cat > /tmp/sparse.py <<'PY'\\nimport io,contextlib\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from readout import *\\nfrom sklearn.linear_model import lars_path\\nfrom scipy.special import erf\\n\\ndef dictionary(z,b,c,d,p,q):\\n stuff={}\\n def add(n,w):\\n  w=np.asarray(w).reshape(len(z),-1)\\n  for j,col in enumerate(w.T): stuff[f'{n}:{j}']=col\\n D={'z':z,'b':b,'c':c,'d':d,'p':p,'q':q}\\n for n,w in D.items():\\n  add(n,w); add(n+'quad',pol(w,2)[:,5:]); add(n+'cube',pol(w,3)[:,15:]);\\n  for k in [.75,1.25,2.,2.8,3.5,5.]:\\n   add(f'sin{k}{n}',np.sin(k*w)); add(f'cos{k}{n}',np.cos(k*w)); add(f'tanh{k}{n}',np.tanh(k*w)); add(f'rat{k}{n}',w/(1+(k*w)**2));\\n  for i,j in combinations(range(4),2):\\n   for sign in [-1,1]:\\n    h=w[:,i]+sign*w[:,j]\\n    for k in [1.25,2.5,4.]:\\n     add(f'sin{k}{n}{i}{j}{sign}',np.sin(k*h)); add(f'cos{k}{n}{i}{j}{sign}',np.cos(k*h)); add(f'tanh{k}{n}{i}{j}{sign}',np.tanh(k*h))\\n for n,w in D.items():\\n  for m,g in D.items():\\n   if n>=m:continue\\n   add(n+m,w[:,:,None]*g[:,None,:]);\\n   if 'b' in (n,m):\\n    add(n+m+'w2',w[:,:,None]**2*g[:,None,:]); add(n+m+'g2',w[:,:,None]*g[:,None,:]**2)\\n    for k in [1.25,2.5,4.]:\\n     add(n+m+f'sinw{k}',np.sin(k*w)[:,:,None]*g[:,None,:]); add(n+m+f'sing{k}',w[:,:,None]*np.sin(k*g)[:,None,:]); add(n+m+f'tanhw{k}',np.tanh(k*w)[:,:,None]*g[:,None,:]); add(n+m+f'tanhg{k}',w[:,:,None]*np.tanh(k*g)[:,None,:])\\n return np.array(list(stuff)),np.column_stack(list(stuff.values()))\\nN,A=dictionary(z,b,c,d,p,q); np.savez('/tmp/latent.npz',x=x,y=y,t=t,z=z,b=b,c=c,d=d,p=p,q=q)\\nfor target in [y,t@V[0]]:\\n for jj in [np.arange(52),np.random.default_rng(10).permutation(72)[:52],np.random.default_rng(17).permutation(72)[:52]]:\\n  kk=np.setdiff1d(np.arange(72),jj); B=(A-A[jj].mean(0))/np.maximum(A[jj].std(0),1e-10); Y=target-target[jj].mean(); _,act,C=lars_path(B[jj],Y[jj],method='lasso',max_iter=42); e=np.mean(abs(B[kk]@C-Y[kk,None]),axis=0); i=e.argmin(); ids=np.flatnonzero(abs(C[:,i])>1e-9); print('lars',i,e[i],list(zip(N[ids],np.round(C[ids,i],4))))\\n  base=np.ones((72,1)); ids=[]; opt=[]\\n  for i in range(25):\\n   L=np.linalg.qr(base[jj])[0]; instead=B[jj]-L@(L.T@B[jj]); r=Y[jj]-L@(L.T@Y[jj]); w=abs(instead.T@r)/np.maximum(np.linalg.norm(instead,axis=0),1e-8); w[ids]=0; k=w.argmax(); ids.append(k);base=np.c_[base,B[:,k]]; co=fit(base[jj],target[jj]); opt.append((np.mean(abs(base[kk]@co-target[kk])), np.std(base[jj]@co-target[jj]),N[ids].tolist()))\\n  print('omp best',min(opt,key=lambda x:x[0]));print('omp prefix',[(r[0],r[1],r[2][-1]) for r in opt[:12]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense single-branch corrections → H2 sparse mixed-branch terms; best observed 52/20 target MAE is 0.0547 and trajectory MAE is 0.0178.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Check whether compact terms recur across independently rotated splits. The trajectory already meets the aggregate tolerance; target extrapolation is the bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2df769d2166f4864527a004bb01f7c75ad932b16c393543e087028627f0da624",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34289.97,
+      "usage_known": true,
+      "prompt_tokens": 42810,
+      "cached_tokens": 12672,
+      "completion_tokens": 1411
+    }
+  ]
+}

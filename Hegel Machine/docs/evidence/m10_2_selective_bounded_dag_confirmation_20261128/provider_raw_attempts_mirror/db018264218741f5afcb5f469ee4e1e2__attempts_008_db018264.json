@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db018264218741f5afcb5f469ee4e1e2",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:57.949926+00:00",
+  "ended_at_utc": "2026-11-28T15:49:28.601601+00:00",
+  "request_sha256": "751dedb911574549f2944086efd3037f70e6b73e883c7f6ca04c76aad0abb1ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33982,
+    "cached_tokens": 12672,
+    "completion_tokens": 1282
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/features={}/,$d' /tmp/graph.py >/tmp/operators.py; cat >> /tmp/operators.py <<'PY'\\nfrom scipy.special import erf\\nfrom itertools import combinations\\nu=c['u'];v=c['v1'];y=tr['y'];p=tr['traj']\\ndef opp(x):return np.c_[x[:,0]*x[:,2],x[:,1]*x[:,3]]\\ndef score(q):\\n a=aff(np.c_[q,w,opp(q)]);d=aff(np.c_[q,w]);return [np.mean(abs(m[52:72]@ls(m[:52],b[:52])-b[52:])) for m,b in [(a,y),(d,p)]]\\ndef rms(r):return np.sqrt(np.mean(r*r))\\ndef evalmodel(name,f):\\n d=f(u);j=np.linalg.pinv(d);e=d@(j@v)-v;lev=(d*j.T).sum(1); print(name,round(rms(e),6),round(rms(e/np.maximum(1-lev[:,None],1e-8)),6),np.round(score(f(w)@(j@v)),5))\\nfor name,g in [('odd',lambda x,k:np.tanh(k*x)),('oddas',lambda x,k:np.arcsinh(k*x)),('oddsq',lambda x,k:x/np.sqrt(1+k*x*x)),('odderf',lambda x,k:erf(k*x))]:\\n for k in [1.25,1.65,1.75,2.15]:\\n  for tag,h in [('quad',lambda x:x*x),('cross',lambda x:x*np.roll(x,-1,axis=1)),('opp',opp),('cub',lambda x:x**3),('fin',lambda x:np.sin(2.15*x)),('none',lambda x:x[:,:0])]:\\n   evalmodel((name,k,tag),lambda x:aff(np.c_[x,g(x,k),h(x)]))\\nfor funname,fun in [('tanh',np.tanh),('asinh',np.arcsinh),('erf',erf),('soft',lambda z:z/np.sqrt(1+z*z)),('atan',np.arctan)]:\\n for tag in ['bias','skip','square','fixedskip','fixedquad']:\\n  e=[];pred=[];el=[]\\n  def fit(u,v):\\n   init=np.r_[ls(aff(u),v),1.] if 'fixed' in tag else ls(aff(u),v)\\n   def design(u,b):\\n    a=fun(aff(u)@b[:5]);return {'bias':aff(a[:,None]),'skip':aff(np.c_[u,a]),'square':aff(np.c_[u*u,a]),'fixedskip':aff(np.c_[a]),'fixedquad':aff(np.c_[a])}[tag]\\n   def off(u,b):return b[5]*(u[:,col] if tag=='fixedskip' else u[:,col]**2) if len(b)>5 else 0\\n   def res(b):\\n    d=design(u,b);r=v-off(u,b);return d@ls(d,r)-r\\n   opt=least_squares(res,init,max_nfev=200);b=opt.x;d=design(u,b);return lambda w: design(w,b)@ls(d,v-off(u,b))+off(w,b)\\n  for col in range(4):\\n   f=fit(u,v[:,col]);e.append(f(u)-v[:,col]);pred.append(f(w))\\n   el.append([fit(np.delete(u,i,0),np.delete(v[:,col],i))(u[i:i+1])[0]-v[i,col] for i in range(len(u))])\\n  print('mixed',funname,tag,round(rms(np.array(e)),6),round(rms(np.array(el)),6),np.round(score(np.array(pred).T),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py >/tmp/operator_metrics; head -1 /tmp/operator_metrics; tail -n +2 /tmp/operator_metrics | head -96 | sort -gk6 | head -24; tail -25 /tmp/operator_metrics\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separable C1 saturation plus free linear skip -> H2 test quadratic corrections and saturation after channel mixing; best prescribed-split MAEs so far are 0.00671 scalar and 0.00641 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose a C1 formula solely by its panel training residual\",\"rejected_reason\":\"With only 24 calibration rows, a flexible basis can fit in sample without recovering the operator or improving end-to-end predictions.\"}],\"rationale\":\"Compare compact operator structures using panel leave-one-out error and independent scalar and trajectory readouts before fixing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dc5b3292932d4ebef74817e4100eedaac8fea722e5297298ecdfd356767dc58a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31096.92,
+      "usage_known": true,
+      "prompt_tokens": 33982,
+      "cached_tokens": 12672,
+      "completion_tokens": 1282
+    }
+  ]
+}

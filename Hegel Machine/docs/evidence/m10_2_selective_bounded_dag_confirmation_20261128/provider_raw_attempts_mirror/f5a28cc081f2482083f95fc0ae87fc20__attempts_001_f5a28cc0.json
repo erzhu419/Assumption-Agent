@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5a28cc081f2482083f95fc0ae87fc20",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__init_decomp_conf_m102_b03_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:23.572014+00:00",
+  "ended_at_utc": "2026-11-28T14:59:04.742116+00:00",
+  "request_sha256": "eb4f846fc35e951f0f5a482a9568d7a86b74fd6d4fdee15eb086446f9f7c7e40",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4906,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14249,
+    "cached_tokens": 0,
+    "completion_tokens": 1807
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The calibrated branch regressions and the temporal basis fit are independent: the regressions use the panel-derived features, while the basis fit uses only evaluation times and training trajectories. The sink applies the original projection and computes diagnostics. This three-node split preserves the source's fit settings and arithmetic order, so it preserves source predictions without assuming that the role-blind shifts identify a model component to change.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_02\"], [\"node_01\", \"node_02\"]],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _align(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    dx, dy = u[i] - u[j], v[i] - v[j]\\n    result = []\\n    for k in range(u.shape[1]):\\n        valid = abs(dx[:, k]) > 1e-8\\n        slope = np.median(dy[valid, k] / dx[valid, k])\\n        r = v[:, k] - u[:, k] * slope\\n        r -= np.median(r)\\n        good = abs(r) <= max(.001, 5 * np.median(abs(r)))\\n        result.append(_ls(_ones(u[good, k:k+1]), v[good, k]))\\n    return np.asarray(result).T\\n\\n\\ndef _branch(panel, x, k):\\n    u, v = panel['u'], panel['v'+str(k)]\\n    if k == 1:\\n        def features(z, p):\\n            w = p[0]*z + p[1:]\\n            return _ones(np.c_[z, w/(1+abs(w))])\\n        start = [.84, 0., 0., 0., 0.]\\n    else:\\n        def features(z, p):\\n            return _ones(np.c_[z, np.cos(p[0]*z+p[1:])])\\n        start = [1.27, 0., 0., 0., 0.]\\n    def residual(p):\\n        d = features(u, p)\\n        return (d @ _ls(d, v) - v).ravel()\\n    p = least_squares(residual, start, max_nfev=150).x\\n    return features(x, p) @ _ls(features(u, p), v)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    rows = slice(None)\\n    xold = train['x'][rows]\\n    xnew = study['test']['x']\\n    n = len(xold)\\n    a, b = _align(study['panel_a'])\\n    z = (np.vstack((xold, xnew)) - a) / b\\n    c, d = (_branch(study['panel_c'], z, k) for k in (1, 2))\\n    dot = np.sum(c*d, axis=1)\\n    sy = _ones(np.c_[d, c, dot])\\n    y = sy[n:] @ _ls(sy[:n], train['y'][rows])\\n    cross = (d[:,:,None]*c[:,None,:]).reshape(len(z), -1)\\n    st = _ones(np.c_[d,c,cross])\\n    unprojected = st[n:] @ _ls(st[:n], train['traj'][rows])\\n    return {'y_hat': y, 'unprojected': unprojected}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    ts = np.asarray(study['eval_times'])\\n    trajectories = study['train']['traj'][slice(None)]\\n    def basis(p):\\n        return -np.expm1(-ts[:, None]*p)\\n    def time_residual(p):\\n        h = basis(p)\\n        return (h @ _ls(h, trajectories.T) - trajectories.T).ravel()\\n    h = basis(least_squares(time_residual, [1.8,.4], bounds=([1.,.1],[3.,.95])).x)\\n    return {'h': h}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    fits = inputs['node_00']\\n    h = inputs['node_01']['h']\\n    y = fits['y_hat']\\n    state = fits['unprojected'] @ np.linalg.pinv(h.T) @ h.T\\n    terminal = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), terminal.mean(), terminal.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "4c1f28d278d28c25cbd89c96d6ac6e485bd28dd1701d6fa5d181c475100dbbb6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41158.84,
+      "usage_known": true,
+      "prompt_tokens": 14249,
+      "cached_tokens": 0,
+      "completion_tokens": 1807
+    }
+  ]
+}

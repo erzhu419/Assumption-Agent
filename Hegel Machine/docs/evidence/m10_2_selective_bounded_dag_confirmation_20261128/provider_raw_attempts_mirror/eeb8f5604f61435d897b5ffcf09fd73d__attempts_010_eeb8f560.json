@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eeb8f5604f61435d897b5ffcf09fd73d",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:57.142071+00:00",
+  "ended_at_utc": "2026-11-28T15:50:17.781851+00:00",
+  "request_sha256": "5bfa796652f3ca15523cea8c3ab85640d02cd3ed76474e7dc5051f8687e8cfcb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 65384,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40709,
+    "cached_tokens": 12672,
+    "completion_tokens": 731
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom pathlib import Path\\nroot = Path('/holdout_task')\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nsink = load('sink', root/'node_01.py')\\nfrozen = load('frozen', root/'_frozen_nodes/node_00.py')\\nrows = []\\nfor bi, batch in enumerate(pickle.load(open(root/'public_batch.pkl', 'rb'))):\\n    s = batch['study']; train = s['train']; n = len(train['x']); ids = np.arange(n)\\n    for name, folds in [('blocked', np.array_split(ids, 4)), ('interleaved', [ids[i::4] for i in range(4)])]:\\n        for i, te in enumerate(folds):\\n            tr = np.setdiff1d(ids, te)\\n            st = dict(s, train=dict(train, **{k: train[k][tr] for k in ('x','y','traj')}), test=dict(x=train['x'][te]))\\n            out = sink.run_node({'__input__':st, 'node_00':frozen.run_node({'__input__':st})})\\n            y, z = out['y_hat'], out['state_pred']\\n            assert y.shape == (len(te),) and z.shape == train['traj'][te].shape\\n            np.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), z[:,-1].mean(), z[:,-1].std()])\\n            assert np.isfinite(y).all() and np.isfinite(z).all()\\n            rows.append((bi,name,i,float(np.mean(abs(y-train['y'][te].reshape(-1)))),float(np.mean(abs(z-train['traj'][te])))))\\nprint('folds:', len(rows), 'worst scalar:', max(rows,key=lambda r:r[3]), 'worst trajectory:', max(rows,key=lambda r:r[4]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 axiswise Fourier head → H2 rational pair couplings after cubic calibration; the verified public split gives 0.024574 scalar MAE and 0.004588 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The artifact passed the official test in normal and isolated Python. Stress-test the unchanged file on blocked and interleaved holdouts to measure sensitivity to the public split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "de3540f14ac5559e59f5a143f0342831c250efb133b2046e75459b048d4bb385",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21152.34,
+      "usage_known": true,
+      "prompt_tokens": 40709,
+      "cached_tokens": 12672,
+      "completion_tokens": 731
+    }
+  ]
+}

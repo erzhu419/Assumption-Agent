@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cd99f6efc5145fda24bd51fe135e3cd",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:10.557732+00:00",
+  "ended_at_utc": "2026-11-28T15:32:46.419691+00:00",
+  "request_sha256": "d95232785ccb6fe37dc7b14cc1caeaf28c252392399feb4007bfe4a5ee840a66",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50683,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35057,
+    "cached_tokens": 12672,
+    "completion_tokens": 1461
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; cat >/tmp/features.py <<'PY'\\nexec(open('/tmp/invert.py').read().split('for d in range(1,5):')[0])\\nfrom itertools import combinations as cb\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nxx=np.r_[s['train']['x'],s['test']['x']]; z=cal(s['panel_a'],xx)[:len(Y)]\\ndef diag(u,d):return np.column_stack([np.ones(len(u))]+[u**k for k in range(1,d+1)])\\ndef solve(A,V):return np.linalg.lstsq(A,V,rcond=None)[0]\\ndef loo(A,V):\\n Q=np.linalg.qr(A,mode='reduced')[0]; R=(V-A@solve(A,V))/np.maximum(.003,1-(Q*Q).sum(1))[:,None]; return np.mean(abs(R))\\nfeatures={'z':z,'x':xx[:len(Y)]}\\nfor key,sub in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n U,V=s[key]['u'],s[key][sub]; print('\\\\n',key,sub,len(U)); W=np.roll(U,-1,axis=1); Z=np.roll(z,-1,axis=1)\\n Ds=[('lin',diag(U,1),diag(z,1)),('diag2',diag(U,2),diag(z,2)),('diag3',diag(U,3),diag(z,3)),('diag4',diag(U,4),diag(z,4)),('cyclic',np.c_[diag(U,2),U*W],np.c_[diag(z,2),z*Z]),('quadratic',poly(U,2),poly(z,2))]\\n for f in (.5,1,1.25,1.5,2,2.5,3,4):\\n  Ds += [(f'sin {f}',np.c_[diag(U,2),np.sin(f*U)],np.c_[diag(z,2),np.sin(f*z)]),(f'tanh {f}',np.c_[diag(U,2),np.tanh(f*U)],np.c_[diag(z,2),np.tanh(f*z)]),(f'sincos {f}',np.c_[np.ones(len(U)),np.sin(f*U),np.cos(f*U)],np.c_[np.ones(len(z)),np.sin(f*z),np.cos(f*z)])]\\n out=[]\\n for name,A,T in Ds:\\n  for inv in ('direct','atanh'):\\n   if inv=='atanh' and np.max(abs(V))>=1: continue\\n   v=V if inv=='direct' else np.arctanh(V); B=solve(A,v); w=T@B; w=w if inv=='direct' else np.tanh(w); mae=loo(A,v); residual=np.mean(abs(A@B-v));\\n   for d in [1,2,3]:\\n    C=poly(w,d); pred=C@solve(C[:N],Y[:N]); er=abs(pred[N:]-Y[N:]); out.append((er[:,0].mean(),er[:,1:].mean(),name,inv,d,mae,residual))\\n   if name in ('lin','diag2','diag3','cyclic','quadratic'): print(name,inv,'LOO',mae,'fit',residual,'coef', np.round(B,3).tolist() if name in ('diag2','diag3') else '')\\n for col in [0,1]: print('best',col,sorted(out,key=lambda a:a[col])[:7]);\\n print('best panel',sorted({a[2:4]+a[5:] for a in out},key=lambda x:x[2])[:8]);\\n for name,A,T in Ds[:6]:features[key+sub+name]=T@solve(A,V)\\n# Sparse smooth target basis, held out scores, scaling fixed by train.\\nfrom sklearn.linear_model import Lasso\\nD=np.c_[poly(z,4),np.sin(z),np.cos(z),np.sin(2*z),np.cos(2*z)]\\nfor j,V in enumerate((Y[:,0],Y[:,-1])):\\n for alpha in (.0005,.002,.008,.02):\\n  scale=np.maximum(.001,D[:N].std(0)); A=D/scale; m=Lasso(alpha=alpha,max_iter=20000).fit(A[:N,1:],V[:N]); p=m.predict(A[N:,1:]); i=np.argsort(abs(m.coef_))[-14:]+1; print('sparse',j,alpha,np.mean(abs(p-V[N:])),list(zip(i,(m.coef_[i-1]/scale[i]).round(3))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/features.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic sensor inversion plus a generic polynomial -> H2 panel-informed or sparse nonlinear readouts; calibrated degree-four holdout MAEs are 0.21997 and 0.16823.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full quartic in calibrated coordinates\",\"rejected_reason\":\"It interpolates training data but misses both holdout thresholds substantially.\"}],\"rationale\":\"Keep the independently verified sensor inversion and test whether either remaining reference panel supplies the missing low-dimensional readout coordinates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "47e347ee8008c1893c57f1b6144e733c86639151f3d76003263b63c7e1809668",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35860.78,
+      "usage_known": true,
+      "prompt_tokens": 35057,
+      "cached_tokens": 12672,
+      "completion_tokens": 1461
+    }
+  ]
+}

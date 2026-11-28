@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09bfaf4d20e8487fa4c3156fd0ffb63a",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:19:42.612719+00:00",
+  "ended_at_utc": "2026-11-28T15:20:26.480723+00:00",
+  "request_sha256": "f28fae0a0203aecb070bcd1f1de88c47fdb98fd2d587724eef67452932f8ccfb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33251,
+    "cached_tokens": 12672,
+    "completion_tokens": 1833
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit the calibrated panel composition and its response and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _intercept(a):\\n    return np.column_stack((np.ones(len(a)), a))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(10):\\n        center = u[keep].mean(axis=0)\\n        du = u[keep] - center\\n        scale = (du * (v[keep] - v[keep].mean(axis=0))).sum(axis=0) / (du**2).sum(axis=0)\\n        shift = v[keep].mean(axis=0) - center * scale\\n        residual = np.linalg.norm(v - shift - u * scale, axis=1)\\n        next_keep = residual <= max(.001, 3 * np.median(residual))\\n        if np.array_equal(keep, next_keep) or next_keep.sum() < 8:\\n            break\\n        keep = next_keep\\n    return (x - shift) / scale\\n\\n\\ndef _panel_b(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def design(a, q):\\n        return _intercept(np.column_stack((a, np.sin(a * np.exp(q[0])))))\\n    def residual(q):\\n        d = design(u, q)\\n        return (d @ _ls(d, v) - v).ravel()\\n    q = min((least_squares(residual, [a], bounds=(-2.5, 1.6))\\n             for a in (-.3, .5, 1.15)), key=lambda fit: fit.cost).x\\n    return design(z, q) @ _ls(design(u, q), v)\\n\\n\\ndef _features(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    w = _panel_b(study['panel_b'], z)\\n    panel = study['panel_c']\\n    def adjacent(a):\\n        return _intercept(a * np.roll(a, -1, axis=1))\\n    b = adjacent(w) @ _ls(adjacent(panel['u']), panel['v1'])\\n    base = _intercept(np.column_stack((z, b)))\\n    cross = z[:, :, None] * b[:, None, :]\\n    return np.column_stack((base, np.trace(cross, axis1=1, axis2=2))), np.column_stack((base, cross.reshape(len(z), -1)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    fy, fs = _features(study, np.concatenate((train['x'], study['test']['x'])))\\n    y_hat = fy[n:] @ _ls(fy[:n], train['y'])\\n    trajectory = np.asarray(train['traj'], dtype=float)\\n    modes = np.linalg.svd(trajectory, full_matrices=False)[2][:2]\\n    state_pred = (fs[n:] @ _ls(fs[:n], trajectory @ modes.T)) @ modes\\n    last = state_pred[:, -1]\\n    return dict(y_hat=y_hat, state_pred=state_pred,\\n                diagnostics_vec=np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()]))\\nPY\\ncat >/tmp/stress.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; z=m._calibrate(s['panel_a'],x); fy,fs=m._features(s,x)\\nprint('response',m._ls(fy,tr['y']).round(4)); print('state readout',m._ls(fs,tr['traj'])[:,[0,-1]].round(4)); print('collinearity',np.linalg.cond(fs));\\nsets=[('required',np.arange(52,72))]\\nsets.extend((f'random {i}',j[:20]) for i,j in enumerate(np.random.default_rng(432).permutation(np.tile(np.arange(72),(16,1)),axis=1))) if False else None\\nrng=np.random.default_rng(432)\\nsets.extend((f'random {i}',rng.permutation(72)[:20]) for i in range(16))\\nsets.extend((f'edge {k}',np.argsort(z[:,k])[-12:]) for k in range(4)); sets.extend((f'edge low {k}',np.argsort(z[:,k])[:12]) for k in range(4)); sets.append(('norm',np.argsort(np.linalg.norm(z,axis=1))[-16:]))\\nfor label,j in sets:\\n i=np.setdiff1d(np.arange(len(x)),j); ss={**s,'train':{**tr,**{k:tr[k][i] for k in ['x','y','traj']}},'test':{'x':x[j]}}; p=m.solve_batch(ss); a=abs(p['y_hat']-tr['y'][j]); b=abs(p['state_pred']-tr['traj'][j]); print(label,np.round([a.mean(),b.mean(),b.mean(axis=0).max(),a.max(),b.max()],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stress.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic regression -> H2 calibrated B-to-C v1 composition with separate readouts; preliminary 52/20 MAEs are 0.00495 for y and 0.00831 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the panel B rational law by in-panel error alone\",\n      \"rejected_reason\": \"Several laws fit comparably; the rational candidates have not yet shown better downstream performance on held-out inputs.\"\n    }\n  ],\n  \"rationale\": \"Save the validated graph as a baseline, then quantify extrapolation risk on coordinate extremes and audit the two readouts independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "eefd717e27998cf893edd5f96e7ae49a03b9e1e390af3e7d522844ac2b24ca72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44278.14,
+      "usage_known": true,
+      "prompt_tokens": 33251,
+      "cached_tokens": 12672,
+      "completion_tokens": 1833
+    }
+  ]
+}

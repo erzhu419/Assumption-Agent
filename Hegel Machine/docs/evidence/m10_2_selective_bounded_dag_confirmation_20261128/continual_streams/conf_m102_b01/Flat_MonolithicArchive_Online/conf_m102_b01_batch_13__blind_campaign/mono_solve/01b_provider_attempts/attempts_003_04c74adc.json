@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "04c74adc78444a52acc7001ef11d21ec",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:54:18.962686+00:00",
+  "ended_at_utc": "2026-11-28T15:54:33.927322+00:00",
+  "request_sha256": "dc6b2d6b2d4fef2b98c5d8caa0a5b5dad740c245e10399f0450fd6aad9836e45",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22253,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21765,
+    "cached_tokens": 12672,
+    "completion_tokens": 533
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; ls -l /tmp/hegel_continual_archive; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,importlib.util,numpy as np, pathlib,copy,time\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a=copy.deepcopy(s); a['train']={k:v[:52] for k,v in s['train'].items() if k!='summary'}; y=a['train']['y']; t=a['train']['traj'][:,-1]; a['train']['summary']=np.array([y.mean(),y.std(),t.mean(),t.std()]); a['test']={'x':s['train']['x'][52:]}\\nfor f in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n try:\\n  q=importlib.util.spec_from_file_location('cand',f); m=importlib.util.module_from_spec(q); q.loader.exec_module(m); b=time.monotonic(); o=m.solve_batch(copy.deepcopy(a)); print(f.name, np.mean(abs(o['y_hat']-s['train']['y'][52:])), np.mean(abs(o['state_pred']-s['train']['traj'][52:])), round(time.monotonic()-b,2),flush=True)\\n except Exception as e: print(f.name,repr(e),flush=True)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived graph families -> H2: identify valid transfer candidates using separate 52/20 readout and trajectory MAEs; no candidate score yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Predict each timestamp independently\",\"rejected_reason\":\"Only two trajectory singular values rise above the apparent noise floor; a shared time basis is a better starting point.\"}],\"rationale\":\"Benchmark the archived solvers on the same split before choosing a panel calibration or readout law. Measure trajectory and scalar errors separately so good transfer on one cannot hide failure on the other.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "0c6dec040b762d258a728d5c41a759a919bb912e9e413bd6d6662b5f21cda7d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 15499.27,
+      "usage_known": true,
+      "prompt_tokens": 21765,
+      "cached_tokens": 12672,
+      "completion_tokens": 533
+    }
+  ]
+}

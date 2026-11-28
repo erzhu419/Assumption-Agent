@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e695e6bf6a6842b789235396bdc46ab3",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:55.979006+00:00",
+  "ended_at_utc": "2026-11-28T15:03:25.430750+00:00",
+  "request_sha256": "47d78679401744fe357f2cc72deecce970e5cad2750cc3c04309672ae1096f4c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67522,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41734,
+    "cached_tokens": 12672,
+    "completion_tokens": 1193
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/additive.py <<'PY'\\nfrom operators import *\\nfrom itertools import product,combinations_with_replacement\\nfrom scipy.optimize import least_squares,minimize_scalar\\nfrom sklearn.preprocessing import PolynomialFeatures\\nx=s['train']['x']; z=(x-a)/b; t=s['eval_times']; tr=s['train']['traj']; H=-np.expm1(-t[:,None]*np.array([.38,1.8,5.4])); Y=np.c_[s['train']['y'],fit(H,tr.T).T]; n=52\\nP=PolynomialFeatures(3).fit_transform(z); Q=P[:,:15]; cub=P[:,15:]; C=s['panel_c']; u=C['u']; cv=lambda u:np.column_stack([u[:,i]*u[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]); A=fit(F(cv(u)),C['v1']); G=fit(F(np.cos(2.4*u)),C['v2']); f=lambda w:F(cv(w))@A; h=lambda w:F(np.cos(2.4*w))@G\\nW={'z':z,'Bz':Bf(z),'BL':z@B[1:],'Bt':Binv(z),'BT':z@B[1:].T,'x':x}; K={**W,**{k+'F':f(w) for k,w in W.items()},**{k+'H':h(w) for k,w in W.items()}}; fs={'cos':np.cos,'sin':np.sin,'tanh':np.tanh,'rat':lambda v:1/(1+v*v),'sig':lambda v:1/(1+np.exp(-v)),'soft':lambda v:v/(1+abs(v))}; out=lambda v,w:(v[:,:,None]*w[:,None,:]).reshape(len(v),-1)\\nR=[]\\ndef ck(D,key):\\n D=D/np.maximum(.0001,np.std(D[:n],axis=0)); B0=fit(D[:n],Y[:n]); E=abs(Y-D@B0); R.append((E[:n].mean(0),E[n:].mean(0),key));return E[:n].mean(0)\\nfor k,w in K.items():\\n for g in np.linspace(.4,5,24):\\n  for l,fun in fs.items():\\n   U=fun(w*g)\\n   for i,D in enumerate([np.c_[P,U],np.c_[Q,U,U*w],np.c_[Q,U,out(z,U)],np.c_[Q,U,out(f(z),U)],np.c_[Q,U,out(f(Bf(z)),U)]]): ck(D,(k,round(g,2),l,i))\\nfor j in range(4):\\n print('OUTPUT',j)\\n for k in [0,1]:\\n  for r in sorted(R,key=lambda r:r[k][j])[:8]: print(r[0].round(4),r[1].round(4),r[2]);\\nprint('fast leave split cubic',ck(P,('cubic',)),R[-1][1]);\\n# Test whether early and late columns share a precisely cubic mode, allowing temporal basis to rotate.\\nfor p in [Q,P]:\\n r=tr-p@fit(p,tr);_,ss,vv=np.linalg.svd(r);print('time after polynomial projection',ss,'top mode',vv[:3]);\\n print('alignment with relaxation',vv@H)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/additive.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (panel-only readouts) → H2 (cubic coupling plus an additive or multiplicative nonlinear branch); best joint 52/20 MAEs so far are 0.230 for y and 0.199 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all temporal amplitudes with the same spatial basis\",\"rejected_reason\":\"The fast amplitude has a much smaller cubic residual than the other amplitudes.\"}],\"rationale\":\"Test nonlinear corrections on top of the cubic and quadratic bases separately for each output, and use the residual temporal rank to detect an exactly polynomial mode.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e50122a1a3f09a3744351362438c2fda89066254ec62f79227f98d3a115302e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29450.05,
+      "usage_known": true,
+      "prompt_tokens": 41734,
+      "cached_tokens": 12672,
+      "completion_tokens": 1193
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6d1f8b367d34cc59633bec8387a1ab7",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:30:46.990968+00:00",
+  "ended_at_utc": "2026-11-28T17:31:51.638257+00:00",
+  "request_sha256": "83281d809c1a69aa2144a09f6e5ee0da7e184db76dc3ae6ccc1544b45633e85f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53154,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34796,
+    "cached_tokens": 12672,
+    "completion_tokens": 1957
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Fit reference-panel coordinates and learn a compact spatial representation.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nfrom scipy.linalg import solve\\n\\ndef D(x): return np.c_[np.ones(len(x)),x]\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef cyc(z): return z*np.roll(z,-1,axis=1)\\n\\ndef coordinates(s):\\n    p=s['panel_a']; u,v=p['u'],p['v']; x=np.r_[s['train']['x'],s['test']['x']]\\n    A=D(np.c_[u,cyc(u),u**3]); keep=np.ones(len(u),bool)\\n    for _ in range(12):\\n        w=fit(A[keep],v[keep]); e=np.linalg.norm(A@w-v,axis=1); new=e<max(.001,3*np.median(e))\\n        if new.sum()<18 or np.array_equal(new,keep): break\\n        keep=new\\n    u,v=u[keep],v[keep]\\n    def form(z,q): return D(np.c_[z,np.sin(q[0]*z),z*z])\\n    def err(q):\\n        a=form(u,q); return (a@fit(a,v)-v).ravel()\\n    q=least_squares(err,[2.15],bounds=(1,4)).x; w=fit(form(u,q),v)\\n    z=np.linalg.solve(w[1:5].T,(x-w[0]).T).T\\n    for _ in range(14):\\n        j=w[1:5]+(q[0]*np.cos(q[0]*z))[:,:,None]*w[5:9]+2*z[:,:,None]*w[9:13]\\n        z-=np.clip(np.linalg.solve(j.transpose(0,2,1),(form(z,q)@w-x)[...,None])[...,0],-.3,.3)\\n    p=s['panel_b']; H=lambda a:D(np.sign(a)*np.maximum(abs(a)-.35,0)**1.5); wb=fit(H(p['u']),p['v']); B=lambda a:H(a)@wb\\n    p=s['panel_c']; u=p['u']; wc=fit(D(cyc(u)),p['v1']); C=lambda a:D(cyc(a))@wc\\n    def g(a,q): return D(a+q[1]*a*a/(1+q[0]*a*a))\\n    def e(q):\\n        a=g(u,q); return (a@fit(a,p['v2'])-p['v2']).ravel()\\n    q=least_squares(e,[.25,.45],bounds=([0,-3],[8,3])).x; we=fit(g(u,q),p['v2']); E=lambda a:g(a,q)@we\\n    return z,B,C,E\\n\\ndef features(z,B,C,E):\\n    b=B(z); c=C(z); e=E(z)\\n    basic=[z,b,c,e,B(c),B(e),C(b),E(b),C(e),E(c)]\\n    f=basic.copy()\\n    for x in [z,b,c,e,z+b,z-b,b-.5*z,c+e,c-e,b+c,b-c,b+e,b-e,z+c,z-c,z+e,z-e]:\\n        f.extend([x*x,cyc(x),x*np.roll(x,2,axis=1)])\\n        for a in [.65,1.25,2.15]:\\n            f.extend([np.sin(a*x)-a*x,np.tanh(a*x)-a*x,x/(1+(a*x)**2)-x,np.arctan(a*x)**2])\\n    for i,a in enumerate(basic[:4]):\\n        for b1 in basic[i:4]:\\n            f.append((a[:,:,None]*b1[:,None,:]).reshape(len(z),-1))\\n    return np.column_stack(f)\\n\\ndef head(F,Y):\\n    n=len(Y); A=F[:n]; mean=A.mean(0); scale=np.maximum(A.std(0),.015); X=(F-mean)/scale; A=X[:n]; m=Y.mean(0); y=Y-m\\n    # Sparse Bayesian regression, with shared scale evidence within each response.\\n    result=[]\\n    for k in range(y.shape[1]):\\n        t=y[:,k]; means=[]\\n        for power in [0.,.5,1.]:\\n            a=scale**power; a/=np.median(a); Q=A*a; beta=np.ones(Q.shape[1])/Q.shape[1]; noise=max(.0001*np.var(t),1e-9)\\n            for _ in range(60):\\n                W=Q*beta; inv=solve(W@Q.T+noise*np.eye(n),np.c_[t,Q],assume_a='pos'); w=beta*(Q.T@inv[:,0]); lev=np.sum(Q*inv[:,1:],axis=0); proposed=abs(w)/np.sqrt(np.maximum(lev,1e-10)); beta=np.maximum(1e-11,.35*beta+.65*proposed)\\n            means.append(X@(a*w)+m[k])\\n        result.append(np.mean(means,axis=0))\\n    return np.column_stack(result)\\n\\ndef run_node(inputs: dict) -> dict:\\n    s=inputs['__input__']; z,B,C,E=coordinates(s); tr=s['train']; t=s['eval_times']; T=tr['traj'].T\\n    def basis(q): return -np.expm1(-t[:,None]*q)\\n    def err(q):\\n        a=basis(q); return (a@fit(a,T)-T).ravel()\\n    a=basis(least_squares(err,[1.8,.42],bounds=([1.,.15],[3.,.85])).x)\\n    modes=fit(a,T).T; n=len(modes); F=features(z,B,C,E)\\n    p=head(F,np.c_[tr['y'],modes]); scale=np.maximum(modes.std(0),1e-5)\\n    return {'y_hat':p[n:,0].copy(),'trajectory_design':np.c_[p[:,1:]/scale,.035*z,.035*B(z)]}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys\\nsys.path[:0]=['/tmp','/holdout_task'];from probe23 import S;from node_00 import *\\nz,B,C,E=coordinates(S);u=S['panel_c']['u'];print('C2 RMSE',np.mean((E(u)-S['panel_c']['v2'])**2)**.5)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Saturation-aware inverse → sparse spatial features and a learned trajectory embedding; the best screened public errors before this candidate were 0.048067 scalar and 0.064738 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Use the best generic kernel from the coordinate sweep\",\"rejected_reason\":\"Neither head reached the required 0.038 MAE.\"}],\"rationale\":\"Save a runnable candidate now and test whether sparse selection among explicit panel and symmetry features improves both heads without changing the frozen DAG.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e143eb0a3c0ebbecec87e4e91c01340698aab26e8acfbd5a5cc3f29db023c01d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 65278.97,
+      "usage_known": true,
+      "prompt_tokens": 34796,
+      "cached_tokens": 12672,
+      "completion_tokens": 1957
+    }
+  ]
+}

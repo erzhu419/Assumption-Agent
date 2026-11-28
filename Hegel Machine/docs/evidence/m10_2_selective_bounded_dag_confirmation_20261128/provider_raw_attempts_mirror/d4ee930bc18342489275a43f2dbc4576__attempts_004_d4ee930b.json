@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d4ee930bc18342489275a43f2dbc4576",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:17.593597+00:00",
+  "ended_at_utc": "2026-11-28T15:48:46.596350+00:00",
+  "request_sha256": "83b73756fdb5271cbe090735302cd06b2bac0953ab7517c152670f3db7a807df",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 30881,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25219,
+    "cached_tokens": 5504,
+    "completion_tokens": 1221
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/node_03.py; cat /tmp/hegel_continual_archive/conf_m102_b02_batch_0{0,1}_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat >/tmp/diagnose.py <<'PY'\\nimport sys,pickle,numpy as np, importlib.util\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\nspec=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/conf_m102_b02_batch_05_solver.py'); old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)\\nz,b=old.parts(s); f=old.times(s); t=s['train']; n=len(t['y']); T=np.c_[t['y'],old.fit(f,t['traj'].T).T]; sl=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(np.random.default_rng(41).permutation(n),4)]\\ndef D(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,cs],axis=1) for k in range(1,d+1) for cs in combinations_with_replacement(range(x.shape[1]),k)])\\ndef assess(a):\\n out=[]\\n for i,j in sl:\\n  e=a[j]@old.fit(a[i],T[i])-T[j];out.append([np.abs(e[:,0]).mean(),np.abs(e[:,1:]@f.T).mean()]);\\n return np.round(out[0],5),np.round(np.mean(out[1:],axis=0),5)\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u']; print(k)\\n for key in set(p)-{'u'}:\\n  v=p[key]; keep=np.ones(len(u),bool)\\n  if k=='panel_a':keep=old.cal(s,u)[2]<2\\n  for nam,A in [('aff',D(u)),('AF',old.AF(u)),('pow2',poly(u,2)),('sinh',D(np.sinh(u))),('asinh',D(np.arcsinh(u))),('tanh',D(np.tanh(u)))]:\\n   A=A[keep];y=v[keep];w=old.fit(A,y);e=y-A@w; lev=np.sum(A*np.linalg.pinv(A).T,axis=1);print(key,nam,'rmse',np.std(e),'LOO',np.std(e/np.maximum(1-lev,.0001)[:,None]))\\n  if k!='panel_a':\\n   H=lambda q: D(np.sign(u)*np.maximum(abs(u)-q[0],0)**q[1]); sol=least_squares(lambda q:(H(q)@old.fit(H(q),v)-v).ravel(),[.3,1.5],bounds=([0,.2],[.8,5]));print('threshold',sol.x,np.std(sol.fun));print('range',u.min(0),u.max(0))\\nprint('T basis errors',np.abs(T[:,1:]@f.T-t['traj']).mean(),T[:8]); print('z',z.min(0),z.max(0))\\nfor name,a in [('raw',np.r_[t['x'],s['test']['x']]),('z',z),('b',b),('zb',np.c_[z,b]),('asinhz',np.arcsinh(z)),('asinhzb',np.arcsinh(np.c_[z,b]))]:\\n for d in range(1,4 if a.shape[1]<5 else 3): print(name,d,assess(poly(a,d)))\\nfor i,j in sl:\\n r=dict(s,train=dict(x=t['x'][i],y=t['y'][i],traj=t['traj'][i]),test=dict(x=t['x'][j])); yp,tp=old.predict(r); print('archive',np.abs(yp-t['y'][j]).mean(),np.abs(tp-t['traj'][j]).mean())\\nprint('corr',np.corrcoef(np.c_[z[:n],b[:n],T].T)[-3:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/diagnose.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration and kernels -> H2 separate panel-model error from head-model error; the public prediction MAEs are not yet independently reproduced.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare the archive against low-order feature models on the official split and four additional splits. Use leave-one-out panel residuals to distinguish actual calibration gains from polynomial overfit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "3a9b54774cdd67af453946be729d294c5ba65b8ec2ead35ca18a169c54dd1b91",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29564.62,
+      "usage_known": true,
+      "prompt_tokens": 25219,
+      "cached_tokens": 5504,
+      "completion_tokens": 1221
+    }
+  ]
+}

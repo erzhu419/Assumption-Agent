@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c51934d82804481a94402357eb7d8344",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:36:44.420663+00:00",
+  "ended_at_utc": "2026-11-28T15:37:29.016075+00:00",
+  "request_sha256": "54af445965660b60b79d36b9ac3dd3ed931faded7023e5f3fce431b8b1eebcb7",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51592,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34513,
+    "cached_tokens": 12672,
+    "completion_tokens": 1933
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrate measured coordinates, then fit shared-frequency prediction heads.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(f, y):\\n    return np.linalg.lstsq(f, y, rcond=1e-10)[0]\\n\\n\\ndef _map_features(u, w):\\n    return np.column_stack((_affine(u), np.sin(u*w)))\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    f = _affine(u)\\n    b = _fit(f, v)\\n    for _ in range(8):\\n        err = np.linalg.norm(f@b-v, axis=1)\\n        keep = np.argsort(err)[:max(10, int(.82*len(u)))]\\n        b = _fit(f[keep], v[keep])\\n    err = np.linalg.norm(f@b-v, axis=1)\\n    keep = err < max(.45, 3*np.median(err))\\n\\n    def optimize(sel, starts):\\n        us, vs = u[sel], v[sel]\\n        def residual(w):\\n            g = _map_features(us, w)\\n            return (g@_fit(g, vs)-vs).ravel()\\n        best = min((least_squares(residual, start, bounds=(.6, 6.), max_nfev=100)\\n                    for start in starts), key=lambda result: result.cost)\\n        return best.x, _fit(_map_features(us, best.x), vs)\\n\\n    w, b = optimize(keep, [np.full(u.shape[1], t) for t in (1.7, 2.5, 3.4)])\\n    err = np.linalg.norm(_map_features(u, w)@b-v, axis=1)\\n    good = err < max(.03, 4*np.median(err))\\n    if np.sum(good) >= 2*u.shape[1]+4:\\n        w, b = optimize(good, [w])\\n    return w, b\\n\\n\\ndef _invert(x, warm, w, b):\\n    d = x.shape[1]\\n    lin, sin = b[1:d+1], b[d+1:]\\n    q = .75*np.linalg.solve(lin.T, (x-b[0]).T).T + .25*warm\\n    for _ in range(24):\\n        r = q@lin + np.sin(q*w)@sin + b[0] - x\\n        if np.max(np.abs(r), initial=0.) < 1e-10:\\n            break\\n        jac = (lin + (w*np.cos(q*w))[:, :, None]*sin).transpose(0, 2, 1)\\n        delta = np.linalg.solve(jac + 1e-10*np.eye(d), r[:, :, None])[..., 0]\\n        step = np.minimum(1., .4/np.maximum(1e-12, np.max(abs(delta), axis=1)))\\n        for _ in range(8):\\n            cand = q - step[:, None]*delta\\n            r1 = cand@lin + np.sin(cand*w)@sin + b[0] - x\\n            bad = np.sum(r1*r1, axis=1) > np.sum(r*r, axis=1)\\n            if not np.any(bad):\\n                break\\n            step[bad] *= .5\\n        q = np.where(bad[:, None], q, cand)\\n    return q\\n\\n\\ndef _head_features(q, w):\\n    return np.column_stack((_affine(q), np.sin(q*w), np.cos(q*w)))\\n\\n\\ndef _heads(q, query, y, traj):\\n    _, s, vt = np.linalg.svd(traj, full_matrices=False)\\n    basis = vt[:2]\\n    scores = traj@basis.T\\n    scale = np.maximum(s[:2]/np.sqrt(len(q)), .025)\\n    target = np.column_stack((y, scores/scale))\\n    def residual(w):\\n        f = _head_features(q, w)\\n        return (f@_fit(f, target)-target).ravel()\\n    best = min((least_squares(residual, np.full(q.shape[1], t), bounds=(1., 5.), max_nfev=90)\\n                for t in (2.5, 3., 3.6)), key=lambda result: result.cost)\\n    pred = _head_features(query, best.x)@_fit(_head_features(q, best.x), target)\\n    return pred[:, 0], (pred[:, 1:]*scale)@basis\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    hybrid = inputs['node_00']['hybrid']\\n    train, test = study['train'], study['test']\\n    x = np.vstack((train['x'], test['x']))\\n    d = x.shape[1]\\n    block = (d+1)*(d+2)*(d+3)//6\\n    warm = hybrid[:, block+1:block+1+d]\\n    w, b = _calibrate(study['panel_a'])\\n    q = _invert(x, warm, w, b)\\n    n = len(train['x'])\\n    y, z = _heads(q[:n], q[n:], train['y'], train['traj'])\\n    end = z[:, -1]\\n    return {'y_hat': y, 'state_pred': z,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\np='/holdout_task/';s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); f=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node'];g=runpy.run_path(p+'node_01.py')['run_node'];\\nfor j in (0,18,36,52):\\n h=np.arange(j,j+20)%n;i=np.setdiff1d(np.arange(n),h); ss=dict(s,train={k:t[k][i] for k in ('x','y','traj')}, test={'x':t['x'][h]}); out=g({'__input__':ss,'node_00':f({'__input__':ss})}); dy=np.abs(out['y_hat']-t['y'][h]); dz=np.abs(out['state_pred']-t['traj'][h]); print(j,dy.mean(),dz.mean(),dz.mean(0).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: nonlinear panel inversion exposes coordinate-aligned sinusoidal heads; panel A component RMSE is 0.0034–0.0038, and held-out head MAEs are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit unrestricted Fourier directions in measured coordinates\",\n      \"rejected_reason\": \"After calibration, the four dominant frequencies are nearly axis-aligned; unrestricted directions add parameters without a clear structural justification.\"\n    }\n  ],\n  \"rationale\": \"Use the frozen coordinates to initialize nonlinear inversion, then fit shared frequencies from training labels only. Run the public evaluator and three additional held-out slices, checking the worst trajectory time point separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5d30814380f40f35d418770379588de17a77d56ac493af230655e429b0589206",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45108.7,
+      "usage_known": true,
+      "prompt_tokens": 34513,
+      "cached_tokens": 12672,
+      "completion_tokens": 1933
+    }
+  ]
+}

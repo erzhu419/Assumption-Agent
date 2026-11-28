@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d3d0c9ee85a4c21833cf07b492cdcd8",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:38:59.161551+00:00",
+  "ended_at_utc": "2026-11-28T15:39:28.907012+00:00",
+  "request_sha256": "89633f4973fbb7687d03f9b93fb900323bf5c19282a51af6bb72907b09f8c891",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34256,
+    "cached_tokens": 14720,
+    "completion_tokens": 1223
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*06_solver.py; cat /tmp/hegel_continual_archive/*03_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat >/tmp/comp08.py <<'PY'\\nexec(open('/tmp/read08.py').read().split(\\\"print('C range'\\\")[0]); from scipy.optimize import minimize_scalar\\nh=q[:,2]; g=h*h; N=np.ones(len(q));\\ndef fitcv(build,bd=(0,1)):\\n e=[]; ps=[]; rms=[]\\n for i,j in folds:\\n  def loss(p):\\n   f=build(p)[i];return np.mean((f@ls(f,y[i])-y[i])**2)\\n  p=minimize_scalar(loss,bounds=bd,method='bounded').x; f=build(p);e.append(err(f[j]@ls(f[i],y[i])-y[j]));ps.append(p);rms.append(loss(p)**.5)\\n return np.mean(e[1:]),fmt(e),fmt(ps),fmt(rms)\\nopts=[]\\nfor name,H in [('q',q),('b',b),('c',c),('qb',np.c_[q,b])]:\\n for j in range(H.shape[1]):\\n  for k in range(j,H.shape[1]):\\n   for sg in ([1] if k==j else [1,-1]):\\n    p0=(H[:,j] if j==k else H[:,j]+sg*H[:,k])**2\\n    for tag in ('B','B&C','diff','diff+C'):\\n     def build(p):\\n      f=1/(1+p*p0); f=f[:,None];\\n      if tag=='B': return np.c_[N,C,b*f]\\n      if tag=='B&C':return np.c_[N,np.c_[b,C]*f]\\n      if tag=='diff':return np.c_[base,b*((1-f)/max(p,1e-9))]\\n      return np.c_[base,np.c_[b,C]*((1-f)/max(p,1e-9))]\\n     opts.append((f'{name} {j} {sg:+} {k} {tag}',fitcv(build)))\\nfor k,v in sorted(opts,key=lambda a:a[1][0])[:22]:print(k,v)\\nfor tag,branch in [('base',base),('q2^2*b',np.c_[base,b*g[:,None]]),('q2^2*b*C',np.c_[base,b*g[:,None],C*g]),('q2^2*(b,q)',np.c_[base,np.c_[b,q]*g[:,None]]),('q2^2*b, q^3',np.c_[base,b*g[:,None],q**3]),('gated C + panel-B',np.c_[base,C*g]),('linear and poly gate',np.c_[base,b*h[:,None],b*g[:,None]])]:print(tag,fmt(cv(branch)),fmt(ls(branch[:52],y[:52])),err(branch[:52]@ls(branch[:52],y[:52])-y[:52]))\\nprint('gate and q geometry',np.quantile(np.abs(q),[0,.5,.9,1],axis=0), 'raw y noise high freq',np.median(np.abs(np.diff(z,n=3,axis=1)),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/comp08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 ungated cyclic readout → H2 rational scalar gating; the fitted coordinate-2 gate reaches 0.0369 on the 52/20 split, but its worst inner fold is 0.0441.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the passing one-parameter gate\",\n      \"rejected_reason\": \"Its gate margin is only 0.0011 and an inner fold exceeds the target.\"\n    }\n  ],\n  \"rationale\": \"Test whether a symmetric pairwise gate or a complementary gated branch explains more of the scalar residual. Fit the nonlinear strength within each training fold and rank by inner-fold errors rather than the trailing split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "91ba75ab272fb4785cf20117a60df2620acf2bd7f8cff26fd21d6dfe041cd56d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29744.04,
+      "usage_known": true,
+      "prompt_tokens": 34256,
+      "cached_tokens": 14720,
+      "completion_tokens": 1223
+    }
+  ]
+}

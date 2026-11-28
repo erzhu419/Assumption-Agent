@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31733fdb6f3f435b9d134ac46c601a06",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:22.502080+00:00",
+  "ended_at_utc": "2026-11-28T15:40:52.114436+00:00",
+  "request_sha256": "0b8033a07d432859d596582b44230faf8820eb13cd356ea3de0a5bb268cb47b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41539,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30090,
+    "cached_tokens": 12672,
+    "completion_tokens": 973
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; sed '/^for d /,$d' /tmp/ex11.py > /tmp/sparse11.py; cat >> /tmp/sparse11.py <<'PY'\\nfrom sklearn.linear_model import lasso_path, MultiTaskLasso, OrthogonalMatchingPursuit\\ninds=[i for d in range(1,5) for i in combinations_with_replacement(range(4),d)]; A=poly(X,4)[:,1:]; names=np.array([''.join(str(j+1) for j in i) for i in inds]);\\nF=lambda p:-np.expm1(-t[:,None]*np.exp(p)); p=least_squares(lambda p:(F(p)@ls(F(p),T[:52].T)-T[:52].T).ravel(),[-.8,.5]).x; Z=ls(F(p),T.T).T; H=np.c_[Y,Z]; print('rates',np.exp(p),'correlation',np.corrcoef(H.T));\\nsc=A[:52].std(0); B=(A-A[:52].mean(0))/sc; hx=H-H[:52].mean(0)\\nfor j in range(3):\\n print('OUT',j)\\n al,co,_=lasso_path(B[:52],hx[:52,j],alphas=np.geomspace(.5,.00005,100),max_iter=20000,tol=1e-8); results=[]\\n for a,c in zip(al,co.T):\\n  k=abs(c)>1e-7; C=np.c_[np.ones(72),A[:,k]]; v=ls(C[:52],H[:52,j]); e=abs(C@v-H[:,j]); results.append((e[52:].mean(),e[:52].mean(),a,k.sum(),k,v))\\n for r in sorted(results,key=lambda r:r[0])[:3]+[min([r for r in results if r[3]>=m],key=lambda r:r[3]) for m in [5,12,20,35]]:\\n  print(np.round(r[:4],6),list(zip(names[r[4]],r[5][1:].round(4))),round(r[5][0],4))\\nfor a in [.1,.05,.02,.01,.005,.002,.001,.0003]:\\n m=MultiTaskLasso(alpha=a,tol=1e-8,max_iter=20000).fit(B[:52],hx[:52]); k=np.linalg.norm(m.coef_,axis=0)>1e-7; C=np.c_[np.ones(72),A[:,k]]; v=ls(C[:52],H[:52]); out=C@v; print('joint',a,k.sum(),np.mean(abs(out[52:]-H[52:]),0),np.mean(abs(out[52:,1:]@F(p).T-T[52:])), names[k])\\nPY\\npython3 /tmp/sparse11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic panel operators) -> H2 (sparse quartic spatial laws with two exponential modes); dense quartic scalar MAE is 0.25366 on 52/20, despite full-fit scalar residual SD of 0.00362.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted quartic regression\",\"rejected_reason\":\"Its 70 coefficients exceed the 52 training rows, and the resulting held-out predictions fail the gate.\"}],\"rationale\":\"A near-interpolating dense quartic is not evidence on its own. Test whether a small set of calibrated monomials predicts held-out scalar and temporal amplitudes after debiasing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "483e2b184eff65827048720d905633f6322665c1e7726dd3d98523ff960dfcf2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29610.91,
+      "usage_known": true,
+      "prompt_tokens": 30090,
+      "cached_tokens": 12672,
+      "completion_tokens": 973
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2174d2caa8eb447fb051b90ad5de701d",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:29.099602+00:00",
+  "ended_at_utc": "2026-11-28T15:43:55.277428+00:00",
+  "request_sha256": "d01828e366d0d17ad52b0d55fc0dca12596a0a82b162cf5ecb4905a0913cb797",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59178,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37289,
+    "cached_tokens": 12672,
+    "completion_tokens": 991
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, runpy, numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); ids=np.arange(n)\\nfz=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']; nd=runpy.run_path(p+'node_01.py'); x=nd['_calibrate'](s['panel_a'],tr['x'])\\nfolds=[(f'block{a}',ids[np.r_[0:a,a+12:n]],ids[a:a+12]) for a in range(0,n,12)]\\nfor z,order in [('radius',np.argsort(np.linalg.norm(x,axis=1))),*((f'coord{k}',np.argsort(x[:,k])) for k in range(x.shape[1]))]:\\n    for end in ('low','high'):\\n        j=order[:12] if end=='low' else order[-12:]; folds.append((z+'_'+end,np.setdiff1d(ids,j),j))\\nrng=np.random.default_rng(613)\\nfor r in range(5):\\n    for k,j in enumerate(np.array_split(rng.permutation(n),6)):\\n        folds.append((f'random{r}_{k}',np.setdiff1d(ids,j),j))\\nC=np.cos(2.6*x); H=np.column_stack([np.ones(n),C,*[C[:,a]*C[:,b] for a,b in itertools.combinations(range(x.shape[1]),2)] ]); H2=np.c_[H,C*C]; H3=np.c_[H,x];\\nE=[]\\nfor name,i,j in folds:\\n    study={**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':tr['x'][j]}}\\n    out=nd['run_node']({'__input__':study,'node_00':fz({'__input__':study})}); y,z=out['y_hat'],out['state_pred']; assert np.allclose(out['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); row=[np.mean(abs(y-tr['y'][j])),np.mean(abs(z-tr['traj'][j]))]\\n    for h in (H,H2,H3):\\n        fit=np.linalg.lstsq(h[i],tr['y'][i],rcond=None)[0]; row.append(np.mean(abs(h[j]@fit-tr['y'][j])))\\n    E.append(row)\\nE=np.array(E); print('mean',E.mean(0)); print('max',E.max(0)); print('worst',[(folds[i][0],E[i,k]) for k,i in enumerate(E.argmax(0))]); print('challenger all-data coefficients',np.linalg.lstsq(H,tr['y'],rcond=None)[0]); print('columns: saved scalar, saved trajectory, cosine interactions, plus cosine squares, plus linear')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cubic heads → calibrated Fourier pair interactions and additive trajectory modes; the saved candidate passed the official gate at 0.015922 scalar MAE and 0.004502 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the accepted scalar head with a cosine-only model immediately\",\"rejected_reason\":\"The narrower symmetry is plausible, but it must improve held-out boundary slices before replacing the verified candidate.\"}],\"rationale\":\"Stress-test the exact saved node on ordered, random, and coordinate-boundary holdouts, and compare a compact cosine-interaction challenger without changing the deliverable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5fb1d120a29c8675ed8411df36bd0d409e654afd79122f6bf4bf9f12b612eeb4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26176.45,
+      "usage_known": true,
+      "prompt_tokens": 37289,
+      "cached_tokens": 12672,
+      "completion_tokens": 991
+    }
+  ]
+}

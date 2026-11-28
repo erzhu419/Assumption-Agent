@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b766be8ce87e40ba8f8fbad832870e84",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:08:05.969810+00:00",
+  "ended_at_utc": "2026-11-28T16:08:36.702216+00:00",
+  "request_sha256": "0195255b06adc2922acf58659b23a939bce32f90eba24b4885f7e10ddc363f3e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51200,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33589,
+    "cached_tokens": 12672,
+    "completion_tokens": 1313
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations\\\\n\\\\n', '').replace('_ALL_EDGES = tuple(combinations(range(4), 2))','_SCALAR_EDGES = ((0, 2), (1, 3))')\\na=s.index('    w, p, q = _coordinates(study, np.concatenate')\\nb=s.index('    tail = state[:, -1]',a)\\ns=s[:a]+'''    _, p, q = _coordinates(study, np.concatenate((train['x'], study['test']['x'])))\\n    d = np.column_stack((_aff(q), _pair(q, _SCALAR_EDGES)))\\n    y = d[n:] @ _ls(d[:n], train['y'])\\n\\n    # Project the shared spatial readout onto the two observed relaxation modes.\\n    t = np.asarray(study['eval_times'], dtype=float)\\n    time_basis = -np.expm1(-t[:, None] * np.array([.42, 1.8]))\\n    amplitudes = _ls(time_basis, np.asarray(train['traj']).T).T\\n    state = p[n:] @ _ls(p[:n], amplitudes) @ time_basis.T\\n'''+s[b:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; idx=np.arange(len(x)); _,p,q=m._coordinates(s,x)\\nfolds={'52/20':idx[52:],'first20':idx[:20],'middle20':idx[26:46],'input-extremes':np.argsort(np.linalg.norm(x,axis=1))[-20:],'operator-extremes':np.argsort(np.linalg.norm(q,axis=1))[-20:]}\\nfolds.update({f'random{i}':np.random.default_rng(i).permutation(72)[:20] for i in range(40)})\\nmetrics={}\\nfor name,v in folds.items():\\n    i=np.setdiff1d(idx,v)\\n    o=m.solve_batch(dict(s,train={k:z[i] if k!='summary' else z for k,z in tr.items()},test={'x':x[v]}))\\n    y,st=o['y_hat'],o['state_pred']; assert y.shape==(20,) and st.shape==(20,8)\\n    assert np.all(np.isfinite(y)) and np.all(np.isfinite(st))\\n    np.testing.assert_allclose(o['diagnostics_vec'],[y.mean(),y.std(),st[:,-1].mean(),st[:,-1].std()],rtol=0,atol=0)\\n    e=np.abs(y-tr['y'][v]); f=np.abs(st-tr['traj'][v]); metrics[name]=np.array([e.mean(), f.mean(), f.mean(0).max(), f[:,-1].mean()])\\nfor name in list(folds)[:5]: print(name,metrics[name])\\nworst=np.max(list(metrics.values()),axis=0); print('Worst across',len(folds),'folds [scalar, trajectory, single horizon, final horizon]:',worst); assert np.all(worst < .038)\\no=m.solve_batch(s); assert o['y_hat'].shape==(36,) and o['state_pred'].shape==(36,8) and np.all(np.isfinite(o['diagnostics_vec']))\\n# Quantify the structural scalar correction on the canonical holdout.\\nv=idx[52:]; i=idx[:52]; baseline=p[v]@m._ls(p[i],tr['y'][i]); print('Canonical scalar base vs corrected',np.mean(np.abs(baseline-tr['y'][v])),metrics['52/20'][0])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: all C1 pairs and unconstrained horizons -> H2: opposing C1 pairs and two shared relaxation modes; prior worst 43-split MAEs for the compact candidates were 0.004894 for y and 0.004371 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the full C1 pair basis and fit each horizon independently\",\n      \"rejected_reason\": \"Removing weak scalar terms and sharing temporal modes lowered the worst observed errors across the earlier resampled folds.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact readouts, then verify the exact artifact in an isolated process on the canonical holdout, input and operator extremes, and individual trajectory horizons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "967be126df8b09541203224b7ced3de757f8a2b1e680e4e9161863433b124d31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31340.33,
+      "usage_known": true,
+      "prompt_tokens": 33589,
+      "cached_tokens": 12672,
+      "completion_tokens": 1313
+    }
+  ]
+}

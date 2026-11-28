@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c7d98b48966347399e9adfb886a4b48b",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:19.650877+00:00",
+  "ended_at_utc": "2026-11-28T15:41:46.553256+00:00",
+  "request_sha256": "00d8a378d37c3716f08e5476c51be59664a9b02aa93bd52acb4cacd9161e468a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75626,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45604,
+    "cached_tokens": 12672,
+    "completion_tokens": 969
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    # c[:, 1]')\\nz = s.index('    y = scalar_design', a)\\ns = s[:a] + '''    # Telemetry supplies the strength of the coordinate-2 scalar gate.\\n    gate = 1.0 / (1.0 + float(study['telemetry_vec'][2]) * h**2)\\n    scalar_design = np.column_stack([np.ones(len(q)), b * gate[:, None], c,\\n                                     b[:, 3] * h**3 * gate])\\n''' + s[z:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nsp=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nt=s['train']; ix=np.arange(len(t['y'])); x=t['x']; y=t['y']; z=t['traj']; base=ix[:52]\\ndef score(i,j):\\n    tr={k:t[k][i] for k in ('x','y','traj')}\\n    tr['summary']=np.array([y[i].mean(), y[i].std(), z[i,-1].mean(), z[i,-1].std()])\\n    o=m.solve_batch(dict(s,train=tr,test={'x':x[j]})); e=abs(o['y_hat']-y[j]); d=abs(o['state_pred']-z[j]); return e.mean(),d.mean(),d.mean(axis=0).max()\\nprimary=score(base,ix[52:]); print('52/20 y/state/worst horizon:',primary); assert max(primary)<.038\\ncv=[score(np.setdiff1d(base,j),j) for seed in (192,412,93) for j in np.array_split(np.random.default_rng(seed).permutation(base),4)]\\nprint('Repeated inner worst y/state/worst horizon:',np.max(cv,axis=0)); assert np.max(cv)<.038\\nq=m._invert(x,m._fit_calibration(s['panel_a']))\\norder=np.argsort(abs(q[:,2])); stress=[score(np.setdiff1d(ix,j),j) for j in [order[:12],order[-12:]]]\\nprint('Low/high gate-coordinate magnitude y/state/worst horizon:',stress); assert np.max(stress)<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 broad cubic modulation → H2 telemetry-fixed rational gating with one odd interaction; the challenger’s worst inner-fold scalar MAE is 0.0174 and its 52/20 MAE is 0.0246.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the broader cubic scalar basis\",\n      \"rejected_reason\": \"Its slightly lower 52/20 MAE is well within tolerance, while the rational gate uses fewer terms and lowers worst inner-fold MAE from 0.02774 to 0.0174.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact telemetry-gated scalar model and retain the better-validated symmetric trajectory readout. Verify the exact artifact in a clean process and test both gate-coordinate extremes and every trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "711768ca962105211be61cf991f99e8b39748bcab873337ccfccb3c60373da2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27456.67,
+      "usage_known": true,
+      "prompt_tokens": 45604,
+      "cached_tokens": 12672,
+      "completion_tokens": 969
+    }
+  ]
+}

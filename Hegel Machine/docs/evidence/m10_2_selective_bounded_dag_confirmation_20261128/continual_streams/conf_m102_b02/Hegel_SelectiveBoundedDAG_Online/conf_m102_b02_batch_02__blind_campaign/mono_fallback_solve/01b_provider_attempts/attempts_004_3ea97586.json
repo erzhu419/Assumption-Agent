@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ea975862a964acb88c990ec33eaf6d3",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:44.291309+00:00",
+  "ended_at_utc": "2026-11-28T15:15:11.617383+00:00",
+  "request_sha256": "dd89240d3d450ff933a05757843844776233d982cc78416e6c3d9d13ce8524cb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25058,
+    "cached_tokens": 12672,
+    "completion_tokens": 1078
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=135)\\ndef poly(x,d=2):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,c],axis=1) for i in range(1,d+1) for c in combinations_with_replacement(range(x.shape[1]),i)])\\ndef reg(u,v):\\n c=np.linalg.lstsq(u,v,rcond=None)[0];r=v-u@c;return c,np.sqrt(np.mean(r*r,axis=0)),np.mean(abs(r/(1-np.sum(u*np.linalg.pinv(u).T,1)[:,None])),axis=0)\\nprint('times tele',s['eval_times'],s['telemetry_vec']);u=s['panel_a']['u'];v=s['panel_a']['v']; D=poly(u,1);k=np.ones(len(u),bool)\\nfor _ in range(5):\\n a=np.linalg.lstsq(D[k],v[k],rcond=None)[0];e=np.linalg.norm(D@a-v,axis=1);k=e<3*np.median(e)\\nprint('a',a,'res',np.sort(e));print('summary',s['train']['summary']);\\nu=s['panel_c']['u'];D=poly(u)\\nfor key in ['v1','v2']:\\n v=s['panel_c'][key];print(key,'range',v.min(0), v.max(0));c,r,l=reg(D,v);print('quadratic',c,'rmse',r,'loo',l)\\n for name,f in [('tanh',np.tanh),('sin',np.sin),('erf',erf),('asinh',np.arcsinh),('linear',lambda x:x)]:\\n  for degree in [1,2]:\\n   M=poly(u,degree);cols=[]\\n   for j in range(4):\\n    y=v[:,j];p=np.r_[np.linalg.lstsq(M,y,rcond=None)[0],0,0];\\n    def pred(p):return M@p[:-2] if name=='linear' else p[-1]+np.exp(np.clip(p[-2],-20,20))*f(M@p[:-2]);\\n    q=least_squares(lambda p:pred(p)-y,p,max_nfev=500);cols.append(np.sqrt(np.mean(q.fun**2)))\\n   print(name,degree,np.array(cols))\\nX=s['train']['x'];T=s['train']['traj'];Y=s['train']['y']; t=s['eval_times'];\\nfor key,fun in [('t, exp',lambda k:np.array([t,-np.expm1(-k*t)])),('1, exp',lambda k:np.array([np.ones(len(t)),-np.expm1(-k*t)])),('exp, exp',lambda k:np.array([-np.expm1(-k[0]*t),-np.expm1(-k[1]*t)]))]:\\n def r(p):\\n  b=fun(p if len(p)>1 else p[0]);return (T-T@np.linalg.pinv(b)@b).ravel()\\n q=least_squares(r,[2,5] if key=='exp, exp' else [2]); print(key,q.x,np.sqrt(np.mean(q.fun*q.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived readouts) → H2 (campaign-specific nonlinear panel and rank-two time basis); prior 52/20 MAEs were 0.241505 and 0.175337.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel B is affine to measurement precision, while panel C is not. Test quadratic and nonlinear operator forms and identify the physical time basis before fitting the readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4481d2016c65a4f2e15585fe74880f0b1164e0e304a0662087c337ea278e4f6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27325.04,
+      "usage_known": true,
+      "prompt_tokens": 25058,
+      "cached_tokens": 12672,
+      "completion_tokens": 1078
+    }
+  ]
+}

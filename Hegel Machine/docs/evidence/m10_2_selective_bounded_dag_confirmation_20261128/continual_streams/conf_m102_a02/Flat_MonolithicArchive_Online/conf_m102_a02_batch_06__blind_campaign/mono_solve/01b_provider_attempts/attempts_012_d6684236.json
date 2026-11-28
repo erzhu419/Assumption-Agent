@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6684236240d477fb82b801c016e738f",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:33.949349+00:00",
+  "ended_at_utc": "2026-11-28T15:40:07.048288+00:00",
+  "request_sha256": "b758ecdaa66dcb790bc91b5af811eb4ac4196599422d1736a8be41709a6e290b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78890,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45256,
+    "cached_tokens": 12672,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().replace('def solve_batch', '''def _rational_readout(x,b,y,q,bq,lam=.005,penalty=.10):\\n    def numerator(z,h):\\n        return np.c_[_quad(h),z,z*h,z*np.roll(h,-1,axis=1),h*np.roll(z,-1,axis=1)]\\n    a,aq=numerator(x,b),numerator(q,bq)\\n    scale=np.maximum(np.linalg.norm(a,axis=0),1e-10)\\n    a,aq=a/scale,aq/scale\\n    sd=np.maximum(b.std(axis=0),.1)\\n    g,gq=b/sd,bq/sd\\n    eye=np.eye(a.shape[1])\\n    def fit(p):\\n        z=a/(1+(g@p)**2)[:,None]\\n        w=np.linalg.solve(z.T@z+lam*eye,z.T@y)\\n        return z@w-y,w\\n    def objective(p):\\n        return np.r_[fit(p)[0],penalty*p]\\n    starts=np.argsort(abs(g.T@fit(np.zeros(g.shape[1]))[0]))[-2:]\\n    solutions=[least_squares(objective,.25*np.eye(g.shape[1])[j],max_nfev=40) for j in starts]\\n    p=min(solutions,key=lambda obj:obj.cost).x\\n    return (aq@fit(p)[1])/(1+(gq@p)**2)\\n\\n\\ndef solve_batch''').replace(\\\"y=_ridge(a,tr['y'],aq,.003)\\\",\\\"y=_rational_readout(x,b(x),tr['y'],q,b(q))\\\")\\ns=s.replace('Recover calibrated coordinates, then fit separate scalar and trajectory readouts.', 'Invert cyclic calibration and fit rational scalar and quadratic trajectory readouts.')\\np.write_text(s)\\nPY\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x,y,z=t['x'],t['y'],t['traj']; n=len(x)\\nqout=m.solve_batch(s); assert qout['y_hat'].shape==(36,) and qout['state_pred'].shape==(36,8)\\na=qout['y_hat']; b=qout['state_pred'][:,-1]; np.testing.assert_allclose(qout['diagnostics_vec'],[a.mean(),a.std(),b.mean(),b.std()]); assert all(np.isfinite(v).all() for v in qout.values())\\nx=m._inverse(x,m._calibration(s['panel_a'])); b=m._operator(s['panel_b'])(x); A=m._features(x,b)\\nsplits=[np.arange(n)]+[np.random.default_rng(k).permutation(n) for k in range(20)]\\noptions=[(l,p) for l in [.001,.002,.003,.004,.005,.007] for p in [.10,.25,.5]]; yp=[]; terr=[]\\nfor ids in splits:\\n tr,te=ids[:52],ids[52:]; yp.append([m._rational_readout(x[tr],b[tr],y[tr],x[te],b[te],l,p) for l,p in options]); terr.append(abs(m._ridge(A[tr],z[tr],A[te],.0003)-z[te]).mean(axis=0))\\ntarget=np.array([y[ids[52:]] for ids in splits]); yp=np.array(yp); terr=np.array(terr)\\nfor j,v in enumerate(options):\\n e=np.abs(yp[:,j]-target).mean(axis=1); print(v,'fixed/avg/worst',np.round([e[0],e[1:].mean(),e[1:].max()],6))\\nfor ids in [[0,3,6,9,12,15],[3,6,9,12],[6,9,12,15],[6,7,9,10,12,13]]:\\n e=np.abs(yp[:,ids].mean(1)-target).mean(axis=1); print('blend', [options[j] for j in ids],np.round([e[0],e[1:].mean(),e[1:].max()],6))\\nprint('trajectory fixed/avg/worst',terr[0].mean(),terr[1:].mean(),max(terr[1:].mean(1)),'worst time errors',terr.max(0)); print('isolated full-data smoke passed')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 mixed quadratic scalar readout → H2 rational readout with a sparse numerator; fixed-split scalar MAE improved from 0.054425 to 0.030009 in the prototype, with worst additional-split MAE 0.054761.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Retain the quadratic scalar readout\",\"rejected_reason\":\"It failed the public MAE criterion.\"}],\"rationale\":\"Install the passing rational candidate, preserve the independently validated trajectory model, and verify the exact artifact with the public schema and 20 additional held-out splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "af9e97bd5f120114432939eb1676108509046a4c5d9ea759f7fcd1ae853aad23",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33097.66,
+      "usage_known": true,
+      "prompt_tokens": 45256,
+      "cached_tokens": 12672,
+      "completion_tokens": 1401
+    }
+  ]
+}

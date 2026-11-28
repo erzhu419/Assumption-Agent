@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a35c12bfaa44453eb2f4eb810cac3f82",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:34.799026+00:00",
+  "ended_at_utc": "2026-11-28T15:29:17.920606+00:00",
+  "request_sha256": "94542212e7d8e9ae22e95d5112623e9a5a04f0fc2e086d5cce983868138e1679",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63128,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34168,
+    "cached_tokens": 5504,
+    "completion_tokens": 1810
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -30 /holdout_task/_frozen_nodes/node_00.py; cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _pairs(x):\\n    return x[:, [0, 0, 1, 2]] * x[:, [1, 3, 2, 3]]\\n\\n\\ndef _calibrate(u, v, x, transform, start, lower, upper):\\n    def residual(params):\\n        d = _aff(transform(u, params))\\n        return (d @ _ls(d, v) - v).ravel()\\n    p = least_squares(residual, start, bounds=(lower, upper), max_nfev=140).x\\n    d = _aff(transform(u, p))\\n    return _aff(transform(x, p)) @ _ls(d, v)\\n\\n\\ndef _components(s, w):\\n    b, c = s['panel_b'], s['panel_c']\\n    affine = _ls(_aff(b['u']), b['v'])\\n    u = (w - affine[0]) @ np.linalg.pinv(affine[1:])\\n    def wave(x, p):\\n        return x + p[1] * np.sin(p[0] * x)\\n    def convex(x, p):\\n        return x + p[1] * (np.logaddexp(p[0]*x, -p[0]*x) - np.log(2.0))\\n    v = _calibrate(b['u'], b['v'], u, wave, [2.9,-.4], [1.,-2.], [6.,0.])\\n    q = _calibrate(c['u'], c['v2'], u, convex, [1.1,.91], [.25,0.], [3.,4.])\\n    coef = _ls(_aff(_pairs(c['u'])), c['v1'])\\n    return u, v, q, coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    w = np.asarray(inputs['node_00']['w'])\\n    u, v, q, pc = _components(s, w)\\n    a = _aff(np.c_[v, _aff(_pairs(v)) @ pc, q])\\n    n = len(s['train']['y'])\\n    fit = _ls(a[:n], np.column_stack((s['train']['y'], s['train']['traj'])))\\n    pred = a[n:] @ fit\\n    y, t = pred[:, 0].copy(), pred[:, 1:].copy()\\n    return {'y_hat': y, 'state_pred': t, 'diagnostics_vec': np.array([y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; cat > /tmp/mixed07.py <<'PY'\\nexec(open('/tmp/probe07.py').read().split('for name,x')[0])\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import minimize_scalar\\nspec=importlib.util.spec_from_file_location('sink',p+'node_01.py'); g=importlib.util.module_from_spec(spec); spec.loader.exec_module(g)\\nu,v,q,pc=g._components(s,w); print('recovery',np.max(abs(u-f._inverse(raw,f._fit_panel_a(a['u'],a['v'])))))\\nacts={'x':lambda x:x,'sin':np.sin,'tanh':np.tanh,'sat':lambda x:x/(1+x*x)}\\nrows=[]\\nfor i,(name,A) in enumerate((('v',v),('q',q),('u',u))):\\n for name2,B in [('u',u),('v',v),('q',q)]:\\n  for k in [-3,-2,-1,-.5,0,.5,1,2,3]:\\n   S=A+k*B\\n   for name3,D in [('id',S),('tanh',np.tanh(2*S)),('sin',np.sin(2*S)),('sat',S/(1+1.25*S*S))]:\\n    for mode,F in [('pair',pair(D)),('poly',poly(D,2)[:,5:]),('cyclic',D*np.roll(D,-1,axis=1))]:\\n     for L,X in [('vq',aff(np.c_[v,q,F])),('v',aff(np.c_[v,F])),('q',aff(np.c_[q,F]))]:\\n      a0,a1=score(X); rows.append((*a1,*a0,name,name2,k,name3,mode,L))\\n for name2,B in [('u',u),('v',v),('q',q)]:\\n  cross=(A[:,:,None]*B[:,None,:]).reshape(n,-1)\\n  for F in [cross,cross[:,[1,3,4,6,9,11,12,14]]]:\\n   for L,X in [('vq',aff(np.c_[v,q,F])),('vpq',aff(np.c_[v,q,pair(v),F])),('v',aff(np.c_[v,F]))]:\\n    a0,a1=score(X); rows.append((*a1,*a0,name,name2,'cross',F.shape[1],L))\\nfor j in range(4): print('MIX',j,*sorted(rows,key=lambda r:r[j])[:7],sep='\\\\n')\\nprint('sorted residuals vs data')\\nF=aff(np.c_[v,q,pair(v)]); E=z-F@fit(F,z); print(np.c_[y,T[:,-1],E[:,0],E[:,-1],u].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixed07.py | head -51\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate calibrated feature blocks -> H2 test interactions between panel outputs; best prior worst-slice MAEs are 0.1100 for response and 0.06797 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a nonlinear link on a single latent projection\",\n      \"rejected_reason\": \"The tested links did not improve worst-slice response MAE over the linear fit.\"\n    }\n  ],\n  \"rationale\": \"Save and test the calibrated baseline, then check whether adding interactions between panel outputs explains the remaining prediction error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "077d74b8c74ff2b9a7692d875163ff0235df02e60220762fee3dfd69d910a2ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43120.0,
+      "usage_known": true,
+      "prompt_tokens": 34168,
+      "cached_tokens": 5504,
+      "completion_tokens": 1810
+    }
+  ]
+}

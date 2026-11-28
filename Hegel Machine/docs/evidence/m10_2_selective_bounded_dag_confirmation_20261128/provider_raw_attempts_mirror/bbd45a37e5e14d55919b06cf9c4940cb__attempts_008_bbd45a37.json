@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbd45a37e5e14d55919b06cf9c4940cb",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:56:15.068341+00:00",
+  "ended_at_utc": "2026-11-28T15:56:41.994214+00:00",
+  "request_sha256": "2e90e3ba76e7adf22dc82d8e4c833c8f236b2a271f8e8404e7a4c2f332e40e90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44390,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30240,
+    "cached_tokens": 14720,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];p=s['panel_c'];u=p['u'];v=p['v1']; I=lambda x:np.c_[np.ones(len(x)),x]; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nfuns={'tanh':np.tanh,'sin':np.sin,'asinh':np.arcsinh,'rat':lambda a:a/(1+a*a),'erf':erf,'atan':np.arctan,'cos':np.cos}\\nfor name,f in funs.items():\\n for extra in ['none','individual','cube','pair','square','cos','sin','tanh']:\\n  def D(a,q):\\n   g=f(a*q[:4]) if extra=='individual' else f(a*q[0]); b=I(np.c_[a,g]); i,j=np.triu_indices(4,1)\\n   if extra=='cube':return np.c_[b,a**3]\\n   if extra=='pair':return np.c_[b,a[:,i]*a[:,j]]\\n   if extra=='square':return np.c_[b,a*a]\\n   if extra in ['cos','sin','tanh']:return np.c_[b,funs[extra](a*q[-1])]\\n   return b\\n  def E(q):\\n   a=D(u,q); h=np.linalg.pinv(a); rr=a@(h@v)-v; lev=np.sum(a*h.T,axis=1); return (rr/np.maximum(1-lev[:,None],.02)).ravel()\\n  dim=4 if extra=='individual' else (2 if extra in ['cos','sin','tanh'] else 1)\\n  z=min([least_squares(E,np.full(dim,q),bounds=(.1,7),max_nfev=90) for q in [.7,1.5,2.15,3.4]],key=lambda a:a.cost)\\n  print(name,extra,z.x.round(3),np.linalg.norm(z.fun)/np.sqrt(v.size))\\nprint('telemetry',s['telemetry_vec']); print('summary',s['train']['summary']); print('raw stats',s['train']['y'].mean(),s['train']['y'].std(),s['train']['traj'][:,-1].mean(),s['train']['traj'][:,-1].std()); print('train/test ranges',s['train']['x'].min(0),s['train']['x'].max(0),s['test']['x'].min(0),s['test']['x'].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | sort -gk 4 | head -45\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived saturating approximation) -> H2 (panel-constrained nonlinear basis); verified 52/20 MAEs are 0.020295 for y and 0.025287 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat panel C v2 as mandatory\",\"rejected_reason\":\"Its cosine deformation fits the panel well, but that alone does not establish that the trajectory uses it.\"}],\"rationale\":\"Use panel-only leave-one-row-out residuals to distinguish nonlinear bases before testing them on outcome folds. Keep the verified solver in place while screening challengers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "18c450bd647608c17b29ba3e7acd2a762368f3ab39bda27263865b9bc7b2720f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27449.04,
+      "usage_known": true,
+      "prompt_tokens": 30240,
+      "cached_tokens": 14720,
+      "completion_tokens": 915
+    }
+  ]
+}

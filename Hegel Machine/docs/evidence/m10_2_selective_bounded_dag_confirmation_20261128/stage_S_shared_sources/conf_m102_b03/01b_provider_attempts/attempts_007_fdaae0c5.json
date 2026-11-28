@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fdaae0c54f6a45da992147473ada1732",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:54:11.666437+00:00",
+  "ended_at_utc": "2026-11-28T14:54:48.969822+00:00",
+  "request_sha256": "9bfda91599c923e4f7ab662731068e6d8ac01c090345a9f04a6b4dc7374f66c4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53665,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37859,
+    "cached_tokens": 12672,
+    "completion_tokens": 1593
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/for mode in (\\\\x27linear\\\\x27,\\\\x27p2\\\\x27,\\\\x27p3\\\\x27,\\\\x27sep\\\\x27,\\\\x27all\\\\x27):/,$d' /tmp/paths.py >/tmp/gp.py\\ncat >>/tmp/gp.py <<'PY'\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import minimize\\nprint('singular values',np.linalg.svd(T,compute_uv=False)); print('trajectory+linear scalar',abs(one(np.c_[T,x])[va]@ls(one(np.c_[T,x])[tr],y[tr])-y[va]).mean())\\nY=np.c_[y,T]; ix=np.arange(len(x)); n=len(x)\\ndef kernels(z,keys,kind):\\n K=[]; nm=[]\\n def add(k,M):\\n  K.append(M/max(np.mean(np.diag(M)),1e-12)); nm.append(k)\\n def radial(D):return np.exp(-D*.5) if kind in (0,2) else (1+np.sqrt(5*D)+5*D/3)*np.exp(-np.sqrt(5*D))\\n for k in keys:\\n  v=z[k]; v=(v-v.mean(0))/np.maximum(v.std(0),1e-10); d=cdist(v,v,'sqeuclidean'); d1=(v[:,None,:]-v[None,:,:])**2; dot=v@v.T/4\\n  for l in [.45,.8,1.4,2.4,4.0]:\\n   add((k,'rbf',l),radial(d/l**2))\\n   if kind<2:\\n    add((k,'add',l),radial(d1/l**2).mean(2)); add((k,'pair',l),sum(radial((d1[:,:,i]+d1[:,:,j])/l**2) for i,j in products)/6)\\n  if kind!=2:\\n   for p in [2,3]:add((k,'poly',p),(1+dot)**p)\\n return np.asarray(K),nm\\n\\ndef fit(K,yy,ids,others,pen=.02,objective='ml'):\\n m=yy[ids].mean(); sd=yy[ids].std(); q=(yy[ids]-m)/sd; L=len(ids); I=np.eye(L); V=K[:,ids][:,:,ids].copy(); J=np.r_[V,I[None,:,:]]; diag=np.diag_indices(L)\\n def fn(h):\\n  w=np.exp(h); A=np.einsum('i,ijk->jk',w,J); F=cho_factor(A,check_finite=False); a=cho_solve(F,q,check_finite=False); C=cho_solve(F,I,check_finite=False)\\n  if objective=='ml':\\n   val=q@a/2+np.log(F[0].diagonal()).sum(); G=(C-np.outer(a,a))/2\\n  else:\\n   D=C[diag]; e=a/D; val=np.mean(e*e)*L/2; G=-np.outer(C@(e/D),a)+ C@np.diag(e*e/D)@C\\n  val+=pen*sum(w[:-1]); gr=w*np.einsum('ijk,jk->i',J,G); gr[:-1]+=pen*w[:-1]; return val,gr\\n h0=np.r_[np.full(len(K),-np.log(len(K))),-6.]; opt=minimize(fn,h0,jac=True,method='L-BFGS-B',bounds=[(-17,6)]*len(K)+[(-14,0)],options={'maxiter':160,'ftol':1e-8}); w=np.exp(opt.x); A=np.einsum('i,ijk->jk',w[:-1],V)+w[-1]*I; F=cho_factor(A); a=cho_solve(F,q); C=cho_solve(F,I); out=np.einsum('i,ijk,k->j',w[:-1],K[:,others][:,:,ids],a)*sd+m; return out,abs(a/np.diag(C)).mean()*sd,w\\nif __name__=='__main__':\\n for keys in [('xa',),('xa','xaB','xaC','xaD','xaBC','xaBD'),('x','xa','xA','xaB','xaC','xaD','xaBC','xaBD','xABC','xABD','xC','xD','xaCB','xaDB','xAC','xAD')]:\\n  for kind in range(3):\\n   K,nm=kernels(z,keys,kind)\\n   for obj in ['ml','loo']:\\n    out,lo,w=fit(K,y,tr,va,objective=obj); ix=np.argsort(w[:-1])[-5:][::-1]; print(keys,kind,obj,'y',abs(out-y[va]).mean(),'loo',lo,'noise',w[-1],'weights',[(nm[i],round(w[i],3)) for i in ix],flush=True)\\n    if len(keys)==6:\\n     P=np.array([fit(K,T[:,j],tr,va,objective=obj)[0] for j in [0,3,7]]).T; print('state',abs(P-T[va][:,[0,3,7]]).mean(0),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse fixed-dictionary readouts → H2 regularized multiscale readouts over calibrated operator paths; quadratic scalar holdout MAE is 0.0635.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the greedy symbolic dictionary again\",\n      \"rejected_reason\": \"The larger dictionary improved training fit without matching the quadratic holdout score.\"\n    }\n  ],\n  \"rationale\": \"Fit kernel scales and operator weights on the first 52 rows only. Compare marginal likelihood and leave-one-out objectives, and measure trajectory accuracy separately at early, middle, and terminal times.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "59e198532e7aa2c956903663f47ec5b69a8f4629ad44d0cd6db63d76c418f1cd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37301.92,
+      "usage_known": true,
+      "prompt_tokens": 37859,
+      "cached_tokens": 12672,
+      "completion_tokens": 1593
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7b5b5b7fe834546a9227ada918816f3",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:28.723551+00:00",
+  "ended_at_utc": "2026-11-28T15:42:04.417524+00:00",
+  "request_sha256": "9b1512295f7c3ee8da56e1865080140554acab39ec838149eaf1f914ffad84e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43696,
+    "cached_tokens": 12672,
+    "completion_tokens": 1571
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/grammar.py <<'PY'\\nexec(open('/tmp/readout.py').read().split(\\\"print('range'\\\")[0])\\nfrom scipy.optimize import least_squares\\nq=(g*np.roll(g,2,axis=1))[:,:2]; D3=np.c_[D1,q]\\ndef out(a): return cv(a)\\nZ={'z':z,'g':g,'v':v}; C={}\\nfor i in range(4):\\n for j in range(i+1,4):\\n  C['gg%d%d'%(i,j)]=(g[:,i]*g[:,j])[:,None]\\nfor nm,a in Z.items():\\n for mk,b in Z.items():\\n  for shift in range(4):\\n   C[f'{nm}{mk} rol{shift}']=a*np.roll(b,shift,axis=1)\\n for mode,f in [('sq',lambda x:x*x),('cube',lambda x:x**3),('sin',np.sin),('tanh',np.tanh),('rat',lambda x:x/(1+x*x))]:\\n  for w in [.5,1.,2.]: C[f'{nm}-{mode}-{w}']=f(w*a)\\nfor scale in [-1.,-.5,-.25,.25,.5,.75,1.,1.25,2.]:\\n for base in ['gv','gz','zv']:\\n  a=Z[base[0]]+scale*Z[base[1]]\\n  for k,p in [('quadratic',poly(a)[:,5:]),('opposite',(a*np.roll(a,2,axis=1))[:,:2]),('sat',np.tanh(a)),('sine',np.sin(a))]: C[f'{base}{scale} {k}']=p\\nfor m,b in [('trajectory',T[:,-1:]),('scalar1',D@fit(D,y[:,None])),('scalar2',D3@fit(D3,y[:,None]))]:\\n for name,fn in [('sq',lambda u:u*u),('cube',lambda u:u**3),('sin',np.sin),('tanh',np.tanh)]:\\n  C[m+' '+name]=fn(b)\\nfor base,A in [('D',D),('D1',D1),('D3',D3)]:\\n ans=[]\\n for k,b in C.items():\\n  if k.startswith(('trajectory','scalar')):continue\\n  e=out(np.c_[A,b]); ans.append((float(.6*e[1]+.4*e[3]),k,e))\\n print(base, sorted(ans,key=lambda x:x[0])[:16])\\n# Compute nested sparse residual fits, selecting features with inner random folds.\\nfor typ in ('g-full','gv-full','all-full'):\\n if typ=='g-full': a=g\\n if typ=='gv-full': a=np.c_[g,v]\\n if typ=='all-full': a=np.c_[g,z,v]\\n B=poly(a)[:,1+a.shape[1]:]; B=np.c_[B,g**3,z**3,v**3]; B=B/(np.linalg.norm(B,axis=0)+1e-12)\\n def select(i,j,lam):\\n  ai,aj=D3[i],D3[j]; bi,bj=B[i],B[j]; coef=fit(ai,np.c_[y[i],bi]); ey=y[i]-ai@coef[:,0]; ebi=bi-ai@coef[:,1:]; ebj=bj-aj@coef[:,1:]; w=np.linalg.solve(ebi.T@ebi+lam*np.eye(B.shape[1]),ebi.T@ey)\\n  return aj@coef[:,0]+ebj@w\\n for lam in [.0001,.001,.01,.05,.2,1]:\\n  es=np.array([abs(y[j]-select(i,j,lam)).mean() for i,j in splits]);print(typ,lam,np.round([es[0],es[1:-1].mean(),es[1:-1].max(),es[-1]],5))\\n# Optimize the mixing scale of a shared quadratic readout stage by variable projection.\\nfor mode in ('opposite','full','shared'):\\n def mat(idx,k):\\n  a=g[idx]+k*v[idx]; P=(a*np.roll(a,2,axis=1))[:,:2]\\n  if mode=='full': P=poly(a)[:,5:]\\n  if mode=='shared': P=P[:,1:]\\n  return np.c_[D1[idx],P]\\n es=[]; params=[]\\n for i,j in splits:\\n  def residual(k):\\n   A=mat(i,k[0]);return A@fit(A,y[i])-y[i]\\n  sol=min([least_squares(residual,[a],bounds=(-3.,3.),max_nfev=60) for a in [-1.,0.,1.]],key=lambda x:x.cost)\\n  k=sol.x[0]; params.append(k); es.append(abs(mat(j,k)@fit(mat(i,k),y[i])-y[j]).mean())\\n print('mixed',mode,np.round([es[0],np.mean(es[1:-1]),max(es[1:-1]),es[-1]],5),'param',np.round(params,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py | tail -24\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate cyclic and opposite-coordinate products → H2 test whether a shared latent mixing stage explains the scalar residual; current MAE is 0.03335 on the ordered split and 0.08807 on the high-amplitude slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use more flexible panel B fitting\",\n      \"rejected_reason\": \"The previous panel variants produced similar scalar errors while worsening leave-one-panel-row-out error.\"\n    }\n  ],\n  \"rationale\": \"Compare compact compositions and regularized residual terms across ordered, random, and high-amplitude splits. Fit any shared mixing parameter using only the training portion of each split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6ac9b0e2b4a05b98de154c400780539489a254ac255f3656e6e80ad3feceb0b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36798.58,
+      "usage_known": true,
+      "prompt_tokens": 43696,
+      "cached_tokens": 12672,
+      "completion_tokens": 1571
+    }
+  ]
+}

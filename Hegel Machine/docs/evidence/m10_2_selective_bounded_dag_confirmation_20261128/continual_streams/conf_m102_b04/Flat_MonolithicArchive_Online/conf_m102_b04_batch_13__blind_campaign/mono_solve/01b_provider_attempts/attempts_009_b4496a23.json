@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4496a235877470d8f74fd7350b83aa0",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:53:44.565337+00:00",
+  "ended_at_utc": "2026-11-28T15:54:25.399225+00:00",
+  "request_sha256": "d33182e40c336675ea7710d950eda86cd526639b25a9ffa69f44248cec9ff087",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52949,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33537,
+    "cached_tokens": 12672,
+    "completion_tokens": 1806
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit13.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares,minimize_scalar\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; print('observed fields:',sorted(s),sorted(tr)); print('telemetry has one study-level value per component:',s['telemetry_vec'].shape)\\nu,v=[s['panel_a'][k] for k in ('u','v')]; gain_dist=np.linalg.norm(v-u,axis=1); med=np.median(gain_dist); retained=np.flatnonzero(gain_dist<med+8*np.median(abs(gain_dist-med)))\\nfor kind in ('sine_only','tanh','rational'):\\n def design(z,p):\\n  eye=np.broadcast_to(np.eye(4),(len(z),4,4)); base=[eye,eye*z[...,None],np.sin(p[-1]*np.roll(z,-2,1))[...,None]]\\n  if kind=='tanh': base.append(np.tanh(p[0]*z)[...,None])\\n  if kind=='rational': base.append((z/(1+p[0]*z*z))[...,None])\\n  return np.concatenate(base,axis=-1)\\n errors=[]\\n for j in retained:\\n  i=retained[retained!=j]; target=v[i].ravel()\\n  def fit(p):\\n   a=design(u[i],p).reshape(4*len(i),-1); w=m._ls(a,target); return a@w-target,w\\n  ini={'sine_only':[2.4],'tanh':[1.8,2.4],'rational':[1.4,2.4]}[kind]; opts={'sine_only':([1.4],[3.5]),'tanh':([.5,1.4],[4,3.5]),'rational':([.05,1.4],[6,3.5])}[kind]\\n  q=least_squares(lambda q:fit(q)[0],ini,bounds=opts,gtol=1e-12).x\\n  errors.extend((design(u[j:j+1],q)@fit(q)[1]-v[j]).ravel())\\n print('leave-one-inlier-out calibration',kind,'MAE',np.mean(np.abs(errors)),'max',np.max(np.abs(errors)))\\ncal=m._calibration(s['panel_a']); h=m._operator(s['panel_b'])(m._inverse(x,cal)); B=m._affine(h); S=m._scalar_design(h); a,b,c,d=h.T; q0=a*c+b*d; q1=a*c-b*d\\nQ=np.column_stack([B]+[h[:,i]*h[:,j] for i,j in combinations_with_replacement(range(4),2)])\\n# Explicit pairwise sum/difference squares and three-way products augment the sparse symmetric readout.\\nD=np.c_[S,(a-c)**2+(b-d)**2,(a+c)**2-(b+d)**2,(a-c)**2-(b-d)**2,q1]\\nC=np.c_[D,a*b*c,a*b*d,a*c*d,b*c*d]\\nassert np.allclose(4*q0,(a+c)**2+(b+d)**2-(a-c)**2-(b-d)**2)\\nrng=np.random.default_rng(928470); splits=[np.arange(52,72),np.argsort(np.linalg.norm(h-h.mean(0),axis=1))[-20:],np.argsort(abs(y))[-20:],np.argsort(abs(T[:,-1]))[-20:]]+[rng.permutation(len(y))[:20] for _ in range(24)]\\nrs={k:[] for k in ('affine','symmetric','pair differences','pair plus triples','full quadratic','rational','one rate','two rates','timewise affine')}\\nfor j in splits:\\n i=np.setdiff1d(np.arange(len(y)),j)\\n for k,M in [('affine',B),('symmetric',S),('pair differences',D),('pair plus triples',C),('full quadratic',Q)]:\\n  rs[k].append(np.mean(abs(M[j]@m._ls(M[i],y[i])-y[j])))\\n def rational(theta):\\n  n,z=theta; return S/(1+n*(q0 if z==0 else q1)[:,None]**2)\\n def loss(theta):\\n  r=rational(theta)[i]; return np.mean((r@m._ls(r,y[i])-y[i])**2)\\n theta=min([(0.,0)]+[(minimize_scalar(lambda n:loss((n,z)),bounds=(0.,1.),method='bounded').x,z) for z in (0,1)],key=loss)\\n R=rational(theta); rs['rational'].append(np.mean(abs(R[j]@m._ls(R[i],y[i])-y[j])))\\n beta=m._ls(B[i],T[i]); fitted=B[i]@beta\\n def one(r):\\n  F=(-np.expm1(-r*t))[:,None]; return m._ls(F,fitted.T).T@F.T\\n r=minimize_scalar(lambda r:np.mean((one(r)-fitted)**2),bounds=(.01,8),method='bounded').x\\n for k,P in [('one rate',B[j]@m._ls(B[i],one(r))),('two rates',m._trajectory(h[i],h[j],t,T[i])),('timewise affine',B[j]@beta)]:\\n  e=abs(P-T[j]); rs[k].append((e.mean(),e.mean(0).max()))\\nfor k,E in rs.items(): print(k,'prescribed',np.round(E[0],7),'mean',np.round(np.mean(E,axis=0),7),'worst',np.round(np.max(E,axis=0),7))\\nassert np.max(rs['symmetric'])<=.038 and np.max(rs['two rates'])<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit13.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (missing calibration and scalar terms) → H2 (shared tanh/opposing sine, cosine features, symmetric interaction, two relaxation rates); verified worst timestamp MAE is 0.00606, with a focused challenger audit pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply technical-batch centering, relay-mode splits, or a Fokker–Planck/HJB operator\",\n      \"rejected_reason\": \"The public data contain one study-level telemetry vector and continuous outputs, with no per-row batch labels, relay modes, density observations, or control states needed to test those mechanisms.\"\n    }\n  ],\n  \"rationale\": \"Audit the exact saved solver against rational calibration and readout alternatives, pairwise differences, cubic interactions, and temporal baselines. Fit challenger parameters within each split and keep the deliverable unchanged until the accuracy and worst-slice comparisons are available.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0454f69f491899cb5f99558f45522b9a8a3e9843801b179e9cc79e5413e49abf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41364.68,
+      "usage_known": true,
+      "prompt_tokens": 33537,
+      "cached_tokens": 12672,
+      "completion_tokens": 1806
+    }
+  ]
+}

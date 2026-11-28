@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb1d0d0f23ea465d84d91e49e52931c4",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:01.005978+00:00",
+  "ended_at_utc": "2026-11-28T15:39:23.926282+00:00",
+  "request_sha256": "c7809a44b20544cfc509f77ab5f26ff2509fefae53011a70359eae3ef6a40d60",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 17759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19850,
+    "cached_tokens": 12672,
+    "completion_tokens": 804
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1 PYTHONPATH=/tmp; python3 -m hegel_wormhole_skills --search 'robust reference panel nonlinear calibration variable projection' 2>&1 | head -35; cat /tmp/hegel_continual_archive/*_{04,06,09,10}_solver.py; python3 - <<'PY'\\nimport glob, pickle, importlib.util, numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; print('times,telemetry,summary',s['eval_times'],s['telemetry_vec'],tr['summary']); print('y/traj std',tr['y'].std(),tr['traj'].std(0)); print('traj svd',np.linalg.svd(tr['traj'],compute_uv=False)); print('traj centered svd',np.linalg.svd(tr['traj']-tr['traj'].mean(0),compute_uv=False)); print('traj first',tr['traj'][:4]); print('x quantiles',np.quantile(tr['x'],[0,.5,1],axis=0));\\nfor key in ('panel_a','panel_b','panel_c'):\\n p=s[key]; u=p['u']; A=np.c_[np.ones(len(u)),u]; print(key,'u quantiles',np.quantile(u,[0,.5,1],axis=0));\\n for k,v in p.items():\\n  if k=='u': continue\\n  W=np.linalg.lstsq(A,v,rcond=None)[0]; r=v-A@W; print(k,'W=',W.round(3),'error quantiles',np.quantile(abs(r),[0,.5,.9,1],axis=0).round(5))\\nss={**s,'train':{k:(v[:52] if len(v)==72 else v) for k,v in tr.items()},'test':{'x':tr['x'][52:]}}\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('mod',f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); o=m.solve_batch(ss); print(f.split('/')[-1],np.mean(abs(o['y_hat']-tr['y'][52:])),np.mean(abs(o['state_pred']-tr['traj'][52:])))\\n except Exception as e: print(f,e)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived graph) -> H2 (identify the campaign-specific panel and temporal laws); the archived gate reports 52/20 MAEs of 0.285118 for the scalar and 0.388214 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Accept the routed archive candidate\",\n      \"rejected_reason\": \"Its reported scalar holdout MAE is over seven times the required threshold.\"\n    }\n  ],\n  \"rationale\": \"Compare archive solvers on the same split and measure each panel’s affine residuals and trajectory rank to isolate which graph stages need a different law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "576e1cbf15032dc719666146776ddba2470ef7638a9e0d631ebf5932d96dd7f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22919.22,
+      "usage_known": true,
+      "prompt_tokens": 19850,
+      "cached_tokens": 12672,
+      "completion_tokens": 804
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "90964e2f28754d2cbdf7834150ffe784",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__init_decomp_conf_m102_b04_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:23.580884+00:00",
+  "ended_at_utc": "2026-11-28T14:58:50.288082+00:00",
+  "request_sha256": "ea6a791cba0b38d76bf5398ec39d2f3fdc40794d7821ba14693becb65aee9725",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4316,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13978,
+    "cached_tokens": 0,
+    "completion_tokens": 1097
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Panel calibration and cubic feature construction depend only on the panels and covariates, not on the training outcomes. Extracting them gives both prediction paths one shared feature computation. The sink preserves the original fits, penalties, blends, and diagnostics without changing the numerical operations. This preserves source behavior by construction; it does not address the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"from itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _basis(x):\\n    return np.column_stack([np.ones(len(x))] + [np.prod(x[:, j], axis=1) for d in (1, 2, 3) for j in combinations_with_replacement(range(x.shape[1]), d)])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.vstack((study['train']['x'], study['test']['x']))\\n    a, c = study['panel_a'], study['panel_c']\\n    u, v = a['u'], a['v']\\n    f = _affine(u)\\n    fit = np.linalg.lstsq(f, v, rcond=None)[0]\\n    for _ in range(10):\\n        err = np.linalg.norm(f @ fit - v, axis=1)\\n        keep = np.argsort(err)[:int(.82 * len(u))]\\n        fit = np.linalg.lstsq(f[keep], v[keep], rcond=None)[0]\\n    maps = np.linalg.lstsq(_affine(c['u']), c['v1'], rcond=None)[0]\\n    raw = _affine(x) @ maps\\n    calibrated = (x - fit[0]) / fit[1:].diagonal()\\n    aligned = _affine(calibrated) @ maps\\n    squash = lambda q: q / np.sqrt(1 + .09 * q*q)\\n    raw, aligned = _basis(squash(raw)), _basis(squash(aligned))\\n    hybrid = np.column_stack((aligned, _basis(calibrated)))\\n    return {'raw': raw, 'aligned': aligned, 'hybrid': hybrid}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ridge(x, y, q, penalty):\\n    return q @ np.linalg.solve(x.T @ x + penalty * np.eye(x.shape[1]), x.T @ y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    features = inputs['node_00']\\n    n = len(train['x'])\\n    raw, aligned, hybrid = features['raw'], features['aligned'], features['hybrid']\\n    y = .8 * _ridge(hybrid[:n], train['y'], hybrid[n:], .007)\\n    y += .2 * _ridge(raw[:n], train['y'], raw[n:], .012)\\n    z = train['traj']\\n    time_basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amps = z @ time_basis.T\\n    state = (.5 * _ridge(raw[:n], amps, raw[n:], .014) + .5 * _ridge(aligned[:n], amps, aligned[n:], .014)) @ time_basis\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "ee80aec776e1cf67ccb08826101a6c69153a6ad710618289e4b781d90c864d18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26703.55,
+      "usage_known": true,
+      "prompt_tokens": 13978,
+      "cached_tokens": 0,
+      "completion_tokens": 1097
+    }
+  ]
+}

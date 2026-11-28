@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4471839e2c324cfeaf7fc43347b97ad0",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:24:06.963345+00:00",
+  "ended_at_utc": "2026-11-28T16:25:34.767950+00:00",
+  "request_sha256": "d6ee0b9269f6b6172051050003169d52ef2e2517309f903350850cfd284423e4",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53999,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35318,
+    "cached_tokens": 12672,
+    "completion_tokens": 1417
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/dag15_read.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom sklearn.linear_model import Lasso,OrthogonalMatchingPursuit\\n\\ndef ls(f,y):return np.linalg.lstsq(f,y,rcond=None)[0]\\ndef dictionary(q,b):\\n c=np.cos(2.6*q); s=np.sin(2.6*q); n=len(q)\\n blocks={}\\n def add(name,x,names):blocks[name]=(np.asarray(x).reshape(n,-1),names)\\n add('q',q,[f'q{i}' for i in range(4)]); add('b',b,[f'b{i}' for i in range(4)])\\n add('cyclic',b*np.roll(q,-1,axis=1),[f'b{i}q{(i+1)%4}' for i in range(4)])\\n for name,x,labels in [('Q',q,list('abcd')),('B',b,list('ABCD')),('M',np.c_[q,b],list('abcdABCD')),('C',np.c_[q,c],list('abcdEFGH'))]:\\n  for d in (2,3):\\n   ts=list(combinations_with_replacement(range(x.shape[1]),d)); add(name+str(d),np.array([np.prod(x[:,t],1) for t in ts]).T,[''.join(labels[i] for i in t) for t in ts])\\n add('sin',s,[f's{i}' for i in range(4)])\\n g=[1/(1+k*q[:,i]**2) for k in (.22,1,2.15) for i in range(4)]\\n add('rat',np.column_stack([x*v for v in g for x in np.c_[q,b].T]),[f'rat{i}' for i in range(96)])\\n return blocks\\n\\ndef des(blocks,keys):return np.column_stack([blocks[k][0] for k in keys]),sum([blocks[k][1] for k in keys],[])\\n\\ndef opts(f,y,t,v,method,p):\\n mu=f[t].mean(0); sd=np.maximum(f[t].std(0),1e-6); a=(f[t]-mu)/sd; x=(f[v]-mu)/sd\\n ym=y[t].mean(0); yy=y[t]-ym\\n if method=='ols':return x@ls(a,yy)+ym\\n if method=='ridge':return x@np.linalg.solve(a.T@a+p*np.eye(a.shape[1]),a.T@yy)+ym\\n if method=='lasso':\\n  if yy.ndim>1:return np.column_stack([Lasso(alpha=p, max_iter=7000,tol=1e-5).fit(a,yy[:,j]).predict(x) for j in range(yy.shape[1])])+ym\\n  return Lasso(alpha=p,max_iter=7000,tol=1e-5).fit(a,yy).predict(x)+ym\\n if method=='omp':\\n  sel=[]; resid=yy\\n  for i in range(p):\\n   score=np.linalg.norm((a.T@resid).reshape(a.shape[1],-1),axis=1);score[sel]=-1;sel.append(np.argmax(score)); w=ls(a[:,sel],yy);resid=yy-a[:,sel]@w\\n  return x[:,sel]@w+ym\\n\\nif __name__=='__main__':\\n for mode in ['a','sine2']:\\n  d=np.load('/tmp/dag15_'+mode+'.npz'); y=d['y'];z=d['z'];n=len(y); q=d['q'][:n];b=d['b'][:n]; packs=dictionary(q,b); folds=np.array_split(np.arange(n),4)+[np.arange(n-20,n)]; folds += [np.argsort(np.max(abs(q),1))[-16:]]\\n  for target in [y,z]:\\n   results=[]\\n   for keys in [('q',),('b',),('q','b'),('b','cyclic'),('q','b','cyclic'),('q','Q2'),('b','B2'),('q','b','Q2','B2','cyclic'),('q','b','M2'),('q','b','C2'),('q','b','C2','C3'),('q','b','M2','sin'),('q','b','M2','rat')]:\\n    f,names=des(packs,keys)\\n    for method,ps in [('ols',[0] if f.shape[1]<40 else []),('ridge',[.03,.3,2,8]),('lasso',[.001,.003,.01] if target.ndim==1 else []),('omp',[4,6,8,12,16])]:\\n     for p in ps:\\n      sc=[np.mean(abs(opts(f,target,np.setdiff1d(np.arange(n),v),v,method,p)-target[v])) for v in folds]\\n      results.append((max(sc[:5]),sc[-2],sc[-1],keys,method,p))\\n   print(mode,target.shape,'worst ordinary', sorted(results)[:8], 'best official', sorted(results,key=lambda a:a[1])[:5],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag15_read.py 2>/dev/null\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 opposite-coordinate sine plus diagonal correction -> H2 independently select compact scalar and trajectory readouts; panel-A blocked calibration RMSE is 0.00837 and maximum inverse residual is below 1e-9.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[],\"rationale\":\"Compare structured scalar and trajectory bases under identical blocked, final-20, and high-coordinate-magnitude splits using the improved inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "334117e657cb806082455a5099172cdeae289803439ceaa251b69dd9ca0eda4e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 89340.91,
+      "usage_known": true,
+      "prompt_tokens": 35318,
+      "cached_tokens": 12672,
+      "completion_tokens": 1417
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46c3fc754aae404c98605abdb6f657d3",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:48.051772+00:00",
+  "ended_at_utc": "2026-11-28T15:07:26.246873+00:00",
+  "request_sha256": "5432647dbf28b23099dcd405d4b5642220d2ebc65f08db06e36286c64902ede5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79772,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46332,
+    "cached_tokens": 12672,
+    "completion_tokens": 1531
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_v01.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = \\\"    return {'y_hat': y, 'state_pred': st, 'diagnostics_vec':\\\"\\nassert s.count(a) == 1\\ns = s.replace(a, '''    # Blend smooth readouts in raw and panel-B coordinates for the scalar.\\n    dx, db = _sqdist(coords[0]), _sqdist(coords[2])\\n    gp = .3*g[0] + .7*g[2]\\n    broad = _predict(np.exp(-.2*db) + .15*gp, train['y'], n, .001)\\n    mixed = _predict(np.exp(-.06*(dx + db)) + .15*gp, train['y'], n, .0003)\\n    y = .55*y + .25*broad + .20*mixed\\n\\n    # Learn the common time profile within the training fold; shrink the\\n    # smaller time-dependent deviations toward a calibrated ridge fit.\\n    mean = traj.mean(axis=0)\\n    centered = traj - mean\\n    q = np.linalg.svd(centered, full_matrices=False)[2][0]\\n    amplitude = _predict(np.exp(-.2*(.2*dx + .8*db)) + 1.2*gp,\\n                         centered @ q, n, .00003)\\n    residual = centered - np.outer(centered @ q, q)\\n    u = np.column_stack((_affine(coords[1]), c[3][:, :x.shape[1]]))\\n    ui = u[:n]\\n    coef = np.linalg.solve(ui.T @ ui + .4*np.eye(ui.shape[1]), ui.T @ residual)\\n    st = .55*st + .45*(mean + np.outer(amplitude, q) + u[n:] @ coef)\\n    return {'y_hat': y, 'state_pred': st, 'diagnostics_vec':''')\\np.write_text(s)\\nPY\\ncat > /tmp/verify_promotion.py <<'PY'\\nimport sys\\nsys.path.insert(0, '/tmp')\\nimport finalcv as f\\nimport importlib.util\\nimport numpy as np\\nsp = list(f.sp)\\nrng = np.random.default_rng(49271)\\nfor _ in range(32):\\n    p = rng.permutation(72)\\n    sp.append((p[:52],p[52:]))\\nnew = f.run(sp)\\nspec = importlib.util.spec_from_file_location('baseline', '/tmp/batch_solver_v01.py')\\nbase = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(base)\\nnew_solver = f.m\\nf.m = base\\nold = f.run(sp)\\nfor label, e in [('baseline',old),('challenger',new)]:\\n    print(label, '52/20 scalar, trajectory, final horizon:', e[0,[0,1,9]])\\n    for label2, sl in [('development stress',slice(1,33)),('fresh stress',slice(33,None))]:\\n        print(label2,'mean', e[sl][:,[0,1,9]].mean(0),'worst',e[sl][:,[0,1,9]].max(0))\\n    print('worst by horizon', e[1:,2:10].max(0))\\nassert np.isfinite(new).all()\\nkeep = (new[0,0] <= .038 and (new[0,:2] <= old[0,:2]).all()\\n        and (new[1:,:2].mean(0) <= old[1:,:2].mean(0) + .001).all()\\n        and (new[1:,:2].max(0) <= old[1:,:2].max(0) + .001).all()\\n        and new[1:,9].max() <= old[1:,9].max() + .001)\\nif not keep:\\n    from shutil import copyfile\\n    copyfile('/tmp/batch_solver_v01.py','/holdout_task/batch_solver.py')\\nprint('selected', 'challenger' if keep else 'baseline')\\nPY\\npython3 -I /tmp/verify_promotion.py\\npython3 -B -I - <<'PY'\\nimport sys\\nsys.path.insert(0,'/tmp')\\nimport finalcv as f\\nimport numpy as np\\np = f.m.solve_batch(f.s)\\ny, t = p['y_hat'], p['state_pred']\\nassert y.shape == (36,) and t.shape == (36,8)\\nassert np.isfinite(y).all() and np.isfinite(t).all()\\nassert np.array_equal(p['diagnostics_vec'], [y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])\\ne = f.run(f.sp)\\nassert e[0,0] <= .038\\nprint('FINAL 52/20 scalar, trajectory, final horizon', e[0,[0,1,9]])\\nprint('FINAL diagnostics', p['diagnostics_vec'])\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test a smoother scalar blend and low-rank temporal shrinkage, then promote only if stress checks pass; the verified baseline has worst random-split MAEs of 0.05241 scalar and 0.02923 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote solely on the prescribed split\",\n      \"rejected_reason\": \"That split does not establish robustness across alternate training subsets or at the final trajectory horizon.\"\n    }\n  ],\n  \"rationale\": \"The component screen identified separate improvements for scalar and trajectory readouts. Compare their combination on 32 fresh splits, retain the baseline if the challenger regresses beyond tolerance, and verify the exact selected file in a clean process and with the public schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "422fbcd1ce58775f1f63f123c2bcfa432faff19fb769943055b7eb7476f69f27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38193.52,
+      "usage_known": true,
+      "prompt_tokens": 46332,
+      "cached_tokens": 12672,
+      "completion_tokens": 1531
+    }
+  ]
+}

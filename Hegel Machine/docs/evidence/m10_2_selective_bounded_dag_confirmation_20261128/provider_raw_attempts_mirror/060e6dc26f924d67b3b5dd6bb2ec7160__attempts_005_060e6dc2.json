@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "060e6dc26f924d67b3b5dd6bb2ec7160",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:40.796072+00:00",
+  "ended_at_utc": "2026-11-28T15:17:11.999120+00:00",
+  "request_sha256": "d9edc88084be12efee262e23206a625f890ab1054b06744078c6c79fa8db4ead",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41390,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29697,
+    "cached_tokens": 12672,
+    "completion_tokens": 1292
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/graph06.py <<'PY'\\nfrom probe06 import *\\nimport runpy\\nfrom itertools import combinations\\nfrom sklearn.linear_model import Ridge\\nm=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_a04_batch_05_solver.py')\\nu,v=[s['panel_a'][k] for k in ['u','v']]; keep=np.linalg.norm(v-u,axis=1)<5; u=u[keep];v=v[keep]\\nfor shift in range(1,4):\\n j=(np.arange(4)+shift)%4\\n f=np.stack((np.ones_like(u),u,u[:,j],u*u[:,j],u**3),axis=-1)\\n w=np.stack([ls(f[:,i],v[:,i]) for i in range(4)]);print('A shift',shift,'RMS',np.sqrt(np.mean((np.sum(f*w,axis=-1)-v)**2)),np.round(w,5))\\nx=s['train']['x']; z=m['_calibrate'](s['panel_a'],x)\\nb=s['panel_b']; W=ls(bias(b['u']),b['v']); b=bias(z)@W\\nc=s['panel_c']; g,h=m['_operators'](c,z); gb,hb=m['_operators'](c,b); gx,hx=m['_operators'](c,x)\\nD=dict(x=x,z=z,b=b,g=g,h=h,G=gb,H=hb,P=gx,Q=hx)\\nY=np.c_[s['train']['y'],s['train']['traj']];\\ndef score(f):\\n f=bias(f); mu=f[:52].mean(0); sd=np.maximum(f[:52].std(0),1e-9); f[:,1:]=(f[:,1:]-mu[1:])/sd[1:]; out=[]\\n for alpha in [0,0.001,0.03,0.3,2]:\\n  pred=f@ls(f[:52],Y[:52]) if not alpha else Ridge(alpha=alpha).fit(f[:52,1:],Y[:52]).predict(f[:,1:]); e=np.abs(pred-Y); out.append((e[52:,0].mean(),e[52:,1:].mean(),alpha,e[:52,0].mean(),e[:52,1:].mean()))\\n return out\\nR=[]\\ndef add(name,f):\\n for a,b,alpha,c,d in score(f):R.append((a,b,name,alpha,c,d))\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nfor n,a in D.items():\\n add(n,a); add(n+' poly2',poly(a,2)[:,1:]);add(n+' poly3',poly(a,3)[:,1:]);\\nfor i,j in combinations(D,2):\\n a,b=D[i],D[j]; k=i+j\\n add(k,np.c_[a,b]); add(k+' dot',np.c_[a,b,np.sum(a*b,axis=1)]); add(k+' diag',np.c_[a,b,a*b]); add(k+' cross',np.c_[a,b,cross(a,b)]); add(k+' poly2',poly(np.c_[a,b],2)[:,1:]);\\nfor keys in combinations(D,3):\\n a,b,c=[D[k] for k in keys]; add(''.join(keys),np.c_[a,b,c]); add(''.join(keys)+' diag',np.c_[a,b,c,a*b,b*c,a*c,a*b*c]); add(''.join(keys)+' cross',np.c_[a,b,c,cross(a,b),cross(a,c),cross(b,c)])\\nfor i in [0,1]:\\n print('best',i)\\n for r in sorted(R,key=lambda r:r[i])[:19]:print(r)\\nprint('ranges',[(k,np.abs(v).max()) for k,v in D.items()]); print('A recovered',np.linalg.norm(z-x,axis=1).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independently fitted panel maps → H2: identify which composition predicts both outputs; the best archived holdout errors remain 0.565872 for y and 0.706576 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat panel B as inactive\",\n      \"rejected_reason\": \"Its affine map fits the panel at the measurement noise floor, but its role in the forward graph still needs to be tested against the outputs.\"\n    }\n  ],\n  \"rationale\": \"Panel C’s product and cosine bases are confirmed at roughly 0.00009 RMSE. Test their placement before and after the affine map, including pairwise products and contractions, and score y and trajectories separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1fe1490746125f7b43a6d33592ba29232d9c6279a2f10d365f3e42556a1735a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31199.36,
+      "usage_known": true,
+      "prompt_tokens": 29697,
+      "cached_tokens": 12672,
+      "completion_tokens": 1292
+    }
+  ]
+}

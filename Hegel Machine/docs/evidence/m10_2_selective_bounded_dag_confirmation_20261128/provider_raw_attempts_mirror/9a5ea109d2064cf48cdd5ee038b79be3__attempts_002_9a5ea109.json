@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a5ea109d2064cf48cdd5ee038b79be3",
+  "call_seq": 2,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:39.942798+00:00",
+  "ended_at_utc": "2026-11-28T14:58:57.250397+00:00",
+  "request_sha256": "850bab7b5d73ad90f964b6912bc5c40f4110aedddded55ed5671f476ddfa7375",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12551,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17741,
+    "cached_tokens": 12672,
+    "completion_tokens": 552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/*_solver.py; cat validate_public_schema.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\nfor k,v in s.items():\\n print(k)\\n if not isinstance(v,dict): print(v); continue\\n for f,a in v.items(): print(f,a.shape,'span',np.min(a,axis=0),np.max(a,axis=0),'examples',a[:5])\\n if 'u' in v:\\n  u=v['u']; X=np.c_[u,np.ones(len(u))]\\n  for f,a in v.items():\\n   if f=='u': continue\\n   c=np.linalg.lstsq(X,a,rcond=None)[0]; r=np.linalg.norm(a-X@c,axis=1); keep=r<np.quantile(r,.85); c=np.linalg.lstsq(X[keep],a[keep],rcond=None)[0]; print(f,'affine matrix',c, 'sorted residuals',np.sort(np.linalg.norm(a-X@c,axis=1)))\\nt=s['train']; print('traj singular values',np.linalg.svd(t['traj'],compute_uv=False)); print('y vs traj',np.corrcoef(np.c_[t['y'],t['traj']].T)[0]); print('delta examples',np.diff(t['traj'][:10],axis=1))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic response surface -> H2 panel-conditioned computation graph; the existing 52/20 baseline has y MAE 0.179389 and trajectory MAE 0.222635.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare the archived mechanism with the new panel residuals and trajectory structure before choosing which operators to carry into validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "9443830ec02f0171007cb99e962b27e38751fe95bf82597578d666cbf6e89ff9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17306.4,
+      "usage_known": true,
+      "prompt_tokens": 17741,
+      "cached_tokens": 12672,
+      "completion_tokens": 552
+    }
+  ]
+}

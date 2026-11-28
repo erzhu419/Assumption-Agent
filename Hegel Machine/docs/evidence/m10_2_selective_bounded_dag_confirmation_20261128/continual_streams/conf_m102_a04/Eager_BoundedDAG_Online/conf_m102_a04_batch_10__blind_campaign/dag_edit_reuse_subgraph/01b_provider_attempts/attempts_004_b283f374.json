@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b283f374b64d45d29237f576551a3fc2",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:52.998515+00:00",
+  "ended_at_utc": "2026-11-28T15:40:21.607946+00:00",
+  "request_sha256": "49fce1227d6e0d9dd14986286603ca049efd3b5d57befc4c9b282049c7b9a428",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30780,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24259,
+    "cached_tokens": 12672,
+    "completion_tokens": 1152
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/hegel_probe.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=130)\\ndef load(name,path):\\n s=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\na=load('arc','/tmp/hegel_continual_archive/conf_m102_a04_batch_00_solver.py')\\nf=[load('f'+str(i),f'/holdout_task/_frozen_nodes/node_0{i}.py') for i in [1,2,3]]\\ndef study(t,v):\\n return dict(p,train={k:p['train'][k][t] for k in ['x','y','traj']},test={'x':p['train']['x'][v]})\\ndef score(w,s):\\n n=len(s['train']['x']); z=f[0].run_node({'__input__':s}); fit=f[1].run_node({'node_00':{'features':w,'n_train':np.array(n)},'node_01':z}); o=f[2].run_node({'node_01':z,'node_02':fit}); return np.mean(abs(o['y_hat']-p['train']['y'][vi])),np.mean(abs(o['state_pred']-p['train']['traj'][vi]))\\nif __name__=='__main__':\\n for k in ['panel_a','panel_b']:\\n  u,v=p[k]['u'],p[k]['v']; q,b=a._align(p[k]); print(k,'offset scale',q,b); print('u range',u.min(0),u.max(0),'v range',v.min(0),v.max(0)); print('diag residual quantiles',np.quantile(abs(v-u*b-q),[0,.25,.5,.65,.75,.9,.95,1],axis=0)); print('affine',np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]); print('worst rows',np.sort(np.linalg.norm(v-u*b-q,axis=1)))\\n u=p['panel_c']['u']; w=a._panel_maps(p['panel_c'],u); print('archived c RMS',np.sqrt(np.mean((w-np.c_[p['panel_c']['v1'],p['panel_c']['v2']])**2,axis=0)))\\n vi=np.arange(52,72); s=study(np.arange(52),vi); x=np.vstack([s['train']['x'],s['test']['x']]); qa,ba=a._align(p['panel_a']); qb,bb=a._align(p['panel_b']);\\n for k,z in {'raw':x,'a inverse':(x-qa)/ba,'b inverse':(x-qb)/bb,'b direct':x*bb+qb,'a inv b inv':((x-qa)/ba-qb)/bb,'a inv b direct':((x-qa)/ba)*bb+qb,'b inv a inv':((x-qb)/bb-qa)/ba,'b direct a inv':(x*bb+qb-qa)/ba}.items():\\n  for name,w in [('raw',z),('square',np.c_[z,z*z]),('archived',a._panel_maps(p['panel_c'],z)),('archived + raw',np.c_[z,a._panel_maps(p['panel_c'],z)])]:\\n   w=(w-w[:52].mean(0))/np.maximum(w[:52].std(0),.1);print(k,name,score(w,s))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/hegel_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived diagonal calibration and response maps → H2 identify panel corruption and calibration order; panel A full-affine RMS is 1.36206, and prediction CV is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the panel B affine map in place of panel A\",\n      \"rejected_reason\": \"Its low panel residual does not establish that its coordinate direction or place in the calibration chain matches the study inputs.\"\n    }\n  ],\n  \"rationale\": \"Check whether panel A's large OLS residual is concentrated in outliers, measure how well the archived nonlinear basis reconstructs panel C, and compare calibration orders using the unchanged frozen predictor.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "34766ed8cd58a910cf970366413ad12a9c5a92c5276ff5742f464105c286e789",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28608.46,
+      "usage_known": true,
+      "prompt_tokens": 24259,
+      "cached_tokens": 12672,
+      "completion_tokens": 1152
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3612a6494e644d849169aac776a13d8a",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:11.191001+00:00",
+  "ended_at_utc": "2026-11-28T15:02:49.477364+00:00",
+  "request_sha256": "da3eac7a8a52f6bf3178ccc4136175242070f6ef5e63be7ad02051137d062652",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53805,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33435,
+    "cached_tokens": 12672,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_graph.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\na=s['panel_a']; u,v=a['u'],a['v']; n=len(u); h=np.tile(np.eye(4),(n,1)); x=u.ravel(); j=np.roll(u,-1,axis=1).ravel(); D=np.column_stack((h,h*x[:,None],j,x*j,x**3)); clean=np.linalg.norm(v-u,axis=1)<3\\nfor cols in (9,10,11):\\n errs=[]\\n for i in np.flatnonzero(clean):\\n  keep=np.repeat(clean & (np.arange(n)!=i),4); c=m._fit(D[keep,:cols],v.ravel()[keep]); errs.extend(D[4*i:4*i+4,:cols]@c-v[i])\\n print('panel A clean leave-one-row-out columns',cols,'RMSE',np.sqrt(np.mean(np.square(errs))), 'max abs',max(map(abs,errs)))\\ntr=s['train']; y,T=tr['y'],tr['traj']; z=m._decode(tr['x'],m._calibration(a)); b=s['panel_b']; w=m._affine(z)@m._fit(m._affine(b['u']),b['v']); base=m._readout_features(w); q=m._quadratic(w) if hasattr(m,'_quadratic') else np.column_stack((m._affine(w),*[w[:,i]*w[:,j] for i in range(4) for j in range(i,4)]))\\nmodels={'bilinear':base,'intercept':np.c_[np.ones(len(w)),base],'quadratic':q}\\nfor i in range(4):\\n for j in range(i+1,4):\\n  for sign in (-1,1):\\n   for c in (.5,1.,2.):\\n    d=w[:,i]+sign*c*w[:,j]; d=d/np.sqrt(1+c*c)\\n    models[f'diff:{i}:{j}:{sign}:{c}']=np.c_[base,d*d]\\n    for alpha in (.005,.02,.1,.4): models[f'quotient:{i}:{j}:{sign}:{c}:{alpha}']=base/(1+alpha*d[:,None]**2)\\nidx=np.arange(len(y)); rng=np.random.default_rng(9823)\\nsplits={'specified':idx[52:],'first':idx[:20],'radial':np.argsort(np.linalg.norm(z,axis=1))[-20:]}\\nfor k in range(4):\\n for sign in (-1,1): splits[f'tail{k}:{sign}']=np.argsort(sign*z[:,k])[-20:]\\nfor k in range(25): splits[f'random{k}']=rng.permutation(idx)[:20]\\nrecord={k:[] for k in ('bilinear','intercept','quadratic','best_diff','best_quotient','trajectory','worst_time','terminal')}; selected={}\\nfor name,te in splits.items():\\n train=np.setdiff1d(idx,te); inner=np.array_split(rng.permutation(train),4)\\n chosen={}\\n for family in ('diff','quotient'):\\n  def score(D):\\n   return np.mean([np.mean(abs(D[v]@m._fit(D[np.setdiff1d(train,v)],y[np.setdiff1d(train,v)])-y[v])) for v in inner])\\n  k=min((k for k in models if k.startswith(family+':')),key=lambda k:score(models[k])); selected[k]=selected.get(k,0)+1; chosen['best_'+family]=models[k]\\n for k,D in ([(k,models[k]) for k in ('bilinear','intercept','quadratic')]+list(chosen.items())): record[k].append(np.mean(abs(D[te]@m._fit(D[train],y[train])-y[te])))\\n d=abs(w[te]@m._relaxation(w[train],T[train],s['eval_times'])-T[te]); record['trajectory'].append(d.mean()); record['worst_time'].append(d.mean(0).max()); record['terminal'].append(d[:,-1].mean())\\nfor k, e in record.items(): print(k, 'specified',round(e[0],7),'mean',round(float(np.mean(e)),7),'worst',round(max(e),7),'slice',list(splits)[int(np.argmax(e))]); assert max(e)<.038 or k not in ('bilinear','trajectory','worst_time','terminal')\\nprint('inner-selected alternatives, most frequent:',sorted(selected.items(),key=lambda item:-item[1])[:8]); print('public fields:',sorted(s),'training fields:',sorted(tr),'study telemetry shape:',np.shape(s['telemetry_vec']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_graph.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cyclic cubic calibration with a panel-B bilinear readout and two relaxation modes → H2: test added difference and rational terms by nested CV; current worst-slice scalar MAE is 0.00451 and worst single-time trajectory MAE is 0.00651.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test batch-centered classification, relay modes, or PDE drift\",\n      \"rejected_reason\": \"The public task provides continuous scalar and trajectory targets, with no row-level batch labels, relay modes, or spatial field on which to run those tests.\"\n    }\n  ],\n  \"rationale\": \"Measure the effect of the missing calibration terms directly on held-out reference rows. Select difference and rational terms only inside each outer fold, compare worst-case errors against the current solver, and rerun the public validator on the unchanged artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3caad98b6d90cffe937a511d00776d5be63f3a01d0cbe074df4023ae717146f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38284.89,
+      "usage_known": true,
+      "prompt_tokens": 33435,
+      "cached_tokens": 12672,
+      "completion_tokens": 1552
+    }
+  ]
+}

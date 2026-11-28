@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38c7d36daed94f83b280c85e00177d89",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:33:24.579681+00:00",
+  "ended_at_utc": "2026-11-28T16:34:08.319525+00:00",
+  "request_sha256": "c2201d2ab1ca42722dd0eceb618aa9f8216dda98e5d455fb3717e68e7d2f58e2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40369,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29176,
+    "cached_tokens": 5504,
+    "completion_tokens": 1782
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Calibrate observed coordinates, then form scalar and dynamical predictors.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(f, y):\\n    return np.linalg.lstsq(f, y, rcond=1e-10)[0]\\n\\n\\ndef _panel_a(study, x):\\n    p = study['panel_a']\\n    u, v = p['u'], p['v']\\n    freq = study['telemetry_vec'][1]\\n\\n    def design(z):\\n        return np.c_[np.ones(len(z)), z, np.sin(freq*z), z**3]\\n\\n    f = design(u)\\n    # Grossly corrupted measurements are far outside the calibration range.\\n    keep = np.max(np.abs(v - np.median(v, axis=0)), axis=1) < 3.5\\n    w = _fit(f[keep], v[keep])\\n    for _ in range(5):\\n        err = np.linalg.norm(f@w-v, axis=1)\\n        keep = err < max(.018, 4*np.median(err[keep]))\\n        w = _fit(f[keep], v[keep])\\n    a, b, c = np.split(w[1:], 3)\\n    z = np.linalg.solve(a.T, (x-w[0]).T).T\\n    for _ in range(35):\\n        r = design(z)@w-x\\n        if np.max(np.abs(r)) < 1e-10:\\n            break\\n        j = a + freq*np.cos(freq*z)[...,None]*b + 3*z[...,None]**2*c\\n        step = np.linalg.solve(j.transpose(0,2,1), r[...,None])[...,0]\\n        step /= np.maximum(1., np.max(np.abs(step),axis=1,keepdims=True)/.45)\\n        nxt = z-step\\n        norm = np.linalg.norm(r,axis=1)\\n        for _ in range(12):\\n            bad = np.linalg.norm(design(nxt)@w-x,axis=1) > norm\\n            if not np.any(bad):\\n                break\\n            step[bad] *= .5\\n            nxt[bad] = z[bad]-step[bad]\\n        z = nxt\\n    return z\\n\\n\\ndef _panel_b(study, z):\\n    u, v = (study['panel_b'][k] for k in ('u','v'))\\n\\n    def h(x,q):\\n        return np.c_[np.ones(len(x)), np.sign(x)*np.maximum(np.abs(x)-q[0],0)**q[1]]\\n\\n    def residual(q):\\n        f = h(u,q)\\n        return (f@_fit(f,v)-v).ravel()\\n\\n    q = least_squares(residual,[.35,1.5],bounds=([.15,.6],[.6,2.5])).x\\n    return h(z,q)@_fit(h(u,q),v)\\n\\n\\ndef _head(x,n,y,degree,decay):\\n    dot = x@x.T/x.shape[1]\\n    dist = np.maximum(np.diag(dot)[:,None]+np.diag(dot)-2*dot,0)\\n    k = (1+dot)**degree + np.exp(-decay*dist)\\n    return k[n:,:n]@np.linalg.solve(k[:n,:n]+1e-6*np.eye(n),y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr = study['train']\\n    z = _panel_a(study,np.r_[tr['x'],study['test']['x']])\\n    b = _panel_b(study,z)\\n    sym = np.c_[.3*z+b,.3*z-b]\\n    n = len(tr['x'])\\n    y = .5*_head(np.arcsinh(sym),n,tr['y'],2,1.4)+.5*_head(sym,n,tr['y'],3,.15)\\n    return {'y_hat':y,'trajectory_design':np.arcsinh(np.c_[.3*z,b])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import node_00 as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=s['panel_a'].values(); k=np.max(abs(v),axis=1)<3.5; f=s['telemetry_vec'][1]; F=np.c_[np.ones(len(u)),u,np.sin(f*u),u**3]; w=m._fit(F[k],v[k]); print('clean rows',k.sum(),'matrix',w.round(4),sep='\\\\n'); print('clean restoration MAE',np.mean(abs(m._panel_a(s,v[k])-u[k]))); z=m._panel_a(s,np.r_[s['train']['x'],s['test']['x']]); print('coordinate range',z.min(0),z.max(0)); print('inverse residual max',np.max(abs(np.c_[np.ones(len(z)),z,np.sin(f*z),z**3]@w-np.r_[s['train']['x'],s['test']['x']]))); print('Panel B fit MAE',np.mean(abs(m._panel_b(s,s['panel_b']['u'])-s['panel_b']['v'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial-only Panel A → H2 robust affine, sinusoidal, and cubic calibration; median panel residual drops from 0.02261 to 0.00205 with the expanded basis, while the inherited public trajectory MAE was 0.247186.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived polynomial-only calibration basis is adequate for Panel A.\",\n    \"empirical_witness\": \"Trimmed median residual is 0.02261 for affine, adjacent-product, and cubic terms, 0.00813 for affine and sine, and 0.00205 for the expanded sine and cubic basis.\",\n    \"causal_blanket_diagnosis\": \"Gross panel outliers mask systematic sinusoidal calibration structure shared by the two prediction paths.\",\n    \"sublated_pivot\": \"Retain the cubic term, add telemetry-frequency sine, remove unsupported adjacent products, and validate the inverse with the frozen downstream nodes.\",\n    \"risk_kind\": \"Shared calibration error\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the polynomial inverse\",\n      \"rejected_reason\": \"Its robust calibration residual is an order of magnitude larger than the expanded basis residual.\"\n    },\n    {\n      \"option\": \"Use sine without cubic\",\n      \"rejected_reason\": \"It leaves systematic clean-row residuals that the cubic term substantially reduces.\"\n    }\n  ],\n  \"rationale\": \"Implement the supported calibration basis, preserve the archived nonlinear Panel B and kernel designs, and measure both official prediction errors and inverse consistency.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "29caa0f3908f1aaa78b052efc32fa747923857652277f0a79d24f3a6759e59cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44258.7,
+      "usage_known": true,
+      "prompt_tokens": 29176,
+      "cached_tokens": 5504,
+      "completion_tokens": 1782
+    }
+  ]
+}

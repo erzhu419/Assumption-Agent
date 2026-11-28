@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e7a023b390a94c2dab109f102a48500c",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:09:55.685661+00:00",
+  "ended_at_utc": "2026-11-28T16:10:31.476760+00:00",
+  "request_sha256": "62904b0e516a42a9fbd8a7998d85eddb5ea1600e1c0fce9c59146efe70894edd",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53557,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36528,
+    "cached_tokens": 12672,
+    "completion_tokens": 1417
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 /tmp/read.py | grep -E '^times|^temporal|^fits' | cut -c1-375; sed -n '145,205p' /holdout_task/test_dag_candidate.py; cat > /tmp/yprobe.py <<'PY'\\nexec(open('/tmp/compose.py').read().split('for j in [')[0]); from scipy.optimize import least_squares\\nz=V['b']; n=len(Y); t=s['eval_times']; rep=[np.random.default_rng(j).permutation(n)[:20] for j in range(5)];\\ndef cv(x,y):\\n out=[]\\n for ii in rep:\\n  jj=np.setdiff1d(np.arange(n),ii); a=x[jj]; coef=np.linalg.lstsq(a,y[jj],rcond=1e-8)[0]; out.append(np.mean(abs(x[ii]@coef-y[ii])))\\n return np.round([np.mean(out),max(out)],5)\\ndef phi(a):return np.sinh(np.arcsinh(a)/3)\\nrows=[]\\nfor g in [0.8,1.4,2.15,3.,4.6,7.]:\\n for f in [np.arcsinh,np.arctan,np.tanh,phi]:\\n  v=f(g*z); d=ab(np.c_[z,v]);\\n  for j,e in enumerate([d,np.c_[d,Q(v)],np.c_[d,Q(z)],np.c_[d,Q(v),V['c'],V['d']],ab(np.c_[v,Q(v)]),ab(np.c_[z,Q(z)])]):rows.append((cv(e,Y),g,f.__name__,j))\\nprint('interaction CV',sorted(rows,key=lambda e:e[0][1])[:15]); print('sorted y, B2', np.round(np.c_[Y,z[:,2]][np.argsort(Y)].T,3))\\nfor transform in [lambda x:x, np.arcsinh, np.arctan, np.tanh, phi]:\\n v=transform(2.15*z); a=ab(np.c_[z,v]); q=np.linalg.lstsq(a,Y,rcond=None)[0]; m=a@q; print('residual',transform.__name__,np.round(np.c_[Y,m,Y-m][np.argsort(m)][::3],3).tolist())\\n# Fit an outer nonlinear response to a low-dimensional latent readout.\\nF={'id':lambda x:x,'sin':np.sin,'tanh':np.tanh,'atan':np.arctan,'asinh':np.arcsinh,'inv3':phi,'rat':lambda x:x/(1+x*x),'sat':lambda x:x/np.sqrt(1+x*x)}\\nresults=[]\\nfor g in [1.5,2.15,3.3,5.0]:\\n for nm,f in F.items():\\n  v=f(g*z)\\n  for ft,d in [('z',ab(z)),('v',ab(v)),('zv',ab(np.c_[z,v])),('zq',ab(np.c_[z,Q(z)])),('vq',ab(np.c_[v,Q(v)]))]:\\n   if nm=='id' and g!=1.5: continue\\n   jj=np.where(idx)[0]; ii=np.where(~idx)[0]; ds=d[jj]; yy=Y[jj]; base=np.linalg.lstsq(ds,yy,rcond=1e-8)[0]\\n   for nm2,f2 in F.items():\\n    if nm2=='id': continue\\n    def pr(p,xx):return p[0]+p[1]*f2(xx@p[2:]);\\n    best=None\\n    for k in (0.6,1.5,3.):\\n     p=least_squares(lambda p:pr(p,ds)-yy,np.r_[0,1/k,base*k],max_nfev=100)\\n     if best is None or p.cost<best.cost:best=p\\n    results.append((np.mean(abs(pr(best.x,d[ii])-Y[ii])),np.mean(abs(best.fun)),g,nm,ft,nm2))\\nprint('outer results', sorted(results)[:18]); print('trajectory asinh family',[(g,cv(ab(np.c_[z,np.arcsinh(g*z)]),T).tolist()) for g in [1.5,1.85,2.15,2.6]]); print('trajectory inv3 family',[(g,cv(ab(np.c_[z,phi(g*z)]),T).tolist()) for g in [1.5,1.85,2.15,2.6]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/yprobe.py | tail -15\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cosine panel-B map → H2 fit separate trajectory and scalar readouts; the composed scalar tail MAE is 0.1013, above the 0.038 threshold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test the archived pairwise feature grammar and nonlinear scalar readouts on held-out rows, while checking trajectory error separately across repeated splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f9a155cba0784a124afc3db795d8147f96122f270cf170393acf2de1d9824084",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36431.13,
+      "usage_known": true,
+      "prompt_tokens": 36528,
+      "cached_tokens": 12672,
+      "completion_tokens": 1417
+    }
+  ]
+}

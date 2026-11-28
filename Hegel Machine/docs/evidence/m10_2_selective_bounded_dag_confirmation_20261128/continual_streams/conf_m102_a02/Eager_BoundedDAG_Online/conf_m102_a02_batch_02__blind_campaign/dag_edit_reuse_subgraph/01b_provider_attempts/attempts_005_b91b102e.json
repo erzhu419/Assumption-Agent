@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b91b102e58614b9caf799f67cd4c8027",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:12.627621+00:00",
+  "ended_at_utc": "2026-11-28T15:08:47.854584+00:00",
+  "request_sha256": "a343f79e80a6c797aba5e5f84284ecf3e84bd26b8bd4a9e587cda41fc8a91ab8",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 41991,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29833,
+    "cached_tokens": 5504,
+    "completion_tokens": 1407
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/endpoint_probe.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('for d in range(1,6)')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nQ=poly(x,2); C=poly(x,3)[:,15:]; inds=list(combinations_with_replacement(range(4),3)); fs=[(np.arange(n)%6!=i,np.arange(n)%6==i) for i in range(6)]+[(np.arange(n)<52,np.arange(n)>=52)]\\ndef fit(F,Y): return np.linalg.lstsq(F,Y,rcond=1e-9)[0]\\ndef eval_model(name,model):\\n b,e=model(np.arange(n),np.arange(n)); out=[]\\n for m,v in fs:\\n  _,pred=model(np.where(m)[0],np.where(v)[0]); out.append(np.mean(abs(y[v]-pred)))\\n print(name,'full',round(np.mean(abs(e-y)),6),'cv',np.round(out,5),'params',np.round(b,4),flush=True)\\nfor terms in [[(0,0,2),(0,2,2),(2,2,2)],[(0,0,2),(0,2,2),(1,2,2),(2,2,2)],[(0,0,2),(0,2,2),(1,2,2),(2,2,2),(2,2,3)]]:\\n F=np.c_[Q,C[:,[inds.index(z) for z in terms]]]; eval_model(str(terms),lambda m,v: (fit(F[m],y[m]),F[v]@fit(F[m],y[m])))\\ndef variable(m,v,mode,axial):\\n def design(ix,p):\\n  xs=x[ix]; z=(p[0]*xs[:,2] if axial else xs@p[:4])+p[-1]; a=Q[ix,:5]; q=Q[ix]; r=1/(1+z*z)\\n  if mode=='q_plus_ar': return np.c_[q,a*(1-r)[:,None]]\\n  if mode=='a_plus_qr': return np.c_[a,q*r[:,None]]\\n  if mode=='qr': return q*r[:,None]\\n  if mode=='q_plus_at': return np.c_[q,a*np.tanh(z)[:,None]]\\n  if mode=='q_plus_s': return np.c_[q,np.sin(z)]\\n  if mode=='q_plus_sr': return np.c_[q,z*r]\\n  if mode=='q_plus_diff': return np.c_[q,np.tanh(z)-z]\\n  if mode=='q_plus_rankc': return np.c_[q,z**3]\\n def resid(p):\\n  F=design(m,p); return F@fit(F,y[m])-y[m]\\n best=None\\n for scale in [0.55,1.25,2.2]:\\n  p=np.array([scale,0.] if axial else [0.,0.,scale,0.,0.]); opt=least_squares(resid,p,bounds=(-4,4),max_nfev=90)\\n  if best is None or opt.cost<best.cost: best=opt\\n p=best.x; F=design(m,p); b=fit(F,y[m]); return p,design(v,p)@b\\nfor mode in ['q_plus_ar','a_plus_qr','qr','q_plus_at','q_plus_s','q_plus_sr','q_plus_diff','q_plus_rankc']:\\n for axial in [True,False]:\\n  if mode=='q_plus_rankc' and axial: continue\\n  eval_model((mode,axial),lambda m,v: variable(m,v,mode,axial))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -15\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/endpoint_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full quadratic -> H2 compact nonlinear endpoint: four sparse cubic terms give 0.0296 on the public split and 0.0357 worst slice; trajectory MAE remains 0.004042 on the public split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Commit the sparse cubic immediately\",\n      \"rejected_reason\": \"It passes the reported slices, but the terms were screened on the full public data and leave limited margin; compare compact models whose nonlinear parameters are fitted separately in each fold.\"\n    }\n  ],\n  \"rationale\": \"The cubic residual concentrates in products involving the third coordinate. Test whether a rational or saturating readout explains those terms with better held-out margin, while keeping the existing trajectory calculation unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "57f9116c6912608d3835d82364ee4b2cde6f548146b24d8e7922862cc2bdace6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35225.75,
+      "usage_known": true,
+      "prompt_tokens": 29833,
+      "cached_tokens": 5504,
+      "completion_tokens": 1407
+    }
+  ]
+}

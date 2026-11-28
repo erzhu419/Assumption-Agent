@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db6685ea07a44c76bf4f009da788b423",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:15.443959+00:00",
+  "ended_at_utc": "2026-11-28T15:01:40.572402+00:00",
+  "request_sha256": "ec7c9dc746e7aace267cba2113b56eec33923ff678ae1aed8e0a9b8739b1074d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41018,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29108,
+    "cached_tokens": 12672,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/node_00.py')\\nmodule = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(module)\\nfor batch in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    study = batch['study']\\n    run = lambda s: module.run_node({'__input__': s})['features']\\n    base = run(study)\\n    n = len(study['train']['x'])\\n    assert base.shape == (n + len(study['test']['x']), 8)\\n    np.testing.assert_allclose(base[:n].mean(axis=0), 0, atol=1e-12)\\n    assert np.all(base[:n].std(axis=0) <= 1 + 1e-12)\\n    for key in ('panel_a', 'panel_c'):\\n        panel = study[key]\\n        shifts = []\\n        for row in range(len(panel['u'])):\\n            reduced = {k: np.delete(v, row, axis=0) for k, v in panel.items()}\\n            trial = run({**study, key: reduced})\\n            assert np.isfinite(trial).all()\\n            shifts.append(float(np.max(np.abs(trial[n:] - base[n:]))))\\n        worst = int(np.argmax(shifts))\\n        print(f'{key}: {len(shifts)} leave-one-row-out refits; worst row={worst}, max held-out feature change={shifts[worst]:.6g}')\\n        assert shifts[worst] < 0.025\\n    p = study['panel_c']\\n    errors = []\\n    for i in range(len(p['u'])):\\n        mask = np.arange(len(p['u'])) != i\\n        design = module._couplings(p['u'])\\n        coef = np.linalg.lstsq(design[mask], p['v1'][mask], rcond=1e-9)[0]\\n        errors.append(np.abs(design[i] @ coef - p['v1'][i]))\\n    print(f'v1 calibration: worst absolute leave-one-row-out residual={np.max(errors):.6g}')\\n    assert np.max(errors) < 0.001\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived softsign → H2 sparse cyclic bilinear v1; the verified DAG reports scalar CV MAE 0.013567 and trajectory CV MAE 0.011081, both below 0.038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact artifact passed the end-to-end checks. Without editing it, refit after dropping each calibration row to test whether the recovered coupling or held-out features depend on a single observation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "50129ba31307fb29b06c5bc6a2cc27695d0159dcf551ee7bc1151477ee95b62e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25127.31,
+      "usage_known": true,
+      "prompt_tokens": 29108,
+      "cached_tokens": 12672,
+      "completion_tokens": 943
+    }
+  ]
+}

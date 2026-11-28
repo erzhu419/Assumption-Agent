@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf0258cbb118471796642404ac61ae6a",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:17.667161+00:00",
+  "ended_at_utc": "2026-11-28T15:07:49.854396+00:00",
+  "request_sha256": "71befe11c39b47bd0b05825ac67ee57d166c80a0ba2bbb059fafcf3ed67c4403",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66545,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40664,
+    "cached_tokens": 14720,
+    "completion_tokens": 1375
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as b\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; z=b._calibrate(s['panel_a'],d['x']); g,h=np.split(b._panel_maps(s['panel_c'],z),2,1); y=d['y']; T=d['traj']; t=s['eval_times']; N=len(y); prod=g*h; dot=prod.sum(1); cross=(g[:,:,None]*h[:,None,:]).reshape(N,16); base=b.one(np.c_[g,h]); F=b._time_basis(t,T); amps=b.lin(F,T.T).T\\nfor name,A in [('dot',np.c_[base,dot]),('diag',np.c_[base,prod]),('cross',np.c_[base,cross])]:\\n co=b.lin(A,np.c_[y,amps]); print(name,'coefficients',np.round(co,5).T,'RMSE',np.std(A@co-np.c_[y,amps],axis=0))\\nrng=np.random.default_rng(54312); order=np.argsort(np.max(abs(z),axis=1)); perms=[np.arange(N),order,order[::-1]]+[rng.permutation(N) for _ in range(40)]\\nreg=[0,.0001,.001,.01]; errors={}\\ndef add(key,err):errors.setdefault(key,[]).append(err)\\nsig={'dot':dot,'g2':(g*g).sum(1),'h2':(h*h).sum(1),'z2':(z*z).sum(1),'p2':(prod*prod).sum(1),'sum2':((g+h)**2).sum(1),'diff2':((g-h)**2).sum(1),'dot2':dot**2}\\nfor p in perms:\\n a,q=p[:52],p[52:]; f=b._time_basis(t,T[a]); amp=b.lin(f,T[a].T).T\\n for rr in reg:\\n  for name,M in [('dot',np.c_[g,h,dot]),('diag',np.c_[g,h,prod]),('cross',np.c_[g,h,cross])]:\\n   out=b._readout(M[p],np.c_[y[a],amp],52,rr); add((name,rr,'y'),abs(out[:,0]-y[q]).mean()); add((name,rr,'T'),abs(out[:,1:]@f.T-T[q]).mean())\\n for name,v in sig.items():\\n  for mode in ['numer','all','tanh','sin','extra']:\\n   def design(k):\\n    if mode=='numer':return np.c_[base,dot/(1+k*v)]\\n    if mode=='all':return np.c_[base,dot]/(1+k*v[:,None])\\n    if mode=='tanh':return np.c_[base,np.tanh(k*dot)/k]\\n    if mode=='sin':return np.c_[base,np.sin(k*dot)/k]\\n    return np.c_[base,dot,v]\\n   def resid(pp):\\n    A=design(pp[0])[a]; return A@b.lin(A,y[a])-y[a]\\n   lo=max(-.7/max(v.max(),1e-8),-.8); hi=min(-.7/min(v.min(),-1e-8),3.)\\n   if mode in ('tanh','sin'): lo,hi=.0001,3.\\n   k=least_squares(resid,[min(.22,hi/2)],bounds=(lo,hi)).x[0] if mode!='extra' else 0.\\n   A=design(k); add((name,mode,'y'),abs(A[q]@b.lin(A[a],y[a])-y[q]).mean())\\n   if p is perms[0] and name=='dot': print('scalar fit',mode,k,np.std(resid([k])))\\nfor idx in ['y','T']:\\n for key,v in sorted([(k,v) for k,v in errors.items() if k[-1]==idx],key=lambda a: max(a[1])+.6*np.mean(a[1]))[:16]: print(key,'gate',round(v[0],6),'edge',np.round(v[1:3],6),'mean/max',np.round([np.mean(v),max(v)],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal trajectory coupling -> H2 full bilinear coupling with a separate scalar dot-product readout; the current artifact’s worst MAEs across seven splits are 0.01208 scalar and 0.02330 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the passing baseline unchanged\",\"rejected_reason\":\"Full bilinear trajectory coupling reduced the worst projected trajectory MAE from over 0.02 to 0.00312, warranting a test against the actual observed trajectories.\"}],\"rationale\":\"Compare full bilinear and compact scalar readouts on the prescribed split, random holdouts, and calibrated input extremes. Fit the time basis and any scalar shape parameters only on each training fold and score against raw held-out observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "be885209e6afafbf530b578bc8eae3c457ac39080b79ebab2a8241c1d3cea35f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32589.66,
+      "usage_known": true,
+      "prompt_tokens": 40664,
+      "cached_tokens": 14720,
+      "completion_tokens": 1375
+    }
+  ]
+}

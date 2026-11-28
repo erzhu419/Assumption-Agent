@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d02670f4140c4165bdd825f7cf32c4d6",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:36.605577+00:00",
+  "ended_at_utc": "2026-11-28T15:02:05.431380+00:00",
+  "request_sha256": "dc3f38531d1a6e51a3440b43519e09e07e20595f8e88a5872600fc2d0ffa0d66",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51743,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35890,
+    "cached_tokens": 12672,
+    "completion_tokens": 1099
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/indexfit.py <<'PY'\\nexec(open('/tmp/dag.py').read().split('ops=')[0])\\nfrom itertools import product\\nfrom scipy.optimize import least_squares\\nN=52\\nY=np.c_[y,ts@np.linalg.pinv(H.T)]\\nF0={'z':z,'L':L(z),'Q':Q(z),'R':R(z),'QL':Q(L(z)),'RL':R(L(z)),'QR':Q(R(z)),'RQ':R(Q(z))}\\nF0.update({'QR+':np.c_[F0['Q'],F0['R']], 'zr':np.c_[z,F0['R']], 'zq':np.c_[z,F0['Q']], 'Q*R':F0['Q']*F0['R']})\\nfor k,y0 in enumerate(Y.T):\\n res=[]\\n for n,w in F0.items():\\n  for skip in [False,True] if k==0 else [False]:\\n   base=ones(Y[:,1:]) if skip else np.ones((len(y),1)); ry=y0[:N]-base[:N]@ls(base[:N],y0[:N]);\\n   ww=(w-w[:N].mean(0))/w[:N].std(0); w0=ww[:N]; d=w0.shape[1]; u=ls(w0,ry);u/=max(np.linalg.norm(u),1e-8)\\n   rng=np.random.default_rng(42)\\n   for fun,g in [('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('soft',lambda e:e/(1+abs(e))),('rat',lambda e:1/(1+e*e)),('lin',lambda e:e),('sq',lambda e:e*e)]:\\n    def ff(p,w0,b):return np.c_[b,g(w0@p[:-1]+p[-1])]\\n    def rr(p):\\n     f=ff(p,w0,base[:N]);return f@ls(f,y0[:N])-y0[:N]\\n    out=[]\\n    for u0 in [np.r_[u*sc,off] for sc,off in product([.55,1.6,3.5],[0,.75])] + [np.r_[rng.normal(0,sc,d),rng.uniform(-2,2)] for sc in [.5,1.25] for _ in range(3)]:\\n     a=least_squares(rr,u0,max_nfev=85);out.append((np.linalg.norm(a.fun),a.x))\\n    _,p0=min(out,key=lambda e:e[0]);ff0=ff(p0,ww,base);be=ls(ff0[:N],y0[:N]);e=abs(ff0@be-y0); coef=p0[:-1]/w[:N].std(0);res.append((e[:N].mean(),e[N:].mean(),n,fun,skip,np.r_[coef,p0[-1]-w[:N].mean(0)@coef],be))\\n print('target',k,'best train',*sorted(res,key=lambda v:v[0])[:8],sep='\\\\n');print('best test',*sorted(res,key=lambda v:v[1])[:5],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/indexfit.py; printf '\\\\nARCHIVE\\\\n'; ls -la /tmp/hegel_continual_archive; sed -n '1,230p' /tmp/hegel_continual_archive/*solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: fit nonlinear projections of C1 and C2 separately for each temporal amplitude; the best full y validation MAE remains 0.160.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the generic sparse dictionary further\",\"rejected_reason\":\"The existing 8,840-feature screen substantially overfits and instead points to nonlinear projections of the calibrated branches.\"}],\"rationale\":\"Profile projection gains and offsets continuously, and test whether the scalar readout shares the temporal amplitudes or needs a separate branch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b14ce618978fc73fa46eda5daa900221c74ca161bd48081a49b45a2e93a0099f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29295.02,
+      "usage_known": true,
+      "prompt_tokens": 35890,
+      "cached_tokens": 12672,
+      "completion_tokens": 1099
+    }
+  ]
+}

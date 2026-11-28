@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a63af68927e14ec5aae4eda98272228d",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:48.137236+00:00",
+  "ended_at_utc": "2026-11-28T15:27:14.381859+00:00",
+  "request_sha256": "8cd48b305909e8e8f9d26fd1166c21846a63ddc830e4765d0102439998fbb2ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33413,
+    "cached_tokens": 12672,
+    "completion_tokens": 1060
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/nonlin.py <<'PY'\\nfrom compose import *\\nfrom scipy.optimize import root\\nu=U[:,1:]; g=np.sort(ids); v=V[g];\\nsoft=lambda a:a/(1+abs(a))\\ndef fitA():\\n def features(z,j,p):\\n  w=z[:,j]; r=z[:,(j+2)%4]; return one(np.c_[w,soft(p[0]*w),r,np.tanh(p[1]*r)])\\n def residual(p):\\n  return np.concatenate([D@ls(D,v[:,j])-v[:,j] for j in range(4) for D in [features(u[g],j,p)]])\\n p=least_squares(residual,[1,1],bounds=([.08,.08],[8,8]),gtol=1e-13).x\\n P=[ls(features(u[g],j,p),v[:,j]) for j in range(4)]; print('A nonlinear',p,np.std(residual(p)),P)\\n return lambda z:np.column_stack([features(z,j,p)@P[j] for j in range(4)])\\nFA=fitA(); az=np.array([root(lambda z:FA(z[None])[0]-r,(r-M[0])@np.linalg.inv(M[1:])).x for r in x]); print('inv max',abs(FA(az)-x).max(),az.min(0),az.max(0))\\nif __name__=='__main__':\\n F=dict(left=az, right=one(az)@B, rinv=(az-B[0])@np.linalg.inv(B[1:]),raw=x)\\n for k,z in F.items():\\n  c,d=[f(z) for f in branches]; m=c*d; cross=(c[:,:,None]*d[:,None,:]).reshape(n,-1); norm=lambda r:np.sum(r*r,axis=1)\\n  for l,D in [('lin',np.c_[c,d]),('dot',np.c_[c,d,m.sum(1)]),('diag',np.c_[c,d,m]),('diag+',np.c_[c,d,m,norm(c),norm(d),norm(z)]),('cross',np.c_[c,d,cross]),('input',np.c_[c,d,m,z]),('mix',np.c_[c,d,m,cross,z]),('pquad',np.c_[z,*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]])]: print(k,l,np.round(score(one(D)),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/nonlin.py | tail -36; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust panel alignment' | head -5\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: invert a sparse nonlinear calibration before testing branch readouts; previous best separate 52/20 MAEs are 0.07883 for outcome and 0.05921 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A full affine map plus three contaminated rows explains panel A.\",\"empirical_witness\":\"Adding a softsign self-term and a tanh term from the opposite coordinate lowers inlier residual standard deviations from roughly 0.13 to 0.003 for two inspected outputs.\",\"causal_blanket_diagnosis\":\"The full affine model captures coordinate coupling but misses the nonlinear response of both the direct and coupled coordinates.\",\"sublated_pivot\":\"Fit shared nonlinear shapes from panel A, then invert that calibrated operator before testing readouts.\",\"risk_kind\":\"nonlinear_calibration_basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Invert a generic cubic calibration\",\"rejected_reason\":\"The sparse saturating basis fits the panel better and is less prone to extrapolation artifacts.\"}],\"rationale\":\"Separate calibration error from readout error by fitting the nonlinear calibration solely on its paired reference data, then compare downstream compositions on the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8538f0e9307cd044727308a225dd9be4d7deaceb3feff1c3c140fe18bebaa64f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26243.26,
+      "usage_known": true,
+      "prompt_tokens": 33413,
+      "cached_tokens": 12672,
+      "completion_tokens": 1060
+    }
+  ]
+}

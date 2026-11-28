@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c88fbe53119434b916a99c880226e0c",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:48.406157+00:00",
+  "ended_at_utc": "2026-11-28T15:05:37.278960+00:00",
+  "request_sha256": "3560a3c94b2af965bafc3a2058db8f5c7de5381fb8ff26979bc5f58dfd159c1b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39455,
+    "cached_tokens": 5504,
+    "completion_tokens": 990
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /holdout_task/batch_solver.py /tmp/rational_baseline.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('    a, b, c, d = p\\\\n    return (x**5 + d*x)/(1 + a*np.abs(x)**3 + b*x**4) + c*x','    threshold, exponent = p\\\\n    return np.sign(x) * np.maximum(np.abs(x) - threshold, 0.)**exponent').replace('_b, [19., 10., -.015, .016], ([0,0,-1,-1], [20,20,1,1])','_b, [.35, 1.5], ([0., .25], [.8, 4.]))'.rstrip(')')+')')\\nopen(p,'w').write(s)\\nPY\\ncat > /tmp/readout_check.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as b\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];x=tr['x'];y=tr['y'];t=tr['traj'];z=b._latent(s,x);a=b._aff(z);d=b._scalar_design(z);ls=b._ls\\nids=np.arange(len(x));rng=np.random.default_rng(517);folds=[ids]+[rng.permutation(ids) for _ in range(16)]+[j for j in np.argsort(abs(b._calibrate(s['panel_a'],x)),axis=0).T]\\nfor mode in range(6):\\n stats=[]\\n for j in folds:\\n  i,k=j[:52],j[52:]; A=a if mode%2==0 else z; D=d if mode%2==0 else d[:,1:];coef=ls(A[i],t[i]);basis=t[i] if mode//2==1 else A[i]@coef\\n  if mode//2:V=np.linalg.svd(basis,full_matrices=False)[2][:2];coef=(coef@V.T)@V\\n  e=abs(A[k]@coef-t[k]);f=abs(D[k]@ls(D[i],y[i])-y[k]);stats.append([f.mean(),e.mean(),e.mean(0).max(),f.max(),e.max()]);\\n print(mode,'52/20',np.round(stats[0],7),'tail',np.round(np.max(stats[-4:],axis=0),7),'worst',np.round(np.max(stats,axis=0),7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/readout_check.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (smooth rational B) → H2 (dead-zone B with sparse scalar and affine trajectory readouts); the challenger reached 0.00341 scalar MAE and 0.00465 worst-horizon MAE on 52/20, with worst stress-split horizon MAE of 0.00940.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain smooth rational B\",\n      \"rejected_reason\": \"The dead-zone law reduces panel B RMSE from 0.00157 to 0.0000983 and improves both endpoints on the designated split.\"\n    }\n  ],\n  \"rationale\": \"Promote the panel-supported dead-zone law. Compare affine and rank-two trajectory readouts, fitting each basis inside its fold, to test whether the measured low rank offers a meaningful improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "32572cfc3264c592d492f8aa6fe19edbdda163324a7438d985fdf83c75d12315",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49385.62,
+      "usage_known": true,
+      "prompt_tokens": 39455,
+      "cached_tokens": 5504,
+      "completion_tokens": 990
+    }
+  ]
+}

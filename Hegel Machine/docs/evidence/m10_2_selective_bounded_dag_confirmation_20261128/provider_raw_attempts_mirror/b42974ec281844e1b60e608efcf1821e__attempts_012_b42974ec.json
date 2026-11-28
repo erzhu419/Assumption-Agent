@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b42974ec281844e1b60e608efcf1821e",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:04:52.474466+00:00",
+  "ended_at_utc": "2026-11-28T16:05:14.851544+00:00",
+  "request_sha256": "cc0f9553c6d0bbdbb543bd7a20f609741cf7e16cb028bb28885e549f79bdc78c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69228,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39812,
+    "cached_tokens": 12672,
+    "completion_tokens": 852
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; cp /holdout_task/batch_solver.py /tmp/sparse_v02.py; python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); s=s.replace('return x+p[2]*np.tanh(p[0]*x)+p[3]*x/(1+p[1]*x*x)', 'a, b = p[0]*x, p[1]*x\\\\n        return x + p[2]*a*np.exp(-a*a) + p[3]*b/(1+np.abs(b))'); s=s.replace('[3.53,5.99,-1.16,3.12],\\\\n               ([.15,.15,-6,-6],[6,6,6,6])','[4.09593,.54798,.04681,-2.22252],\\\\n               ([.05,.05,-10,-10],[10,10,10,10])'); assert '4.09593' in s; p.write_text(s)\\nPY\\ncat >/tmp/final_verify.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/tmp')\\nfrom stress import m,s,t,y,xx,slices,split,np\\nfor name,i,j in slices:\\n p=m.solve_batch(split(i,j)); ph=np.c_[p['y_hat'],p['state_pred']]; e=np.abs(ph-y[j]); vals=np.r_[e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()]; print(name,vals); assert max(vals)<.012\\n end=ph[:,-1]; assert np.allclose(p['diagnostics_vec'],[ph[:,0].mean(),ph[:,0].std(),end.mean(),end.std()])\\nz,h=m._coords(s,xx); i,j=slices[0][1:]; base=np.c_[np.ones(len(z)),z]; E=np.abs(base[j]@m._ls(base[i],y[i])-y[j]); print('calibration-only 52/20 y/state MAE',E[:,0].mean(),E[:,1:].mean())\\nPY\\nif ! python3 -I /tmp/final_verify.py; then cp /tmp/sparse_v02.py /holdout_task/batch_solver.py; python3 -I /tmp/stress.py; fi; python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse readout with approximate Panel B -> H2 sparse readout with exponential taper and softsign; the challenger reaches 52/20 MAEs of 0.004609 for y and 0.004989 for state, with worst slice-by-horizon MAE 0.007774.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the tanh–rational Panel B fit\",\n      \"rejected_reason\": \"The exponential–softsign fit lowers both panel cross-validation error and downstream worst-slice errors.\"\n    }\n  ],\n  \"rationale\": \"Promote the operator that improved both independent panel fit and downstream prediction, then verify the exact saved solver in an isolated process and rerun the public schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a46932fe74c1c85dd0e015f05834f65388ba9cfe272adc63391144653cb342e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22375.35,
+      "usage_known": true,
+      "prompt_tokens": 39812,
+      "cached_tokens": 12672,
+      "completion_tokens": 852
+    }
+  ]
+}

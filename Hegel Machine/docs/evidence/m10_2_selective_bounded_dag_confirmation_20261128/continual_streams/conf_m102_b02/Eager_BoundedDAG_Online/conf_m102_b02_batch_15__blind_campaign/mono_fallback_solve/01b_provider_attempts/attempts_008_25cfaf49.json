@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25cfaf49bb874db8b81cda9376759cbc",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_15__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:18:30.976885+00:00",
+  "ended_at_utc": "2026-11-28T17:19:06.285656+00:00",
+  "request_sha256": "d5959bf9f1c7b3aa8fee21e9595474cc1ec4b9b90b3be860bdc39d3186925bc5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48860,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29094,
+    "cached_tokens": 5504,
+    "completion_tokens": 1427
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"mv /tmp/struct.py /tmp/struct_probe.py; OPENBLAS_NUM_THREADS=1 timeout 125 python3 -u /tmp/struct_probe.py >/tmp/struct_out & pid=$!; cat >/tmp/resprobe.py <<'PY'\\nimport numpy as np,itertools\\nfrom scipy.optimize import least_squares\\np=np.load('/tmp/design.npz'); Y=np.c_[p['y'],p['m']]; N=52; z,b,c,h=[p[k][:72] for k in 'zbch']; O=np.ones(72)\\ndef D(*a):return np.column_stack((O,*a))\\ndef fit(F,y):return np.linalg.lstsq(F[:N],y[:N],rcond=1e-9)[0]\\ndef proj(F,y):return F@fit(F,y)\\ndef quad(x):return np.stack([x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(x.shape[1]),2)],axis=1)\\nbq=quad(b); zq=quad(z); cq=quad(c); hq=quad(h)\\nW={'z':z,'b':b,'c':c,'h':h,'bq':bq,'zq':zq,'cq':cq,'hq':hq,'t':np.tanh(z),'g':Y[:,1:],'gq':quad(Y[:,1:])}\\nfor j in [1,2,0]:\\n y=Y[:,j]; tests=[]\\n for k in range(1,4):\\n  for ss in itertools.combinations([s for s in W if j==0 or s not in ['g','gq']],k):\\n   F=D(*(W[s] for s in ss));\\n   if F.shape[1]>28:continue\\n   v=fit(F,y); e=F@v-y; tests.append((np.mean(abs(e[N:])),np.mean(abs(e[:N])),ss))\\n print('linear',j,sorted(tests)[:10]);\\n if j==1:\\n  U=np.c_[z[:,2]+z[:,3],z[:,0]-z[:,1]]\\n  for ss in [(),('z',),('b',),('c',),('h',),('zq',),('cq',),('z','b'),('z','c'),('z','h'),('z','c','h'),('zq','b'),('zq','h')]:\\n   def F(q):return D(np.tanh(U*q[:2]+q[2:]),*[W[s] for s in ss])\\n   q=least_squares(lambda q:(proj(F(q),y)-y)[:N], [1,1,0,0],bounds=([.01,.01,-3,-3],[10,10,3,3])).x\\n   e=proj(F(q),y)-y;print('paired',ss,np.round(q,3),np.round([np.mean(abs(e[:N])),np.mean(abs(e[N:]))],4),np.round(fit(F(q),y),2))\\n if j==2:\\n  bf=[D(b,bq),D(bq),D(z,b,bq),D(b,bq,c),D(b,bq,h),D(np.c_[b[:,0]*b[:,1],b[:,2]*b[:,3],b[:,0]*b[:,3]])]; out=[]\\n  for nf,F in enumerate(bf):\\n   for k,A in [('z',z),('b',b),('c',c),('h',h)]:\\n    U=[(str(i),A[:,i]) for i in range(4)] + [(f'{i}{s:+d}{l}',A[:,i]+s*A[:,l]) for i,l in itertools.combinations(range(4),2) for s in [-1,1]]\\n    for nm,u in U:\\n     for mode in range(3):\\n      def G(q):\\n       den=1+q[0]*(u-q[1])**2\\n       if mode==0:return F/den[:,None]\\n       if mode==1:return D(F[:,1:]/den[:,None])\\n       return D(F[:,1:],1/den)\\n      q=least_squares(lambda q:(proj(G(q),y)-y)[:N],[.6,0],bounds=([0,-2],[20,2]),max_nfev=50).x\\n      e=(proj(G(q),y)-y);out.append((np.mean(abs(e[N:])),np.mean(abs(e[:N])),nf,k,nm,mode,np.round(q,3)))\\n  print('rational',sorted(out,key=lambda a:a[0])[:15]);print('rational fit',sorted(out,key=lambda a:a[1])[:8]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/resprobe.py; wait $pid; head -23 /tmp/struct_out; grep -A2 '^IDX' /tmp/struct_out | cut -c1-280; ls /tmp/hegel_continual_archive\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coordinate-wise sparse heads -> H2 paired slow-mode drives and panel-B rational fast-mode interactions; the last measured fast-mode 52/20 MAE was 0.1591.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Rerun only the failed projection search\",\"rejected_reason\":\"The repeated selection of panel-B products and paired latent coordinates also warrants explicit rational and paired-drive tests.\"}],\"rationale\":\"Fix the probe filename collision, then test compact denominators and coupled state features against the first-52 fit while reporting held-out errors separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "47cb5bdc652ddfdae7b6b07ed8e688cfa8ca9fe5754c54df377a674dd89a9ee4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35858.73,
+      "usage_known": true,
+      "prompt_tokens": 29094,
+      "cached_tokens": 5504,
+      "completion_tokens": 1427
+    }
+  ]
+}

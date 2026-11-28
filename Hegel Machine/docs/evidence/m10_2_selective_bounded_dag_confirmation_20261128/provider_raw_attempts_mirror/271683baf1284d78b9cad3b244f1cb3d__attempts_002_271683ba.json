@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "271683baf1284d78b9cad3b244f1cb3d",
+  "call_seq": 2,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_14__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:56.479884+00:00",
+  "ended_at_utc": "2026-11-28T16:19:16.304634+00:00",
+  "request_sha256": "c3d41cbd07eef42a69c6829fea37ade1d8e1288456874ffc902b49401767db7a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17982,
+    "cached_tokens": 12672,
+    "completion_tokens": 745
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py; tail -30 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nfor k,z in s.items():\\n print('\\\\n',k)\\n for a,b in (z.items() if isinstance(z,dict) else [('value',z)]):\\n  b=np.asarray(b);print(a,b.shape,'mean',b.mean(0),'std',b.std(0),'range',b.min(),b.max());print(b[:5] if b.ndim>1 else b[:12]);\\n if k.startswith('panel'):\\n  u=np.c_[z['u'],np.ones(len(z['u']))]\\n  for a,b in z.items():\\n   if a=='u':continue\\n   for fit in (b,np.arctanh(np.clip(b,-.999999,.999999))):\\n    p=np.linalg.lstsq(u,fit,rcond=None)[0];e=fit-u@p;ii=np.argsort(np.linalg.norm(e,axis=1))[:int(.82*len(u))];p=np.linalg.lstsq(u[ii],fit[ii],rcond=None)[0];print(a,'operator',p,'row residuals',np.sort(np.linalg.norm(fit-u@p,axis=1)))\\nt=s['train'];print('corr',np.corrcoef(np.c_[t['x'],t['y'],t['traj']].T));print('traj sv',np.linalg.svd(t['traj']-t['traj'].mean(0),compute_uv=False));print('trajectory increments',np.diff(t['traj'][:10],axis=1));p=np.linalg.lstsq(np.c_[t['traj'][:52],np.ones(52)],t['y'][:52],rcond=None)[0];print('y from traj',p,np.mean(np.abs(np.c_[t['traj'][52:],np.ones(20)]@p-t['y'][52:])) )\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived graph transfer -> H2 identify this campaign's panel transforms and trajectory-to-response coupling; archived 52/20 MAE is 0.235111 for response and 0.151443 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived solver unchanged\",\n      \"rejected_reason\": \"It already exceeds the public tolerance on both outputs.\"\n    }\n  ],\n  \"rationale\": \"Compare robust affine and inverse-tanh panel fits, and measure the trajectory rank and its predictive relation to the response before choosing a model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "a60df2817b578a006ce88b75aaab0c66ca3de0c0e590578371e7693109aad050",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19823.82,
+      "usage_known": true,
+      "prompt_tokens": 17982,
+      "cached_tokens": 12672,
+      "completion_tokens": 745
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "67875480132941f6b62e090216bb0afc",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:13.411580+00:00",
+  "ended_at_utc": "2026-11-28T15:01:39.709857+00:00",
+  "request_sha256": "4236d58da81766c6824d1896d24032135b89266a9019800d66e4926b2d60f628",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43254,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30890,
+    "cached_tokens": 12672,
+    "completion_tokens": 1077
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated scalar prediction and low-rank trajectory regression.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _basis(x, degree):\\n    return np.column_stack([np.ones(len(x))] + [\\n        np.prod(x[:, j], axis=1)\\n        for d in range(1, degree + 1)\\n        for j in combinations_with_replacement(range(x.shape[1]), d)\\n    ])\\n\\n\\ndef _calibrated(x, panel):\\n    u, v = panel['u'], panel['v']\\n    a = _affine(u)\\n    fit = np.linalg.lstsq(a, v, rcond=None)[0]\\n    for _ in range(10):\\n        keep = np.argsort(np.linalg.norm(a @ fit - v, axis=1))[:max(5, int(.82 * len(a)))]\\n        fit = np.linalg.lstsq(a[keep], v[keep], rcond=None)[0]\\n    return (x - fit[0]) / fit[1:].diagonal()\\n\\n\\ndef _ridge(f, y, n, penalty):\\n    a = f[:n]\\n    return f[n:] @ np.linalg.solve(a.T @ a + penalty * np.eye(a.shape[1]), a.T @ y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, features = inputs['__input__'], inputs['node_00']\\n    train = study['train']\\n    y, z = train['y'], train['traj']\\n    n = len(y)\\n    x = np.vstack((train['x'], study['test']['x']))\\n    panel = study['panel_b']\\n    transform = np.linalg.lstsq(_affine(panel['u']), panel['v'], rcond=None)[0]\\n    q = _affine(_calibrated(x, study['panel_a'])) @ transform\\n    y_hat = _ridge(_basis(q / np.sqrt(1 + .3 * q*q), 3), y, n, .01)\\n    time_basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amps = z @ time_basis.T\\n    state = (.5 * _ridge(features['raw'], amps, n, .014) +\\n             .5 * _ridge(features['aligned'], amps, n, .014)) @ time_basis\\n    end = state[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | sed -n '/v2 quad coefs/,+9p'\\ncat /holdout_task/_frozen_nodes/node_00.py\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic blend → H2 calibrated panel-B cubic; the scalar probe improves official MAE from 0.07008 to 0.03057, but worst-split MAE is 0.06578.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unregularized cubic after an affine coordinate change\",\n      \"rejected_reason\": \"An invertible affine change spans the same full cubic space; it cannot fix the observed in-sample residual without a different basis or prior.\"\n    }\n  ],\n  \"rationale\": \"Install and verify a candidate that preserves the trajectory head, then inspect the panel-C coefficients for a structural explanation of the remaining scalar error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ecbddd2a81bcfe5064faf4501e50f193053f21d514eeb87b762db26271c7bc1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26296.82,
+      "usage_known": true,
+      "prompt_tokens": 30890,
+      "cached_tokens": 12672,
+      "completion_tokens": 1077
+    }
+  ]
+}

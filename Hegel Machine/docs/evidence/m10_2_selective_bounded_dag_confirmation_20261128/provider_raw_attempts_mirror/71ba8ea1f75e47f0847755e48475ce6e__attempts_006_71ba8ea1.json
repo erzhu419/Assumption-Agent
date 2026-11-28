@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71ba8ea1f75e47f0847755e48475ce6e",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:54.898344+00:00",
+  "ended_at_utc": "2026-11-28T15:56:53.301658+00:00",
+  "request_sha256": "1e9866d54570272f5840900306a002fcb6a57a606ce3cd4d2d76647ec5b32626",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43211,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26040,
+    "cached_tokens": 5504,
+    "completion_tokens": 1667
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection two exponential viscoelastic relaxation' | head -8; cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated cosine operator with scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(6):\\n        bias, gain = np.array([_fit(_affine(a[mask]), b[mask]) for a, b in zip(u.T, v.T)]).T\\n        residual = np.linalg.norm(v - (bias + u * gain), axis=1)\\n        next_mask = residual <= max(4 * np.median(residual), 1e-8)\\n        if np.array_equal(mask, next_mask) or next_mask.sum() < 8:\\n            break\\n        mask = next_mask\\n    return bias, gain\\n\\n\\ndef _operator(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def design(z, frequency):\\n        return _affine(np.cos(frequency * z))\\n    def loss(frequency):\\n        a = design(u, frequency)\\n        return np.sum((a @ _fit(a, v) - v)**2)\\n    grid = np.linspace(.2, 16., 160)\\n    i = np.argmin([loss(k) for k in grid])\\n    frequency = minimize_scalar(loss, bounds=(grid[max(0, i-1)], grid[min(len(grid)-1, i+1)]), method='bounded', options={'xatol': 1e-11}).x\\n    mix = _fit(design(u, frequency), v)\\n    return frequency, mix\\n\\n\\ndef _quadratic(w):\\n    x = np.column_stack([w[:, i] * w[:, j] for i in range(w.shape[1]) for j in range(i, w.shape[1])])\\n    return _affine(np.column_stack((w, x)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    bias, gain = _calibration(study['panel_a'])\\n    frequency, mix = _operator(study['panel_b'])\\n    def encode(x):\\n        return _affine(np.cos(frequency * ((np.asarray(x) - bias) / gain))) @ mix\\n    w, wt = encode(train['x']), encode(study['test']['x'])\\n    y_hat = _quadratic(wt) @ _fit(_quadratic(w), train['y'])\\n    x = _affine(w)\\n    coef = _fit(x, train['traj'])\\n    _, _, vh = np.linalg.svd(x @ coef, full_matrices=False)\\n    modes = vh[:2].T\\n    state_pred = (_affine(wt) @ coef @ modes) @ modes.T\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task'); import batch_solver as b\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; f,m=b._operator(s['panel_b']); bias,g=b._calibration(s['panel_a']); w=b._affine(np.cos(f*((tr['x']-bias)/g)))@m\\nprint('calibration',bias,g,'frequency',f); print('panel RMS',np.sqrt(np.mean((b._affine(np.cos(f*s['panel_b']['u']))@m-s['panel_b']['v'])**2)))\\nd=b._quadratic(w[:52]); y=tr['y'][:52]; c=b._fit(d,y); print('scalar coefficients',np.round(c,5),'fit MAE',np.mean(np.abs(d@c-y)))\\ntimes=s['eval_times']; trajectories=tr['traj'][:52]; projected=(np.linalg.qr(b._affine(w[:52]))[0].T@trajectories).T\\nfor x0 in [[.2,2.15],[.5,1.5],[1,4]]:\\n def basis(p): return -np.expm1(-np.outer(times,p))\\n def residual(p):\\n  mat=basis(p); return (mat@b._fit(mat,projected)-projected).ravel()\\n a=least_squares(residual,x0,bounds=(.001,15)); print('rates',a.x,'projected RMS',np.std(a.fun))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine transfer -> H2 panel-B cosine mixing with a quadratic scalar readout and rank-two trajectory; 52/20 MAEs are 0.0044 for y and 0.0042 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine operator and affine scalar readout suffice.\",\n    \"empirical_witness\": \"Panel B's affine fit has a median row residual of 0.969, whereas cosine mixing has panel MSE near 1e-8; adding quadratic readout terms lowers held-out scalar MAE from 0.0427 to 0.0044.\",\n    \"causal_blanket_diagnosis\": \"The affine family misses the even coordinate transform and the scalar interaction terms downstream of the panel operator.\",\n    \"sublated_pivot\": \"Decode panel-A calibration, fit panel-B cosine mixing independently, and fit the two readouts in the recovered coordinates.\",\n    \"risk_kind\": \"algebraic_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use panel C as the primary operator\",\n      \"rejected_reason\": \"Its best tested quadratic variants miss the validation gate, while panel B predicts both outputs within tolerance.\"\n    }\n  ],\n  \"rationale\": \"Build the candidate around the operator recovered from independent panel measurements, then check the official gate and inspect whether a sparser scalar law or shared decay rates are supported.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "78c3d4855ebaa9829f9f80821fcc85898b57d466f605966336221f807139c980",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58926.03,
+      "usage_known": true,
+      "prompt_tokens": 26040,
+      "cached_tokens": 5504,
+      "completion_tokens": 1667
+    }
+  ]
+}

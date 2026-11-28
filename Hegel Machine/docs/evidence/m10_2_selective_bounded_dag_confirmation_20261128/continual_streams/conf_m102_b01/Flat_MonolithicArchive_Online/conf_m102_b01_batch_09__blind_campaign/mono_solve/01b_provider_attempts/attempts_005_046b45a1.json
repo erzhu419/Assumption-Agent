@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "046b45a1a3f94fde9798b66d7216aa45",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:36:49.031471+00:00",
+  "ended_at_utc": "2026-11-28T15:37:19.308266+00:00",
+  "request_sha256": "328150551d42dc4cdca4b83626e5d5722691ba817c1f40447a7314ca77ca30a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39320,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29115,
+    "cached_tokens": 12672,
+    "completion_tokens": 1189
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure.py <<'PY'\\nfrom explore import s,t,x,y,P,aff,ls,poly\\nimport numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True)\\na=s['panel_a']; u,v=a['u'],a['v']; rng=np.random.default_rng(11)\\nfor j in range(4):\\n i=(j+2)%4; q=u[:,j]; r=u[:,i]; print('A column',j)\\n items=[('opp',np.c_[q,r,q*r,q**3,r**3,q*q,r*r,q*q*r,q*r*r]),('full2',poly(u,2)),('full2+cube',np.c_[poly(u,2),u**3]),('full2+sin',np.c_[poly(u,2),np.sin(u)]),('opptrig',np.c_[q,r,q*r,np.sin(q),np.sin(r),np.tanh(q),np.tanh(r)])]\\n for name,f in items:\\n  d=aff(f); best=(np.inf,None)\\n  for _ in range(180):\\n   idx=rng.choice(len(u),min(len(u),d.shape[1]+2),False)\\n   for rep in range(4):\\n    w=ls(d[idx],v[idx,j]); err=abs(d@w-v[:,j]); idx=np.argsort(err)[:39]\\n   loss=np.mean(err[idx]**2)**.5\\n   if loss<best[0]:best=(loss,w)\\n  print(name,best)\\nfor name,fun,g in [('exp+linear',lambda p:np.c_[1-np.exp(-p[0]*t),t],[1]),('exp+exp',lambda p:np.c_[1-np.exp(-p[0]*t),1-np.exp(-p[1]*t)],[1,.25]),('exp+rat',lambda p:np.c_[1-np.exp(-p[0]*t),t/(1+p[1]*t)],[1,.25]),('exp+sin',lambda p:np.c_[1-np.exp(-p[0]*t),np.sin(p[1]*t)],[1,.4])]:\\n def res(p):\\n  d=fun(p);return (d@ls(d,P.T)-P.T).ravel()\\n q=least_squares(res,g,bounds=(.001,5)); print('time',name,q.x,np.std(q.fun),ls(fun(q.x),P.T)[:,:10])\\nfor key in ['v1','v2']:\\n c=s['panel_c']; u,v=c['u'],c[key]; print('C',key)\\n for fun in [lambda u:u,lambda u:poly(u,2),lambda u:np.c_[poly(u,2),u**3],lambda u:np.c_[u,u*u],lambda u:np.c_[u,np.sin(u),np.tanh(u)],lambda u:np.c_[poly(u,2),np.tanh(u)]]:\\n  d=aff(fun(u)); w=ls(d,v); h=np.sum(d*np.linalg.pinv(d).T,axis=1); print(d.shape,np.sqrt(np.mean((d@w-v)**2,axis=0)),np.mean(abs((d@w-v)/np.maximum(1-h[:,None],1e-10)),axis=0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | sed -n '/A column/,$p'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cyclic calibration and generic readouts -> opposite-coordinate calibration and two shared temporal modes; best measured scalar/trajectory 52/20 MAEs are 0.1159/0.1591 from separate exploratory fits.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived nearest-neighbor calibration basis adequately describes this panel.\",\"empirical_witness\":\"The nearest-neighbor polynomial fits leave median absolute panel residuals near 0.1, and the strongest off-diagonal affine coefficient instead points to the opposite coordinate in all four channels.\",\"causal_blanket_diagnosis\":\"The assumed coordinate pairing can distort every downstream operator evaluated after inversion.\",\"sublated_pivot\":\"Keep robust panel inversion, but test opposite-coordinate and full quadratic bases before fitting readouts.\",\"risk_kind\":\"calibration_operator_grammar\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all eight trajectory outputs independently\",\"rejected_reason\":\"The trajectory's first two singular values are 21.80 and 2.21, versus 0.054 for the third; shared temporal modes are better supported.\"}],\"rationale\":\"Recover the calibration on independent panel measurements and estimate shared temporal bases before attempting to map the scalar and trajectory amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "876de6f1b5667be895a510fcdc4b5130d6caecc73ea624d4128ea62cf9bf72a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30275.59,
+      "usage_known": true,
+      "prompt_tokens": 29115,
+      "cached_tokens": 12672,
+      "completion_tokens": 1189
+    }
+  ]
+}

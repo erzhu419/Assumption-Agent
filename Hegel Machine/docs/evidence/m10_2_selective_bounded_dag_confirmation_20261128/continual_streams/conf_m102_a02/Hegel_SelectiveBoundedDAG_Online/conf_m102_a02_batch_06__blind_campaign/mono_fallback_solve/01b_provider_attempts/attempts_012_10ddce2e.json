@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "10ddce2e38d045e8b52f28863c4f999c",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:38.760725+00:00",
+  "ended_at_utc": "2026-11-28T15:34:11.866137+00:00",
+  "request_sha256": "d17897dbb2a4cfc32f2406daf20cdb924e60ed72233fc047fbf7caf699761ed4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66419,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38692,
+    "cached_tokens": 12672,
+    "completion_tokens": 1430
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -i '/kw={/i\\\\     if alg==OrthogonalMatchingPursuit and p>F.shape[1]:continue' /tmp/sparse2.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse2.py 2>/tmp/sparse2.warn | grep -A8 BEST\\ncat /tmp/hegel_continual_archive/conf_m102_a02_batch_02_solver.py\\ncat >/tmp/compact.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('np.set_printoptions')[0])\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import Lasso\\nW=dict(np.load('/tmp/discover.npz')); N=len(y); I=np.arange(52); J=np.arange(52,N)\\n\\ndef fit(F,alpha):\\n s=np.maximum(F[I].std(0),.03); F=F/s\\n K=F@F.T+100.; return kr(K,alpha)\\ndef kr(K,a):\\n B=np.linalg.inv(K[np.ix_(I,I)]+a*np.eye(len(I))); c=B@y[I]; return np.mean(abs(c/np.diag(B))),np.mean(abs(K[np.ix_(J,I)]@c-y[J]))\\nR=[]\\nfor nm in ['qb','bc','qbc','qbd','b','q','bd','bcd']:\\n A=np.column_stack([W[k] for k in nm]); names=[k+str(i) for k in nm for i in range(4)]\\n for dg in [1,2,3,4]:\\n  P=PolynomialFeatures(dg,include_bias=False); F=P.fit_transform(A)\\n  for a in np.geomspace(1e-4,30,14):R.append((*fit(F,a),nm,dg,a))\\n for mix in [.25,1,4]:\\n  S=A.copy(); S[:,4:]*=mix; d=cdist(S,S,'sqeuclidean'); P=PolynomialFeatures(2,include_bias=False).fit_transform(A); P/=np.maximum(P[I].std(0),.1); K0=P@P.T+100\\n  for h in [.35,.6,1,1.8,3,5]:\\n   for w in [0.01,.1,1,10,100]:\\n    for a in [.001,.03,.3]:R.append((*kr(K0+w*np.exp(-d/(2*h*h)),a),nm,'gp',mix,h,w,a))\\nprint('BEST REG LOO',sorted(R)[:12]); print('BEST REG HOLD',sorted(R,key=lambda a:a[1])[:12]);\\n# Profile low-dimensional smooth modulation of an affine/quadratic readout.\\ndef pol(a):return PolynomialFeatures(2,include_bias=True).fit_transform(a)\\ndef prof(f):\\n X=f[I]; return np.linalg.lstsq(X,y[I],rcond=1e-9)[0]\\nfrom scipy.optimize import minimize\\nR=[]\\nfor nm in ['q','b','c','d','qb','bc']:\\n A=np.column_stack([W[k] for k in nm]);\\n for gn in ['q','b','c','d']:\\n  G=W[gn]; G=np.c_[np.ones(N),G];\\n  for fm in ['rational','gate','addtanh','sine','addrat']:\\n   for deg in [1,2]:\\n    base=np.c_[np.ones(N),A] if deg==1 else pol(A)\\n    if base.shape[1]>20:continue\\n    def ff(p):\\n     g=G@p\\n     if fm=='rational':return base/(1+g[:,None]**2)\\n     if fm=='gate':return np.c_[base,(G[:,1:])/(1+g[:,None]**2)]\\n     if fm=='addtanh':return np.c_[base,np.tanh(g)]\\n     if fm=='addrat':return np.c_[base,1/(1+g*g)]\\n     return np.c_[base,np.sin(g)]\\n    def err(p):\\n     f=ff(p);return f[I]@prof(f)-y[I]\\n    rng=np.random.default_rng(4)\\n    for p in [np.zeros(5)+.1,*rng.normal(size=(4,5))]:\\n     o=least_squares(err,p,bounds=(-8,8),max_nfev=120); F=ff(o.x); E=F@prof(F)-y; R.append((np.mean(abs(E[I])),np.mean(abs(E[J])),nm,gn,fm,deg,o.x.tolist()))\\nprint('BEST LAW TRAIN',sorted(R)[:14]);print('BEST LAW HOLD',sorted(R,key=lambda a:a[1])[:14]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full calibrated-B quadratic → H2 sparse or smoothly modulated readout; verified baseline 52/20 MAEs are 0.05389 for scalar and 0.01834 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare sparse interactions, kernel regularization, and compact rational or gated laws. Fit all readout coefficients on the first 52 rows and report the final 20 separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c505252ce9dfb7b71f61849a1f9e75bf92cb01bf5de343222c8184c9aba1a724",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33104.06,
+      "usage_known": true,
+      "prompt_tokens": 38692,
+      "cached_tokens": 12672,
+      "completion_tokens": 1430
+    }
+  ]
+}

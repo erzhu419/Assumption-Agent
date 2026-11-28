@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25b7eeae3be44fe3ad00f4aa3c44750a",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:50.635980+00:00",
+  "ended_at_utc": "2026-11-28T16:00:04.344214+00:00",
+  "request_sha256": "82b6f879f20d3b4b80e43b5d4e52193f15a76769fd210eefad3735e5f8f66604",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20191,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20697,
+    "cached_tokens": 12672,
+    "completion_tokens": 451
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/*batch_{00,04,06,10,11}_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as n,pickle,glob,importlib.util\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['train']; ss=dict(s,train={k:v[:52] if k!='summary' else v for k,v in t.items()},test={'x':t['x'][52:]})\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('mod',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);p=m.solve_batch(ss);print(f.split('/')[-1],*[round(n.abs(p[k]-t[j][52:]).mean(),6) for k,j in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(type(e),e)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archive transfer -> H2 shared operator blocks with a rank-two trajectory readout; inherited 52/20 MAE is 0.131851 for y and 0.101758 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a generic nonlinear regressor first\",\"rejected_reason\":\"The trajectory has two signal modes, and the archived operator blocks offer more structured candidates that can be directly tested.\"}],\"rationale\":\"Compare all archived predictors on the same held-out split and inspect their operator bases to isolate which blocks transfer.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "882569cb2397a8fe0c289879fb56ba19b9adbf46470dfa579152c4d3fe57c3dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 14237.66,
+      "usage_known": true,
+      "prompt_tokens": 20697,
+      "cached_tokens": 12672,
+      "completion_tokens": 451
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a65ff2b6d3f40b898f854b28cee5cbd",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:44.835386+00:00",
+  "ended_at_utc": "2026-11-28T15:15:20.152736+00:00",
+  "request_sha256": "057d985638b24bff7976157289e96a33e4831f8809ed9aa83659bf9bbe491d2a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30915,
+    "cached_tokens": 12672,
+    "completion_tokens": 1535
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 /tmp/probe_forms.py | awk '/^ B|^ C1|^ C2|^ scalar/{k=7} k>0{print;k--}'; cat >/tmp/probe_warp.py <<'PY'\\nexec(open('/tmp/probe_dag.py').read().split('for d in (1,2,3,4):')[0])\\nfrom scipy.optimize import minimize_scalar\\ncr=list(it.combinations(range(4),2)); sq=[(j,j) for j in range(4)]; ix=np.arange(52); jj=np.arange(52,72)\\nwarp={'cube':lambda x,k:x**3,'sin_cube':lambda x,k:np.sin(k*x**3),'tanh_cube':lambda x,k:np.tanh(k*x**3),'atan_cube':lambda x,k:np.arctan(k*x**3),'rat2':lambda x,k:x**3/(1+k*x**2),'rat4':lambda x,k:x**3/(1+k*x**4),'rat6':lambda x,k:x**3/(1+k*x**6),'pow':lambda x,k:np.sign(x)*abs(x)**k,'sin':lambda x,k:np.sin(k*x)}\\ndef probe(X,Y,i,j):\\n out=[]\\n for key,fn in warp.items():\\n  for mode in ('add','cross','wcross','both','sqcross','no_raw'):\\n   def feat(k):\\n    w=fn(X,k); fs=[np.ones((len(X),1)),w];\\n    if mode!='no_raw':fs.append(X)\\n    if mode in ('cross','sqcross','both'):fs.append(mat(X,cr+(sq if mode=='sqcross' else [])))\\n    if mode in ('wcross','both'):fs.append(mat(w,cr))\\n    return np.column_stack(fs)\\n   def fit(k, ret=False):\\n    A=feat(k); c=n._fit(A[i],Y[i]); r=A@c-Y\\n    return (np.mean(abs(r[j])),np.sqrt(np.mean(r[i]**2)),k,c) if ret else np.mean(r[i]**2)\\n   grid=np.geomspace(.02,6,36); m=np.argmin([fit(k) for k in grid]); k=grid[m]\\n   if key!='cube' and 0<m<len(grid)-1:k=minimize_scalar(fit,bounds=(grid[m-1],grid[m+1]),method='bounded').x\\n   e,train,k,c=fit(k,True);out.append((e,train,key,mode,k,c))\\n for e,train,key,mode,k,c in sorted(out,key=lambda r:r[0])[:12]:\\n  print('val/fit %.5f %.5f %s %s %.4f'%(e,train,key,mode,k), np.round(c,3) if c.ndim==1 else '')\\n return min(out,key=lambda r:r[1])\\nprint('B'); probe(u,v,np.arange(18),np.arange(18,24)); print('scalar'); probe(x,y,ix,jj); print('amp'); probe(x,yy,ix,jj)\\nprint('Outer links & panel prediction');\\nfor h in ('raw','tanh','sin','asinh'):\\n for k in [1.01,1.15,1.5,2,3]:\\n  if h=='raw' and k!=1.01:continue\\n  ft,inv={'raw':(lambda x:x,lambda x:x), 'tanh':(lambda x:np.arctanh(x/k),lambda x:k*np.tanh(x)), 'sin':(lambda x:np.arcsin(x/k),lambda x:k*np.sin(x)), 'asinh':(lambda x:np.arcsinh(x/k),lambda x:k*np.sinh(x))}[h]; k*=np.max(abs(y[ix]));\\n  for bname,bf in [('cube',lambda x:np.c_[n._affine(x),x**3]),('satcube',lambda x:np.c_[n._affine(x),np.tanh(x**3)]),('sin',lambda x:np.c_[n._affine(x),np.sin(3*x)])]:\\n   A=np.c_[bf(x),mat(x,cr)]; c=n._fit(A[ix],ft(y[ix])); r=inv(A@c)-y; print(h, round(k,2),bname,np.round([np.mean(abs(r[ix])),np.mean(abs(r[jj]))],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_warp.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense polynomial readout → compact saturating cubic and interaction models; the cubic scalar holdout MAE is 0.10272, while a compact sinusoidal trajectory-amplitude model reaches 0.02406.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the same nonlinear features for both outputs\",\n      \"rejected_reason\": \"Simple coordinate-wise transforms fit the trajectory amplitude substantially better than the scalar readout.\"\n    }\n  ],\n  \"rationale\": \"Test whether cubic inputs followed by saturation explain the panel and trajectory, and whether scalar error comes from missing interactions or an outer link.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4d8aaeabe157b588d80ae5f6474c5536169d28df8197bca0df578ce957191b7f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35315.93,
+      "usage_known": true,
+      "prompt_tokens": 30915,
+      "cached_tokens": 12672,
+      "completion_tokens": 1535
+    }
+  ]
+}

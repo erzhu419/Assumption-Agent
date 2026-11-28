@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "26040c069def4f44a4c1a2ecf6dd2f50",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:57.387019+00:00",
+  "ended_at_utc": "2026-11-28T15:41:16.812370+00:00",
+  "request_sha256": "06ad473bfa4bf2ed2b4a24fa138e400011acad07332cb1c7c44381a430c26315",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 27579,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23731,
+    "cached_tokens": 12672,
+    "completion_tokens": 725
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*00_solver.py /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\ndef ls(f,y):return np.linalg.lstsq(f,y,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\nfor name in ('a','b','c'):\\n d=s['panel_'+name]; u=d['u'];\\n for key in set(d)-{'u'}:\\n  v=d[key]; k=np.linalg.norm(v-u,axis=1)<4 if name=='a' else np.ones(len(u),bool); x,y=u[k],v[k]; print(name,key,len(x))\\n  for label,f in [('linear',aff(x)),('poly2',np.c_[aff(x),*[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]]),('sin',np.c_[aff(x),np.sin(2.4*x)]),('tanh',aff(np.tanh(2.15*x))),('atan',aff(np.arctan(2.15*x)))]:\\n   w=ls(f,y); print(label,np.sqrt(np.mean((f@w-y)**2)), np.sqrt(np.mean(((f@w-y)/(1-np.sum(np.linalg.svd(f,full_matrices=False)[0]**2,axis=1))[:,None])**2))); \\n   if label=='linear': print(w)\\nz=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; print('t',t); p,d,v=np.linalg.svd(z,full_matrices=False);print('svd',d); print('modes',v[:5]); print('y from z',ls(aff(z),y),np.mean(abs(aff(z)@ls(aff(z),y)-y))); print('first differences SVD',np.linalg.svd(np.diff(z),compute_uv=False)); print('z residual rank 2', np.mean(abs(z-(p[:,:2]*d[:2])@v[:2]),axis=0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived GP → panel-specific nonlinear maps and low-rank time evolution; prior 52/20 y and trajectory MAEs are 0.285118 and 0.388214.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare panel laws with leave-one-row-out errors and test whether trajectory rank and its relation to the scalar output constrain the graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "306182b6880f1493d7b3a08e2c79b2cee4dfa13a5c81c8afbaaca8d339dff858",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19424.46,
+      "usage_known": true,
+      "prompt_tokens": 23731,
+      "cached_tokens": 12672,
+      "completion_tokens": 725
+    }
+  ]
+}

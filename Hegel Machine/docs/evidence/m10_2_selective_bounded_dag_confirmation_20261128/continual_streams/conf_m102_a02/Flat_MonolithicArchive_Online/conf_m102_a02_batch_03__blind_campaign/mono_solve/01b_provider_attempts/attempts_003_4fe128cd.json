@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4fe128cd257342cf9f0e2876a19feede",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:26.141819+00:00",
+  "ended_at_utc": "2026-11-28T15:14:49.829153+00:00",
+  "request_sha256": "f8d81e666fd4022bdf08f87dec4ab92582a9ebdcb20bb25f310ab51c312bf278",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21724,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21799,
+    "cached_tokens": 12672,
+    "completion_tokens": 810
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*02_solver.py; tail -45 /tmp/hegel_continual_archive/*01_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,glob,runpy,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=6,suppress=True)\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; i=np.arange(52); j=np.arange(52,72)\\na={**s,'train':{**s['train'],'x':x[i],'y':y[i],'traj':z[i]},'test':{'x':x[j]}}\\nprint('time telemetry summary',s['eval_times'],s['telemetry_vec'],s['train']['summary'])\\np=s['panel_a']; A=np.c_[np.ones(48),p['u']]; V=p['v']; k=np.ones(48,bool)\\nfor _ in range(8):\\n w=np.linalg.lstsq(A[k],V[k],rcond=None)[0]; e=np.linalg.norm(A@w-V,axis=1); k=e<max(7*np.median(e),.0004)\\nprint('panel A',w,'sorted resid',np.sort(e))\\nfor fn in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n o=runpy.run_path(fn)['solve_batch'](a); print(fn,np.mean(abs(o['y_hat']-y[j])),np.mean(abs(o['state_pred']-z[j])))\\nfor d in range(1,6):\\n F=np.column_stack([np.prod(x[:,p],axis=1) for k in range(d+1) for p in itertools.combinations_with_replacement(range(4),k)]); tar=np.c_[y,z]; G=F[i].T@F[i]\\n for r in (0,1e-4,.002,.02,.2):\\n  W=np.linalg.lstsq(F[i],tar[i],rcond=None)[0] if r==0 else np.linalg.solve(G+r*np.eye(len(G)),F[i].T@tar[i]); E=F@W-tar\\n  print(d,r,'train rms',np.sqrt(np.mean(E[i]**2,0))[[0,1,-1]],'test mae',np.mean(abs(E[j]),0)[[0,1,-1]],np.mean(abs(E[j,1:])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived affine trajectory) -> H2 (nonlinear spatial amplitudes for two temporal modes); the pre-LLM 52/20 response and trajectory MAEs were 0.050964 and 0.205189.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight independent temporal models\",\"rejected_reason\":\"Only two trajectory singular values stand clearly above the noise floor, so the timestamps can share a temporal basis.\"}],\"rationale\":\"Compare archived and polynomial models on the required split. Recover the calibration map separately so the next comparison can test nonlinear operators in calibrated coordinates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "27aaae8c86d10dc9f14fba4cb8dec6dbaaa698ff0012d383a42ae458c4e73cc4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23684.05,
+      "usage_known": true,
+      "prompt_tokens": 21799,
+      "cached_tokens": 12672,
+      "completion_tokens": 810
+    }
+  ]
+}

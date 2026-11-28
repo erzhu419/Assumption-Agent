@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "413da708219044e182872cca08dfcdd8",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:58.720150+00:00",
+  "ended_at_utc": "2026-11-28T15:47:51.693002+00:00",
+  "request_sha256": "2e610dce9b7c2e598293fb9fd05d45199dc340a376f37c0ec74b5b3749f620bc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75971,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45611,
+    "cached_tokens": 12672,
+    "completion_tokens": 2294
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ard.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task')\\nfrom batch_solver import *\\nfrom scipy.optimize import nnls\\nfrom scipy.spatial.distance import cdist\\n\\ndef ard(w,Y,n,kind,init):\\n    w=(w-w[:n].mean(0))/np.maximum(w[:n].std(0),1e-8); Y=np.asarray(Y); m=Y.mean(0); sc=np.maximum(Y.std(0),1e-8); Y=(Y-m)/sc\\n    d=((w[:n,None,:]-w[None,:n,:])**2).transpose(2,0,1).copy(); dc=((w[n:,None,:]-w[None,:n,:])**2).transpose(2,0,1).copy(); p=len(d); I=np.eye(n); G=1+w[:n]@w[:n].T/p; Gc=1+w[n:]@w[:n].T/p\\n    def ker(h,dist,G,train):\\n        a=np.exp(h); s=np.einsum('i,ijk->jk',a[:p],dist)\\n        if kind==0: k=np.exp(-s); grad=-k\\n        if kind==1: r=np.sqrt(3*s+1e-30); v=np.exp(-r); k=(1+r)*v; grad=-1.5*v\\n        if kind==2: r=np.sqrt(5*s+1e-30); v=np.exp(-r); k=(1+r+r*r/3)*v; grad=-(5/6)*(1+r)*v\\n        if kind==3: k=(1+s)**-2; grad=-2*(1+s)**-3\\n        C=a[p]*k+a[p+1]*G+a[p+2]*G**2\\n        if not train:return C\\n        return C+a[-1]*I,[*(a[:p,None,None]*dist*(a[p]*grad)[None,:,:]),a[p]*k,a[p+1]*G,a[p+2]*G**2,a[-1]*I]\\n    def loss(h):\\n        C,J=ker(h,d,G,True); L=cho_factor(C); A=cho_solve(L,Y); B=cho_solve(L,I)-A@A.T/Y.shape[1]; delta=h[:p]+3.0; return .5*np.sum(A*Y)/Y.shape[1]+np.log(L[0].diagonal()).sum()+.002*sum(delta**2), np.einsum('ijk,jk->i',J,B)*.5+np.r_[.004*delta,[0]*4]\\n    opt=minimize(loss,np.r_[np.full(p,init),0,-4,-4,-7],jac=True,method='L-BFGS-B',bounds=[(-11,4)]*p+[(-8,9),(-12,6),(-12,6),(-14,-2)],options={'maxiter':130})\\n    C,_=ker(opt.x,d,G,True); L=cho_factor(C); A=cho_solve(L,Y); loo=Y-A/cho_solve(L,I).diagonal()[:,None]; return (m+ker(opt.x,dc,Gc,False)@A*sc),m+loo*sc,np.exp(opt.x),opt.fun\\n\\ndef fixed(w,Y,n,deg,ls,l):\\n    w=(w-w[:n].mean(0))/np.maximum(w[:n].std(0),1e-9); D=cdist(w,w,'sqeuclidean')/w.shape[1]; G=1+w@w.T/w.shape[1]; K=G**deg+np.exp(-D/ls)*3; L=cho_factor(K[:n,:n]+l*np.eye(n)); a=cho_solve(L,Y); return K[n:,:n]@a,Y-a/cho_solve(L,np.eye(n)).diagonal()\\n\\ndef sbranch(panel,x,form):\\n    u,v=[panel[k] for k in ('u','v')]; a=affine(u)\\n    if form==0: fn=lambda u,h:np.c_[affine(u),np.sin(h[0]*u)]\\n    if form==1: fn=lambda u,h:np.c_[affine(u),np.tanh(h[0]*u),np.sin(h[1]*u)]\\n    if form==2: fn=lambda u,h:np.c_[affine(u),np.cos(h[0]*u)]\\n    def r(h):\\n        A=fn(u,h);return (A@fit(A,v)-v).ravel()\\n    opt=min((least_squares(r,ini,bounds=(.15,7),max_nfev=120) for ini in [(1,1),(2,2),(3.5,1.25),(1.25,3.5),(4.5,2.5)]),key=lambda o:o.cost)\\n    return fn(x,opt.x)@fit(fn(u,opt.x),v)\\n\\ndef examine(s,z,b,t,y,jj,kk,extended=True):\\n    idx=np.r_[jj,kk]; n=len(jj); z,b=z[idx],b[idx]; t=t[idx]; y=y[jj]; U,sv,V=np.linalg.svd(t[:n],full_matrices=False); pcs=t[:n]@V[:3].T\\n    B=sbranch(s['panel_b'],z,0); C=sbranch({'u':s['panel_c']['u'],'v':s['panel_c']['v1']},z,1); D=sbranch({'u':s['panel_c']['u'],'v':s['panel_c']['v2']},z,2)\\n    W={'z':z,'b':b,'B':B,'zb':np.c_[z,b],'zB':np.c_[z,B],'bC':np.c_[b,C],'bD':np.c_[b,D],'bCD':np.c_[b,C,D],'zbCD':np.c_[z,b,C,D]}; out={}\\n    for name,w in W.items():\\n        for k in [0,2,3]:\\n            for yi in [0,1,2]:\\n                target=np.c_[y,pcs[:,1:]] if yi==1 else np.c_[y,pcs] if yi==2 else y[:,None]; pr,lo,h,c=ard(w,target,n,k,-3)\\n                out[(name,k,yi)]=(pr[:,0],lo[:,0],c,h)\\n        for degree in [1,2,3]:\\n            for ls in [2,6,16]:\\n                for l in [.0001,.001,.01]:\\n                    pr,lo=fixed(w,y,n,degree,ls,l);out[(name,degree,ls,l)]=(pr,lo,0,[])\\n    return out\\n\\nif __name__=='__main__':\\n    from probe import s\\n    z,b,n=features(s); y=s['train']['y'];t=s['train']['traj'];\\n    allout=[]\\n    for i in [0,10,17,25,42]:\\n        jj=np.arange(52) if not i else np.random.default_rng(i).permutation(72)[:52]; kk=np.setdiff1d(np.arange(72),jj); out=examine(s,z,b,t,y,jj,kk); allout.append((jj,kk,out));\\n        print('split',i,flush=True)\\n        orders=lambda which: sorted(out,key=lambda k:np.mean(abs(out[k][which]-y[[kk,jj][which]])))\\n        for which in [0,1]:\\n            for k in orders(which)[:8]:print(k,round(np.mean(abs(out[k][0]-y[kk])),5),round(np.mean(abs(out[k][1]-y[jj])),5),np.round(out[k][3],3),flush=True)\\n        for typ in [0,1,2]:\\n            keys=[k for k in orders(1) if not typ or len(k)==typ+2];\\n            for count in [3,10,25]:print('avg',typ,count,np.mean(abs(np.mean([out[k][0] for k in keys[:count]],0)-y[kk])),flush=True)\\n    import pickle\\n    pickle.dump(allout,open('/tmp/ard.pkl','wb')); out=allout[0][-1]\\n    for k in sorted(out,key=lambda k:np.mean([np.mean(abs(o[k][0]-y[kk])) for j,kk,o in allout]))[:15]:print('aggregate', k,np.round([np.mean(abs(o[k][0]-y[kk])) for j,kk,o in allout],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ard.py >/tmp/ard.out; grep -E '^split|^avg|^aggregate' /tmp/ard.out; head -18 /tmp/ard.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isotropic branch kernels → H2 anisotropic and joint-output kernels; the saved 52/20 candidate scores 0.064934 target MAE and 0.021596 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether the target depends disproportionately on a few calibrated coordinates or shares a smoother covariance with trajectory modes. Compare fold-local selection against several rotated 52/20 splits before promoting a candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b0243d88736545291a5a15abaa5260beda27db0aa21c0b81e05d77c96ade3c15",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52971.12,
+      "usage_known": true,
+      "prompt_tokens": 45611,
+      "cached_tokens": 12672,
+      "completion_tokens": 2294
+    }
+  ]
+}

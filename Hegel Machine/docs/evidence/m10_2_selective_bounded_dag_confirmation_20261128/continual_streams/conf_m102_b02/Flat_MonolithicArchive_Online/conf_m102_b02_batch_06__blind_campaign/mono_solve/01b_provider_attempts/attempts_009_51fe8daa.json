@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51fe8daae80a4e41ae28b09fd93d27a6",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:45.770474+00:00",
+  "ended_at_utc": "2026-11-28T15:35:32.189955+00:00",
+  "request_sha256": "63a6ff0c7a4c5da5e9647fe8d04042c77d5edc9ad3f5122606bec6a1410607f8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62116,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38537,
+    "cached_tokens": 12672,
+    "completion_tokens": 2073
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the observation coordinates and infer a shared trajectory/readout model.\\\"\\\"\\\"\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a,b):\\n    return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\n\\n\\ndef _i(a):\\n    return np.column_stack((np.ones(len(a)),a))\\n\\n\\ndef _pair(a):\\n    return a*np.roll(a,-1,axis=1)\\n\\n\\ndef _cal(a):\\n    p=np.roll(a,-1,axis=1)\\n    return np.stack((np.ones_like(a),a,p,a*p,a**3),axis=-1)\\n\\n\\ndef _calibrate(panel,x):\\n    d=_cal(panel['u']); v=panel['v']; keep=np.ones(len(v),bool)\\n    for _ in range(8):\\n        Co=np.array([_ls(d[keep,j],v[keep,j]) for j in range(4)])\\n        err=np.max(np.abs(np.einsum('nik,ik->ni',d,Co)-v),axis=1)\\n        take=err<.75\\n        if take.sum()<8 or np.array_equal(take,keep):\\n            break\\n        keep=take\\n    def fun(a):\\n        return np.einsum('ik,ik->i',_cal(a[None,:])[0],Co)\\n    return np.array([least_squares(lambda a:fun(a)-row,row).x for row in x]).reshape(-1,4)\\n\\n\\ndef _operator(u,v,x,fn,init):\\n    def residual(p):\\n        d=fn(u,p)\\n        return (d@_ls(d,v)-v).ravel()\\n    p=least_squares(residual,init,max_nfev=140).x\\n    return fn(x,p)@_ls(fn(u,p),v)\\n\\n\\ndef _cross(a,b):\\n    return np.column_stack([np.sum(a*np.roll(b,k,axis=1),axis=1) for k in range(4)])\\n\\n\\ndef _ridge(a,b,x,alpha):\\n    sd=np.maximum(a.std(0),1e-6); sd[0]=1\\n    a=a/sd; pen=alpha*np.eye(a.shape[1]);pen[0,0]=0\\n    return (x/sd)@np.linalg.solve(a.T@a+pen,a.T@b)\\n\\n\\ndef _response(d,y,x,fn=np.sin):\\n    beta=_ls(d,y); k=len(beta)\\n    def evaluate(p,a):\\n        return a@p[:k]+p[-1]*fn(a@p[k:-1])\\n    fits=[least_squares(lambda p:evaluate(p,d)-y,np.r_[beta,beta*scale,amp],max_nfev=125)\\n          for scale,amp in ((.65,.5),(1.,-.5),(2.,.5),(.65,-.5))]\\n    return evaluate(min(fits,key=lambda f:f.cost).x,x)\\n\\n\\ndef _coords(study,x,bmode='sat',cmode='c'):\\n    z=_calibrate(study['panel_a'],x)\\n    b=study['panel_b']; c=study['panel_c']; u=c['u']\\n    if bmode=='sat':\\n        bf=lambda x,p:_i(np.c_[x,x/(1+np.exp(p[0])*x*x)])\\n        bp=[-.2]\\n    elif bmode=='sin':\\n        bf=lambda x,p:_i(np.c_[x,np.sin(np.exp(p[0])*x)])\\n        bp=[1.05]\\n    else:\\n        bf=lambda x,p:_i(x-p[0]*np.sin(p[1]*x))\\n        bp=[.4,2.85]\\n    w=_operator(b['u'],b['v'],z,bf,bp)\\n    q=_i(_pair(w))@_ls(_i(_pair(u)),c['v1'])\\n    if cmode=='c4':\\n        cf=lambda x,p:_i(x+p[0]*x*x+p[1]*x**4)\\n        cp=[.53,-.064]\\n    else:\\n        cf=lambda x,p:_i(x+p[0]*x*x+p[1]*x**3)\\n        cp=[.45,0]\\n    r=_operator(u,c['v2'],w,cf,cp)\\n    return z,w,q,r\\n\\n\\ndef _estimate(z,w,q,r,y,tr,ids,test,alpha=.03,fn=np.sin):\\n    base=np.c_[z,q,r]; d=_i(np.c_[base,*[_cross(a,b) for a,b in combinations((z,w,q,r),2)]])\\n    t=tr[ids]; mean=t.mean(0); modes=np.linalg.svd(t-mean,full_matrices=False)[2][:3]\\n    scores=(t-mean)@modes.T\\n    predicted=_ridge(d[ids],scores,d[test],alpha)\\n    yh=_response(_i(np.c_[z[ids],q[ids],scores]),y[ids],_i(np.c_[z[test],q[test],predicted]),fn)\\n    return yh,predicted@modes+mean\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    a=study['train']; test=study['test']['x']; n=len(a['x'])\\n    z,w,q,r=_coords(study,np.vstack((a['x'],test)))\\n    y,tr=_estimate(z,w,q,r,a['y'],a['traj'],np.arange(n),np.arange(n,n+len(test)))\\n    return dict(y_hat=y,state_pred=tr,diagnostics_vec=np.array([y.mean(),y.std(),tr[:,-1].mean(),tr[:,-1].std()]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/cv6.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _coords,_estimate\\nimport numpy as np,pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['train']; n=len(a['x']); rng=np.random.default_rng(229);\\nfolds=[np.arange(n),*[rng.permutation(n) for _ in range(8)]]\\nfor b in ['sat','sin','sine']:\\n for c in ['c','c4']:\\n  z,w,q,r=_coords(s,a['x'],b,c)\\n  for f in [np.sin,np.tanh]:\\n   errs=[]\\n   for fold in folds:\\n    ids,te=fold[:52],fold[52:];p,t=_estimate(z,w,q,r,a['y'],a['traj'],ids,te,fn=f);errs.append((abs(p-a['y'][te]).mean(),abs(t-a['traj'][te]).mean()))\\n   err=np.asarray(errs);print(b,c,f.__name__,'official',err[0].round(5),'random mean/max',err[1:].mean(0).round(5),err[1:].max(0).round(5),'y folds',err[:,0].round(4),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: direct panel readout -> H2: shared trajectory scores with a nonlinear response; the latest 52/20 response MAE is 0.02333, with trajectory MAE to be verified on the saved solver.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the quartic panel C operator immediately\",\n      \"rejected_reason\": \"It fits the panel more closely, but its effect on response and trajectory must be tested across splits before promotion.\"\n    }\n  ],\n  \"rationale\": \"Save the first deployable model that clears the response gate, then compare panel grammars and response links on repeated held-out splits to check that the gain is not confined to the prescribed split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "57b549a1e639c540116d8ec0578943d00eed927f6acbf1622900294a4bab2ad6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46418.34,
+      "usage_known": true,
+      "prompt_tokens": 38537,
+      "cached_tokens": 12672,
+      "completion_tokens": 2073
+    }
+  ]
+}

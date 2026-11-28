@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2da77baa3fe0440b843dc8f0eef01077",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:47.228613+00:00",
+  "ended_at_utc": "2026-11-28T15:29:23.116189+00:00",
+  "request_sha256": "a73f6b66fbbb0cab8282a898cce19ded4f4dd258fa4fd9a24dadfdf3c8ffcb69",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35123,
+    "cached_tokens": 12672,
+    "completion_tokens": 1518
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Robust calibration, shared panel response, and separate output regressions.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _latents(study, x):\\n    panel = study['panel_a']\\n    u, v = panel['u'], panel['v']\\n    a, b = np.triu_indices(len(u), 1)\\n    du = u[a] - u[b]\\n    scale = np.nanmedian(np.divide(v[a]-v[b], du, where=abs(du)>1e-10,\\n                                  out=np.full_like(du, np.nan)), axis=0)\\n    shift = np.median(v-u*scale, axis=0)\\n    for j in range(u.shape[1]):\\n        e = abs(v[:, j] - shift[j] - u[:, j]*scale[j])\\n        keep = e <= max(.001, 6*np.median(e))\\n        shift[j], scale[j] = _ls(_aff(u[keep, j]), v[keep, j])\\n    panel = study['panel_b']\\n    u, v = panel['u'], panel['v']\\n\\n    def basis(z, p):\\n        return _aff(z*(p[2]+z**2*(1+z**2*(p[0]+p[1]*z**2))))\\n\\n    def residual(p):\\n        f = basis(u, p)\\n        return (f@_ls(f, v)-v).ravel()\\n\\n    p = least_squares(residual, [-.45,.09,-.09], gtol=1e-11).x\\n    return basis((x-shift)/scale, p)@_ls(basis(u,p), v)\\n\\n\\ndef _cross(h):\\n    i,j = np.triu_indices(h.shape[1],1)\\n    return np.c_[_aff(h), h[:,i]*h[:,j]]\\n\\n\\ndef _scalar(h, q, y):\\n    f = _cross(h)\\n    pen = np.diag(np.r_[np.zeros(5), np.full(f.shape[1]-5,.03)])\\n    return _cross(q) @ np.linalg.solve(f.T@f+pen,f.T@y)\\n\\n\\ndef _state(h, q, traj):\\n    _, _, right = np.linalg.svd(traj, full_matrices=False)\\n    time = right[0]\\n    return np.outer(_aff(q) @ _ls(_aff(h),traj@time), time)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, q = train['x'], study['test']['x']\\n    h, hq = np.split(_latents(study,np.vstack((x,q))),[len(x)])\\n    y = _scalar(h,hq,train['y'])\\n    state = _state(h,hq,train['traj'])\\n    end = state[:,-1]\\n    diag = np.array([y.mean(),y.std(),end.mean(),end.std()]) if len(y) else np.zeros(4)\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':diag}\\nPY\\ncat > /tmp/campaigncheck.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train'];rng=np.random.default_rng(886)\\nps=[np.arange(72)]+[rng.permutation(72) for _ in range(25)]+[np.argsort(t['x'][:,j]*sgn) for j in range(4) for sgn in (-1,1)]\\nE=[]\\nfor p in ps:\\n a,b=p[:52],p[52:];r=m.solve_batch(dict(s,train={k:t[k][a] for k in ['x','y','traj']},test={'x':t['x'][b]}));E.append([abs(r['y_hat']-t['y'][b]).mean(),abs(r['state_pred']-t['traj'][b]).mean(),abs(r['state_pred']-t['traj'][b]).mean(axis=0).max()]);assert np.all(np.isfinite(r['diagnostics_vec']))\\nprint('gate',E[0]);print('random mean',np.mean(E[1:26],axis=0),'worst',np.max(E[1:26],axis=0));print('extreme slices',np.round(E[26:],5),'worst',np.max(E[26:],axis=0));print('test ranges',[(k,v.min(),v.max()) for k,v in m.solve_batch(s).items()]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/campaigncheck.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted quadratic readout) -> H2 (shared panel B response with a cross-term readout); prototype scalar MAE is 0.03706 on the required split and 0.04577 on the worst of ten alternate splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Use the archived rational branch unchanged\",\"rejected_reason\":\"Its denominator is specific to an earlier campaign and has not been supported by the current panel or readout data.\"}],\"rationale\":\"Save and independently verify the gate-passing prototype. Score both outputs separately across alternate splits and coordinate tails before considering a challenger.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "91621dff1e36fd05134e747b9a5ca203f22a56abf93694964a64e2ecc5a94427",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35886.43,
+      "usage_known": true,
+      "prompt_tokens": 35123,
+      "cached_tokens": 12672,
+      "completion_tokens": 1518
+    }
+  ]
+}

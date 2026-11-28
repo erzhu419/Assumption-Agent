@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ed6c9dc4a12482cb6fdb53fff056499",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:16:53.254606+00:00",
+  "ended_at_utc": "2026-11-28T16:17:11.836155+00:00",
+  "request_sha256": "239855cb66a57c059b24aebb43c00e2394b5f4e778f178dd018e44f1b876844d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21089,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20596,
+    "cached_tokens": 12672,
+    "completion_tokens": 719
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np, glob, importlib.util, copy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; tr=s['train']; print('times',s['eval_times'],'telemetry',s['telemetry_vec'],'summary',tr['summary']); print('trajectory singular values',np.linalg.svd(tr['traj']-tr['traj'].mean(0),compute_uv=False)); print('range x',tr['x'].min(0),tr['x'].max(0)); print('first examples',np.c_[tr['x'],tr['y'],tr['traj']][:5]);\\nfor name in ['panel_a','panel_b','panel_c']:\\n p=s[name]; u=p['u']; a=np.c_[np.ones(len(u)),u]; print(name,'u range',u.min(0),u.max(0));\\n for k,v in p.items():\\n  if k=='u':continue\\n  e=np.linalg.norm(a@np.linalg.lstsq(a,v,rcond=None)[0]-v,axis=1); print(k,'affine residual percentiles',np.percentile(e,[0,25,50,75,100]),'output range',v.min(0),v.max(0))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); q=copy.deepcopy(s); q['train']={k:(v[:52] if k!='summary' else np.array([tr['y'][:52].mean(),tr['y'][:52].std(),tr['traj'][:52,-1].mean(),tr['traj'][:52,-1].std()])) for k,v in tr.items()}; q['test']={'x':tr['x'][52:].copy()}; r=m.solve_batch(q); print(f.split('/')[-1],np.mean(np.abs(r['y_hat']-tr['y'][52:])),np.mean(np.abs(r['state_pred']-tr['traj'][52:])));\\n except Exception as e: print(f.split('/')[-1],repr(e))\\nPY\\nfor i in 10 13 14; do cat /tmp/hegel_continual_archive/conf_m102_a03_batch_${i}_solver.py; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived operator grammars → campaign-specific graph selection; pre-LLM fixed-split MAE was 0.388774 for the scalar and 0.415750 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure each archived solver on the same 52/20 split and inspect panel residuals and trajectory rank to identify which operator families merit refitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e77b9a8c63f63d3550f63fe0b90c7ecae0fbd7631e16158c85af9cb304b44353",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18578.52,
+      "usage_known": true,
+      "prompt_tokens": 20596,
+      "cached_tokens": 12672,
+      "completion_tokens": 719
+    }
+  ]
+}

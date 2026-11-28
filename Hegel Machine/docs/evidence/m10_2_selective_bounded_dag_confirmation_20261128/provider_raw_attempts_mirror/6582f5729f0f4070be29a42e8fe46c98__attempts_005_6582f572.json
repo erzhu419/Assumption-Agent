@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6582f5729f0f4070be29a42e8fe46c98",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:59.029624+00:00",
+  "ended_at_utc": "2026-11-28T15:17:32.221293+00:00",
+  "request_sha256": "9bb3fd6692a2c5ee8eac537c868269b48a2bd1d08488579bef89b46646bbadab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37959,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28229,
+    "cached_tokens": 12672,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nP=[()] + [j for d in (1,2,3) for j in combinations_with_replacement(range(4),d)]\\ndef design(x,p=P): return np.column_stack([np.prod(x[:,j],axis=1) for j in p])\\ndef ls(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef calibrate(panel):\\n u,v=panel['u'],panel['v']; g=design(u); k=np.linalg.norm(v-u,axis=1)<5; w=ls(g[k],v[k]); active=abs(w)>.002\\n for j in range(4):\\n  w[~active[:,j],j]=0; w[active[:,j],j]=ls(g[k][:,active[:,j]],v[k,j]); print('A',j,[(p,round(float(q),6)) for p,q in zip(P,w[:,j]) if q]);\\n print('A rmse',np.std(g[k]@w-v[k])); return w\\ndef inverse(x,w):\\n u=np.linalg.solve(w[1:5].T,(x-w[0]).T).T\\n for _ in range(30):\\n  r=design(u)@w-x\\n  if np.max(abs(r))<1e-10: break\\n  J=np.stack([np.column_stack([j.count(h)*np.prod(u[:,list(j[:j.index(h)]+j[j.index(h)+1:])],axis=1) if h in j else np.zeros(len(u)) for j in P])@w for h in range(4)],axis=2)\\n  delta=np.linalg.solve(J,r[:,:,None])[:,:,0]; u-=delta/np.maximum(1,np.max(abs(delta),axis=1,keepdims=True))\\n print('inversion max error',np.max(abs(design(u)@w-x)),'range',u.min(0),u.max(0));return u\\ndef temporal(t,z):\\n def basis(p): return -np.expm1(-t[:,None]*np.exp(p))\\n def res(p):\\n  g=basis(p);return (g@ls(g,z.T)-z.T).ravel()\\n return basis(least_squares(res,np.log([.4,1.8])).x)\\nif __name__=='__main__':\\n np.set_printoptions(precision=5,suppress=True); tr=s['train']; x=np.r_[tr['x'],s['test']['x']]; u=inverse(x,calibrate(s['panel_a'])); z=tr['traj']; y=tr['y']; t=s['eval_times']; tb=temporal(t,z[:52]); print('exp amplitude std',ls(tb,z.T).std(1)); print('summary matches',np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]),tr['summary']);\\n b=ls(design(s['panel_b']['u'],P[:5]),s['panel_b']['v']); c=ls(design(s['panel_c']['u'],P[:5]),s['panel_c']['v1']);\\n for name,v in [('raw',x),('cal',u),('braw',design(x,P[:5])@b),('bcal',design(u,P[:5])@b),('craw',design(x,P[:5])@c),('ccal',design(u,P[:5])@c)]:\\n  out=[]\\n  for q in [v,np.tanh(v),v/np.sqrt(1+.25*v*v),v/(1+.25*v*v),np.sin(v)]:\\n   for d in [5,15,35]:\\n    g=design(q,P[:d]); A=g[:52]; coef=ls(A,np.c_[y[:52],ls(tb,z[:52].T).T]); pred=g[52:72]@coef; out.append(tuple(np.round([np.mean(abs(pred[:,0]-y[52:])),np.mean(abs(pred[:,1:]@tb.T-z[52:]))],5)))\\n  print(name,out)\\n for name,v in [('cal',u),('bcal',design(u,P[:5])@b)]:\\n  for d in [5,15,35]:\\n   g=design(v[:52],P[:d]); target=np.c_[y[:52],ls(tb,z[:52].T).T]; w=ls(g,target); print(name,d,'training rms',np.std(g@w-target,axis=0));\\n   if d<=15: print(w)\\n np.savez('/tmp/calgraph.npz',u=u,x=x,b=b,c=c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration -> H2 sparse cubic calibration with two exponential modes; the prior 52/20 trajectory MAE is 0.039949.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or quadratic calibration suffices after removing panel A outliers.\",\n    \"empirical_witness\": \"On 45 clean panel rows, quadratic RMS is 0.04079 and cubic RMS is 0.00004490.\",\n    \"causal_blanket_diagnosis\": \"The calibration leaves nonlinear measurement distortion in the features used for the physical readouts.\",\n    \"sublated_pivot\": \"Recover the sparse cubic map, invert it, and compare calibrated readouts on the prescribed split.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test whether inverting the recovered calibration and fitting two temporal amplitudes improves both held-out outputs; compare the auxiliary panel coordinates rather than assuming they are active.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c379c15d028a809ee8bab935d8c587323e48d326dde27adb086c308122effe12",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33592.21,
+      "usage_known": true,
+      "prompt_tokens": 28229,
+      "cached_tokens": 12672,
+      "completion_tokens": 1422
+    }
+  ]
+}

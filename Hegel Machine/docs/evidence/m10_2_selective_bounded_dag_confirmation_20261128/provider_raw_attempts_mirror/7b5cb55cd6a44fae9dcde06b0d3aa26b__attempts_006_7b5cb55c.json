@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b5cb55cd6a44fae9dcde06b0d3aa26b",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:19.731516+00:00",
+  "ended_at_utc": "2026-11-28T15:11:53.518446+00:00",
+  "request_sha256": "ac06d1285aea3c09f1aa8a12562c49b3fd5eba750d1ac88841749b04b8972cbe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40944,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31168,
+    "cached_tokens": 12672,
+    "completion_tokens": 1455
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/studyfit.py <<'PY'\\nfrom explore import *\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.spatial.distance import cdist\\n\\ndef cal(s,x,details=False):\\n u,v=[s['panel_a'][k] for k in ('u','v')]; _,e=fit(one(np.c_[u,pair(u)]),v); g=e<1\\n def basis(z):\\n  w=np.roll(z,-1,axis=1);return np.stack((np.ones_like(z),z,w,z*w,z**3),axis=2)\\n b=np.stack([ls(basis(u)[g,j],v[g,j]) for j in range(4)])\\n def f(z):return np.einsum('njk,jk->nj',basis(z),b)\\n z0=(x-b[:,0])/b[:,1];z=least_squares(lambda Z:(f(Z.reshape(-1,4))-x).ravel(),z0.ravel(),jac_sparsity=np.kron(np.eye(len(x)),np.eye(4)+np.roll(np.eye(4),1,axis=1)),ftol=1e-12,gtol=1e-12).x.reshape(-1,4)\\n if details:print('cal',b,'forward RMSE',np.mean((f(u)[g]-v[g])**2)**.5,'inverse max',np.max(abs(f(z)-x)))\\n return z\\n\\ndef branch(p,z,key,details=False):\\n u=p['u'];v=p[key]; best=[]\\n for fun in [lambda z,a:z/(1+a*abs(z)),lambda z,a:1/(1+a*z*z),lambda z,a:np.cos(a*z),lambda z,a:np.tanh(a*z)]:\\n  for mode in [0,1]:\\n   def f(z,a):return one(np.c_[z,fun(z,a)]) if mode else one(fun(z,a))\\n   def err(a):\\n    F=f(u,a);return np.mean((F@ls(F,v)-v)**2)\\n   r=minimize_scalar(err,bounds=(.1,3),method='bounded');b=ls(f(u,r.x),v);best.append((r.fun,r.x,b,f,mode));\\n   if details:print(key,len(best),r.x,r.fun**.5)\\n e,a,b,f,_=min(best,key=lambda x:x[0]);\\n if details:print('best coefficients',b)\\n return f(z,a)@b\\n\\ndef features(s,x,details=False):\\n z=cal(s,x,details);b=s['panel_b']; L=one(z)@ls(one(b['u']),b['v']);C,D=(branch(s['panel_c'],z,k,details) for k in ('v1','v2'));return z,L,C,D\\n\\nif __name__=='__main__':\\n t=s['train'];z,L,C,D=features(s,t['x'],True);Y=np.c_[t['y'],t['traj']];ts=s['eval_times'];\\n def h(p):return -np.expm1(-ts[:,None]*p)\\n def err(p):H=h(p);return (H@ls(H,t['traj'].T)-t['traj'].T).ravel()\\n pp=least_squares(err,[1.8,.4],bounds=(.01,10));print('time',pp.x,np.std(pp.fun));H=h(pp.x); a=ls(H,t['traj'].T).T;Y=np.c_[Y,a];\\n cross=lambda A,B:(A[:,:,None]*B[:,None,:]).reshape(len(z),-1)\\n F={'z':one(z),'L':one(L),'C':one(C),'D':one(D),'CD':one(np.c_[C,D]),'zCD':one(np.c_[z,C,D]),'zCLD':one(np.c_[z,C,L,D]),'dot':one(np.c_[C,D,(C*D).sum(1)]),'bilin':one(np.c_[C,D,cross(C,D)]),'zbilin':one(np.c_[z,C,D,cross(C,D)]),'zquad':one(np.c_[z,pair(z)]),'Cquad':one(np.c_[C,pair(C)]),'Dquad':one(np.c_[D,pair(D)]),'C+Dquad':one(np.c_[C,D,pair(C+D)]),'dotLD':one(np.c_[L,C,D,(L*D).sum(1)]),'dotLC':one(np.c_[L,C,D,(L*C).sum(1)]),'LC':one(np.c_[L,C,cross(L,C)]),'LD':one(np.c_[L,D,cross(L,D)])};\\n for k,M in F.items():\\n  b=ls(M[:52],Y[:52]);E=Y-M@b;print(k,M.shape[1], 'MAE',np.round(abs(E[52:]).mean(0)[[0,1,8,9,10]],5),'fit',np.round(abs(E[:52]).mean(0)[[0,1,8,9,10]],5),'sv',np.round(np.linalg.svd(E[:52,:9],compute_uv=False)[:4],4));\\n  if k in ('dot','CD','bilin'): print('weights',np.round(b[:,[0,9,10]].T,4))\\n np.savez('/tmp/features.npz',z=z,L=L,C=C,D=D,a=a,Y=Y,H=H)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/studyfit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 cyclic bilinear-plus-cubic calibration; the previous 52/20 baseline MAEs are 0.094226 for y and 0.201611 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The cyclic cubic law fits the reference panel near measurement noise. Invert it, then compare panel activation and fusion terms against held-out scalar and trajectory observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c9064ed1641eccd9f277d6dd81a06e9074612834e5aa3a997793d271ceef358a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33785.56,
+      "usage_known": true,
+      "prompt_tokens": 31168,
+      "cached_tokens": 12672,
+      "completion_tokens": 1455
+    }
+  ]
+}

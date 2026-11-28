@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "91098a9ae1044b1c89b625d092e011a6",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:18.225473+00:00",
+  "ended_at_utc": "2026-11-28T15:59:46.170320+00:00",
+  "request_sha256": "c8bffc5f673372612cbf5d38e8ec41d653dae8f8d24a80ffcc53dd353316d3fa",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37635,
+    "cached_tokens": 12672,
+    "completion_tokens": 809
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 -I test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport copy, pickle, sys\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\nsys.argv = [str(p)]\\nns = {'__file__': str(p), '__name__': '__main__'}\\nsource = p.read_text()\\nexec(compile(source[:source.index('\\\\nst = pickle.load')], str(p), 'exec'), ns)\\nrun = ns['run_dag']\\ns = pickle.loads(Path('/holdout_task/public_batch.pkl').read_bytes())[0]['study']\\nx, y, tr = (s['train'][k] for k in ('x','y','traj'))\\nidx = np.arange(len(x))\\nradius = np.linalg.norm(x, axis=1)\\nslices = {f'fold_{i+1}': a for i,a in enumerate(np.array_split(np.random.default_rng(19).permutation(idx),4))}\\nslices['largest_radius'] = np.argsort(radius)[-18:]\\nslices['smallest_radius'] = np.argsort(radius)[:18]\\nmaxima = np.zeros(3)\\nfor name, val in slices.items():\\n    fit = np.setdiff1d(idx, val)\\n    study = copy.deepcopy(s)\\n    study['train'] = {'x':x[fit], 'y':y[fit], 'traj':tr[fit], 'summary':np.array([y[fit].mean(),y[fit].std(),tr[fit,-1].mean(),tr[fit,-1].std()])}\\n    study['test'] = {'x': x[val]}\\n    pred, counts = run(study)\\n    assert all(c == 1 for c in counts.values()), counts\\n    e = abs(pred['state_pred']-tr[val])\\n    metrics = np.array([abs(pred['y_hat']-y[val]).mean(), e.mean(), e.mean(axis=0).max()])\\n    print(name, np.round(metrics, 6).tolist())\\n    maxima = np.maximum(maxima, metrics)\\nprint('Worst slice: scalar MAE, trajectory MAE, worst-time MAE:', np.round(maxima,6).tolist())\\nassert np.all(maxima < .038), maxima\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Opposite-coordinate sine alignment and arctangent panel maps → verify the unchanged candidate across random and radial holdouts; official public scalar and trajectory MAEs are 0.005881 and 0.005058.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add terms to the first response map\",\"rejected_reason\":\"The current model is comfortably below both public tolerances; stress the radial extremes before considering extra terms.\"}],\"rationale\":\"Verify the exact artifact in an isolated process, then assess label-held-out radial extremes and individual trajectory horizons without changing the candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "959f238d204b7563eaae7c34c707eddc0e1c549541bbefd67195bfecc4dd8dd0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28513.96,
+      "usage_known": true,
+      "prompt_tokens": 37635,
+      "cached_tokens": 12672,
+      "completion_tokens": 809
+    }
+  ]
+}

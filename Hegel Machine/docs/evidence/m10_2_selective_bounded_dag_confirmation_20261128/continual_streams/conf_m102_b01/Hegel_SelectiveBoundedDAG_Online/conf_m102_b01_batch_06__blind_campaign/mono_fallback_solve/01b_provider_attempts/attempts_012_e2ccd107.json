@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2ccd1071ad3454c8aa46013b9083974",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:02.051296+00:00",
+  "ended_at_utc": "2026-11-28T15:35:48.613234+00:00",
+  "request_sha256": "6df0f783a6afc2641fbc8905705d3fc628d98c3e0be848d8ad3673bea7bfaf05",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70681,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42596,
+    "cached_tokens": 12672,
+    "completion_tokens": 1976
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/finalscreen.py <<'PY'\\nfrom refine import *\\nfrom sklearn.linear_model import lars_path\\nfrom scipy.optimize import least_squares\\ntr=s['train'];Y=np.c_[tr['y'],tr['traj']]; z,bs,C,D=operators(s,tr['x']); ix=np.arange(52); jx=np.arange(52,72); u=s['panel_b']['u']; v=s['panel_b']['v']\\nfor k,f,p in [('abs',lambda u,p:u*(np.abs(u)**p[0]+p[1]),[1,-.3]),('absplus',lambda u,p:u*(np.abs(u)**p[0]+p[1]+p[2]*u*u),[1,-.3,0]),('signed',lambda u,p:u+p[0]*np.tanh(p[1]*u)*np.abs(u),[-1,1]),('cbrtsin',lambda u,p:u+p[0]*np.sin(p[1]*u)+p[2]*np.cbrt(u),[-.4,2.9,0]),('sinabs',lambda u,p:u+p[0]*np.sin(p[1]*u)+p[2]*u*abs(u),[-.4,2.9,0]),('softdead',lambda u,p:u*(1-p[0]/np.sqrt(1+p[1]*u*u)),[1,3]),('offsetsin',lambda u,p:u+(p[0]+p[2]*abs(u))*np.sin(p[1]*u),[-.4,2.9,0]),('sinr',lambda u,p:u+p[0]*np.sin(p[1]*u)/(1+abs(p[2])*u*u),[-.4,2.9,0])]:\\n def calc(p):\\n  F=aff(f(u,p));return F,ls(F,v)\\n o=least_squares(lambda p:(calc(p)[0]@calc(p)[1]-v).ravel(),p,max_nfev=220); bs[k]=aff(f(z,o.x))@calc(o.x)[1];print('panel',k,o.x,np.std(o.fun))\\nprint('dexact',np.std(D(s['panel_c']['u'])-s['panel_c']['v2']))\\nrows=[]; store={}\\ndef add(k,F):\\n store[k]=F\\n for r,P,L in fit(F,Y,ix,jx,[.001,.01,.05,.2,1.]):\\n  v=abs(P-Y[jx]).mean(0);rows.append((L[0]+L[1:].mean(),v[0],v[1:].mean(),k,r))\\nfor bk,b in bs.items():\\n c=C(b); d=D(z)\\n for ck,cc in [('id',c),('t',np.tanh(1.25*c)),('r',c/(1+.22*c*c)),('a',np.arcsinh(1.25*c))]:\\n  for dk,dd in [('id',d),('t',np.tanh(1.25*d)),('r',d/(1+.22*d*d)),('a',np.arcsinh(1.25*d))]:\\n   k=(bk,ck,dk); inter=(cc[:,:,None]*dd[:,None,:]).reshape(len(cc),16)\\n   add(k+('cross',),np.c_[aff(np.c_[cc,dd]),inter]); add(k+('c2',),np.c_[poly(cc,2),dd,inter]); add(k+('d2',),np.c_[poly(dd,2),cc,inter]); add(k+('full',),np.c_[poly(np.c_[cc,dd],2),c,d]); add(k+('diag',),np.c_[aff(np.c_[cc,dd]),cc*dd,cc**2,dd**2]); add(k+('cc',),np.c_[aff(np.c_[cc,dd]),inter,cc*d,cc*dd**2]);\\nfor i in range(3): print('top',i,*sorted(rows,key=lambda a:a[i])[:10],sep='\\\\n')\\nfor n in (3,8,20,50):\\n rr=sorted(rows)[:n]; P=np.mean([next(fit(store[k],Y,ix,jx,[r]))[1] for _,_,_,k,r in rr],0); v=abs(P-Y[jx]).mean(0);print('avg',n,v[0],v[1:].mean())\\n# Compare the robust shape-preserving readout to the already passing alternatives.\\nfor bk,ck,dk,ft,r in [('polyfull','t','t','full',.001),('odd5','t','t','full',.001),('original','id','t','full',.05)]:\\n k=(bk,ck,dk,ft); F=store[k]; print('REF',k,r,next(fit(F,Y,ix,jx,[r]))[1].shape)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/finalscreen.py > /tmp/finalscreen.out; cat /tmp/finalscreen.out\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read(); s=s[:s.index('def solve_batch')]; s=s.replace('import numpy as np,pickle,itertools','import numpy as np,itertools').replace('from scipy.linalg import solve\\\\n','').replace('from scipy.spatial.distance import cdist\\\\n',''); a=s.index('def graphs('); b=s.index('def operators('); s=s[:a]+s[b:];s=s[:s.index('def features(')]+s[s.index('def fit('):];open(p,'w').write(s)\\nPY\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef solve_batch(study):\\n    tr=study['train']; n=len(tr['x']); x=np.r_[tr['x'],study['test']['x']]\\n    z,bs,C,D=operators(study,x)\\n    d=D(z); Y=np.c_[tr['y'],tr['traj']]; ix=np.arange(n); jx=np.arange(n,len(x))\\n    preds=[]\\n    for kind,r in [('polyfull',.001),('odd5',.001)]:\\n        c=C(bs[kind]); F=np.c_[poly(np.tanh(1.25*np.c_[c,d]),2),c,d]\\n        preds.append(next(fit(F,Y,ix,jx,[r]))[1])\\n    P=np.mean(preds,axis=0)\\n    y,t=P[:,0].copy(),P[:,1:].copy()\\n    return {'y_hat':y,'state_pred':t,'diagnostics_vec':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense quadratic readout -> H2 saturated branch readouts; individual 52/20 candidates reach 0.03041 endpoint MAE and 0.02680 trajectory MAE together.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Retain the original quadratic baseline\",\"rejected_reason\":\"Its endpoint MAE of 0.04820 fails the required threshold.\"}],\"rationale\":\"Save a saturated two-operator ensemble that averages two passing panel fits, run the isolated schema gate, and screen more compact interaction bases for stability.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "70f465d4df77806c3e7767d0518ae5d4eed9a090dd064de6db67d42e45b31959",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46560.74,
+      "usage_known": true,
+      "prompt_tokens": 42596,
+      "cached_tokens": 12672,
+      "completion_tokens": 1976
+    }
+  ]
+}

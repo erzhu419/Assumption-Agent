@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b85ab020bb3443d8c1e49c78a1f17df",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:21.841007+00:00",
+  "ended_at_utc": "2026-11-28T15:08:57.721147+00:00",
+  "request_sha256": "0f8b604ba289222fb6791bb1874ec5cd86097ed150d3fbfc787c952f85e6cdee",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67671,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41591,
+    "cached_tokens": 5504,
+    "completion_tokens": 1365
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ratchet.py <<'PY'\\nexec(open('/tmp/compare.py').read().split('for design,label')[0]);from scipy.linalg import solve\\nte=m._decode(s['test']['x'],A); print('ranges',z.min(0),z.max(0),te.min(0),te.max(0)); lam=.001\\npairs=list(combinations(range(4),2))\\ndef kernels(v,scale,l,kind):\\n d=(v[:,None,:]-v[None,:,:])/scale/l\\n k=np.exp(-.5*d*d) if kind=='rbf' else (lambda q:(1+q+q*q/3)*np.exp(-q))(np.sqrt(5)*abs(d))\\n return k,np.stack([k[:,:,p]*k[:,:,q] for p,q in pairs],axis=2)\\nsettings=[(l,lam,kind,mix,pw) for l in [.65,.85,1.05,1.25,1.5,1.8,2.2] for lam in [.0003,.001,.003,.01] for kind in ['rbf','mat'] for mix in [0,.5,1.] for pw in [.35,1.,3.]]\\ndef train_kernel(i,j,setting):\\n l,lam,kind,mix,pw=setting; sd=z[i].std(0); v=(z-z[i].mean(0))/sd; k,p=kernels(z,sd,l,kind); Kg=k.mean(2)+pw*p.mean(2); H=m._scalar_design(z,ops);H=(H-H[i].mean(0))/H[i].std(0); K=Kg+1+v@v.T+mix*(H@H.T)/H.shape[1]; alpha=solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),y[i],assume_a='pos');return K[np.ix_(j,i)]@alpha\\nerrs=np.array([[np.mean(abs(train_kernel(i,j,q)-y[j])) for i,j in folds] for q in settings]);\\nprint('top mean',*[(settings[k],errs[k,0],errs[k,1:].mean(),errs[k].max()) for k in np.argsort(errs[:,1:].mean(1))[:16]],sep='\\\\n')\\nprint('top worst',*[(settings[k],errs[k,0],errs[k,1:].mean(),errs[k].max()) for k in np.argsort(errs.max(1))[:12]],sep='\\\\n')\\nfor q in [(1.1,.001,'rbf',0.,1.),(1.1,.001,'rbf',.5,1.)]:\\n i,j=folds[0];sd=z[i].std(0);v=(z-z[i].mean(0))/sd;k,p=kernels(z,sd,q[0],q[2]);K=1+v@v.T+k.mean(2)+p.mean(2);alpha=solve(K[np.ix_(i,i)]+q[1]*np.eye(len(i)),y[i],assume_a='pos');print('anova',[(str(g),round(np.std(Kg[:,i]@alpha),5)) for g,Kg in list(enumerate(k.transpose(2,0,1)/4))+list(zip(pairs,p.transpose(2,0,1)/6))]);print('err',np.round(train_kernel(i,j,q)-y[j],4))\\nfor label,F in [('z affine',D(z)),('w no offset',w),('w affine',D(w))] if 'D' in globals() else [('z affine',m._affine(z)),('w no offset',w),('w affine',m._affine(w))]:\\n cs=np.linalg.lstsq(F,t,rcond=None)[0]; ut,st,vt=np.linalg.svd(cs,full_matrices=False);print(label,'coeff svd',st,'res',np.mean(abs(F@cs-t)))\\n for deg in [0,1,2,3,4,5]:\\n  T=s['eval_times'];S=np.c_[T,1-np.exp(-T),1-np.exp(-2*T),1-np.exp(-3*T)] if deg==0 else np.c_[*[T**k for k in range(1,deg+1)]];e=[]\\n  for i,j in folds:\\n   C=m._fit(F[i],t[i]);pred=F[j]@C@S@np.linalg.pinv(S);e.append(np.mean(abs(pred-t[j]),axis=0))\\n  print(deg,np.mean(e[0]),np.mean(e),np.max(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ratchet.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dual-panel quadratic readout and transferred time law -> H2 pairwise calibrated-coordinate residuals and independent trajectory smoothing; pairwise kernel 52/20 y MAE is 0.02563 and worst alternate fold is 0.03843.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the archived two-exponential trajectory unchanged\",\"rejected_reason\":\"On this batch its early-horizon errors are materially larger than those of decoded affine fits.\"}],\"rationale\":\"Compare pairwise-kernel neighborhoods with and without the dual-panel prior, and test time-axis smoothing separately before promoting a candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7e79a99ed27048d4a2452387751745589f10d961f32e26660f357a5fcc1976ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35878.87,
+      "usage_known": true,
+      "prompt_tokens": 41591,
+      "cached_tokens": 5504,
+      "completion_tokens": 1365
+    }
+  ]
+}

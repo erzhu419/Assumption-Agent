@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "000e5e7f5e0d4bc7b7dc272d1120f403",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:22.879263+00:00",
+  "ended_at_utc": "2026-11-28T15:32:07.172315+00:00",
+  "request_sha256": "c082718cb0cf421ee4c21575ccb8da474c430dbe6eac92902ec2a58a12b505b1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36873,
+    "cached_tokens": 12672,
+    "completion_tokens": 1995
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed '/^def _predict/,$d' /tmp/hegel_continual_archive/conf_m102_b01_batch_05_solver.py > batch_solver.py; cat >> batch_solver.py <<'PY'\\n\\ndef _designs(study, x):\\n    from scipy.optimize import least_squares\\n    a, b, c = (study[k] for k in ('panel_a', 'panel_b', 'panel_c'))\\n    z = _inverse(_calibration(a), x)\\n    def dead(u):\\n        return np.sign(u)*np.maximum(np.abs(u)-.35, 0.)**1.5\\n    w = _aff(dead(z)) @ _ls(_aff(dead(b['u'])), b['v'])\\n    q = _cross(w) @ _ls(_cross(c['u']), c['v1'])\\n    def warp(u):\\n        return u+.91*(np.logaddexp(1.1*u, -1.1*u)-np.log(2.))\\n    c2 = _ls(_aff(warp(c['u'])), c['v2'])\\n    r, R = _aff(warp(w)) @ c2, _aff(warp(z)) @ c2\\n    Z = q*np.roll(z,-1,axis=1)\\n    state = _aff(np.c_[q,Z.sum(axis=1)])\\n    core = _aff(np.c_[w,q,Z])\\n    a0 = q[:,0]; a1 = q[:,1]; a2 = q[:,2]\\n    scalar = np.c_[core,w[:,0]*a0,a1*R[:,0],a0*r[:,2],(a2-r[:,2])*R[:,2],a0/(1+.22*w[:,2]**2)]\\n    return state, scalar\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    state, scalar = _designs(study, np.concatenate((train['x'], test['x'])))\\n    y = scalar[n:] @ _ls(scalar[:n], train['y'])\\n    p = state[n:] @ _ls(state[:n], train['traj'])\\n    tail = p[:, -1]\\n    return {'y_hat': y, 'state_pred': p,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\nPY\\ncat batch_solver.py; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py; cat > /tmp/structure6.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from refine6 import *\\nfrom scipy.special import expit\\nN=len(Y); core=A(np.c_[w,q,Z]); state=A(np.c_[q,Z.sum(1)])\\ndef quadratic(a,b=None):\\n if b is not None:return np.einsum('ni,nj->nij',a,b).reshape(N,-1)\\n return np.column_stack([a[:,i]*a[:,j] for i in range(a.shape[1]) for j in range(i,a.shape[1])])\\nS0=np.c_[core,w[:,0]*q[:,0],q[:,1]*R[:,0],q[:,0]*r[:,2],(q[:,2]-r[:,2])*R[:,2]]\\nS1=np.c_[S0,q[:,0]/(1+.22*w[:,2]**2)]\\nsplits=[(np.arange(52),np.arange(52,N))]+[(p[:52],p[52:]) for p in [np.random.default_rng(i).permutation(N) for i in range(12)]]\\ndef eval1(D,tr,te,j,al=0):\\n U=D[tr];V=D[te];sd=np.maximum(U.std(0),1e-9);sd[0]=1; U=U/sd;V=V/sd\\n coef=L(np.r_[U,np.sqrt(al*len(tr))*np.diag(np.r_[0,np.ones(U.shape[1]-1)])],np.r_[Y[tr][:,j],np.zeros((U.shape[1],len(j)))]) if al else L(U,Y[tr][:,j]);return np.mean(abs(V@coef-Y[te][:,j]))\\ndef stats(name,d,j=[0],a=0):\\n es=[eval1(d,tr,te,j,a) for tr,te in splits];print(name,a,np.round([es[0],np.mean(es[1:]),max(es[1:])],5))\\nfor k,D in [('state',state),('state free',np.c_[state,Z]),('state wq',np.c_[core])]:\\n stats(k,D,list(range(1,9)))\\nprint('state-coefs',L(state[:52],Y[:52,1:]))\\nfor k,D in [('core',core),('S0',S0),('S1',S1),('cubic',np.c_[S0,q[:,0]*w[:,2]**2]),('cubicC',np.c_[S0,q[:,0]**3,q[:,0]*w[:,2]**2]),('fullq2',np.c_[state,quadratic(q)]),('fullq3',np.c_[state,poly(q,3)[:,5:]]),('sparse12',np.c_[base[-1][1],C(q)[:,0]**2,q[:,0]**3,q[:,0]*(q[:,3]-r[:,3]),q[:,0]/(1+1.25*q[:,1]**2)])]:\\n for a in [0,.0001,.001]: stats(k,D,[0],a)\\n# Try saturating the entire linear numerator with a single profiled denominator.\\nfor dn,d in [('w',w),('z',z),('q',q),('r',r),('R',R),('state',state[:,1:])]:\\n for model in ('quot','addquot','sat','tanh'):\\n  outs=[]\\n  for tr,te in splits[:5]:\\n   def pred(p):\\n    h=A(d)@p\\n    if model=='quot': return np.c_[core/(1+h[:,None]**2)]\\n    if model=='addquot': return np.c_[state,core[:,1:]/(1+h[:,None]**2)]\\n    if model=='sat': return np.c_[core,h/(1+h*h)]\\n    return np.c_[core,np.tanh(h)]\\n   def f(p):\\n    a=pred(p)[tr];return np.r_[a@L(a,Y[tr,0])-Y[tr,0],.001*p]\\n   rng=np.random.default_rng(41); fs=[least_squares(f,rng.normal(0,.6,d.shape[1]+1),max_nfev=150) for _ in range(7)];opt=min(fs,key=lambda f:f.cost);outs.append([eval1(pred(opt.x),tr,te,[0]),np.mean(abs(opt.fun[:len(tr)]))]);\\n   if len(outs)==1:par=opt.x\\n  print('profile',dn,model,np.round(outs,5).tolist(),np.round(par,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse free interactions → H2 shared cyclic trajectory readout and separate scalar correction; the cyclic model reaches 52/20 MAEs of 0.03332 for y and 0.00475 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use one readout for both targets\",\n      \"rejected_reason\": \"The cyclic sum nearly explains the trajectory, while the scalar residual still shows substantial nonlinear structure.\"\n    }\n  ],\n  \"rationale\": \"Save a self-contained candidate, then compare scalar corrections on alternate splits and check whether the simpler trajectory readout generalizes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f0996cd6499c66bd2aaa64a01deea1f2e7e39651387c9fb7af1ea476372f7f68",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44291.36,
+      "usage_known": true,
+      "prompt_tokens": 36873,
+      "cached_tokens": 12672,
+      "completion_tokens": 1995
+    }
+  ]
+}

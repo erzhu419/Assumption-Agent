@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b09ce7fcf672412e9844c72827d2ac7f",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:12.482120+00:00",
+  "ended_at_utc": "2026-11-28T15:00:36.477381+00:00",
+  "request_sha256": "6d3226d7d61920b999555b7bf566c865d7387677156db406729bf289f92865e8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27523,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23832,
+    "cached_tokens": 12672,
+    "completion_tokens": 923
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport glob,runpy,pickle,numpy as np,itertools,copy\\nnp.set_printoptions(precision=4,suppress=True,linewidth=135)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; old=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); cv=copy.deepcopy(s); cv['test']={'x':s['train']['x'][52:]}; cv['train']={k:v[:52] for k,v in s['train'].items()}; out=old['solve_batch'](cv); print('archive transfer',*[np.mean(np.abs(out[k]-s['train'][t][52:])) for k,t in [('y_hat','y'),('state_pred','traj')]])\\ndef analyze(u,v):\\n a=np.column_stack([np.ones(len(u)),u]); c=np.linalg.lstsq(a,v,rcond=None)[0]; print('affine',c); print('res norm sorted',np.sort(np.linalg.norm(a@c-v,axis=1))); print('ranges u/v',u.min(0),u.max(0),v.min(0),v.max(0));\\n for rev in [False,True]:\\n  x,y=(v,u) if rev else (u,v)\\n  for deg in [1,2,3,4,5]:\\n   err=[]\\n   for j in range(4):\\n    d=np.polynomial.polynomial.polyvander(x[:,j],deg); pin=np.linalg.pinv(d); yh=d@(pin@y[:,j]); err.append(np.median(np.abs((y[:,j]-yh)/np.maximum(1-(d*pin.T).sum(1),1e-12))))\\n   print('mono LOOCV',rev,deg,np.array(err))\\n  for deg in [1,2,3]:\\n   terms=[t for n in range(deg+1) for t in itertools.combinations_with_replacement(range(4),n)]; d=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]);\\n   if d.shape[1]>=len(x):continue\\n   pin=np.linalg.pinv(d); er=np.linalg.norm((y-d@(pin@y))/np.maximum(1-(d*pin.T).sum(1),1e-12)[:,None],axis=1); print('full LOOCV',rev,deg,np.quantile(er,[0,.25,.5,.75,.9,1]))\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; print('\\\\n',k)\\n for l in p:\\n  if l!='u': print(l); analyze(p['u'],p[l])\\np=s['panel_a']; c=old['_calibration'](p); print('robust A',c); print('panel A u v and residual'); print(np.column_stack([p['u'],p['v'],p['v']-old['_affine'](p['u'])@c]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived affine inverse -> compare structured forward and inverse calibration on held-out panel rows; the prior gate reported a worst head MAE of 0.142890.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure archived-encoder transfer on the current batch and use leave-one-row-out panel residuals to distinguish nonlinear calibration from isolated corruptions or cross-coordinate mixing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0aa5eec57d4596796057b2d92d74b22742463355abb834a55df5ac3a9428068a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23994.23,
+      "usage_known": true,
+      "prompt_tokens": 23832,
+      "cached_tokens": 12672,
+      "completion_tokens": 923
+    }
+  ]
+}

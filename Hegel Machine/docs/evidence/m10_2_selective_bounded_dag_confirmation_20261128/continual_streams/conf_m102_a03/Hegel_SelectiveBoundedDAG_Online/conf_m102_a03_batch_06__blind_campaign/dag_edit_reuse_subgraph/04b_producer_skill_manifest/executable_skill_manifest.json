@@ -1,0 +1,199 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a03_batch_06_38db8b00a8b4",
+    "source_hash": "38db8b00a8b40c19d99b0d4c5ea24b4dcb61d8adc39a4067088dad16742554ad",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_a03_batch_06__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/cyclic.py",
+        "archived_relpath": "producers/tmp__cyclic.py",
+        "bytes": 1945,
+        "sha256": "f503f57f1eed4f1345ffc14af48f06577d052f7ed8a4b49a0dad6a16f455bd4e"
+      },
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 1974,
+        "sha256": "dd734982da7461dbc984a1c0de0f0fd02eb4b197921922a3c04cb2ea793eacdd"
+      },
+      {
+        "container_path": "/tmp/features.py",
+        "archived_relpath": "producers/tmp__features.py",
+        "bytes": 1563,
+        "sha256": "69660a63e38ff55ffbe937fd90c67eb01c976afb2fe14dc38a0d5bd400682bab"
+      },
+      {
+        "container_path": "/tmp/node00_v01.py",
+        "archived_relpath": "producers/tmp__node00_v01.py",
+        "bytes": 3324,
+        "sha256": "44f20a8d506c713e39e618fbc1271ad1c41be9da44b74e93dc5c713d66580c0c"
+      },
+      {
+        "container_path": "/tmp/panel_diag.py",
+        "archived_relpath": "producers/tmp__panel_diag.py",
+        "bytes": 1126,
+        "sha256": "5da3d554cf9933eb57ee9505581c1cdfb1810c81ebf91aa9217d7ce76f723101"
+      },
+      {
+        "container_path": "/tmp/readout_search.py",
+        "archived_relpath": "producers/tmp__readout_search.py",
+        "bytes": 3169,
+        "sha256": "a4d2605d66ffabbc7ad5aaf6593b8be45c654f8d441e8acf0f6fa1dedf3acdbe"
+      },
+      {
+        "container_path": "/tmp/scalar_part.py",
+        "archived_relpath": "producers/tmp__scalar_part.py",
+        "bytes": 7273,
+        "sha256": "a9e7f1927f31934535d2168ce9fe391cf39eb7aede8da568679eec99f063d611"
+      },
+      {
+        "container_path": "/tmp/separable.py",
+        "archived_relpath": "producers/tmp__separable.py",
+        "bytes": 1880,
+        "sha256": "55a9ada6bbc0aa54b1857fc784e07ce6b72e9ad2d7d15894c96c8ad5600e3333"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_00_solver.py",
+        "bytes": 2165,
+        "sha256": "1cbb261bff4025eba9291fa441be191940cf9aff1fb6560a8524c6db774d70ee"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_01_solver.py",
+        "bytes": 3245,
+        "sha256": "e0dee26c4b2270003349c77a52bd53f8797efccdaf2f23a3a6cd22dbf37f0f22"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_02_solver.py",
+        "bytes": 4315,
+        "sha256": "f4fd48c71c8162e72478bfb8ae32fa0eceb85821ff86efe07d5d72d15b5766e5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json && cat _frozen_nodes/node_01.py _frozen_nodes/node_02.py && cat test_dag_candidate.py && cat public_asset_index.json; echo ARCHIVE; ls -la /tmp/hegel_continual_archive; find /tmp/hegel_continual_archive -maxdepth 3 -type f | head -100; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)\ndef see(d,p=''):\n if isinstance(d,dict):\n  for k,v in d.items(): see(v,p+'/'+str(k))\n elif isinstance(d,np.ndarray): print(p,d.shape,d.dtype,str(d.ravel()[:8]))\n else: print(p,type(d),str(d)[:300])\nsee(d)\nPY",
+      "cd /holdout_task; sed -n '65,230p' test_dag_candidate.py; cat /tmp/hegel_continual_archive/*01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel nonlinear calibration alignment' 2>&1 | head -40; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\nfor k,v in s.items():\n print(k)\n for a,b in (v.items() if isinstance(v,dict) else [(k,v)]):\n  b=np.asarray(b); print(a,b.shape,b[0] if b.ndim>1 else b[:8], 'std',b.std(axis=0))\nPY",
+      "cd /holdout_task; tail -90 test_dag_candidate.py; head -48 /tmp/hegel_continual_archive/*01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation'; cat > /tmp/panel_diag.py <<'PY'\nimport numpy as np,pickle,itertools\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\ndef fit(A,y):return np.linalg.lstsq(A,y,rcond=1e-10)[0]\ndef exam(u,v,typ):\n n,d=u.shape; cols=[np.ones(n)]; names=['1'];\n for deg in range(1,typ+1):\n  for ix in itertools.combinations_with_replacement(range(d),de",
+      "grep -A40 '^def .*cv' /holdout_task/test_dag_candidate.py; head -31 /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/explore.py <<'PY'\nimport numpy as np,pickle,itertools,glob,runpy\nfrom scipy.optimize import least_squares\nfrom scipy.special import expit\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*01_solver.py')[0]); c=a['_calibration'](s['panel_a']); z=a['_inverse'](s['train']['x'],c); y=s['train']['y']; Y=s['train']['traj']; t=s['eval_times'];\nnp.set_printoptions(precision=5,suppress=True,linewidth=14",
+      "cd /holdout_task; cat _frozen_nodes/node_01.py _frozen_nodes/node_02.py; tail -55 test_dag_candidate.py; cat > /tmp/features.py <<'PY'\nimport numpy as np,pickle,itertools,glob,runpy\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*01_solver.py')[0]); z=a['_inverse'](s['train']['x'],a['_calibration'](s['panel_a'])); y=s['train']['y']; Y=s['train']['traj'];\nterms=[()]+[ix for k in range(1,4) for ix in itertools.combinations_with_replacement(range(4),k) if k<3 or len(set(ix))==1];\ndef design(z,terms=terms):return np.",
+      "sed -n '135,195p' /holdout_task/test_dag_candidate.py; cat > /tmp/separable.py <<'PY'\nimport numpy as np,pickle,glob,runpy,itertools\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*01_solver.py')[0]); z=a['_inverse'](s['train']['x'],a['_calibration'](s['panel_a'])); y=s['train']['y']; Y=s['train']['traj']\ndef fit(A,Y): return np.linalg.lstsq(A,Y,rcond=1e-10)[0]\ndef one(u):return np.ones((len(u),1))\nforms={'sin':lambda u,f:np.sin(u*f),'tanh':lambda u,f:np.tanh(u*f),'atan':l",
+      "cd /holdout_task; sed -n '30,180p' /tmp/hegel_continual_archive/*01_solver.py; cat > /holdout_task/node_00.py <<'PY'\n\"\"\"Robust reference-panel calibration and positive-definite feature kernels.\"\"\"\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve\nfrom scipy.optimize import minimize\n\n\ndef _sensor(panel, x):\n    u,v=(np.asarray(panel[k],float) for k in ('u','v'))\n    d=np.stack((np.ones_like(u),u,np.roll(u,-1,axis=1),u*np.roll(u,-1,axis=1),u**3),axis=2)\n    w=np.ones(len(u))\n    for _ in range(24):\n        c=np.array([np.linalg.lstsq(d[:,j]*w[:,None],v[:,j]*w,rcond=None)[0] for j",
+      "cat /tmp/hegel_continual_archive/*00_solver.py | grep -A80 '^def _readout'; cat /tmp/hegel_continual_archive/*02_solver.py | grep -A75 '^def _readout'; cat > /tmp/readout_search.py <<'PY'\nimport numpy as np,pickle,runpy,itertools\nfrom scipy.linalg import solve\nfrom scipy.optimize import minimize_scalar\nfrom sklearn.linear_model import ARDRegression, OrthogonalMatchingPursuit\nm=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; Y=s['train']['traj']; z=m['_sensor'](s['panel_a'],s['train']['x']); n=len(z)\ndef lin(",
+      "cat >/tmp/cyclic.py <<'PY'\nimport numpy as np,pickle,runpy,itertools\nfrom scipy.optimize import least_squares\nfrom scipy.special import erf\nm=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; z=m['_sensor'](s['panel_a'],s['train']['x']); n=len(y)\nforms=[np.sin,np.tanh,np.arctan,erf,lambda x:x/(1+x*x)]\ndef fit(A,y):return np.linalg.lstsq(A,y,rcond=1e-9)[0]\ndef design(z,F,shift,typ):\n p=np.roll(z,shift,axis=1); g=np.roll(F,shift,axis=1); L=np.c_[np.ones(len(z)),z,F]\n inter=[z*g,z*p,F*g,z*z,F*F,z*F,z*g*g,z*z*g]\n ",
+      "set -e\ncd /holdout_task\ncp node_00.py /tmp/node00_v01.py\ncat >/tmp/scalar_part.py <<'PY'\n\ndef _scalar_kernel(study, z, y):\n    \"\"\"Estimate a panel response map and select sparse readout interactions.\"\"\"\n    from scipy.optimize import minimize_scalar, least_squares\n    from itertools import combinations_with_replacement\n\n    n, d = len(y), z.shape[1]\n    u = np.asarray(study['panel_b']['u'], float)\n    v = np.asarray(study['panel_b']['v'], float)\n    uv = np.vstack((u, z))\n    d2 = list(combinations_with_replacement(range(d), 2))\n    one = np.ones((len(uv), 1))\n    cross = np.column_stack([uv[:"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__scalar_part.py",
+      "primary_producer_container_path": "/tmp/scalar_part.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 10608,
+        "sha256": "dc56433882af83caa85de5aec07e0176c5c33d6621155a300f6a8e7f127ee73f",
+        "content_addressed_ref": "content_addressed_blobs/dc56433882af83caa85de5aec07e0176c5c33d6621155a300f6a8e7f127ee73f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "cv",
+      "_basis",
+      "_groups",
+      "exam",
+      "lin",
+      "_scalar_kernel",
+      "one"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "38db8b00a8b40c19d99b0d4c5ea24b4dcb61d8adc39a4067088dad16742554ad",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\ncp node_00.py /tmp/node00_v01.py\ncat >/tmp/scalar_part.py <<'PY'\n\ndef _scalar_kernel(study, z, y):\n    \"\"\"Estimate a panel response map and select sparse readout interactions.\"\"\"\n    from scipy.optimize import minimi",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "38db8b00a8b40c19d99b0d4c5ea24b4dcb61d8adc39a4067088dad16742554ad",
+        "expected_candidate_sha256": "38db8b00a8b40c19d99b0d4c5ea24b4dcb61d8adc39a4067088dad16742554ad",
+        "computed_candidate_sha256": "38db8b00a8b40c19d99b0d4c5ea24b4dcb61d8adc39a4067088dad16742554ad",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 10608
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_38db8b00"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(A, y):\n    return np.linalg.lstsq(A, y, rcond=1e-09)[0]"
+      },
+      {
+        "name": "cv",
+        "code": "def cv(A, Y):\n    P = A @ np.linalg.pinv(A)\n    r = A @ fit(A, Y) - Y\n    return (np.mean(abs(r / (1 - np.diag(P)).reshape((-1,) + (1,) * (Y.ndim - 1)))), np.sqrt(np.mean(r * r)))"
+      },
+      {
+        "name": "_basis",
+        "code": "def _basis(z, typ):\n    return np.column_stack((np.ones(len(z)), z, {'b': lambda : np.sin(2.8 * z), 'c': lambda : np.arctan(2.1 * z), 'q': lambda : np.cos(1.28 * z)}[typ]()))"
+      },
+      {
+        "name": "_groups",
+        "code": "def _groups(study, z):\n    (B, C, Q) = [_basis(z, t) @ np.linalg.lstsq(_basis(study[p]['u'], t), study[p][k], rcond=None)[0] for (t, p, k) in [('b', 'panel_b', 'v'), ('c', 'panel_c', 'v1'), ('q', 'panel_c', 'v2')]]\n    S = np.sin(2.8 * z)\n    A = np.arctan(2.1 * z)\n    H = np.cos(1.28 * z) - 1\n    fs = [z, S, A, H, B, C, Q]\n    G = [np.ones((len(z), len(z)))]\n    names = ['1']\n\n    def add(name, f):\n        k = f @ f.T\n        G.append(k / max(np.mean(np.diag(k)), 1e-10))\n        names.append(name)\n    for (j, f) in enumerate(fs):\n        add(str(j), f)\n    for i in range(len(fs)):\n        for j in range(i, len(fs)):\n            (f, g) = (fs[i], fs[j])\n            add(f'{i}{j}', (f[:, :, None] * g[:, None, :]).reshape(len(z), -1))\n            if j != i:\n                add(f'{i}d{j}', f * g)\n    for (j, f) in enumerate([z, B, C, Q, np.column_stack((z, S, A, H))]):\n        k = f @ f.T / f.shape[1]\n        G.append(k ** 3 / max(np.mean(np.diag(k) ** 3), 1e-10))\n        names.append(f'cube{j}')\n    return (np.array(G), names)"
+      },
+      {
+        "name": "exam",
+        "code": "def exam(u, v, typ):\n    import itertools\n    (n, d) = u.shape\n    cols = [np.ones(n)]\n    names = ['1']\n    for deg in range(1, typ + 1):\n        for ix in itertools.combinations_with_replacement(range(d), deg):\n            if deg == 3 and len(set(ix)) != 1:\n                continue\n            cols.append(np.prod(u[:, ix], axis=1))\n            names.append(''.join(map(str, ix)))\n    A = np.column_stack(cols)\n    b = fit(A, v)\n    e = np.linalg.norm(A @ b - v, axis=1)\n    idx = np.argsort(e)[:int(n * 0.86)]\n    b = fit(A[idx], v[idx])\n    e = np.linalg.norm(A @ b - v, axis=1)\n    print('degree', typ, 'rms, median, high', np.sqrt(np.mean(e ** 2)), np.median(e), np.sort(e)[-8:])\n    if typ == 1 or (typ == 3 and n > 30):\n        print(list(zip(names, b.round(4))))"
+      },
+      {
+        "name": "lin",
+        "code": "def lin(A, b):\n    return np.linalg.lstsq(A, b, rcond=1e-08)[0]"
+      },
+      {
+        "name": "_scalar_kernel",
+        "code": "def _scalar_kernel(study, z, y):\n    \"\"\"Estimate a panel response map and select sparse readout interactions.\"\"\"\n    from scipy.linalg import cho_factor\n    from scipy.linalg import cho_solve\n    from scipy.optimize import least_squares\n    from scipy.optimize import minimize_scalar\n    from scipy.optimize import minimize_scalar, least_squares\n    from itertools import combinations_with_replacement\n    (n, d) = (len(y), z.shape[1])\n    u = np.asarray(study['panel_b']['u'], float)\n    v = np.asarray(study['panel_b']['v'], float)\n    uv = np.vstack((u, z))\n    d2 = list(combinations_with_replacement(range(d), 2))\n    one = np.ones((len(uv), 1))\n    cross = np.column_stack([uv[:, i] * uv[:, j] for (i, j) in d2])\n    cyc = uv * np.roll(uv, 1, axis=1)\n    maps = []\n    for (fun, limits) in ((np.tanh, (0.8, 2.0)), (np.sin, (2.2, 3.4)), (lambda x: x / (1 + x * x), (0.55, 1.25))):\n        for extra in (one[:, :0], uv ** 2, cyc, cross):\n\n            def form(w):\n                return np.column_stack((one, uv, fun(w * uv), extra))\n\n            def fit(w, ret=False):\n                X = form(w)\n                a = X[:len(u)]\n                h = np.linalg.pinv(a, rcond=1e-09)\n                c = h @ v\n                e = (a @ c - v) / np.maximum(0.025, 1 - np.einsum('ij,ji->i', a, h))[:, None]\n                return (np.mean(e ** 2), X[len(u):] @ c) if ret else np.mean(e ** 2)\n            sol = minimize_scalar(fit, bounds=limits, method='bounded', options={'xatol': 0.0001})\n            maps.append(fit(sol.x, True))\n    maps.sort(key=lambda x: x[0])\n    weights = np.array([1 / max(e, 1e-12) ** 2 for (e, _) in maps])\n    weights /= weights.sum()\n    maps.append((maps[0][0], sum((w * b for (w, (_, b)) in zip(weights, maps)))))\n    Cs = [_basis(z, t) @ np.linalg.lstsq(_basis(study['panel_c']['u'], t), study['panel_c'][k], rcond=None)[0] for (t, k) in [('c', 'v1'), ('q', 'v2')]]\n    (C, Q) = Cs\n    rng = np.random.default_rng(281)\n    folds = [f for _ in range(2) for f in np.array_split(rng.permutation(n), 4)]\n    rows = np.arange(n)\n    train_folds = [(np.setdiff1d(rows, f), f) for f in folds]\n    candidates = []\n\n    def feature(f):\n        sd = np.maximum(np.std(f[:n], axis=0), 1e-07)\n        return (f - np.mean(f[:n], axis=0)) / sd\n\n    def lin(A, b, ridge):\n        return np.linalg.solve(A.T @ A + np.diag(ridge), A.T @ b)\n\n    def gram(feat, penalties):\n        F = feat / np.sqrt(penalties)\n        K = F @ F[:n].T\n        return (K[:n] + np.eye(n), K[n:])\n\n    def losses(es):\n        es = np.array(es)\n        return np.mean(es) + 0.12 * np.max(es)\n\n    def fixed(F, pen, tag):\n        (K, V) = gram(F, pen)\n        es = []\n        for (a, b) in train_folds:\n            c = cho_solve(cho_factor(K[np.ix_(a, a)], check_finite=False), y[a], check_finite=False)\n            es.append(np.mean(abs(K[np.ix_(b, a)] @ c - y[b])))\n        candidates.append((losses(es), K, V, tag))\n    nl_jobs = []\n    stack = lambda f, g: (f[:, :, None] * g[:, None, :]).reshape(len(z), -1)\n    for (ib, (_, B)) in enumerate(maps):\n        L = np.column_stack((np.ones(len(z)), feature(B), feature(z * np.roll(B, 1, axis=1))))\n        G = np.column_stack((z, B))\n        q = np.column_stack([G[:, i] * G[:, j] for (i, j) in combinations_with_replacement(range(2 * d), 2)])\n        core = np.column_stack((z[:, -1] ** 2, B[:, 1] * B[:, 3], z[:, -1] * B[:, 0]))\n        Aug = np.column_stack((z, q, C, Q, z * np.roll(B, -1, axis=1), stack(z, C), stack(z, Q)))\n        for (j, f) in enumerate((core, np.column_stack((core, q)), Aug, np.column_stack((Aug, stack(z, q), stack(B, q))))):\n            if j == 3 and ib not in (0, 1, len(maps) - 1):\n                continue\n            U = feature(f)\n            for a in (0.03, 0.2, 1.0, 5.0, 25.0, 150.0):\n                fixed(np.column_stack((L, U)), np.r_[np.full(L.shape[1], 0.001), np.full(U.shape[1], a)], ('ridge', ib, j, a))\n        for sh in (1, -1, 2):\n            for F in (B, z, C):\n                for H in (B, z):\n                    T = F * np.roll(H, sh, axis=1)\n                    for sc in (0.1, 0.4, 1.0):\n                        R = T / (1 + sc * np.roll(H, sh, axis=1) ** 2)\n                        U = feature(np.column_stack((core, R, T)))\n                        fixed(np.c_[L, U], np.r_[np.full(L.shape[1], 0.001), np.full(U.shape[1], 2.0)], ('cyclic', ib, sh, sc))\n        if ib in (0, 1, len(maps) - 1):\n            nl_jobs.extend([(L, z, ib, 'z'), (L, B, ib, 'B'), (np.c_[L, feature(core)], B, ib, 'coreB')])\n        if ib in (0, 1, 2, len(maps) - 1):\n            U = feature(np.column_stack((core, Aug)))\n            F = np.c_[L, U]\n\n            def ard(a, trunc):\n                T = F[a]\n                yy = y[a]\n                k = L.shape[1]\n                alp = np.r_[np.full(k, 0.01), np.full(U.shape[1], 30.0)]\n                bet = 400.0\n                for _ in range(75):\n                    cov = cho_solve(cho_factor(bet * T.T @ T + np.diag(alp), check_finite=False), np.eye(T.shape[1]), check_finite=False)\n                    coef = bet * (cov @ (T.T @ yy))\n                    gamma = np.maximum(0, 1 - alp * np.diag(cov))\n                    alp[k:] = np.clip(gamma[k:] / (coef[k:] ** 2 + 1e-08), 0.03, 1000000.0)\n                    bet = np.clip((len(yy) - sum(gamma)) / max(1e-09, np.sum((yy - T @ coef) ** 2)), 30, 30000.0)\n                pen = alp / bet\n                if trunc:\n                    pen[k:] = np.where(abs(coef[k:]) > 0.012, pen[k:], 100000.0)\n                return pen\n            for trunc in (False, True):\n                es = []\n                for (a, b) in train_folds:\n                    pen = ard(a, trunc)\n                    es.append(np.mean(abs(F[b] @ lin(F[a], y[a], pen) - y[b])))\n                (K, V) = gram(F, ard(rows, trunc))\n                candidates.append((losses(es), K, V, ('ARD', ib, trunc)))\n    for (L, W, ib, tag) in nl_jobs:\n        W = feature(W)\n        D = np.c_[np.ones(len(W)), W]\n        for typ in ('rat', 'rat2', 'sin', 'tanh', 'gate'):\n\n            def profile(a):\n                l = L[a]\n                x = D[a]\n                yy = y[a]\n                U = np.linalg.qr(l, mode='reduced')[0]\n                yr = yy - U @ (U.T @ yy)\n\n                def col(mat, h):\n                    r = mat @ h\n                    if typ == 'rat':\n                        return (r / (1 + r * r))[:, None]\n                    if typ == 'rat2':\n                        return (1 / (1 + r * r))[:, None]\n                    if typ == 'sin':\n                        return np.sin(r)[:, None]\n                    if typ == 'tanh':\n                        return np.tanh(r)[:, None]\n                    return mat / (1 + r[:, None] ** 2)\n\n                def res(h):\n                    f = col(x, h)\n                    g = f - U @ (U.T @ f)\n                    if g.shape[1] == 1:\n                        coef = g.T @ yr / (np.sum(g * g) + 1e-07)\n                    else:\n                        coef = lin(g, yr, np.full(g.shape[1], 0.001))\n                    return np.r_[g @ coef - yr, 0.007 * h]\n                starts = np.vstack((np.r_[0.0, np.ones(d) * 0.25], np.eye(d + 1)[1:], np.random.default_rng(29).normal(0, 0.6, (4, d + 1))))\n                rr = min((least_squares(res, h, bounds=(-5, 5), max_nfev=65) for h in starts), key=lambda r: r.cost)\n                f = np.c_[L, col(D, rr.x)]\n                return (f, np.r_[np.full(L.shape[1], 0.0002), np.full(f.shape[1] - L.shape[1], 0.001)])\n            es = []\n            for (a, b) in train_folds[:4]:\n                (F, pen) = profile(a)\n                es.append(np.mean(abs(F[b] @ lin(F[a], y[a], pen) - y[b])))\n            (F, pen) = profile(rows)\n            (K, V) = gram(F, pen)\n            candidates.append((losses(es) * 1.045, K, V, ('profile', tag, ib, typ)))\n    candidates.sort(key=lambda r: r[0])\n    best = candidates[0][0]\n    eligible = [c for c in candidates if c[0] <= best * 1.13][:10]\n    weights = np.array([np.exp(-22 * (c[0] / best - 1)) for c in eligible])\n    weights /= sum(weights)\n    K = eligible[0][1]\n    V = sum((w * (cho_solve(cho_factor(k, check_finite=False), v.T, check_finite=False).T @ K) for (w, (_, k, v, _)) in zip(weights, eligible)))\n    return (K, V)"
+      },
+      {
+        "name": "one",
+        "code": "def one(u):\n    return np.ones((len(u), 1))"
+      }
+    ]
+  }
+}

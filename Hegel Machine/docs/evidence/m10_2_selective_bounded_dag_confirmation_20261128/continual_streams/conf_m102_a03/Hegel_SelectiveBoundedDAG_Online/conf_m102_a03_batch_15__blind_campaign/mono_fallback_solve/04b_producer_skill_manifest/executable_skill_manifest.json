@@ -1,0 +1,123 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a03_batch_15_uncommitted",
+    "source_hash": "",
+    "parent_ids": [],
+    "source_episode_id": "mono_fallback_solve",
+    "task_id": "conf_m102_a03_batch_15__blind_campaign",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_00_solver.py",
+        "bytes": 2165,
+        "sha256": "1cbb261bff4025eba9291fa441be191940cf9aff1fb6560a8524c6db774d70ee"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_01_solver.py",
+        "bytes": 3245,
+        "sha256": "e0dee26c4b2270003349c77a52bd53f8797efccdaf2f23a3a6cd22dbf37f0f22"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_02_solver.py",
+        "bytes": 4315,
+        "sha256": "f4fd48c71c8162e72478bfb8ae32fa0eceb85821ff86efe07d5d72d15b5766e5"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_06_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_06_solver.py",
+        "bytes": 4432,
+        "sha256": "16514327b7020b62009b3346832cf351381c84f1c503abe31be77eae315ad1a4"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_08_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_08_solver.py",
+        "bytes": 3607,
+        "sha256": "8f446ed7ad6bffcfcbb184adfc880d3f711db7b243ce75710f738c2b9cd8c120"
+      }
+    ],
+    "build_and_invoke_commands": [],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m102_a03_batch_06_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_06_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_fit",
+      "_affine",
+      "_calibration",
+      "_readout",
+      "solve_batch",
+      "fit",
+      "affine",
+      "calibrate"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": null
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_fit",
+        "code": "def _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    (u, v) = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    a = _affine(u)\n    coef = _fit(a, v)\n    for _ in range(24):\n        residual = np.linalg.norm(a @ coef - v, axis=1)\n        scale = max(float(np.median(residual)), 1e-12)\n        weight = np.sqrt(np.minimum(1.0, 1.5 * scale / np.maximum(residual, 1e-12)))\n        coef = _fit(a * weight[:, None], v * weight[:, None])\n    residual = np.linalg.norm(a @ coef - v, axis=1)\n    good = residual <= 5 * max(float(np.median(residual)), 1e-12)\n    if good.sum() >= a.shape[1] and np.linalg.matrix_rank(a[good]) == a.shape[1]:\n        coef = _fit(a[good], v[good])\n        mat = coef[1:]\n        off = mat - np.diag(np.diag(mat))\n        if np.linalg.norm(off) <= 5 * max(float(np.median(residual)), 1e-12):\n            for j in range(u.shape[1]):\n                (coef[0, j], coef[j + 1, j]) = _fit(a[good][:, [0, j + 1]], v[good, j])\n            coef[1:] = np.diag(np.diag(coef[1:]))\n    return coef"
+      },
+      {
+        "name": "_readout",
+        "code": "def _readout(z):\n    return np.column_stack((z, z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]))"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    x = np.asarray(train['x'], dtype=float)\n    target = np.asarray(study['test']['x'], dtype=float)\n    a = _calibration(study['panel_a'])\n    b = _fit(_affine(study['panel_b']['u']), study['panel_b']['v'])\n\n    def encode(rows):\n        calibrated = np.linalg.solve(a[1:].T, (rows - a[0]).T).T\n        return _affine(calibrated) @ b\n    (z, zt) = (encode(x), encode(target))\n    yh = _readout(zt) @ _fit(_readout(z), train['y'])\n    (q, r) = np.linalg.qr(z, mode='reduced')\n    (u, sv, vh) = np.linalg.svd(q.T @ train['traj'], full_matrices=False)\n    rank = min(2, len(sv))\n    coef = _fit(r, u[:, :rank] * sv[:rank] @ vh[:rank])\n    sp = zt @ coef\n    diag = np.array([yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\n    return {'y_hat': yh, 'state_pred': sp, 'diagnostics_vec': diag}"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=1e-11)[0]"
+      },
+      {
+        "name": "affine",
+        "code": "def affine(x):\n    return np.c_[np.ones(len(x)), x]"
+      },
+      {
+        "name": "calibrate",
+        "code": "def calibrate(panel, x):\n    from scipy.optimize import least_squares\n    (u, v) = [np.asarray(panel[k], float) for k in ('u', 'v')]\n    good = np.linalg.norm(v, axis=1) < 5\n\n    def design(u, j):\n        a = u[:, j]\n        b = u[:, (j + 1) % 4]\n        return np.c_[affine(u), a * b, a ** 3]\n    co = np.column_stack([fit(design(u[good], j), v[good, j]) for j in range(4)])\n\n    def forward(z):\n        return np.column_stack([design(z, j) @ co[:, j] for j in range(4)])\n    g = np.linalg.solve(co[1:5].T, (x - co[0]).T).T\n    return np.array([least_squares(lambda z: forward(z[None])[0] - r, a, gtol=1e-12).x for (a, r) in zip(g, x)])"
+      }
+    ]
+  }
+}

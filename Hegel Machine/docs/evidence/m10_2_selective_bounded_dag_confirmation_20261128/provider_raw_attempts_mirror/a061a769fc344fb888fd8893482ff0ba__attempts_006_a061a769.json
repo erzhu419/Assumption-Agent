@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a061a769fc344fb888fd8893482ff0ba",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:31.751449+00:00",
+  "ended_at_utc": "2026-11-28T15:44:58.696284+00:00",
+  "request_sha256": "79437d789b29449847cb42da0d570dfbe9517df5879912d339624c6f5a2db545",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44209,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30544,
+    "cached_tokens": 12672,
+    "completion_tokens": 1093
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/recover9.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as comb\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; L=lambda f,y:np.linalg.lstsq(f,y,rcond=None)[0]; A=lambda x:np.c_[np.ones(len(x)),x]\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nu,v=(s['panel_a'][k] for k in ['u','v']); e=np.linalg.norm(v-A(u)@L(A(u),v),axis=1); keep=np.argsort(e)[:-3]; print('removed',np.argsort(e)[-3:],np.sort(e)[-6:]);u,v=u[keep],v[keep]\\na=A(u); terms=[i for d in range(2,5) for i in comb(range(4),d)]; f=np.array([np.prod(u[:,i],axis=1) for i in terms]).T\\nfor j in range(4):\\n ids=[]\\n for step in range(8):\\n  vals=[]\\n  for k in set(range(f.shape[1]))-set(ids):\\n   z=np.c_[a,f[:,ids+[k]]]; c=L(z,v[:,j]); vals.append((np.std(z@c-v[:,j]),k,c))\\n  e,k,c=min(vals,key=lambda a:a[0]); ids.append(k); print('A',j,step,terms[k],e,c if step in [0,2,7] else '')\\nfuncs={'rat':(lambda z,p:z/(1+p[0]*abs(z)**p[1]),[2.5,2.],([.01,.3],[30,6])), 'soft':(lambda z,p:z/(1+p[0]*abs(z)**p[1])**.5,[3.,2.],([.01,.3],[100,6])), 'tanh':(lambda z,p:np.tanh(p[0]*z),[2.],([.01],[30.])), 'sin':(lambda z,p:np.sin(p[0]*z),[2.],([.01],[20.])), 'gauss':(lambda z,p:np.exp(-p[0]*z*z),[.3],([.001],[20.])), 'oddgauss':(lambda z,p:z*np.exp(-p[0]*z*z),[1.],([.001],[30.]))}\\nfor panel,key,w,z in [('A','v',u,v),*[('C',k,s['panel_c']['u'],s['panel_c'][k]) for k in ('v1','v2')]]:\\n for name,(fn,start,bd) in funcs.items():\\n  for extra in (False,True):\\n   def des(p):return np.c_[A(w) if extra else np.ones(len(w)),fn(w,p)]\\n   def res(p):\\n    F=des(p);return (F@L(F,z)-z).ravel()\\n   p=least_squares(res,start,bounds=bd,max_nfev=100).x; F=des(p); c=L(F,z); rr=res(p).reshape(z.shape); print(panel,key,name,extra,p,np.std(rr),np.std(rr/(1-np.sum(F*np.linalg.pinv(F).T,axis=1))[:,None]));\\n   if np.std(rr)<.001:print(c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/recover9.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Identify the missing calibration terms and sharpen panel C’s nonlinear fits; the current 52/20 MAEs are 0.046097 for y and 0.047588 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the opposite-coordinate bilinear and cubic calibration\",\"rejected_reason\":\"Median residuals remain above 0.12 in every output, too large to distinguish calibration error from downstream readout error.\"}],\"rationale\":\"Use panel-only residuals and leave-one-row-out errors to separate exact nonlinear operators from approximations before retesting the prediction split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0d18a9d7ba953bf087bd4f83d8c0a4402abbec027542bd4e7454d3433b8f62b8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26943.61,
+      "usage_known": true,
+      "prompt_tokens": 30544,
+      "cached_tokens": 12672,
+      "completion_tokens": 1093
+    }
+  ]
+}

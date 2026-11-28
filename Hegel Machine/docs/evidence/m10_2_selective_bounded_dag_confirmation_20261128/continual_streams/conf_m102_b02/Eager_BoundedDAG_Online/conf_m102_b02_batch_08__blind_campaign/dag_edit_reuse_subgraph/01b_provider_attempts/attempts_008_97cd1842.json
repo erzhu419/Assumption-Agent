@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "97cd18422da84b2980635cf7f9d37770",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:00.979254+00:00",
+  "ended_at_utc": "2026-11-28T16:10:36.967703+00:00",
+  "request_sha256": "ef4d2e3b956d2db3a168b0718df5b648e4664e47cc25f09684bc64957333c072",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 58538,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38018,
+    "cached_tokens": 12672,
+    "completion_tokens": 1582
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/G={}/,$d' /tmp/heads8.py > /tmp/mech8.py; cat >> /tmp/mech8.py <<'PY'\\nfrom scipy.optimize import least_squares\\nr=lambda x,j=1:np.roll(x,-j,axis=1)\\nbase=D(np.c_[z,b*r(b)])[:n]; tgt=np.c_[Y[:,0],Y[:,1:]@F(p)[-1]]\\nprint('BASE COEF',fit(base,tgt)); print('BASE RESID CORR',np.corrcoef((tgt-base@fit(base,tgt)).T)); print('RAW RESID SUMMARY',np.quantile(tgt-base@fit(base,tgt),[0,.1,.25,.5,.75,.9,1],axis=0))\\nfor name in ['z','b','c','d']:\\n q=X[name][:n]; print('FAMILY',name,'ranges',q.min(0),q.max(0)); print('PAIR',np.corrcoef(np.c_[q,tgt].T)[:4,4:].round(3))\\nB={}; S={}\\nfor name in ['z','b','c','d','h','p','q']:\\n u=X[name][:n]; B[name]=u\\n for key,fn in [('sq',lambda v:v*v),('cube',lambda v:v**3),('abs',abs),('prod',lambda v:v*r(v)),('tri',lambda v:v*r(v)*r(v,2))]: B[name+key]=fn(u)\\nfor a,bn in itertools.combinations(['z','b','c','d','h'],2):\\n for i in range(4):\\n  S[f'{a}{bn}{i}']=B[a]*r(B[bn],i)\\nfor i,j in itertools.combinations_with_replacement(range(4),2):\\n for aa in ['z','b','c','d']:\\n  S[f'{aa}{i}{j}']=(B[aa][:,i]*B[aa][:,j])[:,None]\\nfor aa in ['z','b','c','d']:\\n for bb in ['z','b','c','d']:\\n  for k in [.3,1,3]:\\n   for j in range(4): S[f'{aa}/{bb}{j}/{k}']=B[aa]/(1+k*r(B[bb],j)**2)\\nA=np.c_[*B.values(),*S.values()]; keys=[f'{name}:{i}' for name,g in [*B.items(),*S.items()] for i in range(g.shape[1])]; keep=np.std(A,axis=0)>1e-6; A=A[:,keep];keys=np.array(keys)[keep];\\nfrom sklearn.linear_model import ElasticNet,LassoLars\\nfor j in range(2):\\n for ir,it in slices:\\n  x=base[ir]; q=np.linalg.qr(x)[0]; g=A[ir]-q@(q.T@A[ir]); scale=np.maximum(np.std(g,axis=0),1e-5); gt=A[it]-base[it]@fit(x,A[ir]); e=tgt[ir,j]-q@(q.T@tgt[ir,j]); initial=base[it]@fit(x,tgt[ir,j]);\\n  for a in [.008,.003,.001]:\\n   mod=ElasticNet(alpha=a,l1_ratio=.88,max_iter=4000,tol=1e-5,fit_intercept=False).fit(g/scale,e); print('elastic',j,it[0],a,np.mean(abs(initial+gt/scale@mod.coef_-tgt[it,j])),list(zip(keys[np.argsort(abs(mod.coef_))[-12:]],np.sort(abs(mod.coef_))[-12:].round(4))))\\n# Profile compact nonlinear wave response in a measured coordinate, with the base projected out.\\nfor j in range(2):\\n ir,it=slices[0]; x=base[ir]; q=np.linalg.qr(x)[0]; e=tgt[ir,j]-q@(q.T@tgt[ir,j]); wins=[]\\n for name,u in X.items():\\n  for fun in ['sin','tanh','asinh','rational','cos','dead']:\\n   def H(par):\\n    v=u*par[0]+par[1]; f={'sin':np.sin,'tanh':np.tanh,'asinh':np.arcsinh,'rational':lambda x:x/(1+x*x),'cos':np.cos,'dead':lambda x:np.sign(x)*np.maximum(abs(x)-.5,0)**1.5}[fun];return np.c_[base,f(v)[:n]]\\n   def res(par):\\n    h=H(par)[ir];return h@fit(h,tgt[ir,j])-tgt[ir,j]\\n   for init in [[1,0],[2,.5],[4,0],[7,1]]:\\n    opt=least_squares(res,init,bounds=([.1,-4],[14,4]),max_nfev=35); h=H(opt.x); wins.append((np.sqrt(np.mean(opt.fun**2)),np.mean(abs(h[it]@fit(h[ir],tgt[ir,j])-tgt[it,j])),name,fun,opt.x))\\n print('NONLINEAR',j,sorted(wins,key=lambda a:a[0])[:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mech8.py 2>/dev/null | awk '/BASE COEF/{p=1} p' | awk '!/elastic/ || /elastic [01] 52/'; cat /tmp/hegel_continual_archive/*05_solver.py; cat /holdout_task/_frozen_nodes/node_03.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse fixed interaction groups → H2 profile nonlinear response terms over the shared adjacent-product base; the training-selected beam reached held-out scalar MAE 0.1009 and trajectory endpoint MAE 0.0571 on the official split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase the interaction beam depth\",\"rejected_reason\":\"Deeper models reduced training leave-one-out error but increased error on external slices.\"}],\"rationale\":\"Inspect the shared base coefficients and residuals, then test whether a compact profiled nonlinear response or sparse interactions can explain the errors that remain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3501928f9c2a911aa61124c0582b5d68b609c59847d7f5eb3884da351ab27735",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37260.43,
+      "usage_known": true,
+      "prompt_tokens": 38018,
+      "cached_tokens": 12672,
+      "completion_tokens": 1582
+    }
+  ]
+}

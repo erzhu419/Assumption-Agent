@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41fa2a4fe8e04abcbe83eb1e205b3882",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:43.266409+00:00",
+  "ended_at_utc": "2026-11-28T15:03:48.831277+00:00",
+  "request_sha256": "13a98bc684cdcf394adee76977c218d5d3a4bfd649393de123db54367381ba86",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32933,
+    "cached_tokens": 8832,
+    "completion_tokens": 1941
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/conf_m102_a01_batch_00_solver.py /holdout_task/batch_solver.py; cat > /tmp/gp.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations_with_replacement as comb\\nsys.path.insert(0,'/holdout_task'); import batch_solver as old\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];x=s['train']['x']; y=s['train']['y'];T=s['train']['traj'];z,h=old._coordinates(s,x);n=52\\nA=lambda w:np.c_[np.ones(len(w)),w]\\np=s['panel_b'];B=np.linalg.lstsq(A(p['u']),p['v'],rcond=None)[0]\\np=s['panel_c'];u=p['u']; F=lambda w,k:np.c_[A(w),w/(1+.84*abs(w)) if k=='v1' else np.sqrt(1+.959**2*w*w)]\\nWs=[x,z,h,A(z)@B,A(x)@B]; Ws+= [F(w,k)@np.linalg.lstsq(F(u,k),p[k],rcond=None)[0] for w in Ws[:3] for k in ['v1','v2']]\\nR=np.random.default_rng(2); folds=[(np.arange(n),np.arange(n,72))]+[(p[:n],p[n:]) for p in [R.permutation(72) for i in range(7)]]\\ndef blocks(tr,mode):\\n K=[]\\n def add(f):\\n  if f.ndim==1:f=f[:,None]\\n  q=f@f.T; scale=np.sqrt(np.mean(q[np.ix_(tr,tr)]**2)); K.append(q/max(scale,1e-12))\\n def gram(q):K.append(q / np.sqrt(np.mean(q[np.ix_(tr,tr)]**2)))\\n def pol(w,d):return np.stack([np.prod(w[:,ids],1) for ids in comb(range(4),d)],1)\\n for w in ([x] if mode in ['iso','ard','bare'] else Ws[:5] if mode in ['full','sparse'] else Ws):\\n  v=w-w[tr].mean(0); G=v@v.T; d=np.maximum(G.diagonal()[:,None]+G.diagonal()[None,:]-2*G,0)\\n  if mode!='bare':\\n   for l in [.65,1.15,2.2]:gram(np.exp(-d/(2*l*l)))\\n  for j in range(2,6):\\n   f=pol(w,j)\\n   add(f)\\n   if (mode in ['ard','sparse'] and j<=3):\\n    for k in f.T:add(k)\\n  if mode not in ['full','sparse','all']:continue\\n  for j in [.22,1.25]:\\n   for f in [np.tanh(j*w),np.sin(j*w),w/(1+j*abs(w)),w/(1+j*w*w),np.sqrt(1+j*w*w)-1]:\\n    add(f);add(np.einsum('ni,nj->nij',f,w).reshape(len(w),-1))\\n   i,k=np.triu_indices(4,1); dd=w[:,i]-w[:,k]; ss=w[:,i]+w[:,k]\\n   for q in [dd,ss]:\\n    add(np.tanh(j*q));add(np.sin(j*q));add(np.einsum('ni,nj->nij',q/(1+j*q*q),w).reshape(len(w),-1))\\n  for j in [.22,1.25]:\\n   f=pol(w,2); add((f[:,:,None]/(1+j*w[:,None,:]**2)).reshape(len(w),-1))\\n return np.array(K)\\ndef predict(K,tr,te,y,reg):\\n C=np.concatenate((K[:,tr][:,:,tr],np.eye(len(tr))[None]));D=K[:,te][:,:,tr]; base=2+2*x@x.T; bt=base[np.ix_(tr,tr)]; be=base[np.ix_(te,tr)]; r=y[tr]; eye=np.eye(len(tr)); p=np.full(len(C),-7.);p[-1]=-7.; CC=C.reshape(len(C),-1).copy()\\n def opt(t):\\n  w=np.exp(t); c=cho_factor(bt+(w@CC).reshape(bt.shape),check_finite=False); a=cho_solve(c,r,check_finite=False); V=cho_solve(c,eye,check_finite=False)-np.outer(a,a)\\n  return .5*r@a+np.log(c[0].diagonal()).sum()+reg*np.sum(w[:-1]**.35), .5*w*(CC@V.ravel())+np.r_[.35*reg*w[:-1]**.35,0]\\n fit=minimize(opt,p,jac=True,method='L-BFGS-B',bounds=[(-16,1)]*(len(C)-1)+[(-13,-2)],options={'maxiter':120,'ftol':1e-8}); w=np.exp(fit.x); c=cho_factor(bt+(w@CC).reshape(bt.shape)); out=(be+np.einsum('i,ijk->jk',w[:-1],D))@cho_solve(c,r);return out,np.sort(w[:-1])[-6:],w[-1]\\nif __name__=='__main__':\\n out={}\\n for mode in ['arch','iso','ard','bare','full','sparse','all']:\\n  for reg in ([0.,1.,3.] if mode not in ['arch','bare'] else [0.]):\\n   errs=[];P=[]\\n   for tr,te in folds:\\n    if mode=='arch':\\n     d={**s,'train':{**s['train'],'x':x[tr],'y':y[tr],'traj':T[tr]},'test':{'x':x[te]}}; a,b,_=old._components(d); pu=.65*a[:,0]+.35*b[:,0]\\n    else:\\n     pu,w,no=predict(blocks(tr,mode),tr,te,y,reg)\\n    errs.append(np.mean(abs(pu-y[te])));P.append(pu)\\n   out[mode,reg]=np.array(P); print(mode,reg,np.round(errs,4),np.mean(errs),flush=True)\\n Y=np.array([y[te] for tr,te in folds]); base=out['arch',0.];\\n for key,P in out.items():\\n  print('blend',key,np.round(np.mean(abs(.5*(base+P)-Y),1),4))\\n np.savez('/tmp/gpstudy.npz',**{str(k):v for k,v in out.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single projected correction) -> H2 (evidence-weighted interaction grammar); archived 52/20 scalar MAE is 0.040803, and the best projected correction on that split is 0.04830.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the baseline with the best single rational correction\",\"rejected_reason\":\"It misses the 0.038 gate and does not consistently improve on the archived model.\"}],\"rationale\":\"Save the baseline as a runnable artifact and compare evidence-weighted interaction families against it on the required split and seven independent row splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c4b6dfab9390ad00468fd545c195e2c80f5f04e983db4e68855fe4a6de4d4778",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 65562.39,
+      "usage_known": true,
+      "prompt_tokens": 32933,
+      "cached_tokens": 8832,
+      "completion_tokens": 1941
+    }
+  ]
+}

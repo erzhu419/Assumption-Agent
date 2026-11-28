@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5fc1a5ffccfe44a497e923b6bf1b1364",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:38.052468+00:00",
+  "ended_at_utc": "2026-11-28T15:24:38.743062+00:00",
+  "request_sha256": "d01f7f20e72bd240332eea80f63058f6033b9ab13ade241c56d21a045b8d542a",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 61274,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38078,
+    "cached_tokens": 12672,
+    "completion_tokens": 1563
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress_dag.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; n0=runpy.run_path(p+'node_00.py'); n1=runpy.run_path(p+'node_01.py')['run_node']; n2=runpy.run_path(p+'_frozen_nodes/node_02.py')['run_node']; u=s['panel_b']['u']; v=s['panel_b']['v']; x=s['train']['x']; yy=s['train']['y']; tt=s['train']['traj']; z=n0['_inverse'](x,n0['_calibration'](s['panel_a'])); N=len(x)\\nfolds=[('public',np.arange(N-20,N)),('early',np.arange(20)),('mid',np.arange(26,46)),('interleaved',np.arange(0,N,3)),('large-radius',np.argsort(np.linalg.norm(z,axis=1))[-14:])]\\ndef score(make=None):\\n    out=[]\\n    for name,te in folds:\\n        tr=np.setdiff1d(np.arange(N),te); sub={**s,'train':{'x':x[tr],'y':yy[tr],'traj':tt[tr]},'test':{'x':x[te]}}\\n        a=n0['run_node']({'__input__':sub}) if make is None else make(tr,te)\\n        b=n1({'__input__':sub,'node_00':a}); r=n2({'node_00':a,'node_01':b}); e=np.abs(r['state_pred']-tt[te]); assert r['y_hat'].shape==yy[te].shape and e.shape==tt[te].shape and all(np.all(np.isfinite(w)) for w in r.values()); out.append((name,round(np.mean(np.abs(r['y_hat']-yy[te])),5),round(e.mean(),5),round(e.mean(axis=0).max(),5)))\\n    return out\\nbase=n0['run_node']({'__input__':{**s,'test':{'x':x}}}); i,j=np.triu_indices(z.shape[1]); ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\nprint('BASELINE',score())\\nmodels=[('cubic',lambda a,h:a**3,[]),('quintic-mix',lambda a,h:a**3+h[0]*a**5,[0.]),('rational',lambda a,h:a**3/(1+np.exp(h[0])*a*a),[-2.]),('power',lambda a,h:np.sign(a)*abs(a)**h[0],[3.]),('sinh',lambda a,h:np.sinh(np.exp(h[0])*a),[0.]),('tanh',lambda a,h:np.tanh(np.exp(h[0])*a),[0.]),('sin',lambda a,h:np.sin(np.exp(h[0])*a),[0.]),('cubic-rational',lambda a,h:a**3+h[0]*a/(1+np.exp(h[1])*a*a),[.1,0.])]\\nfor name,phi,start in models:\\n    for lin in (False,True):\\n        def design(a,h): return np.c_[np.ones(len(a)),a,phi(a,h)] if lin else np.c_[np.ones(len(a)),phi(a,h)]\\n        def fit(tr):\\n            def residual(h):\\n                A=design(u[tr],h);return (A@ls(A,v[tr])-v[tr]).ravel()\\n            h=least_squares(residual,start,bounds=(-5,5),max_nfev=90).x if start else start\\n            return h,ls(design(u[tr],h),v[tr])\\n        ix=np.arange(len(u)); h,c=fit(ix); pe=[]\\n        for k in range(6):\\n            te=ix[k::6]; a,b=fit(np.setdiff1d(ix,te));pe.append(abs(design(u[te],a)@b-v[te]).mean())\\n        g=design(z,h)@c\\n        def make(tr,te):\\n            A=np.c_[g,g[:,i]*g[:,j],base['readout_train'][:,14:]];B=np.c_[g,base['z'][:,4:]];return {'readout_train':A[tr],'readout_test':A[te],'z':B[tr],'zt':B[te]}\\n        print(name,lin,np.round(h,4),'panel CV',round(np.mean(pe),6), 'responses',score(make))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_dag.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and additive kernels -> H2 robust cyclic inversion, cubic panel features, and a rank-two trajectory fit; verified public MAE is 0.037380 for readout and 0.034112 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the passing cubic map immediately\",\n      \"rejected_reason\": \"The evidence for higher-order panel structure is not enough to justify an edit without independent panel and response validation.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifacts intact while stress-testing early, middle, interleaved, and large-radius slices. Compare higher-order panel maps fitted without response labels, since the verified readout clears the threshold by only 0.000620.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "131fc3302b2529f5d3be82c13a04f49b05902553c3a86d3c39b7f0e867ac4901",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 61165.76,
+      "usage_known": true,
+      "prompt_tokens": 38078,
+      "cached_tokens": 12672,
+      "completion_tokens": 1563
+    }
+  ]
+}

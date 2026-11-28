@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4f3092cd8974e01a623e69c2c0ce4d6",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:52.295694+00:00",
+  "ended_at_utc": "2026-11-28T15:08:22.202120+00:00",
+  "request_sha256": "e81fba5be6494b4f1171eae0199efd565af96d2126b27977766069589c864e6a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29263,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24440,
+    "cached_tokens": 12672,
+    "completion_tokens": 1130
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine calibration reference panel outlier alignment'; sed -n '70,155p' /tmp/hegel_continual_archive/conf_m102_a01_batch_03_solver.py; cat > /tmp/probe05.py <<'PY'\\nimport pickle,sys\\nimport numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport conf_m102_a01_batch_03_solver as old\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; A=old._affine\\nz,h=old._coordinates(s,x); b=np.linalg.lstsq(A(s['panel_b']['u']),s['panel_b']['v'],rcond=None)[0]; print('b singular values',np.linalg.svd(b[1:],compute_uv=False))\\nc=s['panel_c']; coords={'x':x,'z':z,'h':h,'Bz':A(z)@b};\\nfor key in ('v1','v2'):\\n def f(w):return w/(1+.84*abs(w)) if key=='v1' else np.sqrt(1+.959**2*w*w)\\n def basis(w): return np.c_[A(w),f(w)]\\n cf=np.linalg.lstsq(basis(c['u']),c[key],rcond=None)[0];print(key,'residual',np.std(c[key]-basis(c['u'])@cf,axis=0),'coef',cf.round(4))\\n for name,w in list(coords.items())[:4]: coords[name+key[-1]]=basis(w)@cf\\nprint('coord ranges',[(k,np.round(w.min(0),2),np.round(w.max(0),2)) for k,w in coords.items()]);\\nY=np.c_[y,t]; rng=np.random.default_rng(123); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(9)]\\ndef evaluate(K):\\n a=[]\\n for j in splits:\\n  i,v=j[:52],j[52:]; p=K[np.ix_(v,i)]@cho_solve(cho_factor(K[np.ix_(i,i)]),Y[i]);e=np.abs(p-Y[v]); a.append([e[:,0].mean(),e[:,1:].mean()]);\\n a=np.array(a);return np.r_[a[0],a.mean(0),a.max(0)]\\nfor k,w in coords.items():\\n w=w/np.std(w,axis=0); G=w@w.T/4; D=cdist(w,w,'sqeuclidean'); base=1+G\\n models={}\\n for d in range(2,7):\\n  for rho in (.08,.25,.7,1.5):\\n   for noise in (1e-5,1e-3,.01): models[('poly',d,rho,noise)]=evaluate(sum((rho**(j-1) if j>1 else 1)*G**j for j in range(d+1))+noise*np.eye(len(w)))\\n for scale in (.65,1,1.5,2.2,3.5,5):\\n  for noise in (1e-5,1e-3,.01):models[('rbf',scale,noise)]=evaluate(base+.15*np.exp(-.5*D/scale**2)+noise*np.eye(len(w)))\\n for i in (2,3):\\n  print(k,'yt'[i-2],[(j, np.round(m,4)) for j,m in sorted(models.items(),key=lambda jm:jm[1][i])[:2]])\\nPY\\npython3 /tmp/probe05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived nonlinear priors -> H2 calibrated operator coordinates with separately selected response and trajectory models; archived 52/20 MAEs are 0.043762 and 0.022093.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived ensemble unchanged\",\"rejected_reason\":\"The prior gate missed the response tolerance, and panel C has measurable non-affine structure.\"}],\"rationale\":\"Check whether the archived nonlinear panel basis matches the calibration readings, then screen discrete polynomial degrees and smooth kernels on both outputs across multiple splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f234ff399a57b02b99c2dd5fac9274bdec88a8420cd12912682faf932b6b232d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29904.11,
+      "usage_known": true,
+      "prompt_tokens": 24440,
+      "cached_tokens": 12672,
+      "completion_tokens": 1130
+    }
+  ]
+}

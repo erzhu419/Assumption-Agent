@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "784aa5a0c16648959a74cb04b4d83e5c",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:10:11.903726+00:00",
+  "ended_at_utc": "2026-11-28T17:10:51.351691+00:00",
+  "request_sha256": "e0372ff6bab84c081b29f1d9bf4c1e013733bd87357522022787e7221670416c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54351,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35933,
+    "cached_tokens": 12672,
+    "completion_tokens": 1584
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*batch_0[15]*py | head -150; cat > /tmp/struct21.py <<'PY'\\nfrom lab21 import *\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import minimize_scalar\\nx=np.r_[tr['x'],s['test']['x']]; a,w=fit_a(); z=invert(x,a,w)\\nprint('inversion residual',np.max(abs(z*w[1]+np.sin(a*z)*w[2]+np.sin(a*np.roll(z,2,axis=1))*w[3]+w[0]-x),axis=0)); print('panel lengths',[len(p['u']) for p in [A,B,C]])\\n# Separate even and odd terms with two independently profiled frequencies.\\nu,v=C['u'],C['v2']; opts={}\\nfor n1,h in [('sin',np.sin),('tanh',np.tanh),('rat',lambda x:x/(1+x*x)),('asinh',np.arcsinh)]:\\n for n2,g in [('cos',np.cos),('tanh2',lambda x:np.tanh(x)**2),('rat2',lambda x:x*x/(1+x*x)),('linear2',lambda x:x*x),('tanh_sq',lambda x:np.tanh(x*x))]:\\n  def fit(u,q):return D(h(q[0]*u),g(q[1]*u))\\n  def err(q):\\n   f=fit(u,q);return (f@reg(f,v)-v).ravel()\\n  o=least_squares(err,[.4,.4],bounds=(.015,4)); opts[n1,n2]=(rms(o.fun),o.x)\\nprint('C2 forms', sorted(opts.items(),key=lambda q:q[1][0])[:8]);\\nf=D(z,z*z); print('Y ranges',Y.min(0),Y.max(0)); print('X ranges',x.min(0),x.max(0)); print('Y first',np.round(np.c_[z,Y[:,[0,-1]]][:12],4));\\nT=Y[:,1:]; tm=s['eval_times']; print('times',tm); E=lambda p:-np.expm1(-tm[:,None]*p); o=least_squares(lambda p:(E(p)@reg(E(p),T.T)-T.T).ravel(),[2.15,.22],bounds=([1,.05],[6,1])); print('rates',o.x,rms(o.fun)); W=np.c_[Y[:,0],reg(E(o.x),T.T).T];\\n# Test families of sparse supervised bases, sharing functions but not coefficients.\\ncos=np.cos(2.6*z); co=D(np.cos(2.6*B['u'])); b=D(cos)@reg(co,B['v']); p=cyc(z); v1=D(p)@reg(D(cyc(C['u'])),C['v1']); v2=D(np.tanh(.21647*z),np.tanh(.21647*z)**2)@reg(D(np.tanh(.21647*u),np.tanh(.21647*u)**2),v);\\nnp.savez('/tmp/struct21.npz',x=x,z=z,b=b,p=p,v1=v1,v2=v2,Y=Y,W=W);\\ndef basis(h):\\n return [('raw',h),('poly',polys(h,3)),('harmonics',np.c_[h,h*h,*[fun(a*h) for a in [.22,.5,1.,1.25,2.15,2.6,3.5,4.3,5.2,6.5,8.6,10.4] for fun in [np.sin,np.cos,np.tanh]]]),('poly2',polys(h,2))]\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit, ElasticNet\\nres=[]\\nfor name,h in [('z',z),('x',x),('b',b),('cos',cos),('v1',v1),('v2',v2),('zb',np.c_[z,b]),('mix+',z+b),('mix-',z-b),('all',np.c_[z,b,v1,v2]),('mixa',np.c_[z+b,z-b]),('h',np.c_[z,b,p,v1,v2,z+b,z-b,b+v1,b-v1])]:\\n for nn,f in basis(h):\\n  if f.shape[1]>1500:continue\\n  f=f[:72];mu=f[:52].mean(0);sd=f[:52].std(0); f=(f-mu)/np.maximum(sd,1e-8)\\n  for k in [4,8,12,20,32]:\\n   if k>f.shape[1]:continue\\n   model=OrthogonalMatchingPursuit(n_nonzero_coefs=k).fit(f[:52],W[:52]); e=np.abs(model.predict(f[52:])-W[52:]).mean(0); res.append((tuple(e),name,nn,k));\\nfor j in range(3):print('sparse head',j,sorted(res,key=lambda p:p[0][j])[:8]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct21.py 2>/tmp/struct21.err; tail -6 /tmp/struct21.err\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic kernels on calibrated panels → H2 train-informed features that recover distinct response mechanisms; best joint public-split MAEs tested so far are 0.1940 for the scalar and 0.1289 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the frozen kernel's input scale alone\",\n      \"rejected_reason\": \"Calibrated feature groups still miss the public threshold by severalfold, so the next test targets missing response structure.\"\n    }\n  ],\n  \"rationale\": \"Panel B supports a cosine map at frequency 2.6 with residual RMS below 0.00009, but calibration alone has not delivered predictive accuracy. Check inversion directly and test sparse algebraic and harmonic bases for each response before constructing the editable node.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5ed237c3a389f4bb44d31c7a167cb3022280d2ff450164c2bacaec328575ca92",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39895.57,
+      "usage_known": true,
+      "prompt_tokens": 35933,
+      "cached_tokens": 12672,
+      "completion_tokens": 1584
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "819575bf4ccc421e9cd137a7886376b1",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:07:58.043363+00:00",
+  "ended_at_utc": "2026-11-28T16:08:21.038342+00:00",
+  "request_sha256": "2892e044a8739b6b2de959ede13a46d0ad61d07d23966153dc0772383ac1705f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51381,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34454,
+    "cached_tokens": 12672,
+    "completion_tokens": 910
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/rng=np.random/,$d' /tmp/readout.py > /tmp/saturate.py; cat >> /tmp/saturate.py <<'PY'\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nL=aff(z); bil=z[:,0]*z[:,2]+z[:,1]*z[:,3]; P=poly(z,3); Q=np.c_[z[:,0]*z[:,2],z[:,1]*z[:,3]]\\nshapes={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'erf':erf,'soft':lambda t:t/np.sqrt(1+t*t)}\\nallidx=np.arange(len(z)); folds=[(allidx[:-20],allidx[-20:])]+[(np.setdiff1d(allidx,j),j) for seed in (42,142,242) for j in np.array_split(np.random.default_rng(seed).permutation(len(z)),5)]\\nprint('cubic',np.round([np.mean(abs(P[j]@fit(P[i],y[i])-y[j])) for i,j in folds],5))\\nfor name,f in shapes.items():\\n for mode in ['sum','pairs','inside','linear']:\\n  def pred(p,i):\\n   qi=Q[i] if mode=='pairs' else bil[i,None]; ts=L[i]@p[:5]; b=qi@p[6:6+qi.shape[1]]\\n   if mode=='inside':return p[5]*f(ts+b)\\n   if mode=='linear': b=b+p[-1]*ts\\n   return p[5]*f(ts)+b\\n  def fitp(i):\\n   n=2 if mode=='pairs' else 1; init=np.r_[fit(L[i],y[i])/2.2,2.2,np.full(n,.22),([0.] if mode=='linear' else [])]; lower=np.r_[np.full(5,-10.),.25,np.full(len(init)-6,-4.)]; upper=np.r_[np.full(5,10.),12.,np.full(len(init)-6,4.)]\\n   return least_squares(lambda p:pred(p,i)-y[i],init,bounds=(lower,upper),max_nfev=300).x\\n  p=fitp(allidx); scores=np.array([np.mean(abs(pred(fitp(i),j)-y[j])) for i,j in folds]);print(name,mode,'fit',round(np.mean(abs(pred(p,allidx)-y)),6),'public/mean/worst',np.round([scores[0],scores[1:].mean(),scores.max()],6),'coef',np.round(p,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/saturate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cosine-aligned cubic readout -> H2 saturated linear index plus symmetric bilinear interaction; verified public MAE is 0.023248 for scalar and 0.004065 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the accepted cubic baseline now\",\"rejected_reason\":\"The cubic coefficients show a coherent linear-index pattern and two similar bilinear coefficients, making a simpler model worth testing on held-out slices.\"}],\"rationale\":\"Fit each saturation model afresh inside each split and compare its public, mean, and worst-slice MAE with the accepted cubic baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "169240feb80db2331f853eae286ca9e0ca3b421878f958b4b007a6e719b8f08d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22993.7,
+      "usage_known": true,
+      "prompt_tokens": 34454,
+      "cached_tokens": 12672,
+      "completion_tokens": 910
+    }
+  ]
+}

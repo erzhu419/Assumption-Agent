@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "11b91517674349cbae87f28f4ed50d6f",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:18.906264+00:00",
+  "ended_at_utc": "2026-11-28T15:21:48.337780+00:00",
+  "request_sha256": "c13bf40c1f14c1fe4bcb0c973a492da0425ff6070932fb842099e61474f273e5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38887,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28579,
+    "cached_tokens": 12672,
+    "completion_tokens": 1130
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=150)\\na=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py'); w=a['_calibration'](s['panel_a']); z=a['_inverse'](s['train']['x'],w)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef nxt(x):return np.roll(x,-1,axis=1)\\ndef poly(z,d):return PolynomialFeatures(d).fit_transform(z)\\nfuns={'quad':lambda x:x*x,'cyc':lambda x:x*nxt(x),'cube':lambda x:x**3,'rat':lambda x:x/(1+x*x),'gauss':lambda x:x*np.exp(-x*x),'tanh':np.tanh,'sin':np.sin,'crossdiff':lambda x:(x-nxt(x))**2}\\nfor p in ['panel_b','panel_c']:\\n u=s[p]['u']\\n for key,v in s[p].items():\\n  if key=='u':continue\\n  scores=[]\\n  from itertools import combinations\\n  for d in range(3):\\n   for keys in combinations(funs,d):\\n    F=np.column_stack([aff(u)]+[funs[k](u) for k in keys]); c=ls(F,v); h=np.sum(F*np.linalg.pinv(F).T,axis=1); scores.append((np.sqrt(np.mean(((F@c-v)/(1-h[:,None]))**2)),keys,c))\\n  scores.sort(key=lambda i:i[0]); print(p,key,[(q[0],q[1]) for q in scores[:6]],'coef',scores[0][2]);\\nt=s['eval_times']; S=s['train']['traj']; Y=s['train']['y'];\\ndef B(r):return -np.expm1(-t[:,None]*r)\\nfor k in (1,2,3):\\n r=least_squares(lambda r:(B(r)@ls(B(r),S[:52].T)-S[:52].T).ravel(),[2,.4,.1][:k],bounds=(.001,20)).x; print('rates',r,'rms',np.sqrt(np.mean((B(r)@ls(B(r),S.T)-S.T)**2)))\\n if k==2: amp=ls(B(r),S.T).T; BB=B(r)\\nprint('amp range',amp.min(0),amp.max(0),'cal ranges',z.min(0),z.max(0))\\nfor name,F in [('raw',aff(s['train']['x'])),('latent',aff(z)),('poly2',poly(z,2)),('poly3',poly(z,3))]+[(k,np.c_[aff(z),f(z)]) for k,f in funs.items()]:\\n c=ls(F[:52],np.c_[Y,amp][:52]); pred=F[52:]@c; print(name,'y',np.mean(abs(pred[:,0]-Y[52:])),'state',np.mean(abs(pred[:,1:]@BB.T-S[52:])),'amp train',np.std(F[:52]@c-np.c_[Y,amp][:52],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration -> H2 sparse cyclic cubic calibration with two temporal modes; panel-A inlier residual is about 0.00009, while the archived 52/20 y/trajectory MAEs are 0.122883/0.140019.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine calibration spans the panel-A mapping.\",\"empirical_witness\":\"Pairwise quadratic fits leave channel residuals around 0.04–0.05; adding the local cubic term reduces them below 0.00010.\",\"causal_blanket_diagnosis\":\"Calibration curvature is otherwise carried into downstream spatial features.\",\"sublated_pivot\":\"Invert the sparse cyclic cubic calibration before testing auxiliary operators and readout features.\",\"risk_kind\":\"structural_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full higher-degree calibration polynomial\",\"rejected_reason\":\"The sparse cyclic cubic already reaches the panel noise floor without unsupported tail terms.\"}],\"rationale\":\"Separate calibration, temporal modes, and spatial response errors, then use panel leave-one-out fits to identify operator features before testing them on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "41f286b109d665a5178e6ebd04a1a62e2cd1ef4d40bb6b34ddfe483bbee089da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29913.58,
+      "usage_known": true,
+      "prompt_tokens": 28579,
+      "cached_tokens": 12672,
+      "completion_tokens": 1130
+    }
+  ]
+}

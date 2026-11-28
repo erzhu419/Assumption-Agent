@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a846e32b7a34b5aae82debb6b67cfb9",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:42.591646+00:00",
+  "ended_at_utc": "2026-11-28T15:53:22.891059+00:00",
+  "request_sha256": "3f3ab4b29e835723f202d06b444b40e71c6015b1a48d3ffda7931e53c89ca10d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37892,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27215,
+    "cached_tokens": 12672,
+    "completion_tokens": 1695
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,runpy,itertools\\nfrom scipy.optimize import least_squares\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=S['train']; X=T['x']; n=len(X); A=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b01_batch_06_solver.py'); head=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']; ls=A['_ls']; aff=A['_aff']; pair=A['_pairmap']; z=A['_calibrate'](S['panel_a'],X); u,v=S['panel_b']['u'],S['panel_b']['v']; C=S['panel_c']; p,q=C['u'],C['v2']; cfit=ls(pair(p),C['v1']); dfit=ls(A['_even'](p),q); d0=A['_even'](z)@dfit; d=np.tanh(1.25*d0)\\nprint('A latent range',z.min(0),z.max(0),'C residual', np.std(pair(p)@cfit-C['v1']),np.std(A['_even'](p)@dfit-q)); print('B sv',np.linalg.svd(v-v.mean(0),compute_uv=False));\\ndef cv(w,folds=1):\\n out=[]\\n for te in [np.arange(52,72)]+list(np.array_split(np.random.default_rng(111).permutation(n),4))[:folds-1]:\\n  tr=np.setdiff1d(np.arange(n),te); a=head({'__input__':{'train':{k:T[k][tr] for k in ('y','traj')}},'node_00':{'w':w[np.r_[tr,te]]}});out.append([np.mean(abs(a[k]-T[t][te])) for k,t in [('y_hat','y'),('state_pred','traj')]])\\n return np.round(out,5)\\ndef profile(name,f,starts):\\n def resid(h):\\n  k=aff(f(u,h));return (k@ls(k,v)-v).ravel()\\n fits=[least_squares(resid,h,max_nfev=260) for h in starts]; r=min(fits,key=lambda x:np.mean(x.fun**2));h=r.x; k=aff(f(u,h)); coef=ls(k,v); hat=k@np.linalg.pinv(k); loo=np.std(r.fun.reshape(v.shape)/(1-hat.diagonal())[:,None]); print(name,np.round(h,5),'rmse,press',np.std(r.fun),loo);return aff(f(z,h))@coef,loo\\nopts={\\n 'lin':(lambda x,h:x+h[0]*0,[[0]]),\\n 'sinmix':(lambda x,h:x+h[0]*np.sin(h[1]*x)+h[2]*np.cbrt(x),[[a,b,0] for a in [-.4,.4] for b in [1.25,2.15,3.5,5.5,8]]),\\n 'rational':(lambda x,h:x/(1+np.exp(h[0])*x*x)+h[1]*x,[[a,b] for a in [-2,0,1] for b in [-.5,0,.5]]),\\n 'sine':(lambda x,h:np.sin(h[0]*x+h[1])+h[2]*x,[[b,a,0] for a in [0,.5,1] for b in [1.25,2.15,3.5,5.5,8]]),\\n 'tanh':(lambda x,h:np.tanh(h[0]*x+h[1])+h[2]*x,[[b,a,0] for a in [0,.5] for b in [1.25,2.15,3.5,5.5]]),\\n 'oddpoly':(lambda x,h:x+h[0]*x**3+h[1]*x**5+h[2]*x**7,[[0,0,0]]),\\n 'atan':(lambda x,h:np.arctan(h[0]*x+h[1])+h[2]*x,[[b,a,0] for a in [0,.5] for b in [1.25,2.15,3.5,5.5]]),\\n 'polysep':(lambda x,h:np.c_[x,x*x,x**3,x**5]+h[0]*0,[[0]]),\\n 'trigrat':(lambda x,h:np.sin(h[0]*x)/(1+np.exp(h[1])*x*x)+h[2]*x,[[b,a,0] for a in [-2,0,1] for b in [1.25,2.15,3.5,5.5,8]]),\\n}\\nbest=[]\\nfor name,(f,starts) in opts.items():\\n b,e=profile(name,f,starts); c0=pair(b)@cfit;c=np.arcsinh(1.25*c0)\\n ws={'b':b,'b+d':np.c_[b,d],'c':c,'d':d,'c+d':np.c_[c,d],'c0+d':np.c_[c0,d],'c+d0':np.c_[c,d0],'c0+d0':np.c_[c0,d0],'c0':c0,'tanhc+d':np.c_[np.tanh(1.25*c0),d]}\\n scores=sorted((max(cv(w)[0]),k,cv(w)[0]) for k,w in ws.items());print('best',scores[:4]);best.extend((a,name,k,w if False else ws[k]) for a,k,_ in scores)\\nfor a,name,k,w in sorted(best,key=lambda t:t[0])[:12]:print('multi',name,k,cv(w,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel B → H2 nonlinear panel B plus a shared bilinear feature map; affine panel-B calibration RMSE is 0.112–0.158 by channel.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine map adequately describes panel B in the shifted regime.\",\"empirical_witness\":\"Affine panel-B residual RMSE was 0.112–0.158 across channels, and quadratic terms reduced the residual in all four channels.\",\"causal_blanket_diagnosis\":\"Panel B has unmodeled nonlinear structure upstream of the frozen prediction head.\",\"sublated_pivot\":\"Profile low-dimensional nonlinear panel maps and test their downstream representations without changing the frozen node.\",\"risk_kind\":\"calibration misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted cubic interpolation\",\"rejected_reason\":\"The cubic design has more columns than calibration rows; zero residual does not establish transfer.\"}],\"rationale\":\"Compare calibration residual and leave-one-row-out error separately from downstream prediction, then stress-test the best handoffs on additional training splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "aac46a16e4eabc2b41dac1941206df4e798fc33ab2676c73334289de4952789e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40298.35,
+      "usage_known": true,
+      "prompt_tokens": 27215,
+      "cached_tokens": 12672,
+      "completion_tokens": 1695
+    }
+  ]
+}

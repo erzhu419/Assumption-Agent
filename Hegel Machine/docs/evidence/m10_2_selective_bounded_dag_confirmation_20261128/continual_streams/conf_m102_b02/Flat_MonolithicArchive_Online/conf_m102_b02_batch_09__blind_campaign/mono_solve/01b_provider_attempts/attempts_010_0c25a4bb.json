@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c25a4bbfec14b888b05e1b949ee5c96",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:18.722619+00:00",
+  "ended_at_utc": "2026-11-28T15:45:52.631545+00:00",
+  "request_sha256": "70bd13fecc47e150e4b396122f73709f71e8c475dfab0c2ea025b8c5c0d04229",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56875,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35559,
+    "cached_tokens": 12672,
+    "completion_tokens": 1475
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Invert the reference calibration and predict with the measured B→C1 path.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import root\\n\\n\\ndef _intercept(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _latent(panel, x):\\n    u, v = panel['u'], panel['v']\\n\\n    def correction(w):\\n        return .18 * np.tanh(1.8 * w) - .32 * np.sin(2.4 * np.roll(w, 2, axis=-1))\\n\\n    target = v - correction(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        offset, scale = np.array([_ls(_intercept(u[keep, j]), target[keep, j])\\n                                  for j in range(u.shape[1])]).T\\n        err = np.linalg.norm(u * scale + offset - target, axis=1)\\n        new = err < max(.001, 4 * np.median(err))\\n        if np.array_equal(new, keep) or new.sum() < len(u) // 2:\\n            break\\n        keep = new\\n    return np.array([root(lambda w: scale * w + offset + correction(w) - r,\\n                          (r - offset) / scale).x for r in x])\\n\\n\\ndef _features(study, x):\\n    z = _latent(study['panel_a'], x)\\n    pb, pc = study['panel_b'], study['panel_c']\\n    w = _intercept(z) @ _ls(_intercept(pb['u']), pb['v'])\\n\\n    def design(a):\\n        return _intercept(np.column_stack((a, np.arcsinh(2.65 * a),\\n                                          a / (1 + (5.47 * a)**2))))\\n\\n    h = design(w) @ _ls(design(pc['u']), pc['v1'])\\n    return z, h, (z[:, :, None] * h[:, None, :]).reshape(len(z), -1)\\n\\n\\ndef _ridge(f, response, n, alpha):\\n    mean = f[:n].mean(axis=0)\\n    scale = np.maximum(f[:n].std(axis=0), 1e-10)\\n    q = (f - mean) / scale\\n    base = response.mean(axis=0)\\n    a = q[:n]\\n    coef = np.linalg.solve(a.T @ a + alpha * np.eye(a.shape[1]), a.T @ (response - base))\\n    return q[n:] @ coef + base\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    test = study['test']['x']\\n    z, h, cross = _features(study, np.vstack((train['x'], test)))\\n    trace = cross[:, [0, 5, 10, 15]].sum(axis=1)\\n    y = _ridge(np.column_stack((z, h, trace)), train['y'], n, .003)\\n    t = np.asarray(train['traj'])\\n    mean = t.mean(axis=0)\\n    modes = np.linalg.svd(t - mean, full_matrices=False)[2][:2]\\n    state = _ridge(np.column_stack((z, h, cross)), (t - mean) @ modes.T, n, .003) @ modes + mean\\n    end = state[:, -1]\\n    return dict(y_hat=y, state_pred=state, diagnostics_vec=np.array([y.mean(), y.std(), end.mean(), end.std()]))\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/decompose.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _features, _intercept, _ls\\nfrom panel import s, least_squares, np\\nz,h,c=_features(s,s['train']['x']); D=_intercept(np.c_[z,h,c]); tr=s['train']['traj']; y=s['train']['y']; t=s['eval_times']\\nprint('Y coeff',_ls(D,y)); print('state coefficient matrix',_ls(D,tr).T)\\nbase=_intercept(np.c_[z,h,c[:,[0,5,10,15]].sum(1)]); print('y base coeff and rms',_ls(base,y),np.std(base@_ls(base,y)-y))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/decompose.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated B→C1 path with diagonal coupling → full bilinear trajectory readout; the full basis gives public trajectory MAE 0.0062 and worst of five split MAEs 0.0062.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Diagonal products suffice for both readouts on the calibrated B→C1 path.\",\"empirical_witness\":\"On the 52/20 split, trajectory MAE falls from 0.0702 with diagonal products to 0.0062 with all cross-channel products; scalar MAE is already 0.0051 with a trace term.\",\"causal_blanket_diagnosis\":\"The upstream operator path works for both endpoints, but the trajectory couples different input and operator-output channels.\",\"sublated_pivot\":\"Keep the scalar trace coupling and admit all 16 bilinear channel pairs for the trajectory.\",\"risk_kind\":\"missing_cross_channel_interactions\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add panel C2 to the selected path\",\"rejected_reason\":\"C2 paths did not match the held-out accuracy of B→C1 with the full bilinear readout.\"}],\"rationale\":\"Build a complete solver from the validated operator path and inspect the fitted trajectory coefficients for any useful further simplification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "65c2ddd03ec370d38b4b90dd7fb6b7772f9f97607423a663baf235ab55333dba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33907.54,
+      "usage_known": true,
+      "prompt_tokens": 35559,
+      "cached_tokens": 12672,
+      "completion_tokens": 1475
+    }
+  ]
+}

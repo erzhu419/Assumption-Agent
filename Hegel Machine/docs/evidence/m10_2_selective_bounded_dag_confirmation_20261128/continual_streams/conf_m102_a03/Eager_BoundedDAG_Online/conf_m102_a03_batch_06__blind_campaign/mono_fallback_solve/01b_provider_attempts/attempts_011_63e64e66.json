@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63e64e669652409f965b083d8ad86643",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:57.869639+00:00",
+  "ended_at_utc": "2026-11-28T15:34:44.248052+00:00",
+  "request_sha256": "4dc3b42d138e47e4121d441e9e7b7153adb89b20b83c282c93388e8bd42b5734",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44155,
+    "cached_tokens": 12672,
+    "completion_tokens": 2047
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated scalar and trajectory prediction.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar, least_squares\\n\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=1e-11)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x):\\n i,j=np.triu_indices(x.shape[1]); return np.c_[aff(x),x[:,i]*x[:,j]]\\ndef cal(p,x):\\n u,v=p['u'],p['v']; n=np.roll(u,-1,1); A=np.stack((np.ones_like(u),u,n,u*n),2); w=np.ones(len(u))\\n for _ in range(30):\\n  c=np.stack([ls(A[:,j]*w[:,None],v[:,j]*w) for j in range(4)],1); r=np.linalg.norm(np.einsum('ijk,kj->ij',A,c)-v,axis=1);w=np.sqrt(np.minimum(1,1.3*np.median(r)/np.maximum(r,1e-12)))\\n good=r<4*np.median(r)\\n def coef(k,ret=False):\\n  D=np.concatenate((A,np.sin(k*u)[:,:,None]),axis=2)[good]; C=np.stack([ls(D[:,j],v[good,j]) for j in range(4)],1)\\n  if ret:return C\\n  return np.mean([np.mean(((D[:,j]@C[:,j]-v[good,j])/(1-(np.linalg.qr(D[:,j])[0]**2).sum(1)))**2) for j in range(4)])\\n k=minimize_scalar(coef,bounds=(.12,1.6),method='bounded').x; c=coef(k,True)\\n d=np.eye(4); e=np.roll(d,1,axis=1); z=np.linalg.solve(d*(c[1]+k*c[4])[:,None]+e*c[2,:,None],(x-c[0]).T).T\\n for _ in range(30):\\n  n=np.roll(z,-1,1); pred=c[0]+c[1]*z+c[2]*n+c[3]*z*n+c[4]*np.sin(k*z)\\n  jac=d*(c[1]+c[3]*n+c[4]*k*np.cos(k*z))[:,:,None]+e*(c[2]+c[3]*z)[:,:,None]; z+=np.clip(np.linalg.solve(jac,(x-pred)[...,None])[...,0],-.4,.4)\\n return z\\n\\ndef ops(s,z):\\n out=[]\\n for pn,vn,fn,bounds in [('panel_b','v',np.sin,(2.2,3.3)),('panel_c','v1',np.arcsinh,(1.5,8)),('panel_c','v2',lambda x:np.sqrt(1+x*x),(.5,1.6))]:\\n  u,v=s[pn]['u'],s[pn][vn]\\n  def design(u,k):return np.c_[aff(u),fn(k*u)]\\n  def loss(k):\\n   Q=np.linalg.qr(design(u,k))[0]; return np.mean(((v-Q@(Q.T@v))/(1-(Q*Q).sum(1))[:,None])**2)\\n  k=minimize_scalar(loss,bounds=bounds,method='bounded').x;out.append(design(z,k)@ls(design(u,k),v))\\n return out\\n\\ndef ridge(a,y,n,alpha):\\n m=a[:n].mean(0); d=np.maximum(a[:n].std(0),1e-10); a=(a-m)/d; h=a[:n]; b=y[:n]-y[:n].mean(0); return y[:n].mean(0)+a@(h.T@np.linalg.solve(h@h.T+alpha*np.eye(n),b))\\n\\ndef solve_batch(study):\\n s=study; h=s['train']; n=len(h['x']); z=cal(s['panel_a'],np.r_[h['x'],s['test']['x']]); b,p,q=ops(s,z); A=poly(z)\\n def f(w):return np.c_[A,np.tanh(aff(z)@w)]\\n def fit(w,ret=False):\\n  D=f(w); c=ls(D[:n],h['y']); return D@c if ret else np.r_[D[:n]@c-h['y'],.003*w]\\n w=least_squares(fit,[0,0,0,0,4],max_nfev=160).x; y=fit(w,True)[n:]; t=ridge(poly(np.c_[z,p])[:,1:],h['traj'],n,.03)[n:];return {'y_hat':y,'state_pred':t,'diagnostics_vec':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}\\nPY\\ncat >/tmp/check.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task');from batch_solver import *\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; h=s['train']; times=s['eval_times']; n=52; z=cal(s['panel_a'],h['x']); b,p,q=ops(s,z); Y=np.c_[h['y'],h['traj']];\\ndef er(pr):return np.mean(abs(pr[52:]-Y[52:]),axis=0)[[0,1,8]],np.mean(abs(pr[52:,1:]-Y[52:,1:]))\\nss=dict(s,train={k:v[:52] if k!='summary' else v for k,v in h.items()},test={'x':h['x'][52:]}); pp=solve_batch(ss);print('baseline',er(np.r_[Y[:52],np.c_[pp['y_hat'],pp['state_pred']]]));print('times',times,'z',z.min(0),z.max(0));\\nfor kind in ['z','zp','zq','zb','zpq']:\\n X=np.c_[tuple(dict(z=z,p=p,q=q,b=b)[k] for k in kind)]; A=poly(X); results=[]\\n for f in [A,np.c_[A,np.tanh(4*X)],np.c_[A,np.tanh(4*X),np.sqrt(.12+X*X)],np.c_[A,np.sin(2.5*X),np.sqrt(.25+X*X)],np.c_[A,X**3],np.c_[A,poly(np.tanh(1.25*X)),poly(np.sqrt(1+X*X))]]:\\n  row=[]\\n  for lam in [.0001,.003,.03,.3,1,3]:\\n   d,tt=er(ridge(f,Y,n,lam));row.append((round(d[0],4),round(tt,4)))\\n  results.append(row)\\n print(kind,results)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic bilinear calibration → H2 cyclic sinusoidal calibration plus separate readouts; panel A jackknife RMSE falls to 0.00031, with previous fixed-split scalar MAE 0.0739.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t09\"]},\"considered_alternatives\":[],\"rationale\":\"Save a runnable solver immediately, replace the systematic calibration residual with the panel-supported sine term, then measure how that correction changes scalar and trajectory error independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "186e523d6a65328e20585b086c08067cfb0287fa4e88a2c67f9f91d552193b18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46797.19,
+      "usage_known": true,
+      "prompt_tokens": 44155,
+      "cached_tokens": 12672,
+      "completion_tokens": 2047
+    }
+  ]
+}

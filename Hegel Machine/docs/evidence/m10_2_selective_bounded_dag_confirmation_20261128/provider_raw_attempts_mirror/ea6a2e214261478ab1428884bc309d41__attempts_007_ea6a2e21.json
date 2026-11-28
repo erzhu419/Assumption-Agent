@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea6a2e214261478ab1428884bc309d41",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:53:16.108124+00:00",
+  "ended_at_utc": "2026-11-28T15:53:46.532518+00:00",
+  "request_sha256": "2f36e51f38ef80346306f1bb7a491c052afcadd6f9d2141f9b08141bb9df78a1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54003,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33009,
+    "cached_tokens": 12672,
+    "completion_tokens": 1310
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '31,48p' /tmp/hegel_continual_archive/conf_m102_b04_batch_09_solver.py; cat >/tmp/joint.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('for name,p in')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import product,combinations_with_replacement\\nlat=np.cbrt(q); raw=s['train']['x']; tar=np.c_[y,t@np.linalg.svd(t,full_matrices=False)[2][:2].T]; tar/=tar.std(0)\\nc=s['panel_c']; u=c['u']; print('panels',[(k,[(j,np.shape(a)) for j,a in v.items()]) for k,v in s.items() if isinstance(v,dict)]); print('latent std',lat.std(0),'raw std',raw.std(0),'c std',u.std(0),'range',u.min(0),u.max(0))\\ndef profile(x,y,fn,init):\\n def res(p):\\n  a=fn(x,p); return (a@np.linalg.lstsq(a,y,rcond=1e-10)[0]-y).ravel()\\n o=least_squares(res,init,max_nfev=100); a=fn(x,o.x); return np.mean(o.fun**2)**.5,o.x,np.linalg.lstsq(a,y,rcond=1e-10)[0]\\nxs={'latent':lat,'cubic':q,'raw':raw,'B(latent)':aff(np.cos(f*lat))@co,'B(cubic)':aff(np.cos(f*q))@co}\\nfor key in ['v1','v2']:\\n for name,fn in {'atan':lambda x,p:aff(np.arctan(p[0]*x+p[1:])), 'tanh':lambda x,p:aff(np.tanh(p[0]*x+p[1:])), 'affatan':lambda x,p:np.c_[aff(x),np.arctan(p[0]*x+p[1:])], 'affcos':lambda x,p:np.c_[aff(x),np.cos(p[0]*x+p[1:])], 'polycos':lambda x,p:np.c_[aff(x),x**2,x**3,np.cos(p[0]*x+p[1:])], 'affsquash':lambda x,p:np.c_[aff(x),(p[0]*x+p[1:])/np.sqrt(1+(p[0]*x+p[1:])**2)]}.items():\\n  e,p,w=min([profile(u,c[key],fn,np.r_[g,np.zeros(4)]) for g in (1,1.3,2.15,2.6,3.6)],key=lambda a:a[0]); print(key,name,e,p,flush=True)\\n  if e<.001:\\n   for k,x in [('lat',lat),('q',q),('B',xs['B(latent)']),('BQ',xs['B(cubic)'])]: xs[f'{k}:{key}:{name}']=fn(x,p)@w\\n\\ndef feats(x,fn,p,mode):\\n a=fn(p[:4]*x+p[4:8]); b=np.c_[aff(a),x] if 'x' in mode else aff(a)\\n if '2' in mode: b=np.c_[b,*[a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(4),2)]]\\n return b\\nresults=[]\\nfor key,x in xs.items():\\n for name,fn in [('cos',np.cos),('tanh',np.tanh),('atan',np.arctan)]:\\n  for mode in ['','x','2','x2']:\\n   for g in [1.3,2.15,2.6]:\\n    m=lambda x,p:feats(x,fn,p,mode); e,p,w=profile(x[:54],tar[:54],m,np.r_[np.full(4,g),np.zeros(4)]); valid=np.mean(abs(m(x[54:],p)@w-tar[54:]),0); results.append((valid.mean(),e,key,name,mode,p,valid))\\nfor a in sorted(results,key=lambda a:a[0])[:20]:print(a)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test shifted and coordinate-specific operators against calibration data and held-out labels; the best composed model so far has worst-fold MAEs of 0.413 and 0.460.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The unshifted panel-C fits leave structured residuals. Fit shifted maps independently of the outcomes, then use held-out rows to test those maps and coordinate-specific phases.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "55955fee912704241f614e24b0debef241b2fdc6e910721bdb9015fb8b0c9611",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31544.5,
+      "usage_known": true,
+      "prompt_tokens": 33009,
+      "cached_tokens": 12672,
+      "completion_tokens": 1310
+    }
+  ]
+}

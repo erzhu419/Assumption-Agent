@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af4043c5dd0c4d0d9d51b8e76ae0de4b",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:10.906897+00:00",
+  "ended_at_utc": "2026-11-28T15:01:51.651873+00:00",
+  "request_sha256": "a9bdb5060277fe0a1d30705691fc553f294217defd2f290c7ec802132f630e99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48847,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33410,
+    "cached_tokens": 12672,
+    "completion_tokens": 1762
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().split('def _quadratic(z):')[0]\\ns+='''def _readout_features(w):\\n    interaction = w[:, 0]*w[:, 2] + w[:, 1]*w[:, 3]\\n    return np.column_stack((w, interaction))\\n\\n\\ndef _relaxation(w, traj, times):\\n    # Project onto the spatial design before fitting the shared time constants.\\n    q, r = np.linalg.qr(w, mode='reduced')\\n    target = q.T @ traj\\n\\n    def basis(rates):\\n        return -np.expm1(-np.outer(rates, times))\\n\\n    def residual(rates):\\n        f = basis(rates)\\n        return (_fit(f.T, target.T).T @ f - target).ravel()\\n\\n    fit = least_squares(residual, [0.4, 1.8], bounds=(1e-4, 20.),\\n                        ftol=1e-11, gtol=1e-11, xtol=1e-11)\\n    f = basis(np.sort(fit.x))\\n    return _fit(r, _fit(f.T, target.T).T) @ f\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.asarray(train['x'], dtype=float)\\n    test = np.asarray(study['test']['x'], dtype=float)\\n    coef = _calibration(study['panel_a'])\\n    z, zt = _decode(x, coef), _decode(test, coef)\\n    b = study['panel_b']\\n    operator = _fit(_affine(np.asarray(b['u'])), np.asarray(b['v']))\\n    w, wt = _affine(z) @ operator, _affine(zt) @ operator\\n    yh = _readout_features(wt) @ _fit(_readout_features(w), train['y'])\\n    sp = wt @ _relaxation(w, np.asarray(train['traj']), np.asarray(study['eval_times']))\\n    diag = np.array([yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\\n    return {'y_hat': yh, 'state_pred': sp, 'diagnostics_vec': diag}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/stress_solver.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    mod=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nnew=load('candidate','/holdout_task/batch_solver.py'); old=load('baseline','/tmp/baseline_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x)\\na=s['panel_a']; u=a['u']; v=a['v']\\n\\ndef forward(coef,z):\\n    b=np.roll(z,-1,axis=1)\\n    return coef[:4]+coef[4:8]*z+coef[8]*b+coef[9]*z*b+coef[10]*z**3\\n\\nclean=np.linalg.norm(v-u,axis=1)<3\\nloo=[]\\nfor i in np.flatnonzero(clean):\\n    take=np.arange(len(u))!=i\\n    coeff=new._calibration({'u':u[take],'v':v[take]})\\n    loo.append(np.max(abs(forward(coeff,u[i:i+1])-v[i:i+1])))\\ncoef=new._calibration(a)\\nprint('calibration clean LOO max abs',max(loo),'clean RMSE',np.sqrt(np.mean((forward(coef,u[clean])-v[clean])**2)))\\nz=new._decode(x,coef); zt=new._decode(s['test']['x'],coef)\\nprint('train/test forward inversion max errors',np.max(abs(forward(coef,z)-x)),np.max(abs(forward(coef,zt)-s['test']['x'])))\\nassert max(loo)<.001\\nassert np.max(abs(forward(coef,zt)-s['test']['x']))<1e-8\\nsplits={'specified':np.arange(52,72),'first20':np.arange(20),'mid20':np.arange(26,46),'radial20':np.argsort(np.linalg.norm(z,axis=1))[-20:]}\\nfor k in range(4):\\n    for sign in [-1,1]:\\n        splits[f'axis{k}_{sign:+}']=np.argsort(sign*z[:,k])[-20:]\\nfor name, m in [('baseline',old),('structured',new)]:\\n    bag=[]\\n    for k, test in splits.items():\\n        train=np.setdiff1d(np.arange(n),test)\\n        p=m.solve_batch(dict(s,train={key:(val[train] if key!='summary' else val) for key,val in tr.items()},test={'x':x[test]}))\\n        y=p['y_hat']; st=p['state_pred']; assert np.allclose(p['diagnostics_vec'],[y.mean(),y.std(),st[:,-1].mean(),st[:,-1].std()])\\n        e=abs(y-tr['y'][test]); f=abs(st-tr['traj'][test]); vals=np.array([e.mean(),f.mean(),f[:,-1].mean(),f.mean(0).max()]); bag.append(vals)\\n        if k=='specified' or name=='structured': print(name,k,np.round(vals,7))\\n    worst=np.max(bag,axis=0); print(name,'worst across slices: y, traj, final, max-time',worst)\\n    assert np.max(worst)<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: generic calibrated regressions → H2: panel-B bilinear readout and two shared exponential modes; component probes on the prescribed split give scalar MAE 0.00350 and worst-time trajectory MAE 0.00454.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the generic quadratic and rank-two regressions\",\n      \"rejected_reason\": \"Panel B exposes two matching bilinear coefficients, and the two-exponential basis fits the projected trajectories substantially better than the other time bases tested. Compare both candidates on range-stressed splits before submission.\"\n    }\n  ],\n  \"rationale\": \"Use the structure identified from the independent panel and trajectory measurements to reduce fitted degrees of freedom. Verify the final artifact in an isolated process, with leave-one-reference-row-out calibration and separate error checks for the scalar, full trajectory, and terminal state.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "433432b2dc4a91139745596a0ed91c3972c3263beb9c1d5b4695356866f63bd2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40743.63,
+      "usage_known": true,
+      "prompt_tokens": 33410,
+      "cached_tokens": 12672,
+      "completion_tokens": 1762
+    }
+  ]
+}

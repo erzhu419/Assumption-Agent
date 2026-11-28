@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "119c33b1fc304c93836629b15eb41a02",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:57:16.169072+00:00",
+  "ended_at_utc": "2026-11-28T14:57:40.357144+00:00",
+  "request_sha256": "8828803c8cef3a2aec7a23a0a02838f852024e5b8138ee9df706cd378837a79a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43856,
+    "cached_tokens": 12672,
+    "completion_tokens": 970
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/panel_proxy_verified.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace(\\\"    raw, aligned = _panel_features(study, np.vstack((train['x'], study['test']['x'])))\\\\n    y = _ridge(raw[:n], train['y'], raw[n:], .012)\\\", \\\"    x = np.vstack((train['x'], study['test']['x']))\\\\n    raw, aligned, calibrated = _panel_features(study, x)\\\\n    # Blend two cubic bases with different extrapolation behavior.\\\\n    hybrid = np.column_stack((aligned, _basis(calibrated)))\\\\n    y = .8 * _ridge(hybrid[:n], train['y'], hybrid[n:], .007)\\\\n    y += .2 * _ridge(raw[:n], train['y'], raw[n:], .012)\\\").replace(\\\"    aligned = _affine((x - fit[0]) / fit[1:].diagonal()) @ maps\\\", \\\"    calibrated = (x - fit[0]) / fit[1:].diagonal()\\\\n    aligned = _affine(calibrated) @ maps\\\").replace(\\\"return _basis(squash(raw)), _basis(squash(aligned))\\\", \\\"return _basis(squash(raw)), _basis(squash(aligned)), calibrated\\\")\\nPath('/tmp/hybrid_challenger.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_cv.py /tmp/panel_proxy_verified.py /tmp/hybrid_challenger.py | tee /tmp/hybrid_cv.txt\\npython3 - <<'PY'\\nimport re, shutil\\ns=open('/tmp/hybrid_cv.txt').read(); a,b=re.findall(r'^max \\\\[([^]]+)\\\\] mean \\\\[([^]]+)\\\\]',s,re.M); p,q=re.findall(r'^prescribed \\\\[([^]]+)\\\\]',s,re.M)\\nold,new=(list(map(float,v[0].split())) for v in (a,b))\\nif new[0] < .85*old[0] and float(q.split()[0]) <= .014 and new[2] <= old[2]+1e-8:\\n    shutil.copyfile('/tmp/hybrid_challenger.py','/holdout_task/batch_solver.py'); print('Promoted hybrid')\\nelse:\\n    print('Retained verified proxy')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_cv.py /holdout_task/batch_solver.py\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single panel-C proxy → H2 blended cubic bases for the scalar with unchanged rank-two trajectory; the saved solver scores 0.00796 on the prescribed scalar split and 0.10662 on the worst directional scalar slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the proxy with the recovered nonlinear panel map\",\n      \"rejected_reason\": \"Improved panel fit did not translate into better held-out response predictions.\"\n    }\n  ],\n  \"rationale\": \"The calibrated two-basis scalar challenger scored 0.06199 on its worst directional slice in the probe. Promote the blend only if the exact solver materially improves that stress metric, preserves the trajectory result, and retains a wide margin on the prescribed split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a0cd99452f4293f3444f828721de75b2cefcb309faff51bb5b6833f71f902dff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24186.82,
+      "usage_known": true,
+      "prompt_tokens": 43856,
+      "cached_tokens": 12672,
+      "completion_tokens": 970
+    }
+  ]
+}

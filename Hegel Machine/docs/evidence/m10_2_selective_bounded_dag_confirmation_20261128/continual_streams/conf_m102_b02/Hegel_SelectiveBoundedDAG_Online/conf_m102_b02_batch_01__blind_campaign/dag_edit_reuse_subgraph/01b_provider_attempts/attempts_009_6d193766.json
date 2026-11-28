@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d193766c03c4567a71da2004e82c0fc",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:57.307594+00:00",
+  "ended_at_utc": "2026-11-28T15:03:46.770171+00:00",
+  "request_sha256": "3c01bd96552a39475355e03267457ebd969e4a3639c862b22ee3357f66ac1af5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36480,
+    "cached_tokens": 12672,
+    "completion_tokens": 1995
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Robustly recover latent input coordinates from panel A.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _latent(study):\\n    panel = study['panel_a']\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    d = np.column_stack((np.ones(len(u)), u))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        coef = np.linalg.lstsq(d[keep], v[keep], rcond=None)[0]\\n        e = np.linalg.norm(d @ coef - v, axis=1)\\n        nxt = e <= max(0.001, 3 * np.median(e))\\n        if np.array_equal(keep, nxt) or nxt.sum() < d.shape[1]:\\n            break\\n        keep = nxt\\n    coef = np.linalg.lstsq(d[keep], v[keep], rcond=None)[0]\\n    x, xt = (np.asarray(study[k]['x'], dtype=float) for k in ('train', 'test'))\\n    z = np.linalg.solve(coef[1:].T, (np.vstack((x, xt)) - coef[0]).T).T\\n    return z, len(x)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    z, n = _latent(inputs['__input__'])\\n    z *= 0.2\\n    return {'z': z[:n].copy(), 'zt': z[n:].copy()}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | grep -E 'best LOO|^ [BC]'; cat > /tmp/probe9.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/compare_maps.py').read())\\nfrom scipy.optimize import minimize_scalar\\nu=base['deA']; y=np.column_stack([train['y'],train['traj']@np.linalg.svd(train['traj'],full_matrices=False)[2][:2].T]); mats={}; basis={}\\nfor name,P,key in [('B',b,'v'),('C1',c,'v1'),('C2',c,'v2')]:\\n U,V=P['u'],P[key]\\n for typ,f in [('rat',lambda t,k:t/(1+k*t*t)),('tanh',lambda t,k:np.tanh(k*t)),('sin',lambda t,k:np.sin(k*t))]:\\n  def fit(k):\\n   F=np.c_[np.ones(len(U)),U,f(U,k)]; C=np.linalg.lstsq(F,V,rcond=None)[0];return np.mean((F@C-V)**2),C\\n  ks=np.linspace(.1,6,58);i=np.argmin([fit(k)[0] for k in ks]);k=minimize_scalar(lambda k:fit(k)[0],bounds=(ks[max(0,i-1)],ks[min(i+1,len(ks)-1)]),method='bounded').x\\n  rm,C=fit(k); l,sv,r=np.linalg.svd(C[1:5]); M=l@r; print(name,typ,k,rm**.5,sv)\\n  mats[name]=M; basis[name+typ]=(k,C,f)\\nresults=[]\\nfor name,M in {'I':np.eye(4),**mats,**{k+'T':m.T for k,m in mats.items()}}.items():\\n v=u@M\\n for a1 in [.45,.8,1.2,1.8,2.5,3.5,5,7]:\\n  for a2 in [-1.1,-.85,-.6,-.35,.0,.5,1.]:\\n   for desc,q in [('pre-tanh',(u+a2*np.tanh(a1*u))@M),('post-tanh',v+a2*np.tanh(a1*v)),('pre-sin',(u+a2*np.sin(a1*u))@M),('post-sin',v+a2*np.sin(a1*v)),('pre-rat',(u+a2*u/(1+a1*u*u))@M),('post-rat',v+a2*v/(1+a1*v*v))]:\\n    for sc in [.15,.35,.7,1.2]:\\n     e=score(q*sc);results.append((max(e),e.tolist(),name,desc,a1,a2,sc))\\nprint('sweep',*sorted(results)[:12],sep='\\\\n')\\n# Identify unusually predictive univariate/pairwise terms on held-out training rows.\\ntr=np.arange(52);te=np.arange(52,72)\\nfor name,M in {'I':np.eye(4),**mats,**{k+'T':m.T for k,m in mats.items()}}.items():\\n v=u@M; F=np.c_[np.ones(len(u)),v]; R=y-F@np.linalg.lstsq(F[tr],y[tr],rcond=None)[0]; D=[]; names=[]\\n for i in range(4):\\n  for j in range(i,4):\\n   for nm,t in [('prod',v[:,i]*v[:,j]),('sum',v[:,i]+v[:,j]),('diff',v[:,i]-v[:,j])]:\\n    for nm2,t2 in [('raw',t),*[(f'{fn}{k}',f(k*t)) for fn,f in [('sin',np.sin),('cos',np.cos),('asinh',np.arcsinh),('tanh',np.tanh)] for k in [1,2,3.5,5,7]]]:\\n     S=t2-F@np.linalg.lstsq(F[tr],t2[tr],rcond=None)[0]; D.append(S); names.append((i,j,nm,nm2))\\n D=np.array(D).T; C=np.abs(D[tr].T@R[tr])/np.maximum(np.linalg.norm(D[tr],axis=0)[:,None],1e-10)/np.linalg.norm(R[tr],axis=0)\\n print('corr',name, [[(names[j],round(C[j,i],3)) for j in np.argsort(C[:,i])[-3:][::-1]] for i in range(3)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe9.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Direct panel-B composition -> separate robust latent recovery from the coordinate warp; best disjoint-fold maximum MAE is 0.12417, above tolerance.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the best-fitting panel B map directly\",\"rejected_reason\":\"Its small calibration residual does not translate into accurate predictions through the frozen sink.\"}],\"rationale\":\"Save the best verified structural baseline, then test whether rotations recovered from the panels need to precede the nonlinear warp rather than follow it.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f1162a02f05a5a874212cf702c4d3b3cab21d93965f41f929b1d2c976dfb76e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49461.28,
+      "usage_known": true,
+      "prompt_tokens": 36480,
+      "cached_tokens": 12672,
+      "completion_tokens": 1995
+    }
+  ]
+}

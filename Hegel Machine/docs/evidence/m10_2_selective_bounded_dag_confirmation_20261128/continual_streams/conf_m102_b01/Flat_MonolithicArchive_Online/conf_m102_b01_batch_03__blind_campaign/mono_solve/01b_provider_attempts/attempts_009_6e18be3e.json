@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e18be3e2a194c16a5b1b7d77534eb2c",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:59.560918+00:00",
+  "ended_at_utc": "2026-11-28T15:15:30.030179+00:00",
+  "request_sha256": "04a9210448fc6a2c339e4bd7a22ce757892cf0b692dc5020336a140766f2afa7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52664,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34608,
+    "cached_tokens": 12672,
+    "completion_tokens": 1257
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_batch.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as b\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['y']); ii=np.arange(N)\\nprint('study keys:',sorted(s),'train keys:',sorted(tr),'telemetry shape:',np.shape(s['telemetry_vec']))\\np=s['panel_a']; u,v=p['u'],p['v']; mag=np.linalg.norm(v,axis=1); med=np.median(mag); clean=mag<=med+10*np.median(abs(mag-med)); F=b._cal_basis(u); errs=[]\\nfor j in np.flatnonzero(clean):\\n k=clean.copy(); k[j]=False\\n ca=np.array([b._ls(F[k,h],v[k,h]) for h in range(4)]); af=b._ls(b._aff(u[k]),v[k]); errs.append((np.linalg.norm((F[j]*ca).sum(1)-v[j]),np.linalg.norm(b._aff(u[j:j+1])@af-v[j])))\\nprint('Panel A leave-one-clean-row-out norm error: median and max, cubic vs affine',np.median(errs,0),np.max(errs,0),'excluded rows',np.flatnonzero(~clean))\\nw=b._coordinates(s,tr['x']); splits=[ii[52:]]+list(np.array_split(np.random.default_rng(1323).permutation(N),4))\\nfor j in range(4):\\n ix=np.argsort(tr['x'][:,j]); splits.extend([ix[:16],ix[-16:]])\\nsplits.append(np.argsort(np.linalg.norm(tr['x'],axis=1))[-16:]);\\ndef columns(g,kind,model):\\n f=b._design(w,g,kind); h=f[:,1:5]; cols=[]\\n for j in range(4):\\n  for k in range(j+1,4):\\n   for sg in [-1,1]:\\n    d=h[:,j]+sg*h[:,k]\\n    if model=='pairs': cols.append(np.arcsinh(d))\\n    if model=='rational': cols.append(h[:,j]/(1+.22*d*d))\\n    if model=='third':\\n     for r in range(k+1,4): cols.append(h[:,j]*h[:,k]*h[:,r])\\n if not cols:return f\\n return np.c_[f,np.unique(np.asarray(cols).T,axis=1)]\\nfor model in ['base','pairs','rational','third']:\\n results=[]\\n for v in splits:\\n  a=np.setdiff1d(ii,v); sc=[]\\n  for kind,target in [('scalar',tr['y']),('trajectory',tr['traj'])]:\\n   def loss(g):\\n    f=columns(g,kind,model)[a]; return np.mean((f@b._ls(f,target[a])-target[a])**2)\\n   g=minimize_scalar(loss,bounds=(.3,9) if kind=='scalar' else (.25,4),method='bounded').x; f=columns(g,kind,model); e=abs(f[v]@b._ls(f[a],target[a])-target[v]); sc.extend([e.mean(),np.max(e.mean(0))]);\\n  results.append(sc)\\n R=np.array(results); print(model,'52/20',np.round(R[0],6),'worst',np.round(R.max(0),6),'mean',np.round(R.mean(0),6))\\nprint('test latent coordinate ranges',np.round(w.min(0),3),np.round(w.max(0),3),np.round(b._coordinates(s,s['test']['x']).min(0),3),np.round(b._coordinates(s,s['test']['x']).max(0),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (sparse cyclic calibration and profiled readouts) -> H2 (test pairwise, rational, and cubic interaction terms); the current worst stress-slice MAE is 0.013890 against a 0.038 limit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification deconfounding or relay/PDE checks\",\n      \"rejected_reason\": \"This campaign provides one study with continuous scalar and trajectory outputs, a study-level telemetry vector, and no cohort labels, relay-mode inputs, control policies, or state density observations.\"\n    }\n  ],\n  \"rationale\": \"Use calibration measurements independent of the prediction targets to test the affine failure directly. Compare each new feature family with the saved baseline on the required split and stress slices, profiling gains only on each split's training rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7e1f187b5b1cf672c902adc7028f70b8fa51c01c5296d5e450aec570c52d61b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30873.31,
+      "usage_known": true,
+      "prompt_tokens": 34608,
+      "cached_tokens": 12672,
+      "completion_tokens": 1257
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "689281540702424d839de224e8855253",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:01.224174+00:00",
+  "ended_at_utc": "2026-11-28T15:06:37.244506+00:00",
+  "request_sha256": "6056c9fafb6b8a78cc3996da960c357b5c71fa5bce4519f4f15be138f8e85a5b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32581,
+    "cached_tokens": 12672,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/node_01.py <<'PY'\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _trajectory_terms(x, y):\\n    n = len(y)\\n    terms = list(range(x.shape[1]))\\n\\n    def criterion(cols):\\n        a = x[:, cols]\\n        residual = y - a @ _fit(a, y)\\n        return n * np.log(max(np.mean(residual**2), 1e-30)) + len(cols) * np.log(n)\\n\\n    while len(terms) > 1:\\n        value, drop = min((criterion([j for j in terms if j != i]), i) for i in terms)\\n        if value >= criterion(terms):\\n            break\\n        terms.remove(drop)\\n    return terms\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    w = np.asarray(inputs['node_00']['w'], dtype=float)\\n    y = np.asarray(train['y'], dtype=float)\\n    trajectory = np.asarray(train['traj'], dtype=float)\\n    products = [w[:, i] * w[:, j] for i, j in combinations_with_replacement(range(w.shape[1]), 2)]\\n    features = np.column_stack([np.ones(len(w)), w, *products])\\n    n = len(y)\\n    a, b = features[:n], features[n:]\\n    y_hat = b @ _fit(a, y)\\n    terms = _trajectory_terms(a, trajectory)\\n    state_pred = b[:, terms] @ _fit(a[:, terms], trajectory)\\n    tail = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), tail.mean(), tail.std()])}\\nPY\\npython3 /holdout_task/test_dag_candidate.py\\ncat >/tmp/scalar_probe.py <<'PY'\\nexec(open('/tmp/sparse_probe.py').read().split(\\\"print('coefficients\\\")[0])\\nfrom itertools import combinations_with_replacement as cr\\nsplits=[(np.arange(52),np.arange(52,72))];\\nfor seed in range(6):splits+=list(KFold(6,shuffle=True,random_state=seed).split(F))\\nr=np.linalg.norm(w,axis=1); splits += [(np.argsort(r)[:-12],np.argsort(r)[-12:])]\\ndef stats(e): return np.round([e[0],np.mean(e[1:-1]),max(e[1:-1]),e[-1]],6)\\ndef err(builder):return stats([np.abs(builder(a,b)-y[b]).mean() for a,b in splits])\\nQ=F[:,5:]; products=Q[:,[pairs.index(k) for k in [(0,1),(0,3),(1,2),(2,3)]]]; c=s['panel_c']; uc=c['u']; C=np.column_stack([np.ones(len(uc)),*[uc[:,i]*uc[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]]); V=np.c_[np.ones(len(w)),products]@ls(C,c['v1']);\\nfor name,A in [('quadratic',F),('even',F[:,[0,*range(5,15)]]),('pair',products),('quartic',np.c_[F[:,[0,*range(5,15)]],*[np.prod(w[:,ix],axis=1) for ix in cr(range(4),4)]]),('pair-cubic',np.c_[np.ones(len(w)),products,*[np.prod(products[:,ix],axis=1) for ix in cr(range(4),3)]]),('pair-quadratic',np.c_[np.ones(len(w)),products,*[np.prod(products[:,ix],axis=1) for ix in cr(range(4),2)]])]:\\n for l in ([0,.02,.1,.5] if A.shape[1]>15 else [0]):\\n  def pred(a,b):\\n   zz=A[a]; sd=np.sqrt(np.mean(zz**2,axis=0)); sd=np.maximum(sd,1e-8); zz=zz/sd; return (A[b]/sd) @ ls(np.r_[zz,np.sqrt(l)*np.eye(A.shape[1])],np.r_[y[a],np.zeros(A.shape[1])])\\n  print(name,l,err(pred))\\nfor kind,fn in [('sin',np.sin),('tanh',np.tanh),('atan',np.arctan),('asinh',np.arcsinh),('rational',lambda x:x/(1+x*x)),('saturate',lambda x:x/np.sqrt(1+x*x))]:\\n for g in [.1,.25,.5,1,2]:\\n  a0=np.c_[F,fn(g*V)];print(kind,g,err(lambda a,b:a0[b]@ls(a0[a],y[a])))\\nprint('y residual sorted by y: ',[(np.round(y[i],3),np.round((y-F@ls(F,y))[i],3)) for i in np.argsort(y)[::3]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Use a full quadratic scalar head and a fold-selected sparse quadratic trajectory head; evaluator-split MAEs are 0.02622 and 0.00410, while scalar high-radius MAE is 0.04045.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Apply the same hard sparsity to both heads\",\"rejected_reason\":\"It consistently improves trajectory predictions but raises the scalar evaluator-split MAE from 0.02622 to 0.03189 at the standard penalty.\"}],\"rationale\":\"Verify the passing baseline now, then test whether even-order structure or panel-derived features improve the scalar extrapolation slice without sacrificing shuffled-fold performance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bcdd1f82f488f06d855d99b5d383966128dbfea7c70dd385b40d0f136facd26a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36018.06,
+      "usage_known": true,
+      "prompt_tokens": 32581,
+      "cached_tokens": 12672,
+      "completion_tokens": 1521
+    }
+  ]
+}

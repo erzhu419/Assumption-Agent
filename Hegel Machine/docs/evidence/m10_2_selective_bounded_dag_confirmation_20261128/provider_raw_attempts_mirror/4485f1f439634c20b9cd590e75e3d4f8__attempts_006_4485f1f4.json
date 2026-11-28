@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4485f1f439634c20b9cd590e75e3d4f8",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:30.842584+00:00",
+  "ended_at_utc": "2026-11-28T15:51:00.019956+00:00",
+  "request_sha256": "0d9720c94b44d2df2da489861d260a217e2b00ccd54157185c1c396c85435699",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45636,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31486,
+    "cached_tokens": 12672,
+    "completion_tokens": 1235
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine.py <<'PY'\\nexec(open('/tmp/scalar.py').read().split('for name,u')[0]); from scipy.special import erf\\nF=a['_readout'](w)\\nlinks={'tanh': np.tanh,'rational':lambda x:x/(1+x*x),'sqrt':lambda x:x/np.sqrt(1+x*x),'erf':erf,'atan':np.arctan}\\nforms=[(h,b) for h in links for b in ['both','inner','none']]\\nidx=np.arange(len(y)); s=np.abs(F@fit(F)); norms=np.max(abs(w),axis=1)\\nsplits=[(idx[:52],idx[52:]),(idx[20:],idx[:20]),(np.argsort(s)[:-12],np.argsort(s)[-12:]),(np.argsort(norms)[:-12],np.argsort(norms)[-12:])]+[(np.setdiff1d(idx,e),e) for e in np.array_split(np.random.default_rng(11).permutation(len(y)),4)]\\nfor h,b in forms:\\n f=links[h]; FF=F if b!='none' else F[:,1:]; res=[]\\n for ii,jj in splits:\\n  def pred(p):\\n   q=FF@p[:-3]; return q+p[-3]*f(np.exp(p[-2])*q)+(p[-1] if b=='both' else 0)\\n  c=np.linalg.lstsq(FF[ii],y[ii],rcond=None)[0]; p=np.r_[.8*c,.4,.3,0]; m=least_squares(lambda p:(pred(p)-y)[ii],p,max_nfev=200); r=abs(pred(m.x)-y);res.append([r[ii].mean(),r[jj].mean(),r[jj].max()]);\\n  if ii[0]==0 and len(jj)==20 and jj[0]==52: zpar=m.x\\n print(h,b,np.array(res).T, 'p',zpar)\\ncoef=np.linalg.lstsq(aff(w),T,rcond=None)[0]; u,sv,v=np.linalg.svd(coef); t=S['eval_times']; print('trajectory coefficients',coef, 'singular vals',sv,'temporal vectors',v[:2]);\\nfor name,f in [('log',lambda p: np.log1p(p[0]*t)),('exp',lambda p:-np.expm1(-p[0]*t)),('sqrt',lambda p:np.sqrt(1+p[0]*t)-1),('rat',lambda p:t/(1+p[0]*t))]:\\n for extra in [lambda p:t,lambda p:np.sin(p[1]*t),lambda p:-np.expm1(-p[1]*t),lambda p:np.log1p(p[1]*t),lambda p:np.ones(len(t))]:\\n  def res(p):\\n   D=np.stack([f(p),extra(p)]); return (coef-np.linalg.lstsq(D.T,coef.T,rcond=None)[0].T@D).ravel()\\n  m=least_squares(res,[1.,.22],bounds=(.0001,10));print(name, np.linalg.norm(m.fun),m.x)\\nprint('tail index and w range', np.sort(F@fit(F))[[0,-1]], (a['_readout'](aff(a['_decode'](S['test']['x'],a['_calibration'](S['panel_a'])))@a['_fit'](aff(p['u']),p['v']))@fit(F)).min())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pure saturating readout → H2 linear-plus-saturating shared index; public 52/20 scalar MAE is 0.00270–0.00322 across the leading links, and trajectory MAE is 0.003871.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Select the best link by first-52 training residual alone\",\"rejected_reason\":\"The top links differ by less than 0.0002 in training RMSE; their tails may separate more clearly.\"}],\"rationale\":\"Compare the leading readouts on random and extrapolation splits, and test whether a compact temporal basis improves on the archived rank-two trajectory fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c7876a1d7216afdc30d857566f6c835775025b71d7653b1d2978bb5c76222a49",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29722.95,
+      "usage_known": true,
+      "prompt_tokens": 31486,
+      "cached_tokens": 12672,
+      "completion_tokens": 1235
+    }
+  ]
+}

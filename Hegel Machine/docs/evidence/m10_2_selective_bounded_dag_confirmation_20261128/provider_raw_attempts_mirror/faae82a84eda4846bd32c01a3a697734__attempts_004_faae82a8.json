@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "faae82a84eda4846bd32c01a3a697734",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:52:08.303854+00:00",
+  "ended_at_utc": "2026-11-28T14:52:38.571466+00:00",
+  "request_sha256": "7662e727f067bfd76dd8c394e47840bdbed5c4774989c8d52ecfe7b09ad7fa16",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30267,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24808,
+    "cached_tokens": 12672,
+    "completion_tokens": 1215
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Quadratic scalar readout and rank-two affine trajectory model.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _design(x):\\n    x = np.asarray(x, dtype=float)\\n    affine = np.column_stack((np.ones(len(x)), x))\\n    quadratic = [x[:, i] * x[:, j]\\n                 for i, j in combinations_with_replacement(range(x.shape[1]), 2)]\\n    return affine, np.column_stack((affine, *quadratic))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    a, q = _design(train['x'])\\n    a_test, q_test = _design(study['test']['x'])\\n\\n    # The endpoint needs all pairwise products, including squares. A full\\n    # quadratic span is invariant under invertible affine panel calibration.\\n    readout = np.linalg.lstsq(q, train['y'], rcond=None)[0]\\n    y = q_test @ readout\\n\\n    # Estimate the temporal span from fitted signals, not raw noisy snapshots.\\n    state_coef = np.linalg.lstsq(a, train['traj'], rcond=None)[0]\\n    _, _, modes = np.linalg.svd(a @ state_coef, full_matrices=False)\\n    basis = modes[:2].T\\n    state = (a_test @ state_coef @ basis) @ basis.T\\n    final = state[:, -1]\\n    diagnostics = np.array([y.mean(), y.std(), final.mean(), final.std()])\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': diagnostics}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nx=s['train']['x']; ix=np.arange(len(x)); rng=np.random.default_rng(555)\\nslices={'ordered':ix[52:]}\\nslices.update({f'fold{i}':j for i,j in enumerate(np.array_split(rng.permutation(ix),4))})\\nfor k in range(x.shape[1]): slices[f'extreme{k}']=np.argsort(abs(x[:,k]-x[:,k].mean()))[-15:]\\nslices['largest_norm']=np.argsort(np.linalg.norm(x,axis=1))[-15:]\\nfor label,j in slices.items():\\n    i=np.setdiff1d(ix,j)\\n    tr={k:s['train'][k][i] for k in ('x','y','traj')}\\n    o=m.solve_batch(dict(s,train=tr,test={'x':x[j]}))\\n    y=o['y_hat']; p=o['state_pred']; e=abs(p-s['train']['traj'][j]); ey=abs(y-s['train']['y'][j]); z=p[:,-1]\\n    true_y=s['train']['y'][j]; true_z=s['train']['traj'][j,-1]\\n    dv=np.array([true_y.mean(),true_y.std(),true_z.mean(),true_z.std()]); de=abs(dv-o['diagnostics_vec']).max()\\n    np.testing.assert_array_equal(o['diagnostics_vec'],[y.mean(),y.std(),z.mean(),z.std()])\\n    print(f'{label}: endpoint={ey.mean():.6f}, trajectory={e.mean():.6f}, worst_horizon={e.mean(0).max():.6f}, final_state={e[:,-1].mean():.6f}, summary_max_error={de:.6f}')\\n    assert max(ey.mean(),e.mean(0).max()) < .038\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: use a full quadratic endpoint and a rank-two affine trajectory; exploratory worst-slice endpoint and per-horizon MAEs are 0.006561 and 0.006353.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Threshold small quadratic coefficients\",\"rejected_reason\":\"The full basis had lower endpoint MAE on the prescribed split and the worst boundary slice.\"},{\"option\":\"Fit each trajectory horizon independently\",\"rejected_reason\":\"Rank two matches the observed spectral gap and reduced worst-horizon error on the shuffled and boundary slices.\"}],\"rationale\":\"Fit each output at its observed complexity, then verify the saved solver on the official split, shuffled folds, and high-leverage input slices, including final-state and diagnostic consistency.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a25047f70d5f798cffb9701fa22ca63fa7aa130f8ed96bbdea1dba6cb3ae529c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30266.73,
+      "usage_known": true,
+      "prompt_tokens": 24808,
+      "cached_tokens": 12672,
+      "completion_tokens": 1215
+    }
+  ]
+}

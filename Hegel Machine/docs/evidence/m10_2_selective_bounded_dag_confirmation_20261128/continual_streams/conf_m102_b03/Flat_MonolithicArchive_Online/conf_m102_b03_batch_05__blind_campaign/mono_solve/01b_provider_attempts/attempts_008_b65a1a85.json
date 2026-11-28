@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b65a1a85776143d288df8db84c7205fd",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:29.747934+00:00",
+  "ended_at_utc": "2026-11-28T15:26:10.191038+00:00",
+  "request_sha256": "eade8b43f0bf3d28115f759d9e80cfc407e4c086eb16ada9c5c2a67451fee4df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49624,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34364,
+    "cached_tokens": 12672,
+    "completion_tokens": 1651
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/calibrate05.py; cat /holdout_task/validate_public_schema.py; cp /tmp/calibrate05.py /holdout_task/batch_solver.py; cat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _panel_features(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    panel = study['panel_c']\\n    u = np.asarray(panel['u'])\\n\\n    def products(a):\\n        return _design(a * np.roll(a, -1, axis=1))\\n\\n    def cosines(a):\\n        return _design(np.cos(2.4 * a))\\n\\n    p = products(z) @ _ls(products(u), panel['v1'])\\n    q = cosines(z) @ _ls(cosines(u), panel['v2'])\\n    dot = np.einsum('ij,ij->i', p, q)\\n    cross01 = p[:, 0] * q[:, 1]\\n    scalar = _design(np.column_stack((p, q, dot)))\\n    fast = _design(np.column_stack((p, q, dot, cross01)))\\n    slow = _design(np.column_stack((q, cross01)))\\n    return scalar, fast, slow\\n\\n\\ndef _state(times, observations, fast, slow):\\n    n = len(observations)\\n\\n    def matrix(rates, f, g):\\n        h = -np.expm1(-times[:, None] * rates)\\n        terms = (f[:, None, :] * h[None, :, 0, None],\\n                 g[:, None, :] * h[None, :, 1, None])\\n        return np.concatenate(terms, axis=2).reshape(len(f) * len(times), f.shape[1] + g.shape[1])\\n\\n    target = observations.ravel()\\n\\n    def residual(rates):\\n        d = matrix(rates, fast[:n], slow[:n])\\n        return d @ _ls(d, target) - target\\n\\n    fit = least_squares(residual, [1.8, 0.45], bounds=([0.8, 0.05], [4., 0.78]), ftol=1e-10)\\n    coef = _ls(matrix(fit.x, fast[:n], slow[:n]), target)\\n    return (matrix(fit.x, fast[n:], slow[n:]) @ coef).reshape(len(fast) - n, len(times))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    \\\"\\\"\\\"Predict endpoints and two-mode relaxation traces from calibrated panel C features.\\\"\\\"\\\"\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.vstack((train['x'], study['test']['x']))\\n    scalar, fast, slow = _panel_features(study, x)\\n    y = scalar[n:] @ _ls(scalar[:n], np.asarray(train['y']))\\n    state = _state(np.asarray(study['eval_times']), np.asarray(train['traj']), fast, slow)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/stress05.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; rng=np.random.default_rng(29)\\ndef score(i,j):\\n    st=dict(s,train={**tr, **{k:tr[k][i] for k in ('x','y','traj')}},test={'x':tr['x'][j]})\\n    pred=m.solve_batch(st)\\n    dy=abs(pred['y_hat']-tr['y'][j]); dt=abs(pred['state_pred']-tr['traj'][j]); last=pred['state_pred'][:,-1]\\n    np.testing.assert_allclose(pred['diagnostics_vec'],[pred['y_hat'].mean(),pred['y_hat'].std(),last.mean(),last.std()])\\n    return dy.mean(),dt.mean(),max(dt.mean(0)),dy.max(),dt.mean(1).max()\\nbase=score(np.arange(52),np.arange(52,72)); print('52/20: scalar, trajectory, worst timestamp, worst scalar row, worst trajectory row',base)\\nfolds=[]\\nfor _ in range(18):\\n    p=rng.permutation(72);folds.append(score(p[:52],p[52:]))\\nfor v in [*tr['x'].T,np.linalg.norm(tr['x'],axis=1)]:\\n    p=np.argsort(v);folds.extend([score(p[:52],p[52:]),score(p[20:],p[:20])])\\nworst=np.max([base,*folds],axis=0); print('worst across predefined and stress splits',worst); assert max(worst[:3]) < .038\\nout=m.solve_batch(s); assert out['y_hat'].shape==(36,) and out['state_pred'].shape==(36,8) and all(np.isfinite(a).all() for a in out.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: all branch cross products → H2: scalar dot product and mode-specific interactions; the full-cross 52/20 trajectory MAE was 0.00440, with worst-timestamp MAE 0.00604.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit every cross product separately in both modes\",\n      \"rejected_reason\": \"The fast-mode diagonal coefficients are nearly equal, and the slow mode is dominated by one off-diagonal product; test whether those terms retain accuracy under extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Write the calibrated solver and test both outputs on the prescribed split, randomized splits, and held-out input extremes in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ad2581162defe5f6ee5d7e539dfbbe1cd3c147d2218edea23010e8de68472004",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40441.99,
+      "usage_known": true,
+      "prompt_tokens": 34364,
+      "cached_tokens": 12672,
+      "completion_tokens": 1651
+    }
+  ]
+}

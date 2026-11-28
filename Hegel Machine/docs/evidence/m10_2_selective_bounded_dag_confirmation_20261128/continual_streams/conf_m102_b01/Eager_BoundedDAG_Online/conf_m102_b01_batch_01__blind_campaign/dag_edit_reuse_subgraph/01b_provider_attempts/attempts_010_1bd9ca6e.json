@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1bd9ca6e4d9c4ed6b782034b89757d91",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:22.754284+00:00",
+  "ended_at_utc": "2026-11-28T15:04:55.429485+00:00",
+  "request_sha256": "6acdd9d58615b0fa4eef606eef7c9c901d22caac3d9e8dd071eae4891e645d2f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 67713,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40743,
+    "cached_tokens": 12672,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\np='/holdout_task/node_01.py'\\ns=open(p).read()\\ns=s.replace('def _odd(x):\\\\n    return np.column_stack((_aff(x), x**3, x**5))','''def _response(x, gain):\\n    return np.column_stack((_aff(x), np.tanh(gain * x)))\\n\\n\\ndef _calibrate(u, v, z):\\n    # Profile the shared saturation gain using panel-only leave-one-out error.\\n    def loss(gain):\\n        a = _response(u, gain)\\n        q, _ = np.linalg.qr(a, mode='reduced')\\n        leverage = np.sum(q*q, axis=1)\\n        residual = v - q @ (q.T @ v)\\n        return np.mean((residual / np.maximum(1.0 - leverage[:, None], 1e-10))**2)\\n\\n    lo, hi = 0.3, 4.0\\n    for _ in range(3):\\n        grid = np.linspace(lo, hi, 33)\\n        i = min(range(len(grid)), key=lambda j: loss(grid[j]))\\n        lo, hi = grid[max(0, i-1)], grid[min(len(grid)-1, i+1)]\\n    gain = grid[i]\\n    return _response(z, gain) @ _fit(_response(u, gain), v)''')\\ns=s.replace('calibrated = _odd(z) @ _fit(_odd(u), v)','calibrated = _calibrate(u, v, z)')\\nopen(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; m=runpy.run_path(p+'node_01.py'); f=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']; tr=s['train']; n=len(tr['y']); ix=np.arange(n)\\nb=s['panel_b']; w=f({'__input__':s})['w'][:n]; a=m['_fit'](m['_aff'](b['u']),b['v']); z=np.linalg.solve(a[1:].T,(w-a[0]).T).T; h=m['_calibrate'](b['u'],b['v'],z)\\nsplits=[('official',ix[-20:])]+[(f'interleave{i}',ix[i::4]) for i in range(4)]+[(name,np.argsort(key)[-14:]) for name,key in [('raw-corners',np.linalg.norm(z,axis=1)),('channel-edge',np.abs(z).max(axis=1)),('mixed-edge',np.linalg.norm(h,axis=1))]]\\nfor label,va in splits:\\n ti=np.setdiff1d(ix,va); case={**s,'train':{k:tr[k][ti] for k in ['x','y','traj']},'test':{'x':tr['x'][va]}}; pred=m['run_node']({'__input__':case,'node_00':f({'__input__':case})}); y=pred['y_hat']; t=pred['state_pred']; np.testing.assert_allclose(pred['diagnostics_vec'],[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]); ye=abs(y-tr['y'][va]).mean(); e=abs(t-tr['traj'][va]); print(label,'scalar',round(ye,6),'trajectory',round(e.mean(),6),'worst horizon',round(e.mean(axis=0).max(),6)); assert max(ye,e.mean())<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fifth-order odd calibration -> H2 shared saturating panel response; in stress probes the worst-slice scalar/trajectory MAEs fell from 0.02882/0.03778 to 0.01911/0.02720.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the verified fifth-order calibration\",\n      \"rejected_reason\": \"It passes the official check, but the saturating response lowers both official errors and materially improves the raw-corner trajectory margin.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger because it improves the worst-case margin while fitting its gain without prediction labels. Verify the exact edited node in isolated Python on the official holdout and boundary slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f6749aad8fd883ad5e044ddd1240aa9475f51a3c499d5911d1eba5c8c70126d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33169.55,
+      "usage_known": true,
+      "prompt_tokens": 40743,
+      "cached_tokens": 12672,
+      "completion_tokens": 1298
+    }
+  ]
+}

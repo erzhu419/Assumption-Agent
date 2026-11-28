@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aae14d674cc947b59970158687ae092c",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:57.495990+00:00",
+  "ended_at_utc": "2026-11-28T15:08:32.913389+00:00",
+  "request_sha256": "4ef6f3fd7d2194c15931798c14bc10eee7f110dd07a434efb3008f299bfe82ff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41985,
+    "cached_tokens": 12672,
+    "completion_tokens": 1242
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('def _align(')\\nb = s.index('def _panel_maps(', a)\\ns = s[:a] + s[b:]\\ns = '\\\"\\\"\\\"Cyclic reference calibration and two-mode bilinear response prediction.\\\"\\\"\\\"\\\\n' + s\\ns = s.replace(\\\"y=_readout(np.c_[g,h,prod.sum(1)],train['y'],n,.1)\\\", \\\"y=_readout(np.c_[g,h,prod.sum(1)],train['y'],n,.001)\\\")\\ns = s.replace('state=_readout(np.c_[g,h,z,prod],amp,n,.001)@f.T', 'cross=(g[:,:,None]*h[:,None,:]).reshape(len(z),16)\\\\n    state=_readout(np.c_[g,h,cross],amp,n,.0001)@f.T')\\np.write_text(s)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nb=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nd=s['train']; x,y,T=d['x'],d['y'],d['traj']; n=len(x)\\nz=b._calibrate(s['panel_a'],x)\\npa=s['panel_a']; clean=np.linalg.norm(pa['v'],axis=1)<4\\ncal_errors=[]\\nfor i in np.flatnonzero(clean):\\n    panel={key:np.delete(value,i,axis=0) for key,value in pa.items()}\\n    cal_errors.append(np.max(np.abs(b._calibrate(panel,pa['v'][i:i+1])-pa['u'][i:i+1])))\\nprint('reference inverse leave-one-out worst coordinate error:',max(cal_errors))\\nassert max(cal_errors)<.001\\nrng=np.random.default_rng(54312); order=np.argsort(np.max(abs(z),axis=1))\\nsets=[np.arange(n),order,order[::-1]]+[rng.permutation(n) for _ in range(40)]\\nfor col in range(z.shape[1]):\\n    order=np.argsort(z[:,col]); sets.extend([order,order[::-1]])\\nrows=[]; time_errors=[]\\nfor p in sets:\\n    a,q=p[:52],p[52:]\\n    pred=b.solve_batch(dict(s,train={'x':x[a],'y':y[a],'traj':T[a]},test={'x':x[q]}))\\n    ey=abs(pred['y_hat']-y[q]); et=abs(pred['state_pred']-T[q]); rows.append([ey.mean(),et.mean()]); time_errors.append(et.mean(0))\\nrows=np.array(rows)\\nprint('52/20 MAE [scalar, trajectory]:',rows[0])\\nprint('Worst split MAE over',len(rows),'splits:',rows.max(0))\\nprint('Worst per-time MAE:',np.max(time_errors,axis=0))\\nassert np.max(rows)<.038\\nassert np.max(time_errors)<.038\\npred=b.solve_batch(s); yy,tt=pred['y_hat'],pred['state_pred']\\nassert yy.shape==(36,) and tt.shape==(36,8)\\nassert all(np.isfinite(value).all() for value in pred.values())\\nnp.testing.assert_array_equal(pred['diagnostics_vec'],[yy.mean(),yy.std(),tt[:,-1].mean(),tt[:,-1].std()])\\nprint('Isolated artifact verification passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal trajectory coupling with stronger scalar shrinkage -> H2 full bilinear trajectory coupling and a compact scalar dot product; challenger worst-split MAEs are 0.00588 scalar and 0.00519 trajectory across 43 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a rational correction to the scalar readout\",\n      \"rejected_reason\": \"The worst-split improvement was only 0.00026, and the compact dot-product model already predicts at the observed noise scale.\"\n    }\n  ],\n  \"rationale\": \"Promote the bilinear readout because it substantially reduces trajectory error on real holdouts. Verify the exact artifact in an isolated process, check the calibration against omitted reference rows, and audit every timestamp on random and coordinate-extreme splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "74199c42101b16bc127bc3405967f152b7d33b21e88045348d58352c5c89b6b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35415.62,
+      "usage_known": true,
+      "prompt_tokens": 41985,
+      "cached_tokens": 12672,
+      "completion_tokens": 1242
+    }
+  ]
+}

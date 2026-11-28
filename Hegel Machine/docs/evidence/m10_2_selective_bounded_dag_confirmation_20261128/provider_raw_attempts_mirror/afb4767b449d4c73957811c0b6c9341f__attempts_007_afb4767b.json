@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afb4767b449d4c73957811c0b6c9341f",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:41.879981+00:00",
+  "ended_at_utc": "2026-11-28T15:13:04.404228+00:00",
+  "request_sha256": "8b6dec94564a4db4f5bead4cdcf3bd927222fb4ebc3a72751a9e44570a0d725e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29891,
+    "cached_tokens": 12672,
+    "completion_tokens": 862
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nbase = Path('/holdout_task')\\ndef load(relative):\\n    path = base / relative\\n    spec = importlib.util.spec_from_file_location(path.stem, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nfit, basis, sink = [load(p) for p in ('node_00.py', '_frozen_nodes/node_01.py', '_frozen_nodes/node_02.py')]\\nbatch = pickle.loads((base / 'public_batch.pkl').read_bytes())\\nrng = np.random.default_rng(91)\\nworst = [0., 0.]\\nfor entry in batch:\\n    s = entry['study']\\n    x = s['train']['x']\\n    n = len(x)\\n    indices = np.arange(n)\\n    folds = [(f'random_{j}', a) for j, a in enumerate(np.array_split(rng.permutation(n), 4))]\\n    q = n // 5\\n    for j in range(x.shape[1]):\\n        order = np.argsort(x[:, j])\\n        folds.extend([(f'x{j}_low', order[:q]), (f'x{j}_high', order[-q:])])\\n    for name, heldout in folds:\\n        rows = np.setdiff1d(indices, heldout)\\n        case = dict(s, train=dict(s['train'], **{k: s['train'][k][rows] for k in ('x', 'y', 'traj')}), test=dict(s['test'], x=x[heldout]))\\n        a = fit({'__input__': case})\\n        b = basis({'__input__': case})\\n        out = sink({'node_00': a, 'node_01': b})\\n        actual_y, actual_t = (s['train'][k][heldout] for k in ('y', 'traj'))\\n        assert out['y_hat'].shape == actual_y.shape and out['state_pred'].shape == actual_t.shape\\n        errors = [float(np.mean(np.abs(out[k]-actual))) for k, actual in [('y_hat', actual_y), ('state_pred', actual_t)]]\\n        assert np.all(np.isfinite(errors))\\n        worst = np.maximum(worst, errors)\\n        print(name, *(f'{e:.6f}' for e in errors))\\nprint('worst scalar and projected trajectory MAE:', *worst)\\nassert max(worst) <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived calibration and softsign branch → H2 cyclic cubic calibration and quadratic/cosine branches; exact-artifact public CV MAEs are 0.004167 scalar and 0.004401 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official isolated run accepted the artifact. Stress-test the same node and frozen sink on held-out coordinate tails, where calibration inversion and branch extrapolation face a stronger test than on random folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1d72af152fcbc993aa98a0eab81f58c398ce12a799c7271ffad79ce8cafb2810",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22523.1,
+      "usage_known": true,
+      "prompt_tokens": 29891,
+      "cached_tokens": 12672,
+      "completion_tokens": 862
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c7c18d907524c2aa34924ec0d84561b",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:23.771223+00:00",
+  "ended_at_utc": "2026-11-28T15:43:06.435721+00:00",
+  "request_sha256": "0bb675c007392c27bcc503d7ba02bc72a0090efb42c5e126f9ceb1a7b8b4f0c8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47555,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33798,
+    "cached_tokens": 12672,
+    "completion_tokens": 1700
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/decode.py >/tmp/decode.out; sed -n '/^ b v/,/^ c v2/p' /tmp/decode.out | grep -E '^ |^lin|^quad|^sin|^tanh|^cyclic|^\\\\[\\\\['; cat >/tmp/graph.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\n\\ndef calibration(s):\\n p=s['panel_a']; u,v=p['u'],p['v']; keep=np.linalg.norm(v,axis=1)<5\\n def features(u,j):\\n  a=u[:,j]; b=u[:,(j+1)%4]; return np.c_[pol(u,1),a*b,a**3]\\n cc=np.column_stack([fit(features(u[keep],j),v[keep,j]) for j in range(4)])\\n def f(u):return np.column_stack([features(u,j)@cc[:,j] for j in range(4)])\\n def inv(x):\\n  guess=np.linalg.solve(cc[1:5].T,(x-cc[0]).T).T\\n  ret=[]\\n  for a,b in zip(guess,x):\\n   if np.linalg.norm(f(a[None])[0]-b)<1e-12:ret.append(a); continue\\n   fn=lambda z:f(z[None])[0]-b\\n   r=least_squares(fn,a,max_nfev=80,gtol=1e-12); pool=[r.x]\\n   if np.linalg.norm(r.fun)>1e-7 or np.max(abs(r.x))>1.35:\\n    for ini in [np.clip(a,-1.2,1.2),np.zeros(4), *[a+k for k in [np.eye(4)[i]*v for i in range(4) for v in [-1,1]]]]:\\n     pool.append(least_squares(fn,ini,max_nfev=80,gtol=1e-12).x)\\n   ret.append(min(pool,key=lambda z: 1e4*np.linalg.norm(fn(z)) + np.sum(abs(z)**4)))\\n  return np.array(ret)\\n return inv, f, cc, np.std(f(u[keep])-v[keep],axis=0)\\n\\ndef operators(s):\\n ops={}\\n for pn,kn in [('b','v'),('c','v1'),('c','v2')]:\\n  u,v=[s['panel_'+pn][k] for k in ['u',kn]]\\n  candidates=[]\\n  for name,fn in [('lin+tanh',lambda u,h:np.c_[pol(u,1),np.tanh(h[0]*u)]),('lin+sin',lambda u,h:np.c_[pol(u,1),np.sin(h[0]*u)]),('lin+cos',lambda u,h:np.c_[pol(u,1),np.cos(h[0]*u)]),('tanh+cos',lambda u,h:np.c_[np.ones(len(u)),np.tanh(h[0]*u),np.cos(h[1]*u)]),('tanh+sin',lambda u,h:np.c_[np.ones(len(u)),np.tanh(h[0]*u),np.sin(h[1]*u)]),('sin+cos',lambda u,h:np.c_[np.ones(len(u)),np.sin(h[0]*u),np.cos(h[1]*u)]),('lin+tanh+cos',lambda u,h:np.c_[pol(u,1),np.tanh(h[0]*u),np.cos(h[1]*u)]),('lin+tanh+sin',lambda u,h:np.c_[pol(u,1),np.tanh(h[0]*u),np.sin(h[1]*u)]),('lin+sin+cos',lambda u,h:np.c_[pol(u,1),np.sin(h[0]*u),np.cos(h[1]*u)])]:\\n   def err(h):\\n    a=fn(u,h);return (a@fit(a,v)-v).ravel()\\n   sol=min((least_squares(err,[a,b],bounds=(.2,6),max_nfev=80) for a,b in [(1,1),(2,2),(3,1.25),(1.25,3),(4,4)]),key=lambda r:r.cost); h=sol.x; a=fn(u,h); c=fit(a,v); rms=np.std(err(h)); candidates.append((rms,name,h,fn,c));\\n  candidates.sort(key=lambda v:v[0]); print('operator',kn,[(r[1],np.round(r[0],6),np.round(r[2],4)) for r in candidates]);\\n  rms,name,h,fn,c=min(candidates,key=lambda r:r[0]+.00005*len(r[4])); print('selected',name,h,c.T); ops[kn]=lambda x,fn=fn,h=h,c=c:fn(x,h)@c\\n return ops\\n\\nif __name__=='__main__':\\n inv,f,cc,err=calibration(s); print('A',cc.T,err)\\n x,y,t=[s['train'][k] for k in ['x','y','traj']]; z=inv(x); print('calibration inversion errors, range',np.sort(np.linalg.norm(f(z)-x,axis=1))[-10:],z.min(0),z.max(0)); o=operators(s); obs=np.c_[y,t[:,[0,-1]]]; results=[]\\n Z={'x':x,'a':z};\\n for a in list(Z):\\n  for b in o: Z[a+b]=o[b](Z[a]);\\n for a in list(Z)[2:]:\\n  for b in o: Z[a+b]=o[b](Z[a]);\\n for k,w in Z.items():\\n  for d in (1,2):\\n   A=pol(w,d); c=fit(A[:52],obs[:52]); e=np.mean(abs(obs-A@c)[52:],axis=0); results.append((e[2],k,d,e,np.std(obs-A@c,axis=0)))\\n for r in sorted(results,key=lambda r:r[0])[:25]:print(r)\\n print('best y');\\n for r in sorted(results,key=lambda r:r[3][0])[:12]:print(r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py > /tmp/graph.out; cat /tmp/graph.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic calibration with an unexplained residual → H2 cyclic-plus-cubic calibration followed by compact auxiliary operators; prior 52/20 MAEs were 0.104313 and 0.093919.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[],\"rationale\":\"The fitted sine frequency collapsed toward zero while retaining a stable cubic contribution. Fit that cubic directly, solve the calibration inverse, and compare auxiliary compositions on the held-out target and trajectory endpoints.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0bdbd674fd6ddc91db2f4ff890bd2b785fd30755420e3e5d133a42cb3c188a46",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43213.87,
+      "usage_known": true,
+      "prompt_tokens": 33798,
+      "cached_tokens": 12672,
+      "completion_tokens": 1700
+    }
+  ]
+}

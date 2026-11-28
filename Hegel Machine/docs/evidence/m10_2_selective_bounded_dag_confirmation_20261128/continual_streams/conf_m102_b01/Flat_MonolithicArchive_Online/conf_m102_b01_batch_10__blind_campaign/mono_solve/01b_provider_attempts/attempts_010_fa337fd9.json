@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa337fd9fc294d4d93f9cd293188b2e0",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:32.168603+00:00",
+  "ended_at_utc": "2026-11-28T15:45:00.220721+00:00",
+  "request_sha256": "2fb623159f1621294a641d1ef4b865c1fe825539fb464040795a6dd191b32e47",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36564,
+    "cached_tokens": 12672,
+    "completion_tokens": 1095
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations_with_replacement\\\\n\\\\n', '')\\na = s.index('def _quadratic(')\\nb = s.index('def solve_batch(', a)\\ns = s[:a] + 'def _scalar_basis(q):\\\\n    # Retain only the two opposite-coordinate products supported by CV.\\\\n    return _aff(np.column_stack((q, q[:, 0]*q[:, 2], q[:, 1]*q[:, 3])))\\\\n\\\\n\\\\n' + s[b:]\\np.write_text(s.replace('d = _quadratic(q)', 'd = _scalar_basis(q)'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nsolve = runpy.run_path('/holdout_task/batch_solver.py')['solve_batch']\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; ix = np.arange(len(tr['x'])); rng = np.random.default_rng(574)\\nq = solve.__globals__['_coordinates'](s, tr['x'])\\nslices = [np.linalg.norm(q, axis=1), np.max(abs(tr['x']), axis=1), *abs(q.T)]\\ngroups = {'52/20':[ix[52:]], 'random':[rng.choice(ix,20,False) for _ in range(20)], 'boundary':[np.argsort(a)[-k:] for a in slices for k in (8,12)]}\\nfor name, splits in groups.items():\\n    errors = []\\n    for te in splits:\\n        ti = np.setdiff1d(ix,te)\\n        cv = dict(s, train={k:v[ti] if k in ('x','y','traj') else v for k,v in tr.items()}, test={'x':tr['x'][te]})\\n        o = solve(cv); y,T,d = [o[k] for k in ('y_hat','state_pred','diagnostics_vec')]\\n        assert y.shape == (len(te),) and T.shape == (len(te), len(s['eval_times'])) and d.shape == (4,)\\n        assert all(np.isfinite(a).all() for a in (y,T,d))\\n        np.testing.assert_array_equal(d, [y.mean(),y.std(),T[:,-1].mean(),T[:,-1].std()])\\n        errors.append(np.r_[np.mean(abs(y-tr['y'][te])), np.mean(abs(T-tr['traj'][te])), np.mean(abs(T-tr['traj'][te]),axis=0)])\\n    e = np.max(errors,axis=0)\\n    print(name, 'max y MAE',e[0],'max trajectory MAE',e[1],'max horizon MAE',max(e[2:]))\\n    assert np.max(e) <= .038\\nout = solve(s)\\nassert out['y_hat'].shape == (36,) and out['state_pred'].shape == (36,8)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic readout -> H2 retain the two opposite-coordinate products; challenger scalar MAE is 0.00555 on the canonical split and 0.00607 on the worst boundary slice, versus 0.01657 on that stress suite for the unrestricted model.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tie the two opposite-coordinate coefficients\",\n      \"rejected_reason\": \"Tying them slightly worsened canonical, random worst-split, and boundary worst-split MAE.\"\n    },\n    {\n      \"option\": \"Replace the learned temporal modes with fixed exponential modes\",\n      \"rejected_reason\": \"The tested exponential bases did not match the observed trajectories as closely as the learned rank-two modes.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler scalar readout because it improves boundary generalization without changing the verified calibration or trajectory model. Verify the exact edited artifact in an isolated Python process and rerun the public schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f025ba34840066258941f891e38907de1106359953658227b58c663a82d42870",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28050.88,
+      "usage_known": true,
+      "prompt_tokens": 36564,
+      "cached_tokens": 12672,
+      "completion_tokens": 1095
+    }
+  ]
+}

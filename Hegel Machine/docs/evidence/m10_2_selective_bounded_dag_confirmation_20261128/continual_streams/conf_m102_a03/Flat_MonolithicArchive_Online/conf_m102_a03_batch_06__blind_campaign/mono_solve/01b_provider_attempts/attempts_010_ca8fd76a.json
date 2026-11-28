@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca8fd76af2de45b196030342ef4823c2",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:06.681962+00:00",
+  "ended_at_utc": "2026-11-28T15:25:42.103592+00:00",
+  "request_sha256": "15c9b5e66f4a49981c419461989d0a0307f325cee6b7ef5f1550deb1510b2382",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34724,
+    "cached_tokens": 7552,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '64,125p' /tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py; grep -nE 'telemetry|1.25|0.22|readout' /tmp/hegel_continual_archive/*solver.py; cat > /tmp/tele.py <<'PY'\\nexec(open('/tmp/readout.py').read().split('for nam,a0')[0])\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nu=s['panel_a']['u']; v=s['panel_a']['v'];\\ndef cm(u,c):\\n n=np.roll(u,-1,axis=1);return c[:4]+c[4:8]*u+c[8]*n+c[9]*u*n+c[10]*u**3\\nprint('cal residual',np.sort(np.linalg.norm(cm(u,cal)-v,axis=1)))\\nY=np.c_[y,T]; splits=[(ix,val),*KFold(5,shuffle=True,random_state=41).split(z)];\\ndef evalq(Q, regs=(.000001,.003,.03,.2)):\\n out=[]\\n for i,j in splits:\\n  Q0=Q-Q[i].mean(0); Q0/=Q0[i].std(0).clip(.00001); Q0=af(Q0); U,S,V=np.linalg.svd(Q0[i],full_matrices=False); out.append([np.mean(abs((Q0[j]@V.T)@((S/(S*S+r))[:,None]*(U.T@Y[i]))-Y[j]),0) for r in regs]);\\n E=np.array(out); return [(round(e[0,0],5),round(e[1:,0].mean(),5),round(e[1:,0].max(),5),round(e[0,1:].mean(),5),r) for e,r in zip(E.transpose(1,0,2),regs)]\\ndef warp(v,t,k):return np.sign(v)*np.maximum(abs(v)-t,0)**k\\nR=[]\\nfor t in (0,.1,.16,.22,.28,.35,.42,.5):\\n for k in (.75,1,1.25,1.5,1.75,2):\\n  g=warp(z,t,k)\\n  for nm,Q in [('g2',polys(g,2)),('gz2',polys(np.c_[g,z],2)),('hg2',polys(np.c_[g,h],2)),('hzg',np.c_[polys(h,2),(h[:,:,None]*g[:,None,:]).reshape(-1,16),z,g]),('hgdiag',np.c_[polys(h,2),g,h*g]),('wgdiag',np.c_[polys(w,2),g,w*g])]:\\n   for e in evalq(Q):R.append((*e,nm,t,k))\\nprint('top gate',*sorted(R)[:14],sep='\\\\n'); print('top cv',*sorted(R,key=lambda e:e[1])[:14],sep='\\\\n'); print('top state',*sorted(R,key=lambda e:e[3])[:6],sep='\\\\n')\\n# Profile a common dead-zone power of the calibrated inputs independently of panel B, then fit each readout.\\nfor mode in ('quadratic','mixed','both'):\\n def design(p,z):\\n  g=warp(z,*p); b0=af(polys(g,2));\\n  if mode=='mixed':b0=np.c_[b0,z,(g[:,:,None]*z[:,None,:]).reshape(-1,16)]\\n  if mode=='both':\\n   h=warp(z,.35,1.5); b0=np.c_[b0,polys(h,2),(g[:,:,None]*h[:,None,:]).reshape(-1,16)]\\n  return b0\\n for jj in (slice(0,1),slice(1,None),slice(None)):\\n  out=[]\\n  for i,j in splits:\\n   def fun(p):\\n    Q=design(p,z[i]); A=Y[i,jj]; return (Q@fit(Q,A)-A).ravel()\\n   p=min([least_squares(fun,b,bounds=([0,.5],[.75,4]),max_nfev=100) for b in ([.22,1.25],[.35,1.5],[.5,2])],key=lambda o:o.cost)\\n   q=design(p.x,z); pr=q@fit(q[i],Y[i]); e=np.mean(abs(pr[j]-Y[j]),0); out.append((p.x,e[0],e[1:].mean(),np.mean(abs(p.fun))))\\n  print('profile',mode,jj,out)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/tele.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 inherited panel-B dead zone alone -> H2 a telemetry-parameterized dead zone in the forward law; current best 52/20 MAEs are 0.03893 for y and 0.00640 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the calibration with a higher-degree polynomial\",\"rejected_reason\":\"The polynomial estimates agree with the inherited cyclic couplings but introduce many weakly determined terms; directly checking the inherited law is more informative.\"}],\"rationale\":\"Check the calibration residual directly, then test whether the telemetry entries 0.22 and 1.25 identify the forward dead-zone threshold and exponent. Rank candidates on the prescribed split and on additional folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4edb180a7e49e889e7e04f9bcf6c0c4cfb28c1aac3a616b017ab07be39d840ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35420.4,
+      "usage_known": true,
+      "prompt_tokens": 34724,
+      "cached_tokens": 7552,
+      "completion_tokens": 1521
+    }
+  ]
+}

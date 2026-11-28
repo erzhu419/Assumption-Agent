@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0df896e2817749d09d4525ff6fc7b01d",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:56.520955+00:00",
+  "ended_at_utc": "2026-11-28T15:03:37.814339+00:00",
+  "request_sha256": "b57a6a2081f60d261cdb6cbc7b3ace3c97ec04e61171027e0cf35001ac3a8ddf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60348,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37993,
+    "cached_tokens": 12672,
+    "completion_tokens": 1763
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat > /tmp/evidence_cv.py <<'PY'\\nfrom explore import *\\nimport glob, importlib.util\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize, nnls\\nfrom sklearn.model_selection import KFold\\nspec=importlib.util.spec_from_file_location('prior',glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); prior=importlib.util.module_from_spec(spec);spec.loader.exec_module(prior)\\nD={}; W={'x':x,'z':z,'h':h,'Bz':z@B[1:]+B[0],'Bx':x@B[1:]+B[0],'ix':(x-B[0])@np.linalg.inv(B[1:])}\\nfor name,g in W.items():\\n p=poly(g,6); D[name]=[p[:,l:r] for l,r in zip([5,15,35,70,126],[15,35,70,126,210])]\\n D[name+'t']=[poly(np.tanh(.7*g),2)[:,1:],poly(np.tanh(1.25*g),2)[:,1:]]\\n D[name+'r']=[poly(g/(1+.22*g*g),2)[:,1:]]\\n\\ndef evidence(i,j,Y,groups,default=-6,reg=.1):\\n base=10+10*z@z.T; ii=np.ix_(i,i); ji=np.ix_(j,i); I=np.eye(len(i)); G=[]\\n for f in groups:\\n  f=f/np.maximum(np.sqrt(np.mean(f[i]**2,axis=0)),1e-8); G.append(f@f.T/f.shape[1]);\\n A=np.array([g[ii] for g in G]+[I]); C=np.array([g[ji] for g in G]); Y=Y[i]; mu=np.array([default]*len(G)+[-8]);\\n def loss(p):\\n  w=np.exp(p); c=cho_factor(base[ii]+np.einsum('i,ijk->jk',w,A)); a=cho_solve(c,Y); Z=cho_solve(c,I)-np.outer(a,a); return .5*Y@a+np.log(c[0].diagonal()).sum()+reg*np.sum((p-mu)**2),.5*w*np.einsum('ijk,jk->i',A,Z)+2*reg*(p-mu)\\n b=minimize(loss,mu,jac=True,bounds=[(-17,2)]*len(G)+[(-13,-4)],method='L-BFGS-B',options={'maxiter':100}).x; w=np.exp(b); return (base[ji]+np.einsum('i,ijk->jk',w[:-1],C))@cho_solve(cho_factor(base[ii]+np.einsum('i,ijk->jk',w,A)),Y),w\\n\\ndef pred(i,j):\\n ss={**s,'train':{k:s['train'][k][i] for k in ['x','y','traj']},'test':{'x':x[j]}}; p,k,v=prior._components(ss); out={'prior':.65*p[:,0]+.35*k[:,0],'p':p[:,0],'k':k[:,0]}\\n for name in W:\\n  out['ep'+name],w=evidence(i,j,y,D[name]);\\n  for deg in [3,4,5]:\\n   for lam in [.4,2,8]:\\n    fs=[aff(z)]+D[name][:deg-1]; f=np.concatenate([f/np.sqrt(np.mean(f[i]**2,axis=0))/np.sqrt(l) for f,l in zip(fs,[1e-7,.035,lam*.2,lam,lam*6,lam*20])],axis=1); out[name+str(deg)+'_'+str(lam)]=f[j]@f[i].T@np.linalg.solve(np.eye(len(i))+f[i]@f[i].T,y[i])\\n for name,groups in [('multi',[f for k in W for f in D[k][:3]]),('fwd',[f for k in ['z','Bx','Bz'] for f in D[k][:4]]),('mixed',[f for k in ['z','Bx','h'] for f in D[k][:4]]),('nonlinear',[f for k in W for f in D[k][:3]+D[k+'t']+D[k+'r']])]:\\n  out[name],w=evidence(i,j,y,groups)\\n  if len(i)==52 and min(j)==52: print('weights',name,np.round(w,4))\\n return out\\nP=[]; inds=[]\\nfor seed in [19,23,29]:\\n for i,j in KFold(5,shuffle=True,random_state=seed).split(np.arange(52)):\\n  P.append(pred(i,j)); inds.extend(j)\\ngate=pred(np.arange(52),np.arange(52,72)); names=list(gate); A=np.column_stack([np.concatenate([p[k] for p in P]) for k in names]); Y=y[inds]; C=np.column_stack([gate[k] for k in names]); E=np.mean(abs(A-Y[:,None]),0); J=np.mean(abs(C-y[52:,None]),0); idx=np.argsort(E)\\nfor ix in [idx[:15],np.argsort(J)[:12],np.array([names.index(k) for k in ['prior','p','k','multi','mixed','nonlinear']])]: print([(names[j],round(E[j],5),round(J[j],5)) for j in ix]);\\nfor ids in [idx[:4],idx[:10],idx[:20],np.arange(len(names))]:\\n for reg in [.0,.05,.2,1.]:\\n  w=nnls(np.r_[A[:,ids],np.ones((1,len(ids)))*10,np.eye(len(ids))*reg],np.r_[Y,10,np.zeros(len(ids))])[0]; w/=w.sum();print('mix',len(ids),reg,np.mean(abs(A[:,ids]@w-Y)),np.mean(abs(C[:,ids]@w-y[52:])),[(names[k],round(t,4)) for k,t in zip(ids,w) if t>.01]);\\nnp.savez('/tmp/predictions_cv.npz',A=A,C=C,Y=Y,names=names,inds=inds)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/evidence_cv.py; tail -24 /tmp/transformed_screen.log; OPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py | sed -n '12,23p'\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 fixed polynomial regularization -> H2 learn degree-wise shrinkage across calibrated coordinate systems; best screened 52/20 y MAE is 0.0385.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Choose the single transformed basis with the lowest 52/20 MAE\",\"rejected_reason\":\"It still misses the tolerance, and the inner-fold results favor different bases.\"}],\n  \"rationale\":\"Fit shrinkage and ensemble weights using only the first 52 observations, then test whether the candidate clears the prescribed gate without using its labels to fit weights.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a07c2badb670bf8e8d7e6382c0a9ff8895416997f1063a2c2e723f811a1a1f6d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41291.87,
+      "usage_known": true,
+      "prompt_tokens": 37993,
+      "cached_tokens": 12672,
+      "completion_tokens": 1763
+    }
+  ]
+}

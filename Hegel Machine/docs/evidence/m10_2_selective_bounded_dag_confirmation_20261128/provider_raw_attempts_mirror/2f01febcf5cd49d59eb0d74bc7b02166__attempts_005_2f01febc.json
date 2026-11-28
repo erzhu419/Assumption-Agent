@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f01febcf5cd49d59eb0d74bc7b02166",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:02.334025+00:00",
+  "ended_at_utc": "2026-11-28T15:00:37.515428+00:00",
+  "request_sha256": "3aa60d09622639e4cfa8f76b030ec8eb38b2e0f86209635a3ca10a85c69b1936",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29933,
+    "cached_tokens": 12672,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/branch.py <<'PY'\\nfrom operators import *\\nfrom itertools import product\\nc=s['panel_c'];u=c['u']; V=c['v2']; Q=lambda u:F(np.c_[u,*[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]])\\nC1=fit(Q(u),c['v1']); print('C1 coeff',C1.T,'validation',report(Q(u),c['v1'],18));\\nmodels=[]\\nfor nam,fn in {'cs':np.cos,'gauss':lambda z:np.exp(-z*z),'rat':lambda z:1/(1+z*z),'rat4':lambda z:1/(1+z**4)}.items():\\n for base in [False,True]:\\n  for mode in range(3):\\n   def D(z,p):\\n    w=fn(z*p[0 if mode<2 else slice(0,4)]+(0 if mode==0 else p[1:] if mode==1 else p[4:])); return F(np.c_[z,w]) if base else F(w)\\n   res=[]\\n   for init in [0.8,1.25,2.5,3.7]:\\n    p=[init] if mode==0 else [init]+[0]*4 if mode==1 else [init]*4+[0]*4\\n    def err(p):\\n     H=D(u[:19],p);return (H@fit(H,V[:19])-V[:19]).ravel()\\n    q=least_squares(err,p,max_nfev=100); e=report(D(u,q.x),V,19).mean(); res.append((e,q.x))\\n   e,p=min(res,key=lambda v:v[0]); print('C2',nam,base,mode,e,p);models.append((e,nam,base,mode,p,fn))\\ne,nam,base,mode,p,fn=min(models,key=lambda v:v[0]); print('winner',e,nam,base,mode,p)\\ndef H(z):\\n w=fn(z*p[0 if mode<2 else slice(0,4)]+(0 if mode==0 else p[1:] if mode==1 else p[4:]));return F(np.c_[z,w]) if base else F(w)\\nC2=fit(H(u),V); print('C2 coeff',C2.T)\\ndef f1(x):return Q(x)@C1\\ndef f2(x):return H(x)@C2\\nif __name__=='__main__':\\n x=s['train']['x']; z=(x-a)/b; Y=np.c_[s['train']['y'],s['train']['traj']]; R=[]\\n def add(D,name):\\n  scale=np.maximum(np.std(D[:52],axis=0),.001); D=D/scale\\n  for l in [0,.0001,.01]:\\n   if l==0:\\n    if D.shape[1]>45: continue\\n    pred=D[52:]@fit(D[:52],Y[:52]); tr=D[:52]@fit(D[:52],Y[:52]);\\n   else:\\n    K=D@D.T; coeff=np.linalg.solve(K[:52,:52]+l*np.eye(52),Y[:52]); pred=K[52:,:52]@coeff; tr=K[:52,:52]@coeff\\n   E=abs(pred-Y[52:]); E0=abs(tr-Y[:52]);R.append((E[:,0].mean(),E[:,1:].mean(),E0[:,0].mean(),E0[:,1:].mean(),name,l))\\n Z={'z':z,'Bz':Bf(z),'x':x,'Binvz':Binv(z),'Blinz':z@B[1:]}\\n for name,w in Z.items():\\n  v,g=f1(w),f2(w)\\n  for k,j in [('v',v),('g',g),('vg',np.c_[v,g]),('zvg',np.c_[w,v,g]),('vz',np.c_[w,v]),('gz',np.c_[w,g])]:\\n   add(F(j),(name,k,'linear')); add(Q(j) if j.shape[1]==4 else F(np.c_[j,*[j[:,i]*j[:,k] for i in range(j.shape[1]) for k in range(i,j.shape[1])]]),(name,k,'quad'))\\n  X=[w,v,g]; L=['w','v','g'];\\n  for i,j in product(range(3),repeat=2):\\n   d=X[i];e=X[j]; m=(d[:,:,None]*e[:,None,:]).reshape(len(w),-1); \\n   add(F(np.c_[w,v,g,m]),(name,L[i]+L[j],'outer'))\\n   add(F(np.c_[w,v,g,np.sum(d*e,axis=1),d*e]),(name,L[i]+L[j],'diag'))\\n   for k in [.1,.22,.5,1,1.25,2]:\\n    Hs=[d/(1+k*e**2), d/(1+k*np.sum(e**2,axis=1,keepdims=True))]\\n    for ind,block in enumerate(Hs):add(F(np.c_[w,v,g,block]),(name,L[i]+L[j],k,ind))\\n for k in (0,1):print('best',k,*sorted(R,key=lambda row: row[k])[:15],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic nonlinear features) → H2 (quadratic and cosine panel branches composed with calibration and rotation); the generic trajectory baseline remains near 0.199 MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Coordinatewise nonlinearity as panel C's first branch\",\"rejected_reason\":\"Its best screened held-out error was 0.378, while a full quadratic fits at the panel noise level.\"}],\"rationale\":\"Recover the two panel operators separately, then test their composition and algebraic readouts on the public 52/20 split before committing to a solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b13a1d252b0a4072c0988f82b881f1e056d938c15b2b7c6a5094f1f9f5c83d7a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35180.03,
+      "usage_known": true,
+      "prompt_tokens": 29933,
+      "cached_tokens": 12672,
+      "completion_tokens": 1533
+    }
+  ]
+}

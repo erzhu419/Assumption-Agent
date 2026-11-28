@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a887bfbb7d5941099f279f8efa514e95",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:52.594691+00:00",
+  "ended_at_utc": "2026-11-28T15:08:25.922249+00:00",
+  "request_sha256": "6e98b2d54259cbcc99455e5d2c9d926ebcce716e95564d92be373e3c68792859",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42607,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30991,
+    "cached_tokens": 12672,
+    "completion_tokens": 1188
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout.py <<'PY'\\nfrom explore import *\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nP=np.c_[np.ones(len(w)),w,powr(w,2),powr(w,3)]; print('canonical coefficients (y, trajectory at first and last horizons)'); print(ls(P,np.c_[y,s['train']['traj'][:,[0,-1]]]))\\nq=aug(powr(w,2))@C; q-=C[0]\\ngroups={'w':w,'q':q,'wq':w*q,'wq_full':(w[:,:,None]*q[:,None,:]).reshape(-1,16),'cube':powr(w,3),'w_cube':w**3,'wquad':w*w,'c2':c2fun(w),'z':z,'zwq':z*q}\\nspecs=[('w','q'),('w','q','wq'),('w','q','wq_full'),('w','q','cube'),('w','q','w_cube'),('w','q','wq','w_cube'),('w','q','wq','wquad'),('w','q','wq','c2'),('w','q','zwq'),('w','q','cube','wquad'),('w','q','cube','c2')]\\nY=np.c_[y,s['train']['traj']]; rng=np.random.default_rng(492); ind=np.arange(72); splits=[(ind[:52],ind[52:])]\\nfor _ in range(100):\\n i=rng.permutation(ind); splits.append((i[:52],i[52:]))\\nfor sp in specs:\\n F=aug(np.column_stack([groups[key] for key in sp])); E=[]\\n for a,b in splits:\\n  T=Y[a,1:]; modes=np.linalg.svd(T,full_matrices=False)[2][:2]; Yp=F[b]@ls(F[a],np.c_[Y[a,0],T@modes.T]); err=np.abs(np.c_[Yp[:,0],Yp[:,1:]@modes]-Y[b]); E.append([err[:,0].mean(),err[:,1:].mean(),err[:,1:].mean(0).max()]);\\n print(sp,np.linalg.matrix_rank(F),'fixed',E[0],'median',np.median(E,axis=0),'worst',np.max(E,axis=0));\\n if sp==('w','q','wq'): print('structured coefficients',ls(F,np.c_[y,Y[:,[1,-1]]]))\\n# Test output link hypotheses for C2 on the parsimonious shared feature u + k*u**2.\\nfrom scipy.special import erf\\nfor name,fn in [('linear',lambda a:a),('tanh',np.tanh),('sin',np.sin),('erf',erf),('asinh',np.arcsinh),('atan',np.arctan)]:\\n E=[]; PP=[]\\n for j in range(4):\\n  v=v2[:,j]; L=ls(aug(u+.45*u*u),v)\\n  def pred(p,uu): return p[0]+np.exp(p[1])*fn(p[2]+(uu+p[3]*uu*uu)@p[4:]);\\n  p=np.r_[0.,0.,L[0],.45,L[1:]]; f=least_squares(lambda p:pred(p,u)-v,p,max_nfev=500,bounds=([-3,-3,-3,-2]+[-4]*4,[3,3,3,2]+[4]*4)); E.append(np.sqrt(np.mean(f.fun**2)));PP.append(f.x[:4]);\\n print('C2',name,E,PP)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | tail -65\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: reduce the panel-informed cubic readout to specific interactions; the current 52/20 candidate has response MAE 0.00526 and trajectory MAE 0.00306.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the lowest-error feature set separately on the prescribed split\",\"rejected_reason\":\"A single split cannot distinguish a stable cubic mechanism from chance gains due to extra features.\"}],\"rationale\":\"Compare compact interaction bases on repeated holdouts, refitting trajectory modes inside each fold, and test whether C2 has a plausible role beyond its quadratic approximation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f057be101c96b8b2a5f04a06024a1512d88f4835c376e27e2b9eafd8ef1afc5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33326.13,
+      "usage_known": true,
+      "prompt_tokens": 30991,
+      "cached_tokens": 12672,
+      "completion_tokens": 1188
+    }
+  ]
+}

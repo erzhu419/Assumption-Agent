@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20b51eea3f15465faef51c00e95d3632",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:40.778104+00:00",
+  "ended_at_utc": "2026-11-28T15:29:16.946529+00:00",
+  "request_sha256": "6e352ff30b1ce90c71ca7da19eca8ba2adda203b2020fb9ca5c8a95aca3d3f04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38952,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29271,
+    "cached_tokens": 12672,
+    "completion_tokens": 1459
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/branch6.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe6 import *\\nfrom scipy.special import expit\\nV=c['v2']; q=lat['v1cross'];\\nforms={'square':lambda z,a:z+a*z*z,'square_cube':lambda z,a,b:z+a*z*z+b*z**3,'square4':lambda z,a,b:z+a*z*z+b*z**4,'poly4':lambda z,a,b,k:z+a*z*z+b*z**3+k*z**4,'quotient':lambda z,a,b:(z+a*z*z)/(1+b*z*z),'ratlin':lambda z,a:z/(1-a*z),'tanh_square':lambda z,a,b:np.tanh(b*z)/b+a*z*z,'sin_square':lambda z,a,b:np.sin(b*z)/b+a*z*z,'exp':lambda z,a:np.expm1(a*z)/a,'shifted_sqrt':lambda z,a,b:z+a*(np.sqrt(1+b*z*z)-1)}\\ndef residual(par,f,u=cu,v=V):\\n d=A(f(u,*par));return (d@L(d,v)-v).ravel()\\nimport inspect\\nfor k,f in forms.items():\\n fit2=least_squares(residual,[.4]+[.1]*(len(inspect.signature(f).parameters)-2),args=(f,),max_nfev=500);print('C2',k,fit2.x,np.std(fit2.fun))\\nfor j in range(4):\\n d=np.column_stack([cu[:,j]**i for i in range(1,7)]); oth=np.delete(cu,j,axis=1); oth=oth+.45*oth**2; D=np.c_[A(oth),d]; M=L(D,V); print('C2 powers',j,M[-6:].T)\\nf=forms['poly4']; par=least_squares(residual,[.4,.1,.1],args=(f,)).x\\nD=A(f(cu,*par)); coef=L(D,V)\\ndef C2(z):return A(f(z,*par))@coef\\nC1=lambda z:cross(z)@L(cross(cu),c['v1'])\\nr=C2(w); print('range',[(a.min(0),a.max(0)) for a in (w,q,r)]);\\ndef score(d,Y=Y):\\n e=d[52:]@L(d[:52],Y[:52])-Y[52:]; t=d[:52]@L(d[:52],Y[:52])-Y[:52]; return tuple(np.round((np.mean(abs(t[:,0])),np.mean(abs(t[:,1:])),np.mean(abs(e[:,0])),np.mean(abs(e[:,1:]))),5))\\nfor k,z0 in [('q',q),('r',r),('q+r',q+r),('q-r',q-r),('q*r',q*r),('q/r',q/(1+r**2)),('q+r*q',q+r*q),('r+q*r',r+q*r),('gate',q*expit(r)),('blend',q*expit(r)+r*expit(-r)),('C2-after-C1',C2(q)),('C1-after-C2',C1(r)),('C2-after-A',C2(z)),('C1-B-C2-A',C1(B(C2(z)))),('q,r',np.c_[q,r]),('q,w',np.c_[q,w]),('q,r,q*r',np.c_[q,r,q*r]),('q,r,cross',np.c_[q,r,*[q[:,i]*r[:,j] for i in range(4) for j in range(4)]])]:\\n print('branch',k,score(A(z0)),score(poly(z0,2)) if z0.shape[1]<=8 else '',score(np.c_[A(z0),z0[:,0]*z0[:,2],z0[:,1]*z0[:,3]) if z0.shape[1]==4 else '')\\nprint('train trajectory fit shared time modes');print(np.linalg.svd(Y[:52,1:],full_matrices=False)[2][:3]);print('center',np.mean(Y[:52],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single C1 branch → H2 identify C2’s nonlinear basis and test branch composition; the best reported C1-only 52/20 MAEs are 0.10676 for y and 0.07160 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived C1-only cascade with an affine or quadratic readout is sufficient for this campaign.\",\n    \"empirical_witness\": \"Calibration, B, and C1 panel residuals are near measurement noise, but the C1-only cascade still misses the 0.038 threshold for both outputs on the 52/20 split.\",\n    \"causal_blanket_diagnosis\": \"The upstream operators fit their panels; the missing dependency lies in the branch composition or downstream readout.\",\n    \"sublated_pivot\": \"Preserve the identified calibration, dead-zone, and C1 operators while identifying C2 and testing sums, products, rational gates, and serial compositions.\",\n    \"risk_kind\": \"structural_underfit\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase polynomial degree on C1 alone\",\n      \"rejected_reason\": \"Quadratic expansion did not close the gap, and the independent C2 panel provides a better-constrained source of nonlinear features.\"\n    }\n  ],\n  \"rationale\": \"Fit the auxiliary operator to its own panel before testing downstream features, and report both fit and held-out errors so extra terms are not mistaken for genuine predictive improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1859d73d1b814225076daa60112905de58af2682043c9e9004da5ee3aaa9fc93",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36167.44,
+      "usage_known": true,
+      "prompt_tokens": 29271,
+      "cached_tokens": 12672,
+      "completion_tokens": 1459
+    }
+  ]
+}

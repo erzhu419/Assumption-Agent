@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86077f2c737a43f89fc591f3a411f177",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:07.698675+00:00",
+  "ended_at_utc": "2026-11-28T16:10:44.194664+00:00",
+  "request_sha256": "e7d019c2e4c23e351e1bca7fd92767847403cb170e87af0e5671e4b1a486e0d9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54910,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34932,
+    "cached_tokens": 12672,
+    "completion_tokens": 1586
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/grammar13.py <<'PY'\\nexec(open('/tmp/read13.py').read().split('from itertools import combinations_with_replacement as cr')[0])\\nfrom itertools import combinations as cmb, combinations_with_replacement as cr\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.linear_model import Lasso\\nY=tr['y']; H=np.c_[np.ones(len(q)),b]; N=len(Y); G=np.cos(p*q)\\nF=[np.arange(j,min(j+18,N)) for j in (0,18,36,54)]+[np.arange(52,72)]\\ndef cv(A):\\n return np.round([np.mean(abs(A[j]@ls(A[i],Y[i])-Y[j])) for j in F for i in [np.setdiff1d(np.arange(N),j)]],5)\\ndef rm(A):return np.sqrt(np.mean((A@ls(A,Y)-Y)**2))\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef poly(a,n):return np.column_stack([np.prod(a[:,t],axis=1) for t in cr(range(a.shape[1]),n)])\\nfor nm,a in [('b',b),('g',G),('q',q)]:\\n A=np.c_[H,poly(a,2)];print(nm,'quadratic',rm(A),cv(A),list(zip(cr(range(4),2),np.round(ls(A,Y)[5:],4))));\\n for r in [3,4]:\\n  A=np.c_[A,poly(a,r)]; print(nm,r,rm(A),cv(A))\\nfor nm,a in [('B',b),('G',G),('q',q)]:\\n for i,j in cmb(range(4),2):\\n  for c in [-1,1]:\\n   x=a[:,i]+c*a[:,j]\\n   for vname,v in [('cos',np.cos(p*x)),('sin',np.sin(p*x)),('tanh',np.tanh(x)),('sq',x*x),('product',a[:,i]*a[:,j])]:\\n    A=np.c_[H,v]; print('ONE',nm,i,j,c,vname,rm(A),cv(A)) if rm(A)<.085 else None\\nU=[('H',H),('cyc',np.c_[H,b*np.roll(q,-1,axis=1)]),('quad',np.c_[H,poly(G,2)]),('oddt',np.c_[H,q,b*np.roll(q,-1,axis=1)])]\\nZ=[]\\nfor nm,V in [('q',q),('x',tr['x']),('b',b),('G',G),('q2',q*q)]:\\n Z += [(nm+str(i),V[:,i]) for i in range(4)]; Z += [(f'{nm}{i}{op}{j}',V[:,i]+sgn*V[:,j]) for i,j in cmb(range(4),2) for op,sgn in [('+',1),('-',-1)]];Z += [(f'{nm}{i}*{j}',V[:,i]*V[:,j]) for i,j in cmb(range(4),2)]\\nZ += [('state',tr['traj'][:,-1]),('statefit',(H@ls(H,tr['traj']))[:,-1])]\\nresults=[]\\nfor nm,z in Z:\\n for mode in ('full','offset','partial','raw'):\\n  for bn,B in U:\\n   def design(k):\\n    g=1/(1+k*z*z)\\n    if mode=='full':return B*g[:,None]\\n    if mode=='offset':return np.c_[np.ones(N),B*g[:,None]]\\n    if mode=='partial':return np.c_[B,H*g[:,None]]\\n    return np.c_[B,g]\\n   k=minimize_scalar(lambda k:rm(design(k)),bounds=(.001,4),method='bounded').x; A=design(k); rr=rm(A)\\n   if rr<.059:results.append((rr,nm,mode,bn,round(k,4),cv(A)))\\nfor r in sorted(results,key=lambda r:r[0])[:30]: print('GATE',r)\\n# Evaluate full pair-harmonic bases and sparse approximation to the residual.\\nfor nm,a in [('g',G),('q',q)]:\\n S=np.sin(p*q); M=np.c_[H,poly(G,2),cross(S,S),cross(S,G),S];\\n if nm=='q':M=np.c_[M,cross(q,S),cross(q,G),cross(q*q,G),poly(q,2),q,q**3]\\n for alpha in (.001,.003,.006,.012):\\n  out=[]\\n  for j in F:\\n   i=np.setdiff1d(np.arange(N),j); d=np.maximum(M[i,1:].std(0),.03); mdl=Lasso(alpha=alpha,max_iter=10000).fit(M[i,1:]/d,Y[i]);out.append(np.mean(abs(mdl.predict(M[j,1:]/d)-Y[j])))\\n  print('LASSO',nm,alpha,np.round(out,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar13.py | grep -E 'quadratic|^[bgq] [34]|^ONE|^GATE|^LASSO'; cat /holdout_task/public_asset_index.json | tail -23\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear cosine readout -> H2 pairwise harmonic or rational readout; quadratic cosine features reduce public scalar MAE from 0.12690 to 0.07192, still above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the quadratic baseline\",\"rejected_reason\":\"It improves the public split but remains nearly twice the required error.\"}],\"rationale\":\"Test explicit pairwise sums, differences, products, and shared rational denominators. The improvement from quadratic cosine terms suggests the scalar readout combines channels rather than applying an independent coordinate gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d4376ac39303bf80d1cf84215004cdfdb7c33110999e9b00597851908a37a94c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37126.12,
+      "usage_known": true,
+      "prompt_tokens": 34932,
+      "cached_tokens": 12672,
+      "completion_tokens": 1586
+    }
+  ]
+}

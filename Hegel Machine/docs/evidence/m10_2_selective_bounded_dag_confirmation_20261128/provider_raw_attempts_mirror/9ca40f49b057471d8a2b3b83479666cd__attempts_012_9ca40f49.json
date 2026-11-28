@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9ca40f49b057471d8a2b3b83479666cd",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:14.732274+00:00",
+  "ended_at_utc": "2026-11-28T15:10:37.150489+00:00",
+  "request_sha256": "f042e9a4e65ab7e75aaff3f46fec8e5d57797bdef5d8af5e3c085a229e9aaf7d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74516,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42777,
+    "cached_tokens": 12672,
+    "completion_tokens": 882
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    params = least_squares(')\\nb = s.index('\\\\n\\\\n\\\\ndef _regress', a)\\ns = s[:a] + '''    # Select the gate by training residual only. Multiple starts avoid a\\n    # steep, displaced gate that can look locally optimal on smaller folds.\\n    starts = ([8, 0, 0, 0, 0], [3, 0, 0, 0, 0], [14, 0, 0, 0, 0],\\n              [8, -.12, 0, 0, 0], [8, .12, 0, 0, 0],\\n              [8, 0, 1, 0, 0], [8, 0, -1, 0, 0])\\n    fit = min((least_squares(\\n        residual, start,\\n        bounds=([1, -.35, -3, -3, -3], [35, .35, 3, 3, 3]),\\n        max_nfev=100,\\n    ) for start in starts), key=lambda result: result.cost)\\n    qt = _quadratic(test)\\n    coef = _regress(_gated(x, q, fit.x), y)\\n    tilted = _gated(test, qt, fit.x) @ coef\\n\\n    # A small fixed-gate component reduces split-to-split prediction variance.\\n    fixed = np.column_stack((q, q * np.tanh(8 * x[:, 2:3])))\\n    fixed_test = np.column_stack((qt, qt * np.tanh(8 * test[:, 2:3])))\\n    return .8 * tilted + .2 * (fixed_test @ _regress(fixed, y))''' + s[b:]\\np.write_text(s)\\nPY\\nsed -i '/print(name,.*worst time MAE:/a\\\\    assert sc <= .038' /tmp/verify_campaign.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_campaign.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (single-start tilted gate) -> H2 (training-selected multistart gate with 20% fixed-gate stabilization); the challenger measured 0.011934 on 52/20 and 0.023062 on the worst of 96 additional splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the unblended multistart gate\",\n      \"rejected_reason\": \"It passed the gate but had higher mean and worst scalar MAE across the 96 random splits; the blend also passed both targeted slices.\"\n    }\n  ],\n  \"rationale\": \"On the failing split, multistart reduced the training objective and lowered holdout MAE from 0.12148 to 0.01650, identifying an optimization failure rather than a new model-form failure. Install the tested blend and rerun the split, stress slices, and public schema checks on the exact deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "95c0640da265f92ec6e5af1897ba6cc4b34efeb2ea4ab815b4dea4988c90abe3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22974.61,
+      "usage_known": true,
+      "prompt_tokens": 42777,
+      "cached_tokens": 12672,
+      "completion_tokens": 882
+    }
+  ]
+}

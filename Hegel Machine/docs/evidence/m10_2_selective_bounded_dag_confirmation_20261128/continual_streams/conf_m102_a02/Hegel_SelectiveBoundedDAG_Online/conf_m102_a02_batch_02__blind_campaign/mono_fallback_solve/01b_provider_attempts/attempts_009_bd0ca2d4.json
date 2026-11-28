@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd0ca2d40b2145c9bfdf610b78ea2c3a",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:38.451441+00:00",
+  "ended_at_utc": "2026-11-28T15:08:21.254576+00:00",
+  "request_sha256": "3a70302ec2951dd2b7937b2f112f1c3f2f504d0ff1b6cd256e5c11b51659326c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61229,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34754,
+    "cached_tokens": 7552,
+    "completion_tokens": 1781
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated gated scalar regression and low-rank affine state regression.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    delta = np.linalg.norm(v - u, axis=1)\\n    med = np.median(delta)\\n    keep = delta <= med + max(0.25, 8 * np.median(abs(delta - med)))\\n    u, v = u[keep], v[keep]\\n    uc, vc = u - u.mean(0), v - v.mean(0)\\n    slope = (uc * vc).sum(0) / (uc * uc).sum(0)\\n    return v.mean(0) - slope * u.mean(0), slope\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack((_affine(x), *(x[:, i] * x[:, j] for i, j in combinations_with_replacement(range(4), 2))))\\n\\n\\ndef _gated(x):\\n    q = _quadratic(x)\\n    return np.column_stack((q, q * np.tanh(8 * x[:, 2:3])))\\n\\n\\ndef _regress(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.asarray(train['x'], dtype=float)\\n    test = np.asarray(study['test']['x'], dtype=float)\\n    offset, slope = _calibration(study['panel_a'])\\n    y_hat = _gated((test - offset) / slope) @ _regress(_gated((x - offset) / slope), train['y'])\\n    a = _affine(x)\\n    time_basis = np.linalg.svd(a @ _regress(a, train['traj']), full_matrices=False)[2][:2].T\\n    state_pred = (_affine(test) @ _regress(a, train['traj'] @ time_basis)) @ time_basis.T\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), state_pred[:, -1].mean(), state_pred[:, -1].std()])}\\nPY\\nsed '/p=s\\\\[.panel_c.\\\\]/,$d' /tmp/probe.py >/tmp/gateprobe.py; cat >>/tmp/gateprobe.py <<'PY'\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import ShuffleSplit\\nq=ai(x); Q=poly(q,2); ids=np.arange(72); pairs=[(i,j) for i in range(4) for j in range(i,4)]\\nsplits=[(ids[:52],ids[52:]),*KFold(4,shuffle=True,random_state=12).split(x),*KFold(4,shuffle=True,random_state=73).split(x),*ShuffleSplit(32,test_size=20,random_state=383).split(x)]\\nQix={'all':np.arange(15),'gate2':np.array([0,1,2,3,4,*[5+k for k,(i,j) in enumerate(pairs) if i==2 or j==2]]),'linear':np.arange(5),'gate3':np.array([0,1,2,3,4,*[5+k for k,(i,j) in enumerate(pairs) if i==2 or j==2 or (i,j) in [(0,0),(1,1),(3,3)]]])}\\ndef gate(par):return np.tanh(par[0]*(q[:,2]-par[1])+q[:,[0,1,3]]@par[2:])\\ndef mat(par,ix):return np.c_[Q,Q[:,ix]*gate(par)[:,None]]\\ndef bet(F,y,lam):\\n if not lam:return ls(F,y)\\n diag=np.full(F.shape[1],lam);diag[:5]=lam/100;return np.linalg.solve(F.T@F+np.diag(diag),F.T@y)\\ndef setup(a,ix,lam,mode):\\n if isinstance(mode,(int,float)):return mat([mode,0,0,0,0],ix)\\n n={'slope':1,'center':2,'tilt':5}[mode]\\n def obj(p):\\n  F=mat(np.r_[p,np.zeros(5-n)],ix)[a]; return F@bet(F,y[a],lam)-y[a]\\n p=least_squares(obj,[8,0,0,0,0][:n],bounds=([1,-.35,-3,-3,-3][:n],[35,.35,3,3,3][:n]),max_nfev=50).x\\n return mat(np.r_[p,np.zeros(5-n)],ix)\\nrows=[]\\nfor n,ix in Qix.items():\\n for lam in [0,.0003,.003,.015,.06]:\\n  for mode in [4,8,12,18,'slope','center','tilt']:\\n   es=[]\\n   for a,b in splits:\\n    F=setup(a,ix,lam,mode);es.append(np.mean(abs(F[b]@bet(F[a],y[a],lam)-y[b])))\\n   rows.append((np.round([es[0],np.mean(es[1:9]),max(es[1:9]),np.mean(es[9:]),max(es[9:])],6),n,lam,mode))\\nprint('baseline',[r for r in rows if r[1:]==('all',0,8)]); print('best',*sorted(rows,key=lambda r:(r[0][4],r[0][3]))[:25],sep='\\\\n');print('best mean',*sorted(rows,key=lambda r:r[0][3])[:15],sep='\\\\n')\\nF=mat([8,0,0,0,0],Qix['all']); beta=ls(F,y);print('gate coeffs',np.round(beta.reshape(2,-1),4));print('sorted residual',np.round(np.c_[q[:,2], y-F@beta][np.argsort(q[:,2])],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gateprobe.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (soft-modulated quadratic) -> H2 (inverse-calibrated, tanh-gated quadratic); scalar MAE is 0.014591 on 52/20 and 0.020678 on the worst of eight shuffled folds.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Fit the gate's slope, center, and direction freely\",\"rejected_reason\":\"Keep the fixed calibrated coordinate as the baseline until fold-local fitting demonstrates a repeatable gain.\"}],\"rationale\":\"Save a solver that already clears the scalar gate, independently fit the trajectory head, and challenge the scalar model on additional 52/20 splits with compact gate numerators and regularization.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ea40e862916cda752b5acb4f2b4d48a6127bf63cff683ca197b135871f7a4e90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42801.82,
+      "usage_known": true,
+      "prompt_tokens": 34754,
+      "cached_tokens": 7552,
+      "completion_tokens": 1781
+    }
+  ]
+}

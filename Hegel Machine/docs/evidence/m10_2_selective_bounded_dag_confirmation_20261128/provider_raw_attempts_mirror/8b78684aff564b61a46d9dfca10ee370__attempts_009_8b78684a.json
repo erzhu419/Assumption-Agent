@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b78684aff564b61a46d9dfca10ee370",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:09.954841+00:00",
+  "ended_at_utc": "2026-11-28T15:11:48.700475+00:00",
+  "request_sha256": "19634d370df810dbe9f97c8b4cfe81c089824a49ffeac3e34cca9e363be5c2fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63300,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40360,
+    "cached_tokens": 12672,
+    "completion_tokens": 1487
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated multi-output regression with a shared low-rank state trajectory.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _design(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    A, v = _design(a['u']), a['v']\\n    keep = np.ones(len(A), dtype=bool)\\n    for _ in range(6):\\n        w = _fit(A[keep], v[keep])\\n        e = np.linalg.norm(A @ w - v, axis=1)\\n        good = e < max(.001, 3 * np.median(e))\\n        if np.array_equal(keep, good) or good.sum() < A.shape[1]:\\n            break\\n        keep = good\\n    z = np.linalg.solve(w[1:].T, (x - w[0]).T).T\\n    p = study['panel_b']\\n    u, v = p['u'], p['v']\\n    def phi(q, u):\\n        return _design(erf(q[0]*u) + q[1]*u)\\n    def residual(q):\\n        F = phi(q, u)\\n        return (F @ _fit(F, v) - v).ravel()\\n    sols = [least_squares(residual, [a, -.5*a], bounds=([.1,-8],[4,8]), max_nfev=80) for a in [.4,.8,1.4,2.2]]\\n    q = min(sols, key=lambda o:o.cost).x\\n    b = phi(q, z) @ _fit(phi(q, u), v)\\n    return z, b\\n\\n\\ndef _kernel(x, w):\\n    linear = x @ w.T / x.shape[1]\\n    r = .5 * np.abs(x[:, None, :] - w[None, :, :])\\n    g = (1 + r + r*r/3)*np.exp(-r)\\n    avg = g.mean(2)\\n    pair = avg*avg - (g*g).sum(2)/x.shape[1]**2\\n    return (1+linear)**2 + 2*avg + 2*pair\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    z, b = _coordinates(study, np.vstack((tr['x'], study['test']['x'])))\\n    x = np.c_[z, b, np.tanh(2*z), np.tanh(2*b)]\\n    x = x / np.maximum(x[:n].std(0), 1e-10)\\n    i, j = x[:n], x[n:]\\n    traj = np.asarray(tr['traj'])\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    k, ktest = _kernel(i, i), _kernel(j, i)\\n    y = ktest @ np.linalg.solve(k + .001*np.eye(n), tr['y'])\\n    state = (ktest @ np.linalg.solve(k + .001*np.eye(n), traj @ modes.T)) @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/check_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train'];N=len(tr['x']);R=np.random.default_rng(713)\\nfolds=[np.arange(52,N)]+[R.permutation(N)[:20] for _ in range(12)]\\nmetrics=[]\\nfor j in folds:\\n i=np.setdiff1d(np.arange(N),j)\\n out=m.solve_batch(dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]}));e=abs(out['state_pred']-tr['traj'][j]);metrics.append([abs(out['y_hat']-tr['y'][j]).mean(),e.mean(),e[:,-1].mean(),*e.mean(0)])\\na=np.array(metrics); print('52/20',a[0]); print('12 shuffled mean',a[1:].mean(0));print('12 shuffled max',a[1:].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic smooth regression → H2 nonlinear Panel B with raw and saturated pairwise features; the prototype reached 52/20 MAEs of 0.03388 for y and 0.03596 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Use the lowest regularization from the prescribed split\",\"rejected_reason\":\"The slightly stronger regularization improved both shuffled-fold metrics while retaining margin on the prescribed split.\"}],\"rationale\":\"Implement the first candidate that clears both aggregate gates, with scaling and temporal modes fitted only on training rows; then verify the exact artifact and measure endpoint and shuffled-split errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4d6f7dbcf3ecd2331c6485e8d54223c33d9fd7edc3c15f967cbf9cd12c0607fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38744.22,
+      "usage_known": true,
+      "prompt_tokens": 40360,
+      "cached_tokens": 12672,
+      "completion_tokens": 1487
+    }
+  ]
+}

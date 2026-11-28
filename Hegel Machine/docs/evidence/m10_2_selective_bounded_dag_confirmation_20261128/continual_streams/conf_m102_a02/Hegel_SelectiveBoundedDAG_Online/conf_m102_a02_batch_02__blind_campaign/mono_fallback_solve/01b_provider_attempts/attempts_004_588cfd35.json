@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "588cfd35d63345faa8544e14b96c7f7c",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:35.084250+00:00",
+  "ended_at_utc": "2026-11-28T15:05:04.129567+00:00",
+  "request_sha256": "547ff0652ad9d6b1e1dfc473336ee4be953f8fe2308b1c16a87bd4e0419b7e02",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24021,
+    "cached_tokens": 12672,
+    "completion_tokens": 1216
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\npoly=lambda x,d:PolynomialFeatures(d).fit_transform(x)\\np=s['panel_a']; u,v=p['u'],p['v']; m=np.linalg.norm(u-v,axis=1)<1\\nA=np.array([ls(poly(u[m,i:i+1],1),v[m,i]) for i in range(4)]); af=lambda x:x*A[:,1]+A[:,0]; ai=lambda x:(x-A[:,0])/A[:,1]\\np=s['panel_b']; B=ls(poly(p['u'],1),p['v']); bf=lambda x:poly(x,1)@B\\np=s['panel_c']; u=p['u']; C=[]\\nfor key in ['v1','v2']:\\n v=p[key]; print(key)\\n for d in [1,2,3]:\\n  F=poly(u,d); es=[]\\n  for a,b in KFold(6,shuffle=True,random_state=11).split(u):es.extend(abs(F[b]@ls(F[a],v[a])-v[b]).ravel())\\n  coef=ls(F,v); print(d,'train',np.mean(abs(F@coef-v)),'CV',np.mean(es));\\n  if d==2: print(np.round(coef,4)); C.append(coef)\\nfor key in ['v1','v2']:\\n v=p[key]; print(key,'marginal range',v.min(0),v.max(0))\\n\\ndef evaluate(F):\\n o=[]\\n for a,b in [(np.arange(52),np.arange(52,72)),*KFold(4,shuffle=True,random_state=12).split(x)]:\\n  pred=F[b]@ls(F[a],np.c_[y[a],t[a]]); o.append(np.mean(abs(pred-np.c_[y[b],t[b]]),axis=0))\\n o=np.array(o); return tuple(np.round([o[0,0],o[1:,0].mean(),o[1:,0].max(),o[0,1:].mean()],5))\\nres=[]\\nfor nm,q in [('raw',x),('A+',af(x)),('A-',ai(x)),('BA+',bf(af(x))),('BA-',bf(ai(x))),('Braw',bf(x)),('A-B',ai(bf(x))),('A+B',af(bf(x)))]:\\n for d in [1,2,3]:\\n  T=poly(q,d); res.append((evaluate(T),nm+str(d)))\\n f,g=[poly(q,2)@c for c in C]\\n for name,z in [('C1',f),('C2',g),('fullC',np.c_[f,g]),('C1C2prod',f*g),('C1+C2',f+g),('C1-C2',f-g),('C2-C1sq',g-f*f),('tanhC1',np.tanh(f)),('tanhC2',np.tanh(g))]:\\n  for d in [1,2]:\\n   T=poly(z,d); res.append((evaluate(T),nm+name+str(d))); res.append((evaluate(np.c_[poly(q,2),T[:,1:]]),nm+'Q+'+name+str(d)))\\nprint('best first split');print(*sorted(res)[:26],sep='\\\\n');print('best worst folds');print(*sorted(res,key=lambda a:a[0][2])[:20],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine calibration plus archive readout) -> H2 (test polynomial C and staged readouts); archive 52/20 MAE is 0.072683 for the scalar and 0.004042 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select a readout solely on the specified split\",\n      \"rejected_reason\": \"Additional shuffled folds can expose high-variance fits that happen to score well on the specified split.\"\n    }\n  ],\n  \"rationale\": \"Panel B is affine to measurement precision, while C is not. Test whether C has a recoverable low-degree operator and compare calibrated compositions across the prescribed split and four additional folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d1885f3d32154ca326af679addb51f8459029334b469318651df63ef988a2f87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29558.27,
+      "usage_known": true,
+      "prompt_tokens": 24021,
+      "cached_tokens": 12672,
+      "completion_tokens": 1216
+    }
+  ]
+}

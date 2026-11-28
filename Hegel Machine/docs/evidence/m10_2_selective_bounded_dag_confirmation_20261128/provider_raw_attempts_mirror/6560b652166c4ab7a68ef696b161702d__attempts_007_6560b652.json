@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6560b652166c4ab7a68ef696b161702d",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:46.194805+00:00",
+  "ended_at_utc": "2026-11-28T16:19:17.124754+00:00",
+  "request_sha256": "1566350a4e357d372f3782ebd67f3406bcfd5623af22073de31ea50a2925f9ec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52704,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36091,
+    "cached_tokens": 12672,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/heads.py <<'PY'\\nfrom features import *\\nfrom scipy.special import erf\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import product\\nfrom scipy.linalg import qr\\nrng=np.random.default_rng(776)\\nF=np.c_[z,b,c,e]; Z=D(np.c_[z,b]); i,j=splits[0]\\nfor typ in ['grow','decay','drift','decay_drift','two']:\\n def phi(r):\\n  v=np.exp(-r*ts)\\n  return dict(grow=(1-v)[:,None],decay=D(v[:,None]),drift=np.c_[1-v,ts],decay_drift=np.c_[np.ones(len(ts)),v,ts],two=np.c_[1-v,1-np.exp(-.25*ts)])[typ]\\n vals=[]\\n for row in g:\\n  def loss(r):\\n   a=phi(r);return np.mean((a@fit(a,row)-row)**2)\\n  r=minimize_scalar(loss,bounds=(.03,4),method='bounded').x;a=phi(r);vals.append(np.r_[r,fit(a,row),loss(r)])\\n vals=np.array(vals); print('traj',typ,'rms',np.sqrt(vals[:,-1].mean()),'param quantiles',np.quantile(vals[:,:-1],[0,.1,.5,.9,1],axis=0).round(4)); print('affine params',np.mean(abs(Z[j]@fit(Z[i],vals[i,:-1])-vals[j,:-1]),axis=0));print('first',vals[:6,:-1].round(4))\\nprint('telemetry',s['telemetry_vec'],'summary',t['summary']);print('y+features',np.c_[y,z,b][:12].round(3))\\nfn={'tanh':(np.tanh,lambda q:1-np.tanh(q)**2),'sin':(np.sin,np.cos),'asinh':(np.arcsinh,lambda q:1/np.sqrt(1+q*q)),'erf':(erf,lambda q:2/np.sqrt(np.pi)*np.exp(-q*q)),'rat':(lambda q:q/(1+q*q),lambda q:(1-q*q)/(1+q*q)**2),'cos':(np.cos,lambda q:-np.sin(q))}\\nfor cols,N in [('zb',Z),('all',D(F))]:\\n for name,(f,df) in fn.items():\\n  for nh in [1,2,3]:\\n   d=N.shape[1]; X=N[i]; I=np.eye(d*(nh+1)+nh); best=None\\n   for strength in [.002,.025]:\\n    for seed in range(5):\\n     def pred(q,X):\\n      p=q[:d]; W=q[d:-nh].reshape(d,nh); a=q[-nh:];return X@p+f(X@W)@a\\n     def loss(q):return np.r_[pred(q,X)-y[i],strength*q]\\n     def jac(q):\\n      W=q[d:-nh].reshape(d,nh);a=q[-nh:]; P=X@W\\n      return np.r_[np.c_[X,(X[:,:,None]*(df(P)*a)[:,None,:]).reshape(len(X),-1),f(P)],strength*I]\\n     st=np.r_[fit(X,y[i]),rng.normal(0,.6,d*nh),rng.normal(0,.5,nh)]\\n     R=least_squares(loss,st,jac=jac,max_nfev=500)\\n     if best is None or R.cost<best.cost:best=R\\n    print(cols,name,nh,strength,round(np.mean(abs(pred(best.x,N[j])-y[j])),5),round(np.std(pred(best.x,X)-y[i]),5),flush=True)\\n    if nh==1 and np.mean(abs(pred(best.x,N[j])-y[j]))<.07:print(best.x.round(4))\\n    best=None\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/heads.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 exact panel features with generic kernels → H2 compact nonlinear readouts and row-dependent relaxation; the best 52/20 MAEs so far are 0.09461 for y and 0.05391 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep tuning generic kernels\",\n      \"rejected_reason\": \"The recovered coordinates improved both targets, but neither reached tolerance; testing compact readout and relaxation laws is more informative.\"\n    }\n  ],\n  \"rationale\": \"Compare nonlinear scalar readouts fitted only on the first 52 labels, and use per-row trajectory fits to distinguish a varying relaxation rate from a missing temporal term.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a11f55103d40e5f000e4fc10c7ff999231aaf1ddf7e8fcb7851d4636c1c2a6d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31409.26,
+      "usage_known": true,
+      "prompt_tokens": 36091,
+      "cached_tokens": 12672,
+      "completion_tokens": 1255
+    }
+  ]
+}

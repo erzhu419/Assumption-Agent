@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7275f01b4a240e488c454e88af67b33",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:24.700810+00:00",
+  "ended_at_utc": "2026-11-28T15:49:13.079689+00:00",
+  "request_sha256": "53a61dce0f9fa33a7080c0e9a32766351bbf3c51bde80f8f1b155bf12748285a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79990,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44631,
+    "cached_tokens": 12672,
+    "completion_tokens": 2134
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/joint.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'/holdout_task');import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; Y=np.c_[y,T]; a,z,c,d,b,f,p=m._routes(s,x); n=52; ls=m._ls\\nU,S,V=np.linalg.svd(T[:n]-T[:n].mean(0),full_matrices=False); amp=(T-T[:n].mean(0))@V[0];print('S',S,'y/amp',np.corrcoef(y,amp)[0,1]);print('y residual from all traj',np.mean(abs(m._aff(T[n:])@ls(m._aff(T[:n]),y[:n])-y[n:])),ls(m._aff(T[:n]),y[:n])); print('amp examples',np.round(np.c_[z,amp,y][np.argsort(amp)[::6]],3));\\nR={'x':x,'z':z,'c':c,'d':d,'b':b,'f':f,'p':p}; u,v=(s['panel_b'][j] for j in ('u','v')); k=s['panel_c']; u2=k['u'];\\nfor tag,fn in [('tan',lambda x:np.arctan(2*x**3)),('tanh',lambda x:np.tanh(1.25*x**3)),('rat',lambda x:x**3/(1+.55*x**4)),('asinh',lambda x:np.arcsinh(1.25*x**3))]:\\n F=lambda x:m._aff(fn(x)); q=ls(F(u),v); R['B'+tag]=F(z)@q; R['I'+tag]=(z-q[0])@np.linalg.pinv(q[1:]); print(tag,np.std(F(u)@q-v))\\ndef std(w):return (w-w[:n].mean(0))/np.maximum(w[:n].std(0),1e-9)\\ndef dot(w):return w@w.T/w.shape[1]\\ndef poly(w,k):return std(np.column_stack([np.prod(w[:,ii],axis=1) for ii in combinations_with_replacement(range(w.shape[1]),k)]))\\ndef group(w):\\n w=std(w); W=dot(w); Q=dot(poly(w,2)); C=dot(poly(w,3)); D=cdist(w,w,'sqeuclidean')/w.shape[1]; return W,Q,C,D\\nK={}\\nfor k,w in R.items():\\n W,Q,C,D=group(w); K[k+'lin']=W;K[k+'q']=W+Q;K[k+'p3']=W+.5*Q+C;K[k+'int']=Q+C\\n for l in [.35,.7,1.4,2.8,5.6]:\\n  d0=np.sqrt(5*D)/l; K[k+'m'+str(l)]=(1+d0+d0*d0/3)*np.exp(-d0);K[k+'r'+str(l)]=np.exp(-.5*D/l**2)\\nfor k in [q for q in R if q.startswith(('B','I'))]+['b','c','d','p']:\\n for l in [.7,1.4,2.8]:\\n  K['sum'+k+str(l)]=K['zm'+str(l)]+K[k+'m'+str(l)]; K['prod'+k+str(l)]=K['zm'+str(l)]*K[k+'m'+str(l)]; K['poly'+k+str(l)]=K['zp3']+K[k+'q']+.25*K['zlin']*K[k+'lin']\\nP=[];L=[]; names=[]\\nfor k,G in K.items():\\n for r in (1e-6,.0001,.001,.01,.04):\\n  g=G[:n,:n]+5+np.eye(n)*r; ff=cho_factor(g); inv=cho_solve(ff,np.eye(n)); B=inv@Y[:n]; L.append(Y[:n]-B/np.diag(inv)[:,None]); P.append((G[n:,:n]+5)@B);names.append((k,r))\\nL=np.array(L);P=np.array(P); ve=np.mean(abs(P-Y[n:]),axis=1); le=np.mean(abs(L-Y[:n]),axis=1)\\nfor j in [0,1]:\\n v=ve[:,0] if j==0 else ve[:,1:].mean(1); l=le[:,0] if j==0 else le[:,1:].mean(1); print('best',j,[(names[i],round(v[i],5),round(l[i],5)) for i in np.argsort(v)[:9]]);print('LOO',[(names[i],round(v[i],5),round(l[i],5)) for i in np.argsort(l)[:9]]);\\n for k in [4,12,32,80]:\\n  i=np.argsort(l)[:k]; print('pool',j,k,np.mean(abs(P[i,:,0].mean(0)-y[n:])) if j==0 else np.mean(abs(P[i,:,1:].mean(0)-T[n:])));\\n# Fit a common nonlinear drive by sparse projection pursuit, and look for extrapolation failure separately.\\nfrom scipy.optimize import minimize\\nrng=np.random.default_rng(1334)\\nfor key,w in [('z',z),('x',x),('zb',np.c_[z,b]),('zc',np.c_[z,c]),('zcd',np.c_[z,c,d]),('zB',np.c_[z,R['Btan']])]:\\n w=std(w);D=w.shape[1]; target=np.c_[y,amp]; target=target/target[:n].std(0)\\n vals=[]\\n for fun in [np.tanh,np.arcsinh,np.sin]:\\n  for rank in (2,3,4):\\n   def F(t):return m._aff(np.c_[w,fun(w@t.reshape(D+1,rank)[:-1]+t.reshape(D+1,rank)[-1])]);\\n   def loss(t):\\n    a=F(t)[:n]; q=np.linalg.solve(a.T@a+.015*np.eye(a.shape[1]),a.T@target[:n]);return np.r_[(a@q-target[:n]).ravel(),.025*t,.05*q.ravel()]\\n   best=None\\n   for i in range(5):\\n    f0=least_squares(loss,rng.normal(0,.45,(D+1)*rank),max_nfev=100)\\n    if best is None or f0.cost<best.cost: best=f0\\n   a=F(best.x);q=ls(a[:n],Y[:n]);e=np.mean(abs(a[n:]@q-Y[n:]),0);vals.append((round(e[0],4),round(e[1:].mean(),4),fun.__name__,rank,round(best.cost,4)))\\n print('PPR',key,vals,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent kernel heads) -> H2 (shared nonlinear drive and operator-composition kernels); public 52/20 MAEs are 0.088874 for y and 0.051224 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the saved baseline\",\n      \"rejected_reason\": \"It misses both numerical gates.\"\n    }\n  ],\n  \"rationale\": \"Test whether the dominant trajectory mode and scalar target share a nonlinear drive. Compare that model with operator-composition kernels using training-only fits and report held-out error for each output separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f194a718b4234c73f36e40cdb1757475addcc9ee5297f12a08645cc635722b94",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49386.84,
+      "usage_known": true,
+      "prompt_tokens": 44631,
+      "cached_tokens": 12672,
+      "completion_tokens": 2134
+    }
+  ]
+}

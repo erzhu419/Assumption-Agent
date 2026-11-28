@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "293be681400342a388f7b9d73725a94d",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:44.907084+00:00",
+  "ended_at_utc": "2026-11-28T15:36:27.274785+00:00",
+  "request_sha256": "5212322726b556bac7520e7f1801d32d75d1d766fa87359219dc5b8302c9f531",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63921,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38910,
+    "cached_tokens": 12672,
+    "completion_tokens": 1599
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; python3 /tmp/rank.py | head -12; grep 'sp_idx =' /holdout_task/test_dag_candidate.py; cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np,runpy,itertools\\nfrom scipy.linalg import qr\\nm=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=m['_coordinates'](s); M=m['_maps'](s,X); z=X[0][:72]; c,d=(a[:72] for a in M[0]); Z=(z,c,d); Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(Y); rng=np.random.default_rng(123); splits=[np.arange(54,n),np.arange(52,n),*np.array_split(rng.permutation(n),4)];\\ndef poly(x,k):\\n return np.column_stack([np.prod(x[:,i],axis=1) for j in range(1,k+1) for i in itertools.combinations_with_replacement(range(x.shape[1]),j)])\\nR=np.column_stack([z*z/(1+a*z*z) for a in [.12,.25,.45,.8]]); H=np.column_stack([np.tanh(a*z) for a in [.6,1,1.5]]+[np.sin(a*z) for a in [1,2,3]]+[z/(1+a*abs(z)) for a in [.4,1]]); mx=np.c_[z,c,d]; modules={'z2':poly(z,2),'z3':poly(z,3),'z4':poly(z,4),'z5':poly(z,5),'cd':np.c_[c,d],'R':R,'H':H,'zR':(z[:,:,None]*R[:,None,:]).reshape(n,-1),'zH':(z[:,:,None]*H[:,None,:]).reshape(n,-1),'c2':poly(c,2),'d2':poly(d,2),'zc':poly(np.c_[z,c],2),'all2':poly(mx,2)}; out=[]\\nfor tags in ['z2 cd','z3 cd','z4 cd','z5 cd','z2 R','z3 R','z4 R','z2 R H','z3 R H','z4 R H','z3 R zR','z3 R H zH','z2 c2 d2','z2 cd H','zc cd','zc cd R','zc cd R H','all2','all2 R','all2 R H','z3 all2 R H','z4 R H zH zR']:\\n a=np.column_stack([modules[t] for t in tags.split()]); folds=[]\\n for te in splits:\\n  tr=np.setdiff1d(np.arange(n),te); mu=a[tr].mean(0); sd=np.maximum(a[tr].std(0),.03); f=(a-mu)/sd; yy=Y[tr]-Y[tr].mean(0); U,S,V=np.linalg.svd(f[tr],full_matrices=False); g=f[te]@V.T; E=[]\\n  for lam in [1e-9,1e-6,1e-4,.001,.01,.1,1]:\\n   pred=(g*(S/(S*S+lam)))@(U.T@yy)+Y[tr].mean(0); er=abs(pred-Y[te]); E.append([er[:,0].mean(),er[:,1:].mean()]);\\n  # Individual greedy sparse regression, with fixed path length for verification.\\n  for kind in ['omp','forward']:\\n   es=[]\\n   F=f[tr]; norm=np.sum(F*F,axis=0).clip(1e-10); ys=yy[:,[0,3,-1]]; cols=[]; arr=[]\\n   for count in range(24):\\n    Q=np.linalg.qr(F[:,cols])[0] if cols else F[:,:0]; rem=ys-Q@(Q.T@ys); div=(norm-np.sum((Q.T@F)**2,axis=0)).clip(1e-10) if kind=='forward' else norm; scores=np.sum(((F.T@rem)/np.maximum(ys.std(0),.1))**2,axis=1)/div; scores[cols]=-1; cols.append(int(np.argmax(scores))); pred=f[te][:,cols]@np.linalg.lstsq(F[:,cols],yy,rcond=1e-8)[0]+Y[tr].mean(0); er=abs(pred-Y[te]); arr.append([er[:,0].mean(),er[:,1:].mean()]);\\n   E.extend(arr[3::4]);\\n  folds.append(E)\\n ff=np.array(folds); train_err=np.linalg.norm(np.c_[np.ones(n),a]@np.linalg.lstsq(np.c_[np.ones(n),a],Y,rcond=1e-8)[0]-Y)/np.sqrt(Y.size); print(tags,'in',round(train_err,5),'best',round(ff.max(axis=(0,2)).min(),4), np.round(ff[0].min(0),4));\\n for i in range(ff.shape[1]): out.append((ff[:,i].max(),tags,i,np.round(ff[:,i],4).tolist()));\\nprint('TOP',*sorted(out)[:16],sep='\\\\n')\\nPY\\npython3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: panel features alone → H2: identify a compact target-response basis in calibrated coordinates; a tested feature combination still has worst-fold MAE 0.1949.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the rotated panel map\",\"rejected_reason\":\"Feature comparisons favor the unrotated calibrated coordinates, and the reported rotated combinations remain well above tolerance.\"}],\"rationale\":\"Probe algebraic target-response bases across held-out rows, fitting only on each fold’s training rows, to distinguish missing terms from kernel conditioning.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6ac961584471e307338c0b23eba3faf97d418785e4085e2de1b3fe65b459f025",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42906.72,
+      "usage_known": true,
+      "prompt_tokens": 38910,
+      "cached_tokens": 12672,
+      "completion_tokens": 1599
+    }
+  ]
+}

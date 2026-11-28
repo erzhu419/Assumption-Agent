@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b681bb4405a74ef89ad88c9ebabc1e27",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:00.799194+00:00",
+  "ended_at_utc": "2026-11-28T16:02:29.979470+00:00",
+  "request_sha256": "7a2cb00075a3d559bc2a33ee260bc822830299263140a88e2d1829a7fc02530d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55369,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34447,
+    "cached_tokens": 12672,
+    "completion_tokens": 1173
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\np = Path('/holdout_task')\\ndef load(path):\\n    ns = {'__name__': '_isolated_node'}\\n    exec(compile(path.read_bytes(), str(path), 'exec'), ns)\\n    return ns\\nnode = load(p / 'node_00.py')\\nsink = load(p / '_frozen_nodes/node_01.py')['run_node']\\nbatches = pickle.loads((p / 'public_batch.pkl').read_bytes())\\nresults, horizons, panel_err = [], [], []\\nfor item in batches:\\n    st = item['study']\\n    tr = st['train']\\n    pb = st['panel_b']\\n    u, v = pb['u'], pb['v']\\n    for i in range(len(u)):\\n        keep = np.arange(len(u)) != i\\n        got = node['_panel_b']({'u': u[keep], 'v': v[keep]}, u[i:i+1])\\n        panel_err.append(got[0] - v[i])\\n    rng = np.random.default_rng(391)\\n    folds = list(np.array_split(rng.permutation(len(tr['x'])), 4))\\n    folds += [np.argsort(np.linalg.norm(tr['x'], axis=1))[-12:]]\\n    for j, held in enumerate(folds):\\n        keep = np.setdiff1d(np.arange(len(tr['x'])), held)\\n        a = st['panel_a']\\n        pa_keep = np.arange(len(a['u'])) != j % len(a['u'])\\n        recipe = {**st, 'panel_a': {k: a[k][pa_keep] for k in ('u', 'v')}, 'train': {k: tr[k][keep] for k in ('x','y','traj')}, 'test': {'x': tr['x'][held]}}\\n        w = node['run_node']({'__input__': recipe})\\n        assert set(w) == {'w'} and w['w'].shape == (len(tr['x']), u.shape[1]) and np.isfinite(w['w']).all()\\n        out = sink({'__input__': recipe, 'node_00': w})\\n        e = np.abs(out['state_pred'] - tr['traj'][held])\\n        results.append([np.abs(out['y_hat'] - tr['y'][held]).mean(), e.mean()])\\n        horizons.append(e.mean(axis=0))\\n        y, tail = out['y_hat'], out['state_pred'][:, -1]\\n        np.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), tail.mean(), tail.std()])\\n    tc = {**st, 'train': {'x': tr['x']}}\\n    np.testing.assert_array_equal(node['run_node']({'__input__': tc})['w'], node['run_node']({'__input__': st})['w'])\\nprint('Stress fold MAE [y, trajectory]:', np.round(results, 6).tolist())\\nprint('Worst fold [y, trajectory]:', np.round(np.max(results, axis=0), 6).tolist())\\nprint('Worst fold-horizon trajectory MAE:', float(np.max(horizons)))\\nprint('Refitted panel-B leave-one-row-out RMS:', float(np.mean(np.square(panel_err))**.5))\\nassert np.isfinite(results).all() and np.isfinite(panel_err).all()\\nassert np.max(results) <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: an even cosine warp replaces the affine panel-B map; the isolated DAG validator accepted with public MAEs of 0.009064 for y and 0.006597 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a batch_solver.py for the standalone schema script\",\n      \"rejected_reason\": \"It is outside the editable DAG cut; the DAG-specific validator already checked output shapes, diagnostics, execution counts, and numeric novelty.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the unchanged node on alternate folds and high-norm inputs, refit the cosine frequency while withholding each panel-B row, and verify that the upstream node does not depend on training targets.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "69a1025911fc76e137c4a5cbc6c1fe5ddeaaad547268e308260df835ac1afe99",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29810.23,
+      "usage_known": true,
+      "prompt_tokens": 34447,
+      "cached_tokens": 12672,
+      "completion_tokens": 1173
+    }
+  ]
+}

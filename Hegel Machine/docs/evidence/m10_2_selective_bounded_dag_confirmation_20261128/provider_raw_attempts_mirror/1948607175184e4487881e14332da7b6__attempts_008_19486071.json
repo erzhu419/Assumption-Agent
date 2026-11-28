@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1948607175184e4487881e14332da7b6",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:56.807262+00:00",
+  "ended_at_utc": "2026-11-28T15:53:22.292422+00:00",
+  "request_sha256": "62de03e00d774a7ae46e1757f0f91061f29f7bb97d64325c5fa05b606613f703",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47796,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30893,
+    "cached_tokens": 12672,
+    "completion_tokens": 930
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot = Path('/holdout_task')\\nf = [runpy.run_path(str(root / ('node_00.py' if i == 0 else f'_frozen_nodes/node_{i:02d}.py')))['run_node'] for i in range(4)]\\nbatch = pickle.loads((root/'public_batch.pkl').read_bytes())\\nprint('public studies:', len(batch))\\nfor k, record in enumerate(batch):\\n    st = record['study']; tr = st['train']; n = len(tr['y']); all_rows = np.arange(n)\\n    folds = [('blocked', j, v) for j, v in enumerate(np.array_split(all_rows, 5))]\\n    folds += [('shuffled', j, v) for j, v in enumerate(np.array_split(np.random.default_rng(82).permutation(n), 5))]\\n    scores = []\\n    for method, j, valid in folds:\\n        fit = np.setdiff1d(all_rows, valid)\\n        s = copy.deepcopy(st)\\n        s['train'] = {name: tr[name][fit] for name in ('x', 'y', 'traj')}\\n        last = tr['traj'][fit, -1]\\n        s['train']['summary'] = np.array([tr['y'][fit].mean(), tr['y'][fit].std(), last.mean(), last.std()])\\n        s['test'] = {'x': tr['x'][valid]}\\n        a = f[0]({'__input__': s}); b = f[1]({'__input__': s}); c = f[2]({'node_00': a, 'node_01': b}); o = f[3]({'node_01': b, 'node_02': c})\\n        assert a['features'].shape == (n, 8) and np.isfinite(a['features']).all()\\n        yy = abs(o['y_hat'] - tr['y'][valid]); tt = abs(o['state_pred'] - tr['traj'][valid])\\n        assert np.isfinite(yy).all() and np.isfinite(tt).all()\\n        scores.append((yy.mean(), tt.mean(), tt.mean(axis=0).max()))\\n        print(k, method, j, 'y/traj/worst-horizon', np.round(scores[-1], 6))\\n    print(k, 'worst across alternate folds', np.round(np.max(scores, axis=0), 6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived rational response -> H2 affine, cyclic-product, and arctangent response; worst calibration-fold MAE is 0.000231 and the official DAG test passed with scalar and trajectory MAEs of 0.013356 and 0.009216.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune against the official split\",\n      \"rejected_reason\": \"Both official MAEs already have substantial margin; additional splits are more informative than further tuning on that split.\"\n    }\n  ],\n  \"rationale\": \"The saved candidate passed the clean-process official test. Stress-test the unchanged artifact on blocked and shuffled row folds, scoring both targets and individual trajectory horizons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "13dfb1e74aca934fe0332cb528964959d8c7ef0217719f8abfa058bb7950849c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25484.02,
+      "usage_known": true,
+      "prompt_tokens": 30893,
+      "cached_tokens": 12672,
+      "completion_tokens": 930
+    }
+  ]
+}

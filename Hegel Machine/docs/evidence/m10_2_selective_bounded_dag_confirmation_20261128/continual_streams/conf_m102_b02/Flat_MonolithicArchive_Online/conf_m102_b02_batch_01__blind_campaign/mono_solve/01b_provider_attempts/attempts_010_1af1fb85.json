@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1af1fb85f1e348b6aa69702c9c1a4ec8",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:19.305531+00:00",
+  "ended_at_utc": "2026-11-28T15:03:57.529897+00:00",
+  "request_sha256": "259aff5dd402b194edb0861ef65574c68c44d407bb300e81b42f6e7234ea3529",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65236,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41646,
+    "cached_tokens": 12672,
+    "completion_tokens": 1649
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate inputs, compose the measured operators, and fit two readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    a = np.column_stack((np.ones(len(u)), u))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        c = _ls(a[keep], v[keep])\\n        r = np.linalg.norm(a @ c - v, axis=1)\\n        take = r < max(.001, 3 * np.median(r))\\n        if take.sum() < a.shape[1] or np.array_equal(take, keep):\\n            return c\\n        keep = take\\n    return _ls(a[keep], v[keep])\\n\\n\\ndef _operator(u, v, fn):\\n    def design(w, q):\\n        return np.column_stack((np.ones(len(w)), w, fn(w * np.exp(q))))\\n\\n    def objective(q):\\n        d = design(u, q)\\n        return (d @ _ls(d, v) - v).ravel()\\n\\n    fits = [least_squares(objective, np.full(u.shape[1], np.log(a)),\\n                          bounds=(-2, 2), max_nfev=100)\\n            for a in (.65, 1.4, 2.5, 3.8)]\\n    q = min(fits, key=lambda f: f.cost).x\\n    c = _ls(design(u, q), v)\\n    return lambda w: design(w, q) @ c\\n\\n\\ndef _ridge(d, target, lam, n):\\n    m = d[:n].mean(0)\\n    scale = np.maximum(d[:n].std(0), 1e-8)\\n    w = (d - m) / scale\\n    a = w[:n]\\n    ym = target.mean(0)\\n    gram = a.T @ a + lam * np.eye(a.shape[1])\\n    return w[n:] @ np.linalg.solve(gram, a.T @ (target - ym)) + ym\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    cal = _calibration(study['panel_a'])\\n    x = np.vstack((train['x'], test['x']))\\n    z = np.linalg.solve(cal[1:].T, (x - cal[0]).T).T\\n    pb, pc = study['panel_b'], study['panel_c']\\n    b = _operator(pb['u'], pb['v'], erf)\\n    c = _operator(pc['u'], pc['v1'], np.arcsinh)\\n    r, h = c(z), c(b(z))\\n    dy = np.column_stack((z, h, (z * h).sum(1)))\\n    ds = np.column_stack((z, r, h, z * r, z * h, r * h))\\n    t = np.asarray(train['traj'], dtype=float)\\n    modes = np.linalg.svd(t, full_matrices=False)[2][:2]\\n    y = _ridge(dy, np.asarray(train['y']), .0003, n)\\n    state = _ridge(ds, t @ modes.T, .003, n) @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/cv_exact.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['y']); rng=np.random.default_rng(218)\\ndef score(i,j):\\n    d=dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]}); r=m.solve_batch(d); e=abs(r['state_pred']-tr['traj'][j]); return np.r_[abs(r['y_hat']-tr['y'][j]).mean(),e.mean(),e.mean(0)]\\nP=[np.arange(N)]+[rng.permutation(N) for _ in range(18)]; E=np.array([score(p[:52],p[52:]) for p in P]); print('public:',E[0]); print('worst column-wise:',E.max(0)); print('mean:',E.mean(0)); X=tr['x']; E=np.array([score(p[:52],p[52:]) for p in [np.argsort(sign*X[:,i]) for i in range(4) for sign in [-1,1]]]); print('directional extrapolation worst:',E.max(0)); print(E[:,:2]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 -I /tmp/cv_exact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive readouts -> H2 calibrated skip and composed-branch products; the trajectory prototype scores 0.0136 public mean MAE and 0.0364 worst terminal MAE across 19 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unrestricted quadratic readout\",\n      \"rejected_reason\": \"The scalar cross-product coefficients are nearly equal, and the trajectory prototype generalizes better without within-branch squares.\"\n    }\n  ],\n  \"rationale\": \"Write the solver with a shared scalar interaction coefficient and a separate two-mode trajectory readout. Test the exact artifact against the schema, repeated holdouts, and directional extrapolation slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "68493653508a08f7edb677098f4b630460ac6ecb9d535a3fed3b3d71fdce6f73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38222.82,
+      "usage_known": true,
+      "prompt_tokens": 41646,
+      "cached_tokens": 12672,
+      "completion_tokens": 1649
+    }
+  ]
+}

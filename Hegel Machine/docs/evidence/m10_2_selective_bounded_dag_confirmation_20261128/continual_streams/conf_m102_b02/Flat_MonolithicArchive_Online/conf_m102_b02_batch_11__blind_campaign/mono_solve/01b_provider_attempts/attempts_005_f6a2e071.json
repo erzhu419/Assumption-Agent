@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6a2e07114d14385bd47b7ff2cae7eb8",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:54:59.288846+00:00",
+  "ended_at_utc": "2026-11-28T15:55:28.403867+00:00",
+  "request_sha256": "3e282e740416fa4a96a26479bf96764c9d856abffb804d5c8ffe61f2d49db22e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38109,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27534,
+    "cached_tokens": 12672,
+    "completion_tokens": 1132
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,glob,importlib.util,copy\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; Y=np.c_[tr['y'],tr['traj']]; n=52\\nI=lambda a:np.c_[np.ones(len(a)),a]\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef poly(a,d):\\n return np.column_stack([np.prod(a[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(a.shape[1]),k)])\\ndef score(f):\\n p=f[n:]@ls(f[:n],Y[:n]); e=abs(p-Y[n:]);return np.round([e[:,0].mean(),e[:,1:].mean()],6)\\np=s['panel_a']; u=p['u']; v=p['v']; a=I(u); keep=np.ones(len(u),bool)\\nfor _ in range(8):\\n c=ls(a[keep],v[keep]); r=np.linalg.norm(a@c-v,axis=1); keep=r<max(.003,4*np.median(r))\\nprint('A',keep.sum(),c,'err',np.sqrt(np.mean((a[keep]@c-v[keep])**2)))\\nfor d in [2,3]:\\n a2=poly(u,d); print('A poly',d,np.sqrt(np.mean((a2[keep]@ls(a2[keep],v[keep])-v[keep])**2)))\\nz=np.linalg.solve(c[1:].T,(x-c[0]).T).T\\np=s['panel_b']; b=ls(I(p['u']),p['v']); w=I(z)@b\\np=s['panel_c']; u=p['u']; pair=np.triu_indices(4,1); F={'affine':I,'pairs':lambda a:I(a[:,pair[0]]*a[:,pair[1]]),'square':lambda a:I(a*a),'poly2':lambda a:poly(a,2),'cube':lambda a:I(np.c_[a,a**3]),'tanh':lambda a:I(np.tanh(2*a))}; C=[]\\nfor k,v in p.items():\\n if k=='u':continue\\n for name,f in F.items():\\n  a=f(u); h=a@ls(a,v)-v; lev=np.sum(a*np.linalg.pinv(a).T,axis=1); print('C',k,name,np.sqrt(np.mean(h**2)),np.sqrt(np.mean((h/(1-lev[:,None]))**2)))\\n  for label,base in [('z',z),('w',w)]:\\n   q=f(base)@ls(a,v); print('    ',label,score(I(np.c_[z,q])),score(I(np.c_[z,q,(z[:,:,None]*q[:,None,:]).reshape(len(x),-1)])))\\nfor label,base in [('x',x),('z',z),('w',w)]:\\n for d in [1,2,3]:print(label,d,score(poly(base,d)))\\nfor fn in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('candidate',fn); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\n  st=copy.deepcopy(s);st['train']={k:v[:n] if k!='summary' else v for k,v in tr.items()}; st['test']['x']=x[n:]; out=m.solve_batch(st); e=abs(np.c_[out['y_hat'],out['state_pred']]-Y[n:]);print(fn.split('/')[-1], e[:,0].mean(),e[:,1:].mean())\\n except Exception as e:print(type(e),e)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived readouts) -> H2 (robust calibration plus a panel-supported nonlinear basis); prior 52/20 MAEs were 0.034310 for y and 0.054559 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure calibration residuals after outlier rejection, score auxiliary-panel bases by leave-one-out error, and test which compositions generalize to the prescribed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3bf90e28f8e2afabf2101c81fe0d07e3139808f12c1f71d87eb5f3c0920455bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29895.03,
+      "usage_known": true,
+      "prompt_tokens": 27534,
+      "cached_tokens": 12672,
+      "completion_tokens": 1132
+    }
+  ]
+}

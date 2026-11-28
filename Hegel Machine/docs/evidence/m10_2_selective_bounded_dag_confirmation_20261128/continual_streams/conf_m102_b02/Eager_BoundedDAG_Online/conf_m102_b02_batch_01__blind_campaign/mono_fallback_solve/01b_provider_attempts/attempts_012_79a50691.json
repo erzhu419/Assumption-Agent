@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79a506910ece4cbf906f3bb728aaa805",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:13.124447+00:00",
+  "ended_at_utc": "2026-11-28T15:13:41.705208+00:00",
+  "request_sha256": "1c48f0d25703a2c81bbac99efaabd5ddc5ddd98144e0a2d50103878d7920a783",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71230,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41427,
+    "cached_tokens": 12672,
+    "completion_tokens": 934
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nfor old, new in [('return (1+linear)**2 + 2*avg + 2*pair', 'return (1+linear)**2 + .30*avg + .30*pair'), ('np.tanh(2*z), np.tanh(2*b)', 'np.tanh(z), np.tanh(2.5*b)'), ('.001*np.eye(n)', '.004*np.eye(n)')]:\\n    assert old in s\\n    s = s.replace(old, new)\\np.write_text(s)\\nPY\\ncat > /tmp/verify_final.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(p)\\np.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']\\nn = len(tr['x'])\\nz, _ = m._coordinates(s, tr['x'])\\nrng = np.random.default_rng(20531)\\nfolds = [np.arange(52, n)] + [rng.choice(n, 20, replace=False) for _ in range(40)] + [np.argsort(np.linalg.norm(z, axis=1))[-20:]]\\nmetrics = []\\nfor j in folds:\\n    i = np.setdiff1d(np.arange(n), j)\\n    train = dict(tr, **{k:tr[k][i] for k in ('x','y','traj')})\\n    out = m.solve_batch(dict(s,train=train,test={'x':tr['x'][j]}))\\n    e = abs(out['state_pred'] - tr['traj'][j])\\n    metrics.append([abs(out['y_hat']-tr['y'][j]).mean(), e.mean(), e[:,-1].mean(), e.mean(0).max()])\\na = np.array(metrics)\\nassert np.isfinite(a).all() and (a[0,:2] <= .038).all()\\nprint('52/20:', a[0], 'shuffle worst:', a[1:-1].max(0), 'large radius:', a[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared saturation scale → H2 distinct calibrated-input and Panel B scales; the challenger achieved 52/20 MAEs of 0.02948 for y and 0.03009 for trajectory, with a worst shuffled endpoint MAE of 0.05755.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the rational-saturation challenger with the lowest prescribed-split MAE\",\n      \"rejected_reason\": \"It had a higher trajectory MAE on the large-radius holdout: 0.05471 versus 0.04515.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger that improved both prescribed-split MAEs, every shuffled worst-slice metric, and the large-radius holdout relative to baseline. The matched affine ablation raised prescribed-split MAEs to 0.09505 and 0.10200, supporting the nonlinear Panel B correction. Verify the exact promoted artifact before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c858fdfb374b12f96aac7799ff58c9441480f01130e77087b2098e76c3a6715d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28579.55,
+      "usage_known": true,
+      "prompt_tokens": 41427,
+      "cached_tokens": 12672,
+      "completion_tokens": 934
+    }
+  ]
+}

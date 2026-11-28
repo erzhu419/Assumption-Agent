@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "872e83a6a81f47909f80d7ed4104a6ef",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:18.312133+00:00",
+  "ended_at_utc": "2026-11-28T16:18:55.242196+00:00",
+  "request_sha256": "415bb41715773b5ee50e329f459900ba60badd67e9cc8b798be8528a16368543",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29866,
+    "cached_tokens": 12672,
+    "completion_tokens": 1602
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/head15.py <<'PY'\\nexec(open('/tmp/explore15.py').read().split(\\\"for k in ['panel_b'\\\")[0])\\nfrom scipy.optimize import minimize_scalar\\nB=s['panel_b']; C=s['panel_c']; t=s['telemetry_vec']; w=o['w']; n=len(tr['y'])\\ndef r(u):return u*np.roll(u,-1,axis=1)\\ncoef=fit(aff(B['u']),B['v']); u=np.linalg.solve(coef[1:].T,(w-coef[0]).T).T\\nprint('handoff condition',np.linalg.cond(coef[1:]))\\ndef prof(x,y,fn,lo,hi):\\n def cost(g):\\n  a=aff(fn(x,g)); return np.mean((y-a@fit(a,y))**2)\\n grid=np.linspace(lo,hi,25); j=np.argmin([cost(g) for g in grid]); return minimize_scalar(cost,bounds=(grid[max(j-1,0)],grid[min(j+1,len(grid)-1)]),method='bounded').x\\nbf=lambda x,g:np.cos(g*x)\\ng=prof(B['u'],B['v'],bf,0.4,5); bc=fit(aff(bf(B['u'],g)),B['v']); b=lambda x:aff(bf(x,g))@bc\\ncc=fit(aff(r(C['u'])),C['v1']); c=lambda x:aff(r(x))@cc\\nv2={'expm1':lambda x,g:np.expm1(g*x),'x+quad':lambda x,g:x+g*x*x,'x+quad-rat':lambda x,g:x+.45*x*x/(1+g*x*x),'x+sinquad':lambda x,g:x+.45*np.sin(g*x*x)/g,'x+cos':lambda x,g:x+.22*(1-np.cos(g*x)), 'x+softplus':lambda x,g:x+.45*np.log(np.cosh(g*x))*2/g**2, 'x+abs':lambda x,g:x+.45*2*(np.sqrt(1+g*x*x)-1)/g, 'x+atanquad':lambda x,g:x+.45*np.arctan(g*x*x)/g}\\nx=C['u']; y=C['v2'];\\nfor k in range(1,6):\\n d=aff(np.concatenate([x**j for j in range(1,k+1)],axis=1)); co=fit(d,y); print('v2 additive polynomial',k,err(d,y),np.round([np.sum(co[1:5]*co[1+4*j:5+4*j])/np.sum(co[1:5]**2) for j in range(k)],5))\\nbest=[]\\nfor k,fn in v2.items():\\n g2=prof(x,y,fn,.001,4); A=aff(fn(x,g2)); sc=err(A,y); print('v2',k,g2,sc); best.append((sc[1],k,g2,fit(A,y)))\\n_,k,g2,co=min(best); d=lambda x:aff(v2[k](x,g2))@co\\nz=b(u); maps={'u':u,'b':z,'c(u)':c(u),'c(b)':c(z),'d(u)':d(u),'d(b)':d(z),'d(c(b))':d(c(z)),'c(d(b))':c(d(z)),'c(b)+d(b)':c(z)+d(z),'c(b)-d(b)':c(z)-d(z),'c(b)+.22d(b)':c(z)+.22*d(z),'c(b)-.22d(b)':c(z)-.22*d(z),'b+.22c(b)':z+.22*c(z),'b+c(b)':z+c(z),'b+d(b)':z+d(z),'bc':np.c_[z,c(z)],'bd':np.c_[z,d(z)],'cd':np.c_[c(z),d(z)],'bcd':np.c_[z,c(z),d(z)]}\\nfs={'lin':lambda x:x,'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'asinh':np.arcsinh,'atan':np.arctan,'inv3':lambda x:np.sinh(np.arcsinh(x)/3),'rat':lambda x:x/(1+x*x),'rat2':lambda x:x*x/(1+x*x),'soft':lambda x:x/np.sqrt(1+x*x)}\\nfor target in [tr['y'],tr['traj']]:\\n scores=[]\\n for k,Z in maps.items():\\n  x=Z[:n]\\n  for name,fn in fs.items():\\n   for g0 in [.45,1.25,2.15,2.6,4]:\\n    F=fn(g0*x)\\n    for typ in [0,1,2,3]:\\n     if typ==0:A=aff(F)\\n     elif typ==1:A=aff(np.c_[x,F]) if name!='lin' else aff(x)\\n     elif typ==2:A=poly(F,2) if x.shape[1]<=8 else aff(np.c_[x,F,F**2])\\n     else:A=aff(np.c_[x,F,poly(F,2)[:,1+F.shape[1]:]]) if x.shape[1]<=8 else aff(np.c_[x,F,r(F)])\\n     if A.shape[1]>=48:continue\\n     score=err(A,target)[1]; scores.append((score,k,name,g0,typ))\\n print('head',target.shape, sorted(scores)[:32])\\nnp.savez('/tmp/map15.npz',**maps)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/head15.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial downstream transforms -> H2 cosine mixing followed by compact panel-C operators; panel-B cosine LOOCV MAE is 0.000092, while the archived worst head MAE is 0.579910.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use quadratic interpolation for panel B\",\n      \"rejected_reason\": \"Its LOOCV MAE of 0.379332 is far above the shared-frequency cosine model's 0.000092.\"\n    }\n  ],\n  \"rationale\": \"Recover calibrated coordinates from the frozen handoff, test compact panel-C fits, and screen downstream compositions independently for the scalar and trajectory heads.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "663662935184bd5845a208697f420739a4c9825bbebb9192b2cf5a51e6022594",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37408.86,
+      "usage_known": true,
+      "prompt_tokens": 29866,
+      "cached_tokens": 12672,
+      "completion_tokens": 1602
+    }
+  ]
+}

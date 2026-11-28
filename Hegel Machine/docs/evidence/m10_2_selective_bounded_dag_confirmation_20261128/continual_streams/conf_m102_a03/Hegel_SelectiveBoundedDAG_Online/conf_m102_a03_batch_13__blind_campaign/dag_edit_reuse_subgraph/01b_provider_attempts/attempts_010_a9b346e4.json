@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9b346e47a054a2e996c274a7a58af22",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:23:42.531150+00:00",
+  "ended_at_utc": "2026-11-28T16:24:20.941386+00:00",
+  "request_sha256": "a12eef9b8511a358eafc15d239b0e375aadc970daad3d821c67c94aa5e94aaf3",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 65009,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40502,
+    "cached_tokens": 5504,
+    "completion_tokens": 1719
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp node_00.py /tmp/node_00_v01.py\\npython3 - <<'PY'\\np='node_00.py'\\ns=open(p).read().replace('import itertools\\\\n','')\\npos=s.index('\\\\ndef run_node')\\ns=s[:pos]+'''\\ndef _readout(b, y):\\n    \\\"\\\"\\\"Profile an affine readout, symmetric interaction, and one sine index.\\\"\\\"\\\"\\n    pair = b[:, 0]*b[:, 2] + b[:, 1]*b[:, 3]\\n    base = np.column_stack((_affine(b), pair))\\n    n = len(y)\\n    a, x = base[:n], b[:n]\\n    q, _ = np.linalg.qr(a, mode='reduced')\\n    centered_y = y - q @ (q.T @ y)\\n\\n    def residual(h):\\n        v = np.sin(h[0] + x @ h[1:])\\n        v = v - q @ (q.T @ v)\\n        return centered_y - v * ((v @ centered_y) / max(v @ v, 1e-20))\\n\\n    direction = _fit(a, y)[1:-1]\\n    starts = [np.r_[phase, mult*direction] for phase in (0., .35, -.35)\\n              for mult in (.85, 1.55, 2.2, 2.9)]\\n    best = min((least_squares(residual, h, max_nfev=120) for h in starts),\\n               key=lambda opt: opt.cost)\\n    return np.column_stack((base, np.sin(best.x[0] + b @ best.x[1:])))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train, test = (np.asarray(study[k]['x'], float) for k in ('train', 'test'))\\n    n = len(train)\\n    z = _inverse(study['panel_a'], np.concatenate((train, test)))\\n    b = _branch(study['panel_b'], z)\\n    state = _affine(b)\\n    readout = _readout(b, np.asarray(study['train']['y'], float))\\n    return {'z': state[:n], 'zt': state[n:], 'readout_train': readout[:n], 'readout_test': readout[n:]}\\n'''\\nopen(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/stress13.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location('candidate',path)\\n    m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\np='/holdout_task/'\\nf,g,h=[load(p+k).run_node for k in ('node_00.py','node_01.py','_frozen_nodes/node_02.py')]\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; n=len(x); allrows=np.arange(n)\\nrng=np.random.default_rng(642)\\nsplits=[('public',np.arange(52,n))]+[(f'random-{i}',rng.permutation(n)[52:]) for i in range(24)]\\nm=load(p+'node_00.py'); z=m._inverse(s['panel_a'],x); b=m._branch(s['panel_b'],z)\\nfor name,score in [(f'b{i} tail',b[:,i]) for i in range(4)]+[('radius',np.linalg.norm(z,axis=1)),('readout tail',b@np.linalg.lstsq(b,y,rcond=None)[0])]:\\n    order=np.argsort(score);splits.extend([(name+' high',order[-12:]),(name+' low',order[:12])])\\nerrors=[]\\nfor name,j in splits:\\n    i=np.setdiff1d(allrows,j); st=dict(s,train={'x':x[i],'y':y[i],'traj':t[i]},test={'x':x[j]}); a=f({'__input__':st}); c=g({'__input__':st,'node_00':a}); out=h({'node_00':a,'node_01':c}); errors.append((name,np.mean(abs(out['y_hat']-y[j])),np.mean(abs(out['state_pred']-t[j]))))\\nfor group in (errors[:25],errors[25:]):\\n    print('slices',len(group),'worst readout',max(group,key=lambda row:row[1]),'worst trajectory',max(group,key=lambda row:row[2]))\\nassert max(row[1] for row in errors)<.038 and max(row[2] for row in errors)<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense cubic readout -> H2 symmetric bilinear interaction plus a profiled sine index; exploratory six-split worst readout MAE improves from 0.0411 to 0.01049.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the verified cubic readout\",\n      \"rejected_reason\": \"The sine index sharply reduces worst-split error with fewer fitted terms.\"\n    },\n    {\n      \"option\": \"Use a rational or tanh index\",\n      \"rejected_reason\": \"Both score similarly on exploratory splits, so neither has established a clear advantage over the sine index.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact challenger, fit its nonlinear parameters using training rows only, and verify the exact artifacts in isolated Python on the official split, new random splits, and coordinate-tail holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1aa39a9527567de44d7d071899bcd71c2b3a0a90b65588acda203ca97a9fd83c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39429.74,
+      "usage_known": true,
+      "prompt_tokens": 40502,
+      "cached_tokens": 5504,
+      "completion_tokens": 1719
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "897c5df8a9de4ecb9b0978f6f971884d",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:00.781906+00:00",
+  "ended_at_utc": "2026-11-28T16:02:31.540812+00:00",
+  "request_sha256": "09d8786ce30f274b1f5e02b3decc5ee7cd66363d8da9b98ea3e35d0885b2298b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36702,
+    "cached_tokens": 12672,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Recover latent coordinates and compose the two measured calibration maps.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, root\\nfrom scipy.special import erf\\n\\n\\ndef _sensor_coordinates(panel, observed):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    # Gross contamination is separated from the calibration cloud by row norm.\\n    radius = np.linalg.norm(v - np.median(v, axis=0), axis=1)\\n    keep = radius < 4 * max(np.median(radius), 1e-8)\\n    if np.count_nonzero(keep) < 8:\\n        keep = np.ones(len(u), dtype=bool)\\n\\n    def design(q):\\n        neighbor = np.roll(q, -1, axis=-1)\\n        return np.stack((np.ones_like(q), q, neighbor, q * neighbor, q**3), axis=-1)\\n\\n    d = design(u)\\n    coeff = np.column_stack([np.linalg.lstsq(d[keep, j, :], v[keep, j], rcond=None)[0]\\n                             for j in range(u.shape[1])])\\n    affine = np.diag(coeff[1]) + np.roll(np.diag(coeff[2]), 1, axis=0)\\n    initial = np.linalg.solve(affine, (observed - coeff[0]).T).T\\n\\n    def forward(q):\\n        return np.sum(design(q) * coeff.T, axis=-1)\\n\\n    recovered = []\\n    for row, guess in zip(observed, initial):\\n        result = root(lambda q: forward(q) - row, guess, tol=1e-10)\\n        q = result.x\\n        if np.max(np.abs(forward(q) - row)) > 1e-7:\\n            q = least_squares(lambda z: forward(z) - row, guess).x\\n        recovered.append(q)\\n    return np.asarray(recovered).reshape(observed.shape)\\n\\n\\ndef _profile_map(panel, target, query, kernel, starts):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', target))\\n\\n    def design(q, params):\\n        return np.column_stack((np.ones(len(q)), kernel(q, params), q, q**3, q**2))\\n\\n    def fit(params):\\n        d = design(u, params)\\n        w = np.linalg.lstsq(d, v, rcond=None)[0]\\n        return (d @ w - v).ravel(), w\\n\\n    best = None\\n    for start in starts:\\n        p = least_squares(lambda p: fit(p)[0], start, bounds=(-12, 12), max_nfev=200).x\\n        residual, w = fit(p)\\n        error = residual @ residual\\n        if best is None or error < best[0]:\\n            best = error, p, w\\n    _, p, w = best\\n    return design(query, p) @ w\\n\\n\\ndef _erf_cubic(q, p):\\n    return erf(np.exp(p[0]) * q + p[1] * q**3)\\n\\n\\ndef _rational(q, p):\\n    return q / (1.0 + np.exp(p[0]) * q**2)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    raw_train = np.asarray(study['train']['x'], dtype=float)\\n    raw_test = np.asarray(study['test']['x'], dtype=float)\\n    n = len(raw_train)\\n    x = _sensor_coordinates(study['panel_a'], np.concatenate((raw_train, raw_test)))\\n    b = _profile_map(study['panel_b'], 'v', x, _erf_cubic, ((.6, 4.), (.4, -.27)))\\n    c = _profile_map(study['panel_c'], 'v1', b, _rational, ((0.,), (-1.,), (1.,)))\\n    return dict(x_train=x[:n], x_test=x[n:], c_train=c[:n], c_test=c[n:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py; sed -n '120,205p' /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse cyclic-cubic A inversion → composed B/C maps with additive square and cube terms; the selected probe reached worst-slice MAEs of 0.02649 scalar and 0.00898 trajectory over five splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Keep the archived one-component C operator\",\"rejected_reason\":\"With corrected A coordinates, it still reaches 0.04851 worst-slice scalar MAE, compared with 0.02649 for the additive rational C map.\"}],\"rationale\":\"Save the calibration-only node now. The candidate restores the measured cyclic symmetry in A and adds independently profiled square and cube terms to C, without using labels or changing frozen consumers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "dfaeb85387eb628a28e7bf128718ee8fc60bc657411dabb6b7de1f8a93843891",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31388.62,
+      "usage_known": true,
+      "prompt_tokens": 36702,
+      "cached_tokens": 12672,
+      "completion_tokens": 1326
+    }
+  ]
+}

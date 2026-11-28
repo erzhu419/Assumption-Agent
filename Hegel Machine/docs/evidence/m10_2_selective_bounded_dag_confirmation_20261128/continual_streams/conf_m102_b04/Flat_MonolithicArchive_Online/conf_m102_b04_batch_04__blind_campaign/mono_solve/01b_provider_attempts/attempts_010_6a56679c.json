@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a56679c8713496b834fd2e83ff581d9",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:08.134604+00:00",
+  "ended_at_utc": "2026-11-28T15:13:42.753195+00:00",
+  "request_sha256": "02943f3505420ee8d48db8236a804c8cdd8ae6b101311c29bf1923fbf1f19df0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65182,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40327,
+    "cached_tokens": 12672,
+    "completion_tokens": 1424
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/scalar_structure.py <<'PY'\\nexec(open('/tmp/stress_batch.py').read().split('for mode in')[0])\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations\\n\\ndef fit(g,y,ridge=None):\\n    if ridge is None: return np.linalg.lstsq(g,y,rcond=None)[0]\\n    return np.linalg.lstsq(np.vstack((g,np.diag(np.sqrt(ridge)))),np.r_[y,np.zeros(len(ridge))],rcond=None)[0]\\n\\nE=[]\\nfor name,i,j in folds:\\n    T=m._time_basis(s['eval_times'],z[i]); v=z[i]@T\\n    p=m._profile(u[i],np.c_[y[i],v]); q=m._quadratic(u); g=m._design(u,q,p)\\n    co=np.linalg.lstsq(g[i],v,rcond=None)[0]; a=g@co\\n    h=g[:,15:]; h=h/np.linalg.norm(h[i],axis=0)\\n    # The measured state contains a stable common nonlinearity. Compare scalar readout laws that retain it.\\n    odd=np.c_[q[:,:5],h]\\n    av=a / np.std(a[i],axis=0)\\n    cs=[av[:,k]*av[:,l] for k,l in [(0,0),(0,1),(1,1)]]\\n    candidates={'base':g,'odd':odd,'diag':np.c_[odd,q[:,5:9]],'mixed':np.c_[odd,q[:,9:]],'statequad':np.c_[g,*cs], 'oddcubic':np.c_[g,u**3], 'stateodd':np.c_[q,av], 'statecross':np.c_[g,*cs,*[u[:,k]*av[:,l] for k in range(4) for l in range(2)]]}\\n    v=np.zeros_like(u); w=abs(u); c,k,r=np.exp(p); v=np.sign(u)*np.exp(k*np.log(np.maximum(w,1e-30))-r*np.log1p(c*w*w));\\n    for power in [1.5,2,3]:\\n        for weight in [0.1,0.4,1.6]:\\n            hh=np.sign(u)*(w**power); gg=np.c_[q,h,hh]; penalty=np.r_[0,np.repeat(.03,4),np.repeat(.25,10),np.zeros(4),np.repeat(weight,4)]; candidates[(power,weight)]=(gg,penalty)\\n    err=[]\\n    for key,gg in candidates.items():\\n        ridge=None\\n        if isinstance(gg,tuple): gg,ridge=gg\\n        c0=fit(gg[i],y[i],ridge); err.append(abs(gg[j]@c0-y[j]).mean())\\n    # Lagged data are used only as an explanatory check, not as unavailable prediction inputs.\\n    if name=='52/20':\\n        print('y summaries residual RMS',np.std(y[i]-g[i]@fit(g[i],y[i])), 'rank',np.linalg.svd(np.c_[fit(g[i],y[i])[-4:],co[-4:]],compute_uv=False))\\n        print('state loadings across axes and nonlinear y/state coefficients',np.c_[fit(g[i],y[i])[-4:],co[-4:]])\\n    E.append(err); print(name, np.round(err,5))\\nprint(list(candidates)); e=np.array(E);print('worst',e.max(0).round(5));print('average',e.mean(0).round(5));print('ordinary',e[:9].mean(0).round(5))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling' | head -5; OPENBLAS_NUM_THREADS=1 python3 -I /tmp/scalar_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compare scalar readouts that share the learned state response but differ in residual curvature; the verified baseline has 52/20 MAEs of 0.01500 for scalar and 0.00621 for trajectory, with worst coordinate-tail scalar MAE 0.05259.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply stronger uniform ridge regularization\",\n      \"rejected_reason\": \"It improved the low tail of axis 2 but worsened axis 0 and did not resolve the high tail of axis 3.\"\n    }\n  ],\n  \"rationale\": \"The official split already passes. Compare targeted scalar readout changes without editing the verified solver; promote a change only if it improves the tail bottleneck without materially degrading ordinary splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c860fdcaafa3b2a725c70e868c3206652108a770e30e18516ea3de60b21bdaa7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34617.23,
+      "usage_known": true,
+      "prompt_tokens": 40327,
+      "cached_tokens": 12672,
+      "completion_tokens": 1424
+    }
+  ]
+}

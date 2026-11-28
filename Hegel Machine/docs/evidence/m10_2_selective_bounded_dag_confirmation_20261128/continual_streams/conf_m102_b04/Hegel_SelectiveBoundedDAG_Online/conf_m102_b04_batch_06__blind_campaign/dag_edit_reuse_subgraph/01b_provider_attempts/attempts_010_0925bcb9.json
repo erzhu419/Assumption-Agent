@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0925bcb9124f48259cbda052b41761cb",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:24:31.131197+00:00",
+  "ended_at_utc": "2026-11-28T15:24:57.027927+00:00",
+  "request_sha256": "caeab798b7bde118b88e8479e8a854016dfea78bfa2e8aa9a843b9617c24c07b",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 65886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40249,
+    "cached_tokens": 14720,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp node_01.py /tmp/node_01_accepted05.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('node_01.py')\\ns=p.read_text().replace('calibrated cubic coordinates','calibrated linear and cubic coordinates').replace('-.02*','-.06*').replace('return .5*(np.exp(delta.mean(axis=2)) + np.exp(delta).mean(axis=2))','return .2*np.exp(delta.mean(axis=2)) + .8*np.exp(delta).mean(axis=2)').replace('    mean = x.mean(axis=0)\\\\n    scale = np.maximum(x.std(axis=0), 1e-12)\\\\n    x, q = (x-mean)/scale, (q-mean)/scale','    # Use a common scale so coordinate-wise distances retain their relative sizes.\\\\n    scale = max(float(x.std(axis=0).mean()), 1e-12)\\\\n    x, q = np.column_stack((x, np.cbrt(x)))/scale, np.column_stack((q, np.cbrt(q)))/scale').replace('+= 3e-5','+= 1e-3')\\np.write_text(s)\\nPY\\ncat > /tmp/final_stress05.py <<'PY'\\nexec(open('/tmp/stress05.py').read().split('m=load(1);')[0])\\nm=load(1)\\ndef pred(i,j):\\n    out=m.run_node({'__input__':{'train':{'y':y[i],'traj':z[i]}},'node_00':{'cubic_train':f[i],'cubic_test':f[j]}})\\n    yh, zh = out['y_hat'], out['state_pred']\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yh.mean(), yh.std(), zh[:,-1].mean(), zh[:,-1].std()])\\n    return np.column_stack((yh, zh))\\nr=score(pred)\\nprint('Exact public, random maxima, tail maxima, worst random horizon:',r)\\nprint('Public per-horizon MAE:',abs(pred(*splits[0])[:,1:]-z[splits[0][1]]).mean(0))\\nassert np.isfinite(r).all() and max(r[:2])<=.038 and max(r[2:4])<.038 and max(r[4:6])<.08 and r[6]<.04943502\\nPY\\nif ! (OPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_stress05.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py); then\\n  cp /tmp/node_01_accepted05.py /holdout_task/node_01.py\\n  OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic-only kernel → H2 mixed linear–cubic kernel; screening reduced worst coordinate-tail MAEs from 0.1046/0.3016 to 0.0356/0.0346 for scalar/trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the accepted cubic-only model\",\n      \"rejected_reason\": \"It passes the public gate but has substantially larger errors on coordinate-tail slices.\"\n    }\n  ],\n  \"rationale\": \"The mixed feature model improves the extrapolation bottleneck in screening. Recheck the saved implementation with scale fitted on each training split, then retain it only if the stress checks and isolated public harness pass.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bb105764615a40e32bc42fa088238195155ab99f1036b21236b40c9dd6a2cb1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25895.17,
+      "usage_known": true,
+      "prompt_tokens": 40249,
+      "cached_tokens": 14720,
+      "completion_tokens": 1003
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c3339a5766642b59039b6404ea7a3f3",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:28.042124+00:00",
+  "ended_at_utc": "2026-11-28T15:41:55.696336+00:00",
+  "request_sha256": "3dd61157a2d3fca7e14ca881b6ac3e32b17683822477dea3a8d3659cea445d1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38161,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27627,
+    "cached_tokens": 12672,
+    "completion_tokens": 1140
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_04_solver.py /tmp/hegel_continual_archive/*_05_solver.py; cat >/tmp/panel_scan.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; LS=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(u,d):return np.column_stack([np.prod(u[:,k],axis=1) for i in range(1,d+1) for k in itertools.combinations_with_replacement(range(4),i)])\\ndef press(d,v):\\n p=np.linalg.pinv(d);return np.sqrt(np.mean(((d@p@v-v)/np.maximum(.01,1-np.sum(d*p.T,axis=1))[:,None])**2))\\na=s['panel_a'];u=a['u'];v=a['v']; m=np.linalg.norm(v,axis=1)<7;u=u[m];v=v[m];print('A inliers',len(u))\\nfor j in range(4):\\n x=u[:,j]; z=u[:,(j+2)%4];n=u[:,(j+1)%4];p=u[:,(j-1)%4];\\n for typ,d in [('archive09',np.c_[x,np.tanh(1.8*x),np.sin(2.4*z)]),('poly',poly(u,2)),('cycle',np.c_[x,n,x*n,x**3]),('broad',np.c_[x,np.tanh(1.8*x),np.sin(2.4*x),z,np.sin(2.4*z),x*z,x**3,n,p])]:\\n  d=aff(d);print(j,typ,press(d,v[:,j:j+1]),LS(d,v[:,j]).round(4))\\nfuncs={'linear':lambda x,a:x,'tanh':lambda x,a:np.tanh(a*x),'sin':lambda x,a:np.sin(a*x),'atan':lambda x,a:np.arctan(a*x),'asinh':lambda x,a:np.arcsinh(a*x),'inv3':lambda x,a:np.sinh(np.arcsinh(a*x)/3),'dead':lambda x,a:np.sign(x)*np.maximum(abs(x)-a,0)**1.5,'dead1':lambda x,a:np.sign(x)*np.maximum(abs(x)-a,0),'softsign':lambda x,a:x/(1+a*abs(x)),'sinhn':lambda x,a:np.sinh(a*x),'cubic':lambda x,a:x+a*x**3,'sat':lambda x,a:x/np.sqrt(1+a*x*x)}\\nfor k,o in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n q=s[k];u=q['u'];v=q[o];out=[]\\n for name,f in funcs.items():\\n  for name2,g in funcs.items():\\n   for j in [0,1]:\\n    def fit(a):\\n     x=f(u,a); y=g(v,a); return press(aff(np.c_[x,u] if j and name!='linear' else x),y)/np.std(y)\\n    z=minimize_scalar(fit,bounds=(.04,.75 if 'dead' in name+name2 else 4),method='bounded');out.append((z.fun,name,name2,j,z.x))\\n cross=np.column_stack([u[:,i]*u[:,j] for i,j in itertools.combinations(range(4),2)]); print(k,o,'cross',press(aff(cross),v),'cross4',press(aff(cross[:,[0,2,3,5]]),v),'quad',press(aff(poly(u,2)),v),'top',sorted(out)[:20])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_scan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived graphs transfer directly -> H2 identify each panel’s nonlinear basis before recomposing it; best archived 52/20 MAEs were 0.1173 for y and 0.1484 for trajectories, from different solvers.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Copy an archived solver unchanged\",\"rejected_reason\":\"None of the eight transferred solvers met either public error threshold.\"}],\"rationale\":\"Use leave-one-row-out panel errors to separate missing nonlinear basis terms from errors in the downstream graph composition.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c479890c57101b368cc7ec490ff4f4879b91e455fbb383f942778b373297127b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28209.26,
+      "usage_known": true,
+      "prompt_tokens": 27627,
+      "cached_tokens": 12672,
+      "completion_tokens": 1140
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8707c7f9d13a405da9f03e459eb8465e",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:17:13.904056+00:00",
+  "ended_at_utc": "2026-11-28T16:17:28.961353+00:00",
+  "request_sha256": "5da90bb7b8eb58b5bfe17048d6c850ad40fef5fc1bde1cdb612466beed6c4ebf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30443,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24191,
+    "cached_tokens": 12672,
+    "completion_tokens": 524
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,glob,runpy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; tr=s['train']; c=dict(s,train={k:v[:52] if k!='summary' else v for k,v in tr.items()},test={'x':tr['x'][52:]})\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  r=runpy.run_path(f)['solve_batch'](c); print(f.split('/')[-1][16:24],*[round(np.mean(abs(r[k]-tr[t][52:])),6) for k,t in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(f,repr(e))\\np=s['panel_a']; d=np.linalg.norm(p['u']-p['v'],axis=1); print('cal diff',np.round(np.sort(d),3)); print('cal rows',np.round(np.c_[p['u'],p['v']][np.argsort(d)[:9]],3))\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \\\"$f\\\"); grep -E 'return |(sin|cos|tanh|roll|exp|power|maximum|bounds)[( =]' \\\"$f\\\" | grep -vE 'return (dict|a |np.asarray|p, c)|shape|lstsq' | head -37; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust calibration and explicit panel operators → a rank-two trajectory map and a separate scalar readout; the pre-LLM 52/20 MAEs were 0.388774 and 0.415750, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Recover the compact archive comparison lost to truncation and inspect calibration discrepancies before fitting individual panel laws.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "956b4da6d7699c20ae29c85e2f1c8ec925f65f3f71433733e4cc0803491f579c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 15056.15,
+      "usage_known": true,
+      "prompt_tokens": 24191,
+      "cached_tokens": 12672,
+      "completion_tokens": 524
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c3ce83916c742918a01d4097b0eb7d8",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:18.732116+00:00",
+  "ended_at_utc": "2026-11-28T15:01:58.295701+00:00",
+  "request_sha256": "acce32883c982ba5a038d1946e282443b15ff7a1f551a9191e3cd88ff49eccc9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35137,
+    "cached_tokens": 12672,
+    "completion_tokens": 1659
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rational_screen.py <<'PY'\\nfrom explore import *\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nfolds=list(KFold(5,shuffle=True,random_state=23).split(np.arange(52)))+[(np.arange(52),np.arange(52,72))]\\nprint('response range',np.min(y),np.max(y),'summary',s['train']['summary'],'telemetry',s['telemetry_vec']); print('calibration archive');\\n\\ndef rational(g,Y,i,j,mode,ridge):\\n F=poly(g,2); Fi=F[i]; Z=aff(g); Yi=Y[i]; n=len(i); d=Z.shape[1]\\n penalty=np.r_[np.ones(d)*.03,np.ones(F.shape[1]-d)]\\n def solve(D):\\n  M=Fi/D[i,None]; return np.linalg.solve(M.T@M+ridge*np.diag(penalty),M.T@Yi)\\n if mode=='full':\\n  def den(a):return np.exp(np.clip(F[:,d:]@a,-2,2))\\n  seeds=[np.zeros(F.shape[1]-d)]\\n elif mode=='diag':\\n  def den(a):return 1+g**2@a\\n  seeds=[np.zeros(g.shape[1])+.03]\\n else:\\n  def den(a):return 1+(Z@a)**2\\n  seeds=np.r_[np.eye(d)*.3,np.random.default_rng(42).normal(size=(5,d))*.35]\\n def obj(a):\\n  D=den(a); q=solve(D); return np.r_[(Fi@q/D[i]-Yi),.025*a,np.sqrt(ridge*penalty)*q]\\n best=None\\n for a in seeds:\\n  p=least_squares(obj,a,bounds=(0,2) if mode=='diag' else (-2,2),max_nfev=100)\\n  if best is None or p.cost<best.cost:best=p\\n D=den(best.x); q=solve(D); return F[j]@q/D[j],np.mean(abs(Fi@q/D[i]-Yi)),best.x\\nfor mode in ['full','diag','ridge']:\\n for label,g in [('x',x),('z',z),('h',h)]:\\n  for k in [.0001,.01]:\\n   es=[]\\n   for i,j in folds:\\n    p,tr,a=rational(g,y,i,j,mode,k); es.append(np.mean(abs(p-y[j])))\\n   print(mode,label,k,np.round(es,4),'inner',np.mean(es[:-1]),'train',tr,'param',a,flush=True)\\n\\ndef kernel(g,kind,i,j,Y):\\n v=g/np.std(g[i],axis=0); t=v@v.T/4; D=(v[:,None]-v[None,:])**2/4; F=poly(g,2); base=F@F.T; n=len(i); a=Y[i]; I=np.eye(n)\\n from scipy.linalg import cho_factor,cho_solve\\n from scipy.optimize import minimize\\n def get(b,ind):\\n  iv=np.ix_(ind,i); q=np.exp(b); out=base[iv]*2\\n  ve=D[iv]; tt=t[iv]; kd=ve@q[3:];\\n  if kind=='rbf': k=np.exp(-kd)\\n  elif kind=='matern': r=np.sqrt(3*kd+1e-20); k=(1+r)*np.exp(-r)\\n  elif kind=='cubic': k=tt**3\\n  else: k=np.exp(-kd)*(1+tt)**2\\n  return out+q[0]*k+q[1]*tt**3, k, ve, kd,tt\\n def obj(b):\\n  K,k,ve,kd,tt=get(b,i); q=np.exp(b); C=cho_factor(K+q[2]*I); w=cho_solve(C,a); M=cho_solve(C,I)-np.outer(w,w); val=.5*a@w+np.log(np.diag(C[0])).sum()+.12*np.sum((b[3:]+1)**2)\\n  dk=-k if kind!='matern' else -1.5*np.exp(-np.sqrt(3*kd+1e-20));\\n  if kind=='cubic':dk=np.zeros_like(k)\\n  grad=.5*np.r_[np.sum(M*k),np.sum(M*tt**3),np.trace(M),np.einsum('ij,ijk->k',M*dk*q[0],ve)]*q; grad[3:]+=.24*(b[3:]+1)\\n  return val,grad\\n p=minimize(obj,[-3,-6,-9,-1,-1,-1,-1],jac=True,bounds=[(-14,2)]*2+[(-13,-4)]+[(-5,3)]*4,method='L-BFGS-B')\\n K=get(p.x,i)[0]+np.exp(p.x[2])*I; return get(p.x,j)[0]@cho_solve(cho_factor(K),a),p.x\\nfor w,g in [('x',x),('z',z),('h',h),('Bz',z@B[1:]+B[0])]:\\n for kind in ['rbf','matern','cubic','poly']:\\n  e=[]\\n  for i,j in folds:\\n   p,q=kernel(g,kind,i,j,y);e.append(np.mean(abs(p-y[j])))\\n  print('GP',w,kind,np.round(e,4),np.mean(e[:-1]),q,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_screen.py; sed -n '1,66p' /tmp/hegel_continual_archive/*solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive ridge corrections -> H2 multiplicative rational readouts and anisotropic polynomial residuals; inherited 52/20 MAEs are 0.040803 for y and 0.010249 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more freely oriented nonlinear terms\",\n      \"rejected_reason\": \"One- and two-direction fits lowered training residuals but did not improve the prescribed holdout MAE.\"\n    }\n  ],\n  \"rationale\": \"Test whether nonlinearities modulate the entire quadratic readout instead of adding independent corrections, and compare against a regularized anisotropic baseline on folds inside the training prefix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "03c8b92e4902b4bbe81176ed215dedb83068d053e6af5aefb009cea5bcc60a6f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39562.39,
+      "usage_known": true,
+      "prompt_tokens": 35137,
+      "cached_tokens": 12672,
+      "completion_tokens": 1659
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "547e2b1d3d344898923c65e735b1cbf1",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:55.104209+00:00",
+  "ended_at_utc": "2026-11-28T15:05:30.247860+00:00",
+  "request_sha256": "3fd7484b17fd062b8af94ff425264e81ac46e443a9a6ac953a060a020375eafb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66278,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41959,
+    "cached_tokens": 12672,
+    "completion_tokens": 1388
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/struct.py <<'PY'\\nexec(open('/tmp/dag.py').read().split('ops=')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\nn=52; a,b=Q(z),R(z); cross=(a[:,:,None]*b[:,None,:]).reshape(-1,16); F=ones(np.c_[a,b,cross]); Y=np.c_[y,ts]; U,sig,V=np.linalg.svd(ts[:n],full_matrices=False); M=ts@V[:3].T; target=np.c_[y,M]; print('cond coef',ls(np.c_[F[:n],M[:n]],y[:n])); print('iv ranks',np.linalg.svd((target-F@ls(F[:n],target[:n]))[:n],compute_uv=False));\\nrng=np.random.default_rng(1234)\\nblocks={'q':a,'r':b,'z':z,'l':L(z),'qr':np.c_[a,b],'q+r':a+b,'q-r':a-b,'q*r':a*b,'dot':(a*b).sum(1)[:,None]};\\n# Keep base controls while looking for nonlinear gains on a linear or bilinear numerator.\\nbases={'qr':ones(np.c_[a,b]),'qc':ones(a),'rc':ones(b),'full':F,'one':np.ones((len(z),1)),'z':ones(z),'diag':ones(np.c_[a,b,a*b])}\\nfuncs={'tanh':np.tanh,'sin':np.sin,'gauss':lambda v:np.exp(-v*v),'rat':lambda v:1/(1+v*v),'soft':lambda v:v/(1+abs(v))};\\nfor out in [0,1,2,3]:\\n t=target[:,out]; best=[]\\n for cn,base in bases.items():\\n  for dn in ['one','qc','rc','qr','diag','z'] if cn in ['qr','one','diag'] else ['one']:\\n   num=bases[dn]; P=np.linalg.qr(base[:n])[0]; ry=t[:n]-P@(P.T@t[:n]);\\n   for wn,w0 in blocks.items():\\n    w=(w0-w0[:n].mean(0))/np.maximum(w0[:n].std(0),1e-8); d=w.shape[1]; u=ls(w[:n],ry); u=u/max(np.linalg.norm(u),1e-8)\\n    for gn,g in funcs.items():\\n     def mat(p,rows):return num[rows]*g(w[rows]@p[:-1]+p[-1])[:,None]\\n     def res(p):\\n      m=mat(p,slice(n)); m=m-P@(P.T@m); return ry-m@ls(m,ry)\\n     starts=[np.r_[u,0.2], np.r_[u*2,.7],np.r_[rng.normal(0,.6,d),-.5]]\\n     trials=[least_squares(res,p,max_nfev=55,bounds=(-12,12)) for p in starts]; p=min(trials,key=lambda v:v.cost).x; m=np.c_[base,mat(p,slice(None))]; coef=ls(m[:n],t[:n]); e=abs(m@coef-t);\\n     best.append((e[:n].mean(),e[n:].mean(),cn,dn,wn,gn,p,coef))\\n print('output',out,flush=True)\\n for v in sorted(best,key=lambda v:v[0])[:5]+sorted(best,key=lambda v:v[1])[:6]:print(v,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py >/tmp/struct.out 2>&1 & pid=$!; (sleep 85; kill \\\"$pid\\\" 2>/dev/null) & timer=$!; wait \\\"$pid\\\"; kill \\\"$timer\\\" 2>/dev/null; cat /tmp/struct.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: bilinear panel terms close the conditional readout (held-out MAE 0.00547); test whether a nonlinear gain on those branches explains the spatial modes.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An additive branch basis suffices for the readout once the temporal modes are known.\",\"empirical_witness\":\"Adding the full C1-by-C2 bilinear block cuts conditional held-out y MAE from 0.04701 to 0.00547; the diagonal block alone gives 0.04033.\",\"causal_blanket_diagnosis\":\"The measured modes explain only part of the response; off-diagonal branch interactions account for most remaining readout error.\",\"sublated_pivot\":\"Retain that interaction block and profile gated spatial terms separately from the conditional readout.\",\"risk_kind\":\"algebraic_or_symmetry_gap\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the conditional readout score as end-to-end validation\",\"rejected_reason\":\"Held-out trajectory amplitudes are not available at prediction time.\"}],\"rationale\":\"Use the conditional bilinear closure to constrain the remaining search, comparing additive and multiplicatively gated terms on the spatial outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b5af0452723223119644683d4ad4382df8df7355ce0e2a090aec7055eb462ef2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35656.23,
+      "usage_known": true,
+      "prompt_tokens": 41959,
+      "cached_tokens": 12672,
+      "completion_tokens": 1388
+    }
+  ]
+}

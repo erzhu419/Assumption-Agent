@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "49afb296e7b64cfcb7419966c8674a55",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:37.221325+00:00",
+  "ended_at_utc": "2026-11-28T15:40:54.007868+00:00",
+  "request_sha256": "8ad252593a65f277c56c56e8b0d0c0816e4754cbfea1440e9b92b76145716bd8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 19997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20604,
+    "cached_tokens": 12672,
+    "completion_tokens": 507
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as n,importlib.util,glob\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['train']; cv=dict(s,train={k:v[:52] if len(v)==72 else v for k,v in t.items()},test={'x':t['x'][52:]}); n.set_printoptions(precision=5,suppress=True)\\nfor k,v in s.items():\\n if not isinstance(v,dict): print(k,v)\\n else:\\n  for q,a in v.items(): print(k,q,a.shape,'range',n.min(a,axis=0),n.max(a,axis=0),'examples',a[:3]);\\nprint('traj singular',n.linalg.svd(t['traj'],compute_uv=False))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m);p=m.solve_batch(cv);print(f,*(n.abs(p[a]-t[b][52:]).mean() for a,b in [('y_hat','y'),('state_pred','traj')]))\\n except Exception as e: print(f,repr(e))\\nPY\\nfor i in 03 04 05; do echo ====; cat /tmp/hegel_continual_archive/conf_m102_b03_batch_${i}_solver.py; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: screen archived mechanisms against current panel ranges and trajectory rank; the existing 52/20 baseline has worst-target MAE 0.150819.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test each archived solver on the same split and inspect the observed trajectory rank to constrain the temporal model independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "f1baa289e5b8ea550212ab866c0dc7d08098b545143064dc5583d84c58afd7c8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 16783.14,
+      "usage_known": true,
+      "prompt_tokens": 20604,
+      "cached_tokens": 12672,
+      "completion_tokens": 507
+    }
+  ]
+}

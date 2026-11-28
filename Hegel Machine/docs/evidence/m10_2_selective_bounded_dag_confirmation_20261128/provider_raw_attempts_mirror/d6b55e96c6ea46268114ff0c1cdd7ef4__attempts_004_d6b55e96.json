@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6b55e96c6ea46268114ff0c1cdd7ef4",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:45.241938+00:00",
+  "ended_at_utc": "2026-11-28T15:16:01.954093+00:00",
+  "request_sha256": "67a07a887e7321ddf4e5fd72964b49e15a623632474f5f01d548fecba41afa9d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24674,
+    "cached_tokens": 20864,
+    "completion_tokens": 564
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_b02_batch_01_solver.py; python3 - <<'PY'\\nimport sys,pickle,numpy as np,importlib.util,copy\\np='/holdout_task'; sys.path.insert(0,p+'/_frozen_nodes'); import node_00\\ns=pickle.load(open(p+'/public_batch.pkl','rb'))[0]['study']; z=node_00.run_node({'__input__':s})['z']; print('calibrated coordinate min/max',z.min(0),z.max(0)); print('covariance eigenvalues',np.linalg.eigvalsh(np.cov(z.T))); \\nfor i in range(2):\\n spec=importlib.util.spec_from_file_location('prior',f'/tmp/hegel_continual_archive/conf_m102_b02_batch_0{i}_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); print('Archive',i)\\n for a,b in [(52,72),(0,20),(20,40),(40,60)]:\\n  ids=np.arange(len(z)); mask=(ids<a)|(ids>=b); st=copy.deepcopy(s); st['train']={k:v[mask] if len(v)==len(z) else v for k,v in s['train'].items()}; st['test']={'x':s['train']['x'][a:b]}; r=m.solve_batch(st); print(a,b,np.mean(abs(r['y_hat']-s['train']['y'][a:b])),np.mean(abs(r['state_pred']-s['train']['traj'][a:b])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived regressors → H2 identify which archived basis terms survive the campaign shift; the frozen two-mode reconstruction floor is 0.00352 MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase trajectory rank\",\"rejected_reason\":\"The frozen two-mode projection reconstructs training trajectories with 0.00352 MAE, well below the 0.038 prediction threshold.\"}],\"rationale\":\"Read the newer archived nonlinear basis without truncation and benchmark both archived solvers on the official split and three additional blocked splits before selecting a replacement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "93000e58aba82980210a83421d80b5ac4628a49d6c3f123df6f8d4d42e453a70",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 16710.76,
+      "usage_known": true,
+      "prompt_tokens": 24674,
+      "cached_tokens": 20864,
+      "completion_tokens": 564
+    }
+  ]
+}

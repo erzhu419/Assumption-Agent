@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36c7118b3a954553899c19b3e04ff473",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:02.279067+00:00",
+  "ended_at_utc": "2026-11-28T15:04:32.759555+00:00",
+  "request_sha256": "8bfdf21223c79ec5e9cf938c5149cb443f6ed058fea25821dc6b27367d60ac66",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68359,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40894,
+    "cached_tokens": 12672,
+    "completion_tokens": 1293
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/compose.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/compare_maps.py').read())\\nfrom scipy.optimize import minimize_scalar\\nu=base['deA']; funcs={}; zz={}; fits2={}; results=[]\\nfor name,P,key in [('B',b,'v'),('C1',c,'v1'),('C2',c,'v2')]:\\n U,V=P['u'],P[key]; fits2[name]=[]\\n for typ,f in [('rat',lambda t,k:t/(1+k*t*t)),('tanh',lambda t,k:np.tanh(k*t)),('sin',lambda t,k:np.sin(k*t)),('cos',lambda t,k:np.cos(k*t)-1)]:\\n  def fit(k):\\n   F=np.c_[np.ones(len(U)),U,f(U,k)]; C=np.linalg.lstsq(F,V,rcond=None)[0];return np.mean((F@C-V)**2),C\\n  ks=np.linspace(.1,5,45);i=np.argmin([fit(k)[0] for k in ks]);k=minimize_scalar(lambda k:fit(k)[0],bounds=(ks[max(0,i-1)],ks[min(i+1,len(ks)-1)]),method='bounded').x\\n  rm,C=fit(k);fits2[name].append((rm,typ,k,C,f))\\n for rm,typ,k,C,f in sorted(fits2[name],key=lambda t:t[0])[:2]:\\n  print(name,typ,k,rm**.5,C.round(4),flush=True)\\n  l,sv,r=np.linalg.svd(C[1:5]); O=l@r\\n  funcs[name+typ]=lambda t,k=k,C=C,f=f: C[0]+t@C[1:5]+f(t,k)@C[5:]\\n  funcs[name+typ+'L']=lambda t,C=C: C[0]+t@C[1:5]\\n  funcs[name+typ+'N']=lambda t,k=k,C=C,f=f: C[0]+f(t,k)@C[5:]\\n  funcs[name+typ+'R']=lambda t,O=O:t@O\\n  funcs[name+typ+'T']=lambda t,O=O:t@O.T\\nfuncs['I']=lambda t:t\\nfor n1,f1 in funcs.items():\\n for n2,f2 in funcs.items():\\n  q=f2(f1(u)); sd=np.mean(q.std(0));\\n  for sc in [.12,.25,.45,.7,1.0]:\\n   z=q*(sc/max(sd,1.e-9)); e=score(z); results.append((max(e),e.tolist(),n1,n2,sc))\\nfor n1,f1 in funcs.items():\\n for n2,f2 in funcs.items():\\n  q,sq=f1(u),f2(u); q=(q-q.mean(0))/q.std(0); sq=(sq-sq.mean(0))/sq.std(0)\\n  for wt in [-1,-.5,.25,.5,1]:\\n   for sc in [.15,.3,.6]:\\n    e=score(sc*(q+wt*sq)); results.append((max(e),e.tolist(),n1,n2,wt,sc))\\nprint('composition top:',*sorted(results)[:16],sep='\\\\n');print('public top:',*sorted(results,key=lambda t:max(t[1][:2]))[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compose.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent panel warps -> test ordered compositions and separable components; the saved baseline has public MAEs 0.097295/0.087748 and fails both thresholds.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the scaled panel-A inverse\",\"rejected_reason\":\"It passes the graph contract but misses both accuracy requirements.\"}],\"rationale\":\"Panel C2 has substantially smaller calibration holdout residuals than panel B; test its calibrated components and their ordering through the frozen sink before promoting another candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5c079a9479d04584acdc7f3f3a9146fe9a22973a8984ebb085dca0774fcd4b91",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30974.45,
+      "usage_known": true,
+      "prompt_tokens": 40894,
+      "cached_tokens": 12672,
+      "completion_tokens": 1293
+    }
+  ]
+}

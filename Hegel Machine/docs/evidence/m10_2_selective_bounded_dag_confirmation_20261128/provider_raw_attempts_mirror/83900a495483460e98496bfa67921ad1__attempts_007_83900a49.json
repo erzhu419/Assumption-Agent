@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83900a495483460e98496bfa67921ad1",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:41.499274+00:00",
+  "ended_at_utc": "2026-11-28T15:01:21.509602+00:00",
+  "request_sha256": "37b91dce2fbec89c7b9fcc2a27ee1aa891cace34a2f676351a9e335a13cb5c30",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45799,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33721,
+    "cached_tokens": 12672,
+    "completion_tokens": 1658
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover panel operators and regress their coupled temporal response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ols(f, y):\\n    return np.linalg.lstsq(f, y, rcond=1e-10)[0]\\n\\n\\ndef _one(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _align(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    shifts, scales = [], []\\n    for a, b in zip(u.T, v.T):\\n        da = a[i] - a[j]\\n        k = abs(da) > 1e-8\\n        scale = np.median((b[i[k]] - b[j[k]]) / da[k])\\n        shift = np.median(b - scale*a)\\n        f = _one(a)\\n        for _ in range(5):\\n            d = abs(b - shift - scale*a)\\n            keep = d <= max(5*np.median(d), 2e-4)\\n            shift, scale = _ols(f[keep], b[keep])\\n        shifts.append(shift)\\n        scales.append(scale)\\n    return np.asarray(shifts), np.asarray(scales)\\n\\n\\ndef _products(z):\\n    return z[:, [0, 0, 1, 2]] * z[:, [1, 3, 2, 3]]\\n\\n\\ndef _curvature(z, q):\\n    sq = z*z\\n    return _one(np.c_[z, sq, sq/(1 + q*sq)])\\n\\n\\ndef _features(study, x):\\n    shift, scale = _align(study['panel_a'])\\n    z = (x-shift)/scale\\n    c = study['panel_c']\\n    u = c['u']\\n    a = _one(_products(z)) @ _ols(_one(_products(u)), c['v1'])\\n\\n    def residual(p):\\n        f = _curvature(u, p[0])\\n        return (f @ _ols(f, c['v2']) - c['v2']).ravel()\\n\\n    q = least_squares(residual, [0.3], bounds=(0.02, 3.0)).x[0]\\n    b = _curvature(z, q) @ _ols(_curvature(u, q), c['v2'])\\n    return a, b\\n\\n\\ndef _temporal(t, traj):\\n    def basis(r):\\n        return -np.expm1(-t[:, None]*r)\\n\\n    def residual(r):\\n        f = basis(r)\\n        return (f @ _ols(f, traj.T) - traj.T).ravel()\\n\\n    r = least_squares(residual, [0.42, 1.82], bounds=([0.015, 0.75], [0.75, 8])).x\\n    return basis(r)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    a, b = _features(study, np.r_[train['x'], study['test']['x']])\\n    interactions = (a[:, :, None] * b[:, None, :]).reshape(len(a), 16)\\n    g = _one(np.c_[a, b, (a*b).sum(axis=1)])\\n    f = _one(np.c_[a, b, interactions])\\n    temporal = _temporal(np.asarray(study['eval_times']), train['traj'])\\n    y = g[n:] @ _ols(g[:n], train['y'])\\n    state = (f[n:] @ _ols(f[:n], _ols(temporal, train['traj'].T).T)) @ temporal.T\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/test_batch.py <<'PY'\\nimport pickle, numpy as np, sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ix=np.arange(72)\\nSplits=[ix[:52]]+[np.random.default_rng(i).permutation(ix)[:52] for i in range(40)]\\nfor j in np.array_split(np.argsort(np.linalg.norm(tr['x'],axis=1)),4): Splits.append(np.setdiff1d(ix,j))\\nA=[]\\nfor train in Splits:\\n test=np.setdiff1d(ix,train); st=dict(s,train={k:v[train] if k!='summary' else v for k,v in tr.items()},test={'x':tr['x'][test]}); p=m.solve_batch(st)\\n e=abs(p['state_pred']-tr['traj'][test]); A.append(np.r_[abs(p['y_hat']-tr['y'][test]).mean(),e.mean(),e.mean(0)])\\nA=np.array(A); print('prescribed',A[0]); print('random worst',A[1:41].max(0)); print('norm slices',A[-4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/test_batch.py; python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: share the diagonal interaction coefficient for y and retain full interactions for trajectories; the previous full model reached 0.00491 y MAE and 0.00339 trajectory MAE on the prescribed split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Diagonal interactions for both outputs\",\n      \"rejected_reason\": \"The diagonal trajectory model reached 0.04059 MAE at the last horizon, while full interactions reduced it to 0.00574 even without temporal pooling.\"\n    }\n  ],\n  \"rationale\": \"Scalar interaction coefficients cluster near 0.42, whereas the trajectory fit needs cross-coordinate terms. Verify the resulting solver on the prescribed split, random splits, input-norm slices, and the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "316b76c4f764b5aa8d835614ac11a005ad22104bceaf1da19fb625b21ed0bda9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40009.18,
+      "usage_known": true,
+      "prompt_tokens": 33721,
+      "cached_tokens": 12672,
+      "completion_tokens": 1658
+    }
+  ]
+}

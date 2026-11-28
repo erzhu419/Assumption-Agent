@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e7b37880ebad4c3dbc8aef10feff9331",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:54:11.265123+00:00",
+  "ended_at_utc": "2026-11-28T15:54:40.498855+00:00",
+  "request_sha256": "e1eaee82e32665a0d538aa21965713eb3fe6167c1978439429f38bb2499b8701",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59086,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35730,
+    "cached_tokens": 12672,
+    "completion_tokens": 1175
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/pairs.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('for name,p in')[0])\\nfrom itertools import combinations,combinations_with_replacement\\nfrom scipy.linalg import qr\\nlat=np.cbrt(q); raw=s['train']['x']; tar=np.c_[y,t]; c=s['panel_c'];\\ndef parts(x):\\n return {**{str(i):x[:,i] for i in range(4)},**{f'{i}{sg}{j}':x[:,i]+sg*x[:,j] for i,j in combinations(range(4),2) for sg in [-1,1]},**{f'{i}*{j}':x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)}}\\ndef blocks(x):\\n out={}; p=parts(x)\\n for nm,z in p.items():\\n  for g in [1,1.3,2.15,2.6,4.3,5.2]:\\n   for nm2,fn in [('sin',np.sin),('cos',np.cos),('atan',np.arctan),('tanh',np.tanh),('rat',lambda a:a/(1+a*a)),('evenrat',lambda a:1/(1+a*a))]:out[nm2,nm,g]=fn(g*z)\\n return out\\ndef sparse(x,Y,idx,jdx,base,groups,steps):\\n m=np.column_stack(list(groups.values())); mu=m[idx].mean(0); m-=mu; m/=np.maximum(np.linalg.norm(m[idx],axis=0),1e-10); a=base.copy(); K=list(groups); sel=[]\\n for it in range(steps):\\n  w=np.linalg.lstsq(a[idx],Y[idx],rcond=1e-9)[0]; r=Y[idx]-a[idx]@w\\n  if it in (0,1,2,3,5,8,12,17,23,31):print(it,np.round(np.mean(abs(r),axis=0),5),np.round(np.mean(abs(Y[jdx]-a[jdx]@w),axis=0),5),sel[-4:])\\n  basis=qr(a[idx],mode='economic')[0]; mm=m[idx]-basis@(basis.T@m[idx]); cor=mm.T@r/np.maximum(np.linalg.norm(mm,axis=0).reshape((-1,)+(1,)*(r.ndim-1)),1e-8); k=np.argmax(np.abs(cor) if r.ndim==1 else np.linalg.norm(cor,axis=1));sel.append(K[k]); a=np.c_[a,m[:,k]]; m[:,k]=0\\nfor key,fn in [('v1',lambda x:aff(np.arctan(2.15*x))),('v2',lambda x:np.c_[aff(x),np.cos(1.3*x)]),('v2',lambda x:np.c_[aff(x),x**2,x**3,np.cos(2.6*x)])]:\\n print('CAL',key); xx=c['u']; sparse(xx,c[key],np.arange(18),np.arange(18,24),fn(xx),blocks(xx),9)\\nfor name,x in [('lat',lat),('raw',raw),('q',q),('B',aff(np.cos(f*lat))@co)]:\\n print('LABELS',name); sparse(x,tar[:,[0,1,8]],np.arange(54),np.arange(54,72),aff(np.cos(f*x)),blocks(x),32)\\nprint('time',s['eval_times']); print('correlation',np.corrcoef(tar.T)[0]); print('trajectory examples',np.column_stack([y,t[:,0],t[:,-1]])[:20])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pairs.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace coordinate-wise phase adjustments with pairwise sums, differences, and rational terms; the previous composed model’s worst-fold MAEs remain 0.413 and 0.460.\",\n  \"nogood_update\": {\"has_new_nogood\": false, \"nogood_rung\": \"NONE\", \"assumption_refuted\": null, \"empirical_witness\": null, \"causal_blanket_diagnosis\": null, \"sublated_pivot\": null, \"risk_kind\": null, \"resolves_nogood_ids\": []},\n  \"considered_alternatives\": [],\n  \"rationale\": \"Look for the same missing interaction in independent panel measurements and both readouts. Report held-out errors as terms are added so training residual improvements do not justify a larger model on their own.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3fdc64b6e53a5a4f9187fefdf196123bf42afe249d691a76ebc60a7fbda9648c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29767.67,
+      "usage_known": true,
+      "prompt_tokens": 35730,
+      "cached_tokens": 12672,
+      "completion_tokens": 1175
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2a3a6a0293f4d5f8718751e4d7a91ec",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:27:14.010426+00:00",
+  "ended_at_utc": "2026-11-28T16:27:46.316510+00:00",
+  "request_sha256": "3e799cdb2cbed607151e1b94de3029c48853bcd68784b553d1ff6a14db9bc06d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37268,
+    "cached_tokens": 12672,
+    "completion_tokens": 1403
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Invert the reference panel and fit separate scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import brentq\\n\\n\\ndef _design(*columns):\\n    return np.column_stack((np.ones(len(columns[0])), *columns))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _reference_inverse(panel, observed):\\n    u, v = panel['u'], panel['v']\\n    target = v - .18*np.tanh(1.8*u) + .32*np.sin(2.4*np.roll(u, 2, axis=1))\\n    # A median-based initial line keeps extreme reference rows out of the fit.\\n    centered = u - np.median(u, axis=0)\\n    dy = target - np.median(target, axis=0)\\n    slope = np.array([np.median(dy[abs(centered[:, j]) > .2, j] /\\n                                 centered[abs(centered[:, j]) > .2, j]) for j in range(4)])\\n    offset = np.median(target - slope*u, axis=0)\\n    for _ in range(10):\\n        error = np.linalg.norm(target - offset - u*slope, axis=1)\\n        keep = error <= max(.001, 5*np.median(error))\\n        offset, slope = np.array([_fit(_design(u[keep, j]), target[keep, j])\\n                                  for j in range(4)]).T\\n\\n    def diagonal_inverse(j, t):\\n        # The bounded tanh correction provides this exact bracket.\\n        return brentq(lambda q: slope[j]*q + .18*np.tanh(1.8*q) - t,\\n                      (t-.181)/slope[j], (t+.181)/slope[j], xtol=1e-13)\\n\\n    z = np.empty_like(observed, dtype=float)\\n    for k, row in enumerate(observed-offset):\\n        for i, j in ((0, 2), (1, 3)):\\n            def second(q):\\n                return diagonal_inverse(j, row[j] + .32*np.sin(2.4*q))\\n\\n            def residual(q):\\n                return (slope[i]*q + .18*np.tanh(1.8*q)\\n                        - .32*np.sin(2.4*second(q)) - row[i])\\n\\n            # The full correction has magnitude at most .50. For this\\n            # calibration the diagonal slope product exceeds the maximum\\n            # squared coupling derivative, so the root is unique.\\n            z[k, i] = brentq(residual, (row[i]-.501)/slope[i],\\n                             (row[i]+.501)/slope[i], xtol=1e-13)\\n            z[k, j] = second(z[k, i])\\n    return z\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    z = _reference_inverse(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    b, c = study['panel_b'], study['panel_c']\\n\\n    def cosine(q):\\n        return _design(np.cos(2.6*q))\\n\\n    def adjacent(q):\\n        return _design(q*np.roll(q, -1, axis=1))\\n\\n    w = cosine(z) @ _fit(cosine(b['u']), b['v'])\\n    h = adjacent(w) @ _fit(adjacent(c['u']), c['v1'])\\n    scalar = _design(z, h, np.sum(z*h, axis=1))\\n    dynamic = np.column_stack((scalar, z[:, 1]*h[:, 0]))\\n    y = scalar[n:] @ _fit(scalar[:n], train['y'])\\n    trajectory = np.asarray(train['traj'])\\n    modes = np.linalg.svd(trajectory, full_matrices=False)[2][:2]\\n    state = (dynamic[n:] @ _fit(dynamic[:n], trajectory @ modes.T)) @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 stalled fixed-point calibration -> H2 verified inverse and compact B→C1 readouts; the root-solved prototype reaches 0.00415 scalar MAE and 0.00655 worst-timestamp MAE on the prescribed 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\",\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Add further nonlinear readout terms\",\"rejected_reason\":\"Correcting the inverse reduced its worst forward residual from 0.771 to machine precision and brought the compact readouts below the acceptance threshold.\"}],\"rationale\":\"Implement a bracketed inverse that avoids the fixed-point instability. The scalar readout uses the calibrated coordinates, C1 output, and their dot product; the trajectory adds one cross-term and retains the two measured temporal modes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "719bf90f6b70676250971da7ce65386057d38be096bdcdbc413ecef3489afd0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32814.85,
+      "usage_known": true,
+      "prompt_tokens": 37268,
+      "cached_tokens": 12672,
+      "completion_tokens": 1403
+    }
+  ]
+}

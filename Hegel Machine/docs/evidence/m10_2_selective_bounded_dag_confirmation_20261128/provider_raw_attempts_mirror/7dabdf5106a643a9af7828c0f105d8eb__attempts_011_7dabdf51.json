@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7dabdf5106a643a9af7828c0f105d8eb",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:56:20.896834+00:00",
+  "ended_at_utc": "2026-11-28T15:57:03.129576+00:00",
+  "request_sha256": "80acf62929d8f57519808323cda404f9a88aa8eda89dbe1c34bb06f2f238afc4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65686,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40795,
+    "cached_tokens": 12672,
+    "completion_tokens": 1855
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,/^def branch/p' /tmp/hegel_continual_archive/conf_m102_a03_batch_06_solver.py | sed '$d' > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _kernel(z,n,h,g,w,l,variant=0):\\n    a=(z-z[:n].mean(0))/np.maximum(z[:n].std(0),1e-8)\\n    b=z-g*np.sin(h*z)\\n    b=(b-b[:n].mean(0))/np.maximum(b[:n].std(0),1e-8)\\n    G=(b@b.T+w*(a@a.T))/(4*(1+w))\\n    R=((b[:,None]-b[None,:])**2+w*(a[:,None]-a[None,:])**2)/(1+w)\\n    r=np.exp(-R/l); m=r.sum(2)\\n    return (1+G)**2+m/4+(m*m-(r*r).sum(2))/12\\n\\ndef _pred(K,Y,n,r):\\n    m=Y.mean(0)\\n    return K[n:,:n]@cho_solve(cho_factor(K[:n,:n]+r*np.eye(n)),Y-m)+m\\n\\ndef solve_batch(study):\\n    tr=study['train']; n=len(tr['x']); z=calibrate(study['panel_a'],np.r_[tr['x'],study['test']['x']]); y=tr['y']; T=tr['traj']\\n    yh=np.mean([_pred(_kernel(z,n,h,g,w,l),y,n,r) for h,g,w,l,r in [(2.4,.4,.1,15,.001),(2.9,.4,.4,15,.001),(3.1,.4,.4,15,.001),(3.1,.55,1,6,.005)]],0)\\n    a=(z-z[:n].mean(0))/z[:n].std(0); b=z-.4*np.sin(2.9*z); b=(b-b[:n].mean(0))/b[:n].std(0)\\n    P=_pred((1+(b@b.T+.1*a@a.T)/4.4)**2,T,n,.001)\\n    return {'y_hat':yh,'state_pred':P,'diagnostics_vec':np.array([yh.mean(),yh.std(),P[:,-1].mean(),P[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/mkl08.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nD=np.load('/tmp/feat08.npz'); z,y,T=[D[k] for k in ['z','y','t']]; E=np.load('/tmp/enc08.npz'); W=np.load('/tmp/bfit08.npz'); N=len(z); rng=np.random.default_rng(555); splits=[np.arange(N)]+[rng.permutation(N) for _ in range(6)]\\ndef ks(X,I):\\n X=(X-X[I].mean(0))/X[I].std(0); G=X@X.T/4; D=(X[:,None]-X[None,:])**2\\n return G,D,X\\n\\ndef basis(I,variant):\\n A,DA,a=ks(z,I); C=[np.ones_like(A),A,A*A]; blocks=[]\\n for X in [z-.4*np.sin(f*z) for f in [2.4,2.9,3.3]]+[E['panel_bvsin'],W['f2']]:\\n  G,R,x=ks(X,I); K=[G,G*G,G*A];\\n  for L in [1.5,6,24]:\\n   S=np.exp(-(R+.25*DA)/(1.25*L)); M=S.sum(2); K.extend([M/4,(M*M-(S*S).sum(2))/12]);\\n   if variant: K.extend([S[:,:,i] for i in range(4)]); K.extend([S[:,:,i]*S[:,:,j] for i in range(4) for j in range(i)])\\n  blocks.append(K)\\n return [np.array(C+K) for K in blocks]\\n\\ndef infer(B,I,J,Y,penalty):\\n p=len(B); Y=np.asarray(Y); sd=Y.std(0); M=(Y-Y.mean(0))/np.maximum(sd,1e-8); M=M.reshape(len(I),-1); m=M.shape[1]; A=np.r_[B[:,I][:,:,I],np.eye(len(I))[None]]; a=A.reshape(p+1,-1); ref=np.r_[np.full(p,-3.),-7.]; ref[0]=-1\\n def obj(q):\\n  v=np.exp(q); K=(v@a).reshape(len(I),-1); F=cho_factor(K); alpha=cho_solve(F,M); d=(cho_solve(F,np.eye(len(I)))-alpha@alpha.T/m).ravel(); return np.log(F[0].diagonal()).sum()+np.sum(M*alpha)/2/m+penalty*np.sum((q-ref)**2)/2,(a@d)*v/2+penalty*(q-ref)\\n O=minimize(obj,ref,jac=True,method='L-BFGS-B',bounds=[(-14,5)]*p+[(-12,-2)],options={'maxiter':160,'ftol':1e-7}); v=np.exp(O.x); F=cho_factor((v@a).reshape(len(I),-1)); P=np.tensordot(v[:-1],B[:,J][:,:,I],axes=1)@cho_solve(F,M); return P*sd+Y.mean(0),O.fun\\nif __name__=='__main__':\\n for variant in (0,1):\\n  for p in [.02,.15,.6,2.]:\\n   es=[]; et=[]; ws=[]\\n   for S in splits:\\n    I,J=S[:52],S[52:]; B=basis(I,variant); Z=[infer(H,I,J,y[I,None],p) for H in B]; P=np.array([q[0][:,0] for q in Z]); L=np.array([q[1] for q in Z]); w=np.exp(-.4*(L-L.min())); w/=w.sum(); es.append(np.r_[np.mean(abs(P-y[J]),axis=1),np.mean(abs(w@P-y[J])),np.mean(abs(P.mean(0)-y[J]))]); ws.append(w)\\n   e=np.array(es); print(variant,p,'first',e[0].round(5),'mean',e.mean(0).round(5),'worst',e.max(0).round(5),'weights',ws[0].round(3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mkl08.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single fixed kernel) -> H2 (separate trajectory fit and fold-local additive kernel weighting); best previous 52/20 y MAE is 0.04068.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use train-fitted polynomial warp\",\"rejected_reason\":\"Its best seven-split endpoint mean MAE was 0.05409, worse than the fixed additive kernel.\"}],\"rationale\":\"Save and schema-check a working solver now. Then test whether training-only kernel weighting improves the 52/20 endpoint score without worsening the other splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1402aa8ebd557f04839d3552f2329865070708c10d53a3da165a32500de48f8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42755.67,
+      "usage_known": true,
+      "prompt_tokens": 40795,
+      "cached_tokens": 12672,
+      "completion_tokens": 1855
+    }
+  ]
+}

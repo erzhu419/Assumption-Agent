@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f5ce42d3ec1475b9436f120b03a64ff",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:04.578161+00:00",
+  "ended_at_utc": "2026-11-28T15:02:38.776027+00:00",
+  "request_sha256": "8749474314dc3626ac7910afd6eace1583532dec9ea098a8ab499b6252678698",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53701,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37340,
+    "cached_tokens": 12672,
+    "completion_tokens": 1375
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/struct.py <<'PY'\\nfrom explore import *\\nfrom graph import panel,fw,bw\\nfrom sklearn.model_selection import KFold\\nfrom scipy.linalg import solve\\nfrom itertools import product\\nfolds=list(KFold(5,shuffle=True,random_state=21).split(np.arange(52)))+[(np.arange(52),np.arange(52,72))]\\nG={'x':x,'z':z,'h':h,'Bz':fw(z),'Bx':fw(x),'ix':bw(x)}\\nfor k,g in list(G.items()):\\n a,b=panel(g); G.update({k+'c1':a,k+'c2':b,k+'cs':a+b,k+'cd':a-b,k+'cp':a*b})\\ndef std(F,i):\\n return F/np.maximum(np.sqrt(np.mean(F[i]**2,axis=0)),1e-8)\\ndef err(F,pen,Y=R):\\n E=[]\\n for i,j in folds:\\n  A=std(F,i); Q=A[i]; M=Q.T@Q+np.diag(np.broadcast_to(pen,Q.shape[1])); p=A[j]@solve(M,Q.T@Y[i],assume_a='pos'); E.append(np.mean(abs(p-Y[j]),0))\\n return np.array(E)\\nbase=aff(z); out=[]\\nfor k,g in G.items():\\n for tag,h2 in [('id',g),('t.7',np.tanh(.7*g)),('t1.25',np.tanh(1.25*g)),('t2.2',np.tanh(2.2*g)),('sin1.25',np.sin(1.25*g)),('sin2.2',np.sin(2.2*g)),('r.22',g/(1+.22*g*g)),('r1.25',g/(1+1.25*g*g)),('plus',g+.22*np.tanh(1.25*g)),('minus',g-.22*np.tanh(1.25*g))]:\\n  A=np.c_[base,poly(h2,2)[:,1:]]\\n  for lam in [.005,.15,1.5]:\\n   E=err(A,np.r_[np.full(5,1e-6),np.full(A.shape[1]-5,lam)]);out.append((k,tag,lam,E[:-1].mean(0),E[-1]))\\nfor j in range(3):\\n print('SINGLE',j,*sorted(out,key=lambda t:t[3][j])[:12],sep='\\\\n'); print('gate diagnostic',*sorted(out,key=lambda t:t[4][j])[:5],sep='\\\\n')\\n# Sparse higher-order interactions and gated multivariate products.\\nout=[]\\nfor k,g in list(G.items())[:6]:\\n P=poly(g,4); F=poly(g,2); t1,t2=panel(g); th=np.tanh(1.25*g); si=np.sin(1.25*g); rr=1/(1+.22*g*g)\\n mats=[('higher',P[:,15:]),('gate',np.c_[poly(th,2)[:,1:],poly(si,2)[:,1:],(F[:,:,None]*rr[:,None,:]).reshape(len(g),-1)]),('branch',np.c_[poly(t1,2)[:,1:],poly(t2,2)[:,1:],(t1[:,:,None]*t2[:,None,:]).reshape(len(g),-1)]),('pair',np.column_stack([fn(g[:,a]+sg*g[:,b]) for a in range(4) for b in range(a+1,4) for sg in [1,-1] for fn in [lambda v:np.tanh(1.25*v),lambda v:np.cos(1.25*v),lambda v:1/(1+.22*v*v)]]))]\\n for name,M in mats:\\n  A=np.c_[F,M];\\n  for lam in [.03,.3,3,15,70]:\\n   E=err(A,np.r_[np.full(5,1e-6),np.full(10,.04),np.full(M.shape[1],lam)]);out.append((k,name,lam,E[:-1].mean(0),E[-1]))\\nfor j in range(3):\\n print('COMPOUND',j,*sorted(out,key=lambda t:t[3][j])[:10],sep='\\\\n');print('gate diagnostic',*sorted(out,key=lambda t:t[4][j])[:5],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic numerator with a global denominator -> H2 nonlinear coordinate transforms before pairwise products; inherited 52/20 MAEs are 0.040803 for y and 0.010249 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Optimize a more flexible global denominator\",\n      \"rejected_reason\": \"The tested global denominators missed the holdout tolerance; nonlinearities before multiplication have not yet been tested systematically.\"\n    }\n  ],\n  \"rationale\": \"Rank transformed interaction models on folds within the first 52 observations, then check the prescribed gate separately for y and both trajectory factors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1100045bebbb79a6e3e6d937c1d97f9a61c582ffdd017ce515fcb4e52c1aaa64",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34196.72,
+      "usage_known": true,
+      "prompt_tokens": 37340,
+      "cached_tokens": 12672,
+      "completion_tokens": 1375
+    }
+  ]
+}

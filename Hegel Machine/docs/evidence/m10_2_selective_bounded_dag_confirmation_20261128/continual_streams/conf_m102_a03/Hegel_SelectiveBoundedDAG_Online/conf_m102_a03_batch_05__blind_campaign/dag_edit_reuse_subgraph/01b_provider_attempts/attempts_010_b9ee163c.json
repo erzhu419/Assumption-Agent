@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b9ee163c53d147cfa876eafd7af859bf",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:30:14.805299+00:00",
+  "ended_at_utc": "2026-11-28T15:30:43.613261+00:00",
+  "request_sha256": "2aac6ba54deeac984b66253fec07dc23c49fdf9bea05a5329bd1a9eebcf1194a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61087,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36514,
+    "cached_tokens": 12672,
+    "completion_tokens": 1163
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/stress06.py <<'PY'\\nimport importlib.util,pickle,numpy as np,itertools\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\np='/holdout_task/node_00.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; n=len(x); co=m._sensor_calibration(s['panel_a']); z=(x-co[0])/co[1]; w=m._readout_coordinates(s['panel_b'],z)\\nfolds=[np.arange(n-20,n),*np.array_split(np.random.default_rng(101).permutation(n),4),*np.array_split(np.random.default_rng(807).permutation(n),4),*np.array_split(np.argsort(np.sum(z*z,axis=1)),4)]\\nfor j in folds:\\n i=np.setdiff1d(np.arange(n),j); ss={**s,'train':{k:t[k][i] for k in ('x','y','traj')},'test':{'x':x[j]}}; f=m.run_node({'__input__':ss}); yp=f['readout_test']@solve(f['readout_train'],y[i],assume_a='pos'); cp=np.concatenate([np.outer(solve(k,tr[i]@v,assume_a='pos'),v) for k,v in zip(f['state_train'],f['modes'])]); print('BASE',len(j),round(np.mean(abs(yp-y[j])),6),round(np.mean(abs(f['zt']@cp-tr[j])),6))\\ndef kernels(v,alpha):\\n g=v@v.T/v.shape[1]; ds=(v[:,None,:]-v[None,:,:])**2; return g, np.exp(-alpha*ds.mean(2)),np.exp(-alpha*ds).mean(2)\\nopts=list(itertools.product((.15,.35,.5,.8,1.3),(.0,.3,1.,3.),(0.,.15,.5),(.003,.01,.03,.06,.1)))\\nerrs=np.empty((len(opts),len(folds)))\\nfor fi,j in enumerate(folds):\\n i=np.setdiff1d(np.arange(n),j); ww=(w-w[i].mean(0))/w[i].std(0); zz=(z-z[i].mean(0))/z[i].std(0); K={al:kernels(ww,al) for al in (.15,.35,.5,.8,1.3)}; gz,rz,az=kernels(zz,1.2)\\n for oi,(al,ad,mix,r) in enumerate(opts):\\n  g,rb,ab=K[al]; k=1+g+rb+ad*ab+mix*(gz+az); errs[oi,fi]=np.mean(abs(k[np.ix_(j,i)]@solve(k[np.ix_(i,i)]+r*np.eye(len(i)),y[i],assume_a='pos')-y[j]))\\nfor oi in np.argsort(errs[:,1:9].mean(1)+.45*errs[:,1:9].max(1)+.20*errs[:,9:].mean(1))[:12]: print('OPT',opts[oi],np.round(errs[oi],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine panel B → nonlinear calibration with separate readout and state kernels; the verified candidate passed the official split at 0.036829 scalar and 0.009010 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The scalar margin is narrow, and the exploratory worst fold exceeded the official threshold.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact intact while testing its exact implementation on additional random and radial slices. Compare additive kernel terms without ranking them on the official split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "250a3e538496c15fade86284c8113da343e1b5f9225b96c51f406c0dc4489dba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28806.72,
+      "usage_known": true,
+      "prompt_tokens": 36514,
+      "cached_tokens": 12672,
+      "completion_tokens": 1163
+    }
+  ]
+}

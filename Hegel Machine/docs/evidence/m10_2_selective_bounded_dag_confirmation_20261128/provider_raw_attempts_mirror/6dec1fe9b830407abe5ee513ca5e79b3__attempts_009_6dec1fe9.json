@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6dec1fe9b830407abe5ee513ca5e79b3",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:12.514540+00:00",
+  "ended_at_utc": "2026-11-28T16:18:58.313898+00:00",
+  "request_sha256": "372cdb33df5b5a4b8fd125008cb2476684333fc94c4f6abc7d4dc99fc9427aa0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58564,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37207,
+    "cached_tokens": 12672,
+    "completion_tokens": 1970
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict through the inferred calibration, cosine and mixed activation path.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, root\\n\\n\\ndef _design(*parts):\\n    return np.column_stack((np.ones(len(parts[0])), *parts))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _latent(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n\\n    def correction(w):\\n        return .18 * np.tanh(1.8 * w) - .32 * np.sin(2.4 * np.roll(w, 2, axis=-1))\\n\\n    target = v - correction(u)\\n    keep = np.max(np.abs(v-u), axis=1) < 3\\n    for _ in range(8):\\n        offset, scale = np.array([_ls(_design(u[keep, j]), target[keep, j])\\n                                  for j in range(u.shape[1])]).T\\n        err = np.linalg.norm(u * scale + offset - target, axis=1)\\n        next_keep = err < max(.001, 4 * np.median(err))\\n        if np.array_equal(next_keep, keep) or next_keep.sum() < len(u)//2:\\n            break\\n        keep = next_keep\\n    out = []\\n    for row in x:\\n        initial = (row-offset)/scale\\n        def residual(z):\\n            return z*scale+offset+correction(z)-row\\n        ans = root(residual, initial, tol=1e-10)\\n        if np.linalg.norm(residual(ans.x), ord=np.inf) > 1e-8:\\n            ans = least_squares(residual, initial, gtol=1e-12)\\n        out.append(ans.x)\\n    return np.asarray(out)\\n\\n\\ndef _operator(panel, key, basis, start, bounds, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', key))\\n\\n    def residual(q):\\n        a = basis(u, q)\\n        return (a @ _ls(a, v)-v).ravel()\\n\\n    q = least_squares(residual, start, bounds=bounds, gtol=1e-11).x\\n    return basis(x, q) @ _ls(basis(u, q), v)\\n\\n\\ndef _features(study, x):\\n    z = _latent(study['panel_a'], x)\\n    w = _operator(study['panel_b'], 'v', lambda a,q: _design(np.cos(q[0]*a)),\\n                  [2.6], ([1.5], [3.5]), z)\\n    h = _operator(study['panel_c'], 'v1',\\n                  lambda a,q: _design(np.tanh(q[0]*a), np.sin(q[1]*a)),\\n                  [1.75, 2.1], ([1, 1.7], [2.5, 2.6]), w)\\n    readout = _design(z, h, np.sum(z*h, axis=1))\\n    return readout, np.column_stack((readout, z[:, 1]*h[:, 0]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    x = np.concatenate((tr['x'], study['test']['x']), axis=0)\\n    scalar, temporal = _features(study, x)\\n    y = scalar[n:] @ _ls(scalar[:n], tr['y'])\\n    obs = np.asarray(tr['traj'])\\n    modes = np.linalg.svd(obs, full_matrices=False)[2][:2]\\n    state = (temporal[n:] @ _ls(temporal[:n], obs @ modes.T)) @ modes\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/check14.py <<'PY'\\nimport numpy as np,pickle,importlib.util\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];n=len(tr['x']);times=s['eval_times']; scalar,temp=m._features(s,np.r_[tr['x'],s['test']['x']]);y=tr['y'];T=tr['traj'];coef=m._ls(temp[:n],T)\\nprint('temporal coefficient time dependence',np.round(coef,5),sep='\\\\n'); print('training RMSE',np.std(temp[:n]@coef-T));print('rank sv',np.linalg.svd(temp[:n]@coef,compute_uv=False))\\nfor label,fun,start in [('two exp',lambda t,p:np.c_[-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)],[1.8,.5]),('exp and t exp',lambda t,p:np.c_[-np.expm1(-p[0]*t),t*np.exp(-p[1]*t)],[1.8,.1]),('exp and t',lambda t,p:np.c_[-np.expm1(-p[0]*t),t],[1.8])]:\\n def e(p):\\n  r=fun(times,p);return (r@m._ls(r,coef.T)-coef.T).ravel()\\n q=least_squares(e,start).x; print('time model',label,q,np.std(e(q)))\\n\\ndef cv(te):\\n trn=np.setdiff1d(np.arange(n),te); modes=np.linalg.svd(T[trn],full_matrices=False)[2][:2]; yp=scalar[te]@m._ls(scalar[trn],y[trn]);tp=temp[te]@m._ls(temp[trn],T[trn]@modes.T)@modes;return [abs(yp-y[te]).mean(),abs(tp-T[te]).mean(),abs(tp-T[te]).mean(0).max(),abs(yp-y[te]).max(),abs(tp-T[te]).max()]\\nprint('prescribed',cv(np.arange(52,72))); rng=np.random.default_rng(14); print('random 52/20 worst:',np.max([cv(rng.choice(n,20,False)) for _ in range(100)],0));\\nfor j in range(4):\\n ix=np.argsort(tr['x'][:,j]); print('coordinate',j,cv(ix[:20]),cv(ix[-20:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check14.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Full quadratic trajectory readout -> shared dot product plus one directional cross term; the previous worst timestamp MAE was 0.02186 on the prescribed split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Keep all quadratic terms\",\"rejected_reason\":\"Only the diagonal terms and z[1]·h[0] materially contribute to the fitted trajectory; the remaining terms increase variance.\"}],\"rationale\":\"Build the solver around the measured panel path and the sparse readouts indicated by the coefficients. Check the prescribed split, random splits, coordinate extremes, and public schema.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "6e8e2f778cd5a1ea54f96d769ba1b87882e109e45f5129848b154eec83a59d84",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46733.94,
+      "usage_known": true,
+      "prompt_tokens": 37207,
+      "cached_tokens": 12672,
+      "completion_tokens": 1970
+    }
+  ]
+}

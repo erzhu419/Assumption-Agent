@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bdb93f815a2347bb9351b5661e7857db",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:11:39.781942+00:00",
+  "ended_at_utc": "2026-11-28T16:12:16.235426+00:00",
+  "request_sha256": "537b7cf640ddd8b1fd82c78a7bda74d0718df1e144c4da71e2d0b8aeaa9718ab",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56021,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36071,
+    "cached_tokens": 12672,
+    "completion_tokens": 1476
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^z=cal/,$d' /tmp/read15.py | sed 's/import numpy as np,pickle/import numpy as np/; /^s=pickle/d; s/; print(key,o.x,o.fun)//' >/holdout_task/node_01.py\\n# Keep experiment-only code outside the deliverable.\\nsed -i 's/);return D(x,o.x)/);return D(x,o.x)/;s/method=\\\\x27bounded\\\\x27)return/method=\\\\x27bounded\\\\x27);return/' /holdout_task/node_01.py\\ncat >>/holdout_task/node_01.py <<'PY'\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, raw = inputs['__input__'], inputs['node_00']\\n    x = np.vstack((raw['a'][:, 1:], raw['a_test'][:, 1:]))\\n    z = cal(study['panel_a'], x)\\n    g = panel(study['panel_b'], 'v', z, np.cos, (2, 3), False)\\n    a = aff(g)\\n    b = np.column_stack((a, *[g[:, i]*g[:, j] for i,j in combinations_with_replacement(range(4),2)]))\\n    n = len(raw['a'])\\n    coefficients = np.zeros((b.shape[1], 1+len(study['eval_times'])))\\n    coefficients[:, 0] = fit(b[:n], study['train']['y'])\\n    coefficients[:a.shape[1], 1:] = fit(a[:n], study['train']['traj'])\\n    return {'test_features': b[n:], 'coefficients': coefficients}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed '/for name,a in /,$d' /tmp/read15.py >/tmp/end15.py\\ncat >>/tmp/end15.py <<'PY'\\nfrom itertools import combinations, product\\nfrom scipy.linalg import qr\\nB=aff(g); y=Y[:,0]; ids=np.arange(len(y)); extra={}\\n# The cosine features before the output mixing are a distinct coordinate system.\\nu=np.cos(2.6*z); pp=np.c_[u,g];\\nfor k,a in [('u',u),('g',g),('h',hg),('k',kg),('hz',hz),('kz',kz),('z',z)]:\\n for i in range(4):\\n  v=a[:,i]\\n  for w in [.22, .6, 1.25, 2.15, 2.6, 3.5]:\\n   for nm,f in [('C',np.cos),('S',np.sin),('T',np.tanh),('R',lambda v:1/(1+v*v))]:extra[(k,i,nm,w)]=f(w*v)\\n  for j in range(i,4):extra[(k,i,j,'prod')]=v*a[:,j]\\n  for j in range(4):\\n   for nam,b in [('u',u),('g',g)]:\\n    p=b[:,j];extra[(k,i,nam,j,'prod')]=v*p\\n    for w in [.22, 1.25,2.15]:\\n     extra[(k,i,nam,j,'quot',w)]=p/(1+w*v*v)\\n     for t in [1,-1]:\\n      extra[(k,i,nam,j,'dot',t,w)]=np.cos(w*(p+t*v))\\n      extra[(k,i,nam,j,'tanh',t,w)]=np.tanh(w*(p+t*v))\\nfor k,a in [('g',g),('u',u)]:\\n for i,j,l in combinations_with_replacement(range(4),3):extra[(k,i,j,l,'cube')]=a[:,i]*a[:,j]*a[:,l]\\nE=np.column_stack(list(extra.values())); keys=list(extra)\\nfor base in [B,np.c_[B,q(g)]]:\\n out=[]\\n for v in folds:\\n  t=np.setdiff1d(ids,v); U=qr(base[t],mode='economic')[0]; r=y[t]-U@(U.T@y[t]); R=E[t]-U@(U.T@E[t]); norms=np.linalg.norm(R,axis=0); good=norms>1e-7; R=R/np.maximum(norms,1e-7); R[:,~good]=0\\n  print('singles',[(keys[j],round(abs(r@R[:,j])/np.linalg.norm(r),4)) for j in np.argsort(abs(r@R))[-6:][::-1]])\\n  cand=[]\\n  for j in range(10):\\n   l=np.argmax(abs(r@R));cand.append(l); D=np.c_[base,E[:,cand]]; U=qr(D[t],mode='economic')[0]; r=y[t]-U@(U.T@y[t]); print('step',j,keys[l],round(np.sqrt(np.mean(r*r)),4),round(abs(D[v]@fit(D[t],y[t])-y[v]).mean(),4),end='; ')\\n  print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/end15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared quadratic readout → H2 affine cosine trajectory and separate endpoint correction; worst held-out MAEs are approximately 0.0983 for the endpoint and 0.0049 for the trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply the same nonlinear design to both outputs\",\"rejected_reason\":\"The trajectory is already well predicted by the affine cosine design, and additional interactions increase its error.\"}],\"rationale\":\"Save the calibrated baseline now; examine endpoint residuals in both unmixed cosine and panel-output coordinates so the remaining basis search does not disturb the validated trajectory.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f987fa86a4abfaeb4bf677c3e475cb8c85fe7dbd194aa72703e95484f0f0546d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37053.21,
+      "usage_known": true,
+      "prompt_tokens": 36071,
+      "cached_tokens": 12672,
+      "completion_tokens": 1476
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a563bf8e5e734f6a82ea35f2c3e1de8b",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:27:11.558662+00:00",
+  "ended_at_utc": "2026-11-28T15:27:48.573653+00:00",
+  "request_sha256": "58205fabc6b3d03827ead6fb0e33e41aeb111720c6d368b2664e5e8237da8cd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60720,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40088,
+    "cached_tokens": 12672,
+    "completion_tokens": 1571
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^folds=/,$d' /tmp/map_probe.py | sed '/^C2=min/c\\\\C2=lambda a:one(np.cos(2.4*a))@lin(one(np.cos(2.4*p[\\\"u\\\"])),p[\\\"v2\\\"])' > /tmp/joint_probe.py\\ncat >> /tmp/joint_probe.py <<'PY'\\nprint('B errors',np.sqrt(np.mean((B(b['u'])-b['v'])**2,0)));print('C2 errors',np.sqrt(np.mean((C2(p['u'])-p['v2'])**2,0)))\\nprint('B',cb);print('C1',c1);print('C2',lin(one(np.cos(2.4*p['u'])),p['v2']));\\na=np.arange(52);h=np.arange(52,72); folds=[(a,h)]+[(ix[:52],ix[52:]) for ix in [np.random.default_rng(i).permutation(n) for i in range(4)]]\\nF=-np.expm1(-t[:,None]*np.array([.37633,1.78968,5.5352])); H=lin(F,T.T).T; L=np.c_[y,H,T]\\nD={'z':z,'b':B(z),'c':C(z),'d':C2(z),'cb':C(B(z)),'db':C2(B(z)),'p':mon(z,cyc),'q':np.cos(2.4*z),'qb':np.cos(2.4*B(z))};\\nfor k,X in D.items(): print(k,np.round(np.corrcoef(np.c_[X,L[:,:4]].T)[:4,4:],2))\\ncols={};groups={}\\ndef add(name,X):\\n X=np.reshape(X,(n,-1)); groups[name]=X\\n for i,g in enumerate(X.T):cols[name+':'+str(i)]=g\\nfor name,X in D.items():\\n add(name,X)\\n for d in [2,3]:add(name+'P'+str(d),mon(X,list(itertools.combinations_with_replacement(range(4),d))))\\n for k in [.5,1.25,2,2.4,3,4,5,6,8]:\\n  for fun in [np.sin,np.cos,np.tanh]:add(name+fun.__name__+str(k),fun(X*k))\\n for k in [.22,.5,1,2]:\\n  add(name+'rat'+str(k),X/(1+k*X*X));add(name+'rat2'+str(k),1/(1+k*X*X))\\nfor n1,n2 in [('z','c'),('z','d'),('c','d'),('b','c'),('b','d'),('b','cb'),('b','db'),('cb','db'),('z','b'),('z','cb'),('z','db'),('p','q')]:\\n W,V=D[n1],D[n2];add(n1+'*'+n2,(W[:,:,None]*V[:,None,:]));add(n1+'/'+n2,(W[:,:,None]/(1+.22*V[:,None,:]**2)));add(n2+'/'+n1,(V[:,:,None]/(1+.22*W[:,None,:]**2)))\\nfor k,X in D.items():\\n for name,V in [('sum',X[:,[i for i,j in pairs]]+X[:,[j for i,j in pairs]]),('dif',X[:,[i for i,j in pairs]]-X[:,[j for i,j in pairs]])]:\\n  for f in [np.sin,np.cos,np.tanh]:\\n   for r in [1,1.25,2.4,3.5,5,6]:add(k+name+f.__name__+str(r),f(r*V))\\nfrom sklearn.linear_model import Lars\\nM=np.column_stack(list(cols.values())); N=np.array(list(cols)); print('M',M.shape)\\nfor j in [0,1,2,3,4,11]:\\n target=L[:,j]; print('TARGET',j); opt=[]\\n for ks in [(k,) for k in D]+[('z','p','q','c','d'),('b','cb','db','qb'),('z','b','c','d'),tuple(D)]:\\n  mask=np.array([any(k in ks for k in name.split(':')[0].replace('*','/').split('/')) or any(name.startswith(k+p) for k in ks for p in ['P','sin','cos','tanh','rat','sum','dif']) for name in N]); X=M[:,mask]; names=N[mask]; E=[]; traces=[]\\n  for aa,hh in folds:\\n   m=X[aa].mean(0); sd=np.maximum(X[aa].std(0),1e-9); XX=(X-m)/sd; mdl=Lars(n_nonzero_coefs=28,fit_intercept=True).fit(XX[aa],target[aa]); pred=XX@mdl.coef_path_+mdl.intercept_; E.append(np.mean(abs(pred[hh]-target[hh,None]),0)); traces.append(mdl.active_)\\n  e=np.stack([np.pad(v,(0,29-len(v)),mode='edge') for v in E]); i=e.mean(0).argmin();opt.append((e.mean(0)[i],e[0,i],max(e[:,i]),str(ks),i,names[traces[0][:min(i,12)]]))\\n for r in sorted(opt,key=lambda v:v[0])[:4]:print(r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/joint_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single-source nonlinear features) -> H2 (exact cosine operator plus sparse mixed-source interactions); panel-C v2 leave-one-out MAE is 0.000091, while downstream MAE remains above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the measured cosine law without surplus terms, check whether panel B is truly affine, and test sparse cross-operator products and rational quotients separately for the scalar and trajectory.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b00251ba04d797ca6f59741989a5e88c9097f0e4cae2abf2a48d4be9eeb90434",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37013.69,
+      "usage_known": true,
+      "prompt_tokens": 40088,
+      "cached_tokens": 12672,
+      "completion_tokens": 1571
+    }
+  ]
+}

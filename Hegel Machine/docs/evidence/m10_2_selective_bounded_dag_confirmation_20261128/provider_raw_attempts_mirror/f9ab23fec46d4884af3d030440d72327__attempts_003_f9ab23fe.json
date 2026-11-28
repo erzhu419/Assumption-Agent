@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9ab23fec46d4884af3d030440d72327",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:09.406174+00:00",
+  "ended_at_utc": "2026-11-28T15:21:31.724937+00:00",
+  "request_sha256": "a4d81c372489b6a26379e08f0702028b466b73efeb7b7aaaa22761f5b0eea184",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20347,
+    "cached_tokens": 12672,
+    "completion_tokens": 751
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_b04_batch_0{1,4}_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,glob,importlib.util,copy\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=map(tr.get,('x','y','traj')); q=copy.deepcopy(s); q['train']={k:v[:52] for k,v in tr.items()}; q['test']['x']=x[52:]\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nprint('times/telemetry',s['eval_times'],s['telemetry_vec']); print('raw ranges',x.min(0),x.max(0),'test',s['test']['x'].min(0),s['test']['x'].max(0)); print('correlation',np.corrcoef(np.c_[x,y,T[:,-1]].T)); print('spectra',np.linalg.svd(T,compute_uv=False)); print('sample',np.c_[x,y,T][:10]);\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m); o=m.solve_batch(q); print(f,np.mean(abs(o['y_hat']-y[52:])),np.mean(abs(o['state_pred']-T[52:])))\\n except Exception as e: print(e)\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; M=np.column_stack([np.prod(u[:,j],axis=1) for d in range(4) for j in cr(range(4),d)]); print(p, 'u',u.min(0),u.max(0))\\n for k,v in s[p].items():\\n  if k=='u': continue\\n  print(k,'v',v.min(0),v.max(0));\\n  for n in (5,15,35):\\n   A=M[:,:n]; fit=np.linalg.lstsq(A,v,rcond=None)[0]; r=np.linalg.norm(A@fit-v,axis=1); print(n,np.quantile(r,[0,.5,.8,1]),fit if n==5 else '')\\n print('first',u[:3],{k:v[:3] for k,v in s[p].items() if k!='u'})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: distinguish panel calibration and operator families before fitting response and trajectory laws; the archived transfer baseline has worst 52/20 MAE 0.184002.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived solvers on the same split and use panel residuals and trajectory rank to narrow the graph search.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ce46d4b3e4070a65fe2767e9420ea9f35a8bed6d5683c7ae7b2ef0952a244aeb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22734.04,
+      "usage_known": true,
+      "prompt_tokens": 20347,
+      "cached_tokens": 12672,
+      "completion_tokens": 751
+    }
+  ]
+}

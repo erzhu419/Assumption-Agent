@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfbc5b2df82f4f9ca8295ce1e0ae11df",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:16.180659+00:00",
+  "ended_at_utc": "2026-11-28T15:18:39.210743+00:00",
+  "request_sha256": "8251bafe2cf3725cfdccf254fdfbfcb6a292ee1040caef8257f82f02ebfbba2e",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 21475,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21493,
+    "cached_tokens": 12672,
+    "completion_tokens": 759
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/*solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment calibration' 2>&1 | head -20; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('public_batch.pkl','rb')); print('cases',len(s)); s=s[0]['study']; print('keys',s.keys()); print('times',s['eval_times']);\\ndef des(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for j in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\ndef chk(x,y,n,ds):\\n for d in ds:\\n  z=des(x,d); b=np.linalg.lstsq(z[:n],y[:n],rcond=1e-10)[0]; p=z@b; print(d,np.round(np.mean(abs(p[:n]-y[:n]),axis=0),5),np.round(np.mean(abs(p[n:]-y[n:]),axis=0),5));\\n  if d==1 and y.ndim==2 and y.shape[1]==4: print(np.round(b,3))\\nfor k,v in s.items():\\n if isinstance(v,dict) and k not in ('train','test'):\\n  print(k,[(kk,np.shape(vv)) for kk,vv in v.items()]);\\n  for a,x in v.items():\\n   for b,y in v.items():\\n    if a!=b and np.ndim(x)==np.ndim(y)==2 and len(x)==len(y): print(a,'->',b); chk(x,y,int(len(x)*.8),(1,2))\\n if not isinstance(v,dict): print(k,repr(v)[:400]);\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; print('raw readouts'); chk(x,np.column_stack([y,t]),52,(1,2,3,4)); print('right vecs',np.round(np.linalg.svd(t,full_matrices=False)[2][:3],4));\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: distinguish raw-coordinate readouts from panel-calibrated feature maps; the archived pre-gate endpoint and trajectory MAEs were 0.102786 and 0.172040.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure held-out panel-map residuals in both directions before composing a calibration with the endpoint and rank-two trajectory readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "d3730aaecbc81863522992855734e18cf121754825605c7948f83455034a2b01",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23028.76,
+      "usage_known": true,
+      "prompt_tokens": 21493,
+      "cached_tokens": 12672,
+      "completion_tokens": 759
+    }
+  ]
+}

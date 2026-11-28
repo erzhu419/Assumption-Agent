@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77dbd80627b24521ab8bf909d1c4f95a",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:39.792153+00:00",
+  "ended_at_utc": "2026-11-28T14:54:14.110393+00:00",
+  "request_sha256": "bd7cc06e49d8a24a6511fb0224171e62fe80a53ecb6e3b4e32c8a347b6bff011",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48656,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34073,
+    "cached_tokens": 12672,
+    "completion_tokens": 1450
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp /tmp/cfit.py batch_solver.py\\ncat >>batch_solver.py <<'PY'\\n\\n\\ndef _align(panel):\\n    u = np.asarray(panel['u'], dtype=float)\\n    v = np.asarray(panel['v'], dtype=float)\\n    offset, scale = [], []\\n    for a, b in zip(u.T, v.T):\\n        F = one(a)\\n        ij = np.triu_indices(len(a), 1)\\n        da = (a[:, None] - a)[ij]\\n        db = (b[:, None] - b)[ij]\\n        mask = abs(da) > 1e-8\\n        slope = np.median(db[mask] / da[mask])\\n        inter = np.median(b - slope*a)\\n        for _ in range(5):\\n            r = abs(b - inter - slope*a)\\n            keep = r <= max(5*np.median(r), 0.00035)\\n            inter, slope = lin(F[keep], b[keep])\\n        offset.append(inter)\\n        scale.append(slope)\\n    return np.asarray(offset), np.asarray(scale)\\n\\n\\ndef _square(z):\\n    return np.c_[one(z), z*z]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    offset, scale = _align(study['panel_a'])\\n    z = (np.vstack((tr['x'], study['test']['x']))-offset)/scale\\n    p = study['panel_c']\\n    curvature = _square(z) @ lin(_square(p['u']), p['v2'])\\n    targets = np.column_stack((tr['y'], tr['traj']))\\n    models = fitc(p)\\n    outputs = []\\n    for cf in (models[0], models[2]):\\n        w = np.c_[cf(z), curvature]\\n        w = (w-w[:n].mean(axis=0))/np.maximum(w[:n].std(axis=0), .1)\\n        G = w@w.T/w.shape[1]\\n        d = np.diag(G)\\n        D = np.maximum(d[:, None]+d-G*2, 0.)\\n        for K, alpha in (((1+.25*G)**2+np.exp(-.06*D), .0003), ((1+.06*G)**3, .00003)):\\n            K0 = K[:n,:n] + alpha*np.eye(n)\\n            outputs.append(K[n:,:n] @ np.linalg.solve(K0, targets))\\n    fit = np.mean(outputs, axis=0)\\n    y, state = fit[:,0], fit[:,1:]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 validate_public_schema.py\\npython3 -I validate_public_schema.py\\ncat >/tmp/stress6.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nf='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; T=t['traj']; n=len(x)\\na,b=m._align(s['panel_a']); rad=np.linalg.norm((x-a)/b,axis=1)\\nmodels=m.fitc(s['panel_c'],True)\\nm.fitc=lambda _: models\\nfor name,J in [('public',np.arange(52,72)),('large radius',np.argsort(rad)[-20:]),('small radius',np.argsort(rad)[:20]),('early block',np.arange(20)),('mid block',np.arange(20,40))]+[(f'random {k}',np.random.default_rng(k).permutation(n)[:20]) for k in range(5)]:\\n I=np.setdiff1d(np.arange(n),J); z=dict(s,train={k:t[k][I] for k in ['x','y','traj']},test={'x':x[J]}); r=m.solve_batch(z)\\n err=abs(r['state_pred']-T[J]); ey=abs(r['y_hat']-y[J]); print(name,'y/traj/terminal/worst horizon',np.round([ey.mean(),err.mean(),err[:,-1].mean(),err.mean(axis=0).max()],6))\\nPY\\npython3 -I /tmp/stress6.py >/tmp/stress6.out\\nsort -nk7 /tmp/stress6.out | grep 'panel fit' | head -8; tail -10 /tmp/stress6.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate cubic panel operator → H2 saturation-calibrated dual-panel predictor; best joint candidate scored 0.0198 y and 0.0151 trajectory MAE in inner folds.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Include panel B in the baseline\",\"rejected_reason\":\"The closest inner-fold comparisons favored the two panel C outputs without panel B.\"}],\"rationale\":\"Build the calibrated predictor, verify the exact artifact in a clean process, and measure radial and time-horizon slices separately before deciding whether a more structured model is needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a53cea9ed6fe89548a178e9682c07f09a773814bc547527281c13b2bb85ce42f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34317.03,
+      "usage_known": true,
+      "prompt_tokens": 34073,
+      "cached_tokens": 12672,
+      "completion_tokens": 1450
+    }
+  ]
+}

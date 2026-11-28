@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7d5a6cfc33749ea803a147bb75159da",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:22.416825+00:00",
+  "ended_at_utc": "2026-11-28T15:10:47.951114+00:00",
+  "request_sha256": "c2cfe3d880263160c1873ececa4c37f24a224aaab8f4e879c82ba1c978853740",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40457,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29567,
+    "cached_tokens": 5504,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(name,path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\n    return mod\\nnode=load('calibrator','/holdout_task/node_00.py')\\nsink=load('heads','/holdout_task/_frozen_nodes/node_01.py')\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\na=st['panel_a']; u=a['u']; v=a['v']; n=len(u)\\nfit=node._fit_panel(a)\\ndef forward(z,p):\\n    b,s,c,k,h=p; adj=np.roll(z,-1,axis=1)\\n    return b+s*z+(c+k*z)*adj+h*z**3\\ninlier=np.max(abs(forward(u,fit)-v),axis=1)<0.002\\nloo=[]; inverse=[]\\nfor i in range(n):\\n    keep=np.arange(n)!=i\\n    p=node._fit_panel({k:z[keep] for k,z in a.items()})\\n    if inlier[i]:\\n        loo.append(np.max(abs(forward(u[i:i+1],p)-v[i:i+1])))\\n        inverse.append(np.max(abs(node._invert(v[i:i+1],p)-u[i:i+1])))\\ngrid=np.stack(np.meshgrid(*[np.linspace(l,h,7) for l,h in zip(u.min(0),u.max(0))]),axis=-1).reshape(-1,u.shape[1]); roundtrip=np.max(abs(node._invert(forward(grid,fit),fit)-grid))\\nprint('panel inliers',sum(inlier),'max held-out forward error',max(loo),'max held-out inverse error',max(inverse),'max grid round-trip error',roundtrip)\\nassert max(loo)<0.002 and max(inverse)<0.004 and roundtrip<1e-8\\nx=st['train']['x']; y=st['train']['y']; traj=st['train']['traj']; reports=[]\\nidx=np.arange(len(x)); calibrated=node._invert(x,fit)\\nsplits=[(f'block{i}',ix) for i,ix in enumerate(np.array_split(idx,4))]\\nsplits += [('large_latent_norm',np.argsort(np.linalg.norm(calibrated,axis=1))[-18:])]\\nfor label,ix in splits:\\n    keep=~np.isin(idx,ix); yt=y[keep]; tr=traj[keep]\\n    sub={**st,'train':{'x':x[keep],'y':yt,'traj':tr,'summary':np.array([yt.mean(),yt.std(),tr[:,-1].mean(),tr[:,-1].std()])},'test':{'x':x[ix]}}\\n    w=node.run_node({'__input__':sub}); out=sink.run_node({'__input__':sub,'node_00':w})\\n    ym=np.mean(abs(out['y_hat']-y[ix])); tm=np.mean(abs(out['state_pred']-traj[ix]),axis=0)\\n    reports.append((ym,tm.mean(),tm.max())); print(label,'y MAE',ym,'trajectory MAE',tm.mean(),'worst horizon MAE',tm.max())\\nworst=np.max(reports,axis=0); print('worst y/trajectory/horizon',worst); assert np.all(worst<0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal affine calibration → H2 cyclic cubic calibration; the official holdout passed with scalar MAE 0.007026 and trajectory MAE 0.005892.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the accepted artifact without changing it: check held-out calibration rows, inversion across the observed coordinate range, and both prediction heads on blocked and high-latent-norm slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "8ded6734800a485a6dca42741b41e400ef5462788771dec7149409b20466bf33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26090.84,
+      "usage_known": true,
+      "prompt_tokens": 29567,
+      "cached_tokens": 5504,
+      "completion_tokens": 1065
+    }
+  ]
+}

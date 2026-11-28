@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a6024875cfc54830abbce9a723169d63",
+  "call_seq": 14,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:33.457438+00:00",
+  "ended_at_utc": "2026-11-28T15:07:57.779477+00:00",
+  "request_sha256": "efe90ce5989eb285c9fdb8b2ae59c858615f14ce61527afdb13154720842f021",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 91472,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 50628,
+    "cached_tokens": 14720,
+    "completion_tokens": 804
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -i 's/blend(25,0)/blend(0,25)/g; s/blend(75,1)/blend(1,75)/g; s/blend(75,2)/blend(2,75)/g; s/blend(75,3)/blend(3,75)/g' batch_solver.py\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1\\nrc=0\\npython3 /holdout_task/validate_public_schema.py || rc=$?\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:s=pickle.load(f)[0]['study']\\no=m.solve_batch(s); y=o['y_hat']; p=o['state_pred']; d=o['diagnostics_vec']; assert set(o)=={'y_hat','state_pred','diagnostics_vec'} and y.shape==(36,) and p.shape==(36,8) and d.shape==(4,) and all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in o.values()); np.testing.assert_array_equal(d,[y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()]); print('Isolated output contract passed')\\nrng=np.random.default_rng(87); tr=s['train'];\\nfor fold,r in enumerate([np.arange(72),rng.permutation(72),rng.permutation(72)]):\\n    n,h=r[:52],r[52:]; y,p=m._predict(s,n,tr['x'][h]); a=np.abs(y-tr['y'][h]).mean(); e=np.abs(p-tr['traj'][h]); print(f'52/20 split {fold}: y MAE={a:.6f}; trajectory MAE={e.mean():.6f}; worst horizon MAE={e.mean(axis=0).max():.6f}; gate passed={max(a,e.mean())<=.038}')\\nPY\\nexit \\\"$rc\\\"\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (mode-specific ridge) → H2 (panel-informed ensemble); the ensemble prototype reached 0.179828 trajectory MAE on the 52/20 split, but the exact artifact has not yet been scored after the indexing fix.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Restore the runnable ridge baseline\",\n      \"rejected_reason\": \"Its measured 52/20 MAEs were 0.251442 for y and 0.425344 for trajectories, and the ensemble crash is attributable to reversed arguments.\"\n    }\n  ],\n  \"rationale\": \"Correct all four reversed ensemble calls, then check the exact artifact in isolated Python and report the numerical gate separately from the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "9a4761e34fa9a630931c94300938d8d67a4de90fd8cdd6ef704646289de7f10a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24723.87,
+      "usage_known": true,
+      "prompt_tokens": 50628,
+      "cached_tokens": 14720,
+      "completion_tokens": 804
+    }
+  ]
+}

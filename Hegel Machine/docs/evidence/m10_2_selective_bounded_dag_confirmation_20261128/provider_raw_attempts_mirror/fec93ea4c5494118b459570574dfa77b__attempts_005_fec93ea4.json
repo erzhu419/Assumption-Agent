@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fec93ea4c5494118b459570574dfa77b",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:23.413180+00:00",
+  "ended_at_utc": "2026-11-28T15:40:56.829327+00:00",
+  "request_sha256": "c9acba9abe814739e6ba61d02d5421a1db748bd7146ece076b064e2abe28a06d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38974,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27724,
+    "cached_tokens": 12672,
+    "completion_tokens": 1243
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/hegel_probe2.py <<'PY'\\nimport hegel_probe as h\\nfrom hegel_probe import np,p,a,least_squares\\nh.vi=np.arange(52,72); s=h.study(np.arange(52),h.vi); x=np.r_[s['train']['x'],s['test']['x']]; n=52\\nlin=a.lin\\nu,v=p['panel_a'].values(); F=a.one(u); ok=np.ones(len(u),bool)\\nfor _ in range(8):\\n A=lin(F[ok],v[ok]); r=np.linalg.norm(v-F@A,axis=1);ok=r<max(4*np.median(r),.001)\\nprint('A',A,'residuals',np.sort(r)); print('A SVD',np.linalg.svd(A[1:],compute_uv=False))\\nub,vb=p['panel_b'].values(); B=lin(a.one(ub),vb);print('B svd',np.linalg.svd(B[1:],compute_uv=False))\\nu=p['panel_c']['u']; v=p['panel_c']['v1']\\nmodels={'soft':lambda w,q:w/(1+q*abs(w)), 'tanh':lambda w,q:np.tanh(q*w),'atan':lambda w,q:np.arctan(q*w),'sin':lambda w,q:np.sin(q*w),'asinh':lambda w,q:np.arcsinh(q*w),'root':lambda w,q:w/np.sqrt(1+q*w*w),'rat2':lambda w,q:w/(1+q*w*w),'power':lambda w,q:np.sign(w)*abs(w)**q,'exp':lambda w,q:np.sign(w)*(-np.expm1(-q*abs(w))),'erf':lambda w,q:__import__('scipy').special.erf(q*w)}\\nfits=[]\\nfor name,fn in models.items():\\n for mode in ('shared','separate','full','shared-even'):\\n  def d(w,q,j):\\n   z=fn(w,q if mode=='shared' else q[j] if mode=='separate' else q); b=a.one(w) if mode.startswith('shared') or mode=='full' else a.one(w[:,j]); z=z if mode=='full' else z[:,j];return np.c_[b,z,w*w] if mode=='shared-even' else np.c_[b,z]\\n  def res(q):return np.concatenate([d(u,q,j)@lin(d(u,q,j),v[:,j])-v[:,j] for j in range(4)])\\n  qq=min((least_squares(res,np.full(4 if mode=='separate' else 1,q),bounds=(.02,10),gtol=1e-12) for q in [.4,1.4,2.7]),key=lambda f:f.cost); err=np.sqrt(np.mean(qq.fun**2));fits.append((err,name,mode,qq.x));print(name,mode,qq.x,err)\\nAi=lambda z:(z-A[0])@np.linalg.inv(A[1:]); Ad=lambda z:a.one(z)@A\\nBi=lambda z:(z-B[0])@np.linalg.inv(B[1:]); Bd=lambda z:a.one(z)@B\\nfor name,z in {'Ai':Ai(x),'Ad':Ad(x),'AiBi':Bi(Ai(x)),'AiBd':Bd(Ai(x)),'BiAi':Ai(Bi(x)),'BdAi':Ai(Bd(x)),'Bd':Bd(x),'Bi':Bi(x)}.items():\\n for label,w in [('raw',z),('sq',np.c_[z,z*z]),('archive',a._panel_maps(p['panel_c'],z)),('arch+z',np.c_[z,a._panel_maps(p['panel_c'],z)])]:\\n  for std in [True,False]:\\n   w1=(w-w[:n].mean(0))/np.maximum(w[:n].std(0),.1) if std else w\\n   print(name,label,std,h.score(w1,s))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/hegel_probe2.py | tee /tmp/hegel_probe2.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal calibration and archived C map → H2 robust full-matrix calibration and revised nonlinear basis; best tested joint public MAE is 0.395004.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Archived coordinatewise calibration and archived C basis suffice for the new batch.\",\"empirical_witness\":\"Diagonal A residual row norms stay above 0.25 even after median-based fitting, and C v1 RMS is about 0.04 while archived C v2 retains sub-0.0005 RMS.\",\"causal_blanket_diagnosis\":\"The calibration may mix coordinates, and v1 needs a different nonlinear basis; v2 can retain the prior rational basis.\",\"sublated_pivot\":\"Fit robust full affine A and compare shared nonlinear C bases and A/B composition orders.\",\"risk_kind\":\"calibration_and_basis_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate gross A contamination from coordinate mixing, then require candidate feature maps to reconstruct the panel and predict measured outcomes through the frozen DAG.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "837b246e25bcf8347a67cf9fbb71cc272fbea98937336aa13e6884c02b28062b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33415.14,
+      "usage_known": true,
+      "prompt_tokens": 27724,
+      "cached_tokens": 12672,
+      "completion_tokens": 1243
+    }
+  ]
+}

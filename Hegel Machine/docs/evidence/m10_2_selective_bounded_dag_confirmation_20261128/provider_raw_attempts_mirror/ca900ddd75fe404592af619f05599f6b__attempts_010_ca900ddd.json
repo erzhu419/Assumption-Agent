@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca900ddd75fe404592af619f05599f6b",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:33.240566+00:00",
+  "ended_at_utc": "2026-11-28T15:21:16.524755+00:00",
+  "request_sha256": "9a6901a0b4396560ec1dbd11c8613c6691a2acbf116ade5d3eb6098330b42050",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59309,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32730,
+    "cached_tokens": 5504,
+    "completion_tokens": 827
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/compare.py <<'PY'\\nexec(open('/tmp/stress.py').read().split('for label,j in sets:')[0])\\nbase=fs[:,:9]; xx=fs[:,9:].reshape(len(z),4,4); diag=xx[:,np.arange(4),np.arange(4)]; dot=diag.sum(1)\\ndesigns={'full':fs,'diag':np.c_[base,diag],'diag+10':np.c_[base,diag,xx[:,1,0]],'dot+10':np.c_[base,dot,xx[:,1,0]]}\\nfor reg in (.0003,.001,.003,.01):\\n designs[f'full ridge {reg}']=fs\\nfor name,d in designs.items():\\n metrics=[]\\n for label,j in sets:\\n  i=np.setdiff1d(np.arange(len(z)),j); trj=tr['traj'][i]; u,sw,vt=np.linalg.svd(trj,full_matrices=False); temporal=vt[:2]; h=trj@temporal.T\\n  a=d[i]; b=d[j]\\n  if 'ridge' in name:\\n   lam=float(name.split()[-1]); S=np.diag(np.r_[np.zeros(9),np.full(16,np.sqrt(lam))]); a=np.vstack([a,S]); h=np.vstack([h,np.zeros((len(S),2))]);\\n  p=(b@m._ls(a,h))@temporal; e=abs(p-tr['traj'][j]); metrics.append([e.mean(),e.mean(0).max(),e.max()])\\n print(name,'required',np.round(metrics[0],5),'max',np.round(np.max(metrics,axis=0),5),'avg',np.round(np.mean(metrics,axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained bilinear trajectory readout -> H2 test sparse or shrinkage-stabilized couplings; required 52/20 MAEs are 0.00492 for y and 0.00774 for trajectories, with worst stress-slice MAEs of 0.01491 and 0.01842.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Retain the full bilinear trajectory model\",\"rejected_reason\":\"It already passes; use it as the control to see whether reducing weak cross terms improves the larger edge-slice errors.\"}],\"rationale\":\"Compare trajectory readouts on identical held-out splits, estimating temporal modes only from the fitting subset. Preserve the verified solver unless a challenger improves worst-slice error without materially worsening the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fb7e407eef5c7afe93958cd4b7f59f32ca49c30eb46c2ca183d00c77813893f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44149.85,
+      "usage_known": true,
+      "prompt_tokens": 32730,
+      "cached_tokens": 5504,
+      "completion_tokens": 827
+    }
+  ]
+}

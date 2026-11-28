@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8930276cfc304b268848f537455cc113",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:13.523857+00:00",
+  "ended_at_utc": "2026-11-28T15:00:41.011446+00:00",
+  "request_sha256": "6b171e472e384723e154ac8928de496674699b9c6f237d6cc45cb33cef6fab69",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29477,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24375,
+    "cached_tokens": 12672,
+    "completion_tokens": 1143
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/dag_probe.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; t=s['eval_times']; w=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['w'][:len(y)]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef fit(x,z):return np.linalg.lstsq(x,z,rcond=None)[0]\\ndef poly(x,d):return np.column_stack([np.prod(x[:,k],axis=1) for j in range(d+1) for k in combinations_with_replacement(range(x.shape[1]),j)])\\ndef errs(a):\\n z=np.c_[y,T]; r=a@fit(a,z)-z; p=a[52:]@fit(a[:52],z[:52])-z[52:]; return np.round([abs(r[:,0]).mean(),abs(r[:,1:]).mean(),abs(p[:,0]).mean(),abs(p[:,1:]).mean()],5)\\nnp.set_printoptions(precision=4,suppress=True)\\nb=s['panel_b']; c=s['panel_c']; B=fit(aff(b['u']),b['v']); print('B',B,'sd',np.std(aff(b['u'])@B-b['v'],axis=0)); print('w minmax',w.min(axis=0),w.max(axis=0));print('trajectory singular',np.linalg.svd(T,compute_uv=False))\\nfor label,u in [('C raw',c['u']),('C mapped',aff(c['u'])@B)]:\\n print(label,'extrema',u.min(axis=0),u.max(axis=0))\\n for k in ('v1','v2'):\\n  v=c[k]; print(k,'extrema',v.min(axis=0),v.max(axis=0),'affine',fit(aff(u),v),'sd',np.std(aff(u)@fit(aff(u),v)-v,axis=0),'corr',np.corrcoef(u.T,v.T)[:4,4:]); print('sample',np.c_[u[:5],v[:5]])\\n  for name,fn in [('identity',lambda x:x),('asinh',np.arcsinh),('atan',np.arctan),('tanh',np.tanh),('inv3',lambda x:np.sinh(np.arcsinh(x)/3)),('sin',np.sin),('sinh',np.sinh)]:\\n   def loss(g):\\n    a=aff(fn(u*g));return np.mean((a@fit(a,v)-v)**2)\\n   q=minimize_scalar(loss,bounds=(.05,5),method='bounded'); print(name,round(q.x,4),round(q.fun**.5,6),end='; ')\\n  print()\\nfor name,u in [('w',w),('calibrated raw',np.linalg.solve(B[1:].T,(w-B[0]).T).T)]:\\n for d in (1,2,3): print(name,d,errs(poly(u,d)))\\n for k,fn in [('asinh',np.arcsinh),('atan',np.arctan),('tanh',np.tanh),('inv3',lambda x:np.sinh(np.arcsinh(x)/3)),('sin',np.sin),('sinh',np.sinh)]:\\n  print(name,k,[errs(np.c_[poly(fn(g*u),2),u]) for g in (0.5,1,2,3,5)])\\nprint('archive tails'); print(open('/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py').read().split('def solve_batch')[-1]); print(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json').read())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived feature blend -> H2 panel-identified nonlinear coordinates and low-rank trajectory dynamics; current public CV not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare panel mappings in both coordinate systems, check trajectory rank, and benchmark candidate nonlinear bases before committing to a sink implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "2e6369836603e5d7193daf6e037233babc4ab23dba6380cc3544841d9d3b1e8a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27486.37,
+      "usage_known": true,
+      "prompt_tokens": 24375,
+      "cached_tokens": 12672,
+      "completion_tokens": 1143
+    }
+  ]
+}

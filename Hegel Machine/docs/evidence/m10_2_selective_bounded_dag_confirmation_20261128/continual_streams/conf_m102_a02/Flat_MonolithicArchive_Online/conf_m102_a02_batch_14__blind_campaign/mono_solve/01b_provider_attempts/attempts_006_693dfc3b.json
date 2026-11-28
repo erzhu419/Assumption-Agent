@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "693dfc3bc3eb443bb969bc7ec96ef51c",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:07.277887+00:00",
+  "ended_at_utc": "2026-11-28T16:18:39.935253+00:00",
+  "request_sha256": "082deae8f24e9c5c9bba8b06afa4e1bccf0cda96325f6b55500ce557008c562d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42954,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30011,
+    "cached_tokens": 12672,
+    "completion_tokens": 1327
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/graph14.py <<'PY'\\nfrom panels14 import *\\nimport importlib.util,itertools\\np=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/conf_m102_a02_batch_09_solver.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ndef calibrate(s):return m._calibrate(s['panel_a'])\\ndef panel(u,v,terms):\\n def D(x,p):return np.c_[aff(x),*[F[k](x,a) for k,a in zip(terms,p)]]\\n def err(p):\\n  d=D(u,p);return (d@ls(d,v)-v).ravel()\\n init={'sin':2.15,'cos':1.25,'rat':1.,'tanh':1.25,'gauss':1.,'soft':.83,'exp':.3,'rsq':1.}\\n fit=least_squares(err,[init[a] for a in terms],bounds=(.02,8),max_nfev=90)\\n w=ls(D(u,fit.x),v)\\n return lambda x:D(x,fit.x)@w,fit.x,w,np.std(fit.fun)\\ndef latent(s,x):\\n z=m._inverse(x,calibrate(s)); B=s['panel_b']; C=s['panel_c'];\\n b=panel(B['u'],B['v'],['gauss'])[0](z); c=panel(C['u'],C['v1'],['soft'])[0](z); d=panel(C['u'],C['v2'],['exp'])[0](z)\\n return dict(x=x,z=z,b=b,c=c,d=d)\\ndef feats(a,deg=2):\\n i,j=np.triu_indices(a.shape[1]);return np.c_[aff(a),a[:,i]*a[:,j]] if deg==2 else aff(a)\\nif __name__=='__main__':\\n tr=S['train']; traj=tr['traj']; y=tr['y']; t=S['eval_times']; L=latent(S,tr['x']); Y=np.c_[y,traj]; B=S['panel_b']; C=S['panel_c']\\n for u,v in [(B['u'],B['v']),(C['u'],C['v1']),(C['u'],C['v2'])]:\\n  outs=[]\\n  for terms in itertools.combinations(['sin','cos','tanh','rat','gauss','soft','exp','rsq'],2):\\n   _,p,w,e=panel(u,v,terms);outs.append((e,terms,p,np.linalg.norm(w,axis=0)))\\n  print('operator pairs',sorted(outs,key=lambda x:x[0])[:7]);\\n  for term in ['sin','tanh','rat','gauss','soft','exp']:\\n   _,p,w,e=panel(u,v,[term]); print(term,p,e,np.linalg.svd(w[5:],compute_uv=False), np.round(w,3) if (term=='gauss' and u is B['u']) or (term in ['soft','exp'] and u is C['u']) else '')\\n for r in range(1,4):\\n  def tm(p):return -np.expm1(-t[:,None]*p)\\n  def fun(p):d=tm(p);return (d@ls(d,traj.T)-traj.T).ravel()\\n  fit=least_squares(fun,np.geomspace(.2,2,r),bounds=(.001,10),max_nfev=1000); print('time',fit.x,np.std(fit.fun))\\n for deg in [1,2]:\\n  out=[]\\n  for n in range(1,4):\\n   for keys in itertools.combinations(L,n):\\n    a=feats(np.column_stack([L[k] for k in keys]),deg); aa=a[:52]; aq=a[52:];\\n    for la in ([0] if deg==1 else [0,.01,.1,1.]):\\n     w=ls(np.r_[aa,np.sqrt(la)*np.eye(a.shape[1])],np.r_[Y[:52],np.zeros((a.shape[1],9))]); E=abs(aq@w-Y[52:]);out.append((E[:,0].mean(),E[:,1:].mean(),keys,la))\\n  print('baseline',deg,'scalar',sorted(out)[:12]);print('trajectory',sorted(out,key=lambda r:r[1])[:12])\\n print('ranges',{k:(v.min(),v.max()) for k,v in L.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated input alone -> H2 compositional panel readouts; panel A inlier residual is about 0.0001 per component, but the best transferred 52/20 scalar and trajectory MAEs are 0.184677 and 0.228200.\",\n  \"nogood_update\": {\"has_new_nogood\": false, \"nogood_rung\": \"NONE\", \"assumption_refuted\": null, \"empirical_witness\": null, \"causal_blanket_diagnosis\": null, \"sublated_pivot\": null, \"risk_kind\": null, \"resolves_nogood_ids\": []},\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test which recovered panel coordinates carry predictive signal, whether panel B needs a second primitive, and how many shared relaxation modes the measured trajectories support.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c44f7942d65b196dc8faf99249adeea7ff55f0cd6ba439638c2adae6391812c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33112.43,
+      "usage_known": true,
+      "prompt_tokens": 30011,
+      "cached_tokens": 12672,
+      "completion_tokens": 1327
+    }
+  ]
+}

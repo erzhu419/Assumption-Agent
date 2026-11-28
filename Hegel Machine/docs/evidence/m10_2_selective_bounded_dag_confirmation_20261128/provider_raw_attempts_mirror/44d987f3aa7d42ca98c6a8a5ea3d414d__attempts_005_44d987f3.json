@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "44d987f3aa7d42ca98c6a8a5ea3d414d",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:41.848291+00:00",
+  "ended_at_utc": "2026-11-28T15:40:10.890385+00:00",
+  "request_sha256": "95178ffd8401d05de3a0d1bd36ee2fb7c55372c7977527c5a93931def9d9473a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27731,
+    "cached_tokens": 12672,
+    "completion_tokens": 1197
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat /tmp/hegel_continual_archive/*_10_solver.py; sed -n '49,110p' /tmp/hegel_continual_archive/*_06_solver.py; cat > /tmp/ex11.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; u,v=a['u'],a['v']; keep=np.max(abs(v-u),axis=1)<1\\nls=lambda A,b:np.linalg.lstsq(A,b,rcond=None)[0]\\nD=np.array([ls(np.c_[np.ones(keep.sum()),u[keep,j]],v[keep,j]) for j in range(4)])\\ntr=s['train']; X=(tr['x']-D[:,0])/D[:,1]; T=tr['traj']; Y=tr['y']; t=s['eval_times'];\\ndef poly(x,d):\\n return np.column_stack([np.ones(len(x))]+[x[:,i].prod(1) for k in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef cv(A,H):\\n return np.mean(abs(A[52:]@ls(A[:52],H[:52])-H[52:]),axis=0)\\nfor d in range(1,5):\\n A=poly(X,d); print('poly',d,cv(A,Y),cv(A,T),np.std(Y-A@ls(A,Y)))\\nfor name,F in [('exp',lambda p:-np.expm1(-t[:,None]*np.exp(p))),('log',lambda p:np.log1p(t[:,None]*np.exp(p))),('frac',lambda p:t[:,None]/(1+t[:,None]*np.exp(p))),('expmix',lambda p:np.c_[-np.expm1(-t*np.exp(p[0])),np.log1p(t*np.exp(p[1]))]),('exp0',lambda p:np.c_[t,-np.expm1(-t*np.exp(p[0]))])]:\\n r=least_squares(lambda p:(F(p)@ls(F(p),T.T)-T.T).ravel(),[-.8,.5] if name!='exp0' else [.5],bounds=(-8,6)); print('time',name,np.exp(r.x),np.std(r.fun))\\nfor key in ['panel_b','panel_c']:\\n P=s[key]; U=P['u']; A=poly(U,1)\\n for k in P:\\n  if k=='u':continue\\n  V=P[k]; print(key,k,'range',V.min(0),V.max(0)); print(np.c_[U,V][:8].round(3));\\n  for name,f in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('erf',__import__('scipy.special',fromlist=['erf']).erf),('silu',lambda z:z/(1+np.exp(-z))),('rational',lambda z:z/(1+z*z)),('quadratic',lambda z:z*z),('softplus',lambda z:np.logaddexp(0,z)),('atan',np.arctan)]:\\n   rms=[]\\n   for j in range(4):\\n    y=V[:,j]; w=ls(A,y); rng=np.random.default_rng(11); starts=[w,w*3,-w*3]+list(rng.normal(0,1,(12,5))); solutions=[least_squares(lambda z:f(A@z[:5])+z[5]-y,np.r_[p,0.],max_nfev=160) for p in starts]; rms.append(min(np.std(z.fun) for z in solutions));\\n   print(name,np.round(rms,6))\\nPY\\npython3 /tmp/ex11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archive transfer) -> H2 (diagonal affine calibration followed by an unidentified spatial operator and two temporal modes); best archived 52/20 MAEs were 0.18168 scalar and 0.37390 trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The large residuals of ordinary affine calibration indicate missing cross-coordinate or nonlinear terms.\",\"empirical_witness\":\"Trimmed diagonal affine calibration has 45 inliers with residuals below 0.0003 and three errors near 6.4; fitted off-diagonal gains are at most 0.00005.\",\"causal_blanket_diagnosis\":\"Three corrupted reference rows distort the ordinary fit and create spurious off-diagonal mixing.\",\"sublated_pivot\":\"Use robust diagonal calibration and search for missing structure downstream.\",\"risk_kind\":\"Calibration outliers masquerading as spatial mixing.\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare candidate two-mode bases against the full temporal shape and test nonlinear ridge operators on the calibration-independent auxiliary panels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e6ea1f995205799d78e020d071da5d9fd7db971a34db6e8545b3a2c4a84fba31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29041.08,
+      "usage_known": true,
+      "prompt_tokens": 27731,
+      "cached_tokens": 12672,
+      "completion_tokens": 1197
+    }
+  ]
+}

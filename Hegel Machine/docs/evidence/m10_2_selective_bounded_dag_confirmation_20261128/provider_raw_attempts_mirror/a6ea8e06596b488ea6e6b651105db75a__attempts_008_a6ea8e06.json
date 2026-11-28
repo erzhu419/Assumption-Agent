@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a6ea8e06596b488ea6e6b651105db75a",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:22:51.590661+00:00",
+  "ended_at_utc": "2026-11-28T15:23:16.211293+00:00",
+  "request_sha256": "11be72797739c6b0684bfbf53b052c6e8e56896c7fea79dc450f8ba60283e1fb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53155,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33662,
+    "cached_tokens": 12672,
+    "completion_tokens": 979
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nnode = runpy.run_path(str(root / 'node_00.py'))['run_node']\\nresponse = runpy.run_path(str(root / '_frozen_nodes/node_01.py'))['run_node']\\nsink = runpy.run_path(str(root / '_frozen_nodes/node_02.py'))['run_node']\\ns = pickle.loads((root / 'public_batch.pkl').read_bytes())[0]['study']\\na = s['panel_a']; disp = np.linalg.norm(a['u'] - a['v'], axis=1)\\ngross = disp > max(4.0, 5.0*np.median(disp))\\nz = node({'__input__': s}); clean = dict(s, panel_a={k:v[~gross] for k,v in a.items()})\\nb = node({'__input__': clean})\\nassert all(np.array_equal(z[k], b[k]) for k in ('z','zt'))\\nworst = 0.\\nfor j in np.flatnonzero(~gross):\\n    mask = np.arange(len(disp)) != j\\n    ss = dict(s, panel_a={k:v[mask] for k,v in a.items()})\\n    c = node({'__input__': ss})\\n    worst = max(worst, *(float(np.max(abs(z[k]-c[k]))) for k in ('z','zt')))\\nassert worst < .002\\nprint('excluded gross rows:', gross.sum(), 'max coordinate shift under any inlier deletion:', worst)\\nt = s['train']; n = len(t['x']); out = []\\nfor ids in (*np.array_split(np.arange(n),4), *np.array_split(np.argsort(np.linalg.norm(z['z'],axis=1)),4)):\\n    keep = np.ones(n,dtype=bool); keep[ids] = False\\n    tr = {k:t[k][keep] for k in ('x','y','traj')}\\n    tr['summary'] = np.array([tr['y'].mean(),tr['y'].std(),tr['traj'][:,-1].mean(),tr['traj'][:,-1].std()])\\n    ss = dict(s, train=tr, test={'x':t['x'][ids]})\\n    p = sink({'node_00':node({'__input__':ss}), 'node_01':response({'__input__':ss})})\\n    e = np.abs(p['state_pred']-t['traj'][ids]); out.append([np.mean(abs(p['y_hat']-t['y'][ids])),e.mean(),e.mean(axis=0).max()])\\nprint('fold MAEs (scalar, trajectory, worst horizon):', np.round(out,6).tolist())\\nprint('worst slice:', np.max(out,axis=0))\\nassert np.isfinite(out).all()\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine alignment -> H2 outlier-filtered cubic alignment; public scalar and trajectory CV MAEs are 0.009032 and 0.006674, and the compact calibration’s maximum leave-one-out residual is 0.0003393.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact candidate already passed the isolated public validator. Without editing it, test gross-outlier invariance, sensitivity to each calibration row, and downstream errors on held-out high-radius and temporal-horizon slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "08e4c8c169d5b69aba23e80500b6110d75842a085ad608aeb4964dcff880e94c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24619.44,
+      "usage_known": true,
+      "prompt_tokens": 33662,
+      "cached_tokens": 12672,
+      "completion_tokens": 979
+    }
+  ]
+}

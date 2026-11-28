@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "21649df5b0ff4224b8bc90d5f886b162",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:26:49.537796+00:00",
+  "ended_at_utc": "2026-11-28T16:27:14.025841+00:00",
+  "request_sha256": "8382defd2f6125ff1dc6d39bcfa39b34f8f757c5344e27df745bbbe90f9f3f48",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42516,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30211,
+    "cached_tokens": 12672,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep -nE 'def _operator|def _state|def _scalar|def _readout|return np.c_|return np.column_stack' /tmp/archive_code | cut -c1-220; cat >/tmp/probe15.py <<'PY'\\nimport pickle,numpy as n\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=n.load('/tmp/modeldata.npz'); ls=lambda x,y:n.linalg.lstsq(x,y,rcond=None)[0]; A=lambda x:n.c_[n.ones(len(x)),x]; ii,jj=n.triu_indices(4,1)\\nfuns={'cos':lambda x,p:n.cos(p*x),'sin':lambda x,p:n.sin(p*x),'exp':lambda x,p:n.exp(-p*x*x),'rat':lambda x,p:1/(1+p*x*x),'tanh':lambda x,p:n.tanh(p*x),'even_tanh':lambda x,p:n.tanh(p*x*x),'oddrat':lambda x,p:x/(1+p*x*x),'oddexp':lambda x,p:x*n.exp(-p*x*x),'pow':lambda x,p:abs(x)**p,'oddpow':lambda x,p:n.sign(x)*abs(x)**p,'hinge':lambda x,p:n.maximum(abs(x)-p,0),'coscube':lambda x,p:n.cos(p*x**3),'cosabs2':lambda x,p:n.cos(p*x*x)}\\nfor name,x,y in [(k+v,s[k]['u'],s[k][v]) for k in ('panel_b','panel_c') for v in s[k] if v!='u']+[('amp',d['x'],d['amp']),('y',d['x'],d['y'][:,None])]:\\n print('\\\\n',name); rows=[]\\n for basekind in (0,1):\\n  base=A(x) if not basekind else n.c_[A(x),x[:,ii]*x[:,jj]]\\n  for key,f in funs.items():\\n   def des(p):return n.c_[base,f(x,p)]\\n   end=1.1 if key=='hinge' else 12\\n   def loss(p):\\n    a=des(p); return n.mean((a@ls(a,y)-y)**2)\\n   g=n.linspace(.015,end,121); i=n.argmin([loss(p) for p in g]); p=minimize_scalar(loss,bounds=(g[max(0,i-1)],g[min(len(g)-1,i+1)]),method='bounded').x; a=des(p); mse=loss(p); loo=n.mean(abs((a@ls(a,y)-y)/(1-(a*n.linalg.pinv(a).T).sum(1))[:,None])); rows.append((loo,key,basekind,p,mse**.5))\\n print(sorted(rows)[:12]);\\n for zz in (A(x),n.c_[A(x),x*x],n.c_[A(x),x*x,x[:,ii]*x[:,jj]]):\\n  w=ls(zz,y); print('poly',zz.shape[1],n.mean(abs(zz@w-y),axis=0),n.round(w.T,2))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived readout reuse → H2 even nonlinear features in calibrated coordinates; best archived 52/20 MAEs remain 0.162531 for y and 0.088034 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The reference panel inverts to about 0.0003 on inliers and two relaxation modes fit trajectories to MAE 0.00342. Strong square correlations motivate profiling even primitives and pairwise interactions in each auxiliary panel and readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "953f5dee1385fe956d6cc287056e35035d3f417e27809402dbcc740cdf8162d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25002.55,
+      "usage_known": true,
+      "prompt_tokens": 30211,
+      "cached_tokens": 12672,
+      "completion_tokens": 983
+    }
+  ]
+}

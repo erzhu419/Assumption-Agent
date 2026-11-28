@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec7e1cab84524fa19b9bbd0e6de57a64",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:39.256993+00:00",
+  "ended_at_utc": "2026-11-28T15:56:23.358977+00:00",
+  "request_sha256": "87875197479193d72e6aef6b5568e2a80cb9f440a70735f5c039f1a5192e7d94",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54142,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35995,
+    "cached_tokens": 12672,
+    "completion_tokens": 1992
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated bilinear predictor with a shared two-mode time response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _one(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel, raw):\\n    u, v = panel['u'], panel['v']\\n\\n    def features(z):\\n        b = np.roll(z, -1, axis=-1)\\n        return np.stack((np.ones_like(z), z, b, z*b, z**3), axis=-1)\\n\\n    f = features(u)\\n    keep = np.linalg.norm(v, axis=1) < 5\\n    for _ in range(3):\\n        w = np.stack([_ls(f[keep, j], v[keep, j]) for j in range(4)])\\n        r = np.linalg.norm(np.sum(f*w, axis=-1)-v, axis=1)\\n        keep = r < max(0.001, 6*np.median(r))\\n    w = np.stack([_ls(f[keep, j], v[keep, j]) for j in range(4)])\\n\\n    def invert(row):\\n        def residual(z):\\n            return np.sum(features(z)*w, axis=-1)-row\\n        return least_squares(residual, (row-w[:, 0])/w[:, 1], gtol=1e-11).x\\n\\n    return np.stack([invert(row) for row in raw])\\n\\n\\ndef _profile(design, u, v, start, bounds):\\n    def residual(q):\\n        a = design(u, q)\\n        return (a@_ls(a, v)-v).ravel()\\n    q = least_squares(residual, start, bounds=bounds, gtol=1e-11, max_nfev=250).x\\n    return q, _ls(design(u, q), v)\\n\\n\\ndef _operators(panel, z):\\n    u = panel['u']\\n\\n    def signed(x, q):\\n        return _one(np.c_[np.tanh(q[0]*x), np.sin(q[1]*x), x/(1+q[2]*np.abs(x))])\\n\\n    def curved(x, q):\\n        return _one(np.c_[x, np.tanh(q[0]*x), x*np.roll(x, -1, axis=1)])\\n\\n    q, a = _profile(signed, u, panel['v1'], [2., 2., 1.], ([.3,.3,.1], [6.,6.,6.]))\\n    r, b = _profile(curved, u, panel['v2'], [1.2], (.2, 4.))\\n    return signed(z, q)@a, curved(z, r)@b\\n\\n\\ndef _time(t, r):\\n    return -np.expm1(-t[:, None]*r)\\n\\n\\ndef _readout(g, h):\\n    dot = np.sum(g*h, axis=1, keepdims=True)\\n    cross = (g[:, :, None]*h[:, None, :]).reshape(len(g), 16)\\n    return _one(np.c_[g, h, dot]), _one(np.c_[g, h, cross])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    raw = np.vstack((train['x'], study['test']['x']))\\n    z = _calibrate(study['panel_a'], raw)\\n    g, h = _operators(study['panel_c'], z)\\n    scalar, spatial = _readout(g, h)\\n    y = scalar[n:] @ _ls(scalar[:n], train['y'])\\n    target = np.asarray(train['traj']).T\\n    t = np.asarray(study['eval_times'])\\n\\n    def residual(r):\\n        f = _time(t, r)\\n        return (f@_ls(f, target)-target).ravel()\\n\\n    r = least_squares(residual, [.42, 1.82], bounds=([.05,.8], [.79,4.]), gtol=1e-11).x\\n    time = _time(t, r)\\n    amplitude = _ls(time, target).T\\n    state = (spatial[n:] @ _ls(spatial[:n], amplitude)) @ time.T\\n    end = state[:, -1]\\n    return dict(y_hat=y, state_pred=state,\\n                diagnostics_vec=np.array([y.mean(), y.std(), end.mean(), end.std()]))\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 validate_public_schema.py; cat > /tmp/audit15.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task'; spec=importlib.util.spec_from_file_location('candidate',p+'/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open(p+'/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,traj=tr['x'],tr['y'],tr['traj']; t=s['eval_times'];\\nz=m._calibrate(s['panel_a'],x);g,h=m._operators(s['panel_c'],z); a,b=m._readout(g,h); coef=m._ls(b[:52],np.c_[y,m._ls(m._time(t,[.42,1.82]),traj.T).T][:52]); np.set_printoptions(precision=3,suppress=True,linewidth=120);print('coefs',coef[:9].T);print('cross matrices',coef[9:].T.reshape(3,4,4)); print('dot scalar',m._ls(a[:52],y[:52]));\\nworst=np.zeros(3)\\ndef run(name,te):\\n global worst\\n keep=np.setdiff1d(np.arange(72),te); test=dict(s,train={**tr, **{k:tr[k][keep] for k in ('x','y','traj')}},test={'x':x[te]}); pred=m.solve_batch(test); e=np.abs(pred['state_pred']-traj[te]); score=[np.mean(abs(pred['y_hat']-y[te])),e.mean(),e.mean(0).max()]; worst=np.maximum(worst,score); print(name,np.round(score,6));\\nrun('specified',np.arange(52,72))\\nfor seed in range(5): run('random-'+str(seed),np.random.default_rng(seed).choice(72,20,replace=False))\\nfor j in range(4):\\n for sign in (-1,1):run('boundary-'+str(j)+'-'+str(sign),np.argsort(sign*z[:,j])[-20:])\\nprint('worst',worst)\\nPY\\npython3 -I /tmp/audit15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archive-wide transfer -> H2 cyclic calibration plus signed/curved operators and bilinear readouts; the exploratory 52/20 MAEs are 0.00454 scalar and 0.00557 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use only a dot-product interaction for both readouts\",\"rejected_reason\":\"The dot-product model achieved 0.03906 trajectory MAE; the full bilinear basis reduced it to 0.00557.\"}],\"rationale\":\"Build the solver from independently identified stages, use a compact scalar readout, and verify both outputs on the prescribed split and coordinate-boundary holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6ff684d540af2e1104fe81369d4c80730a05c8bf740fee148f2e72cc4f34836e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45157.13,
+      "usage_known": true,
+      "prompt_tokens": 35995,
+      "cached_tokens": 12672,
+      "completion_tokens": 1992
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "233edfb0dcf1487c903fead3aff37ba8",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:41.427492+00:00",
+  "ended_at_utc": "2026-11-28T15:09:17.068660+00:00",
+  "request_sha256": "2f9114575490f1ee76586fed19f0c831b01b786cf9980c6b9635d73a568fa92b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37882,
+    "cached_tokens": 12672,
+    "completion_tokens": 1441
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/link_probe.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nS=runpy.run_path('/holdout_task/batch_solver.py'); fit=S['_fit']; A=S['_affine']; Q=S['_quadratic']; s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y,t,x=[tr[k] for k in ('y','traj','x')]; a,b=S['_calibrate'](s['panel_a']); z=(x-a)/b; l=A(z); q=Q(z)\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\nprint('traj sv',np.linalg.svd(t,compute_uv=False)); print('traj linear',fit(l,t)); print('traj quadratic',fit(q,t)[5:]); print('y linear',fit(l,y))\\nfor k in ('panel_b','panel_c'):\\n p=s[k]; u=p['u']; print(k)\\n for name,v in p.items():\\n  if name=='u': continue\\n  coeff=fit(A(u),v); print(name,'affine',np.std(A(u)@coeff-v),coeff)\\n  for mode in ('tanh','sin','pow2','rat'):\\n   def B(h):\\n    return A(np.tanh(u*np.exp(h)) if mode=='tanh' else np.sin(u*np.exp(h)) if mode=='sin' else (u+np.exp(h)*u*u) if mode=='pow2' else u/(1+np.exp(h)*u*u))\\n   def err(h):\\n    f=B(h); return (f@fit(f,v)-v).ravel()\\n   m=min([least_squares(err,np.ones(4)*h,bounds=(-6,2)) for h in (-2,0,1)],key=lambda f:f.cost); f=B(m.x); print(mode,np.sqrt(np.mean(m.fun**2)),m.x)\\nI=np.arange(52); J=np.arange(52,72); p=np.argsort(np.abs(x@fit(x,y))); rng=np.random.default_rng(512); folds=[(I,J),(p[:52],p[52:])]+[(v[:52],v[52:]) for v in (rng.permutation(72) for _ in range(10))]\\nfor mode in ('fit','state','state2','state+fit','state+fit-reg','state+fit-sin','state+fit-erf'):\\n vals=[]\\n for i,j in folds:\\n  st=fit(l[i],t[i]); d=st[1:]@np.ones(t.shape[1]); d/=np.linalg.norm(d); yd=fit(l[i],y[i])[1:]; yd/=np.linalg.norm(yd)\\n  if d@yd<0: d=-d\\n  _,_,V=np.linalg.svd(st[1:].T,full_matrices=False); bb=V[:2].T\\n  qr,_=np.linalg.qr(q[i]); target=y[i]-qr@(qr.T@y[i]);\\n  def hfull(h):\\n   if mode=='state': return np.r_[h[0],d*np.exp(h[1])]\\n   if mode=='state2': return np.r_[h[0],bb@h[1:]]\\n   return h\\n  def F(h,k):\\n   v=l[k]@hfull(h)\\n   if mode.endswith('sin'): return np.sin(v)[:,None]\\n   if mode.endswith('erf'):\\n    from scipy.special import erf\\n    return erf(v)[:,None]\\n   return (v/(1+v*v))[:,None]\\n  def err(h):\\n   f=F(h,i); g=f-qr@(qr.T@f); e=g@fit(g,target)-target\\n   if mode.startswith('state+fit'):\\n    w=h[1:]; e=np.r_[e,(.035 if mode.endswith('reg') else .012)*(w-(w@d)*d)]\\n   return e\\n  starts=[np.array([0.,np.log(c)]) if mode=='state' else np.r_[0.,bb.T@yd*c] if mode=='state2' else np.r_[0.,c*yd] for c in (.45,1.2,2.3,3.4)]\\n  h=min([least_squares(err,h,max_nfev=90) for h in starts],key=lambda a:a.cost).x\\n  pi=np.c_[q[i],F(h,i)]; pj=np.c_[q[j],F(h,j)]; vals.append(np.mean(abs(pj@fit(pi,y[i])-y[j])))\\n  if len(vals)<3: print(mode,'split',len(vals),hfull(h))\\n print(mode,'cv',np.round(vals[:2],6),'random mean/max',np.mean(vals[2:]),np.max(vals[2:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/link_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 free quadratic-plus-gate ensemble → H2 test a shared trajectory/readout direction; verified 52/20 readout MAE is 0.014522, but the extreme-index slice reaches 0.044062.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the schema-passing solver\",\"rejected_reason\":\"The high-index slice exposes an extrapolation weakness, and no artifact edit is needed to test a tighter model.\"}],\"rationale\":\"The readout’s dominant linear direction and its nonlinear correction appear related. Check whether the trajectory identifies that direction reliably when outer-index labels are withheld, without replacing the verified solver until the challenger improves validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a393ce0deb610fa387c0734c035031c57f80d7b22d55a03246261639c2349bd3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36211.78,
+      "usage_known": true,
+      "prompt_tokens": 37882,
+      "cached_tokens": 12672,
+      "completion_tokens": 1441
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2850a49be7a49948862a8dc5932d567",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:13.909542+00:00",
+  "ended_at_utc": "2026-11-28T15:18:54.789980+00:00",
+  "request_sha256": "c131bbe94cec008305b4558ecdc494f527144b254903fe77cd2eb5ff5232d452",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42775,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29741,
+    "cached_tokens": 5504,
+    "completion_tokens": 1544
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '90,230p' /holdout_task/test_dag_candidate.py; cat /holdout_task/_frozen_nodes/node_02.py; cat >/tmp/nonlin7.py <<'PY'\\nexec(open('/tmp/panel_search.py').read().split('C={')[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import qr\\nfrom scipy.special import expit\\nfrom sklearn.gaussian_process.kernels import Matern\\nprint('sv',np.linalg.svd(t,compute_uv=False)); print('ranges',[(k,np.min(s[k]['u'],0),np.max(s[k]['u'],0)) for k in ('panel_a','panel_b','panel_c')]); print('summary',s['train']['summary'])\\nX=np.c_[y,t]; rng=np.random.default_rng(3128); folds=np.array_split(rng.permutation(len(y)),4)\\ndef cv(K,F=None):\\n err=[]\\n for j in folds:\\n  i=np.setdiff1d(np.arange(len(y)),j); L=K[np.ix_(i,i)]; R=K[np.ix_(j,i)]\\n  if F is None: pred=R@np.linalg.solve(L,X[i])\\n  else:\\n   f=F[i]; V=np.linalg.solve(L,np.c_[X[i],f]); p=ls(np.c_[f.T@V[:,X.shape[1]:]],f.T@V[:,:X.shape[1]]);pred=R@(V[:,:X.shape[1]]-V[:,X.shape[1]:]@p)+F[j]@p\\n  err.append(abs(pred-X[j]))\\n E=np.concatenate(err);return E[:,0].mean(),E[:,1:].mean()\\nres=[]\\nfor wname,w in [('z',z),('x',x),('f',z@B+h),('r',(z-h)@P)]:\\n c,d=(f(w) for f in funcs); dp=(c*d).sum(1); base=ones(np.c_[c,d,dp]); cross=(c[:,:,None]*d[:,None,:]).reshape(len(w),-1)\\n for nm,U in [('z',w),('cd',np.c_[c,d]),('zcd',np.c_[w,c,d]),('weightedcd',np.c_[c,0.5*d])]:\\n  U=U/U.std(0); dist=cdist(U,U)\\n  for l in [.75,1.5,3,6,12,24]:\\n   v=dist/l\\n   for typ,K in [('rbf',np.exp(-.5*v*v)),('matern',(1+v+v*v/3)*np.exp(-v))]:\\n    for ridge in [1e-7,1e-4,.003,.03]:\\n     for fn,F in [('simple',ones(w)),('branch',base),('cross',np.c_[base,cross])]:\\n      e=cv(K+np.eye(len(y))*ridge,F);res.append((*e,wname,nm,l,typ,ridge,fn))\\nprint('GP y',sorted(res)[:9]);print('GP t',sorted(res,key=lambda x:x[1])[:9]);\\n# Single nonlinear index: jointly fitted direction, partially linear readout.\\nfor wname,w in [('z',z),('x',x),('f',z@B+h),('r',(z-h)@P)]:\\n c,d=(f(w) for f in funcs); dot=(c*d).sum(1); base=ones(np.c_[c,d,dot]);\\n for name,g in [('tanh',np.tanh),('sin',np.sin),('soft',lambda u:u/(1+abs(u))),('gauss',lambda u:np.exp(-u*u)),('rat',lambda u:u/(1+u*u)),('relu',lambda u:np.logaddexp(0,u))]:\\n  for mod in [False,True]:\\n   vals=[]\\n   for j in folds:\\n    i=np.setdiff1d(np.arange(len(y)),j)\\n    def fd(p):\\n     v=g(w@p[:4]+p[4]);return np.c_[base,v[:,None]*np.c_[np.ones(len(y)),w]] if mod else np.c_[base,v]\\n    def loss(p):\\n     f=fd(p)[i];return f@ls(f,y[i])-y[i]\\n    ps=[least_squares(loss,p,max_nfev=60) for p in np.r_[np.eye(5)*1.5,rng.normal(0,1,(5,5))]]; p=min(ps,key=lambda q:q.cost).x; f=fd(p); vals.append([np.mean(abs(f[j]@ls(f[i],y[i])-y[j])),np.sqrt(np.mean(loss(p)**2))]);\\n   print(wname,name,mod,np.mean(vals,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/nonlin7.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration plus archived readouts -> H2 test a nonlinear scalar index and smooth residual structure; best simple held-out scalar and trajectory MAEs are 0.11326 and 0.06098.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select a calibration composition from the previous split\",\n      \"rejected_reason\": \"No composition reached tolerance, and the best scalar and trajectory scores came from different choices.\"\n    }\n  ],\n  \"rationale\": \"Compare a compact nonlinear scalar readout with smooth spatial residual models across four held-out folds. Read the validator alongside these experiments to keep the exact output contract in view.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8ef4d001613aa8b14c045a321fe6aee46a33b3f88abc537c3dd1adfcca410097",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40878.07,
+      "usage_known": true,
+      "prompt_tokens": 29741,
+      "cached_tokens": 5504,
+      "completion_tokens": 1544
+    }
+  ]
+}

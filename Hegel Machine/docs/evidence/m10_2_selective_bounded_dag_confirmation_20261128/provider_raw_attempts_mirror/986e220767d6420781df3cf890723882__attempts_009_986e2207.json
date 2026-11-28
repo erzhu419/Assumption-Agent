@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "986e220767d6420781df3cf890723882",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:39.661882+00:00",
+  "ended_at_utc": "2026-11-28T15:13:19.523790+00:00",
+  "request_sha256": "7d8c7c9c19e3ca9398059f96dc08c62edfbf169b16f03b7299040c3f2daf22aa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53545,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33453,
+    "cached_tokens": 12672,
+    "completion_tokens": 1662
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_dag.py <<'PY'\\nimport importlib.util,itertools,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); panel=s['panel_c']; u=panel['u']; z=m._calibrate(s['panel_a'],tr['x']); c,d=m._branches(panel,z); M,S=m._features(s,tr['x']); print('study/train keys, telemetry shape',list(s),list(tr),np.shape(s['telemetry_vec'])); print('times',s['eval_times']); print('no rowwise batch or relay labels in this schema')\\n# Compare calibration inverses with the same downstream model.\\na=s['panel_a']; A=m._design(a['u']); p0=m._ls(A,a['v']); keep=np.linalg.norm(A@p0-a['v'],axis=1)<3; p0=m._ls(A[keep],a['v'][keep]); e=a['v'][keep]-A[keep]@p0; print('reference inliers and affine versus cyclic inverse RMS',keep.sum(),np.sqrt(np.mean(e**2)),np.sqrt(np.mean((m._calibrate(a,a['v'][keep])-a['u'][keep])**2)))\\n# Candidate single-coordinate branch nonlinearities, compared by panel leave-one-out.\\nfor key,fs in [('v1',{'softsign':lambda x:x/(1+abs(x)), 'rational':lambda x:x/(1+x*x), 'tanh':np.tanh,'atan':np.arctan}), ('v2',{'silu':lambda x:x/(1+np.exp(-x)), 'rational':lambda x:x/(1+x*x)})]:\\n v=panel[key]\\n for name,f in fs.items():\\n  for shifted in [False,True]:\\n   def design(x,h): return m._design(np.c_[x,f(x*h[0]+(h[1:] if shifted else 0))])\\n   def res(h,ids):\\n    B=design(u[ids],h); return (B@m._ls(B,v[ids])-v[ids]).ravel()\\n   def fit(ids):\\n    lo=[.12]+([-1.5]*4 if shifted else []); hi=[4.]+([1.5]*4 if shifted else []); opts=[]\\n    for q in [.6,1.4]:\\n     opts.append(least_squares(res,[q]+([0.]*4 if shifted else []),bounds=(lo,hi),args=(ids,),max_nfev=75))\\n    return min(opts,key=lambda a:a.cost).x\\n   I=np.arange(len(u)); full=fit(I); err=[]\\n   for i in I:\\n    ids=I[I!=i]; h=fit(ids); err.extend((design(u[i:i+1],h)@m._ls(design(u[ids],h),v[ids])-v[i]).ravel())\\n   print('panel',key,name,shifted,'rms full / loo',np.sqrt(np.mean(res(full,I)**2)),np.sqrt(np.mean(np.square(err))), 'params',np.round(full,5))\\n# Extend the identified response cut by rational and pairwise-difference features, controlling model size with ridge.\\nD=np.column_stack([f[:,i]+k*f[:,j] for f in (z,c,d) for i,j in itertools.combinations(range(4),2) for k in [-1,1]])\\nE=np.c_[D**2, D/(1+D**2), 1/(1+D**2)]; E=(E-E.mean(0))/np.maximum(E.std(0),1e-8)\\norder=np.argsort(np.linalg.norm(z,axis=1)); rng=np.random.default_rng(512); splits=[('52/20',np.arange(52,n)),('large norm',order[-20:]),('small norm',order[:20])];splits += [(f'random{i}',rng.choice(n,20,False)) for i in range(12)]\\nfor j in range(4):\\n o=np.argsort(z[:,j]); splits.extend([(f'low{j}',o[:12]),(f'high{j}',o[-12:])])\\nfor reg in [np.inf,1000,100,10,1]:\\n scores=[]\\n for name,iv in splits:\\n  it=np.setdiff1d(np.arange(n),iv); H=m._time_basis(s['eval_times'],tr['traj'][it]); amps=m._ls(H,tr['traj'][it].T).T\\n  def predict(F,y):\\n   if np.isinf(reg): return F[iv]@m._ls(F[it],y)\\n   R=E-F@m._ls(F[it],E[it]); B=np.linalg.solve(R[it].T@R[it]+reg*np.eye(R.shape[1]),R[it].T@(y-F[it]@m._ls(F[it],y)))\\n   return F[iv]@m._ls(F[it],y)+R[iv]@B\\n  yp=predict(M,tr['y'][it]); tp=predict(S,amps)@H.T; scores.append([np.abs(yp-tr['y'][iv]).mean(),np.abs(tp-tr['traj'][iv]).mean(),np.abs(tp-tr['traj'][iv]).mean(0).max()]);\\n print('basis extension',reg,'required',np.round(scores[0],6),'worst',np.round(np.max(scores,0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_dag.py && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: audit the cyclic calibration and bilinear response against rational and pairwise-difference alternatives; the verified baseline’s worst response and single-horizon MAEs are 0.01557 and 0.01510.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification confounding, relay transitions, or PDE drift\",\n      \"rejected_reason\": \"The supplied study has continuous responses, a single apparatus vector, and no batch labels, relay states, spatial field, or control actions. These checks are not identifiable from the measurements.\"\n    }\n  ],\n  \"rationale\": \"Use reference-panel leave-one-out to test alternative nonlinearities independently of the response labels, and compare algebraic extensions on the required split and coordinate extremes before changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e27a66fd94816af78c245d958b15abd36a87a7f9d8114961d0dfcf80efb1a4cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39860.53,
+      "usage_known": true,
+      "prompt_tokens": 33453,
+      "cached_tokens": 12672,
+      "completion_tokens": 1662
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28b56d5702c644499159402621c7f51f",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:51:44.267722+00:00",
+  "ended_at_utc": "2026-11-28T14:52:24.190387+00:00",
+  "request_sha256": "a6d99f4f2600778507d6aa83ea69090b21157c0ff8ddb301f37e490b132f7dfe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 18550,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20868,
+    "cached_tokens": 12672,
+    "completion_tokens": 1481
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/graphprobe.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=180)\\ndef one(x):return np.c_[np.ones(len(x)),x]\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef affine(u,v):return ls(one(u),v)\\na=s['panel_a']; ca=affine(a['u'],a['v']); keep=np.ones(len(a['u']),bool)\\nfor _ in range(5):\\n e=np.linalg.norm(a['v']-one(a['u'])@ca,axis=1); keep=e<max(.001,3*np.median(e)); ca=affine(a['u'][keep],a['v'][keep])\\nb=s['panel_b']; cb=affine(b['u'],b['v']); c=s['panel_c']; u=c['u']; c1=affine(u,c['v1']); poly=PolynomialFeatures(2).fit(u); cp=ls(poly.transform(u),c['v2']); print('C v2',list(zip(poly.get_feature_names_out(),cp)))\\nfor j in range(4):\\n v=c['v1'][:,j]; p=c1[:,j]; print('C1 channel',j,'u,lin,err\\\\n',np.c_[u,one(u)@p,v-one(u)@p][:8]); best=[]\\n for name,f in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh)]:\\n  for k in range(5):\\n   for w in [1,2,3,5,8]:\\n    def pred(q):\\n     z=one(u)@q[:5]; inp=(z if k==4 else u[:,k]); return z+q[5]*f(q[6]*inp+q[7]);\\n    pfit=least_squares(lambda q:pred(q)-v,np.r_[p,.2,w,0],max_nfev=150); best.append((np.std(pfit.fun),name,k,pfit.x))\\n print('best',sorted(best,key=lambda z:z[0])[:3])\\nt=s['eval_times']; T=s['train']['traj']; x=s['train']['x']; y=s['train']['y']; _,sig,vt=np.linalg.svd(T,full_matrices=False); print('time basis',vt[:2]);\\nfor typ in range(5):\\n def f(p):\\n  e=-np.expm1(-p[0]*t); g=-np.expm1(-p[1]*t)\\n  return [np.array([e,g]),np.array([e,t]),np.array([e,t*np.exp(-p[0]*t)]),np.array([e,t-e/p[0]]),np.array([e,np.sin(p[1]*t)])][typ]\\n q=least_squares(lambda p:(T-ls(f(p).T,T.T).T@f(p)).ravel(),[2,.35],bounds=([.01,.01],[10,10])); print('time fit',typ,q.x,np.std(q.fun))\\nq=least_squares(lambda p:(T-ls(np.array([-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)]).T,T.T).T@np.array([-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)])).ravel(),[2,.35],bounds=([.01,.01],[10,10])); latent=ls(np.array([-np.expm1(-q.x[0]*t),-np.expm1(-q.x[1]*t)]).T,T.T).T; Y=np.c_[y,latent]; print('Y scale',Y.std(0))\\nfor name,z in [('x',x),('Ax',one(x)@ca),('iAx',(x-ca[0])/np.diag(ca[1:])),('Bx',one(x)@cb),('BAx',one(one(x)@ca)@cb),('BiAx',one((x-ca[0])/np.diag(ca[1:]))@cb),('iBx',(x-cb[0])@np.linalg.inv(cb[1:]))]:\\n print(name,'linear coeff',ls(one(z),Y).T)\\n for freq in [.5,1,1.5,2,3,4]:\\n  D=one(np.c_[z,np.sin(freq*z),np.cos(freq*z),z*z]); R=np.abs(Y[52:]-D[52:]@ls(D[:52],Y[:52])); print('fourier',freq,R.mean(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graphprobe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct cubic regression -> H2 calibrated operator features with two temporal modes; direct cubic holdout y MAE is 0.11371.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Higher-degree raw polynomial\",\n      \"rejected_reason\": \"Quartic interpolation increased both response and trajectory holdout errors.\"\n    }\n  ],\n  \"rationale\": \"Use the measured trajectory rank and near-exact panel calibrations to test temporal bases and coordinate-dependent nonlinearities separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "a6d4cdde7a233ade2f51697dedbf855833f3d6849bfedf3c0f3aaf0561cc7c09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40442.01,
+      "usage_known": true,
+      "prompt_tokens": 20868,
+      "cached_tokens": 12672,
+      "completion_tokens": 1481
+    }
+  ]
+}

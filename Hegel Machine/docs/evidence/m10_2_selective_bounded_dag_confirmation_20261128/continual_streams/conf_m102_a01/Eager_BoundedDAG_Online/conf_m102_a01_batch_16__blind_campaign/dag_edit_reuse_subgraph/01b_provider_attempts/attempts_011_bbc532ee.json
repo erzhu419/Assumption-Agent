@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbc532eeae1a44038ef1c8fd1fb4239a",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:35.777926+00:00",
+  "ended_at_utc": "2026-11-28T15:16:01.683945+00:00",
+  "request_sha256": "ac6dc69c83cbaee9d2c0bc5933a8986ca741161c871a9363733c2a3750a6eed5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 67114,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39784,
+    "cached_tokens": 5504,
+    "completion_tokens": 1000
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\ncat > /holdout_task/node_03.py <<'PY'\\nimport numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    poly = inputs['node_01']['poly']\\n    branch = inputs['node_02']\\n    smooth, basis = branch['smooth'], branch['vt']\\n    state = (.4 * poly[:, 1:] + .6 * smooth[:, 1:]) @ basis\\n\\n    # Remove the leading endpoint trend from the trajectory disagreement.\\n    gap = (poly[:, 1:] - smooth[:, 1:]) @ basis\\n    shape_gap = np.clip((gap[:, 0] - .2 * gap[:, -1]) / .008, -1., 1.)\\n    s = smooth[:, 0]\\n    bounded_s = np.clip(s, -1., 1.)\\n    y = (s - .15 * (poly[:, 0] - s)\\n         + .0375 * bounded_s**3 + .025 * bounded_s * shape_gap)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\npython3 -I -B /holdout_task/test_dag_candidate.py\\npython3 -I -B - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/node_03.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nget = lambda name: pickle.load(open('/tmp/node03_' + name + '.pkl', 'rb'))\\nrows = [r for _, r in get('nested')] + [r for _, r in get('loo')[:4]] + [(a['poly'], b['smooth'], v, y, t) for a,b,y,t,v in get('folds')[1:]]\\nerrors = []\\nfor p, b, v, y, t in rows:\\n    out = m.run_node({'node_01': {'poly': p}, 'node_02': {'smooth': b, 'vt': v}})\\n    h, z, d = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    np.testing.assert_array_equal(z, (.4 * p[:, 1:] + .6 * b[:, 1:]) @ v)\\n    np.testing.assert_allclose(d, [h.mean(), h.std(), z[:, -1].mean(), z[:, -1].std()])\\n    assert all(np.isfinite(x).all() for x in (h,z,d))\\n    errors.append((np.mean(abs(y-h)), np.mean(abs(t-z))))\\nerrors = np.array(errors)\\nassert errors[4,0] <= .038 and errors[4,1] <= .038\\nassert errors[:,0].max() < .087\\nprint('Public acceptance split:', errors[4].round(6).tolist(), 'worst tested slices:', errors.max(0).round(6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 convex scalar blend → H2 bounded cubic and trajectory-shape correction; the screened candidate reached 0.037588 public scalar MAE and 0.08686 worst auxiliary-fold scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the rule with the lowest public-split MAE\",\n      \"rejected_reason\": \"The selected passing rule ranked better across auxiliary folds; the public split was used as an acceptance screen, not independent validation.\"\n    }\n  ],\n  \"rationale\": \"Install the highest-ranked passing rule, preserve the archived trajectory reconstruction exactly, and verify the saved artifact in a clean process on the official and auxiliary splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "2efc52c19f516689662a01cf6b2fb8208e825a6ec9d39cf041668f246dd578b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25904.71,
+      "usage_known": true,
+      "prompt_tokens": 39784,
+      "cached_tokens": 5504,
+      "completion_tokens": 1000
+    }
+  ]
+}

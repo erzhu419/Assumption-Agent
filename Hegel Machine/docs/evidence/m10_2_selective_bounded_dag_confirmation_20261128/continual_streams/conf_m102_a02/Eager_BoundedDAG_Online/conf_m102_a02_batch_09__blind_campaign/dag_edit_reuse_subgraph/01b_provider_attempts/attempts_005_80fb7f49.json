@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "80fb7f49df944a15ab56034bba95f62d",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:41.713448+00:00",
+  "ended_at_utc": "2026-11-28T15:51:11.627218+00:00",
+  "request_sha256": "6d5ff9395c0fcf26906316f8296511f0eb97d15618d2430a9ea824f5a35bf371",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42383,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30171,
+    "cached_tokens": 21120,
+    "completion_tokens": 1264
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/panel_models.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.special import erf\\nfrom itertools import combinations_with_replacement as cwr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];u,v=[s['panel_a'][k] for k in ('u','v')];n,d=u.shape\\n\\ndef poly(x,k): return np.column_stack([np.ones(len(x))]+[x[:,p].prod(axis=1) for j in range(1,k+1) for p in cwr(range(x.shape[1]),j)])\\ndef fn(x):return np.c_[np.ones(len(x)),x]\\ndef fit(z,v):\\n w=np.ones(len(z));\\n for j in range(14):\\n  b=np.linalg.lstsq(z*w[:,None],v*w[:,None],rcond=1e-10)[0]; e=np.linalg.norm(v-z@b,axis=1); w=1/np.sqrt(1+(e/max(.001,np.median(e)*1.5))**2)\\n return b,e\\nfuncs={'tanh':np.tanh,'sin':np.sin,'erf':erf,'atan':np.arctan,'rat':lambda x:x/(1+x*x),'soft':lambda x:x/np.sqrt(1+x*x),'cub':lambda x:x**3}\\nif __name__=='__main__':\\n np.set_printoptions(precision=6,suppress=True,linewidth=150)\\n k=np.linalg.norm(v-u,axis=1)<2.5;print('cleanish',sum(k)); print('raw deviations',np.round((v-u)[k][:12],3));print('outliers',np.flatnonzero(~k))\\n models={}\\n for name,f in funcs.items():\\n  for mode in ['plain','quad','pair_sum','pair_diff','pair_both']:\\n   def des(x,w):\\n    a=x if mode in ('plain','quad') else (x+np.roll(x,2,axis=1))[:,:2] if mode=='pair_sum' else (x-np.roll(x,2,axis=1))[:,:2] if mode=='pair_diff' else np.c_[(x+np.roll(x,2,axis=1))[:,:2],(x-np.roll(x,2,axis=1))[:,:2]]\\n    return np.c_[poly(x,2 if mode=='quad' else 1),f(w*a)]\\n   def loss(w):\\n    z=des(u[k],w); b,e=fit(z,v[k]);return np.median(e)+.3*np.quantile(e,.8)\\n   g=np.linspace(.25,6,35); vals=np.array([loss(w) for w in g]); j=np.argmin(vals); o=minimize_scalar(loss,bounds=(g[max(0,j-1)],g[min(len(g)-1,j+1)]),method='bounded');z=des(u[k],o.x);b,e=fit(z,v[k]);models[name,mode]=(o.fun,o.x,np.quantile(e,[.5,.8,.95,1]),b)\\n for nm,(l,w,e,b) in sorted(models.items(),key=lambda p:p[1][0])[:13]:\\n  print(nm,w,e)\\n  if l<.025: print(b)\\n for deg in [1,2,3]:\\n  z=poly(u[k],deg);b,e=fit(z,v[k]);print('poly',deg,np.quantile(e,[.5,.8,.9,1]));\\n  if deg==3:\\n   for j in range(4):\\n    p=[()]+[p for a in range(1,4) for p in cwr(range(4),a)]; print(j,sorted(zip(p,np.round(b[:,j],4)),key=lambda a:-abs(a[1]))[:12]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_models.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 successor-coupled calibration -> H2 opposite-coordinate mixing with nonlinear correction; raw cubic final-horizon LOO MAE is 0.11239.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived successor-coupled calibration\",\n      \"rejected_reason\": \"Its median absolute panel error is 0.12–0.28 per coordinate, and broader fits point to coupling between opposite coordinates.\"\n    }\n  ],\n  \"rationale\": \"Screen opposite-coordinate sums and differences alongside a full cubic basis, using robust residuals to distinguish the calibration law from gross panel corruption.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9b2f975d42412127095e67075c976dae4755fa9a7f091c739a3e2b6a419f4135",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30459.67,
+      "usage_known": true,
+      "prompt_tokens": 30171,
+      "cached_tokens": 21120,
+      "completion_tokens": 1264
+    }
+  ]
+}

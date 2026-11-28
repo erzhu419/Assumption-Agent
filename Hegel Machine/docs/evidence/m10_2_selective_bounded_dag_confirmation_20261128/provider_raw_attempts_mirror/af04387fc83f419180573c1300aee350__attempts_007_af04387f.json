@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af04387fc83f419180573c1300aee350",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:19:29.284682+00:00",
+  "ended_at_utc": "2026-11-28T15:20:03.067451+00:00",
+  "request_sha256": "fc3a59e029e33ad5eb78d4aa802df26dc3627e0dfcb76ae40e069dbf991d3248",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34515,
+    "cached_tokens": 12672,
+    "completion_tokens": 1108
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/heads04.py <<'PY'\\nexec(open('/tmp/stress04.py').read().split(\\\"print('scalar full coeff'\\\")[0])\\nfrom collections import defaultdict\\nfrom scipy.optimize import minimize_scalar\\nz=z[:72]; A=A[:72]; D=D[:72]; pair=D[:,[7,11]]; L=A[:,1:]; norm=np.sqrt(np.mean((D-D.mean(0))**2,axis=0)); norm[0]=1\\nrng=np.random.default_rng(677); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(30)]; splits+=[np.argsort(np.linalg.norm(L,axis=1))]; scores=defaultdict(list)\\nprint('y range',y.min(), y.max()); print('test latent bounds',m._latent(s,s['test']['x']).min(0),m._latent(s,s['test']['x']).max(0)); print('train latent bounds',z.min(0),z.max(0))\\ndef ridge(i,j,k):\\n d=D/norm; p=np.diag([0]*5+[.18,.18,.01,.18,.18,.18,.01,.18,.18,.18])*k\\n return d[j]@m._ls(np.r_[d[i],np.sqrt(p)],np.r_[y[i],np.zeros(15)])\\nfor split in splits:\\n i,j=split[:52],split[52:]; out={}\\n d=np.c_[A,pair]; out['pair']=d[j]@m._ls(d[i],y[i]); out['full']=D[j]@m._ls(D[i],y[i]);\\n for k in [.1,1,5,20]: out['ridge'+str(k)]=ridge(i,j,k)\\n for kind in ['tanh','sin','asinh','rational','softsign','atan','identity']:\\n  f={'tanh':np.tanh,'sin':np.sin,'asinh':np.arcsinh,'rational':lambda q:q/np.sqrt(1+q*q),'softsign':lambda q:q/(1+abs(q)),'atan':np.arctan,'identity':lambda q:q}[kind]\\n  for form in ['add','inside']:\\n   def model(p,k):\\n    amp=np.exp(p[-1]);\\n    if form=='add':return amp*f(A[k]@p[:5]/amp)+pair[k]@p[5:7]\\n    return amp*f(d[k]@p[:7]/amp)\\n   p=np.r_[m._ls(d[i],y[i]),0.]; fit=least_squares(lambda p:model(p,i)-y[i],p,bounds=([-np.inf]*7+[-3],[np.inf]*7+[5]),max_nfev=150);out[kind+form]=model(fit.x,j)\\n   if split is splits[0]: print(kind,form,'train RMSE',np.sqrt(np.mean(fit.fun**2)), 'params',np.round(fit.x,4))\\n for k,v in out.items():\\n  e=abs(v-y[j]);scores[k].append([e.mean(),e.max()])\\nfor k,v in sorted(scores.items(),key=lambda item: np.mean(item[1][:-1],axis=0)[0]):print(k,'primary',v[0],'mean',np.mean(v[:-1],0),'worst',np.max(v[:-1],0),'outer tail',v[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/heads04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained quadratic scalar head -> H2 sparse interactions with an explicit saturating readout; repeated-split worst MAE is 0.010959 for the quadratic, 0.007271 for the pair head, and 0.004475 for the rank-two trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the unconstrained quadratic solely because it wins on the fixed split\",\"rejected_reason\":\"Its worst repeated-split error and test leverage are higher, so it warrants an extrapolation check before final selection.\"}],\"rationale\":\"Held-out tests already pass the gate. Compare compact nonlinear heads and regularized quadratic alternatives on random splits and a high-latent-magnitude holdout before changing the artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5face4ec74c47b8b9e8b74130c43ad425371a665ca25015796e4789c2939d0ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34183.08,
+      "usage_known": true,
+      "prompt_tokens": 34515,
+      "cached_tokens": 12672,
+      "completion_tokens": 1108
+    }
+  ]
+}

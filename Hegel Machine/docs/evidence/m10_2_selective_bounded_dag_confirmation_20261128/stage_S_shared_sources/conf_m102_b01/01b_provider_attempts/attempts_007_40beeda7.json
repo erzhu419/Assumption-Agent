@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "40beeda7fc504ab299f04fa9dc0a318c",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:54:31.203653+00:00",
+  "ended_at_utc": "2026-11-28T14:55:02.269533+00:00",
+  "request_sha256": "c1334e836c066b0bab2a21e78b5fdc1d243678c0493a47a7daa8387ede213ba5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52943,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35904,
+    "cached_tokens": 12672,
+    "completion_tokens": 1245
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/baseline.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read();s=s.replace('import numpy as np','import numpy as np\\\\nfrom scipy.optimize import minimize_scalar');s=s[:s.index('def _scalar')]+'''def _features(w, gain, interaction):\\n    z = np.arcsinh(gain * w)\\n    if not interaction:\\n        return np.column_stack((_aff(w), z))\\n    pairs = [z[:, i] * z[:, j] for i, j in itertools.combinations_with_replacement(range(w.shape[1]), 2)]\\n    return np.column_stack((_aff(w), z, *pairs))\\n\\n\\ndef _predict(w, target, interaction):\\n    n = len(target)\\n    scale = np.maximum(np.std(target, axis=0), 1e-8)\\n    def loss(gain):\\n        f = _features(w[:n], gain, interaction)\\n        r = (f @ _ls(f, target) - target) / scale\\n        return np.mean(r*r)\\n    gain = minimize_scalar(loss, bounds=(0.8, 7), method='bounded').x\\n    f = _features(w, gain, interaction)\\n    return f[n:] @ _ls(f[:n], target)\\n\\n\\ndef solve_batch(study):\\n    tr, te = study['train'], study['test']\\n    w = _operator(study, np.concatenate((tr['x'], te['x']), axis=0))\\n    y = _predict(w, tr['y'], True)\\n    p = _predict(w, tr['traj'], False)\\n    tail = p[:, -1]\\n    return {'y_hat': y, 'state_pred': p, 'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\n''';open(p,'w').write(s)\\nPY\\ncat > /tmp/stress.py <<'PY'\\nimport sys,importlib.util,pickle,numpy as np\\nfrom sklearn.model_selection import KFold\\n\\ndef load(path):\\n spec=importlib.util.spec_from_file_location('candidate',path);mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];n=len(tr['x']);i=np.arange(n)\\nbase=load('/tmp/baseline.py'); w=base._operator(s,tr['x']); rad=np.linalg.norm(w,axis=1)\\nsplits=[('prescribed',i[:52],i[52:])]+[(f'kfold{j}',a,b) for j,(a,b) in enumerate(KFold(6,shuffle=True,random_state=82).split(i))]\\nfor label,idx in [('radius',rad)]+[(f'axis{j}',w[:,j]) for j in range(4)]:\\n order=np.argsort(idx)\\n for side,b in [('high',order[-12:]),('low',order[:12])]:splits.append((label+side,np.setdiff1d(i,b),b))\\nfor path in sys.argv[1:]:\\n m=load(path); print(path); scores=[]\\n for l,a,b in splits:\\n  tt={k:tr[k][a] for k in ('x','y','traj')};t=tt['traj'][:,-1];tt['summary']=np.array([tt['y'].mean(),tt['y'].std(),t.mean(),t.std()]); o=m.solve_batch({**s,'train':tt,'test':{'x':tr['x'][b]}}); dy=abs(o['y_hat']-tr['y'][b]);dt=abs(o['state_pred']-tr['traj'][b]); z=[dy.mean(),dt.mean(),dt[:,-1].mean(),dt.mean(0).max()]; print(l,np.round(z,6));scores.append(z)\\n print('worst',np.max(scores,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py /tmp/baseline.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Rational features of calibrated Panel B coordinates → learned asinh features with quadratic scalar interactions and additive state prediction; prescribed-split probe MAEs are 0.00797 for y and 0.00591 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent scales and shifts for all four coordinates\",\"rejected_reason\":\"Extra nonlinear degrees of freedom improved training error but did not consistently improve held-out errors for both outputs.\"}],\"rationale\":\"Fit the shared gain using only the fitting rows, then compare the challenger against the passing baseline on the prescribed split, shuffled folds, coordinate extremes, and individual trajectory horizons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "60acddc5ee9a67d30dcebaef1ea5f4b362b377a582d30900049122875197251f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31064.91,
+      "usage_known": true,
+      "prompt_tokens": 35904,
+      "cached_tokens": 12672,
+      "completion_tokens": 1245
+    }
+  ]
+}

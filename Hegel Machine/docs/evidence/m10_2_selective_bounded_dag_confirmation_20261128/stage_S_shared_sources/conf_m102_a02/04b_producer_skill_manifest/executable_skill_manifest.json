@@ -1,0 +1,119 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a02_batch_00_602ac6d3ef2a",
+    "source_hash": "602ac6d3ef2a64dbf41f32085e20c494bf2af5c187c97de453accf8935c69963",
+    "parent_ids": [],
+    "source_episode_id": "conf_m102_a02",
+    "task_id": "conf_m102_a02_batch_00__blind_campaign",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_cut.py",
+        "archived_relpath": "producers/tmp__audit_cut.py",
+        "bytes": 2372,
+        "sha256": "26d50a774f30352360024a291fa24b346be44fb80219594b811a83e80213d0ef"
+      },
+      {
+        "container_path": "/tmp/audit_endpoint.py",
+        "archived_relpath": "producers/tmp__audit_endpoint.py",
+        "bytes": 1982,
+        "sha256": "164194cbc703ada05cfae24d62bd0230bd7e18c65688207760759f9b5b4bbf9c"
+      },
+      {
+        "container_path": "/tmp/compare.py",
+        "archived_relpath": "producers/tmp__compare.py",
+        "bytes": 1726,
+        "sha256": "e2f7745d5e19861c5f8bc4bda67c786a96e029ad6ed0911af07b243b7294c678"
+      },
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 1440,
+        "sha256": "854aaa0e3707ad1447ffa9d76eb0d14bb2b8d7410adb19a6507545c4cba0387c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && cat public_asset_index.json && cat validate_public_schema.py && python3 - <<'PY'\nimport numpy as np,pickle\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\nfor k,v in s.items():\n for j,a in (v.items() if isinstance(v,dict) else [(k,v)]):\n  a=np.asarray(a);print(k,j,a.shape,'range',a.min(),a.max(),'mean',a.mean(axis=0),'std',a.std(axis=0));print(a[:8])\nimport scipy; print('scipy',scipy.__version__)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust regre",
+      "cd /holdout_task; cat validate_public_schema.py; cat > /tmp/explore.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.linalg import lstsq\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; x=s['train']['x']; y=s['train']['y']; h=s['train']['traj']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\ndef feat(x,d):return np.column_stack([np.prod(x[:,i],axis=1) for k in range(d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\nprint('t',t,'svd'",
+      "cat > /tmp/compare.py <<'PY'\nimport numpy as np,pickle\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; h=s['train']['traj']; t=s['eval_times']; z=s['test']['x']; np.set_printoptions(precision=6,suppress=True)\nq=list(combinations_with_replacement(range(4),2)); A=np.column_stack([np.ones(len(x)),x]+[x[:,i]*x[:,j] for i,j in q]); print('times',t); print('quad order',q); print('y coeff',np.linalg.lstsq(A[:52],y[:52],rcond=None)[0]); W=np.linalg.lstsq(A[:,:5],h,rcond=None)[0]; print('li",
+      "set -e\ncd /holdout_task\ncat > batch_solver.py <<'PY'\n\"\"\"Quadratic scalar readout and rank-two affine trajectory model.\"\"\"\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\n\n\ndef _design(x):\n    x = np.asarray(x, dtype=float)\n    affine = np.column_stack((np.ones(len(x)), x))\n    quadratic = [x[:, i] * x[:, j]\n                 for i, j in combinations_with_replacement(range(x.shape[1]), 2)]\n    return affine, np.column_stack((affine, *quadratic))\n\n\ndef solve_batch(study: dict) -> dict:\n    train = study['train']\n    a, q = _design(train['x'])\n    a_test, q_test = _design(s",
+      "set -e\ncat > /tmp/audit_cut.py <<'PY'\nimport itertools,pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; h=s['train']['traj']; t=s['eval_times']; q=list(itertools.combinations_with_replacement(range(4),2)); a=np.c_[np.ones(len(x)),x]; p=np.column_stack([a]+[x[:,i]*x[:,j] for i,j in q]); ix=np.arange(len(x)); rng=np.random.default_rng(555)\nprint('Study fields:', sorted(s), 'training fields:', sorted(s['train'])); print('Public-test coordinate range:', np.min(s['test']['",
+      "set -e\ncat > /tmp/audit_endpoint.py <<'PY'\nimport pickle,itertools\nimport numpy as np\nfrom scipy.optimize import least_squares\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\nx=s['train']['x']; y=s['train']['y']; h=s['train']['traj']; t=s['eval_times']; n=len(x)\na=np.c_[np.ones(n),x]; pairs=list(itertools.combinations_with_replacement(range(4),2)); p=np.column_stack([a]+[x[:,i]*x[:,j] for i,j in pairs]); ix=np.arange(n)\nsplits=[ix[52:],*np.array_split(np.random.default_rng(555).permutation(ix),4),*[np.argsort(abs(x[:,k]-x[:,k].mean()))[-15:] for k in range(4",
+      "set -e\npython3 /holdout_task/validate_public_schema.py\npython3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open(root + 'public_batch.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\ntr = s['train']; x = tr['x']; y = tr['y']; h = tr['traj']; ix = np.arange(len(x))\na = np.c_[np.ones(len(x)), x]\nslices = {'prescri"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_cut.py",
+      "primary_producer_container_path": "/tmp/audit_cut.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 1271,
+        "sha256": "77ca3c2cdbeb91b7c8737b584ae6beabb913b1aeaa388d539d3db93f94eff78d",
+        "content_addressed_ref": "content_addressed_blobs/77ca3c2cdbeb91b7c8737b584ae6beabb913b1aeaa388d539d3db93f94eff78d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "feat"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "602ac6d3ef2a64dbf41f32085e20c494bf2af5c187c97de453accf8935c69963",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\npython3 /holdout_task/validate_public_schema.py\npython3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\nroot = '/holdout_task/'\nspec = impor",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "602ac6d3ef2a64dbf41f32085e20c494bf2af5c187c97de453accf8935c69963",
+        "expected_candidate_sha256": "602ac6d3ef2a64dbf41f32085e20c494bf2af5c187c97de453accf8935c69963",
+        "computed_candidate_sha256": "602ac6d3ef2a64dbf41f32085e20c494bf2af5c187c97de453accf8935c69963",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 1271
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_602ac6d3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "feat",
+        "code": "def feat(x, d):\n    from itertools import combinations_with_replacement\n    return np.column_stack([np.prod(x[:, i], axis=1) for k in range(d + 1) for i in combinations_with_replacement(range(x.shape[1]), k)])"
+      }
+    ]
+  }
+}

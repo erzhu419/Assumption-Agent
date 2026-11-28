@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f17a6970e76f47aaabbc8fc9b58d09aa",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:22:37.417764+00:00",
+  "ended_at_utc": "2026-11-28T15:23:15.718669+00:00",
+  "request_sha256": "d37dc79a462b4c78fd057bdc54199007af34f6ca3adf368c790a1610f81d53f3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30755,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25240,
+    "cached_tokens": 12672,
+    "completion_tokens": 1390
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/fit06.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=6,suppress=True,linewidth=160)\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef one(a): return np.column_stack((np.ones(len(a)),a))\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[x[:,i].prod(1) for j in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\ndef align(p):\\n u=one(p['u']); v=p['v']; rng=np.random.default_rng(721); best=None\\n for _ in range(1000):\\n  i=rng.choice(len(u),5,False); b=ls(u[i],v[i]); r=np.linalg.norm(u@b-v,axis=1); score=np.sort(r)[:34].mean()\\n  if best is None or score<best[0]: best=(score,b)\\n b=best[1]\\n for _ in range(5):\\n  r=np.linalg.norm(u@b-v,axis=1); keep=r<max(4*np.median(r),.001); b=ls(u[keep],v[keep])\\n return b,r\\np=s['panel_a']; a,r=align(p); print('a',a,'sorted r',np.sort(r));\\nu=s['panel_c']['u'];\\nfor k in ['v1','v2']:\\n v=s['panel_c'][k]; print(k)\\n def ff(kind,q):\\n  if kind=='softsign': return one(u/(1+q[0]*abs(u))+q[1]*u)\\n  if kind=='sin': return one(np.sin(q[0]*u)+q[1]*u)\\n  if kind=='tanh': return one(np.tanh(q[0]*u)+q[1]*u)\\n  if kind=='curv': return np.c_[one(u),u*u,u*u/(1+q[0]*u*u)]\\n  if kind=='poly2': return poly(u,2)\\n  if kind=='poly3sep': return np.c_[one(u),u*u,u**3,u**4]\\n  if kind=='interactions': return np.c_[poly(u,2),u**3,u**4]\\n for kind in ('softsign','sin','tanh','curv','poly2','poly3sep','interactions'):\\n  def fun(q):\\n   f=ff(kind,q); return (f@ls(f,v)-v).ravel()\\n  if kind in ('poly2','poly3sep','interactions'): q=[1,0]\\n  else: q=least_squares(fun,[.9,0],bounds=([.01,-5],[10,5]),gtol=1e-12).x\\n  f=ff(kind,q); print(kind, q,'mae',abs(fun(q)).mean(),'52-like',abs(f[-6:]@ls(f[:-6],v[:-6])-v[-6:]).mean())\\nx=s['train']['x']; z=(x-a[0])@np.linalg.inv(a[1:]); b=ls(one(s['panel_b']['u']),s['panel_b']['v']); w=one(z)@b; y=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']; print('z bounds',z.min(0),z.max(0),'w bounds',w.min(0),w.max(0)); print('b',b)\\nfor nm,g in [('exp',lambda r:-np.expm1(-t[:,None]*r)),('exp+linear',lambda r:np.c_[t,-np.expm1(-t[:,None]*r)]),('exp+sin',lambda r:np.c_[-np.expm1(-t[:,None]*r[:2]),np.sin(t*r[2])])]:\\n def fun(q):\\n  f=g(q); return (f@ls(f,tr[:52].T)-tr[:52].T).ravel()\\n for q in ([.3,1.1,2.],) if nm!='exp+linear' else ([.4,1.8],):\\n  fit=least_squares(fun,q,bounds=(.001,10),gtol=1e-12); f=g(fit.x); print(nm,fit.x,'fit',abs(fun(fit.x)).mean(),'validation basis',abs(f@ls(f,tr[52:].T)-tr[52:].T).mean())\\nnp.savez('/tmp/data06.npz',a=a,b=b,z=z,w=w)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit06.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -24\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: diagonal calibration and two temporal modes -> H2: robust full-matrix alignment and a third mode; the archived time basis has reconstruction MAE 0.01395.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase raw polynomial degree\",\"rejected_reason\":\"Cubic features reduce training error but worsen held-out errors.\"}],\"rationale\":\"Separate calibration, auxiliary panel maps, and the time basis so each can be tested against its own observations before fitting the forward readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ab642e108ae2badac8ed9b00aaca8503dce5fe19c7ce4a9960b7d5586a5ac0ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38299.91,
+      "usage_known": true,
+      "prompt_tokens": 25240,
+      "cached_tokens": 12672,
+      "completion_tokens": 1390
+    }
+  ]
+}

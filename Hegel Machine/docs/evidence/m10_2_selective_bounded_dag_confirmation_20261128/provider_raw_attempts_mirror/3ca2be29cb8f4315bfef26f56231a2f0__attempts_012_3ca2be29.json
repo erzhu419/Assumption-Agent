@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ca2be29cb8f4315bfef26f56231a2f0",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:22:01.480854+00:00",
+  "ended_at_utc": "2026-11-28T16:22:49.073529+00:00",
+  "request_sha256": "47401ae12e75023323798145ef884e66de362d58410a81a28d7becb0c9aa5574",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44383,
+    "cached_tokens": 12672,
+    "completion_tokens": 2134
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/last14.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nfrom panels14 import S,ls,aff\\nimport numpy as np\\nfrom scipy.linalg import orthogonal_procrustes\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nfrom scipy.spatial.distance import cdist\\ntr=S['train']; z=m._inverse(tr['x'],m._calibrate(S['panel_a'])); y=tr['y']; T=tr['traj']; Y=np.c_[y,T]; u,v=S['panel_b'].values(); all=np.arange(len(y)); folds=[all[52:]]+list(np.array_split(np.random.default_rng(14).permutation(len(y)),4)); ix=[np.setdiff1d(all,f) for f in folds]\\n\\ndef prim(x,p,k):\\n a=abs(x); s=np.sign(x); d=a-p[0];\\n if k==0: h=np.maximum(d,0)**p[1]\\n if k==1: h=(.5*(d+np.sqrt(d*d+p[2]**2)))**p[1]\\n if k==2: h=np.logaddexp(0,p[2]*d)**p[1]/p[2]**p[1]\\n if k==3: h=a*expit(p[2]*d)\\n if k==4: h=np.maximum(d,0)+p[1]*np.maximum(d,0)**2\\n return s*h\\n\\ndef proj(D,v):\\n a=D-D.mean(0); b=v-v.mean(0); R,sc=orthogonal_procrustes(a,b); w=R*sc/np.sum(a*a); return w,v.mean(0)-D.mean(0)@w\\n\\ndef opfit(k,opt,dd):\\n def ds(x,p):\\n  a=prim(x,p,k)\\n  if opt==1: return aff(np.c_[a,x])\\n  if opt==2: return aff(np.c_[a,x,np.sin(p[-1]*x)])\\n  if opt==3: return a+p[-2]*np.sin(p[-1]*x)\\n  if opt==4: return a+p[-3]*x+p[-2]*np.sin(p[-1]*x)\\n  return a\\n def predict(p,x):\\n  D=ds(u,p); E=ds(x,p)\\n  if opt in (1,2): return E@ls(D,v)\\n  w,b=proj(D,v); return E@w+b\\n p0,lo,hi=[[.34,1.3,.05],[.01,.3,.0001],[1.0,3,150]]\\n if k==2:p0[2]=25;lo[2]=1\\n if k==3:p0[2]=10;lo[2]=1\\n if opt==4:p0+=[0];lo+=[-3];hi+=[3]\\n if opt>=3:p0+=[.005];lo+=[-.2];hi+=[.2]\\n if opt>=2:p0+=[dd];lo+=[.5];hi+=[50]\\n fit=least_squares(lambda p:(predict(p,u)-v).ravel(),p0,bounds=(lo,hi),max_nfev=95)\\n return np.std(fit.fun),(k,opt,fit.x),predict(fit.x,z)\\nops=[(0,('base',),m._operator(S['panel_b'],z))]\\nfor k in range(5):\\n for opt in range(5):\\n  for d in ([4,9,15,22,34] if opt>=2 else [0]):ops.append(opfit(k,opt,d))\\nops=ops[:1]+sorted(ops[1:],key=lambda a:a[0])[:17]; print('ops',[(a,b) for a,b,_ in ops],flush=True)\\nnp.savez('/tmp/lastops14.npz',**{f'b{i}':q[-1] for i,q in enumerate(ops)})\\nprint('T SVD',np.linalg.svd(T[:52],compute_uv=False),'yT',[(i,np.mean(abs(aff(T[52:,:i])@ls(aff(T[:52,:i]),y[:52])-y[52:]))) for i in (1,2,3,8)],flush=True)\\ndef design(z,b,mode):\\n if mode=='full':return m._quadratic(np.c_[z,b])\\n if mode=='sep':return np.c_[m._quadratic(z),m._quadratic(b)[:,1:],z*b,z*np.roll(b,-1,axis=1),b*np.roll(z,-1,axis=1)]\\n if mode=='zexpand':return np.c_[m._quadratic(np.c_[z,b]),z**3,z**4,b**3]\\n if mode=='res':\\n  h=b-aff(z)@ls(aff(z),b);return np.c_[m._quadratic(np.c_[z,h]),z**3,h**3,z*z*h,z*h*h]\\n if mode=='raw':return np.c_[m._quadratic(np.c_[z,b]),(z*z)*b,z*b*b,z*z*np.roll(b,-1,axis=1),b*b*np.roll(z,-1,axis=1)]\\n if mode=='interaction':return np.c_[m._quadratic(np.c_[z,b]),z*np.roll(z,-1,axis=1)*b,z*b*np.roll(b,-1,axis=1),z**3,b**3]\\n\\ndef fit(A,B,yt,l,q):\\n scale=np.r_[1,np.maximum(A[:,1:].std(0),.035)]; A=A/scale; B=B/scale; p=np.r_[0,np.repeat(l,A.shape[1]-1)]; H=A.T@A; h=A.T@yt; w=np.linalg.solve(H+np.diag(p+1e-10),h)\\n for _ in range(8 if q else 0):\\n  pp=p*(.06/(abs(w)+.004))**q; w=np.linalg.solve(H+np.diag(pp+1e-10),h)\\n return B@w\\nresult=[]; preds=[]\\nfor i,(_,_,b) in enumerate(ops):\\n for mode in ['full','sep','zexpand','res','raw','interaction']:\\n  a=design(z,b,mode)\\n  for l in [.0005,.003,.012,.045,.16,.58]:\\n   for q in [0,.65,1.45]:\\n    ps=[fit(a[j],a[f],y[j],l,q) for j,f in zip(ix,folds)]; es=np.array([abs(p-y[f]).mean() for p,f in zip(ps,folds)]);result.append((es[0],es[1:].max(),es[1:].mean(),i,mode,l,q));preds.append(ps)\\nprint('rank',*sorted(result)[:23],sep='\\\\n');print('rob',*sorted(result,key=lambda a:np.mean(a[:3]))[:12],sep='\\\\n')\\nfor k in [3,10,25,60,160]:\\n for sort in [lambda a:a[0],lambda a:np.mean(a[:3]),lambda a:np.mean(a[1:3])]:\\n  ids=sorted(range(len(result)),key=lambda j:sort(result[j]))[:k];print('ens',k,[round(abs(np.mean([preds[i][j] for i in ids],0)-y[f]).mean(),5) for j,f in enumerate(folds)], [result[i][3:] for i in ids[:5]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/last14.py > /tmp/last14.out; cat /tmp/last14.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 broad quadratic readout -> H2 recover a shared thresholded panel response and test sparse scalar interactions; saved candidate scores 0.04835 scalar and 0.01435 trajectory MAE on the 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Near-zero panel response below a threshold suggests a shared dead-zone primitive. Fit it from paired measurements, then compare scalar readouts on the required split and four additional slices without using held-out trajectories.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f7cd0f7a53e39c1218d3505ca00cb322cc3bd4725f10aa4fc8223a166cef84ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48586.42,
+      "usage_known": true,
+      "prompt_tokens": 44383,
+      "cached_tokens": 12672,
+      "completion_tokens": 2134
+    }
+  ]
+}

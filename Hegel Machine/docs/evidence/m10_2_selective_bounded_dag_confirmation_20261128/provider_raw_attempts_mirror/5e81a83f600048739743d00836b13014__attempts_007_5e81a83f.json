@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e81a83f600048739743d00836b13014",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:36.689073+00:00",
+  "ended_at_utc": "2026-11-28T16:19:07.482087+00:00",
+  "request_sha256": "7a39bc09b310e71bb63a597f48a71dc745b02b15795ae7b99503aa9e2001feb1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48939,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31825,
+    "cached_tokens": 12672,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; { printf '%s\\\\n' '\\\"\\\"\\\"Calibrated cosine operator with separate scalar and time-dependent readouts.\\\"\\\"\\\"' 'import numpy as np' 'from scipy.optimize import least_squares' 'from itertools import combinations_with_replacement'; sed -n '/^def _fit/,/^def _panel/{ /^def _panel/!p; }' /tmp/hegel_continual_archive/conf_m102_a03_batch_14_solver.py; } > batch_solver.py\\ncat >>batch_solver.py <<'PY'\\ndef _operator(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def design(q, freq):\\n        return _affine(np.cos(freq * q))\\n    def residual(p):\\n        a = design(u, p[0])\\n        return (a @ _fit(a, v) - v).ravel()\\n    freq = least_squares(residual, [2.6], bounds=(1.5, 3.8)).x[0]\\n    return design(z, freq) @ _fit(design(u, freq), v)\\n\\n\\ndef _readouts(b):\\n    h = _affine(b)\\n    q = np.column_stack([b[:,i]*b[:,j] for i,j in combinations_with_replacement(range(4),2)])\\n    return h, np.column_stack((h, q))\\n\\n\\ndef _forecast_state(h, train_h, time, traj):\\n    spatial = _fit(train_h, traj)\\n    def basis(p):\\n        return -np.expm1(-np.outer(time, p))\\n    def residual(p):\\n        a = basis(p)\\n        pred = train_h @ _fit(a, spatial.T).T @ a.T\\n        return (pred - traj).ravel()\\n    rates = least_squares(residual, [0.41, 1.82], bounds=([0.05, 0.85], [0.83, 5.])).x\\n    a = basis(rates)\\n    return h @ _fit(a, spatial.T).T @ a.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    z = _decode(np.concatenate((train['x'], study['test']['x'])), _calibration(study['panel_a']))\\n    h, q = _readouts(_operator(study['panel_b'], z))\\n    y_hat = q[n:] @ _fit(q[:n], train['y'])\\n    state_pred = _forecast_state(h[n:], h[:n], study['eval_times'], train['traj'])\\n    last = state_pred[:, -1]\\n    diagnostics_vec = np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])\\n    return dict(y_hat=y_hat, state_pred=state_pred, diagnostics_vec=diagnostics_vec)\\nPY\\ncat > /tmp/check_solver.py <<'PY'\\nimport pickle,runpy,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; rng=np.random.default_rng(1538); n=len(tr['x'])\\nfor j in range(31):\\n    i=np.arange(n) if not j else rng.permutation(n); a,b=i[:52],i[52:]; y=tr['y'][a]; p=tr['traj'][a]; q=dict(s,train=dict(x=tr['x'][a],y=y,traj=p,summary=np.array([y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()])),test={'x':tr['x'][b]}); r=m['solve_batch'](q)\\n    d=np.abs(r['y_hat']-tr['y'][b]); e=np.abs(r['state_pred']-tr['traj'][b]); print(j,d.mean(),e.mean(),d.max(),e.mean(0).max())\\nz=m['_decode'](tr['x'],m['_calibration'](s['panel_a'])); b=m['_operator'](s['panel_b'],z); h,q=m['_readouts'](b); print('scalar coefficients',m['_fit'](q[:52],tr['y'][:52])); print('spatial coefficients',m['_fit'](h[:52],tr['traj'][:52])); print('condition',np.linalg.cond(q[:52]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated panel-B cosine features → quadratic scalar readout and affine two-rate trajectory; fixed-split scalar MAE is 0.0039 and the affine mode MAEs are 0.0135 and 0.0083.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Include panels A, B, and C as downstream predictors\",\"rejected_reason\":\"Panel A is needed for calibration, but adding panel C to the panel-B quadratic worsened the fixed-split scalar and amplitude errors.\"}],\"rationale\":\"Separate the well-supported quadratic scalar readout from the affine spatial trajectory model, then measure the full prediction errors on the prescribed split and 30 randomized splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2cb12e96a3f5869a9fe2d5d55482b514ea903f4e186ddcff5a32af334934f336",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31271.33,
+      "usage_known": true,
+      "prompt_tokens": 31825,
+      "cached_tokens": 12672,
+      "completion_tokens": 1320
+    }
+  ]
+}

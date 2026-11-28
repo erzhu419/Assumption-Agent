@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "585edce03a634f9e9b532d4c6859db25",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:02.003398+00:00",
+  "ended_at_utc": "2026-11-28T16:10:42.177702+00:00",
+  "request_sha256": "e9a7aa3d929bbac82e1e0516f1c158423612b1341a3f8eaaa658b61bf9b7cfa5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46896,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31536,
+    "cached_tokens": 12672,
+    "completion_tokens": 1777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit13.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=m._calibrate(s['panel_a'],tr['x']); I=m._intercept; ls=m._ls\\nrms=lambda e: np.sqrt(np.mean(e**2)); p=s['panel_b']; u,v=p['u'],p['v'];\\nfor name,fn,qs in [('cos',np.cos,[2.6]),('sin',np.sin,[1,3,6,10,13]),('rational even',lambda a:1/(1+a*a),[.4,1,2,4]),('quadratic',np.square,[1])]:\\n def fun(q):\\n  d=I(np.c_[u,fn(q[0]*u)]);return (d@ls(d,v)-v).ravel()\\n opt=min((least_squares(fun,[q],bounds=(.1,15)) for q in qs),key=lambda a:a.cost);print('panel B',name,opt.x,rms(opt.fun))\\nw=m._operator(p,'v',lambda a,q:I(np.cos(q*a)),2.6,(1.5,3.5),z); p=s['panel_c']; u,v=p['u'],p['v1']; models=[]\\nfor name,fn,q0,lo,hi in [('softsign',lambda a,q:a/(1+q[0]*abs(a)),[.83],[.05],[8]),('rational',lambda a,q:a/(1+q[0]*a*a),[1],[.05],[20]),('sqrt',lambda a,q:a/np.sqrt(1+q[0]*a*a),[2],[.05],[30]),('asinh',lambda a,q:np.arcsinh(q[0]*a),[3],[.05],[20]),('arctan',lambda a,q:np.arctan(q[0]*a),[2],[.05],[40]),('softsign generalized',lambda a,q:a/(1+q[0]*abs(a)**q[1])**q[2],[1,1,1],[.05,.3,.1],[12,3,5]),('odd quotient',lambda a,q:a/(1+q[0]*abs(a)+q[1]*a*a),[.8,.2],[.01,-.3],[8,8])]:\\n for lin in (False,True):\\n  def d(a,q):return I(np.c_[a,fn(a,q)] if lin else fn(a,q))\\n  def fit(i):\\n   def residual(q):\\n    a=d(u[i],q);return (a@ls(a,v[i])-v[i]).ravel()\\n   q=least_squares(residual,q0,bounds=(lo,hi),max_nfev=90,ftol=1e-11).x\\n   return q,ls(d(u[i],q),v[i])\\n  folds=np.array_split(np.random.default_rng(14).permutation(len(u)),4); errors=[]\\n  for j in folds:\\n   q,b=fit(np.setdiff1d(np.arange(len(u)),j));errors.append(d(u[j],q)@b-v[j])\\n  q,b=fit(np.arange(len(u)));models.append((name,lin,rms(np.concatenate(errors)),d(w,q)@b)); print('panel C',name,lin,np.round(q,5),rms(d(u,q)@b-v),models[-1][2]);\\ny=np.c_[tr['y'],tr['traj']]; order=np.arange(len(z)); rng=np.random.default_rng(1745); splits=[order]+[rng.permutation(len(z)) for _ in range(12)]+[np.argsort(sign*z[:,j]) for j in range(4) for sign in (-1,1)]\\nfor name,lin,cv,h in sorted(models,key=lambda a:a[2])[:6]:\\n base=I(np.c_[z,h,(z[:,:,None]*h[:,None,:]).reshape(len(z),-1)]); pairs=np.column_stack([z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]+[h[:,i]*h[:,j] for i in range(4) for j in range(i,4)]); qs=[.25,1,4]; rat=np.column_stack([col/(1+q*delta**2) for col in h.T for q in qs for delta in (z[:,0]-z[:,1],z[:,2]-z[:,3])]);\\n for label,extra in [('bilinear',None),('pair products',pairs),('difference quotients',rat)]:\\n  X=base if extra is None else np.c_[base,extra]; scores=[]\\n  for p in splits:\\n   i,j=p[:52],p[52:]; _,_,vh=np.linalg.svd(y[i,1:],full_matrices=False); target=np.c_[y[i,0],y[i,1:]@vh[:2].T]; pred=X[j]@ls(X[i],target); e=abs(np.c_[pred[:,0],pred[:,1:]@vh[:2]]-y[j]);scores.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(axis=0).max()]);\\n  print('readout',name,lin,label,'required',np.round(scores[0],6),'worst',np.round(np.max(scores,axis=0),6));\\nprint('study keys',list(s),'train keys',list(tr),'telemetry shape',s['telemetry_vec'].shape)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit13.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch13.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bilinear cosine–saturation graph -> H2 test whether rational or pairwise terms explain its residuals; current worst stress MAEs are 0.02125 for y and 0.01713 at any trajectory timestamp.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit relay, Fokker–Planck, or batch-confounding corrections\",\n      \"rejected_reason\": \"The public schema contains no relay modes, transition measurements, cohort labels, or classification targets. The relevant tests are panel reconstruction and continuous prediction on held-out rows.\"\n    }\n  ],\n  \"rationale\": \"Audit the cosine against odd and rational alternatives, compare saturation families on held-out panel measurements, and test whether pairwise or rational readout terms improve the worst prediction slices. Leave the verified artifact unchanged during the audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "67b2f701c1a01b55b8c8622962085f14cab643052be1a8d185357b78661f8fd5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41446.21,
+      "usage_known": true,
+      "prompt_tokens": 31536,
+      "cached_tokens": 12672,
+      "completion_tokens": 1777
+    }
+  ]
+}

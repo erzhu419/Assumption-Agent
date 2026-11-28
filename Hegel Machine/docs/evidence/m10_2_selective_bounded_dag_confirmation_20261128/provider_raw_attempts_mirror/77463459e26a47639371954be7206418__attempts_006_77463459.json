@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77463459e26a47639371954be7206418",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:31.012650+00:00",
+  "ended_at_utc": "2026-11-28T15:00:57.645631+00:00",
+  "request_sha256": "147ec0c5d884b570d9d0ca9de8bd5dd88afe74e82aaf2a9c11b1ea93dca3c743",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42738,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33003,
+    "cached_tokens": 12672,
+    "completion_tokens": 937
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ridgegraph.py <<'PY'\\nfrom explore import *\\nfrom sklearn.model_selection import KFold\\nfrom scipy.optimize import least_squares\\nn=52\\nF=poly(z,2)\\nprint('linear trajectory singular',np.linalg.svd(fit(aff(z),R[:,1:])[1:])[1]); print('y regressed on traj+quad');\\nfor j in (1,2):\\n for g in [np.c_[z,R[:,1:]],R[:,1:],np.c_[z,T[:,-1]]]:\\n  Q=poly(g,j); q=fit(Q[:n],y[:n]); print(j,g.shape,np.mean(abs(Q[n:]@q-y[n:])),np.std(Q[:n]@q-y[:n]))\\nfor j in range(3):\\n q=fit(F[:n],R[:n,j]); M=np.zeros((4,4)); ix=np.triu_indices(4); M[ix]=q[5:]; M=(M+M.T)/2; print('quadratic modes',j,np.linalg.eigh(M)); print('quad residuals', j, np.sort(abs(F[:n]@q-R[:n,j]))[-10:]);\\nfuncs={'s':np.sin,'t':np.tanh,'r':lambda a:1/(1+a*a),'g':lambda a:np.exp(-a*a),'u':lambda a:a/(1+a*a),'c':np.cos,'q':lambda a:a*a/(1+a*a)}\\nrng=np.random.default_rng(22)\\nfor j in range(3):\\n yy=R[:,j]; base=F if j!=1 else aff(z); modes=np.linalg.svd(fit(poly(z,3)[:n],yy[:n])[15:].reshape(1,-1),full_matrices=False)[0]; out=[]\\n for key,fn in funcs.items():\\n  for k in [1,2]:\\n   def mat(a):return np.c_[base,fn(z@a.reshape(k,5)[:,:4].T+a.reshape(k,5)[:,4])]\\n   def res(a):\\n    M=mat(a)[:n]; return M@fit(M,yy[:n])-yy[:n]\\n   cand=[]\\n   for rep in range(12):\\n    p=least_squares(res,rng.normal(size=k*5)*.9,bounds=(-5,5),max_nfev=110,ftol=1e-7); A=mat(p.x); coef=fit(A[:n],yy[:n]); cand.append((np.std(p.fun),np.mean(abs(A[n:]@coef-yy[n:])),p.x,coef[-k:]))\\n   print('ridge',j,key,k,min(cand,key=lambda x:x[0]),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridgegraph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct auxiliary-panel compositions -> H2 quadratic readout with a small number of nonlinear directions; inherited 52/20 MAEs remain 0.040803 for y and 0.010249 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use panel C as a direct feature transform\",\"rejected_reason\":\"The tested direct compositions did not outperform a plain quadratic readout.\"}],\"rationale\":\"Check whether the quadratic residual has identifiable rational, trigonometric, or saturating directions, and whether the trajectory coefficients provide an independent fingerprint of the same mapping.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1738d7dc236f66293aec94485569a9e6b0c776b253fd19cc167e79e9be87094f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26631.69,
+      "usage_known": true,
+      "prompt_tokens": 33003,
+      "cached_tokens": 12672,
+      "completion_tokens": 937
+    }
+  ]
+}

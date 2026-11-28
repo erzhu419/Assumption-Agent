@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1784411466be4f05a642b675c9bf9d22",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:24.903103+00:00",
+  "ended_at_utc": "2026-11-28T15:43:06.208216+00:00",
+  "request_sha256": "2bcd1514d51893373e3b27b8dde11a8edf7155b91e9ef79f696d239d487eea97",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45904,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31867,
+    "cached_tokens": 0,
+    "completion_tokens": 1716
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated sinusoidal operator with separate scalar and state readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _quadratic(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((_affine(x), x[:, i] * x[:, j]))\\n\\n\\ndef _calibration(panel):\\n    offsets, gains = [], []\\n    for u, v in zip(panel['u'].T, panel['v'].T):\\n        i, j = np.triu_indices(len(u), 1)\\n        du = u[j] - u[i]\\n        i, j = i[du != 0], j[du != 0]\\n        gain = np.median((v[j] - v[i]) / (u[j] - u[i]))\\n        offset = np.median(v - gain * u)\\n        err = abs(v - offset - gain * u)\\n        keep = err <= max(8 * np.median(err), 1e-8)\\n        offset, gain = np.linalg.lstsq(_affine(u[keep, None]), v[keep], rcond=None)[0]\\n        offsets.append(offset)\\n        gains.append(gain)\\n    return np.array(offsets), np.array(gains)\\n\\n\\ndef _operator(panel, q):\\n    u, v = panel['u'], panel['v']\\n\\n    def design(x, frequency):\\n        return _affine(np.sin(frequency * x)**2)\\n\\n    def fit(frequency):\\n        f = design(u, frequency)\\n        w = np.linalg.lstsq(f, v, rcond=None)[0]\\n        return np.sum((f @ w - v)**2), w\\n\\n    frequency = minimize_scalar(lambda k: fit(k)[0], bounds=(1.05, 1.55),\\n                                method='bounded', options={'xatol': 1e-10}).x\\n    return design(q, frequency) @ fit(frequency)[1]\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    offset, gain = _calibration(study['panel_a'])\\n    b = _operator(study['panel_b'], (x - offset) / gain)\\n\\n    f = _quadratic(b)\\n    y_hat = f[n:] @ np.linalg.lstsq(f[:n], train['y'], rcond=None)[0]\\n\\n    z = train['traj']\\n    modes = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    f = _affine(b)\\n    state_pred = (f[n:] @ np.linalg.lstsq(f[:n], z @ modes.T, rcond=None)[0]) @ modes\\n    end = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/stress_batch.py <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('_candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x)\\ndef evaluate(idx, panel=None, drop=None):\\n    keep=np.setdiff1d(np.arange(n),idx); q=copy.deepcopy(s)\\n    q['test']['x']=x[idx]; q['train'].update({k:tr[k][keep] for k in ('x','y','traj')})\\n    q['train']['summary']=np.array([q['train']['y'].mean(),q['train']['y'].std(),q['train']['traj'][:,-1].mean(),q['train']['traj'][:,-1].std()])\\n    if panel: q[panel]={k:np.delete(v,drop,axis=0) for k,v in q[panel].items()}\\n    z=m.solve_batch(q); dy=abs(z['y_hat']-tr['y'][idx]); dz=abs(z['state_pred']-tr['traj'][idx]); return np.r_[dy.mean(),dz.mean(),dz.mean(0).max(),dy.max(),dz.max()]\\nfixed=np.arange(52,72)\\ngroups={'prescribed':[fixed], 'blocked':[np.arange(i,i+20) for i in (0,13,26,39,52)], 'random':[np.random.default_rng(i).permutation(n)[:20] for i in range(30)], 'coordinate_tails':[np.argsort(sign*x[:,j])[-20:] for j in range(4) for sign in (-1,1)],'radial_tail':[np.argsort(np.linalg.norm(x,axis=1))[-20:]]}\\nfor k,g in groups.items():\\n    metrics=np.max([evaluate(idx) for idx in g],axis=0); print(k,metrics); assert max(metrics[:3])<.038\\nfor key in ('panel_a','panel_b'):\\n    v=np.max([evaluate(fixed,key,i) for i in range(len(s[key]['u']))],axis=0); print(key+' jackknife',v); assert max(v[:3])<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent panel regressions → inverse affine calibration, squared-sine panel B, and separate readouts; exploratory 52/20 MAEs are 0.00427 for y and 0.00459 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include panel C in the readouts\",\n      \"rejected_reason\": \"Tested C compositions increased held-out error relative to calibrated panel B alone.\"\n    },\n    {\n      \"option\": \"Use quadratic readouts for both outputs\",\n      \"rejected_reason\": \"The linear trajectory readout had lower exploratory MAE than the quadratic readout.\"\n    }\n  ],\n  \"rationale\": \"Panel B's fitted linear and cross-coordinate terms were at the panel noise floor, supporting the smaller squared-sine basis. Verify the exact solver on the prescribed split, alternate splits, input tails, and panel-row jackknives.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b66097b8b0000a862516c749ffbd8cdd17c2a8369c52b2140a251d1d6bb2135f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41853.42,
+      "usage_known": true,
+      "prompt_tokens": 31867,
+      "cached_tokens": 0,
+      "completion_tokens": 1716
+    }
+  ]
+}

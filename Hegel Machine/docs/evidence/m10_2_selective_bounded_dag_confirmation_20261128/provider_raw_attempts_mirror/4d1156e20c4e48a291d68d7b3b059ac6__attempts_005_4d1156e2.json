@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d1156e20c4e48a291d68d7b3b059ac6",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:36:44.970580+00:00",
+  "ended_at_utc": "2026-11-28T16:37:23.340792+00:00",
+  "request_sha256": "30026a3ba5dfe1beb98ae65883364d3535ec969a17b43242168e27c59e214dd4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30565,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25038,
+    "cached_tokens": 12672,
+    "completion_tokens": 1620
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe11.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; fit=lambda A,B:np.linalg.lstsq(A,B,rcond=1e-9)[0]; D=lambda x:np.c_[np.ones(len(x)),x]\\ndef poly(u,d): return np.column_stack([np.prod(u[:,i],axis=1) for j in range(d+1) for i in combinations_with_replacement(range(4),j)])\\ndef af(u):return D(np.c_[u,u*np.roll(u,-1,axis=1),u**3])\\na=s['panel_a']; u,v=a['u'],a['v']; keep=np.ones(len(u),bool)\\nfor _ in range(8):\\n c=fit(D(u[keep]),v[keep]);r=np.linalg.norm(D(u)@c-v,axis=1);keep=r<max(.001,3*np.median(r))\\nprint('A resid',np.sort(r), 'coef',c);z=np.linalg.solve(c[1:].T,(x-c[0]).T).T\\nw=fit(af(u[keep]),v[keep]);print('A nonlin',np.linalg.norm(af(u[keep])@w-v[keep]),np.linalg.norm(w[5:]));\\nb=s['panel_b'];w=fit(D(b['u']),b['v']); b=D(z)@w\\nprint('B',w)\\nC=s['panel_c']; U=C['u']; cs=[]\\nfor k in ['v1','v2']:\\n V=C[k]; specs={'aff':D,'af':af,'quad':lambda u:poly(u,2),'cubdiag':lambda u:D(np.c_[u,u**2,u**3]), 'tanh':lambda u:D(np.tanh(u)),'erf':lambda u:D(__import__('scipy').special.erf(u)),'sin':lambda u:D(np.sin(u)),'asinh':lambda u:D(np.arcsinh(u))}\\n for name,F in specs.items():\\n  f=F(U); e=f@fit(f,V)-V; h=(f*np.linalg.pinv(f).T).sum(1); print(k,name,np.sqrt((e**2).mean()),np.sqrt(((e/(1-h[:,None]))**2).mean()))\\n cs.append(af(z)@fit(af(U),V))\\nfor mode in range(4):\\n def F(p):\\n  g=-np.expm1(-t[:,None]*p)\\n  if mode==0:return g\\n  if mode==1:return np.c_[g[:,0],t*np.exp(-p[1]*t)]\\n  if mode==2:return np.c_[g[:,0],np.exp(-p[1]*t)]\\n  return np.c_[g[:,0],t]\\n def err(p):\\n  f=F(p);return (f@fit(f,T.T)-T.T).ravel()\\n q=least_squares(err,[.45,2.15],bounds=([.001,.001],[10,15])).x;print('time',mode,q,np.abs(err(q)).mean());\\n if mode==0: f=F(q); amps=fit(f,T.T).T\\nprint('corr',np.corrcoef(np.c_[z,b,*cs,y,amps].T)[-3:,:].round(3))\\nZs={'x':x,'z':z,'b':b,'c1':cs[0],'c2':cs[1],'zb':np.c_[z,b],'zc':np.c_[z,*cs], 'bc':np.c_[b,*cs]}\\nY=np.c_[y,amps]; rng=np.random.default_rng(110); idx=np.r_[np.arange(len(y))[None,:],np.array([rng.permutation(len(y)) for _ in range(4)])]; out=[]\\nfor name,P in Zs.items():\\n for form in ('lin','asinh0.5','asinh1.5','asinh3.5','tanh1','tanh2','joint'):\\n  Z=P if form=='lin' else (np.arcsinh(float(form[5:])*P) if form.startswith('asinh') else np.tanh(float(form[4:])*P) if form.startswith('tanh') else np.c_[.4*P,np.arcsinh(2*P)])\\n  g=Z@Z.T/Z.shape[1]; dist=np.maximum(np.diag(g)[:,None]+np.diag(g)-2*g,0)\\n  for deg in (1,2,3,4,5):\\n   for gam in (0,.15,.5,1.5,4):\\n    K=(1+g)**deg+(np.exp(-gam*dist) if gam else 0)\\n    for ridge in (1e-7,1e-5,.0003,.003):\\n     er=[]\\n     for p in idx:\\n      i,j=p[:52],p[52:]; pred=K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+ridge*np.eye(52),Y[i]);er.append([np.abs(pred[:,0]-y[j]).mean(),np.abs(pred[:,1:]@f.T-T[j]).mean()])\\n     er=np.array(er);out.append((er,(name,form,deg,gam,ridge)))\\nfor i in (0,1):\\n print('best',i)\\n for e,k in sorted(out,key=lambda ek:ek[0][:,i].mean())[:15]:print(k,e[:,i].round(5),'mean',e[:,i].mean())\\nnp.savez('/tmp/d11.npz',x=x,z=z,b=b,c1=cs[0],c2=cs[1],y=y,T=T,t=t,f=f,amps=amps,idx=idx)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic trajectory transfer -> H2 calibrated spatial coordinates and two temporal modes; previous 52/20 trajectory MAE 0.054559.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Assume every panel is active\",\"rejected_reason\":\"Panel fit quality does not establish that its operator improves held-out prediction.\"}],\"rationale\":\"Compare temporal bases and calibrated, mixed, and auxiliary coordinates on the fixed holdout and four additional splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b91762a7b0b195b9d409623c64165e87140a55fa8c1652224da76a9db986aacc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39522.98,
+      "usage_known": true,
+      "prompt_tokens": 25038,
+      "cached_tokens": 12672,
+      "completion_tokens": 1620
+    }
+  ]
+}

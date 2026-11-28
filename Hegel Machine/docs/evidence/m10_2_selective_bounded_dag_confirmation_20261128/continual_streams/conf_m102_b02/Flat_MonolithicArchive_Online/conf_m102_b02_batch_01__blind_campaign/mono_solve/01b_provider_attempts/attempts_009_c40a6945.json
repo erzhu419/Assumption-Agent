@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c40a694577bc4e4081ec196eb60acd30",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:42.778153+00:00",
+  "ended_at_utc": "2026-11-28T15:03:17.164642+00:00",
+  "request_sha256": "a7909fa929d803086b5ab60e51a4d0e498d1fcbdfc2f513ac1be67af020caef3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39832,
+    "cached_tokens": 12672,
+    "completion_tokens": 1299
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine9.py <<'PY'\\nexec(open('/tmp/graph7.py').read().split(\\\"print('summary'\\\")[0])\\nfrom sklearn.linear_model import Ridge\\nfrom itertools import combinations\\nB,C=v,v1\\nP={'z':z,'C':C(z),'CB':C(B(z)),'B':B(z),'V':V(z),'VB':V(B(z))}; F=temporal(n.log([.41,1.795])); H=ls(F,T.T).T; r=n.linalg.svd(T[:52],full_matrices=False)[2][:2]; Q=n.c_[y,T@r.T,H]; rng=n.random.default_rng(218); splits=[n.arange(72)]+[rng.permutation(72) for _ in range(18)];\\ndef design(g,kind):\\n w=[P[k] for k in g]; keys=[f'{k}{j}' for k in g for j in range(4)]; D=list(n.column_stack(w).T); names=keys.copy()\\n for i,k in enumerate(g):\\n  for j in range(i,len(g)):\\n   if i==j and kind in ['no_sq','inter']:continue\\n   for a in range(4):\\n    for b in range(4):\\n     if (kind!='full' and a!=b) or (i==j and a>b):continue\\n     D.append(w[i][:,a]*w[j][:,b]); names.append(f'{k}{a}*{g[j]}{b}')\\n return n.column_stack(D),names\\ndef cv(D,alpha):\\n R=[]\\n for s in splits:\\n  i,j=s[:52],s[52:]; m=D[i].mean(0); sd=n.maximum(D[i].std(0),1e-8); a=(D[i]-m)/sd; q=(D[j]-m)/sd; y0=Q[i].mean(0); c=n.linalg.solve(a.T@a+alpha*n.eye(a.shape[1]),a.T@(Q[i]-y0)); pred=q@c+y0; et=abs(pred[:,1:3]@r-T[j]); R.append(n.r_[n.mean(abs(pred-Q[j]),0),et.mean(),et.mean(0)[-1]])\\n return n.array(R)\\nrows=[]\\nfor g in [('z','CB'),('z','C','CB'),('z','C','CB','B'),('z','C','CB','V'),('z','C','CB','VB')]:\\n for kind in ['full','diag','no_sq']:\\n  D,names=design(g,kind)\\n  for a in [.0003,.003,.03,.1,.3]:\\n   e=cv(D,a);rows.append((g,kind,a,e[0],e.max(0),e.mean(0)))\\nfor j in [0,5,6]:\\n print('BEST',j)\\n for g,k,a,e,m,o in sorted(rows,key=lambda row:row[4][j])[:6]: print(g,k,a,'public',e,'worst',m,'mean',o)\\nfor g in [('z','CB'),('z','C','CB')]:\\n D,keys=design(g,'diag'); A=n.c_[n.ones(72),D]; d=n.r_[1,D.std(0)]; c=ls(A[:52]/d,Q[:52]); print('COEF',g);print('RMS',n.std(A@ (c/d[:,None])-Q,0));print(*[(key,n.round(w,4)) for key,w in zip(['bias']+keys,c/d[:,None])],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine9.py | tail -66\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive panel compositions -> H2 coordinatewise cross terms in the calibrated skip and C(B(z)) branches; y MAE is 0.0094 on 52/20 and at most 0.0122 on four additional splits, while trajectory errors still need direct verification.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Within-branch features without coordinatewise cross-branch products suffice for the scalar readout.\",\"empirical_witness\":\"The best screened additive or direct composition gave about 0.074 public y MAE; adding coordinatewise z × C(B(z)) products lowers it to 0.0094 and holds up on four other splits.\",\"causal_blanket_diagnosis\":\"The additive feature grammar omitted products coupling calibrated inputs to the composed operator output.\",\"sublated_pivot\":\"Retain the calibrated skip and composed branch; check which interactions and additional branches the trajectory readout needs.\",\"risk_kind\":\"omitted_cross_branch_interactions\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select both outputs using latent-mode MAE alone\",\"rejected_reason\":\"Mode errors must be propagated to the measured state, including the terminal timestamp.\"}],\"rationale\":\"Cross terms close the scalar gap. Compare restricted and full interaction bases on repeated splits using direct trajectory and terminal-state MAE before building the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "57c3c0447b99c4732724ceda6f2d1c112fa9bfd95e52f5246205d1cd094a703e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34384.91,
+      "usage_known": true,
+      "prompt_tokens": 39832,
+      "cached_tokens": 12672,
+      "completion_tokens": 1299
+    }
+  ]
+}

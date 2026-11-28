@@ -1,0 +1,187 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a03_batch_05_6caf3f9563aa",
+    "source_hash": "6caf3f9563aa713f3f3925d49646ea1b574b64b5681a38c4c4f8398a53c19f0d",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/explore06.py",
+        "archived_relpath": "producers/tmp__explore06.py",
+        "bytes": 1539,
+        "sha256": "71b3ba401f4549d469918aa98985b9d2f5a9fbc05f16d18607b197fb8a6fbc07"
+      },
+      {
+        "container_path": "/tmp/map06.py",
+        "archived_relpath": "producers/tmp__map06.py",
+        "bytes": 1036,
+        "sha256": "d0ac8a50aef25ae1d3af48c9d415dfd2cbc893e296b5886c7d11d28d56609aab"
+      },
+      {
+        "container_path": "/tmp/node06_accepted.py",
+        "archived_relpath": "producers/tmp__node06_accepted.py",
+        "bytes": 2843,
+        "sha256": "24ebebf36775dccf8208d11e67105f84b7903b0fc89d0e4fdba23a4f293623d3"
+      },
+      {
+        "container_path": "/tmp/panel06.py",
+        "archived_relpath": "producers/tmp__panel06.py",
+        "bytes": 1212,
+        "sha256": "9b50e3a635cda0e3019d627c3588350b92cfba662d1d43a53684d28f51ae7875"
+      },
+      {
+        "container_path": "/tmp/search06.py",
+        "archived_relpath": "producers/tmp__search06.py",
+        "bytes": 2636,
+        "sha256": "a4ebe3c1a3e7e68619d163925de408772ff6c6443182c1aec43a727ae4a7f0b1"
+      },
+      {
+        "container_path": "/tmp/stress06.py",
+        "archived_relpath": "producers/tmp__stress06.py",
+        "bytes": 1944,
+        "sha256": "6f99f6a238ee64182748adc9e040b4701a2f54ccfbdff65a03c3333646d05817"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_00_solver.py",
+        "bytes": 2165,
+        "sha256": "1cbb261bff4025eba9291fa441be191940cf9aff1fb6560a8524c6db774d70ee"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_01_solver.py",
+        "bytes": 3245,
+        "sha256": "e0dee26c4b2270003349c77a52bd53f8797efccdaf2f23a3a6cd22dbf37f0f22"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_02_solver.py",
+        "bytes": 4315,
+        "sha256": "f4fd48c71c8162e72478bfb8ae32fa0eceb85821ff86efe07d5d72d15b5766e5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; cat _dag_spec.json public_asset_index.json; for f in _frozen_nodes/*.py; do echo \"$f\"; cat \"$f\"; done; cat test_dag_candidate.py; find /tmp/hegel_continual_archive -maxdepth 4 -type f | sort | head -120; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))\ndef walk(x,k='',d=0):\n if isinstance(x,dict) and d<4:\n  for a,b in x.items(): walk(b,k+'/'+str(a),d+1)\n elif isinstance(x,(list,tuple)):\n  print(k,type(x),len(x));\n  if len(x): walk(x[0],k+'/0',d+1)\n else:\n  a=np.asarray(x);print(k,type(x),a.shape,a.dtype,str(a.ravel()[:8])[:200])\nwalk(p)\n",
+      "cd /holdout_task; for f in _frozen_nodes/*.py; do echo \"=== $f\"; cat \"$f\"; done; cd /tmp/hegel_continual_archive; ls -l; python3 - <<'PY'\nimport json\nfor n in ['archive_manifest.json','pre_llm_gate_diagnostic.json']:\n d=json.load(open(n)); print(n, json.dumps(d)[:3800])\nPY\nfor f in *.py; do echo \"=== $f\"; grep -nE '^def |^class |tanh|telemetry' \"$f\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling additive kernel' 2>&1 | head -30",
+      "for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$f; cat \"$f\"; done; sed -n '1,240p' /holdout_task/test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 2>&1 | head -24",
+      "sed -n '65,102p' /tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py; sed -n '1,115p' /holdout_task/test_dag_candidate.py; cat >/tmp/explore06.py <<'PY'\nimport numpy as np,pickle,importlib.util,time\nfrom scipy.linalg import lstsq\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; n=len(y)\np='/tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py'; spec=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\na=m._affine; q=m._quadratic; fit=m._fit\nsh,sc=m._c",
+      "cat >/tmp/panel06.py <<'PY'\nexec(open('/tmp/explore06.py').read().split('for nm,F')[0]); from itertools import combinations_with_replacement\nprint('keys',s.keys()); print('time',s['eval_times']); print('panels',[(k,{j:(v.shape,np.quantile(v,[0,.1,.5,.9,1])) for j,v in s[k].items() if isinstance(v,np.ndarray)}) for k in ['panel_a','panel_b']]); u,v=b['u'],b['v']; print('panel B samples',u[:5],v[:5]); print('B affine per column quantiles',np.quantile(abs(a(u)@B-v),[0,.25,.5,.75,.9,1],axis=0));\ndef pol(x,d): return np.column_stack([np.prod(x[:,j],axis=1) for p in range(d+1) for j in combinations_",
+      "find /tmp/hegel_continual_archive -maxdepth 4 -type f | sort | head -100; cat /holdout_task/_frozen_nodes/node_02.py; cat >/tmp/map06.py <<'PY'\nexec(open('/tmp/explore06.py').read().split('for nm,F')[0])\nfrom itertools import combinations\nu=b['u']; C=s['panel_c']; print('paired inputs',np.max(abs(C['u']-u))); print('C/B first rows',*[C[k][:3] for k in C]); print('B',b['v'][:3]);\ni,j=np.triu_indices(4,1); k=np.arange(4)\ndef pair(z):return z[:,i]*z[:,j]\ndef cy(z):return z*np.roll(z,-1,axis=1)\ndef report(u,v):\n for nm,fun in [('lin',a),('cubic',lambda z:np.c_[a(z),z**3]),('cubicpair',lambda z:np.",
+      "tail -76 /holdout_task/test_dag_candidate.py; cat /holdout_task/_frozen_nodes/node_01.py; python3 - <<'PY'\nimport json\nj=json.load(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json')); print(str(j)[-4500:])\nPY\ncat >/tmp/search06.py <<'PY'\nexec(open('/tmp/explore06.py').read().split('for nm,F')[0]); from scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nfrom scipy.special import erf\nC=s['panel_c']; i,j=np.triu_indices(4,1)\ndef af(x):return np.c_[np.ones(len(x)),x]\ndef pair(x):return x[:,i]*x[:,j]\ndef calib(U,V,D):\n def basi",
+      "set -e\ncat >/holdout_task/node_00.py <<'PY'\n\"\"\"Calibrate the sensor coordinates and construct the scalar and state kernels.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\n\n\ndef _sensor_calibration(panel):\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    a = np.stack((np.ones_like(u), u), axis=-1)\n    w = np.ones(len(u))\n    for _ in range(24):\n        co = np.column_stack([_fit(a[:, j]",
+      "cat >/tmp/stress06.py <<'PY'\nimport importlib.util,pickle,numpy as np,itertools\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\np='/holdout_task/node_00.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; n=len(x); co=m._sensor_calibration(s['panel_a']); z=(x-co[0])/co[1]; w=m._readout_coordinates(s['panel_b'],z)\nfolds=[np.arange(n-20,n),*np.array_split(np.random.default_r",
+      "set -e\ncp /holdout_task/node_00.py /tmp/node06_accepted.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/node_00.py'); s=p.read_text()\ns=s.replace('    wt, w = w[n:], w[:n]\\n', '    wt, w = w[n:], w[:n]\\n    # Use sensor coordinates for additive effects that the panel map mixes.\\n    u = (z - z[:n].mean(0)) / np.maximum(z[:n].std(0), 1e-10)\\n')\ns=s.replace(\"    def scalar(a, b):\\n        d = a.shape[1]\\n        return 1. + a @ b.T / d + np.exp(-.5 * cdist(a, b, 'sqeuclidean') / d)\", \"    def additive(a, b, rate):\\n        return np.exp(-rate * (a[:, None, :] - b[None, :, :])*"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m102_a03_batch_02_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_02_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 3241,
+        "sha256": "ae3c2f3197bc2963ca1c863f431c641aa0cfb026514a1be8321ee32192440924",
+        "content_addressed_ref": "content_addressed_blobs/ae3c2f3197bc2963ca1c863f431c641aa0cfb026514a1be8321ee32192440924.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_affine",
+      "_fit",
+      "_sensor_calibration",
+      "_readout_coordinates",
+      "run_node",
+      "_calibration",
+      "_readout",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6caf3f9563aa713f3f3925d49646ea1b574b64b5681a38c4c4f8398a53c19f0d",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncp /holdout_task/node_00.py /tmp/node06_accepted.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/node_00.py'); s=p.read_text()\ns=s.replace('    wt, w = w[n:], w[:n]\\n', '    wt, w = w[n:], w[:n]\\n    # Use sensor c",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6caf3f9563aa713f3f3925d49646ea1b574b64b5681a38c4c4f8398a53c19f0d",
+        "expected_candidate_sha256": "6caf3f9563aa713f3f3925d49646ea1b574b64b5681a38c4c4f8398a53c19f0d",
+        "computed_candidate_sha256": "6caf3f9563aa713f3f3925d49646ea1b574b64b5681a38c4c4f8398a53c19f0d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 3241
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_6caf3f95"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_sensor_calibration",
+        "code": "def _sensor_calibration(panel):\n    (u, v) = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    a = np.stack((np.ones_like(u), u), axis=-1)\n    w = np.ones(len(u))\n    for _ in range(24):\n        co = np.column_stack([_fit(a[:, j] * w[:, None], v[:, j] * w) for j in range(u.shape[1])])\n        r = np.linalg.norm(v - co[0] - co[1] * u, axis=1)\n        w = np.sqrt(np.minimum(1.0, 1.5 * max(np.median(r), 1e-12) / np.maximum(r, 1e-12)))\n    return co"
+      },
+      {
+        "name": "_readout_coordinates",
+        "code": "def _readout_coordinates(panel, z):\n    from scipy.optimize import least_squares\n    (u, v) = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    d = u.shape[1]\n\n    def basis(x, p, trig):\n        h = x * np.exp(p[:d]) + p[d:]\n        if trig:\n            return np.column_stack((_affine(x), x * x, np.sin(h)))\n        return np.column_stack((_affine(x), np.tanh(h)))\n    candidates = []\n    for trig in (False, True):\n\n        def residual(p):\n            f = basis(u, p, trig)\n            return (f @ _fit(f, v) - v).ravel()\n        result = min((least_squares(residual, np.r_[np.full(d, k), np.zeros(d)], bounds=(-2.0, 2.0), max_nfev=90) for k in (-0.3, 0.4, 1.0)), key=lambda r: r.cost)\n        f = basis(u, result.x, trig)\n        score = np.linalg.norm(result.fun) * (1 + f.shape[1] / 20.0)\n        candidates.append((score, basis(z, result.x, trig) @ _fit(f, v)))\n    return min(candidates, key=lambda item: item[0])[1]"
+      },
+      {
+        "name": "run_node",
+        "code": "def run_node(inputs: dict) -> dict:\n    from scipy.spatial.distance import cdist\n    study = inputs['__input__']\n    train = study['train']\n    co = _sensor_calibration(study['panel_a'])\n    (x, xt) = (np.asarray(block['x'], dtype=float) for block in (train, study['test']))\n    n = len(x)\n    z = (np.concatenate((x, xt), axis=0) - co[0]) / co[1]\n    w = _readout_coordinates(study['panel_b'], z)\n    w = (w - w[:n].mean(0)) / np.maximum(w[:n].std(0), 1e-10)\n    (wt, w) = (w[n:], w[:n])\n\n    def scalar(a, b):\n        d = a.shape[1]\n        return 1.0 + a @ b.T / d + np.exp(-0.5 * cdist(a, b, 'sqeuclidean') / d)\n\n    def state(a, b):\n        return 1.0 + a @ b.T + np.exp(-1.2 * (a[:, None, :] - b[None, :, :]) ** 2).mean(2)\n    modes = np.linalg.svd(np.asarray(train['traj'], dtype=float), full_matrices=False)[2][:2]\n    ks = state(z[:n], z[:n]) + 0.001 * np.eye(n)\n    kt = state(z[n:], z[:n])\n    return {'readout_train': scalar(w, w) + 0.01 * np.eye(n), 'readout_test': scalar(wt, w), 'state_train': np.stack([ks] * len(modes)), 'modes': modes, 'zt': np.concatenate([kt] * len(modes), axis=1)}"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    (u, v) = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    a = _affine(u)\n    coef = _fit(a, v)\n    for _ in range(24):\n        residual = np.linalg.norm(a @ coef - v, axis=1)\n        scale = max(float(np.median(residual)), 1e-12)\n        weight = np.sqrt(np.minimum(1.0, 1.5 * scale / np.maximum(residual, 1e-12)))\n        coef = _fit(a * weight[:, None], v * weight[:, None])\n    residual = np.linalg.norm(a @ coef - v, axis=1)\n    good = residual <= 5 * max(float(np.median(residual)), 1e-12)\n    if good.sum() >= a.shape[1] and np.linalg.matrix_rank(a[good]) == a.shape[1]:\n        coef = _fit(a[good], v[good])\n        mat = coef[1:]\n        off = mat - np.diag(np.diag(mat))\n        if np.linalg.norm(off) <= 5 * max(float(np.median(residual)), 1e-12):\n            for j in range(u.shape[1]):\n                (coef[0, j], coef[j + 1, j]) = _fit(a[good][:, [0, j + 1]], v[good, j])\n            coef[1:] = np.diag(np.diag(coef[1:]))\n    return coef"
+      },
+      {
+        "name": "_readout",
+        "code": "def _readout(z):\n    return np.column_stack((z, z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]))"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    x = np.asarray(train['x'], dtype=float)\n    target = np.asarray(study['test']['x'], dtype=float)\n    a = _calibration(study['panel_a'])\n    b = _fit(_affine(study['panel_b']['u']), study['panel_b']['v'])\n\n    def encode(rows):\n        calibrated = np.linalg.solve(a[1:].T, (rows - a[0]).T).T\n        return _affine(calibrated) @ b\n    (z, zt) = (encode(x), encode(target))\n    yh = _readout(zt) @ _fit(_readout(z), train['y'])\n    (q, r) = np.linalg.qr(z, mode='reduced')\n    (u, sv, vh) = np.linalg.svd(q.T @ train['traj'], full_matrices=False)\n    rank = min(2, len(sv))\n    coef = _fit(r, u[:, :rank] * sv[:rank] @ vh[:rank])\n    sp = zt @ coef\n    diag = np.array([yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\n    return {'y_hat': yh, 'state_pred': sp, 'diagnostics_vec': diag}"
+      }
+    ]
+  }
+}

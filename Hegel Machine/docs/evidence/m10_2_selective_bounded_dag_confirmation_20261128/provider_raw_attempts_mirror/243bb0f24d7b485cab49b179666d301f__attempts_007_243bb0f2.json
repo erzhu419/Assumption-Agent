@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "243bb0f24d7b485cab49b179666d301f",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:04:08.864385+00:00",
+  "ended_at_utc": "2026-11-28T16:04:39.390071+00:00",
+  "request_sha256": "3a458a031b65055323700959f63f00aae847e95ac208b9c915e5f617f79e7f57",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 45171,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30786,
+    "cached_tokens": 12672,
+    "completion_tokens": 1286
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cos12.py <<'PY'\\nexec(open('/tmp/probe12.py').read().split('for key,tar')[0])\\nfrom scipy.optimize import minimize_scalar\\nk=s['telemetry_vec'][-1]\\nmodels={}\\nfor key,tar in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u=s[key]['u']; v=s[key][tar]; folds=np.array_split(np.arange(len(u)),6)\\n def f(x,base,extra,k):\\n  d=np.cos(k*x)-1; h=np.sin(k*x); r=np.roll(x,-1,axis=1)\\n  a={'a':aff(x),'p':poly(x,2),'ac':np.c_[aff(x),x*r],'ah':np.c_[aff(x),x*x],'pc':poly(x,3)}[base]\\n  e={'cos':d,'cos+sin':np.c_[d,h],'cos+odd':np.c_[d,x*d],'cos+xc':np.c_[d,r*d],'cos+prod':np.c_[d,x*r*d],'cos+sat':np.c_[d,x/np.hypot(1,k*x)],'sat':x/np.hypot(1,k*x),'tanh':np.tanh(k*x)}[extra]\\n  return np.c_[a,e]\\n results=[]\\n for a in ['a','p','ac','ah','pc']:\\n  for e in ['cos','cos+sin','cos+odd','cos+xc','cos+prod','cos+sat','sat','tanh']:\\n   if f(u,a,e,k).shape[1]>len(u)*.7: continue\\n   results.append((cv(f(u,a,e,k),v,folds),a,e))\\n for met,a,e in sorted(results)[:5]:\\n  F=f(u,a,e,k); w=ls(F,v); print(key,tar,a,e,met,'in',np.mean(abs(F@w-v)))\\n  if (met,a,e)==min(results):\\n   print('coef',np.round(w,3)); models[key+tar]=(a,e,w)\\n if key=='panel_b':\\n  for a,e in [('p','cos'),('a','cos'),('ac','cos')]:\\n   opt=minimize_scalar(lambda t:np.linalg.norm((F:=f(u,a,e,t))@ls(F,v)-v),bounds=(1,4),method='bounded'); print('freq',a,e,opt.x,opt.fun)\\nbases0={nm:f(q,a,e,k)@w for nm,(a,e,w) in models.items()}\\nbases0.update({'cos':np.cos(k*q)-1, 'q':q})\\nbases0['bc']=np.c_[bases0['panel_bv'],bases0['panel_cv2']]\\ny=tr['y']; T=tr['traj']; folds=np.array_split(np.arange(len(q)),6)\\nR=[]\\nfor name,b in bases0.items():\\n for dn,d in bases0.items():\\n  if b.shape[1]!=4 or d.shape[1]!=4:continue\\n  for an,A in [('aff',aff(b)),('affq',np.c_[aff(b),q]),('poly',poly(b,2)),('cross',np.c_[aff(b), b*np.roll(d,-1,axis=1)]),('a+b',np.c_[aff(b),d]),('allcross', np.c_[aff(b),(b[:,:,None]*d[:,None,:]).reshape(len(b),-1)])]:\\n   R.append((cv(A,y,folds),cv(A,T,folds),name,dn,an,'none'))\\n   for i in range(4):\\n    g=1/(1+s['telemetry_vec'][2]*q[:,i]**2); F=np.c_[np.ones(len(q)),A[:,1:]*g[:,None]]; R.append((cv(F,y,folds),cv(F,T,folds),name,dn,an,'gate'+str(i)))\\nprint('y best',*sorted(R)[:16],sep='\\\\n'); print('t best',*sorted(R,key=lambda v:v[1])[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cos12.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic readouts → H2 cosine-augmented panel features; six-fold worst-fold MAE is 0.0976 for the scalar and 0.0137 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the same cosine-augmented design for both readouts\",\n      \"rejected_reason\": \"It clears the trajectory threshold but leaves the scalar worst-fold error above tolerance.\"\n    }\n  ],\n  \"rationale\": \"The telemetry frequency sharply improves the trajectory and panel-C fit. Check whether the same cosine terms repair panel B, then compare panel-derived products and gated features for the scalar readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "fc7b581a160330608211cdfd20486979f7698da41456abf39d76db0da2d725fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31124.87,
+      "usage_known": true,
+      "prompt_tokens": 30786,
+      "cached_tokens": 12672,
+      "completion_tokens": 1286
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43dbffda793845229db027ef491f037f",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:53.289885+00:00",
+  "ended_at_utc": "2026-11-28T15:27:34.829194+00:00",
+  "request_sha256": "65449f1f7120dc49f2261646beee50af3efaa92d9e9e73e2d12f86162d3e9e46",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30747,
+    "cached_tokens": 12672,
+    "completion_tokens": 1567
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/struct.py <<'PY'\\nfrom paths import *\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nz=cal(T['x']); u,v=(S['panel_b'][k] for k in ('u','v')); yt=T['y']; tr=T['traj']; t=S['eval_times']; U,s,V=np.linalg.svd(tr,full_matrices=False); B=V[0]/V[0,-1]; amp=tr@B/(B@B)\\nprint('time',B,'second',V[1]);\\nfor k,P in [('exp',lambda a:-np.expm1(-t*a)),('log',lambda a:np.log1p(t*a)),('root',lambda a:np.sqrt(1+t*a)-1),('rational',lambda a:t/(1+a*t)),('asinh',lambda a:np.arcsinh(t*a))]:\\n fit=least_squares(lambda a:P(a)/P(a)[-1]-B,.9,bounds=(.001,30)); print(k,fit.x,np.linalg.norm(fit.fun),np.linalg.norm(P(1.25)/P(1.25)[-1]-B))\\nextra={'erf':lambda x,p:__import__('scipy').special.erf(p*x),'softclip':lambda x,p:x/(1+abs(p*x)),'genexp':lambda x,p:x*np.exp(-p[0]*abs(x)**p[1]),'gaussshift':lambda x,p:x*np.exp(-p[0]*(x-p[1])**2)}; funcs={**nl,**extra};\\nfor name,h in funcs.items():\\n for variant in ('scalar','separate','joint') if name not in ('genexp','gaussshift') else ('scalar',):\\n  def F(x,p):return np.c_[af(x),h(x,p)]\\n  def fun(p):\\n   f=F(u,p); e=(f@ls(f,v)-v).ravel();\\n   if variant=='joint':\\n    a=F(z[:52],p); e=np.r_[e,(a@ls(a,amp[:52])-amp[:52])*.75]\\n   return e\\n  if name=='genexp': p0,limits=[1.,2.],([.05,.6],[5,5]);\\n  elif name=='gaussshift': p0,limits=[1.,0.],([.05,-.9],[5,.9]);\\n  else: p0,limits=np.ones(1 if variant=='scalar' else 4),(.05,5)\\n  p=least_squares(fun,p0,bounds=limits,gtol=1e-11).x; f=F(u,p); c=ls(f,v); g=F(z,p)@c; H=np.linalg.qr(f)[0]; e=(f@c-v)/(1-(H*H).sum(1))[:,None]; P=quad(g); coeff=ls(P[:52],yt[:52]); Q=quad(g,True); states=af(g); print(name,variant,p,'panel',np.sqrt((e*e).mean()),'state',abs(states[52:]@ls(states[:52],tr[:52])-tr[52:]).mean(),'y_cross',abs(Q[52:]@ls(Q[:52],yt[:52])-yt[52:]).mean(),'y_full',abs(P[52:]@coeff-yt[52:]).mean(), 'coef', coeff if name=='gauss' else '')\\n  if name=='gauss' and variant=='scalar':\\n   print('panel coefficients',c,'state coef',ls(states[:52],amp[:52]),'y linear',ls(states[:52],yt[:52])); print('y residual corr with amplitude',np.corrcoef(amp,yt-states@ls(states,yt))[0,1]); print('amp mismatch',np.quantile(amp-states@ls(states,amp),[0,.1,.5,.9,1])); print('h range',g.min(0),g.max(0)); print('quad sv',np.linalg.svd(P[:52],compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (panel-free or panel C forward path) -> H2 (panel B mediates both outputs); panel B yields 52/20 MAEs of 0.01644 for trajectories and 0.03893 for the scalar, with scalar MAE up to 0.05304 over ten additional splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The dominant trajectory is an affine readout of the calibrated input or of panel C, rather than of panel B.\",\n    \"empirical_witness\": \"On the same 52/20 split, affine trajectory MAE is 0.26309 in calibrated coordinates and 0.33713 after panel C, versus 0.01644 after panel B; the tested compositions do not improve on panel B.\",\n    \"causal_blanket_diagnosis\": \"Calibrated inputs alone miss the dominant nonlinear operator; requiring both auxiliary panels in the forward path worsens prediction.\",\n    \"sublated_pivot\": \"Keep the robust diagonal calibration and panel B as the shared operator, then identify separate trajectory and scalar readouts.\",\n    \"risk_kind\": \"wrong operator path\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unrestricted quadratic scalar readout\",\n      \"rejected_reason\": \"Its 52/20 MAE is 0.04710; inspect coefficient structure and operator sensitivity before increasing readout complexity.\"\n    }\n  ],\n  \"rationale\": \"Compare panel B nonlinearities and temporal laws independently, and use a training-only trajectory fit to test whether operator error explains the remaining scalar gap.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6f9c1e0508b2aa2f1ecdbb5d41df3b37eb98a65e582bf940fb7395957af24aa9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41538.32,
+      "usage_known": true,
+      "prompt_tokens": 30747,
+      "cached_tokens": 12672,
+      "completion_tokens": 1567
+    }
+  ]
+}

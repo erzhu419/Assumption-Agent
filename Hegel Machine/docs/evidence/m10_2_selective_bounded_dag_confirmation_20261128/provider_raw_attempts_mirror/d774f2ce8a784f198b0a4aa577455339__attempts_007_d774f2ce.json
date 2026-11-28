@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d774f2ce8a784f198b0a4aa577455339",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:09:07.774946+00:00",
+  "ended_at_utc": "2026-11-28T16:09:43.811054+00:00",
+  "request_sha256": "285ed98f0265658de15c1de0eb0a0392ebf311b99e60a8d8abe71a0109107d1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44870,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32109,
+    "cached_tokens": 12672,
+    "completion_tokens": 1574
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover a calibrated cosine–saturation graph and fit its bilinear readout.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _intercept(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-9)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    slopes = []\\n    offsets = []\\n    for a, b in zip(u.T, v.T):\\n        i, j = np.triu_indices(len(a), 1)\\n        use = np.abs(a[i] - a[j]) > 0.05\\n        i, j = i[use], j[use]\\n        slope = np.median((b[i] - b[j]) / (a[i] - a[j]))\\n        offset = np.median(b - slope * a)\\n        error = b - offset - slope * a\\n        keep = np.abs(error) < max(0.001, 8 * np.median(np.abs(error)))\\n        if np.count_nonzero(keep) >= 3:\\n            offset, slope = _ls(_intercept(a[keep]), b[keep])\\n        slopes.append(slope)\\n        offsets.append(offset)\\n    return (x - offsets) / slopes\\n\\n\\ndef _operator(panel, key, design, start, bounds, x):\\n    u, v = panel['u'], panel[key]\\n\\n    def residual(p):\\n        a = design(u, p[0])\\n        return (a @ _ls(a, v) - v).ravel()\\n\\n    p = least_squares(residual, [start], bounds=bounds, ftol=1e-12).x[0]\\n    return design(x, p) @ _ls(design(u, p), v)\\n\\n\\ndef _features(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    w = _operator(study['panel_b'], 'v',\\n                  lambda a, q: _intercept(np.cos(q * a)), 2.6, (1.5, 3.5), z)\\n    h = _operator(study['panel_c'], 'v1',\\n                  lambda a, q: _intercept(np.column_stack((a, a / (1 + q * np.abs(a))))),\\n                  0.83, (0.2, 2.5), w)\\n    products = (z[:, :, None] * h[:, None, :]).reshape(len(z), 16)\\n    return _intercept(np.column_stack((z, h, products)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    design = _features(study, x)\\n    n = len(train['x'])\\n    _, _, vh = np.linalg.svd(train['traj'], full_matrices=False)\\n    basis = vh[:2]\\n    targets = np.column_stack((train['y'], train['traj'] @ basis.T))\\n    pred = design[n:] @ _ls(design[:n], targets)\\n    y_hat, state_pred = pred[:, 0], pred[:, 1:] @ basis\\n    end = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\ncat >/tmp/check_batch13.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['y']); rng=np.random.default_rng(709)\\nsplits=[np.arange(n)]+[rng.permutation(n) for _ in range(32)]\\nx=t['x']; z=m._calibrate(s['panel_a'],x)\\nsplits += [np.argsort(np.linalg.norm(z,axis=1))]+[np.argsort(sign*z[:,j]) for j in range(4) for sign in (-1,1)]\\na=[]\\nfor k,p in enumerate(splits):\\n i,j=p[:52],p[52:]; q=dict(s,train={l: t[l][i] for l in ('x','y','traj')} | {'summary':t['summary']},test={'x':x[j]}); d=m.solve_batch(q)\\n dy=np.abs(d['y_hat']-t['y'][j]); ds=np.abs(d['state_pred']-t['traj'][j]); a.append([dy.mean(),ds.mean(),ds.mean(0).max(),ds[:,-1].mean()]);\\n if k==0 or k>=33: print(k,np.round(a[-1],7))\\nprint('worst random',np.max(a[:33],axis=0),'worst stress',np.max(a,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch13.py\\npython3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single-panel or chained-only prediction -> H2 diagonal calibration with a bilinear skip between calibrated inputs and C-v1(B(z)); exploratory 52/20 y MAE is 0.0040, with scaled mode MAEs of 0.0026 and 0.0127.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Replace C-v1 with C-v2\",\"rejected_reason\":\"The analogous bilinear readout has exploratory y MAE 0.2064, compared with 0.0040 for C-v1.\"}],\"rationale\":\"The interaction of the calibrated input with C-v1 evaluated after the cosine operator gives the strongest held-out evidence. Implement that graph and check both outputs in native units, including random splits and deliberate coordinate extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8bee89a0be8d400c404fcfa4d49ccf6d7f1a0a4fe820f0ffd6a0c0c99bf4758e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36661.83,
+      "usage_known": true,
+      "prompt_tokens": 32109,
+      "cached_tokens": 12672,
+      "completion_tokens": 1574
+    }
+  ]
+}

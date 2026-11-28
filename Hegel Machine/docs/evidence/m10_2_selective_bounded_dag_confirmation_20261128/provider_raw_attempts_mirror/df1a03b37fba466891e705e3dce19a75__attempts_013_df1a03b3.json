@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df1a03b37fba466891e705e3dce19a75",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:01.702374+00:00",
+  "ended_at_utc": "2026-11-28T15:31:27.937508+00:00",
+  "request_sha256": "560f2c1ebb1892cbd44adda8a55359eb09e790412ee3f0a120746c6fdf4adb34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71923,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40790,
+    "cached_tokens": 12672,
+    "completion_tokens": 1005
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncp /holdout_task/batch_solver.py /tmp/campaign_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py');s=p.read_text()\\ns=s.replace('    return basis((x-shift)/scale, p)@_ls(basis(u,p), v)','    z = (x-shift)/scale\\\\n    return basis(z, p)@_ls(basis(u,p), v), z')\\na=s.index('def _scalar('); b=s.index('\\\\ndef _state(',a)\\ns=s[:a]+'''def _scalar(h, q, z, zq, y):\\n    # Shrink the calibrated-input squares more strongly than panel interactions.\\n    f = np.c_[_cross(h), z**2]\\n    fq = np.c_[_cross(q), zq**2]\\n    pen = np.diag(np.r_[np.zeros(5), np.full(6, .03), np.ones(z.shape[1])])\\n    # Smooth robust weights limit the influence of large residuals.\\n    w = np.ones(len(y))\\n    for _ in range(8):\\n        c = np.linalg.solve(f.T@(w[:, None]*f)+pen, f.T@(w*y))\\n        w = 1/np.sqrt(1+((f@c-y)/.03)**2)\\n    return fq@c\\n\\n'''+s[b:]\\ns=s.replace('    time = right[0]\\\\n    return np.outer(_aff(q) @ _ls(_aff(h),traj@time), time)','    time = right[:2]\\\\n    return (_aff(q) @ _ls(_aff(h), traj@time.T)) @ time')\\ns=s.replace('    h, hq = np.split(_latents(study,np.vstack((x,q))),[len(x)])\\\\n    y = _scalar(h,hq,train[\\\\'y\\\\'])','    latent, calibrated = _latents(study, np.vstack((x, q)))\\\\n    h, hq = np.split(latent, [len(x)])\\\\n    z, zq = np.split(calibrated, [len(x)])\\\\n    y = _scalar(h, hq, z, zq, train[\\\\'y\\\\'])')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nif ! { python3 -I /tmp/campaigncheck.py | tee /tmp/campaign_metrics.txt && python3 -c 'import ast; from pathlib import Path; line=Path(\\\"/tmp/campaign_metrics.txt\\\").read_text().splitlines()[0]; y,s,t=ast.literal_eval(line.split(\\\" \\\",1)[1]); assert max(y,s,t)<=.038' && python3 /holdout_task/validate_public_schema.py; }; then\\n  cp /tmp/campaign_baseline.py /holdout_task/batch_solver.py\\n  python3 -I /tmp/campaigncheck.py\\n  python3 /holdout_task/validate_public_schema.py\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (cross terms and one temporal mode) -> H2 (regularized input squares, robust scalar fit, and two temporal modes); the prototypes give scalar MAE 0.03673 on the required split and 0.08854 on the worst coordinate tail, and trajectory MAE 0.01548 on the required split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\n      \"ng_t06\"\n    ]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the verified cross-term baseline\",\n      \"rejected_reason\": \"The robust diagonal prototype improves required-split, worst random-split, and worst coordinate-tail scalar MAE while retaining the panel B path.\"\n    }\n  ],\n  \"rationale\": \"Integrate the independently tested scalar and trajectory improvements, then verify the saved artifact in a clean Python process and run the public schema validator. Restore the verified baseline if the required error gate fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "9e2c9868ba77079b6010315447b23ae35589f9912bdff682d370d06ae5c3a575",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26233.77,
+      "usage_known": true,
+      "prompt_tokens": 40790,
+      "cached_tokens": 12672,
+      "completion_tokens": 1005
+    }
+  ]
+}

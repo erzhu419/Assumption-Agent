@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de6b0e73a6584d788613d1409441cfd9",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:46.336446+00:00",
+  "ended_at_utc": "2026-11-28T15:04:19.122494+00:00",
+  "request_sha256": "f123738bbf8a7bfc880dbb85d594db019cffc0dea298007c0fc4fa21846df7a2",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38169,
+    "cached_tokens": 12672,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/dag_stress.py <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom types import SimpleNamespace\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; Y=np.c_[y,T]; n=len(y)\\nm=runpy.run_path(p+'node_01.py'); fz=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']; aff=m['_aff']; fit=m['_fit']; odd=m['_odd']; b=s['panel_b']; u,v=b['u'],b['v']; c=s['panel_c']; lin=fit(aff(u),v); w=fz({'__input__':s})['w'][:n]; z=np.linalg.solve(lin[1:].T,(w-lin[0]).T).T\\npairs=list(itertools.combinations(range(4),2))\\nsplits=[('official',np.arange(n-20,n))]+[(f'interleave{i}',np.arange(i,n,4)) for i in range(4)]\\nfor nm,sel in [('raw-corners',np.linalg.norm(z,axis=1)),('channel-edge',np.max(abs(z),axis=1)),('mixed-edge',np.linalg.norm(odd(z)@fit(odd(u),v),axis=1))]: splits.append((nm,np.argsort(sel)[-14:]))\\ndef scores(D):\\n rows=[]\\n for name,va in splits:\\n  ti=np.setdiff1d(np.arange(n),va); r=abs(D[va]@fit(D[ti],Y[ti])-Y[va]); rows.append((name,round(r[:,0].mean(),5),round(r[:,1:].mean(),5),round(r[:,1:].mean(axis=0).max(),5)))\\n return rows\\ndef panel(D):\\n H=np.sum(np.linalg.svd(D,full_matrices=False)[0]**2,axis=1); r=D@fit(D,v)-v\\n return np.std(r),np.sqrt(np.mean((r/(1-H[:,None]))**2))\\ndef heads(B,g=2.1):\\n c1=fit(aff(np.arctan(g*c['u'])),c['v1']); d=aff(np.arctan(g*B)); h=d@c1\\n return np.c_[d,*[h[:,i]*h[:,j] for i,j in pairs]]\\nD=odd(u); print('baseline',panel(D),scores(heads(odd(z)@fit(D,v))))\\nfor k,f,lo,hi in [('sin',np.sin,.2,4.5),('tanh',np.tanh,.2,6),('atan',np.arctan,.2,7),('asinh',np.arcsinh,.2,7),('softsign',lambda x:x/np.sqrt(1+x*x),.2,7),('erf',__import__('scipy').special.erf,.2,7),('gauss',lambda x:x*np.exp(-x*x),.1,5),('rational',lambda x:x/(1+x*x),.1,5)]:\\n def d(x,g):return np.c_[aff(x),f(g*x)]\\n q=minimize_scalar(lambda g:panel(d(u,g))[1],bounds=(lo,hi),method='bounded'); D=d(u,q.x); B=d(z,q.x)@fit(D,v); coeff=fit(D,v); a,bb=coeff[1:5],coeff[5:]; print(k,round(q.x,6),np.round(panel(D),6),np.round((a*bb).sum(axis=1)/(bb*bb).sum(axis=1),4),scores(heads(B)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/dag_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 odd polynomial calibration -> H2 shared nonlinear panel response if supported by stress tests; the verified official scalar and trajectory MAEs are 0.022633 and 0.028816.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted polynomial with an untied seventh-order basis\",\n      \"rejected_reason\": \"The stable fifth-to-third-order ratios across coordinates point to a shared response; test that constraint before adding independent polynomial terms.\"\n    }\n  ],\n  \"rationale\": \"The accepted artifact already has a bound verification receipt. Stress it on interleaved and boundary slices, and evaluate compact challengers without editing the deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "05a53d456c6085c1c08d7b32d202044d4e41260161248a33cdccd1c2caeb2276",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32784.73,
+      "usage_known": true,
+      "prompt_tokens": 38169,
+      "cached_tokens": 12672,
+      "completion_tokens": 1275
+    }
+  ]
+}

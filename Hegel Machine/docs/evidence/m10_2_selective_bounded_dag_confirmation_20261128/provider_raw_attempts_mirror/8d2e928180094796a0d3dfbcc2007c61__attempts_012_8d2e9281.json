@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8d2e928180094796a0d3dfbcc2007c61",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:38.666776+00:00",
+  "ended_at_utc": "2026-11-28T15:15:07.045713+00:00",
+  "request_sha256": "5c0a9dd53cbd33a7bb1b2af8f361c9d5c9b2fab750a1d0f8389b9dc206bc59ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73200,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39702,
+    "cached_tokens": 12672,
+    "completion_tokens": 1098
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/final_calibration_witness.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('batch_solver', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ncal = s['panel_a']\\nu, v = cal['u'], cal['v']\\nA = m._design(u)\\nrng = np.random.default_rng(45)\\nfits = (m._ls(A[j], v[j]) for j in (rng.choice(len(u), 8, replace=False) for _ in range(120)))\\npilot = min(fits, key=lambda q: np.median(np.linalg.norm(A @ q - v, axis=1)))\\nr = np.linalg.norm(A @ pilot - v, axis=1)\\ninliers = np.flatnonzero(r <= 5*np.median(r))\\n\\ndef diagonal(p, x):\\n    qs = np.array([m._ls(m._design(p['u'][:, k:k+1]), p['v'][:, k]) for k in range(4)])\\n    return (x - qs[:, 0])/qs[:, 1]\\n\\ndef affine(p, x):\\n    q = m._ls(m._design(p['u']), p['v'])\\n    return np.linalg.solve(q[1:].T, (x - q[0]).T).T\\n\\noriginal = m._calibrate\\ntr = s['train']\\nfit = {k: tr[k][:52] for k in ('x', 'y', 'traj')}\\ncheck = dict(s, train=fit, test={'x': tr['x'][52:]})\\nprint('Calibration ablation: held-out reference inverse RMSE and 52/20 downstream MAEs; downstream fitting unchanged')\\nfor name, fn in [('diagonal affine', diagonal), ('full affine', affine), ('candidate cyclic cubic', original)]:\\n    residuals = []\\n    for i in inliers:\\n        keep = np.arange(len(u)) != i\\n        panel = {'u': u[keep], 'v': v[keep]}\\n        if fn is not original:\\n            mask = np.isin(np.flatnonzero(keep), inliers)\\n            panel = {k: q[mask] for k, q in panel.items()}\\n        residuals.append(fn(panel, v[i:i+1])[0] - u[i])\\n    panel = cal if fn is original else {k: q[inliers] for k, q in cal.items()}\\n    m._calibrate = fn\\n    out = m.solve_batch(dict(check, panel_a=panel))\\n    rmse = np.sqrt(np.mean(np.square(residuals)))\\n    ym = np.mean(np.abs(out['y_hat'] - tr['y'][52:]))\\n    tm = np.mean(np.abs(out['state_pred'] - tr['traj'][52:]))\\n    print(f'{name}: inverse_rmse={rmse:.8f}, response_mae={ym:.8f}, trajectory_mae={tm:.8f}')\\n    if fn is original:\\n        assert rmse < 0.001 and max(ym, tm) < 0.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_calibration_witness.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace diagonal and full affine calibration with the cyclic cubic inverse; the verified compact solver’s worst response and single-horizon trajectory MAEs are 0.01557 and 0.00968.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema validation alone\",\n      \"rejected_reason\": \"Schema validation does not establish whether the final candidate corrects the two calibration failures.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified solver unchanged and directly test both calibration ablations against the final candidate on held-out reference rows and the prescribed 52/20 split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e9163c24782c9c4c36c382b9981181628279aabf10ad28b4ef550f5bcabc88f1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28377.52,
+      "usage_known": true,
+      "prompt_tokens": 39702,
+      "cached_tokens": 12672,
+      "completion_tokens": 1098
+    }
+  ]
+}

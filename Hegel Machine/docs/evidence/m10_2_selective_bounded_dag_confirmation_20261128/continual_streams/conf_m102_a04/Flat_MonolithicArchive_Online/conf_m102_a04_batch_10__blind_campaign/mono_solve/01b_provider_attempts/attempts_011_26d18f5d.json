@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "26d18f5dc5e341f69d52067751cdc9f2",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:27:36.861438+00:00",
+  "ended_at_utc": "2026-11-28T15:28:09.691791+00:00",
+  "request_sha256": "75f004bff0fc4090269336e11c98d78e5a460eca00724d6c332c692d830cc3ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56081,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33641,
+    "cached_tokens": 12672,
+    "completion_tokens": 1246
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\np=/holdout_task/batch_solver.py\\ncp \\\"$p\\\" /tmp/batch10_full_bilinear.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('    cross = (g[:, :, None]*h[:, None, :]).reshape(len(z),16)\\\\n    y = _readout(np.c_[g, h, (g*h).sum(1)], train[\\\\'y\\\\'], n, 1e-5)', '    # The scalar uses the diagonal contraction; the trajectory also resolves g0*h1.\\\\n    diagonal = np.einsum(\\\"ni,ni->n\\\", g, h)\\\\n    scalar_features = np.c_[g, h, diagonal]\\\\n    y = _readout(scalar_features, train[\\\\'y\\\\'], n, 1e-5)').replace('_readout(np.c_[g,h,cross], amp, n, 1e-5)', '_readout(np.c_[scalar_features, g[:, 0]*h[:, 1]], amp, n, 1e-5)')\\nassert 'scalar_features' in s and 'cross' not in s\\nopen(p,'w').write(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/final_audit10.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(name,path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    mod=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nbase=load('base','/tmp/batch10_full_bilinear.py')\\nm=load('final','/holdout_task/batch_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr=s['train']; n=len(tr['x']); z=m._calibrate(s['panel_a'],tr['x'])\\ngroups={'public':np.arange(52,n),'high_radius':np.argsort(np.linalg.norm(z,axis=1))[-20:]}\\nfor i in range(4):\\n    groups[f'axis_{i}_low']=np.argsort(z[:,i])[:20]\\n    groups[f'axis_{i}_high']=np.argsort(z[:,i])[-20:]\\nfor i in range(8): groups[f'random_{i}']=np.random.default_rng(i).permutation(n)[:20]\\nallm=[]\\nfor name,hold in groups.items():\\n    fit=np.setdiff1d(np.arange(n),hold)\\n    q=dict(s,train={**tr,**{k:tr[k][fit] for k in ('x','y','traj')}},test={'x':tr['x'][hold]})\\n    rows=[]\\n    for solver in [m,base]:\\n        o=solver.solve_batch(q); y=o['y_hat']; st=o['state_pred']; e=np.abs(st-tr['traj'][hold]); v=st[:,-1]\\n        assert y.shape==(len(hold),) and st.shape==(len(hold),len(s['eval_times']))\\n        assert np.isfinite(y).all() and np.isfinite(st).all()\\n        np.testing.assert_allclose(o['diagnostics_vec'],[y.mean(),y.std(),v.mean(),v.std()],rtol=0,atol=1e-12)\\n        rows.append([np.mean(np.abs(y-tr['y'][hold])),e.mean(),e.mean(0).max(),e[:,-1].mean()])\\n    allm.append(rows); print(name, np.round(rows,6).tolist())\\nprint('Worst MAEs [y, trajectory, horizon, terminal]; compact then full:',np.max(allm,axis=0))\\nassert np.max(np.array(allm)[:,0]) < .038\\nPY\\npython3 -I /tmp/final_audit10.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: full bilinear trajectory readout -> H2: diagonal contraction plus one off-diagonal term with shared temporal modes; the compact prototype reduced worst-horizon MAE from 0.006154 to 0.005308 across ten splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assign each feature group exclusively to a separate temporal mode\",\n      \"rejected_reason\": \"The best separated variant had worse trajectory MAE on both the prescribed split and the worst audited split.\"\n    }\n  ],\n  \"rationale\": \"Promote the smaller trajectory basis because it improved worst-split and worst-horizon MAE without changing the validated scalar readout. Verify the exact artifact against the prior solver on directional tails and check the terminal state and diagnostics separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1de76f8a4f77f7cc922108bd23677fa4d4d1862febfebb8a3d99569e0805439f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32810.2,
+      "usage_known": true,
+      "prompt_tokens": 33641,
+      "cached_tokens": 12672,
+      "completion_tokens": 1246
+    }
+  ]
+}

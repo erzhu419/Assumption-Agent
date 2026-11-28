@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d6d7ccd553b43fe97795d69aae4ef89",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:49.742576+00:00",
+  "ended_at_utc": "2026-11-28T15:06:28.559519+00:00",
+  "request_sha256": "94f0f5553c8d02208b017a993652f371291b4cd7485f0e367fd7341dee3b9acf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45994,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32302,
+    "cached_tokens": 12672,
+    "completion_tokens": 1528
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structured.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('A=old._calibration')[0]);from scipy.optimize import least_squares\\nA=old._calibration(s['panel_a']);z=old._decode(x,A);pb=s['panel_b'];B=fit(poly(pb['u'],1),pb['v']);w=poly(z,1)@B;pc=s['panel_c'];U=pc['u'];V1=pc['v1'];V2=pc['v2'];print('telemetry',s['telemetry_vec'],'summary',s['train']['summary']);D=lambda z:poly(z,1)\\nfor j,V in enumerate((V1,V2)):\\n for nm,fn,p0 in [('affcos',lambda x,p:np.c_[x,np.cos(p[0]*x)],[1.3]),('atan+sin',lambda x,p:np.c_[np.arctan(p[0]*x),np.sin(p[1]*x)],[4.4,2.58]),('tanh+sin',lambda x,p:np.c_[np.tanh(p[0]*x),np.sin(p[1]*x)],[4.4,2.6]),('tanh+sin+aff',lambda x,p:np.c_[x,np.tanh(p[0]*x),np.sin(p[1]*x)],[4.4,2.6]),('atan+sin+aff',lambda x,p:np.c_[x,np.arctan(p[0]*x),np.sin(p[1]*x)],[4.4,2.58]),('atan+sin same',lambda x,p:np.arctan(p[0]*x)+p[2]*np.sin(p[1]*x),[4.4,2.58,0.5]),('tanh+sin same',lambda x,p:np.tanh(p[0]*x)+p[2]*np.sin(p[1]*x),[4.4,2.6,0.5]),('tanh of sin',lambda x,p:np.tanh(p[0]*x+p[2]*np.sin(p[1]*x)),[1.0,2.6,0.5]),('atan of sin',lambda x,p:np.arctan(p[0]*x+p[2]*np.sin(p[1]*x)),[1.0,2.6,0.5]),('tanh+sin+aff same',lambda x,p:np.tanh(p[0]*x)+p[2]*np.sin(p[1]*x)+p[3]*x,[4.4,2.6,0.5,0.1]),('cos+aff same',lambda x,p:x+p[1]*np.cos(p[0]*x),[1.3,-.65])]:\\n  if (j==1) != ('cos' in nm): continue\\n  def P(x,p):return np.c_[np.ones(len(x)),fn(x,p)]\\n  def res(p):F=P(U,p);return (F@fit(F,V)-V).ravel()\\n  r=least_squares(res,p0,max_nfev=1500); C=fit(P(U,r.x),V);print('panel',j,nm,r.x,'rms',np.std(r.fun));print(C.round(4));\\n  if nm=='atan+sin+aff':a=P(z,r.x)@C\\n  if nm=='cos+aff same':b=P(z,r.x)@C\\nH=np.c_[D(z),a,b,a*b,a*a,b*b]; names=['const']+[f'{s}{i}' for s in ['z','a','b','ab','aa','bb'] for i in range(4)];\\ncut=np.arange(52); print('full coeffs',list(zip(names,fit(H[cut],y[cut]).round(5))));print('condition',np.linalg.cond(H[cut]));\\nprint('traj summary', t.mean(0),t.std(0));print('traj linear normalized coefficients',fit(D(z)[:52],t[:52]));\\nfor design,lab in [(H,'25 pairwise'),(np.c_[D(z),a,b,poly(np.c_[a,b],2)[:,9:]],'all pairwise')]:\\n n=design.shape[1]; perm=np.random.default_rng(29).permutation(72); inds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),perm[i:i+18]),perm[i:i+18]) for i in range(0,72,18)];\\n for lam in [0,1e-5,1e-4,1e-3,.01,.1]:\\n  mae=[]\\n  for i,j in inds:\\n   X=design[i]; scale=np.r_[1.,X[:,1:].std(0).clip(1e-8)];Z=X/scale;rr=np.eye(n)*lam;rr[0,0]=0; c=np.linalg.solve(Z.T@Z+rr,Z.T@y[i]) if lam else fit(Z,y[i]);mae.append(np.mean(abs(design[j]/scale@c-y[j])));\\n  print(lab,lam,np.round(mae,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structured.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct nonlinear readout -> H2 calibrated dual-panel interactions; structured features pass the 52/20 gate with y MAE 0.02136.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Lock the lowest single-split model immediately\",\"rejected_reason\":\"Several operators are tied within 0.0001 MAE; panel residual structure and independent folds can distinguish them more reliably.\"}],\"rationale\":\"The dual-panel feature family clears the required gate. Check for shared mixing and stronger out-of-fold stability before freezing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "93c7a472376d508e4d120d18fbd120a9a749d5eb5ad805c39583ee35a7a88a19",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38815.78,
+      "usage_known": true,
+      "prompt_tokens": 32302,
+      "cached_tokens": 12672,
+      "completion_tokens": 1528
+    }
+  ]
+}

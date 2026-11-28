@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1570cfb9a79436f8a3a78d1c0647795",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:20:56.344962+00:00",
+  "ended_at_utc": "2026-11-28T16:21:30.663018+00:00",
+  "request_sha256": "88193594b198ca3407c717136711bd37433eabaea320c0fd88e1b215a073ae7a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68051,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41367,
+    "cached_tokens": 12672,
+    "completion_tokens": 1467
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress14.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom itertools import combinations\\np='/holdout_task/node_01.py'; spec=importlib.util.spec_from_file_location('candidate',p); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=np.c_[t['y'],t['traj']]; a,m=mod._features(s,x); z,g,v=a[:,1:5],a[:,5:9],a[:,9:13]; n=len(x)\\nfolds=[(np.arange(n-20),np.arange(n-20,n))]; rng=np.random.default_rng(8451)\\nfor _ in range(60):\\n p=rng.permutation(n); folds.append((p[20:],p[:20]))\\nfor score in (np.linalg.norm(x,axis=1),np.max(abs(z),axis=1),np.linalg.norm(v,axis=1)):\\n p=np.argsort(score); folds.append((p[:-12],p[-12:]))\\ndef profile(des,alpha,folds):\\n out=[]\\n for tr,te in folds:\\n  core=des[:,:a.shape[1]]; b=des[:,a.shape[1]:]; c=mod._fit(core[tr],y[tr,0]); py=core[te]@c\\n  if b.shape[1]:\\n   r=b-core@mod._fit(core[tr],b[tr]); scale=np.maximum(np.sqrt(np.sum(r[tr]**2,axis=0)),1e-10); r=r/scale\\n   py+=r[te]@np.linalg.solve(r[tr].T@r[tr]+alpha*np.eye(r.shape[1]),r[tr].T@(y[tr,0]-core[tr]@c))\\n  pt=a[te,:m]@mod._fit(a[tr,:m],y[tr,1:]); err=abs(np.c_[py,pt]-y[te]); out.append(np.r_[err[:,0].mean(),err[:,1:].mean(),err[:,1:].mean(0)])\\n return np.array(out)\\ndef report(out):\\n print('public',out[0,:2].round(6),'random_mean',out[1:-3,:2].mean(0).round(6),'random_worst',out[1:-3,:2].max(0).round(6),'boundary',out[-3:,:2].round(6).tolist(),'worst_horizon',round(out[:,2:].max(),6))\\nreport(profile(a,0,folds))\\ngroups={'adjacent_g':g*np.roll(g,1,axis=1),'latent_sq':z*z,'latent_v':z*v,'v_sq':v*v,'g_sq':g*g,'roll_latent_v':z*np.roll(v,1,axis=1),'latent_softplus':np.logaddexp(0,2.2*z),'v_saturated':v/(1+v*v),'latent_rat':z/(1+1.25*z*z)}\\nres=[]\\nfor k,b in groups.items():\\n for alpha in (0.03,.3,1.):\\n  out=profile(np.c_[a,b],alpha,folds); res.append((out[1:-3,0].mean(),k,alpha,out))\\nfor mean,k,alpha,out in sorted(res,key=lambda r:r[0])[:6]:\\n print(k,alpha); report(out)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress14.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Raw polynomial readouts → panel-calibrated cyclic features with a separate endpoint correction; the verified public MAEs are 0.034268 and 0.014163, with a worst exploratory endpoint MAE of 0.043847.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more endpoint interaction terms immediately\",\n      \"rejected_reason\": \"The saved candidate passes the public gate; additional terms need evidence of improved robustness on independent splits.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the saved candidate on fresh random splits, high-magnitude boundary rows, and individual trajectory horizons without changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "77825c9a840ec651d704596d331186299e479444affe3d8d6fd3fd6022e79452",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34316.08,
+      "usage_known": true,
+      "prompt_tokens": 41367,
+      "cached_tokens": 12672,
+      "completion_tokens": 1467
+    }
+  ]
+}

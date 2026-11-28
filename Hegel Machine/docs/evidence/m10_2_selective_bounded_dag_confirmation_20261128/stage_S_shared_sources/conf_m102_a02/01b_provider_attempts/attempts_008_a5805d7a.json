@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a5805d7a73504030bcb1490cf845bbbd",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:54:02.545328+00:00",
+  "ended_at_utc": "2026-11-28T14:54:27.437999+00:00",
+  "request_sha256": "4e4d568049976a3d237583793e99a0619549a1982702920a76badb81c148e19a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42415,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27358,
+    "cached_tokens": 12672,
+    "completion_tokens": 965
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; x = tr['x']; y = tr['y']; h = tr['traj']; ix = np.arange(len(x))\\na = np.c_[np.ones(len(x)), x]\\nslices = {'prescribed': ix[52:]}\\nslices.update({f'fold{k}': j for k,j in enumerate(np.array_split(np.random.default_rng(555).permutation(ix),4))})\\nslices.update({f'extreme{k}': np.argsort(abs(x[:,k]-x[:,k].mean()))[-15:] for k in range(x.shape[1])})\\nslices['largest_norm'] = np.argsort(np.linalg.norm(x,axis=1))[-15:]\\nrows = {}\\nfor label, j in slices.items():\\n    i = np.setdiff1d(ix,j)\\n    o = mod.solve_batch(dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[j]}))\\n    ref = a[j] @ np.linalg.lstsq(a[i],y[i],rcond=None)[0]\\n    yp = o['y_hat']; hp = o['state_pred']; zp = hp[:,-1]\\n    np.testing.assert_array_equal(o['diagnostics_vec'], [yp.mean(),yp.std(),zp.mean(),zp.std()])\\n    d = abs(hp-h[j]); r = dict(affine_endpoint_mae=float(abs(ref-y[j]).mean()), candidate_endpoint_mae=float(abs(yp-y[j]).mean()), trajectory_mae=float(d.mean()), worst_horizon_mae=float(d.mean(0).max()), final_state_mae=float(d[:,-1].mean()))\\n    assert r['candidate_endpoint_mae'] < min(.038,r['affine_endpoint_mae']) and r['worst_horizon_mae'] < .038\\n    rows[label] = r\\nprint(json.dumps({'nogood_id':'ng_t03','exact_artifact':root+'batch_solver.py','heldout_results':rows},sort_keys=True))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the full quadratic endpoint outperforms affine and rank-restricted endpoints, with worst-slice endpoint MAE 0.006561 and worst per-horizon MAE 0.006353 for the saved solver.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the trajectory model with the two-rate response\",\n      \"rejected_reason\": \"It lowers worst-horizon MAE by 0.000097 but worsens final-state MAE on 8 of 10 slices. Both models are comfortably within tolerance.\"\n    },\n    {\n      \"option\": \"Reduce endpoint curvature to rank three\",\n      \"rejected_reason\": \"Worst boundary MAE rises to 0.054577, exceeding the 0.038 target.\"\n    }\n  ],\n  \"rationale\": \"Run the exact artifact against the affine endpoint on identical held-out rows to provide a direct scientific witness for the missing quadratic terms. Verify the trajectory and diagnostics independently without changing the candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "da1ccf900eef627c4bcce8eb57eb686cff2208977935e1142d2ecc9fb7c7d0d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24891.38,
+      "usage_known": true,
+      "prompt_tokens": 27358,
+      "cached_tokens": 12672,
+      "completion_tokens": 965
+    }
+  ]
+}

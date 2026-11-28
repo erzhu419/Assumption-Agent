@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9be082c61f348b986d88358c2c23884",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:42.257277+00:00",
+  "ended_at_utc": "2026-11-28T15:38:24.198950+00:00",
+  "request_sha256": "0e280e7d4fd7939ae8270f4d17fe5d8b644ad2f7f51024534990de0ed32f70bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64358,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39369,
+    "cached_tokens": 12672,
+    "completion_tokens": 1765
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*04_solver.py; cat /tmp/hegel_continual_archive/*05_solver.py; cat > /tmp/s10.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('forms=')[0])\\nfrom scipy.special import erf\\nu,v=s['panel_b']['u'],s['panel_b']['v']; Y=np.c_[s['train']['y'],s['train']['traj']]; t=s['eval_times']; rng=np.random.default_rng(13); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(4)];\\ndef rat(z,p,q): return z*abs(z)**q/(1+p*z*z)\\nforms={'rat':rat,'rats':lambda z,p,q:z*abs(z)**q/(1+p*abs(z)**q),'tanhdiff':lambda z,p,q:z-np.tanh(p*z)/p,'sindiff':lambda z,p,q:z-np.sin(p*z)/p,'expdiff':lambda z,p,q:z*(-np.expm1(-p*abs(z)**q)),'tanhcube':lambda z,p,q:np.tanh(p*z*abs(z)**q),'atan':lambda z,p,q:np.arctan(p*z*abs(z)**q),'erf':lambda z,p,q:erf(p*z*abs(z)**q),'cubexp':lambda z,p,q:z*abs(z)**q*np.exp(-p*z*z),'poly':lambda z,p,q:z*abs(z)**q,'ratps':lambda z,p,q:z**3/(1+p*abs(z)**q),'rat3p':lambda z,p,q:z**3/(1+p*z*z)**q,'cubsin':lambda z,p,q:z**3*np.sinc(p*z/np.pi)**q}\\nresults=[]\\nfor n,g in forms.items():\\n for base in [False,True]:\\n  def F(z,p,g=g,base=base):return np.c_[aff(z) if base else np.ones(len(z)),g(z,*p)]\\n  def e(p):\\n   A=F(u,p);return (A@ls(A,v)-v).ravel()\\n  p=min((least_squares(e,[a,b],bounds=([.005,.15],[5,6]),max_nfev=100) for a,b in [(1.25,2),(.22,2),(2.5,3)]),key=lambda r:r.cost).x; A=F(u,p);w=ls(A,v); E=A@w-v; H=np.einsum('ij,ji->i',A,np.linalg.pinv(A)); results.append((np.mean(abs(E)/(1-H[:,None])),n,base,p,lambda z,F=F,p=p,w=w:F(z,p)@w))\\nfor r in sorted(results,key=lambda r:r[0])[:12]:print('B',r[:-1])\\nB=min(results,key=lambda r:r[0])[-1]; h=B(x); print('B at zero',B(np.zeros((1,4)))); print('sv',np.linalg.svd(Y,compute_uv=False));print('corr temporal',np.corrcoef(Y.T)[0]);print('times',t)\\nU=s['panel_c']['u']; cf=lambda q:np.c_[aff(q),q*np.exp(-1.0223*abs(q)**.9585)]; df=lambda q:np.c_[aff(q),q*q,np.exp(-.7109*q*q)]; C=lambda q:cf(q)@ls(cf(U),s['panel_c']['v1']); D=lambda q:df(q)@ls(df(U),s['panel_c']['v2']);\\ndef score(A,lam):\\n R=[]\\n for idx in splits:\\n  tr,te=idx[:52],idx[52:]; S=np.maximum(np.linalg.norm(A[tr],axis=0),1e-9); F=A/S; w=ls(np.vstack([F[tr],np.sqrt(lam)*np.eye(F.shape[1])]),np.vstack([Y[tr],np.zeros((F.shape[1],9))])); E=abs(F[te]@w-Y[te]);R.append([E[:,0].mean(),E[:,1:].mean()]);\\n return np.array(R)\\nR=[]\\nfor bn,bb in [(r[1]+str(r[2]),r[-1]) for r in sorted(results,key=lambda r:r[0])[:5]]:\\n h=bb(x); X={'x':x,'b':h,'c':C(x),'d':D(x),'bc':bb(C(x)),'bd':bb(D(x)),'cb':C(h),'db':D(h)}\\n for n,z in X.items():\\n  for nn,w in X.items():\\n   if nn<n:continue\\n   q1,q2=quad(z),quad(w); m=(z[:,:,None]*w[:,None,:]).reshape(len(x),16); m0=m[:,::5]; cyc=np.c_[m0,z*np.roll(w,-1,axis=1),w*np.roll(z,-1,axis=1)]; sp=np.c_[q1,q2[:,1:],z**3,w**3];\\n   for k,F in [('add',np.c_[q1,q2[:,1:]]),('mix',np.c_[q1,q2[:,1:],m]),('cyc',np.c_[q1,q2[:,1:],cyc]),('sep3',sp),('ratform',np.c_[q1,q2[:,1:],z*w,z/(1+.22*w*w),w/(1+.22*z*z),z/(1+1.25*w*w),w/(1+1.25*z*z)]),('squareratform',np.c_[q1,q2[:,1:],z/(1+.22*w*w),w/(1+.22*z*z),z*z/(1+.22*w*w),w*w/(1+.22*z*z)])]:\\n    for l in [.00001,.0003,.003]:R.append((score(F,l),bn,n,nn,k,l))\\nfor col in (0,1):\\n for mode in (0,1):\\n  print('rank',col,mode,[(r[0][:,col].round(4),r[1:]) for r in sorted(R,key=lambda r:r[0][:,col].mean() if mode else r[0][0,col])[:5]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/s10.py | grep -E '^B|^sv|^rank|^corr|^times'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic readout in calibrated coordinates and panel B → H2 identify a compact panel-B transform and structured mixed readout; latest fixed-split best MAEs are 0.0603 for y and 0.0353 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the kernel readout as the final scalar estimator\",\"rejected_reason\":\"Its fixed-split MAE is 0.0620, above the 0.038 gate.\"}],\"rationale\":\"Test low-parameter saturating operators and structured cross-branch terms to improve the scalar prediction without giving up trajectory accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "19584f14ee9ab52a15009cb500c97f77349d1546326e2c3ed1765335b19fd253",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41940.34,
+      "usage_known": true,
+      "prompt_tokens": 39369,
+      "cached_tokens": 12672,
+      "completion_tokens": 1765
+    }
+  ]
+}

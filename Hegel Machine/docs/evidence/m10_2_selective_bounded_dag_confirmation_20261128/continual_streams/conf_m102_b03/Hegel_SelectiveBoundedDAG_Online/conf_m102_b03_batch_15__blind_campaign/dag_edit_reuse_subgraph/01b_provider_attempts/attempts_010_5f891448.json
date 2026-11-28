@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f891448f12146f4b92589bf4c383480",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:58:55.996260+00:00",
+  "ended_at_utc": "2026-11-28T15:59:31.181413+00:00",
+  "request_sha256": "5ba89d8bbf4a7309c6aa6a3c871b7299a1d6705f9a11f33e2a8608a5ae65fb3e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59738,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34632,
+    "cached_tokens": 12672,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/hegel_final_probe.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/holdout_task/node_00.py'); sink=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']; one=m['_ones']; ls=m['_ls']; t=s['train']; n=len(t['x']); rows=np.arange(n); hs=[rows[-20:]]+list(np.array_split(np.random.default_rng(123).permutation(rows),4)); pc=s['panel_c']; u=pc['u']; v=pc['v2']; pf=np.array_split(np.random.default_rng(23).permutation(len(u)),4)\\ndef adj(x):return np.roll(x,-1,axis=1)\\ndef nbr(x):return x*adj(x)\\ndef design(x,kind,k):\\n p=nbr(x); w=adj(x)\\n if kind=='neighbors': h=p\\n elif kind=='nbsq': h=np.c_[p,x*x]\\n elif kind=='nbsat': h=np.c_[p,x*x/(1+k*x*x)]\\n elif kind=='nbcos': h=np.c_[p,np.cos(k*x)]\\n elif kind=='sincross': h=np.sin(k*x)*np.sin(k*w)\\n elif kind=='ratself': h=p/(1+k*x*x)\\n elif kind=='ratnext': h=p/(1+k*w*w)\\n elif kind=='ratprod': h=p/(1+k*abs(p))\\n elif kind=='nbthird': h=np.c_[p,p*np.roll(x,-2,axis=1)]\\n elif kind=='nbsum': h=np.c_[p,np.cos(k*(x+w))]\\n elif kind=='nbdiff': h=np.c_[p,np.cos(k*(x-w))]\\n return one(np.c_[x,h])\\ndef fit(a,b,kind):\\n def obj(k):\\n  A=design(a,kind,k); return np.mean((A@ls(A,b)-b)**2)\\n if kind in ('neighbors','nbsq','nbthird'): k=1.\\n else:\\n  grid=np.geomspace(.015,7,42); j=np.argmin([obj(k) for k in grid]); k=minimize_scalar(obj,bounds=(grid[max(j-1,0)],grid[min(j+1,len(grid)-1)]),method='bounded').x\\n A=design(a,kind,k); w=ls(A,b); return k,w\\nfeat=m['run_node']({'__input__':s}); z=feat['z'][:n]; q=feat['Q'][:n]; base={k:w[:n] for k,w in feat.items()}; kinds='neighbors nbsq nbsat nbcos sincross ratself ratnext ratprod nbthird nbsum nbdiff'.split(); stats=[]; rs={}\\nfor kind in kinds:\\n k,w=fit(u,v,kind); rs[kind]=design(z,kind,k)@w; errs=[]\\n for h in pf:\\n  a=np.setdiff1d(np.arange(len(u)),h); j,b=fit(u[a],v[a],kind); errs.append(np.mean(abs(design(u[h],kind,j)@b-v[h])))\\n stats.append((np.mean(errs),max(errs),np.mean(abs(design(u,kind,k)@w-v)),kind,k))\\nprint('PANEL',sorted(stats),flush=True)\\nrs={k:rs[k] for k in [r[3] for r in sorted(stats)[:4]]}; rs['baseline']=base['R']\\noldp=nbr(z); oldc=np.cos(2.4*z)\\ndef score(r,prod,cos):\\n f=dict(base,R=r,product=prod,cosine=cos); ret=[]\\n for h in hs:\\n  a=np.setdiff1d(rows,h); ix=np.r_[a,h]; st=dict(s,train={k:t[k][a] for k in ('x','y','traj')},test={'x':t['x'][h]}); o=sink({'__input__':st,'node_00':{k:w[ix] for k,w in f.items()}}); ret.append([np.mean(abs(o['y_hat']-t['y'][h])),np.mean(abs(o['state_pred']-t['traj'][h]))])\\n return np.round(ret,6)\\nres=[]\\nfor kind,r in rs.items():\\n for pn,p in [('q',q),('q+nbr',np.c_[q,oldp]),('nbr',oldp)]:\\n  for cn,c in [('r',r),('r+nbr',np.c_[r,oldp]),('r+cos',np.c_[r,oldc]),('nbr',oldp),('cos',oldc)]:\\n   e=score(r,p,c); item=(e.max(),e.mean(),kind,pn,cn,e.tolist()); res.append(item)\\n   if e[0].max()<=.038: print('PASS',item,flush=True)\\nprint('WORST RANK',sorted(res)[:12],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/hegel_final_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separable squared-rational H1 → adjacent-coordinate interactions H2; worst panel-fold MAE improves from 0.229225 to 0.103040, while the accepted baseline’s worst target-fold MAE is 0.048938.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted artifact immediately\",\n      \"rejected_reason\": \"The better panel fit has not yet demonstrated that it preserves both official prediction thresholds.\"\n    }\n  ],\n  \"rationale\": \"Screen interaction families on measured panel folds, then stress-test their feature handoffs on both target metrics without overwriting the accepted artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ba790e18875eb081fcbe98e89ae6e7677621863f69a59b50c28672332ba02f70",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35939.94,
+      "usage_known": true,
+      "prompt_tokens": 34632,
+      "cached_tokens": 12672,
+      "completion_tokens": 1553
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e52ad1bb2c0a4fd2ac4338148cf0f787",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:57.397437+00:00",
+  "ended_at_utc": "2026-11-28T15:44:35.834219+00:00",
+  "request_sha256": "5cf3115445fb0720b3df92a55ddaa515676d844bf0e2d70a27f4c965388ffd67",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42227,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30776,
+    "cached_tokens": 12672,
+    "completion_tokens": 1669
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/structured.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=np.r_[s['train']['x'],s['test']['x']]; Y=np.c_[s['train']['y'],s['train']['traj']]; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; one=lambda u:np.ones(len(u)); A=s['panel_a']; u,v=A['u'],A['v']; np.set_printoptions(precision=5,suppress=True)\\ndef cal(u,j,d):\\n a,b=u[:,j],u[:,(j+1)%4]; return np.column_stack([one(u),a,b,a*b]+[a**k for k in range(2,d+1)])\\ndef robust(f,v):\\n q=least_squares(lambda q:f@q-v,ls(f,v),loss='cauchy',f_scale=.015).x\\n for _ in range(4):\\n  e=abs(f@q-v); keep=e<max(.001,6*np.median(e)); q=ls(f[keep],v[keep]);\\n return q,e,keep\\nfor d in range(1,9):\\n out=[robust(cal(u,j,d),v[:,j]) for j in range(4)]; print('A',d,[round(np.sqrt(np.mean(e[k]**2)),6) for q,e,k in out],[sum(k) for q,e,k in out]);\\n if d in (3,5,7): print(np.array([q for q,e,k in out]))\\n if d==5: Q=[q for q,e,k in out]\\nZ=np.array([least_squares(lambda p:np.array([cal(p[None],j,5)[0]@Q[j] for j in range(4)])-x,x/1.2).x for x in X]); print('Z min max',Z.min(0),Z.max(0))\\nD={'X':X,'Z':Z}; c=s['panel_c'];\\nfor deg in range(1,5):\\n def f(u):return np.column_stack([one(u)]+[u**k for k in range(1,deg+1)])\\n q=ls(f(c['u']),c['v2']); e=f(c['u'])@q-c['v2']; print('C2',deg,np.sqrt(np.mean(e**2,axis=0))); print(q) if deg<=3 else None\\n D['C2'+str(deg)]=f(Z)@q\\nf=lambda u:np.c_[one(u),u*np.roll(u,-1,axis=1)]; D['C1']=f(Z)@ls(f(c['u']),c['v1']);\\nb=s['panel_b'];f=lambda u:np.c_[one(u),u];D['B']=f(Z)@ls(f(b['u']),b['v']);\\nfor key in ['C1','C22','C23','B']:\\n D['Z+'+key]=np.c_[Z,D[key]]\\nD['C1+C22']=np.c_[D['C1'],D['C22']]; D['Z+C1+C22']=np.c_[Z,D['C1'],D['C22']];\\nres=[]\\nfor key,w in D.items():\\n def score(f,reg,tag):\\n  f=f.copy(); f=(f-f[:52].mean(0))/np.maximum(f[:52].std(0),1e-9); f=np.c_[one(f),f]; g=f[:52]; p=f[52:72]@np.linalg.solve(g.T@g+reg*np.eye(f.shape[1]),g.T@Y[:52]); e=abs(p-Y[52:]); res.append([e[:,0].mean(),e[:,1:].mean(),key,tag,reg]);\\n print('corr',key,np.round(np.corrcoef(np.c_[w[:72],Y[:,[0,1,-1]]].T)[:-3,-3:],2).T)\\n for l in (.5,1,2,3,5,8):\\n  for tag,t in [('raw',w),('asinh',np.arcsinh(l*w)),('atan',np.arctan(l*w)),('inv3',np.sinh(np.arcsinh(l*w)/3)),('tanh',np.tanh(l*w))]:\\n   if tag=='raw' and l!=1:continue\\n   for kind,f in [('lin',t),('quad',PolynomialFeatures(2,include_bias=False).fit_transform(t)),('aug',np.c_[w,t])]:\\n    for r in (.001,.03,.25,1):score(f,r,(kind,tag,l))\\n ww=(w-w[:52].mean(0))/np.maximum(w[:52].std(0),1e-8); dis=cdist(ww,ww[:52],'sqeuclidean')/w.shape[1]\\n for l in (.5,1,2,4,8):\\n  for r in (.0001,.002,.02):\\n   for tag,K in [('rbf',np.exp(-.5*dis/l**2)),('mat',(1+np.sqrt(3*dis)/l)*np.exp(-np.sqrt(3*dis)/l))]:\\n    y=Y[:52].mean(0);pred=y+K[52:72]@np.linalg.solve(K[:52]+r*np.eye(52),Y[:52]-y); e=abs(pred-Y[52:]);res.append([e[:,0].mean(),e[:,1:].mean(),key,tag+str(l),r]);\\nfor j in (0,1):\\n print('best',j); seen=set();\\n for r in sorted(res,key=lambda r:r[j]):\\n  if r[2] not in seen: print(r);seen.add(r[2])\\nnp.savez('/tmp/operators.npz',**D,Y=Y)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structured.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (dense polynomial calibration) -> H2 (cyclic sparse calibration and separable auxiliary operators); archived y MAE is 0.057768 and the generic screen reached 0.0752 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a full cubic calibration\",\"rejected_reason\":\"The fit is unstable in the presence of sparse outliers, while quadratic coefficients consistently identify cyclic neighbor interactions.\"}],\"rationale\":\"Fit only the cyclic interaction and own-coordinate curvature in panel A, invert that map, and test whether the corrected coordinates or the structured auxiliary outputs explain both heads.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cd8cb16d1a4e3576a3f62326ffa3a9f6623cd81ecacf3bb575bd4f2525e51d5a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38434.12,
+      "usage_known": true,
+      "prompt_tokens": 30776,
+      "cached_tokens": 12672,
+      "completion_tokens": 1669
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bd01b3508dc48cdb7c7d39368719c0b",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:33.712279+00:00",
+  "ended_at_utc": "2026-11-28T15:06:17.685631+00:00",
+  "request_sha256": "08e0d13aa66402907c314ead449999eda5143859459e3cd9149e5362b8bead0e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68653,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41493,
+    "cached_tokens": 12672,
+    "completion_tokens": 1690
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"mv /tmp/struct.py /tmp/gain_screen.py; rm -f /tmp/__pycache__/struct.*.pyc; cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Reconstruct calibrated branch features and fit a regularized response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef features(s, x):\\n    u, v = (s['panel_a'][k] for k in ('u', 'v'))\\n    i, j = np.triu_indices(len(u), 1)\\n    pars = []\\n    for k in range(u.shape[1]):\\n        d = u[i, k]-u[j, k]; ok = np.abs(d)>1e-8\\n        m = np.median((v[i[ok], k]-v[j[ok], k])/d[ok]); r = v[:,k]-m*u[:,k]\\n        r -= np.median(r); g = np.abs(r)<max(.001, 6*np.median(abs(r)))\\n        pars.append(_ls(_ones(u[g,k:k+1]),v[g,k]))\\n    off, scale = np.array(pars).T\\n    z = (x-off)/scale\\n    b, c = s['panel_b'], s['panel_c']\\n    def q(w): return _ones(w[:,[0,0,1,2]]*w[:,[1,3,2,3]])\\n    def r(w): return _ones(np.cos(2.4*w))\\n    L = _ones(z) @ _ls(_ones(b['u']), b['v'])\\n    Q = q(z) @ _ls(q(c['u']),c['v1'])\\n    R = r(z) @ _ls(r(c['u']),c['v2'])\\n    return z,L,Q,R,q(z)[:,1:],r(z)[:,1:]\\n\\n\\ndef _dist(a):\\n    return np.maximum(0,((a[:,None,:]-a[None,:,:])**2).sum(-1))\\n\\n\\ndef _models(blocks):\\n    z,l,q,r,p,c = blocks\\n    cross=(p[:,:,None]*c[:,None,:]).reshape(len(z),-1)\\n    ds=_dist(z)\\n    fs=[_ones(np.c_[p,c,cross]), _ones(np.c_[z,p,c,cross]), _ones(np.c_[p,c,(q*r).sum(1)]), np.ones((len(z),1))]\\n    for ix,F in enumerate(fs):\\n        lin=F@F.T/F.shape[1]\\n        for D in [ds, _dist(np.c_[q,r]), ds+.5*_dist(np.c_[q,r]), ds+.5*_dist(l)]:\\n            for h in [0.9,1.7,3.,5.]:\\n                for K in [np.exp(-D/h**2),(1+D/h**2)**(-2)]:\\n                    for w in [.1,1.,10.,100.] if ix<3 else [1.]:\\n                        yield K+w*lin\\n    yield fs[0]@fs[0].T/fs[0].shape[1]\\n\\n\\ndef _predict(s, rows, xnew):\\n    t=s['train']; n=len(t['x'][rows]); blocks=features(s,np.vstack([t['x'][rows],xnew])); traj=t['traj'][rows]\\n    U,_,V=np.linalg.svd(traj,full_matrices=False); H=V[:3]; target=np.c_[t['y'][rows],traj@H.T]\\n    count=target.shape[1]; models=[[] for _ in range(count)]; I=np.eye(n)\\n    for K in _models(blocks):\\n        for lam in [1e-6,1e-4,.002,.025]:\\n            f=cho_factor(K[:n,:n]+lam*I,check_finite=False); alpha=cho_solve(f,target,check_finite=False); inv=cho_solve(f,I,check_finite=False).diagonal(); e=np.mean(abs(alpha/inv[:,None]),axis=0)\\n            pred=K[n:,:n]@alpha\\n            for j in range(count):models[j].append((e[j],pred[:,j]))\\n    out=[]\\n    for m in models:\\n        best=sorted(m,key=lambda v:v[0])[:10]; w=np.exp(-15*(np.array([a for a,b in best])/best[0][0]-1));out.append(np.average(np.stack([b for a,b in best]),axis=0,weights=w))\\n    pred=np.array(out).T\\n    return pred[:,0],pred[:,1:]@H\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    y,state=_predict(study,slice(None),study['test']['x']); end=state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),end.mean(),end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task python3 - <<'PY'\\nimport batch_solver as m,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train'];y,h=m._predict(s,slice(52),t['x'][52:]); print('BASELINE',np.mean(abs(y-t['y'][52:])),np.mean(abs(h-t['traj'][52:])),np.mean(abs(h-t['traj'][52:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 timeout 55 python3 /tmp/gain_screen.py >/tmp/struct.out 2>&1; sed -E 's/array\\\\(.*//' /tmp/struct.out | grep -E '^output|^\\\\(|^iv ranks|^cond coef'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: use a calibrated interaction kernel as a predictive baseline while screening explicit gains; the conditional readout MAE is 0.00547, not an end-to-end score.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a complete solver immediately, test the required holdout, and restart the gain screen under a filename that does not shadow the standard library.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "55470c09439af7d0ae0fbaad9887eca72e8aab4834133013c147afed419e32c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43971.75,
+      "usage_known": true,
+      "prompt_tokens": 41493,
+      "cached_tokens": 12672,
+      "completion_tokens": 1690
+    }
+  ]
+}

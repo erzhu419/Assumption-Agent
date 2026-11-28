@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31604a166c244cbb8ba3d9fd59254c8c",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:50.264466+00:00",
+  "ended_at_utc": "2026-11-28T15:47:17.686245+00:00",
+  "request_sha256": "393b4d0483b924e83e37bd1590cb80e22c9b2aea27491f3fc579e04f8f7ab729",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50358,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33691,
+    "cached_tokens": 12672,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, pathlib\\nimport numpy as np\\nsource = pathlib.Path('test_dag_candidate.py').read_text()\\nns = {}\\nexec(compile(source.split('\\\\nst = pickle.load(', 1)[0], 'test_dag_candidate.py', 'exec'), ns)\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x = t['x']; n = len(x); ids = np.arange(n)\\ndef evaluate(label, test, omit=None):\\n    train = np.setdiff1d(ids, test)\\n    st = copy.deepcopy(s)\\n    st['train'] = {k:t[k][train] for k in ('x','y','traj')}\\n    y, tr = st['train']['y'], st['train']['traj']\\n    st['train']['summary'] = np.array([y.mean(),y.std(),tr[:,-1].mean(),tr[:,-1].std()])\\n    st['test'] = {'x':x[test]}\\n    if omit is not None:\\n        st['panel_a'] = {k:np.delete(v, omit, axis=0) for k,v in st['panel_a'].items()}\\n    out, counts = ns['run_dag'](st)\\n    ye = np.abs(out['y_hat'] - t['y'][test]); te = np.abs(out['state_pred'] - t['traj'][test]); d = out['diagnostics_vec']\\n    pred = out['state_pred'][:,-1]; yh = out['y_hat']\\n    assert all(c == 1 for c in counts.values()) and np.all(np.isfinite(ye)) and np.all(np.isfinite(te))\\n    assert np.allclose(d, [yh.mean(),yh.std(),pred.mean(),pred.std()], atol=1e-3)\\n    return np.array([ye.mean(),te.mean(),te.mean(axis=0).max()])\\nfolds = np.array([evaluate(i, idx) for i,idx in enumerate(np.array_split(np.random.default_rng(871).permutation(n),4))])\\nedge = evaluate('high-amplitude', np.argsort(np.max(abs(x),axis=1))[-14:])\\njack = np.array([evaluate(i, ids[-20:], i) for i in range(len(s['panel_a']['u']))])\\nprint('MAE columns: y / trajectory / worst horizon')\\nprint('Worst of four disjoint validation folds:', folds.max(axis=0))\\nprint('Highest-amplitude validation cases:', edge)\\nprint('Worst leave-one-calibration-row-out:', jack.max(axis=0))\\nassert np.max(folds[:,:2]) <= .038 and np.max(edge[:2]) <= .038 and np.max(jack[:,:2]) <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: robust harmonic inversion replaces affine alignment; the accepted public evaluator reports y MAE 0.013836 and trajectory MAE 0.010472.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the single public split\",\n      \"rejected_reason\": \"It does not test sensitivity to individual calibration rows or prediction at the edge of the measured input range.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged and test whether its margin holds across disjoint folds, high-amplitude inputs, and every leave-one-calibration-row-out split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cd05976037ad3969f7f1c3b88744435449b300064aaf61ca806d74343d7c25ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27420.38,
+      "usage_known": true,
+      "prompt_tokens": 33691,
+      "cached_tokens": 12672,
+      "completion_tokens": 993
+    }
+  ]
+}

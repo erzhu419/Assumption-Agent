@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ba067cc9cc7742448cfb2e637fd69b50",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:20:09.875351+00:00",
+  "ended_at_utc": "2026-11-28T16:20:40.266622+00:00",
+  "request_sha256": "f26f3cbfdb5f081ec8ed3d703f9e65a115df802645381699f0d9ccb11a5569e2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54739,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33284,
+    "cached_tokens": 12672,
+    "completion_tokens": 1207
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations_with_replacement\\\\n', '')\\na = s.index('def _readouts(b):')\\nb = s.index('def _forecast_state', a)\\ns = s[:a] + '''def _readouts(b):\\n    # The scalar has a shared coefficient on the two opposite-channel products.\\n    opposite_pairs = b[:, 0] * b[:, 2] + b[:, 1] * b[:, 3]\\n    return _affine(b), np.column_stack((b, opposite_pairs))\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\ncat >/tmp/verify15_final.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\np='/holdout_task/'\\nm=runpy.run_path(p+'batch_solver.py')\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\ntr=s['train']; x=tr['x']; ids=np.arange(len(x)); t=s['eval_times']; rng=np.random.default_rng(782)\\nz=m['_decode'](x,m['_calibration'](s['panel_a'])); b=m['_operator'](s['panel_b'],z)\\nsplits=[('fixed',ids[52:])]+[(f'random_{j}',rng.permutation(ids)[52:]) for j in range(60)]\\nfor name,values in [('x',x),('z',z),('b',b)]:\\n    for j,channel in enumerate(values.T):\\n        i=np.argsort(channel)\\n        splits.extend([(f'{name}{j}_low',i[:20]),(f'{name}{j}_high',i[-20:])])\\n    i=np.argsort(np.linalg.norm(values-np.median(values,axis=0),axis=1))\\n    splits.append((name+'_radial',i[-20:]))\\nmetrics=[]\\nfor name,v in splits:\\n    a=np.setdiff1d(ids,v); y=tr['y'][a]; T=tr['traj'][a]; tail=T[:,-1]\\n    train=dict(x=x[a],y=y,traj=T,summary=np.array([y.mean(),y.std(),tail.mean(),tail.std()]))\\n    out=m['solve_batch'](dict(s,train=train,test={'x':x[v]}))\\n    yp=out['y_hat']; P=out['state_pred']; tail=P[:,-1]\\n    np.testing.assert_allclose(out['diagnostics_vec'],[yp.mean(),yp.std(),tail.mean(),tail.std()],rtol=0,atol=1e-14)\\n    d=abs(yp-tr['y'][v]); e=abs(P-tr['traj'][v])\\n    metrics.append([d.mean(),e.mean(),e.mean(0).max()])\\nM=np.array(metrics)\\nprint('Columns: scalar MAE, trajectory MAE, worst-timestamp MAE')\\nprint('Prescribed 52/20:',M[0]); print('Worst across',len(M),'splits:',M.max(0)); print('Worst slice names:',[splits[j][0] for j in M.argmax(0)])\\nassert np.isfinite(M).all() and M.max()<0.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify15_final.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full quadratic → shared opposite-pair coefficient: worst feature-tail scalar MAE fell from 0.011514 to 0.005615 in the audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Rational denominator selected by inner CV\",\n      \"rejected_reason\": \"It slightly improved the worst feature-tail MAE but worsened mean MAE in both split families and worsened the worst random-split MAE.\"\n    },\n    {\n      \"option\": \"Force a zero spatial trajectory intercept\",\n      \"rejected_reason\": \"It gave no material MAE gain and increased the worst per-timestamp error in the random-split audit.\"\n    }\n  ],\n  \"rationale\": \"The shared coefficient nearly halves the largest feature-tail error while changing fixed-split scalar MAE by less than 0.0001. Promote it, retain the affine two-rate trajectory, and verify the exact edited solver in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e00be1276df8cc01ee63d07f0bdce5d8a483c8c9f07c9855113b1b67e3ffe597",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30917.14,
+      "usage_known": true,
+      "prompt_tokens": 33284,
+      "cached_tokens": 12672,
+      "completion_tokens": 1207
+    }
+  ]
+}

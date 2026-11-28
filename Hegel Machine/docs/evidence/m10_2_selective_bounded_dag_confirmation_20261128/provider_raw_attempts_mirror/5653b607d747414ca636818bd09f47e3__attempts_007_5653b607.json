@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5653b607d747414ca636818bd09f47e3",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:01:08.481286+00:00",
+  "ended_at_utc": "2026-11-28T16:01:33.065695+00:00",
+  "request_sha256": "ed6ac8503ee09ae595aa3b66394b270bb4779c5b00068ca7a781566f4732d3eb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49337,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33441,
+    "cached_tokens": 12672,
+    "completion_tokens": 964
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 -I -B /holdout_task/test_dag_candidate.py\\npython3 -I -B - <<'PY'\\nimport importlib.util, pickle, itertools\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nnode = load('calibration', '/holdout_task/node_00.py')\\nsink = load('frozen', '/holdout_task/_frozen_nodes/node_01.py')\\nstudy = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\npanel = study['panel_a']\\nu, v = panel['u'], panel['v']\\n\\ndef forward(x, m):\\n    b,g,a,c,f = m\\n    return b + g*x + a*np.tanh(f[0]*x) + c*np.sin(f[1]*np.roll(x,-2,axis=1))\\n\\nmodel = node._calibrate(panel)\\nerr = np.linalg.norm(forward(u, model) - v, axis=1)\\nclean = np.flatnonzero(err < 0.002)\\nassert len(clean) == 45\\njack = []\\nfor i in clean:\\n    keep = np.arange(len(u)) != i\\n    m = node._calibrate({'u':u[keep], 'v':v[keep]})\\n    jack.append(np.max(np.abs(forward(u[i:i+1],m)-v[i:i+1])))\\ngrid = np.array(list(itertools.product(np.linspace(-1.6,1.6,9), repeat=4)))\\ninv = np.max(np.abs(node._invert(forward(grid,model),model)-grid))\\nprint(f'Calibration max leave-one-clean-pair-out error: {max(jack):.8g}; boundary-grid inverse max error: {inv:.8g}')\\nassert max(jack) < 0.001 and inv < 1e-8\\nz = node.run_node({'__input__':study})\\nassert set(z) == {'z','zt'} and z['z'].shape == (72,4) and z['zt'].shape == (36,4)\\nassert all(np.isfinite(a).all() for a in z.values())\\ntrain=study['train']\\nrng=np.random.default_rng(214)\\nworst=np.zeros(2)\\nfor order in [rng.permutation(len(z['z'])) for _ in range(8)] + [np.argsort(np.linalg.norm(z['z'],axis=1))]:\\n    for test in np.array_split(order,6):\\n        fit=np.setdiff1d(order,test)\\n        pred=sink.run_node({'__input__':{'train':{k:train[k][fit] for k in ('y','traj')}},'node_00':{'z':z['z'][fit],'zt':z['z'][test]}})\\n        worst=np.maximum(worst,[np.mean(abs(pred['y_hat']-train['y'][test])), np.mean(abs(pred['state_pred']-train['traj'][test]))])\\nprint('Worst stress-slice MAEs (y, trajectory):',worst)\\nassert np.all(worst < 0.038)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 opposite-channel cubic → H2 shared tanh and opposite-channel sine; accepted public CV MAEs are 0.004388 for y and 0.004511 for trajectories, with independent stress checks pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Verify the unchanged artifact in an isolated interpreter, then test calibration jackknife error, inversion near the measurement boundaries, and both downstream outputs on random and magnitude-blocked folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "23ef714223cf0083f2f902b4c0a0d3947cad731ba07f0822dd6e25e8ec38c2a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24582.91,
+      "usage_known": true,
+      "prompt_tokens": 33441,
+      "cached_tokens": 12672,
+      "completion_tokens": 964
+    }
+  ]
+}

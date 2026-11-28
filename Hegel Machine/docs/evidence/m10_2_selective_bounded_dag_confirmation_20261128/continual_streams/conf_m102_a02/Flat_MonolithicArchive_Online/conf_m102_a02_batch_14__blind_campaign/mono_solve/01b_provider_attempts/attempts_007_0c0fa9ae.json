@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c0fa9aec41649bda803af67f369b9e6",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:41.984761+00:00",
+  "ended_at_utc": "2026-11-28T16:19:15.196005+00:00",
+  "request_sha256": "a5782524a80d9bca989837faa1437bd4eaf932d2978516ce35d12b6c1e9e32aa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32690,
+    "cached_tokens": 12672,
+    "completion_tokens": 1346
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m102_a02_batch_{06,10}_solver.py; cat >/tmp/search14.py <<'PY'\\nfrom graph14 import *\\nfrom scipy.optimize import differential_evolution\\nB=S['panel_b']; C=S['panel_c']; tr=S['train']; n=52; Y=np.c_[tr['y'],tr['traj']]; z=m._inverse(tr['x'],calibrate(S)); i,j=np.triu_indices(4)\\ndef fitop(u,v,terms,linear=True):\\n def D(x,p):return np.c_[np.ones(len(x)),*([x] if linear else []),*[F[k](x,a) for k,a in zip(terms,p)]]\\n def obj(p):\\n  d=D(u,p);return np.mean((d@ls(d,v)-v)**2)\\n opt=differential_evolution(obj,[(.03,6)]*len(terms),seed=0,popsize=8,maxiter=60,tol=1e-7); w=ls(D(u,opt.x),v)\\n return lambda x:D(x,opt.x)@w,opt.x,opt.fun**.5\\nF.update({'pwrat':lambda x,p:x/(1+abs(x)**p),'tanh3':lambda x,p:np.tanh(p*x**3),'erf':lambda x,p:__import__('scipy').special.erf(p*x),'gauss3':lambda x,p:x*np.exp(-p*abs(x)**3),'absrat':lambda x,p:x/(1+p*abs(x)**3),'atan3':lambda x,p:np.arctan(p*x**3),'sin3':lambda x,p:np.sin(p*x**3)})\\nopts=[]\\nfor terms in [(a,) for a in F if a!='sinh']+list(itertools.combinations(['rat','gauss','tanh','soft','sin','gauss3','tanh3','pwrat','absrat'],2)):\\n op,p,e=fitop(B['u'],B['v'],terms);opts.append((e,terms,p,op))\\nprint('B ranking',[(e,k,p) for e,k,p,_ in sorted(opts,key=lambda a:a[0])[:14]],flush=True)\\nbo=sorted(opts,key=lambda a:a[0])[0][-1]; b0=panel(B['u'],B['v'],['gauss'])[0]; co=panel(C['u'],C['v1'],['rat','soft'])[0]; do=panel(C['u'],C['v2'],['exp'])[0]; P={'b':bo,'g':b0,'c':co,'d':do}; L={'z':z,'x':tr['x'],**{k:op(z) for k,op in P.items()}}\\nfor a,b in itertools.product(P,P):L[a+b]=P[b](L[a])\\nfor a,b in itertools.product('bc','bcd'):\\n for c in 'bcd':L[a+b+c]=P[c](L[a+b])\\nfor k,a in list(L.items()):\\n if k not in ('z','x'): L['z+'+k]=z+a; L['z-'+k]=z-a\\nout=[]\\nfor keys in [(k,) for k in L]+list(itertools.combinations([k for k in L if '+' not in k and '-' not in k],2)):\\n a=np.column_stack([L[k] for k in keys]); f=feats(a); f=(f-np.r_[0,f[:n,1:].mean(0)])/np.r_[1,np.maximum(f[:n,1:].std(0),.015)];\\n for la in [0,.003,.05,.3]:\\n  w=ls(np.r_[f[:n],np.sqrt(la)*np.eye(f.shape[1])],np.r_[Y[:n],np.zeros((f.shape[1],9))]); E=abs(f[n:]@w-Y[n:]); Et=abs(f[:n]@w-Y[:n]);out.append((E[:,0].mean(),E[:,1:].mean(),Et[:,0].mean(),Et[:,1:].mean(),keys,la))\\nprint('scalar',*sorted(out)[:20],sep='\\\\n');print('traj',*sorted(out,key=lambda a:a[1])[:20],sep='\\\\n'); print('fit',*sorted(out,key=lambda a:a[2]+a[3])[:12],sep='\\\\n'); print('times',S['eval_times'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search14.py | tee /tmp/search14.out\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 parallel panel features -> H2 recover panel B's primitive and test ordered panel compositions; best 52/20 MAEs are 0.068910 scalar and 0.026123 trajectory.\",\n  \"nogood_update\": {\"has_new_nogood\": false, \"nogood_rung\": \"NONE\", \"assumption_refuted\": null, \"empirical_witness\": null, \"causal_blanket_diagnosis\": null, \"sublated_pivot\": null, \"risk_kind\": null, \"resolves_nogood_ids\": []},\n  \"considered_alternatives\": [],\n  \"rationale\": \"The quadratic trajectory readout clears the gate, but the scalar does not. Test sharper odd primitives and operator order before adding nonlinear scalar terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e69b02ebb6fcf898e39735ac07556ea5c619ede344166867ace237e3a19bdf56",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33689.6,
+      "usage_known": true,
+      "prompt_tokens": 32690,
+      "cached_tokens": 12672,
+      "completion_tokens": 1346
+    }
+  ]
+}

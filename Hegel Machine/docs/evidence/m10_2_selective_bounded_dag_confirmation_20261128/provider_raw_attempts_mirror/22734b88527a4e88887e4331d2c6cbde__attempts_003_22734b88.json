@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22734b88527a4e88887e4331d2c6cbde",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:04.294057+00:00",
+  "ended_at_utc": "2026-11-28T15:49:25.607300+00:00",
+  "request_sha256": "c66c04241884fb625f6a43d68a3ad1ef9832fe043a065174155683939eb933d0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 19858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20453,
+    "cached_tokens": 12672,
+    "completion_tokens": 761
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport pickle,glob,importlib.util,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,z=(tr[k] for k in ('x','y','traj')); np.set_printoptions(precision=5,suppress=True,linewidth=120)\\nprint('times, telemetry',s['eval_times'],s['telemetry_vec']); print('train ranges',x.min(0),x.max(0)); print('y stats',y.min(),y.max(),y.std()); print('z singular',np.linalg.svd(z,compute_uv=False), 'centered',np.linalg.svd(z-z.mean(0),compute_uv=False)); print('z',z[:8]); print('y',y[:8]);\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; a=np.c_[np.ones(len(u)),u]; print(k,'range',u.min(0),u.max(0));\\n for h,v in p.items():\\n  if h=='u':continue\\n  w=np.linalg.lstsq(a,v,rcond=None)[0]; r=v-a@w; print(h,'affine',w,'resid quantiles',np.quantile(np.linalg.norm(r,axis=1),[0,.5,.8,.9,1])); print('first pairs',np.c_[u,v][:4]);\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n l=importlib.util.spec_from_file_location('q',f); m=importlib.util.module_from_spec(l);l.loader.exec_module(m)\\n try:\\n  t={**s,'train':{k:v[:52] for k,v in tr.items()},'test':{'x':x[52:]}}; p=m.solve_batch(t); print(f[-19:],np.mean(abs(p['y_hat']-y[52:])),np.mean(abs(p['state_pred']-z[52:])))\\n  if hasattr(m,'_inverse'):\\n   c=m._calibrate(s['panel_a']) if hasattr(m,'_calibrate') else m._calibration(s['panel_a']); print('  cal',c)\\n except Exception as e: print(type(e).__name__,e)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==$(basename \\\"$f\\\"); grep -E '^def|expm1|sin\\\\(|tanh\\\\(|exp\\\\(' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: screen for calibrated latent coordinates and low-rank temporal laws; inherited 52/20 MAE is 0.204250 for scalar and 0.215884 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure panel residual structure and trajectory rank, and score each archived solver on the same split to localize which graph branches need replacement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "97ad50373283e2ca703ced3ef9b8ddcebfe173aae8359ad68015875517e68ee3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21758.67,
+      "usage_known": true,
+      "prompt_tokens": 20453,
+      "cached_tokens": 12672,
+      "completion_tokens": 761
+    }
+  ]
+}

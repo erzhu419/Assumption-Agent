@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "110c78906bf3449892ca31cd6e359f3e",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:30.992119+00:00",
+  "ended_at_utc": "2026-11-28T15:53:19.823371+00:00",
+  "request_sha256": "c553b6d6a894ffdd686006dc88e4973ff21d3f03754ac74d40d44e86650aa112",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 62112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38978,
+    "cached_tokens": 5504,
+    "completion_tokens": 2136
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/conf_m102_b02_batch_05_solver.py').read_text()\\nbase=p[:p.index('def times')]\\nPath('/holdout_task/node_00.py').write_text(base+'''\\ndef features(study):\\n    z,b=parts(study)\\n    p=study['panel_c'];u=p['u'];v=p['v2']\\n    def H(x,q):\\n        return D(x+q[0]*(np.logaddexp(q[1]*x,-q[1]*x)-np.log(2.)))\\n    def err(q):\\n        f=H(u,q);return (f@fit(f,v)-v).ravel()\\n    q=least_squares(err,[1.,1.],bounds=([.01,.01],[20.,5.])).x\\n    c=H(z,q)@fit(H(u,q),v)\\n    cz=D(z*np.roll(z,-1,axis=1))@fit(D(u*np.roll(u,-1,axis=1)),p['v1'])\\n    return z,b,c,cz\\n\\ndef kernel(x):\\n    dot=x@x.T/x.shape[1]\\n    dist=np.maximum(np.diag(dot)[:,None]+np.diag(dot)-2*dot,0.)\\n    return (1+dot)**3+np.exp(-.3*dist)\\n\\ndef run_node(inputs:dict)->dict:\\n    s=inputs['__input__']; z,b,c,p=features(s); y=s['train']['y']; n=len(y)\\n    f=np.arcsinh(2*np.c_[z,b,c]); k=kernel(f)\\n    yhat=k[n:,:n]@np.linalg.solve(k[:n,:n]+.002*np.eye(n),y)\\n    return {'y_hat':yhat,'z':z,'b':b,'c':c,'p':p}\\n''')\\nPY\\ncat >/holdout_task/node_02.py <<'PY'\\nimport numpy as np\\n\\n\\ndef run_node(inputs:dict)->dict:\\n    a=inputs['node_00']; t=inputs['node_01']; modes=t['modes']; n=len(modes)\\n    x=np.arcsinh(2*np.c_[a['b'],a['c']]); dot=x@x.T/x.shape[1]\\n    d=np.maximum(np.diag(dot)[:,None]+np.diag(dot)-2*dot,0.)\\n    k=(1+dot)**3+np.exp(-.05*d)\\n    return {'state_pred':(k[n:,:n]@np.linalg.solve(k[:n,:n]+.002*np.eye(n),modes))@t['basis'].T}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py || true\\ncat >/tmp/gpdiag.py <<'PY'\\nexec(open('/tmp/diagnose.py').read().split(\\\"for k in ['panel_a'\\\")[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nsys.path.insert(0,'/holdout_task');import node_00 as m\\nz,b,c,p=m.features(s)\\na=s['panel_a']; af=m.AF(a['u']); keep=m.cal(s,a['u'])[2]<2; aw=m.fit(af[keep],a['v'][keep]); print('A coef',aw,'noise',np.std(af[keep]@aw-a['v'][keep]),'ranges',[(g.min(0),g.max(0)) for g in (z,b,c,p)], flush=True)\\nprint('inverse residual',np.max(abs(m.AF(z)@aw-np.r_[t['x'],s['test']['x']])),flush=True)\\nfrom scipy.spatial.distance import cdist\\nU=np.linalg.svd(t['traj'],full_matrices=False)[2]; YY=np.c_[T[:,0],t['traj']@U[:2].T]\\n\\ndef gp(f,Y,i,j,kind):\\n f=(f-f[i].mean(0))/np.maximum(f[i].std(0),1e-9); f=f[:n];Y=(Y-Y[i].mean(0))/Y[i].std(0)\\n I=np.eye(len(i)); d=(f[:,None,:]-f[None,:,:])**2; dt=d[j][:,i]; d=d[i][:,i]; aa=f[i]; zz=f[j]; N=aa.shape[1]\\n def calc(q,dm,L,R):\\n  w=np.exp(q[:N]); r2=dm@w; scale=np.exp(q[N]); dot=(L*w)@R.T\\n  if kind==0: k=scale*np.exp(-.5*r2); dk=-.5*k[:,:,None]*dm*w\\n  else:\\n   r=np.sqrt(5*r2); er=np.exp(-r); k=scale*(1+r+r*r/3)*er;dk=-5/6*scale*((1+r)*er)[:,:,None]*dm*w\\n  poly=np.exp(q[N+1])*(1+dot)**2; lin=np.exp(q[N+2])*np.ones_like(k)\\n  dk+=2*np.exp(q[N+1])*(1+dot)[:,:,None]*(L[:,None,:]*R[None,:,:])*w\\n  return k+poly+lin,(dk,k,poly,lin)\\n def fun(q):\\n  k,(dk,k0,p,l)=calc(q,d,aa,aa); noise=np.exp(q[-1]); cf=cho_factor(k+noise*I); Yi=Y[i]; v=cho_solve(cf,Yi); h=Y.shape[1]; g=.5*(h*cho_solve(cf,I)-v@v.T)\\n  return .5*np.sum(Yi*v)+h*np.log(np.diag(cf[0])).sum(),np.r_[np.einsum('ij,ijk->k',g,dk),np.sum(g*k0),np.sum(g*p),np.sum(g*l),noise*np.trace(g)]\\n q=np.r_[np.full(N,-2.3),0.,-2.,0.,-6.]; rr=minimize(fun,q,jac=True,method='L-BFGS-B',bounds=[(-13,4)]*N+[(-12,8),(-15,6),(-12,7),(-14,-1)],options={'maxiter':130}); q=rr.x; k=calc(q,d,aa,aa)[0]; w=cho_solve(cho_factor(k+np.exp(q[-1])*I),Y[i]); pred=calc(q,dt,zz,aa)[0]@w; return pred,np.exp(q[:N]),rr.fun\\n\\nFs={'z':z,'zb':np.c_[z,b],'zc':np.c_[z,c],'bc':np.c_[b,c],'zbc':np.c_[z,b,c],'zbcp':np.c_[z,b,c,p],'z0b0c0':np.c_[z,np.sign(z)*np.maximum(abs(z)-.35,0)**1.5,z*z]}\\nfor name,F in Fs.items():\\n for kind in [0,1]:\\n  vals=[]\\n  for i,j in sl:\\n   a,w,v=gp(F,YY[:,:1],i,j,kind); o,w2,v2=gp(F,YY[:,1:],i,j,kind); e=a[:,0]*YY[i,0].std()+YY[i,0].mean()-YY[j,0]; E=(o*YY[i,1:].std(0)+YY[i,1:].mean(0))@U[:2]-t['traj'][j]; vals.append([abs(e).mean(),abs(E).mean()]);\\n   if len(vals)==1: print('ARD',name,kind,w.round(3),w2.round(3),flush=True)\\n  print('GP',name,kind,np.round(vals,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gpdiag.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 one nonlinear projection per head -> H2 head-specific nonlinear geometry on calibrated coordinates; the archived worst-split MAEs were 0.153646 and 0.074807.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the sparse interaction dictionary\",\n      \"rejected_reason\": \"Its training error dropped substantially without corresponding improvement on held-out trajectory endpoints.\"\n    }\n  ],\n  \"rationale\": \"Save runnable nodes now, then check the calibration inverse and compare head-specific kernel geometry across folds. Fit kernel weights only on each fold’s training rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4bd0b5ea6bfa8823c53b4bcc4c7e1be77d5ea060d9fd96de468d3c6859018477",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48830.04,
+      "usage_known": true,
+      "prompt_tokens": 38978,
+      "cached_tokens": 5504,
+      "completion_tokens": 2136
+    }
+  ]
+}

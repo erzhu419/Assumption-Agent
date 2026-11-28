@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c272762e43d4e14afbcc3924c9f327c",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:14.393491+00:00",
+  "ended_at_utc": "2026-11-28T15:11:33.412365+00:00",
+  "request_sha256": "42190b0b33efe2255eda2a647cebac764cafa27a48aa97aaee7567d4cd362596",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 29831,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24590,
+    "cached_tokens": 5504,
+    "completion_tokens": 685
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -36 /tmp/hegel_continual_archive/*solver.py; cd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as np,itertools,glob,runpy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; old=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); a,b=old['_align'](s['panel_a']);print('align',a,b); print('train latent bounds',((s['train']['x']-a)/b).min(0),((s['train']['x']-a)/b).max(0)); print('align axis residual sorted',np.sort(abs(s['panel_a']['v']-a-s['panel_a']['u']*b),axis=0)[-12:]);\\np=s['panel_c'];u=p['u'];nn=[()]+[c for d in (1,2,3) for c in itertools.combinations_with_replacement(range(4),d)]; f=np.array([u[:,c].prod(1) for c in nn]).T\\nfor k in ('v1','v2'):\\n print(k); F=f[:,:15]; y=p[k]; coef=np.linalg.lstsq(F,y,rcond=None)[0];\\n for c,v in zip(nn,coef):print(c,np.round(v,5));\\n for i in range(4):\\n  keep=list(range(15)) + [j for j in range(15,35) if i in nn[j]]\\n  col=np.linalg.lstsq(f[:,keep],y[:,i],rcond=None)[0]; nz=np.argsort(abs(col))[-8:]; print('top',i,[(nn[keep[j]],round(col[j],5)) for j in nz]);\\ntry:\\n w=old['_panel_maps'](p,u);print('archive panel RMSE',np.sqrt(np.mean((w-np.c_[p['v1'],p['v2']])**2,axis=0)))\\nexcept Exception as e: print(e)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived separable panel maps → H2 batch-fitted polynomial maps; quadratic v1 RMSE is 0.000072 and quadratic v2 RMSE is 0.1074.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all cubic terms to panel v2\",\"rejected_reason\":\"There are 35 cubic-or-lower terms but only 24 reference rows, so the zero training residual does not establish the map.\"}],\"rationale\":\"Inspect coefficient patterns and the archived decoder to identify a constrained map before fitting the sink.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a73d4e3abaa42285c32ce87b4500a71f6d4d1041b08d202ac70bbd9976d092de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19017.6,
+      "usage_known": true,
+      "prompt_tokens": 24590,
+      "cached_tokens": 5504,
+      "completion_tokens": 685
+    }
+  ]
+}

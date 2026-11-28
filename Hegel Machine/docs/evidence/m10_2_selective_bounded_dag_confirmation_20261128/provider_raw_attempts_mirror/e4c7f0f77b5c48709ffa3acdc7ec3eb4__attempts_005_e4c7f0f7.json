@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4c7f0f77b5c48709ffa3acdc7ec3eb4",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:39.298531+00:00",
+  "ended_at_utc": "2026-11-28T15:09:19.293032+00:00",
+  "request_sha256": "cfcf915d20406e7de835f7e09ff4b49d72524ebdbef9180a00f486d10a55e652",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41904,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30423,
+    "cached_tokens": 12672,
+    "completion_tokens": 1584
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated spatial operators and separate scalar and temporal readouts.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    params = []\\n    for u, v in zip(panel['u'].T, panel['v'].T):\\n        design = _aff(u)\\n        coeff = _fit(design, v)\\n        n_keep = max(2, int(.875 * len(u)))\\n        for _ in range(8):\\n            keep = np.argsort(np.abs(design @ coeff - v))[:n_keep]\\n            coeff = _fit(design[keep], v[keep])\\n        error = np.abs(design @ coeff - v)\\n        inliers = error <= max(.002, 10 * np.median(error))\\n        coeff = _fit(design[inliers], v[inliers])\\n        params.append(coeff)\\n    offset, gain = np.asarray(params).T\\n    return (x - offset) / gain\\n\\n\\ndef _products(x):\\n    return np.column_stack((x[:, 0] * x[:, 1], x[:, 0] * x[:, 3],\\n                            x[:, 1] * x[:, 2], x[:, 2] * x[:, 3]))\\n\\n\\ndef _latent(study, x):\\n    a, b, c = (study[k] for k in ('panel_a', 'panel_b', 'panel_c'))\\n    z = _calibrate(a, x)\\n    w = _aff(z) @ _fit(_aff(b['u']), b['v'])\\n    return _aff(_products(w)) @ _fit(_aff(_products(c['u'])), c['v1'])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    h = _latent(study, np.vstack((train['x'], test['x'])))\\n    space = _aff(h)\\n    scalar = np.column_stack((space, h[:, 0] * h[:, 2], h[:, 1] * h[:, 3]))\\n    y = scalar[n:] @ _fit(scalar[:n], train['y'])\\n    coeff = _fit(space[:n], train['traj'])\\n    # Estimate the shared two-dimensional temporal subspace from the signal,\\n    # not from raw trajectories that include measurement noise.\\n    modes = np.linalg.svd(space[:n] @ coeff, full_matrices=False)[2][:2]\\n    state = ((space[n:] @ coeff) @ modes.T) @ modes\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat >/tmp/stress02.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; tt=tr['traj']; ix=np.arange(len(x)); h=m._latent(s,x)\\ncoord=np.linalg.norm(x,axis=1); hf=np.linalg.norm(h,axis=1); splits=[('public',ix[52:])]+[(f'block{i}',ix[i:i+20]) for i in [0,13,26,39]]+[(n,np.argsort(v)[-20:]) for n,v in [('input_radius',coord),('latent_radius',hf),('positive_tail',tr['y']),('negative_tail',-tr['y'])]]+[(f'axis_{j}_{sign:+}',np.argsort(sign*x[:,j])[-20:]) for j in range(4) for sign in [-1,1]]+[(f'random{k}',np.random.default_rng(k).permutation(ix)[:20]) for k in range(10)]\\nfor n,j in splits:\\n i=np.setdiff1d(ix,j); a=m.solve_batch(dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[j]})); err=np.abs(a['state_pred']-tt[j]);print(n,round(np.mean(abs(a['y_hat']-tr['y'][j])),6),round(err.mean(),6),round(max(err.mean(axis=0)),6))\\nF=m._aff(h); print('spatial trajectory coefficients:\\\\n',m._fit(F,tt)); print('scalar coefficients',m._fit(np.c_[F,h[:,0]*h[:,2],h[:,1]*h[:,3]],tr['y'])); c=s['panel_c']; C=m._aff(m._products(c['u'])); print('panel C sparse LOO MAE',np.mean(abs((c['v1']-C@m._fit(C,c['v1']))/(1-np.sum(C*np.linalg.pinv(C).T,axis=1))[:,None])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress02.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted quadratic) -> H2 (calibration, panel B, sparse panel C v1, and separate readouts); the preliminary structured model has public MAE 0.003442 for y and 0.004083 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use panel C v2 as the latent operator\",\"rejected_reason\":\"In panel-B coordinates its affine trajectory MAE was 0.427125, versus 0.004083 for v1.\"},{\"option\":\"Use an unrestricted scalar quadratic in the latent state\",\"rejected_reason\":\"The two cross-products gave lower public scalar MAE with fewer fitted coefficients.\"}],\"rationale\":\"Implement the measured operator chain and test the final readouts on the required split, feature extremes, scalar tails, and individual time horizons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1f0b48ff0f24634da730bfb2fc35d8cba98939544c122d417def07d7a7fe55a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40565.69,
+      "usage_known": true,
+      "prompt_tokens": 30423,
+      "cached_tokens": 12672,
+      "completion_tokens": 1584
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e489a186a115411e835320d46d8a1a8d",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:36.436192+00:00",
+  "ended_at_utc": "2026-11-28T15:44:16.538649+00:00",
+  "request_sha256": "cce19f6d94bcd2ac34b3fa5c1a374914dee57100fae3a0cd9588bd09e7701764",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80139,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45224,
+    "cached_tokens": 12672,
+    "completion_tokens": 1766
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -i '/^def P(/d; /^def gram(/,$d' /holdout_task/batch_solver.py\\ncat >>/holdout_task/batch_solver.py <<'PY'\\ndef kernel(x, degree, decay):\\n    dot=x@x.T/x.shape[1]\\n    dist=np.maximum(np.diag(dot)[:,None]+np.diag(dot)-2*dot,0)\\n    return (1+dot)**degree+np.exp(-decay*dist)\\n\\ndef predict(study):\\n    z,b=parts(study)\\n    f=times(study)\\n    tr=study['train']; n=len(tr['x'])\\n    modes=fit(f,tr['traj'].T).T\\n    yk=kernel(np.arcsinh(np.c_[.3*z+b,.3*z-b]),3,.15)\\n    tk=kernel(np.arcsinh(np.c_[.3*z,b]),3,.7)\\n    def predict_with(k,target):\\n        return k[n:,:n]@np.linalg.solve(k[:n,:n]+1e-6*np.eye(n),target)\\n    return predict_with(yk,tr['y']),predict_with(tk,modes)@f.T\\n\\ndef solve_batch(study:dict)->dict:\\n    y,state=predict(study); end=state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),end.mean(),end.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/verify_heads.py <<'PY'\\nimport pickle,numpy as np\\nfrom batch_solver import parts, times, fit, kernel, solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); z,b=parts(s)\\nfrom sklearn.model_selection import KFold\\nsplits=[(np.arange(52),np.arange(52,n))]+list(KFold(4,shuffle=True,random_state=921).split(z[:n]))\\nfor key,idx in [('z_norm',np.linalg.norm(z[:n],axis=1)),('b_norm',np.linalg.norm(b[:n],axis=1))]:\\n j=np.argsort(idx)[-18:]; splits.append((np.setdiff1d(np.arange(n),j),j))\\nX=np.c_[.3*z+b,.3*z-b]; W=np.c_[.3*z,b]; E=[]; models=[]\\nfor a in ('sum_asinh','sep_asinh','sum_linear','sep_linear','sum_add','sep_add','blend','operator'):\\n for k in (.15,.4,.7,1.4):\\n  for p in (2,3):\\n   for rg in (1e-6,1e-4,.001):\\n    if a=='blend': G=.6*kernel(np.arcsinh(X),p,k)+.4*kernel(np.arcsinh(W),p,k)\\n    elif a=='operator': G=kernel(np.c_[.3*z,b,.7*np.tanh(1.25*X)],p,k)\\n    else:\\n     Q=X if a.startswith('sum') else W\\n     if a.endswith('asinh'): Q=np.arcsinh(Q)\\n     G=kernel(Q,p,k)\\n     if a.endswith('add'):\\n      H=np.arcsinh(Q)\\n      G=.4*G+.3*kernel(H,p,k)+.3*sum(kernel(H[:,i:i+1],p,k) for i in range(H.shape[1]))/H.shape[1]\\n    models.append((a,k,p,rg,G))\\nTF=[]\\nfor i,j in splits:\\n sub=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':tr['x'][j]}); h=solve_batch(sub); d=abs(h['state_pred']-tr['traj'][j]);print('saved solver',len(i),len(j),'y',np.mean(abs(h['y_hat']-tr['y'][j])),'traj',d.mean(),'endpoint',d[:,-1].mean(),'worst horizon',d.mean(0).max()); f=times(sub); TF.append((f,np.c_[tr['y'],fit(f,tr['traj'].T).T]));\\nfor a,k,p,rg,G in models:\\n es=[];preds=[]\\n for (i,j),(f,Y) in zip(splits,TF):\\n  h=G[j][:,i]@np.linalg.solve(G[i][:,i]+rg*np.eye(len(i)),Y[i]); d=h[:,1:]@f.T-tr['traj'][j]; ey=h[:,0]-tr['y'][j];es.append([np.mean(abs(ey)),np.mean(abs(d)),np.mean(abs(d[:,-1]))]);preds.append((ey,d))\\n E.append((np.array(es),(a,k,p,rg),preds))\\nfor h in (0,1):\\n def score(a):\\n  e=a[0][:,h];return np.mean(e[1:5])+.3*np.max(e[1:5])+.2*np.mean(e[5:])\\n A=sorted([x for x in E if x[0][0,h]<.038],key=score)[:12]\\n for e,m,_ in A[:5]: print('head',h,m,np.round(e[:,h],5))\\n for i,v in enumerate(A):\\n  for w in A[:i]:\\n   for frac in [.25,.5,.75]:\\n    e=np.array([np.mean(abs(frac*u[h]+(1-frac)*t[h])) for u,t in zip(v[2],w[2])]);\\n    if e[0]<.038 and e[1:5].max()<A[0][0][1:5,h].max()*.9 and e[5:].mean()<A[0][0][5:,h].mean(): print('blend',h,v[1],w[1],frac,np.round(e,5))\\nPY\\nPYTHONPATH=/holdout_task python3 /tmp/verify_heads.py | head -65\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace the shared normalized kernel with separate calibrated sum/difference and trajectory kernels; exploratory 52/20 MAEs were 0.02644 for y and 0.03678 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\",\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Retain the shared kernel\",\"rejected_reason\":\"The official validation reported MAEs of 0.088187 and 0.057507, both above the gate.\"}],\"rationale\":\"Promote the two heads that meet the exploratory gate, verify the exact artifact with the official validator, and measure independent fold, terminal-time, and large-input errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "422e81b11cf54e9af40ea14d2c95769198b09203b2a46516ddfb31a834621fc6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40100.88,
+      "usage_known": true,
+      "prompt_tokens": 45224,
+      "cached_tokens": 12672,
+      "completion_tokens": 1766
+    }
+  ]
+}

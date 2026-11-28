@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "975860ec520f43108c3be8e2ea746539",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:33.523692+00:00",
+  "ended_at_utc": "2026-11-28T15:44:22.544108+00:00",
+  "request_sha256": "e15c94fa1cf372f40c32ac04080f33ff313b24e9f79d3138fd2c4fa6aa870861",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32795,
+    "cached_tokens": 12672,
+    "completion_tokens": 1203
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat > /tmp/fit2.py <<'PY'\\nfrom panel import *\\nfrom itertools import product\\nfrom scipy.optimize import root\\nfuncs.update(cube=lambda x:x**3,soft=lambda x:np.logaddexp(x,-x),id=lambda x:x)\\nkeys=['sin','tanh','erf','asinh','atan','rat','sat','cube']\\ndef cal(panel,verbose=False):\\n u,v=panel['u'],panel['v']; keep=np.abs(v).max(1)<3; u,v=u[keep],v[keep]; models=[]\\n for j in range(4):\\n  k=(j+2)%4; y=v[:,j]; scores=[]\\n  for a,b in product(keys,repeat=2):\\n   def D(w,p,a=a,b=b,j=j,k=k):return I(np.c_[w,funcs[a](w[:,j]*np.exp(p[0])),funcs[b](w[:,k]*np.exp(p[1]))])\\n   def R(p):\\n    d=D(u,p);return d@ls(d,y)-y\\n   r=min((least_squares(R,np.log(p),bounds=(-2.5,1.6),max_nfev=45) for p in [(1,1),(2.15,2.15)]),key=lambda z:z.cost)\\n   scores.append((np.sqrt(2*r.cost/len(y)),a,b,np.exp(r.x),D,r.x,ls(D(u,r.x),y)))\\n  scores.sort(key=lambda z:z[0]); e,a,b,p,d,q,c=scores[0]; models.append((d,q,c));\\n  if verbose: print('A',j,[(v[:4],v[-1]) for v in scores[:3]])\\n def forward(w):return np.column_stack([d(w,q)@c for d,q,c in models])\\n c=ls(I(u),v)\\n def inv(x):return np.array([root(lambda w:forward(w[None,:])[0]-y,np.linalg.solve(c[1:].T,y-c[0])).x for y in x])\\n return inv,forward\\n\\ndef cfit(panel,verbose=False):\\n u,v=panel['u'],panel['v1']; results=[]\\n for a,b in product(keys, ['id','sin','asinh','cube','tanh','rat','sqrt','cos','sat']):\\n  if a==b:continue\\n  def D(w,p,a=a,b=b):return I(np.c_[w,funcs[a](w*np.exp(p[0])),funcs[b](w*np.exp(p[1]))] if b!='id' else np.c_[w,funcs[a](w*np.exp(p[0]))])\\n  def R(p):\\n   d=D(u,p);return (d@ls(d,v)-v).ravel()\\n  r=min((least_squares(R,np.log(p),bounds=(-2.5,1.7),max_nfev=55) for p in [(2.15,1),(1,2.15),(3.5,2.15)]),key=lambda r:r.cost)\\n  c=ls(D(u,r.x),v); results.append((np.sqrt(2*r.cost/v.size),a,b,np.exp(r.x),lambda w,D=D,p=r.x,c=c:D(w,p)@c,c))\\n results.sort(key=lambda z:z[0]);\\n if verbose:\\n  for z in results[:10]:print('C1',z[:4]);\\n  print(results[0][-1])\\n return results[0][-2]\\nif __name__=='__main__':\\n a,f=cal(s['panel_a'],True); x=np.r_[s['train']['x'],s['test']['x']]; z=a(x);print('inversion',np.max(abs(f(z)-x)),z.min(0),z.max(0)); cfit(s['panel_c'],True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit2.py; cat /tmp/hegel_continual_archive/*08_solver.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"Dense calibration -> sparse self/opposite-channel nonlinear calibration; best archived 52/20 worst-endpoint MAE remains 0.10902.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Fit only the opposite-channel nonlinearity\",\"rejected_reason\":\"It leaves about 0.027 calibration RMSE in every output channel; residual cubic structure also appears on the self channel.\"}],\n  \"rationale\":\"Fit both dominant calibration terms jointly, check numerical inversion, and test whether a second nonlinear basis explains C1's residual before fitting downstream readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "55b0a51590d07be37d896f1cc1814e7cf47a7c2c735560e74901f41d64ca433e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49018.98,
+      "usage_known": true,
+      "prompt_tokens": 32795,
+      "cached_tokens": 12672,
+      "completion_tokens": 1203
+    }
+  ]
+}

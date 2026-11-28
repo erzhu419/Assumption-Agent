@@ -1,0 +1,152 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a02_batch_04_c6404225ac72",
+    "source_hash": "c6404225ac7236bb180f60da8a3480c0079495f6948637b4c066e5b7c1d0036b",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_a02_batch_04__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a02_batch_00_solver.py",
+        "bytes": 1271,
+        "sha256": "77ca3c2cdbeb91b7c8737b584ae6beabb913b1aeaa388d539d3db93f94eff78d"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a02_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a02_batch_01_solver.py",
+        "bytes": 2118,
+        "sha256": "d5dbfe30e1de0f47c3e13400b8eacc0a3019295bc876e069b0a54b37856e68bd"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a02_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a02_batch_02_solver.py",
+        "bytes": 2843,
+        "sha256": "7d349c79e716b22a146b4ec002651885fe9ba331ced8d7ed7830cb7b9d83e121"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a02_batch_03_solver.py",
+        "bytes": 2205,
+        "sha256": "2b47547dddd9baf9ede2d088e3245da53d0d68a13298223d2a1eedf1097394bb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; sed -n '75,240p' test_dag_candidate.py; echo ARCHIVE; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -nE '^def |^class ' \"$f\"; done; python3 - <<'PY'\nimport pickle, numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))\nprint(type(s)); print(s[0].keys()); s=s[0]['study']; print(s.keys()); print('telemetry',s['telemetry_vec'],'times',s['eval_times']);\nfor k in ['panel_a','panel_b','panel_c','train','test']:\n for a,v in s[k].items():\n  q=np.asarray(v); print(k,a,q.shape, 'range',q.min(),q.max(),'first',q[:2]);\nPY",
+      "for n in 01 03; do echo ==== $n; cat /tmp/hegel_continual_archive/conf_m102_a02_batch_${n}_solver.py; done; sed -n '141,240p' /holdout_task/test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference panel alignment calibration outliers'",
+      "sed -n '1,48p' /tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py; cd /holdout_task; python3 - <<'PY'\nimport pickle, numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; u,v=map(s['panel_a'].get,('u','v'))\nnp.set_printoptions(precision=3,suppress=True,linewidth=140)\nprint('panel A: u, v-u'); print(np.c_[u,v-u]);\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'least trimmed squares robust polynomial calibration outliers'",
+      "set -e; cd /holdout_task; sed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py > node_01.py; cat >> node_01.py <<'PY'\ndef _b_features(q, p):\n    scale, power, exponent = p\n    logabs = np.log(np.maximum(np.abs(q), np.finfo(float).tiny))\n    h = q * np.exp(exponent * np.logaddexp(0, power * (np.log(scale) + logabs)))\n    return np.c_[np.ones(len(q)), q, h]\n\n\ndef run_node(inputs: dict) -> dict:\n    study = inputs['__input__']\n    operator = inputs['node_00']\n    train = study['train']\n    coef = _fit_calibration(study['panel_a'])\n    p, w = operator['p'], ope",
+      "set -e; cd /holdout_task; python3 -I - <<'PY'\nimport copy, pickle, runpy\nimport numpy as np\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\nsink = runpy.run_path('node_01.py')\nupstream = runpy.run_path('_frozen_nodes/node_00.py')['run_node']\nb = upstream({'__input__': s})\na = s['panel_a']; train = s['train']; n = len(train['x']); ix = np.arange(n)\nfit = sink['_fit_calibration']; design = sink['_design']; invert = sink['_invert']\nclean = np.linalg.norm(a['v'] - a['u'], axis=1) < 3\npa_loo = []\nfor i in ix[:len(clean)][clean]:\n    keep = np.arange(len(clean)) != i\n    c = fit({k: v[ke"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m102_a02_batch_02_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m102_a02_batch_02_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 2595,
+        "sha256": "1d9704ab06c24d02cdd810c8d9dd665b6d3981b35a3da5d2f66535b7ab1b549d",
+        "content_addressed_ref": "content_addressed_blobs/1d9704ab06c24d02cdd810c8d9dd665b6d3981b35a3da5d2f66535b7ab1b549d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "_ls",
+      "_calibrate",
+      "_calibration",
+      "_affine",
+      "_quadratic",
+      "_gated",
+      "_regress",
+      "_predict_scalar"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c6404225ac7236bb180f60da8a3480c0079495f6948637b4c066e5b7c1d0036b",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "set -e; cd /holdout_task; python3 -I - <<'PY'\nimport copy, pickle, runpy\nimport numpy as np\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\nsink = runpy.run_path('node_01.py')\nupstream = runpy.run_path('_frozen_nodes/node_00.py'",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c6404225ac7236bb180f60da8a3480c0079495f6948637b4c066e5b7c1d0036b",
+        "expected_candidate_sha256": "c6404225ac7236bb180f60da8a3480c0079495f6948637b4c066e5b7c1d0036b",
+        "computed_candidate_sha256": "c6404225ac7236bb180f60da8a3480c0079495f6948637b4c066e5b7c1d0036b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 2595
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c6404225"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_ls",
+        "code": "def _ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(panel):\n    (u, v) = (np.asarray(panel['u']), np.asarray(panel['v']))\n    (gain, offset) = (np.empty(u.shape[1]), np.empty(u.shape[1]))\n    (i, j) = np.triu_indices(len(u), 1)\n    for k in range(u.shape[1]):\n        (a, b) = (u[:, k], v[:, k])\n        du = a[i] - a[j]\n        good = np.abs(du) > 1e-08\n        g = np.median((b[i[good]] - b[j[good]]) / du[good])\n        c = np.median(b - g * a)\n        r = np.abs(b - g * a - c)\n        keep = r <= max(5 * np.median(r), 1e-08)\n        if np.count_nonzero(keep) < 3:\n            keep = np.argsort(r)[:max(3, len(a) // 2)]\n        (gain[k], offset[k]) = _ls(np.c_[a[keep], np.ones(np.count_nonzero(keep))], b[keep])\n    return (gain, offset)"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    (u, v) = (panel['u'], panel['v'])\n    delta = np.linalg.norm(v - u, axis=1)\n    med = np.median(delta)\n    keep = delta <= med + max(0.25, 8 * np.median(abs(delta - med)))\n    (u, v) = (u[keep], v[keep])\n    (uc, vc) = (u - u.mean(0), v - v.mean(0))\n    slope = (uc * vc).sum(0) / (uc * uc).sum(0)\n    return (v.mean(0) - slope * u.mean(0), slope)"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_quadratic",
+        "code": "def _quadratic(x):\n    from itertools import combinations_with_replacement\n    return np.column_stack((_affine(x), *(x[:, i] * x[:, j] for (i, j) in combinations_with_replacement(range(4), 2))))"
+      },
+      {
+        "name": "_gated",
+        "code": "def _gated(x, q, params):\n    (slope, center) = params[:2]\n    score = slope * (x[:, 2] - center) + x[:, [0, 1, 3]] @ params[2:]\n    return np.column_stack((q, q[:, :5] * np.tanh(score)[:, None]))"
+      },
+      {
+        "name": "_regress",
+        "code": "def _regress(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_predict_scalar",
+        "code": "def _predict_scalar(x, y, test):\n    from scipy.optimize import least_squares\n    q = _quadratic(x)\n\n    def residual(params):\n        design = _gated(x, q, params)\n        return design @ _regress(design, y) - y\n    starts = ([8, 0, 0, 0, 0], [3, 0, 0, 0, 0], [14, 0, 0, 0, 0], [8, -0.12, 0, 0, 0], [8, 0.12, 0, 0, 0], [8, 0, 1, 0, 0], [8, 0, -1, 0, 0])\n    fit = min((least_squares(residual, start, bounds=([1, -0.35, -3, -3, -3], [35, 0.35, 3, 3, 3]), max_nfev=100) for start in starts), key=lambda result: result.cost)\n    qt = _quadratic(test)\n    coef = _regress(_gated(x, q, fit.x), y)\n    tilted = _gated(test, qt, fit.x) @ coef\n    fixed = np.column_stack((q, q * np.tanh(8 * x[:, 2:3])))\n    fixed_test = np.column_stack((qt, qt * np.tanh(8 * test[:, 2:3])))\n    return 0.8 * tilted + 0.2 * (fixed_test @ _regress(fixed, y))"
+      }
+    ]
+  }
+}

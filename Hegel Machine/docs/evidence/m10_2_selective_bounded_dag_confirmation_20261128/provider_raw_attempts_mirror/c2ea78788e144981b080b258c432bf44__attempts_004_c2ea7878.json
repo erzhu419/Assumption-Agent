@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2ea78788e144981b080b258c432bf44",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:52.572837+00:00",
+  "ended_at_utc": "2026-11-28T15:40:19.852931+00:00",
+  "request_sha256": "b5cdacf4e8196af6a50ffeef6068182de4e06ad07733252d1a26586924c93014",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30394,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24518,
+    "cached_tokens": 12672,
+    "completion_tokens": 1055
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '63,240p' /tmp/hegel_continual_archive/conf_m102_b03_batch_11_solver.py; python3 - <<'PY'\\nimport pickle, numpy as np, runpy\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];u,v=[s['panel_a'][k] for k in ('u','v')];\\ndef ol(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef soft(z):return z/(1+abs(z))\\na=np.c_[np.ones(len(u)),u]; k=np.ones(len(u),bool)\\nfor _ in range(5):\\n e=np.linalg.norm(a@ol(a[k],v[k])-v,axis=1);m=np.median(e);k=e<max(.02,m+6*1.4826*np.median(abs(e-m)))\\nprint('affine fit',ol(a[k],v[k]).round(4), 'inliers',sum(k),'err',np.sort(e).round(4));u,v=u[k],v[k]\\nfor offsets in [(0,), (0,1),(0,2),(0,3),(0,1,2,3)]:\\n for kind in ('aff','quad','cube','softtanh','tanhsoft','softsoft','tanhtanh','sincos'):\\n  def ds(j,p):\\n   z=[u[:,(j+d)%4] for d in offsets]; fs={'soft':soft,'tanh':np.tanh,'sin':np.sin,'cos':np.cos}\\n   c=[np.ones(len(u)),*z];\\n   if kind in ('quad','cube'):\\n    import itertools\\n    for n in range(2,3+(kind=='cube')):c += [np.prod(seq,axis=0) for seq in itertools.combinations_with_replacement(z,n)]\\n   if kind in ('softtanh','tanhsoft','softsoft','tanhtanh','sincos'):\\n    for ii,b in enumerate(z):\\n     f=list({'softtanh':('soft','tanh'),'tanhsoft':('tanh','soft'),'softsoft':('soft','soft'),'tanhtanh':('tanh','tanh'),'sincos':('sin','cos')}[kind])[min(ii,1)];c.append(fs[f](p[min(ii,1)]*b))\\n   return np.array(c).T\\n  def rs(p):\\n   return np.concatenate([d@ol(d,v[:,j])-v[:,j] for j in range(4) for d in [ds(j,p)]])\\n  p=least_squares(rs,[.6,1.2],bounds=(.03,6),max_nfev=100).x; print(offsets,kind,p.round(4),'rms',np.mean(rs(p)**2)**.5)\\nfor label in ('00','11'):\\n m=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b03_batch_'+label+'_solver.py'); sc={**s,'train':{k:(v[:52] if k!='summary' else v) for k,v in s['train'].items()},'test':{'x':s['train']['x'][52:]}}\\n try:\\n  r=m['solve_batch'](sc);print('archive',label,{k:np.shape(v) for k,v in r.items()});print(np.mean(abs(r['y_hat']-s['train']['y'][52:])),np.mean(abs(r['state_pred']-s['train']['traj'][52:])))\\n except Exception as ex:print(repr(ex))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived opposite-coordinate calibration → H2 test shifted nonlinear coupling against panel A; archived gate MAEs are 0.141162 scalar and 0.236936 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full affine calibration\",\"rejected_reason\":\"The raw affine fit has large residuals; robust trimming and structured nonlinear comparisons are needed to distinguish outliers from missing terms.\"}],\"rationale\":\"Benchmark both archived solvers on the exact public split and use the independent calibration pairs to compare coordinate couplings and nonlinearities before changing the readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6b0e936b28ea278b4e16ff90bd0b06fe68421eb82340598aa00ebbe97b76b002",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27279.07,
+      "usage_known": true,
+      "prompt_tokens": 24518,
+      "cached_tokens": 12672,
+      "completion_tokens": 1055
+    }
+  ]
+}

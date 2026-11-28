@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42ffd30ca4384a60bd8eb150fc0af5cb",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:24.185064+00:00",
+  "ended_at_utc": "2026-11-28T15:42:15.242375+00:00",
+  "request_sha256": "81e0af1cc04cdefe192789dc6134c790197e409d838eaec3207f2aff53caef06",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49879,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33003,
+    "cached_tokens": 12672,
+    "completion_tokens": 2201
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/panel7.py <<'PY'\\nfrom hegel_probe import *\\nfrom itertools import combinations\\nfrom scipy.optimize import root\\nlin=a.lin; one=a.one\\nu,v=p['panel_a'].values(); F=one(u); keep=np.ones(len(u),bool)\\nfor _ in range(4):\\n r=np.linalg.norm(v-F@lin(F[keep],v[keep]),axis=1); keep=r<2\\nu,v=u[keep],v[keep]; nxt=np.roll(u,-1,axis=1)\\npairs=lambda w:np.column_stack([w[:,i]*w[:,j] for i,j in combinations(range(4),2)])\\ndef AF(w,mode):\\n r=np.roll(w,-1,axis=1)\\n return {'cyc':np.c_[one(w),w*r,w**3], 'cycabs':np.c_[one(w),w*r,w*abs(w)],'poly':np.c_[one(w),w*w,pairs(w),w**3],'polyabs':np.c_[one(w),w*w,pairs(w),w*abs(w)]}[mode]\\nfor mode in ['cyc','cycabs','poly','polyabs']:\\n G=AF(u,mode); c=lin(G,v); print('A',mode,np.sqrt(np.mean((G@c-v)**2)),np.round(c,4))\\nfor j in range(4):\\n w=u[:,j]; z=nxt[:,j]; b=np.c_[np.ones(len(w)),w,z,w*z]; y=v[:,j];\\n opts={'cube':lambda q:np.c_[w**3,z**3], 'oddabs':lambda q:np.c_[w*abs(w),z*abs(z)], 'cubic_mix':lambda q:np.c_[w**3,w*w*z,w*z*z,z**3], 'rational':lambda q:np.c_[w**3/(1+q[0]*w*w),z**3/(1+q[0]*z*z)], 'sine':lambda q:np.c_[np.sin(q[0]*w),np.sin(q[0]*z)], 'ratpair':lambda q:np.c_[w*z/(1+q[0]*w*w),w*z/(1+q[0]*z*z),w**3,z**3]}\\n for k,fun in opts.items():\\n  def d(q):return np.c_[b,fun(q)]\\n  def r(q):\\n   g=d(q); return g@lin(g,y)-y\\n  opt=least_squares(r,[.4],bounds=(.0001,6),gtol=1e-12); print('Asparse',j,k,opt.x,np.std(opt.fun),np.round(lin(d(opt.x),y),4))\\ncu=p['panel_c']['u']; cv=p['panel_c']['v1']; cv2=p['panel_c']['v2']\\ncm={'softlin':lambda w,q:w/(1+q[0]*abs(w))+q[1]*w, 'tanhlin':lambda w,q:np.tanh(q[0]*w)+q[1]*w, 'softfree':lambda w,q:np.c_[w,w/(1+q[0]*abs(w))], 'softcubic':lambda w,q:np.c_[w,w/(1+q[0]*abs(w)),w**3], 'softtanh':lambda w,q:np.c_[w,w/(1+q[0]*abs(w)),np.tanh(q[1]*w)], 'tanhabs':lambda w,q:np.c_[w,np.tanh(q[0]*w),w*abs(w)], 'softsat':lambda w,q:np.c_[w,w/(1+q[0]*abs(w)+q[1]*w*w)], 'oddabsrat':lambda w,q:np.c_[w,w*abs(w)/(1+q[0]*abs(w)+q[1]*w*w)], 'softshift':lambda w,q:np.c_[w,(w+q[1])/(1+q[0]*abs(w+q[1]))], 'tanhshift':lambda w,q:np.c_[w,np.tanh(q[0]*(w+q[1]))], 'atan':lambda w,q:np.c_[w,np.arctan(q[0]*w)], 'softpower':lambda w,q:np.c_[w,w/(1+q[0]*abs(w)**q[1])], 'softper':lambda w,q:np.c_[w,w/(1+np.array(q)*abs(w))], 'tanhper':lambda w,q:np.c_[w,np.tanh(np.array(q)*w)]}\\nC={}\\nfor k,fun in cm.items():\\n def d(w,q):return one(fun(w,q))\\n def r(q):\\n  g=d(cu,q); return (g@lin(g,cv)-cv).ravel()\\n lo=[.00001,-4]; hi=[10,8]; seeds=[[.25,.15],[.85,1.2],[1.6,2.0],[2.5,-.3]]\\n if k.endswith('per'):lo=[.00001]*4;hi=[10]*4;seeds=[[s[0]]*4 for s in seeds]\\n if k in ['softfree','tanhabs','atan']:lo=lo[:1];hi=hi[:1];seeds=[s[:1] for s in seeds]\\n if k in ['softpower','softsat','oddabsrat','softtanh']:lo[1]=.00001;seeds=seeds[:-1]\\n opt=min((least_squares(r,ss,bounds=(lo,hi),gtol=1e-12,max_nfev=400) for ss in seeds),key=lambda q:q.cost); q=opt.x; c=lin(d(cu,q),cv); C[k]=(fun,q,c); print('C',k,q,np.std(opt.fun))\\nB=lin(one(p['panel_b']['u']),p['panel_b']['v']); Bi=lambda w:(w-B[0])@np.linalg.inv(B[1:]); Bd=lambda w:one(w)@B\\nh=__import__('hegel_probe');h.vi=np.arange(52,72);s=h.study(np.arange(52),h.vi);x=np.r_[s['train']['x'],s['test']['x']]; scores=[]\\nfor mode in ['cyc','poly','polyabs']:\\n c=lin(AF(u,mode),v); aa=lin(one(u),v)\\n def Ai(X):\\n  return np.array([root(lambda z:(AF(z[None,:],mode)@c)[0]-xx,(xx-aa[0])@np.linalg.inv(aa[1:])).x for xx in X])\\n for label,z in [('Ai',Ai(x)),('AiBi',Bi(Ai(x))),('AiBd',Bd(Ai(x))),('BiAi',Ai(Bi(x))),('BdAi',Ai(Bd(x)))]:\\n  for name,(fun,q,c1) in C.items():\\n   c=one(fun(z,q))@c1; d=a._panel_maps(p['panel_c'],z)[:,4:];\\n   for wname,w in [('cd',np.c_[c,d]),('cdz',np.c_[c,d,z]),('cz',np.c_[c,z]),('z',z),('zd',np.c_[z,d])]:\\n    for scale in [0,1]:\\n     W=w if not scale else (w-w[:52].mean(0))/np.maximum(w[:52].std(0),.1); e=h.score(W,s);scores.append((max(e),e,mode,label,name,wname,scale))\\nprint('TOP',*sorted(scores)[:30],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel7.py > /tmp/panel7.out; grep -E '^(A |Asparse|C |TOP)' /tmp/panel7.out; tail -30 /tmp/panel7.out; grep -nE 'cv_|split|arange' /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine calibration → H2 cyclic interaction calibration and mixed saturating features; best prior joint holdout MAE is 0.292676.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A full affine map adequately models the uncontaminated panel A measurements.\",\n    \"empirical_witness\": \"Adding pair products drops per-channel RMS from roughly 0.13–0.16 to 0.040–0.045; panel A residual correlations reach 0.95–0.975 on the cyclic neighbor products.\",\n    \"causal_blanket_diagnosis\": \"Panel A mixes adjacent latent coordinates multiplicatively, so an affine inverse distorts the feature coordinates.\",\n    \"sublated_pivot\": \"Fit and invert cyclic interaction maps, then compare mixed-coordinate response bases through the frozen kernel.\",\n    \"risk_kind\": \"missing_cyclic_interactions\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Use the calibration panel to identify nonlinear terms independently of labels, then use held-out predictions to distinguish coordinate order and feature scaling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "05d460da1694f1d9572c058daadaab994485e9dd306b4ad5973feeccfc7bb793",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52162.01,
+      "usage_known": true,
+      "prompt_tokens": 33003,
+      "cached_tokens": 12672,
+      "completion_tokens": 2201
+    }
+  ]
+}

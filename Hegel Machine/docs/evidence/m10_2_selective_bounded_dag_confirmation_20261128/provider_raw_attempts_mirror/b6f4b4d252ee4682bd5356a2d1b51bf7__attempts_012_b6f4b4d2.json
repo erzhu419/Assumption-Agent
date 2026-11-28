@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6f4b4d252ee4682bd5356a2d1b51bf7",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:41.266099+00:00",
+  "ended_at_utc": "2026-11-28T16:03:16.088947+00:00",
+  "request_sha256": "4c5f1cfa8228866b08caae76e09f99931aa021d5a258a86d4d22e7511498c3e7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68959,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39678,
+    "cached_tokens": 12672,
+    "completion_tokens": 1413
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graphscan.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations\\nfrom sparse_heads import old,D,fit\\n\\ndef graph(s,x):\\n z=old.coords(s,x); p=s['panel_b']; u=p['u']; h=lambda x:D(np.sign(x)*np.maximum(abs(x)-.35,0)**1.5); B=lambda x:h(x)@fit(h(u),p['v']); b=B(z)\\n p=s['panel_c']; u=p['u']; h1=lambda x:D(x*np.roll(x,-1,axis=1)); h2=lambda x:D(np.c_[x,np.cos(1.2726*x)]); w1=fit(h1(u),p['v1']); w2=fit(h2(u),p['v2']); C=lambda x:h1(x)@w1; E=lambda x:h2(x)@w2\\n G={'z':z,'b':b,'threshold':np.sign(z)*np.maximum(abs(z)-.35,0)**1.5}; S={'z':z,'b':b};\\n for k in [-2,-1.25,-1,-.7,-.35,-.3,-.22,.22,.3,.35,.7,1,1.25,2]: S['b%+gz'%k]=b+k*z;S['z%+gb'%k]=z+k*b\\n for v in [.22,.35,1.,1.25]: S['gate%g'%v]=z/(1+v*b*b);S['gateB%g'%v]=b/(1+v*z*z)\\n for j,q in list(S.items()):\\n  G[j]=q\\n  G['C:'+j]=C(q);G['E:'+j]=E(q);G['B:'+j]=B(q)\\n for j,q in list(G.items()):\\n  if j in S or ':' in j:\\n   for a in [.7,1.25,2.5]:\\n    G[f't{a}:{j}']=np.tanh(a*q);G[f's{a}:{j}']=np.sin(a*q);G[f'a{a}:{j}']=np.arcsinh(a*q);G[f'r{a}:{j}']=q/(1+a*q*q)\\n return G\\n\\ndef run(s,ix,iv):\\n tr=s['train']; G=graph(s,tr['x']); y=tr['y']; T=tr['traj']; V=np.linalg.svd(T[ix],full_matrices=False)[2][0]; Y=np.c_[y,(T@V)*V[-1]]; A=Y[ix]; J=Y[iv]; gs=[]; cache=[]\\n for key,val in G.items():\\n  f=D(val); q,r=qr(f[ix],mode='economic');\\n  if min(abs(r.diagonal()))<1e-8:continue\\n  pr=q@(q.T@A); lev=(q*q).sum(1)[:,None]; score=(abs(A-pr)/(1-lev)).mean(0); gs.append((score,key)); cache.append((key,val,q))\\n for j in range(2):\\n  rank=sorted(gs,key=lambda q:q[0][j]); print('single',j,[(round(e[j],4),k) for e,k in rank[:12]],flush=True)\\n  W=[]; keep={k for _,k in rank[:30]}|{'z','b','threshold'}\\n  for nm,X,Q in cache:\\n   if nm not in keep:continue\\n   for nn,H,_ in cache:\\n    Z=H[ix]-Q@(Q.T@H[ix]); n=np.linalg.norm(Z,axis=0);good=n>1e-8\\n    if not any(good):continue\\n    U,S,VH=np.linalg.svd(Z[:,good]/n[good],full_matrices=False); L=U[:,S>1e-7]; P=np.c_[Q,L]; e=A[:,j]-P@(P.T@A[:,j]); score=np.mean(abs(e)/np.maximum(1-(P*P).sum(1),1e-6)); W.append((score,nm,nn))\\n  for sc,nm,nn in sorted(W)[:14]:\\n   f=D(np.c_[G[nm],G[nn]]); pred=f[iv]@fit(f[ix],A[:,j]); print('pair',j,round(sc,5),round(np.mean(abs(pred-J[:,j])),5),nm,nn)\\nif __name__=='__main__':\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];run(s,np.arange(52),np.arange(52,72))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graphscan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: isolated panel maps and unconstrained heads -> H2: nonlinear readouts after composed panel maps; best fixed-split MAEs are 0.07466 for y and 0.04627 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the archived solver unchanged\",\"rejected_reason\":\"The public validator reports 0.114269 scalar MAE and 0.074807 trajectory MAE.\"}],\"rationale\":\"Use leave-one-out predictions within the first 52 rows to rank low-dimensional compositions before checking them on the fixed 20-row holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "244c46c6b1c14249eb61ade4a2e211725c9c3fb2dfdf9c28303b27e6d17e6df6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35417.18,
+      "usage_known": true,
+      "prompt_tokens": 39678,
+      "cached_tokens": 12672,
+      "completion_tokens": 1413
+    }
+  ]
+}

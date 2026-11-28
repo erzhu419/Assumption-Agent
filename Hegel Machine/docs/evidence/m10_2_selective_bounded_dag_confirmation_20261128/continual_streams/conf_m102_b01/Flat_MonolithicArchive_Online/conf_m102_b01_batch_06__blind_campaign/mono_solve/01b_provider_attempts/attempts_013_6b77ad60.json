@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b77ad602dfa4617a6da4c7426aace85",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:53.348418+00:00",
+  "ended_at_utc": "2026-11-28T15:34:25.880334+00:00",
+  "request_sha256": "32fd2d4f28f5a637a98e90ac923f899b2b3c8a17ee4cb6a3449a5c43259c9418",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74207,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44232,
+    "cached_tokens": 12672,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py')\\ns=p.read_text()\\ns='\\\"\\\"\\\"Panel-calibrated cyclic readouts for the scalar and the trajectory.\\\"\\\"\\\"\\\\n'+s[s.index('import numpy'):s.index('def _latent')]+'''def _coordinates(study, x):\\n    z = _inverse(_calibration(study['panel_a']), x)\\n    b, c = study['panel_b'], study['panel_c']\\n    w = _aff(_dead(z)) @ _ls(_aff(_dead(b['u'])), b['v'])\\n    q = _cross(w) @ _ls(_cross(c['u']), c['v1'])\\n    return z, w, q\\n\\n\\ndef _designs(study, x):\\n    z, _, q = _coordinates(study, x)\\n    cyclic = q * np.roll(z, -1, axis=1)\\n    state = _aff(np.column_stack((q, cyclic.sum(axis=1))))\\n    # Bound the scalar features jointly as the leading cyclic product grows.\\n    attenuation = 1.0 / (1.0 + 0.5 * cyclic[:, :1] ** 2)\\n    scalar = _aff(np.column_stack((q, cyclic)) * attenuation)\\n    return state, scalar\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    state, scalar = _designs(study, np.concatenate((train['x'], study['test']['x'])))\\n    y = scalar[n:] @ _ls(scalar[:n], train['y'])\\n    p = state[n:] @ _ls(state[:n], train['traj'])\\n    tail = p[:, -1]\\n    return {'y_hat': y, 'state_pred': p,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; n=len(x)\\nstate,_=m._designs(s,x); z,w,q=m._coordinates(s,x)\\ndef fit(tr,te):\\n    ss=dict(s,train={k: (v[tr] if k in ('x','y','traj') else v) for k,v in t.items()},test={'x':x[te]})\\n    r=m.solve_batch(ss); p=r['state_pred']; y=r['y_hat']\\n    assert np.allclose(r['diagnostics_vec'],[y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()])\\n    return [np.abs(y-t['y'][te]).mean(),np.abs(p-t['traj'][te]).mean(),np.abs(p-t['traj'][te]).mean(0).max()]\\ncv=fit(np.arange(52),np.arange(52,n)); print('Prescribed 52/20: y, trajectory, worst timestamp MAE',cv); assert max(cv)<.038\\nallcv=[]\\nfor i in range(40):\\n    j=np.random.default_rng(i).permutation(n); allcv.append(fit(j[:52],j[52:]))\\nprint('Worst of 40 random splits:',np.max(allcv,axis=0))\\nfor k,mag in [('response amplitude',abs(state@m._ls(state,t['traj'][:,-1]))),('calibrated amplitude',np.max(abs(z),axis=1)),('B amplitude',np.max(abs(w),axis=1)),('cyclic-product amplitude',abs(q[:,0]*z[:,1]))]:\\n    j=np.argsort(mag); print(k,fit(j[:52],j[52:]))\\nr=m.solve_batch(s); assert r['y_hat'].shape==(36,) and r['state_pred'].shape==(36,8) and r['diagnostics_vec'].shape==(4,) and all(np.isfinite(v).all() for v in r.values())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 free auxiliary interactions → H2 rational attenuation of the C1 cyclic readout; the selected scalar design reached 0.00941 prescribed MAE and 0.02563 worst extrapolation MAE in the comparison.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the C2 interaction readout\",\n      \"rejected_reason\": \"Its worst extrapolation MAE was 0.07225 versus 0.02563 for the simpler bounded cyclic design.\"\n    }\n  ],\n  \"rationale\": \"Promote the tested bounded cyclic design with an unattenuated intercept and retain the separate cyclic trajectory readout. Verify the exact artifact on the prescribed split, random and extrapolation slices, and the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "8de579045daf09c4696d68260a6eee45296f2e657244e952eabdcd9ffb25a407",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32530.65,
+      "usage_known": true,
+      "prompt_tokens": 44232,
+      "cached_tokens": 12672,
+      "completion_tokens": 1401
+    }
+  ]
+}

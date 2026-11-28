@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca27b1162a724cc398081465996c716b",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:20.522151+00:00",
+  "ended_at_utc": "2026-11-28T15:45:41.925700+00:00",
+  "request_sha256": "dedd61d84cbb1f9b83fac02e1629f68bbef2b08d62d14dc4022ae624c03630eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21778,
+    "cached_tokens": 12672,
+    "completion_tokens": 810
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ==== $f; grep -nE '^def |^[[:space:]]+(return |[a-zA-Z_]+ = ).*(exp|sin|cos|tanh|panel|traj|cross|dot|@|abs|predict)' \\\"$f\\\"; done; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport glob,importlib.util,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ss=dict(s,train={k:v[:52] if k!='summary' else v for k,v in tr.items()},test={'x':tr['x'][52:]})\\nfor f in sorted(glob.glob('*solver.py')):\\n q=importlib.util.spec_from_file_location('s',f);m=importlib.util.module_from_spec(q);q.loader.exec_module(m)\\n try:\\n  p=m.solve_batch(ss);print(f,'CV y/traj',np.mean(abs(p['y_hat']-tr['y'][52:])),np.mean(abs(p['state_pred']-tr['traj'][52:])))\\n except Exception as e:print(f,repr(e))\\nprint('times',s['eval_times']);print('traj sv',np.linalg.svd(tr['traj'][:52],compute_uv=False))\\nu,v=(s['panel_a'][k] for k in ['u','v']); i,j=np.triu_indices(len(u),1);b=np.median((v[i]-v[j])/(u[i]-u[j]),axis=0); a=np.median(v-u*b,axis=0);r=v-a-u*b;print('robust diagonal',a,b,'errors',np.quantile(np.linalg.norm(r,axis=1),[0,.5,.75,.85,.9,1]));good=np.linalg.norm(r,axis=1)<.12; A=np.c_[u,np.ones(len(u))]; C=np.linalg.lstsq(A[good],v[good],rcond=None)[0];print('robust affine',good.sum(),C,np.quantile(np.linalg.norm(A@C-v,axis=1),[0,.5,.75,.85,.9,1]));\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace whole-solver transfer with independently identified calibration, trajectory rank, and response branches; archived 52/20 MAE is 0.434267 for target and 0.242742 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use ordinary least squares for calibration\",\n      \"rejected_reason\": \"The calibration panel has a residual norm as large as 12.16, so test whether a robust fit recovers a clean diagonal or affine map first.\"\n    }\n  ],\n  \"rationale\": \"Evaluate every archived solver on the same split, then use robust calibration and the trajectory singular spectrum to distinguish which parts of those graphs can transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "936af35c9395aab70c371697f064a292642c0212ceaafa1a71252e07678a3909",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21402.51,
+      "usage_known": true,
+      "prompt_tokens": 21778,
+      "cached_tokens": 12672,
+      "completion_tokens": 810
+    }
+  ]
+}

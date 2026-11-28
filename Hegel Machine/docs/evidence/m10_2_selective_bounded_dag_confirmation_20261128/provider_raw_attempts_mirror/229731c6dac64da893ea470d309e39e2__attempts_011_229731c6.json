@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "229731c6dac64da893ea470d309e39e2",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:27:52.043469+00:00",
+  "ended_at_utc": "2026-11-28T16:28:18.411078+00:00",
+  "request_sha256": "7bbf244fcf153922cad48dbe7924538427f9d7a2c505e6fa428e163fb7e053f8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38421,
+    "cached_tokens": 12672,
+    "completion_tokens": 1040
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, copy, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); rng=np.random.default_rng(151)\\nx=np.vstack((tr['x'],s['test']['x'])); a=s['panel_a']; z=m._reference_inverse(a,x); u=a['u']; target=a['v']-.18*np.tanh(1.8*u)+.32*np.sin(2.4*np.roll(u,2,axis=1)); coef=np.linalg.lstsq(np.c_[np.ones(n)[:len(u)],u],target,rcond=None)[0] if False else None\\n# Check the inverse against independently estimated diagonal calibration coefficients.\\nkeep=np.max(abs(a['v']-u),axis=1)<3\\nfor _ in range(5):\\n    c=np.array([np.linalg.lstsq(np.c_[np.ones(sum(keep)),u[keep,j]],target[keep,j],rcond=None)[0] for j in range(4)]).T\\n    e=np.linalg.norm(target-c[0]-u*c[1],axis=1); keep=e<max(.001,5*np.median(e))\\nerr=np.max(abs(c[0]+z*c[1]+.18*np.tanh(1.8*z)-.32*np.sin(2.4*np.roll(z,2,axis=1))-x)); print('inverse forward residual max:',err,'calibration inliers:',sum(keep)); assert err<1e-9\\n\\ndef check(idx):\\n    fit=np.setdiff1d(np.arange(n),idx); st=copy.deepcopy(s)\\n    st['train']={k:v[fit] if k in ('x','y','traj') else v for k,v in tr.items()}; st['test']['x']=tr['x'][idx]\\n    r=m.solve_batch(st); yy=r['y_hat']; tt=r['state_pred']; end=tt[:,-1]\\n    assert yy.shape==(len(idx),) and tt.shape==tr['traj'][idx].shape and np.isfinite(yy).all() and np.isfinite(tt).all()\\n    np.testing.assert_allclose(r['diagnostics_vec'],[yy.mean(),yy.std(),end.mean(),end.std()],atol=1e-14,rtol=0)\\n    yerr=abs(yy-tr['y'][idx]); terr=abs(tt-tr['traj'][idx]); return np.array([yerr.mean(),terr.mean(),terr.mean(0).max(),yerr.max(),terr.max()])\\nprimary=check(np.arange(52,n)); edge=np.argsort(np.linalg.norm(z[:n],axis=1))[-20:]; other=np.array([check(edge)]+[check(rng.choice(n,20,replace=False)) for _ in range(24)])\\nprint('columns: scalar MAE, trajectory MAE, worst timestamp MAE, max scalar abs error, max trajectory abs error'); print('52/20:',primary); print('outer latent norm slice:',other[0]); print('worst across 25 stress splits:',other.max(axis=0)); assert max(primary[:3].max(),other[:,:3].max())<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 stalled fixed-point inversion → H2 bracketed calibration inverse with compact B→C1 readouts; the prototype reached 0.00415 scalar MAE and 0.00655 worst-timestamp MAE, and the saved solver has passed schema validation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact saved artifact on the prescribed split, randomized splits, and a high-latent-norm slice. Check calibration forward residuals and diagnostics independently so schema compliance does not stand in for scientific validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4af71749a47ec82e41ae7e43e51cc8bac03c91f0b363000176a197fcb296b575",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26889.46,
+      "usage_known": true,
+      "prompt_tokens": 38421,
+      "cached_tokens": 12672,
+      "completion_tokens": 1040
+    }
+  ]
+}

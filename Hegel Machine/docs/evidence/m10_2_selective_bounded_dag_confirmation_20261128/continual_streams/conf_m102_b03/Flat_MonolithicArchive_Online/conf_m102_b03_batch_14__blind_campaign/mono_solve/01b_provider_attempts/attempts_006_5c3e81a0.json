@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c3e81a04b59415398d8ac1ef75ea00c",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:15.430928+00:00",
+  "ended_at_utc": "2026-11-28T15:57:49.414900+00:00",
+  "request_sha256": "4122aa2a037e933e53a705b8e0bf41cf848c338846b80f5d1bd38fa0692ca362",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39600,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29022,
+    "cached_tokens": 12672,
+    "completion_tokens": 1349
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/model14.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ndef D(x):return np.c_[np.ones(len(x)),x]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nfun={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'atan':np.arctan,'sat':lambda a:a/(1+a*a),'abs':lambda a:a/(1+abs(a)),'soft':lambda a:np.logaddexp(0,a),'sq':lambda a:a*a,'cube':lambda a:a**3}\\ndef calibration(panel,verbose=False):\\n u,v=panel['u'],panel['v']; A=D(u); b=ls(A,v)\\n for _ in range(8):\\n  r=np.linalg.norm(A@b-v,axis=1); mask=r<4*np.median(r);b=ls(A[mask],v[mask])\\n u,v=u[mask],v[mask]; w=np.roll(u,2,axis=1)\\n def design(u,w,j,f,g,k):return np.c_[np.ones(len(u)),u[:,j],w[:,j],fun[f](k[0]*u[:,j]),fun[g](k[1]*w[:,j])]\\n results=[]\\n for f in fun:\\n  for g in fun:\\n   def residual(k,ret=False):\\n    a=[design(u,w,j,f,g,k) for j in range(4)]; b=[ls(a[j],v[:,j]) for j in range(4)];return np.stack(b) if ret else np.column_stack([a[j]@b[j]-v[:,j] for j in range(4)]).ravel()\\n   opt=least_squares(residual,[1.3,2.15],bounds=(.15,5),max_nfev=35);results.append((np.std(opt.fun),f,g,opt.x,residual(opt.x,True)))\\n results.sort(key=lambda a:a[0]); err,f,g,k,co=results[0]\\n if verbose:\\n  for r in results[:7]:print('cal',r)\\n def predict(x):\\n  z=np.linalg.solve(b[1:].T,(x-b[0]).T).T\\n  def forward(z):return np.column_stack([design(z,np.roll(z,2,axis=1),j,f,g,k)@co[j] for j in range(4)])\\n  for _ in range(18):\\n   R=forward(z)-x\\n   if np.max(abs(R),initial=0)<1e-10:break\\n   jacs=np.stack([(forward(z+e)-forward(z-e))/(2e-5) for e in np.eye(4)*1e-5],axis=2)\\n   delta=np.linalg.solve(jacs,R[...,None])[...,0];z-=np.clip(delta,-.7,.7)\\n  return z\\n return predict\\n\\ndef operators(panel,verbose=False):\\n u=panel['u']; funcs={**fun,'adj':lambda x:x*np.roll(x,1,axis=1),'opposite':lambda x:x*np.roll(x,2,axis=1)}; outs=[]\\n for key,v in panel.items():\\n  if key=='u':continue\\n  res=[]\\n  for name,f in funcs.items():\\n   for lin in (False,True):\\n    def design(x,k):return D(np.c_[x,f(k*x)] if lin else f(k*x))\\n    def score(k):\\n     a=design(u,k[0]);return (a@ls(a,v)-v).ravel()\\n    for initial in (1,2.15,3.1):\\n     opt=least_squares(score,[initial],bounds=(.15,5),max_nfev=35); k=opt.x[0]; a=design(u,k);e=(a@ls(a,v)-v)/(1-np.diag(a@np.linalg.pinv(a)))[:,None];res.append((np.std(e),name,lin,k))\\n  res.sort();err,name,lin,k=res[0]\\n  if verbose:print(key,res[:9])\\n  def fit(name,lin,k):\\n   f=funcs[name]\\n   def design(x):return D(np.c_[x,f(k*x)] if lin else f(k*x))\\n   co=ls(design(u),v);return lambda x:design(x)@co\\n  outs.append(fit(name,lin,k))\\n return outs\\n\\nif __name__=='__main__':\\n import pickle\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; pred=calibration(s['panel_a'],True);z=pred(s['train']['x']);print('z range',z.min(),z.max()); operators(s['panel_c'],True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/model14.py; sed -n '61,100p' /tmp/hegel_continual_archive/*08_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 incomplete affine/adjacent-channel mapping -> H2 separable own/opposite nonlinear calibration; best archived 52/20 worst endpoint MAE is 0.14281.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use high-order per-channel interpolation\",\"rejected_reason\":\"The greedy fits require large cancelling coefficients and may extrapolate poorly beyond the panel.\"}],\"rationale\":\"Profile the shared nonlinear parameters against panel A inliers and rank panel C operator families by leave-one-out residual before fitting the output graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "730b66d13372b753e9c67f64776b2332dd1b291bd5c984b5efe3425b4913511a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34492.34,
+      "usage_known": true,
+      "prompt_tokens": 29022,
+      "cached_tokens": 12672,
+      "completion_tokens": 1349
+    }
+  ]
+}

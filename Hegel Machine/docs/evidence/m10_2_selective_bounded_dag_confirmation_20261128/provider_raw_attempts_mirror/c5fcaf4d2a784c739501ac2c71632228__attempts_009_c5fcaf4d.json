@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c5fcaf4d2a784c739501ac2c71632228",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:18.489220+00:00",
+  "ended_at_utc": "2026-11-28T14:55:44.414744+00:00",
+  "request_sha256": "8c1b62f68d99b45ee66148e9f4ed63b6f4e70364f00c157664068f77db21ecda",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62430,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41105,
+    "cached_tokens": 12672,
+    "completion_tokens": 984
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np\\nca,cb,cm=np.load('/tmp/panels.npy',allow_pickle=True); print(repr(cm))\\nPY\\nsed '/for mode in (\\\\x27linear\\\\x27,\\\\x27p2\\\\x27,\\\\x27p3\\\\x27,\\\\x27sep\\\\x27,\\\\x27all\\\\x27):/,$d' /tmp/paths.py >/tmp/compact.py\\ncat >>/tmp/compact.py <<'PY'\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import svd\\nfrom scipy.optimize import least_squares\\nT0=T.copy(); H=lambda p:-np.expm1(-t[:,None]*p); q=least_squares(lambda p:(T[tr]-ls(H(p),T[tr].T).T@H(p).T).ravel(),[1.8,.4]); Y=np.c_[y,ls(H(q.x),T.T).T]; print('rates',q.x)\\nS=z['xa']; print('summary compare',s['train']['summary'],[y.mean(),y.std(),T[:,-1].mean(),T[:,-1].std()]);\\nfor k in ['xa','xaC','xaD','xaB']:\\n a=z[k]; print(k,'range',a.min(0),a.max(0))\\nD=z['xaD']; C=z['xaC']; B=z['xaB'];\\nfor inp,name in [(D,'D'),(C,'C'),(np.c_[D,C],'DC')]:\\n for powers in [2,3]:\\n  pp=PolynomialFeatures(powers,include_bias=True); f=pp.fit_transform(inp); nm=pp.get_feature_names_out();\\n  if name!='DC':f=np.c_[f,C if name=='D' else D]; nm=np.r_[nm,[('C' if name=='D' else 'D')+str(j) for j in range(4)]]\\n  norm=np.linalg.norm(f[tr],axis=0); A=f/norm\\n  for j in range(3):\\n   active=list(range(len(nm))); winner=[]\\n   while len(active)>4:\\n    aa=A[tr][:,active]; u,d,v=svd(aa,full_matrices=False); sh=d*d/(d*d+1e-6); co=v.T@((sh/d)*(u.T@Y[tr,j])); ev=A[:,active]@co-Y[:,j]; loo=(abs(ev[tr]/np.maximum(1-u**2@sh,1e-6))).mean(); mae=abs(ev[va]).mean(); winner.append((loo,mae,len(active),np.std(ev[tr]),list(zip(nm[active],np.round(co/norm[active],4))))); active.pop(int(np.argmin(np.abs(co))))\\n   w=min(winner,key=lambda x:x[0]); print(name,powers,j,w[:4],w[4] if w[2]<27 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 multiscale branch regression → H2 compact C/D branch readouts with two temporal modes; C-linear/D-cubic holdout scalar MAE is 0.0239 and worst-time state MAE is 0.02270.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep all calibrated paths in the final estimator\",\"rejected_reason\":\"A smaller C/D readout already meets the scalar threshold; test whether pruning improves extrapolation before adding paths.\"}],\"rationale\":\"Use training-only leave-one-out error for subtree pruning and record scalar and temporal-mode errors on the reserved split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "650a4f432ba10c54689e81ae3c7dec0dcc7bc09419ee9caf98a7141b882d94cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25924.25,
+      "usage_known": true,
+      "prompt_tokens": 41105,
+      "cached_tokens": 12672,
+      "completion_tokens": 984
+    }
+  ]
+}

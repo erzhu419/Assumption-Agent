@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8d2d2c5d2d746ea9954bc6d43d4bc13",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:05.333644+00:00",
+  "ended_at_utc": "2026-11-28T15:55:46.588868+00:00",
+  "request_sha256": "56783acc898f06a7ef669b0fccd2748047c0ebc8934d5b950df0c74a91d4d2ea",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36864,
+    "cached_tokens": 12672,
+    "completion_tokens": 1820
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/j08.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom itertools import combinations_with_replacement as cwr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=[s['panel_b'][k] for k in ('u','v')]; D=np.load('/tmp/feat08.npz'); z,y,t=[D[k] for k in ('z','y','t')]; n=52\\nfit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-11)[0]\\ndef q(a):return np.column_stack([a[:,i]*a[:,j] for i,j in cwr(range(4),2)])\\n# Identify a common scalar warp independently via alternating linear solves.\\nu0=u.copy(); z0=z.copy(); feats=[]\\nfor deg in [2,3,4,5,6,7,8]:\\n def bas(a):return np.stack([a**(2*k+1) for k in range(deg)],axis=-1)\\n U=bas(u); w=fit(np.c_[np.ones(len(u)),u],v); c=np.zeros(deg);c[0]=1\\n for _ in range(100):\\n  X=U@c; w=fit(np.c_[np.ones(len(u)),X],v); B=np.einsum('nid,ij->njd',U,w[1:]).reshape(v.size,deg); c=fit(B-B.reshape(len(u),4,deg).mean(0)[None,:,:].repeat(len(u),axis=0).reshape(v.size,deg),(v-v.mean(0)).ravel())\\n X=U@c; w=fit(np.c_[np.ones(len(u)),X],v); print('panel',deg,np.std(np.c_[np.ones(len(u)),X]@w-v),c/c[-1],flush=True); feats.append((str(deg),bas(z)@c))\\nnp.savez('/tmp/warp08.npz',**dict(feats))\\n# Train-only variable projection: tuned shared warp and polynomial readout, with shrinkage for weak terms.\\nyh=np.c_[y,t]; rng=np.random.default_rng(555); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(6)]; results=[]\\nfor mode in ['sin','rat','tanh','poly','rpow','shift']:\\n for grammar in [0,1,2,3,4,5]:\\n  for target in [0,1,2]:\\n   es=[]; ps=[]\\n   for p in splits:\\n    I,J=p[:52],p[52:]; Y=yh[I,:] if target==2 else yh[I,:1] if target==0 else yh[I,1:];\\n    def design(h):\\n     a,b,c=h; W={'sin':lambda:z+a*np.sin(b*z)+c*z**3,'rat':lambda:z+a*z/(1+b*z*z)+c*z**3,'tanh':lambda:z+a*np.tanh(b*z)+c*z**3,'poly':lambda:z+a*z**3+b*z**5+c*z**7,'rpow':lambda:z*(1+a*z*z)/(1+b*z*z)**c,'shift':lambda:z+a*np.sin(b*z+c)}[mode]();\\n     groups=[np.ones((len(z),1)),W,z,q(W),q(z),np.column_stack([W[:,i]*z[:,j] for i in range(4) for j in range(4)]),W**3,W**4]\\n     gs=[(0,1,3),(0,1,2,3),(0,1,2,3,4),(0,1,2,3,5),(0,1,2,3,6,7),(0,1,2,3,4,5,6,7)][grammar]\\n     A=np.column_stack([groups[i]/np.maximum(groups[i][I].std(0),1e-4) if i else groups[i] for i in gs]); reg=np.concatenate([np.full(groups[i].shape[1],{0:1e-8,1:.002,2:.010,3:.002,4:.045,5:.030,6:.035,7:.045}[i]) for i in gs]);return A,reg\\n    def obj(h, ret=False):\\n     A,R=design(h); M=A[I]; C=cho_solve(cho_factor(M.T@M+np.diag(R**2)),M.T@Y); return A@C if ret else np.r_[(M@C-Y).ravel(),(R[:,None]*C).ravel()]\\n    starts={'sin':[[-.4,2.8,0],[-.5,2.1,0]],'rat':[[-1,1,.08],[-1.2,3,-.1]],'tanh':[[-.7,1.6,0],[-.8,2,-.1]],'poly':[[1,-.2,.1]],'rpow':[[1,1,.2],[-1,2,-.2]],'shift':[[-.4,2.8,0],[-.5,2.1,0]]}[mode]; lb=[-4,.05,-4] if mode!='poly' else [-5,-5,-5]; ub=[5,8,5];\\n    o=min((least_squares(obj,h,bounds=(lb,ub),max_nfev=60,ftol=1e-5) for h in starts),key=lambda r:r.cost); pr=obj(o.x,True); es.append(np.mean(abs(pr[J]-Y[:1]*0-(yh[J,:] if target==2 else yh[J,:1] if target==0 else yh[J,1:])),0)); ps.append(pr); \\n    if not len(es)>1: par=o.x\\n   e=np.array(es); k=e[:,0] if target!=1 else e.mean(1); results.append((target,k.mean(),max(k),k[0],mode,grammar,par.tolist(),float(np.mean(e[0,1:])) if target==2 else None)); np.save('/tmp/pr08_%s_%d_%d.npy'%(mode,grammar,target),ps)\\nfor tar in range(3):\\n print('RESULTS',tar,*sorted([r for r in results if r[0]==tar],key=lambda r:r[1])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/j08.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed coordinate warp) -> H2 (train-fold shared warp with regularized polynomial readout); best fixed-split y MAE is 0.04068.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Estimate a shared odd warp directly from panel B and separately test whether fold-local variable projection can explain the endpoints and trajectories with a compact polynomial readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1b646bcf985c10cf0eecd662db777dfe46d77ea1a10c8b40b68e3d50504f43ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42035.16,
+      "usage_known": true,
+      "prompt_tokens": 36864,
+      "cached_tokens": 12672,
+      "completion_tokens": 1820
+    }
+  ]
+}

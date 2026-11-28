@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d11392b7ad184888b162ec170bf25c49",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:19.554177+00:00",
+  "ended_at_utc": "2026-11-28T15:00:51.309059+00:00",
+  "request_sha256": "2664abb23bc158c3f3f774e0c418e44f031423871178a7d95e39c6cde5c5ed36",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30434,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24971,
+    "cached_tokens": 12672,
+    "completion_tokens": 1315
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 /tmp/panel_diag.py | sed -n '1,42p'; cat > /tmp/compare_maps.py <<'PY'\\nimport sys,importlib.util,numpy as np,pickle\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/'; s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; train=s['train']; x=train['x']; n=len(x)\\ndef load(i):\\n sp=importlib.util.spec_from_file_location('node',p+'_frozen_nodes/node_0'+str(i)+'.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m);return m\\nkernel=load(2)._kernel\\n\\ndef features(x,d):\\n return np.column_stack([np.ones(len(x))]+[x[:,c].prod(axis=1) for k in range(1,d+1) for c in combinations_with_replacement(range(x.shape[1]),k)])\\ndef make(u,v,d=1,robust=False):\\n a=features(u,d); keep=np.ones(len(u),bool)\\n for _ in range(6):\\n  c=np.linalg.lstsq(a[keep],v[keep],rcond=None)[0]\\n  e=np.linalg.norm(a@c-v,axis=1); k=e<max(.001,3*np.median(e))\\n  if not robust or np.array_equal(keep,k) or k.sum()<a.shape[1]+4:break\\n  keep=k\\n return lambda x:features(x,d)@c, c, e\\n\\ndef score(z):\\n gr=kernel(z,z); vals=[]\\n for te in [np.arange(52,72),*np.array_split(np.random.default_rng(407).permutation(n),4)]:\\n  tr=np.setdiff1d(np.arange(n),te); st=train['traj']; modes=np.linalg.svd(st[tr],full_matrices=False)[2][:2]; y=np.c_[train['y'][tr],st[tr]@modes.T]; g=gr[np.ix_(tr,tr)].copy();g.flat[::len(tr)+1]+=1e-6*np.mean(np.diag(g));pred=gr[np.ix_(te,tr)]@np.linalg.solve(g,y);vals.append([np.mean(abs(pred[:,0]-train['y'][te])),np.mean(abs(pred[:,1:]@modes-st[te]))])\\n return np.r_[vals[0],np.max(vals[1:],axis=0)]\\na,b,c=[s['panel_'+i] for i in 'abc']; fits={}; base={ 'raw':x }\\nfor name,panel,key in [('A',a,'v'),('B',b,'v'),('C1',c,'v1'),('C2',c,'v2')]:\\n for d in [1,2]:\\n  for rev in [False,True]:\\n   nm=f'{name}{d}{\\\"inv\\\" if rev else \\\"\\\"}'; u,v=panel['u'],panel[key]; fn,co,e=make(v if rev else u,u if rev else v,d,name=='A');fits[nm]=fn;base[nm]=fn(x);print(nm,'calib median',round(np.median(e),5))\\n if name=='A':\\n  _,co,_=make(a['u'],a['v'],1,True);base['deA']=(x-co[0])@np.linalg.inv(co[1:]);\\nfor d in [1,2]:\\n for flip in [False,True]:\\n  k='v'+str(1+flip); l='v'+str(2-flip);f,_,e=make(c[k],c[l],d); nm=k+'to'+l+str(d);fits[nm]=f;print(nm,'calib median',round(np.median(e),5))\\nresults=[]\\nfor on,z in base.items():\\n for nm,f in [('id',lambda x:x),*fits.items()]:\\n  for scale in [.5,1,2]:\\n   zz=f(z)*scale; results.append((score(zz),on,nm,scale))\\nprint('ranking by worst of official and additional slices');\\nfor q in sorted(results,key=lambda r:max(r[0]))[:30]:print(q[0].round(5),*q[1:])\\nfor q in results:\\n if q[1:] in [('deA','B1',1),('deA','B2',1),('raw','id',1),('deA','id',1)]:print('reference',q)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare_maps.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived affine composition -> compare panel-derived coordinate maps; panel B quadratic calibration worsens median leave-one-out residual from 0.345 to 0.485.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt an unconstrained quadratic for panel B\",\"rejected_reason\":\"Held-out panel-row prediction is worse than the affine fit despite a smaller training residual.\"}],\"rationale\":\"Use the exact frozen kernel to screen panel-derived maps on the official split and additional disjoint folds, while separately checking which calibration relationships generalize.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "449985819e14836b18e9cf064e99600b620ba8e4de4797b75e6b2394555dff33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31752.95,
+      "usage_known": true,
+      "prompt_tokens": 24971,
+      "cached_tokens": 12672,
+      "completion_tokens": 1315
+    }
+  ]
+}

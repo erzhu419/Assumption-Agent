@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "49dd6649009748ec9d494cbae28124dc",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:30.925103+00:00",
+  "ended_at_utc": "2026-11-28T15:58:04.832095+00:00",
+  "request_sha256": "8b4aee3923ca752c4a77dc88b71372b849bc1c11b192b20b5dc323995084581f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30880,
+    "cached_tokens": 12672,
+    "completion_tokens": 1460
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from scipy.optimize import minimize_scalar', 'from scipy.optimize import least_squares, minimize_scalar')\\na = s.index('def _quadratic(')\\nb = s.index('def solve_batch(', a)\\ns = s[:a] + '''def _scalar_design(w):\\n    pair_sum = w[:, 0] * w[:, 2] + w[:, 1] * w[:, 3]\\n    return _affine(np.column_stack((w, pair_sum)))\\n\\n\\ndef _trajectory(w, wt, trajectories, times):\\n    x = _affine(w)\\n    projected = (np.linalg.qr(x, mode='reduced')[0].T @ trajectories).T\\n\\n    def basis(rates):\\n        return -np.expm1(-np.outer(times, rates))\\n\\n    def residual(rates):\\n        a = basis(rates)\\n        return (a @ _fit(a, projected) - projected).ravel()\\n\\n    rates = least_squares(residual, [.4, 1.8], bounds=([.005, .6], [.8, 15.])).x\\n    a = basis(rates)\\n    amplitudes = _fit(a, trajectories.T).T\\n    return (_affine(wt) @ _fit(x, amplitudes)) @ a.T\\n\\n\\n''' + s[b:]\\na = s.index('    y_hat = _quadratic')\\nb = s.index('    last =', a)\\ns = s[:a] + '''    y_hat = _scalar_design(wt) @ _fit(_scalar_design(w), train['y'])\\n    state_pred = _trajectory(w, wt, np.asarray(train['traj']), np.asarray(study['eval_times']))\\n''' + s[b:]\\np.write_text(s)\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('batch_solver', path)\\nb = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']; n = len(tr['y']); rng = np.random.default_rng(718)\\nbias, gain = b._calibration(s['panel_a']); f, mix = b._operator(s['panel_b']); z = (tr['x'] - bias) / gain\\nw = b._affine(np.cos(f*z)) @ mix\\nfolds = [('52/20', np.arange(n))]\\nfolds += [(f'random-{j}', rng.permutation(n)) for j in range(8)]\\nfolds += [('outer-input', np.argsort(np.max(np.abs(z), axis=1))), ('large-state', np.argsort(np.linalg.norm(w, axis=1)))]\\nworst = np.zeros(5)\\nfor name, order in folds:\\n    i, j = order[:52], order[52:]\\n    held = dict(s, train={**tr, **{k: tr[k][i] for k in ('x','y','traj')}} , test={'x': tr['x'][j]})\\n    r = b.solve_batch(held); y, t = r['y_hat'], r['state_pred']\\n    assert y.shape == (20,) and t.shape == (20,8)\\n    np.testing.assert_array_equal(r['diagnostics_vec'], [y.mean(), y.std(), t[:,-1].mean(), t[:,-1].std()])\\n    ey, et = np.abs(y-tr['y'][j]), np.abs(t-tr['traj'][j]); stats = np.array([ey.mean(), et.mean(), et.mean(0).max(), ey.max(), et.max()]); worst = np.maximum(worst, stats)\\n    assert np.all(stats < .038), (name, stats)\\n    print(name, np.round(stats, 7))\\nprint('worst: scalar MAE, trajectory MAE, timestamp MAE, scalar absolute error, trajectory absolute error:', np.round(worst, 7))\\nr = b.solve_batch(s)\\nperm = rng.permutation(len(s['test']['x']))\\nrp = b.solve_batch(dict(s, test={'x': s['test']['x'][perm]}))\\nfor k in ['y_hat', 'state_pred']:\\n    np.testing.assert_allclose(rp[k], r[k][perm], atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(rp['diagnostics_vec'], r['diagnostics_vec'], atol=1e-12, rtol=0)\\nprint('test-row permutation invariance passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full quadratic and empirical temporal modes -> H2 shared pair interaction and two profiled decay rates; prototype worst split MAEs are 0.00496 for y and 0.00420 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unrestricted quadratic and empirical temporal basis\",\n      \"rejected_reason\": \"The unrestricted scalar fit has a higher worst-split MAE (0.00566 vs. 0.00496); the temporal fits are effectively tied, with the two-rate basis remaining stable across folds.\"\n    }\n  ],\n  \"rationale\": \"Promote the constrained candidate because it preserves the fixed-split margin and improves the worst scalar slice. Verify the exact saved entry point on each fold, checking both outputs, every timestamp, diagnostics, and test-row permutation invariance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "aa51f0a37bd2da00aae3a4129fec81145664a9cf9311db985528fff1cc3c1d2f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34412.86,
+      "usage_known": true,
+      "prompt_tokens": 30880,
+      "cached_tokens": 12672,
+      "completion_tokens": 1460
+    }
+  ]
+}

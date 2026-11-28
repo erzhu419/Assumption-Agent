@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9dd56ff93df4015b9fd32ca024bff3a",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:31.375165+00:00",
+  "ended_at_utc": "2026-11-28T15:03:15.081862+00:00",
+  "request_sha256": "14da8d01991b30cf0bf7dc07d983f28790df1c3e5b976c8274e62d5579208f15",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52481,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34660,
+    "cached_tokens": 12672,
+    "completion_tokens": 1873
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-conditioned Gaussian regression for scalar and trajectory outputs.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize, minimize_scalar\\n\\n\\ndef affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef coordinates(study, x):\\n    a, b, c = (study['panel_'+key] for key in 'abc')\\n    offset, gain = [], []\\n    for u, v in zip(a['u'].T, a['v'].T):\\n        d = affine(u[:,None]); k = np.argsort(u); l, r = np.triu_indices(len(u), 1)\\n        slope = np.median((v[k[r]]-v[k[l]]) / (u[k[r]]-u[k[l]]))\\n        coeff = np.array([np.median(v-slope*u), slope])\\n        for _ in range(5):\\n            keep = np.argsort(abs(v-d@coeff))[:int(.8*len(u))]\\n            coeff = fit(d[keep], v[keep])\\n        offset.append(coeff[0]); gain.append(coeff[1])\\n    cx = (x-offset)/gain\\n    bx = affine(x)@fit(affine(b['u']), b['v'])\\n    u = c['u']\\n    vmap = lambda q: affine(np.arctan(2.12*q))\\n    def wmap(q, a):\\n        return np.column_stack((affine(q), q*q/(1+a*q*q)))\\n    def loss(a):\\n        d = wmap(u, a)\\n        return np.sum((d@fit(d, c['v2'])-c['v2'])**2)\\n    alpha = minimize_scalar(loss, bounds=(0., 1.), method='bounded').x\\n    v = fit(vmap(u), c['v1']); w = fit(wmap(u, alpha), c['v2'])\\n    return cx, bx, vmap(cx)@v, wmap(bx,alpha)@w\\n\\n\\ndef gp(x, xt, y, additive=False):\\n    mu, sd = y.mean(), max(y.std(), 1e-12)\\n    yy = (y-mu)/sd\\n    n, d = x.shape\\n    sq = (x[:,None,:]-x[None,:,:])**2\\n    dsq = (xt[:,None,:]-x[None,:,:])**2\\n    def kernel(dist, th):\\n        w = np.exp(th[:d]); e = -.5*dist*w\\n        per = np.exp(e) if additive else None\\n        k = np.exp(e.sum(2))\\n        if additive:\\n            extra = np.exp(th[d])*per/d\\n            k = k + extra.sum(2)\\n        return k, per if not additive else extra, e\\n    def objective(th):\\n        k, extra, e = kernel(sq, th)\\n        noise = np.exp(th[-1]); k.flat[::n+1] += noise\\n        fac = cho_factor(k, check_finite=False)\\n        al = cho_solve(fac, yy, check_finite=False)\\n        g = .5*(cho_solve(fac, np.eye(n), check_finite=False)-np.outer(al,al))\\n        joint = k.copy(); joint.flat[::n+1] -= noise\\n        if additive:\\n            joint -= extra.sum(2)\\n        grad = np.einsum('ij,ijk->k', g, e*(joint[:,:,None]+(extra if additive else 0.)))\\n        if additive:\\n            grad = np.r_[grad,np.sum(g*extra.sum(2))]\\n        return .5*yy@al+np.log(np.diag(fac[0])).sum(), np.r_[grad, noise*np.trace(g)]\\n    th = minimize(objective, np.r_[np.zeros(d),[-2.] if additive else [],-9.], jac=True,\\n                  method='L-BFGS-B', bounds=[(-11,7)]*d+([(-10,5)] if additive else [])+[(-15,-2)]).x\\n    k = kernel(sq,th)[0]; k.flat[::n+1] += np.exp(th[-1])\\n    return mu+sd*(kernel(dsq,th)[0]@cho_solve(cho_factor(k),yy))\\n\\n\\ndef solve_batch(study):\\n    tr = study['train']; x, xt = tr['x'], study['test']['x']; n = len(x)\\n    cx, bx, v, w = coordinates(study, np.concatenate((x,xt)))\\n    q = np.column_stack((cx,v)); y = gp(q[:n],q[n:],tr['y'],True)\\n    q = np.column_stack((bx,w)); z = tr['traj']; _, _, vt = np.linalg.svd(z,full_matrices=False)\\n    a = gp(q[:n],q[n:],z@vt[0]); state = a[:,None]*vt[0]\\n    return {'y_hat':y, 'state_pred':state,\\n            'diagnostics_vec':np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/stress.py <<'PY'\\nimport copy,importlib.util,pickle,sys,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']\\np=importlib.util.spec_from_file_location('cand',sys.argv[1] if len(sys.argv)>1 else '/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nfor name,h in [('public',np.arange(52,72)),('first',np.arange(20)),('middle',np.arange(24,44)),('corners',np.argsort(np.linalg.norm(x,axis=1))[-20:]),('x0-low',np.argsort(x[:,0])[:20]),('x3-high',np.argsort(x[:,3])[-20:])]:\\n k=np.setdiff1d(np.arange(len(x)),h); t=copy.deepcopy(s); t['train']={key:t['train'][key][k] for key in ('x','y','traj')}; t['test']={'x':x[h]};r=m.solve_batch(t); e=np.abs(r['y_hat']-s['train']['y'][h]);f=np.abs(r['state_pred']-s['train']['traj'][h]);print(name,round(e.mean(),6),round(f.mean(),6),'worst horizon',round(f.mean(0).max(),6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: panel-B kernel -> H2: independently fitted nonlinear panel features with separate output regressions; exploratory public response MAE is 0.02653 and worst tested response slice MAE is 0.04821.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use one shared kernel for both outputs\",\"rejected_reason\":\"The strongest response predictors and trajectory-amplitude predictors used different panel coordinates.\"}],\"rationale\":\"Build a self-contained candidate and measure actual trajectory MAE and worst-horizon error alongside response MAE on the public and extrapolation splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9aac2ae207db66fb35ded67cc5304861d63cde53f2672bae0b471c496d4e7000",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43705.6,
+      "usage_known": true,
+      "prompt_tokens": 34660,
+      "cached_tokens": 12672,
+      "completion_tokens": 1873
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c337716f0e04f418497d094262360b0",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:43:25.890808+00:00",
+  "ended_at_utc": "2026-11-28T16:44:23.951399+00:00",
+  "request_sha256": "be02583eb9e28da38f4727d1b3ee0259c4fabbd336b4a35e973c59558cb8d636",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28036,
+    "cached_tokens": 12672,
+    "completion_tokens": 1702
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe12.py <<'PY'\\nimport sys,pickle, numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport conf_m102_b02_batch_05_solver as old\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nD=old.D; fit=old.fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z,b0=old.parts(s); z=z[:len(x)]; b0=b0[:len(x)]\\na=s['panel_a']; _,_,e=old.cal(s,x); f=old.AF(a['u']); w=fit(f[e<2],a['v'][e<2]); print('A residual',np.quantile(np.linalg.norm(f@w-a['v'],axis=1),[0,.5,.9,1]),'coefficients',w.round(3))\\nfns={'aff':(lambda x,a,b:x,[1,0]), 'tanh':(lambda x,a,b:np.tanh(a*x)+b*x,[1,0]), 'atan':(lambda x,a,b:np.arctan(a*x)+b*x,[1,0]), 'erf':(lambda x,a,b:erf(a*x)+b*x,[1,0]), 'asinh':(lambda x,a,b:np.arcsinh(a*x)+b*x,[1,0]), 'sin':(lambda x,a,b:np.sin(a*x)+b*x,[1,0]), 'soft':(lambda x,a,b:x/(1+a*x*x)**b,[1,.8]), 'softsign':(lambda x,a,b:x/(1+a*abs(x))**b,[1,1]), 'dead':(lambda x,a,b:np.sign(x)*np.maximum(abs(x)-a,0)**b,[.3,1.5]),'clip':(lambda x,a,b:np.clip(x,-a,a)+b*x,[.7,0]), 'exp':(lambda x,a,b:x*np.exp(-a*x*x)+b*x,[1,0]),'pow':(lambda x,a,b:x+a*np.sign(x)*abs(x)**b,[.5,3])}\\n\\ndef panel(u,v,z):\\n res=[]\\n for name,(fn,p) in fns.items():\\n  def fe(x,q):return D(fn(x,*q))\\n  def err(q):\\n   f=fe(u,q); return (f@fit(f,v)-v).ravel()\\n  lo,hi=([.01,.05],[20,8]) if name in ('soft','softsign','dead','pow') else ([.01,-10],[20,10]);\\n  if name in ('dead','clip'):hi[0]=1.45\\n  qs=[least_squares(err,[aa,p[1]],bounds=(lo,hi),max_nfev=100).x for aa in (p[0],.2 if name in ('dead','clip') else 2.15)]\\n  q=min(qs,key=lambda p:np.linalg.norm(err(p))); res.append((np.sqrt(np.mean(err(q)**2)),name,q.round(4), fe(z,q)@fit(fe(u,q),v)))\\n return sorted(res,key=lambda r:r[0])\\n\\ncoords={'x':x,'z':z,'oldB':b0}; p=s['panel_b']; c=s['panel_c'];\\nfor name,u,t,zz in [('B',p['u'],p['v'],z),('C1',c['u'],c['v1'],z),('C2',c['u'],c['v2'],z),('C12',c['v1'],c['v2'],None)]:\\n r=panel(u,t,z if zz is None else zz); print(name,[(round(v,5),k,q.tolist()) for v,k,q,_ in r]);\\n if zz is not None:\\n  for v,k,q,w in r[:4]:coords[name+k]=w\\n  if name=='C1':c1=r[0][-1]\\n if name=='C12':coords[name]=panel(u,t,c1)[0][-1]\\n\\nif __name__=='__main__':\\n from scipy.spatial.distance import cdist\\n folds=[(np.arange(52),np.arange(52,72))]; ids=np.random.default_rng(700).permutation(72)\\n for val in np.array_split(ids,4):folds.append((np.setdiff1d(ids,val),val))\\n def scores(K):\\n  return np.array([np.mean(abs(y[j]-K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+1e-4*np.eye(len(i)),y[i]))) for i,j in folds])\\n all=[]\\n for key,v in coords.items():\\n  for scale in [.3,1.,2.15]:\\n   for name,ff in [('raw',lambda v:v),('asinh',np.arcsinh),('tanh',np.tanh),('soft',lambda v:v/np.sqrt(1+v*v))]:\\n    h=ff(scale*v)\\n    for form,g in [('base',h),('sep',np.c_[.3*z,h]),('sym',np.c_[.3*z+h,.3*z-h]),('mix',np.c_[h,v]),('nonsep',np.arcsinh(np.c_[.3*z+h,.3*z-h]))]:\\n     dot=g@g.T/g.shape[1]; ds=cdist(g,g,'sqeuclidean')/g.shape[1];\\n     for degree,decay in [(1,0),(2,0),(3,0),(1,1.4),(2,1.4),(3,.15),(3,1.4)]:\\n      K=(1+dot)**degree+ (np.exp(-decay*ds) if decay else 0); sc=scores(K); all.append((sc.mean()+.3*sc.max(),*sc.round(4),key,scale,name,form,degree,decay))\\n print('Best balanced'); print(*sorted(all)[:16],sep='\\\\n');print('Best public');print(*sorted(all,key=lambda t:t[1])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe12.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 inherited dead-zone calibration and scalar kernel → H2 identify a panel-supported nonlinear scalar coordinate map; prior public scalar MAE 0.063042 and trajectory MAE 0.029366.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune on the published split alone\",\"rejected_reason\":\"A low public error can mask extrapolation failures, so compare against four additional held-out folds.\"}],\"rationale\":\"Fit candidate calibration grammars against the reference panels independently of scalar labels, then compare scalar predictions across held-out folds while leaving the trajectory computation unchanged.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "03c7e2903958cca5939b1e60847b2b5fe8a28ecabc97d6cf1b7a4f4c33c33292",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58942.29,
+      "usage_known": true,
+      "prompt_tokens": 28036,
+      "cached_tokens": 12672,
+      "completion_tokens": 1702
+    }
+  ]
+}

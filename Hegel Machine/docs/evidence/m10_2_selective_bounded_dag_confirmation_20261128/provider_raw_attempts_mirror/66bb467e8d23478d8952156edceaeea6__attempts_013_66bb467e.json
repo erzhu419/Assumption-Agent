@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "66bb467e8d23478d8952156edceaeea6",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:35.439802+00:00",
+  "ended_at_utc": "2026-11-28T15:35:06.921469+00:00",
+  "request_sha256": "4c8a869c0a531254976e42c071509120e9b388ce4d5bc736c06b01b21130fa50",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41366,
+    "cached_tokens": 12672,
+    "completion_tokens": 1288
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read(); start=s.index('def solve_batch('); end=s.index('def _panel_b',start); s=s[:start]+s[end:]; start=s.index('def solve_batch('); s=s[:start]; open(p,'w').write(s)\\nPY\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _readouts(q,b,y,z):\\n    from sklearn.linear_model import Lasso\\n    n=len(y)\\n    full=_quad(np.c_[q,b])\\n    cyclic=b*np.roll(q,-1,axis=1)\\n    structural=np.c_[b,cyclic]\\n    fs=np.maximum(full[:n].std(0),.03)\\n    ys=Lasso(alpha=.001,max_iter=12000,tol=1e-7).fit(full[:n]/fs,y).predict(full[n:]/fs)\\n    yc=_ridge(structural[:n],y,structural[n:],1e-6)\\n    zc=_ridge(structural[:n],z,structural[n:],1e-6)\\n    return ys,yc,zc\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']\\n    q=_invert(np.vstack([tr['x'],study['test']['x']]),_fit_calibration(study['panel_a']))\\n    b=_panel_b(study['panel_b'],q)\\n    ys,yc,z=_readouts(q,b,tr['y'],tr['traj'])\\n    y=SCALAR_COMPACT_WEIGHT*yc+(1-SCALAR_COMPACT_WEIGHT)*ys\\n    return {'y_hat':y,'state_pred':z,'diagnostics_vec':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])}\\n\\n\\nSCALAR_COMPACT_WEIGHT = 0.0\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];q=m._invert(tr['x'],m._fit_calibration(s['panel_a'])); b=m._panel_b(s['panel_b'],q); y=tr['y'];z=tr['traj'];rng=np.random.default_rng(741)\\nweights=np.array([0.,.25,.5,.75,1.]); scores=[]\\nfor ix in [np.arange(72),np.argsort(np.linalg.norm(q,axis=1)),* [rng.permutation(72) for i in range(16)]]:\\n    i,j=ix[:52],ix[52:]; l,c,a=m._readouts(q[ix],b[ix],y[i],z[i]); e=np.abs(l[:,None]*(1-weights)+c[:,None]*weights-y[j,None]).mean(0); zerr=np.abs(a-z[j]).mean(); scores.append(e);print('scalar models',e.round(6),'state',round(zerr,6),'worst horizon',round(np.abs(a-z[j]).mean(0).max(),6))\\nD=np.asarray(scores); print('Stress mean',D[1:].mean(0),'Stress worst',D[1:].max(0)); admissible=np.flatnonzero(D[0]<=.038); assert admissible.size; risk=D[1:].mean(0)+.35*D[1:].max(0); w=weights[admissible[np.argmin(risk[admissible])]]; print('Selected compact weight',w)\\na=open(p).read().replace('SCALAR_COMPACT_WEIGHT = 0.0',f'SCALAR_COMPACT_WEIGHT = {w}');open(p,'w').write(a)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full calibrated-B quadratic → H2 cyclic calibrated-B interactions; sparse scalar MAE is 0.03060 and sparse terminal-state MAE is 0.00705 on the required 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Generic nonlinear gating\",\"rejected_reason\":\"The screened compact gates had scalar held-out MAEs above 0.10, while sparse interactions pass 0.038.\"}],\"rationale\":\"The sparse fits independently recover the same four cyclic products for both outputs. Fit those terms directly for trajectories, compare the compact and sparse scalar models on repeated splits and high-norm extrapolation, and verify the selected artifact in a clean process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "1e249b96a98ef80dd2316cf1956ef2dd81caa73435d0f8d78269ae9313b2249f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31480.33,
+      "usage_known": true,
+      "prompt_tokens": 41366,
+      "cached_tokens": 12672,
+      "completion_tokens": 1288
+    }
+  ]
+}

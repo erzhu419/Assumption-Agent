@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "456c5fbb3b1648c2920267e6b2ed9a06",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:32.349440+00:00",
+  "ended_at_utc": "2026-11-28T15:47:09.490778+00:00",
+  "request_sha256": "86f0ea253d78087cc6b54b37b4fc1f72a68015b79602cce9e5de8e31a8999c74",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60620,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37442,
+    "cached_tokens": 12672,
+    "completion_tokens": 1537
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/quadratic_baseline.py\\nsed -i '/^def _quadratic/,$d' /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _scalar_design(w):\\n    interaction = w[:, 0] * w[:, 2] + w[:, 1] * w[:, 3]\\n    return np.column_stack((_affine(w), interaction))\\n\\n\\ndef _trajectory(w, wt, trajectories, times):\\n    # Profile out the two amplitudes in each training trajectory when fitting rates.\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ _fit(b, trajectories.T) - trajectories.T).ravel()\\n\\n    rates = least_squares(residual, [.25, 1.25], bounds=([.01, .05], [5., 7.])).x\\n    b = basis(rates)\\n    amplitudes = _fit(b, trajectories.T).T\\n    return _affine(wt) @ _fit(_affine(w), amplitudes) @ b.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    cal = _calibration(study['panel_a'])\\n    encode = _operator(study['panel_b'])\\n    w = encode(_decode(train['x'], cal))\\n    wt = encode(_decode(study['test']['x'], cal))\\n    y = _scalar_design(wt) @ _fit(_scalar_design(w), train['y'])\\n    state = _trajectory(w, wt, np.asarray(train['traj']), np.asarray(study['eval_times']))\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; d=s['train']\\nm=runpy.run_path(p+'batch_solver.py'); solve=m['solve_batch']\\nbaseline=runpy.run_path('/tmp/quadratic_baseline.py')['solve_batch']\\nz=m['_decode'](d['x'],m['_calibration'](s['panel_a'])); w=m['_operator'](s['panel_b'])(z)\\nsplits={'fixed':np.arange(72)}\\nfor k in range(12): splits[f'random{k}']=np.random.default_rng(k).permutation(72)\\nfor name,v in [('latent_edge',np.abs(z).max(1)),('operator_high',np.linalg.norm(w,axis=1)),('operator_low',-np.linalg.norm(w,axis=1))]: splits[name]=np.argsort(v)\\ndef check(r, n):\\n    y,h,g=(r[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    for a,shape in [(y,(n,)),(h,(n,len(s['eval_times']))),(g,(4,))]:\\n        assert isinstance(a,np.ndarray) and a.shape==shape and np.isfinite(a).all()\\n    np.testing.assert_array_equal(g,[y.mean(),y.std(),h[:,-1].mean(),h[:,-1].std()])\\ncheck(solve(s),len(s['test']['x']))\\nfor label, model in [('compact',solve),('quadratic',baseline)]:\\n    scores=[]\\n    for name,idx in splits.items():\\n        i,j=idx[:52],idx[52:]; q=dict(s,train={k:d[k][i] for k in ('x','y','traj')},test={'x':d['x'][j]}); yy,hh=q['train']['y'],q['train']['traj'][:,-1]; q['train']['summary']=np.array([yy.mean(),yy.std(),hh.mean(),hh.std()])\\n        r=model(q); check(r,len(j))\\n        e=np.mean(abs(r['state_pred']-d['traj'][j]),axis=0)\\n        scores.append([np.mean(abs(r['y_hat']-d['y'][j])),e.mean(),e.max(),e[-1]])\\n    scores=np.array(scores)\\n    print(label,'columns: scalar, trajectory, worst timestamp, terminal')\\n    print('fixed',scores[0],'worst',scores.max(0),'slices',[list(splits)[k] for k in scores.argmax(0)])\\n    if label=='compact': assert np.max(scores)<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full quadratic readouts) -> H2 (tied opposite-channel scalar interaction and affine amplitudes for two relaxation modes); across 16 splits, the compact probe achieved 0.00583 worst scalar MAE, 0.00455 worst trajectory MAE, and 0.00588 worst-timestamp MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the full quadratic solver\",\n      \"rejected_reason\": \"It passes the gate, but its worst-timestamp MAE across the same splits is 0.01352, versus 0.00588 for the compact model.\"\n    },\n    {\n      \"option\": \"Use an empirical rank-two time basis\",\n      \"rejected_reason\": \"It is slightly better on the prescribed split, but the two-exponential basis has lower mean trajectory MAE and lower worst-timestamp MAE across splits.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact panel-B model because it lowers the worst scalar and timestamp errors. Verify the exact deliverable in an isolated process on the prescribed split, 12 random splits, and three boundary slices, and check all output shapes and diagnostic identities.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ea63f03994905c28ade574ef9db6f6da347d2bf944b4fa2bdea28eaddb40c965",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37140.05,
+      "usage_known": true,
+      "prompt_tokens": 37442,
+      "cached_tokens": 12672,
+      "completion_tokens": 1537
+    }
+  ]
+}

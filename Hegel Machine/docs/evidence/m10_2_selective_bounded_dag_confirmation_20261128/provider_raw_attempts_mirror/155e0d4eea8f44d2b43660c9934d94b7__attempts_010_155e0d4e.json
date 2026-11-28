@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "155e0d4eea8f44d2b43660c9934d94b7",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:16:51.597568+00:00",
+  "ended_at_utc": "2026-11-28T16:17:30.548119+00:00",
+  "request_sha256": "635fa63e0b6f2c87daa87b8ebfa1b048d391e5439b69a2e520b803e80aa77e87",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62395,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38679,
+    "cached_tokens": 12672,
+    "completion_tokens": 1725
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Recover latent coordinates and build separate state and readout bases.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-11)[0]\\n\\n\\ndef _basis(x, j, scales):\\n    a = x[:, j]\\n    b = x[:, (j + 1) % 4]\\n    c = x[:, (j + 2) % 4]\\n    return np.column_stack((_affine(x), a / (1 + scales[0] * a*a), np.sin(scales[1] * c), a*b))\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    magnitude = np.linalg.norm(v, axis=1)\\n    keep = magnitude < 3 * np.median(magnitude)\\n    if keep.sum() < 12:\\n        keep = np.ones(len(u), dtype=bool)\\n    u, v = u[keep], v[keep]\\n\\n    def coefficients(h):\\n        return [_fit(_basis(u, j, h), v[:, j]) for j in range(4)]\\n\\n    def forward(x, h, co):\\n        return np.column_stack([_basis(x, j, h) @ co[j] for j in range(4)])\\n\\n    h = least_squares(lambda h: (forward(u, h, coefficients(h)) - v).ravel(),\\n                      [1.25, 2.15], bounds=([0.1, 0.3], [5, 4])).x\\n    co = coefficients(h)\\n    inverse_start = _fit(_affine(v), u)\\n    return lambda x: forward(x, h, co), inverse_start\\n\\n\\ndef _readout(latent):\\n    scale = np.sqrt(0.8)\\n    w = np.arctan(scale * latent) / scale\\n    columns = [np.ones(len(w))]\\n    for degree in (1, 2, 3):\\n        for indices in combinations_with_replacement(range(w.shape[1]), degree):\\n            if len(set(indices)) <= 2:\\n                columns.append(np.prod(w[:, indices], axis=1))\\n    return np.column_stack(columns)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train, test = (np.asarray(study[k]['x'], dtype=float) for k in ('train', 'test'))\\n    x = np.concatenate((train, test), axis=0)\\n    forward, inverse_start = _calibration(study['panel_a'])\\n    latent = np.array([least_squares(lambda z: forward(z[None])[0] - observed,\\n                                     initial, gtol=1e-12).x\\n                       for observed, initial in zip(x, _affine(x) @ inverse_start)])\\n    state, readout = _affine(latent), _readout(latent)\\n    n = len(train)\\n    return {'z': state[:n], 'zt': state[n:],\\n            'readout_train': readout[:n], 'readout_test': readout[n:]}\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\np='/holdout_task/'\\nm=runpy.run_path(p+'node_00.py'); frozen=[runpy.run_path(p+'_frozen_nodes/node_0'+str(i)+'.py')['run_node'] for i in (1,2)]\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); rng=np.random.default_rng(7823)\\nfeatures=m['run_node']({'__input__':s}); a,b=features['readout_train'],features['z']; r=[]\\nfolds=[rng.choice(n,20,False) for _ in range(24)]+[np.argsort(b[:,j])[k:k+12] for j in range(1,5) for k in (0,n-12)]\\nfor j in folds:\\n i=np.setdiff1d(np.arange(n),j); local={k:t[k][i] for k in ('y','traj')}; f={'readout_train':a[i],'readout_test':a[j],'z':b[i],'zt':b[j]}; pred=frozen[1]({'node_00':f,'node_01':frozen[0]({'__input__':{'train':local},'node_00':f})}); r.append([abs(pred['y_hat']-t['y'][j]).mean(),abs(pred['state_pred']-t['traj'][j]).mean()])\\nprint('random mean/worst MAE:',np.mean(r[:24],axis=0),np.max(r[:24],axis=0)); print('coordinate-tail worst MAE:',np.max(r[24:],axis=0))\\npanel=s['panel_a']; mask=np.linalg.norm(panel['v'],axis=1)<3*np.median(np.linalg.norm(panel['v'],axis=1)); residual=[]\\nfor j in np.flatnonzero(mask):\\n keep=np.arange(len(mask))!=j; forward,_=m['_calibration']({k:v[keep] for k,v in panel.items()}); residual.append(np.abs(forward(panel['u'][j:j+1])[0]-panel['v'][j]));\\nprint('panel A leave-one-out worst absolute error:',np.max(residual)); assert np.max(residual)<.005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the full rational cubic with a two-coordinate arctangent cubic; the screened candidate gave 0.02383 public and 0.03946 worst additional readout MAE, with the exact artifact check pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the full rational cubic\",\n      \"rejected_reason\": \"It failed the official readout threshold and had worse errors on the additional splits.\"\n    }\n  ],\n  \"rationale\": \"The smaller basis gives a clear improvement across the screening splits while preserving the affine trajectory model. Verify the exact artifact in an isolated process, then measure fresh random-split, coordinate-tail, and calibration leave-one-out errors separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "34e95f0fe76ca4a0fb2c5d51643f9073c4127bd7c5f83dbe4b7a14b13113a907",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38949.18,
+      "usage_known": true,
+      "prompt_tokens": 38679,
+      "cached_tokens": 12672,
+      "completion_tokens": 1725
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f4fb76f4e89c44a397002496748c560a",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:55.927106+00:00",
+  "ended_at_utc": "2026-11-28T15:19:21.580950+00:00",
+  "request_sha256": "069d8ccb1ab7ea028571fbedc3990b6806c9678e339062df5f8581b932e7b60a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 35067,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26068,
+    "cached_tokens": 12672,
+    "completion_tokens": 968
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nsink = runpy.run_path('node_01.py')\\nupstream = runpy.run_path('_frozen_nodes/node_00.py')['run_node']\\nb = upstream({'__input__': s})\\na = s['panel_a']; train = s['train']; n = len(train['x']); ix = np.arange(n)\\nfit = sink['_fit_calibration']; design = sink['_design']; invert = sink['_invert']\\nclean = np.linalg.norm(a['v'] - a['u'], axis=1) < 3\\npa_loo = []\\nfor i in ix[:len(clean)][clean]:\\n    keep = np.arange(len(clean)) != i\\n    c = fit({k: v[keep] for k,v in a.items()})\\n    pa_loo.append(float(np.max(np.abs(design(a['u'][i:i+1], len(c)) @ c - a['v'][i]))))\\nprint('panel_A_clean_LOO_max_abs:', max(pa_loo), 'excluded_gross_outliers:', int((~clean).sum()))\\npb = s['panel_b']; pb_res = sink['_b_features'](pb['u'], b['p']) @ b['w'] - pb['v']\\nprint('panel_B_reference_MAE:', np.mean(abs(pb_res)))\\nc = fit(a); x = np.concatenate((train['x'], s['test']['x'])); q = invert(x, c)\\nprint('inverse_forward_max_abs:', np.max(abs(design(q, len(c)) @ c - x)))\\nfolds = list(np.array_split(ix, 6)); folds += [np.argsort(np.max(abs(q[:n]), axis=1))[-12:]]\\nworst = np.zeros(3)\\nfor j, val in enumerate(folds):\\n    keep = np.setdiff1d(ix, val)\\n    st = copy.copy(s); st['train'] = {k: train[k][keep] for k in ('x', 'y', 'traj')}; st['test'] = {'x': train['x'][val]}\\n    out = sink['run_node']({'__input__':st, 'node_00':b})\\n    ey = abs(out['y_hat'] - train['y'][val]).mean()\\n    e = abs(out['state_pred'] - train['traj'][val]); m = np.array([ey, e.mean(), e.mean(axis=0).max()])\\n    assert np.all(np.isfinite(m)) and m.max() < .038\\n    print('fold',j,'scalar, trajectory, worst horizon:',m)\\n    worst = np.maximum(worst,m)\\nprint('worst slices:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine inverse -> sparse cubic panel-A inversion with frozen panel B; official held-out MAEs are 0.003156 for the scalar and 0.004189 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The official split passes, but it does not separately stress high-amplitude inputs, individual horizons, or panel-A calibration stability.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the accepted artifact without editing it: check panel-A leave-one-out residuals, the frozen panel-B fit, inverse consistency, and both predictions across contiguous folds and a high-amplitude holdout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3335b8fc8c26d644d9018c4a5dfeea5ca344c47aa88e256a4d015225b53174f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26070.61,
+      "usage_known": true,
+      "prompt_tokens": 26068,
+      "cached_tokens": 12672,
+      "completion_tokens": 968
+    }
+  ]
+}

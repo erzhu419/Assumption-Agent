@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "beeb22a94bde4cc2942125b6e3af08b0",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:09.422959+00:00",
+  "ended_at_utc": "2026-11-28T15:48:35.976236+00:00",
+  "request_sha256": "42691ad76085960659862797c2e9aa52babddd9db70e136198ea752f0f5cb8ab",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41803,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28986,
+    "cached_tokens": 12672,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/read09.py <<'PY'\\nfrom probe09 import *\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef op(u,v,f,k,lo,hi):\\n def res(k):\\n  a=f(u,k);return (a@ls(a,v)-v).ravel()\\n p=least_squares(res,k,bounds=(lo,hi),max_nfev=300,gtol=1e-12).x;c=ls(f(u,p),v);return np.mean(res(p)**2)**.5,p,c,f(q,p)@c\\nout={}\\nfor pn,vn,w0,name in [('panel_b','v',2.6,'B'),('panel_c','v2',1.3,'W')]:\\n u=s[pn]['u'];v=s[pn][vn]\\n for kind in ['c','lc','cp','lcp','lsc','l2c']:\\n  r,p,c,o=op(u,v,lambda x,k:features(x,kind,k[0]),[w0],[w0-.3],[w0+.3]);print(name,kind,r,p);print(c if kind in ('lc','lcp','lsc') else '')\\n  if kind=='lc':out[name]=o\\nu=s['panel_c']['u'];v=s['panel_c']['v1']\\nfor fn in [np.arctan,np.tanh,np.sin]:\\n for base in [False,True]:\\n  for sh in [False,True]:\\n   def f(x,k):\\n    z=fn(k[0]*x+(k[1:] if sh else 0)); return aff(np.c_[x,z] if base else z)\\n   r,p,c,o=op(u,v,f,[2.15]+[0]*4*sh,[.4]+[-1]*4*sh,[5]+[1]*4*sh);print('C',fn.__name__,base,sh,r,p);print(c if r<.001 else '')\\n   if fn==np.arctan and sh and not base:out['C']=o\\nY=s['train']['y']; T=s['train']['traj']; _,_,vt=np.linalg.svd(T,full_matrices=False); Z=T@vt[:2].T\\nsets={'Q':q,**out}; sets.update({a+b:np.c_[sets[a],sets[b]] for a,b in itertools.combinations(sets,2)})\\nfor name,x in sets.items():\\n for kind in ['l','l2','l2p','l23p','ls','lsc','lt','lr']:\\n  a=features(x,kind,1.25)\\n  if a.shape[1]>=49:continue\\n  pred=[a[52:]@ls(a[:52],t[:52]) for t in (Y,Z)]; print(name,kind,*np.round([np.mean(abs(pred[0]-Y[52:])),np.mean(abs(pred[1]@vt[:2]-T[52:])),*np.mean(abs(pred[1]-Z[52:]),axis=0)],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/read09.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel maps -> H2 periodic B/C2 maps and a separate saturating C1 map; panel B linear-to-periodic LOO MAE falls from 0.568 to 0.000120.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine or low-degree polynomial features suffice for panel B.\",\"empirical_witness\":\"Panel B LOOCV MAE is 0.568 for affine and 0.218 for affine plus squares, versus 0.000120 with a shared-frequency trigonometric basis.\",\"causal_blanket_diagnosis\":\"The omitted periodic terms change the operator substantially before either outcome is fitted.\",\"sublated_pivot\":\"Profile compact trigonometric bases for B and C2, and test a shifted saturating map for C1 before selecting outcome readouts.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the independent calibration panels to identify compact operator maps, then compare scalar and low-rank trajectory readouts separately on held-out observations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9c8e03861f0a06a9502356f8ecc20afe22f1bdd9a6a428e81c7efcabb4c8f585",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26552.33,
+      "usage_known": true,
+      "prompt_tokens": 28986,
+      "cached_tokens": 12672,
+      "completion_tokens": 1065
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "34da5eb55c4a40098c3fb6920fc9802e",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:58.599562+00:00",
+  "ended_at_utc": "2026-11-28T15:24:36.782508+00:00",
+  "request_sha256": "d8525ac8a05a2c2e9996b7dc28000d257d99d6612bcef6ab2b8a08730f4e6789",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32335,
+    "cached_tokens": 12672,
+    "completion_tokens": 1663
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/sparse06.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as comb, combinations\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(suppress=True,precision=4,linewidth=160)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\ndef one(x):return np.c_[np.ones(len(x)),x]\\nix=list(comb(range(4),2))\\ndef P(x):return np.column_stack([one(x)]+[x[:,i]*x[:,j] for i,j in ix])\\ndef D(x,q):return np.c_[one(x),x*x,x*x/(1+q*x*x)]\\np=s['panel_a']; u,v=p['u'],p['v']; keep=np.linalg.norm(v,axis=1)<6\\nF=lambda x:np.c_[P(x),x**3]; a=ls(F(u[keep]),v[keep]); print('A',a)\\np=s['panel_b']; b=ls(one(p['u']),p['v']); p=s['panel_c']; u=p['u']; c=ls(P(u),p['v1']); print('C1',c)\\nq=least_squares(lambda q:(D(u,q)@ls(D(u,q),p['v2'])-p['v2']).ravel(),[.25],gtol=1e-13).x; d=ls(D(u,q),p['v2']); print('C2',q,d)\\ntr=s['train']; x=tr['x']; z=np.array([least_squares(lambda zz:(F(zz[None])@a-xx).ravel(),xx,gtol=1e-12).x for xx in x]); w=one(z)@b\\nY=np.c_[tr['y'],tr['traj']]; _,_,vt=np.linalg.svd(tr['traj'][:52],full_matrices=False); target=np.c_[tr['y'],tr['traj']@vt[:3].T]\\nnp.savez('/tmp/feat06.npz',z=z,w=w,a=a,b=b,c=c,d=d,q=q,Y=Y,target=target)\\ndef candidates(blocks,extra):\\n n=len(z); feats={}\\n for k,h in blocks.items():\\n  for j,col in enumerate(h.T): feats[f'{k}{j}']=col\\n source=list(feats.items());\\n for (i,g),(j,h) in comb(source,2):\\n  feats[f'{i}*{j}']=g*h\\n for i,g in source:\\n  for tag,h in [('sin',np.sin(g)),('sin125',np.sin(1.25*g)),('tanh',np.tanh(g)),('tanh125',np.tanh(1.25*g)),('sqrat',g*g/(1+.22*g*g)),('rat',g/(1+.22*g*g)),('cube',g**3),('abs',abs(g))]: feats[f'{tag}({i})']=h\\n if extra:\\n  for k,h in blocks.items():\\n   for i,j in combinations(range(h.shape[1]),2):\\n    for sign in (1,-1):\\n     g=h[:,i]+sign*h[:,j]; name=f'{k}{i}{sign:+}{k}{j}'\\n     feats['sin'+name]=np.sin(1.25*g); feats['tanh'+name]=np.tanh(1.25*g); feats['rat'+name]=g/(1+.22*g*g); feats['sqrat'+name]=g*g/(1+.22*g*g)\\n return np.column_stack(list(feats.values())),list(feats)\\ndef omp(A,names,yt):\\n train=np.arange(52); val=np.arange(52,72); A=A-A[train].mean(0); A/=np.maximum(A[train].std(0),1e-7); B=A[train]; mean=yt[train].mean(0); T=yt[train]-mean; S=np.maximum(T.std(0),.01); T=T/S; R=T.copy(); selected=[]; Q=np.empty((len(B),0)); best=(99,None)\\n for step in range(35):\\n  scores=np.linalg.norm(B.T@R,axis=1)/np.maximum(np.sqrt(np.maximum(np.sum(B*B,0)-np.sum((Q.T@B)**2,0),0)),.001); scores[selected]=-1\\n  j=np.argmax(scores); selected.append(j); Q=np.linalg.qr(B[:,selected])[0]; coef=ls(B[:,selected],T); R=T-B[:,selected]@coef; pred=(A[val][:,selected]@coef)*S+mean; err=abs(pred-yt[val]); metric=err.mean();\\n  if metric<best[0]:best=(metric,(step+1,err.mean(0),[names[i] for i in selected],np.mean(abs(R)*S,axis=0)))\\n return best\\nfor hname,h in [('z',z),('w',w)]:\\n c1=P(h)@c; c2=D(h,q)@d\\n for bn,blocks in [('plain',{'z':z,'w':w,'c':c1,'d':c2}),('cd',{'c':c1,'d':c2}),('with linear after',{'z':z,'w':w,'c':c1,'d':c2,'e':one(c1)@b,'f':one(c2)@b})]:\\n  A,names=candidates(blocks,True)\\n  for tag,t in [('all',target),('y',target[:,:1]),('traj',Y[:,1:])]:print(hname,bn,tag,omp(A,names,t),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: dense quadratic readout after cubic calibration -> H2: sparse interactions or rational transforms of the calibrated branches; best reported 52/20 trajectory MAE remains 0.259.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the dense quadratic readout\",\n      \"rejected_reason\": \"It nearly interpolates the fitting rows but fails the held-out gate for both outputs.\"\n    }\n  ],\n  \"rationale\": \"Inspect the panel coefficients for exact structure and screen sparse readouts across calibrated coordinates and panel branches. Use the trajectory modes to test whether the scalar and trajectory outputs share the same features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "68d05845ca438890da51fae16a5c5053dd5249945d556cb26f647622ee52ce37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38181.85,
+      "usage_known": true,
+      "prompt_tokens": 32335,
+      "cached_tokens": 12672,
+      "completion_tokens": 1663
+    }
+  ]
+}

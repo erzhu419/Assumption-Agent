@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "730de9cce395433684188ee6ac0522b7",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:00:07.993567+00:00",
+  "ended_at_utc": "2026-11-28T16:00:24.424670+00:00",
+  "request_sha256": "6ffdbc25827f32f1652783aefe5c194d8eded0c750564e6803a79e47414d42df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20085,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20819,
+    "cached_tokens": 12672,
+    "completion_tokens": 592
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/archive_probe.py <<'PY'\\nimport glob,importlib.util,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ss={**s,'train':{k:(v[:52] if k!='summary' else np.array([tr['y'][:52].mean(),tr['y'][:52].std(),tr['traj'][:52,-1].mean(),tr['traj'][:52,-1].std()])) for k,v in tr.items()},'test':{'x':tr['x'][52:]}}\\nprint('telemetry',s['telemetry_vec'],'traj sv',np.linalg.svd(tr['traj'],compute_uv=False),'target stats',np.std(tr['y']),np.std(tr['traj'],axis=0))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m);o=m.solve_batch(ss);print(f.split('/')[-1],np.mean(abs(o['y_hat']-tr['y'][52:])),np.mean(abs(o['state_pred']-tr['traj'][52:])))\\n except Exception as e: print(f,e)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/archive_probe.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \\\"$f\\\"); grep -E '^def |sin\\\\(|cos\\\\(|tanh\\\\(|expm1|telemetry|pair|panel_c|v1|v2|cross|power|\\\\*\\\\*' \\\"$f\\\"; done; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived end-to-end transfer → H2 isolate panel and downstream components with separate scalar and trajectory checks; pre-LLM 52/20 MAEs are 0.4368 and 0.4777.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Evaluate all archived solvers on the same split and identify compact operator terms for independent panel fitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1dfa929308f85322a32414e01a5c15ec312a51a3b62b4f82d6f1961d0569a240",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 16428.92,
+      "usage_known": true,
+      "prompt_tokens": 20819,
+      "cached_tokens": 12672,
+      "completion_tokens": 592
+    }
+  ]
+}

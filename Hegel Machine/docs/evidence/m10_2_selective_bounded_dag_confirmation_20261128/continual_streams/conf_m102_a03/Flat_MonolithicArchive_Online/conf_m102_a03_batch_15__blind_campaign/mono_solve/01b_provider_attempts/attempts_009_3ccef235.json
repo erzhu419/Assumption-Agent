@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ccef23556c24c4d9e69789968012344",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:19:28.499054+00:00",
+  "ended_at_utc": "2026-11-28T16:20:03.724386+00:00",
+  "request_sha256": "53ac615cd1545b800b12d3482e9298cb29e4493d105a64f79e3f0ee8998214df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52786,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32797,
+    "cached_tokens": 12672,
+    "completion_tokens": 1539
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/stress15.py <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom scipy.optimize import minimize_scalar, least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=(tr[k] for k in ('x','y','traj')); t=s['eval_times']; fit=m['_fit']\\nz=m['_decode'](x,m['_calibration'](s['panel_a'])); b=m['_operator'](s['panel_b'],z); h,q=m['_readouts'](b)\\nN=len(x); rng=np.random.default_rng(624); ix=np.arange(N)\\nsplits=[('fixed',ix[52:])]+[(f'random{i}',rng.permutation(N)[52:]) for i in range(30)]\\nfor k,u in [('observed',x),('decoded',z),('operator',b)]:\\n for j,v in enumerate(u.T):\\n  a=np.argsort(v); splits.extend([(f'{k}{j}_low',a[:20]),(f'{k}{j}_high',a[-20:])])\\nfor k,u in [('decoded',z),('operator',b)]:\\n a=np.argsort(np.linalg.norm(u-np.median(u,axis=0),axis=1)); splits.append((f'{k}_radial',a[-20:]))\\ncompact=np.c_[b,b[:,0]*b[:,2]+b[:,1]*b[:,3]]\\npairs=np.column_stack([b[:,i]+sgn*c*b[:,j] for i in range(4) for j in range(i+1,4) for sgn in (-1,1) for c in (.5,1.,2.)]); factors=np.c_[b,pairs]\\n# Every pairwise square is already in the full quadratic span; test for a rational denominator using only inner-fold losses.\\nassert np.max(abs(q@fit(q,pairs**2)-pairs**2))<1e-9\\nres={}\\nfor label,te in splits:\\n a=np.setdiff1d(ix,te); target=y[a]; traj=T[a]\\n def linear(d): return d[te]@fit(d[a],target)\\n inner=[(np.setdiff1d(np.arange(len(a)),f),f) for f in np.array_split(np.random.default_rng(1538).permutation(len(a)),4)]\\n def cv(d):\\n  d=d[a]; return np.mean([np.mean(abs(d[v]@fit(d[u],target[u])-target[v])) for u,v in inner])\\n best=(cv(compact),-1,0.)\\n for j,w in enumerate(factors.T):\\n  w=w/max(np.sqrt(np.mean(w[a]**2)),1e-10)\\n  for alpha in (.001,.01,.05,.2,.8):\\n   d=compact/(1+alpha*w[:,None]**2); score=cv(d)\\n   if score<best[0]:best=(score,j,alpha)\\n if best[1]<0: rat=linear(compact)\\n else:\\n  w=factors[:,best[1]]; w=w/max(np.sqrt(np.mean(w[a]**2)),1e-10); rat=linear(compact/(1+best[2]*w[:,None]**2))\\n def temporal(D):\\n  S=fit(D[a],traj)\\n  def basis(p):return -np.expm1(-np.outer(t,p))\\n  def err(p):\\n   B=basis(p);return (D[a]@fit(B,S.T).T@B.T-traj).ravel()\\n  p=least_squares(err,[.41,1.82],bounds=([.05,.85],[.83,5.])).x\\n  B=basis(p);return D[te]@fit(B,S.T).T@B.T,p\\n state,p=temporal(b); base=m['_forecast_state'](h[te],h[a],t,traj)\\n mets=np.array([*[np.mean(abs(f-y[te])) for f in (linear(q),linear(compact),rat)],np.mean(abs(base-T[te])),np.mean(abs(state-T[te])),np.mean(abs(base-T[te]),0).max(),np.mean(abs(state-T[te]),0).max()]); res[label]=(mets,best[2],p)\\nfor label in ['fixed','decoded_radial','operator_radial']: print(label,res[label])\\nfor filt in [lambda k:k.startswith('random'),lambda k:not k.startswith('random')]:\\n sub=[(k,v) for k,v in res.items() if filt(k)]; J=np.array([v[0] for _,v in sub]); print('mean',J.mean(0),'worst',J.max(0),'worst names',[sub[i][0] for i in np.argmax(J,0)],'rational adopted',sum(v[1]>0 for _,v in sub),'of',len(sub))\\nprint('training fields',list(tr),'study fields',list(s)); print('compact coefficients',fit(compact[:52],y[:52])); print('full-data compact residual RMSE',np.sqrt(np.mean((compact@fit(compact,y)-y)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress15.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full quadratic and affine trajectory → test an opposite-pair symmetric scalar and zero-offset trajectory; current worst scalar MAE is 0.005980 across 31 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test batch-centered classification, relay modes, or Fokker–Planck/HJB drift\",\n      \"rejected_reason\": \"The supplied study contains one apparatus vector and continuous targets; it provides no cohort labels, relay modes, or density or control-value measurements for those tests.\"\n    }\n  ],\n  \"rationale\": \"The two opposite-pair coefficients are nearly equal and the trajectory intercept is near zero. Test those restrictions on the prescribed split and feature-tail splits, with rational-denominator selection confined to the inner folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4c21b6d8c713c7870376014ea2ede741c2b6b42dac077d652e5574d0ef1cd209",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35759.46,
+      "usage_known": true,
+      "prompt_tokens": 32797,
+      "cached_tokens": 12672,
+      "completion_tokens": 1539
+    }
+  ]
+}

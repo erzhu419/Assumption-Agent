@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b11351fe570433fa21bd93a5f31917e",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_14__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:21:13.823515+00:00",
+  "ended_at_utc": "2026-11-28T16:21:43.499810+00:00",
+  "request_sha256": "1ff868503750bac73da668ac91b2570e2ac3297c425e6684253b9a23305fbf6e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33828,
+    "cached_tokens": 12672,
+    "completion_tokens": 1241
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/down.py <<'PY'\\nfrom ops import *\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nF=features(x); Q=F['zB']; np.set_printoptions(precision=4,suppress=True)\\nqq=lambda z:np.column_stack([z[:,i]*z[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])\\nbase=lambda z:aff(np.c_[z,qq(z)])\\nprint('Q range',Q.min(0),Q.max(0))\\nprint('y quadratic',ls(base(Q)[:52],y[:52])); print('traj quadratic',ls(base(Q)[:52],T[:52])[:,[0,4,7]])\\nfolds=list(KFold(4,shuffle=True,random_state=131).split(y))\\nsp=[(np.arange(52),np.arange(52,72))]+folds\\nres=[]\\ndef score(a,v):\\n out=[]\\n for i,j in sp:\\n  p=a[j]@ls(a[i],v[i]);out.append(np.mean(abs(p-v[j])))\\n return out[0],np.mean(out[1:]),max(out[1:])\\nfor target,v in [('y',y),('T',T)]:\\n for n,z in F.items():\\n  if n not in ['z','x','zB','zBC','zBD','zC','zD']:continue\\n  for dn,a in [('lin',aff(z)),('sq',base(z))]:\\n   for gn, g in [('id',None)]+[(k+str(w),lambda z,g=g,w=w:g(z,w)) for k,g in fn.items() for w in [.22,.5,1,1.25,2.15,2.8,3.5,4.5]]:\\n    for dn2,b in [('one',a if g is None else np.c_[a,g(z)]),('two',None if g is None else np.c_[a,g(z),qq(g(z))])]:\\n     if b is None:continue\\n     res.append((target,*score(b,v),n,dn,gn,dn2))\\n for metric in [1,2]: print('rank',target,metric,sorted([r for r in res if r[0]==target],key=lambda r:r[metric])[:12])\\nfor gn,b in [('B',Q),('BC',F['zBC']),('BD',F['zBD'])]:\\n for deg in [1,2]:\\n  a=aff(b) if deg==1 else base(b)\\n  for link in ['tanh','sin','asinh','linear']:\\n   out=[];pars=[]\\n   for i,j in sp:\\n    def apply(p,d):\\n     w=d@p[:-2];g={'tanh':np.tanh,'sin':np.sin,'asinh':np.arcsinh,'linear':lambda w:w}[link];return p[-2]*g(w)+p[-1]\\n    rs=[]\\n    for scale in [0.75,1.5,2.5,5.]:\\n     p0=np.r_[ls(a[i],y[i])/scale,scale,0.];r=least_squares(lambda p:apply(p,a[i])-y[i],p0,max_nfev=170);rs.append(r)\\n    r=min(rs,key=lambda r:r.cost);out.append(np.mean(abs(apply(r.x,a[j])-y[j])));pars.append(r.x)\\n   print('link',gn,deg,link, np.round(out,4),np.round(pars[0],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/down.py > /tmp/down.out; tail -50 /tmp/down.out; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection relaxation exponential' | head -10\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic polynomial downstream law → H2 nonlinear readout and relaxation driven by calibrated panel B; current 52/20 MAEs are 0.10941 for response and 0.05947 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the unconstrained cubic readout\",\"rejected_reason\":\"It worsens panel B response MAE from 0.1094 to 0.2163.\"}],\"rationale\":\"Panel B improves both outputs after calibration. Compare candidate response links and coordinatewise nonlinear features across several splits before fitting a dedicated time law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b249121aab617e03ae63e0a0ca788b3e711339027c4e4f8cf296720174db356f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30227.86,
+      "usage_known": true,
+      "prompt_tokens": 33828,
+      "cached_tokens": 12672,
+      "completion_tokens": 1241
+    }
+  ]
+}

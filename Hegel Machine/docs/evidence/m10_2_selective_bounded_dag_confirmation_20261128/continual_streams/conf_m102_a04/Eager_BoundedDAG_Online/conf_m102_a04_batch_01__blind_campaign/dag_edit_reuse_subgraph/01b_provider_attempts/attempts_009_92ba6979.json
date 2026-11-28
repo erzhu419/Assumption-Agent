@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "92ba69795572483baa32fddb917672a8",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:39.905057+00:00",
+  "ended_at_utc": "2026-11-28T15:06:09.905785+00:00",
+  "request_sha256": "1f93709de610026560da6e51f941df73b36b50e033f9ed38198fecfd667703fa",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52605,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34587,
+    "cached_tokens": 12672,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _linear_fit(design, response):\\n    return np.linalg.lstsq(design, response, rcond=1e-9)[0]\\n\\n\\ndef _affine_design(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _align(panel):\\n    readout = np.asarray(panel['v'], dtype=float)\\n    reference = np.asarray(panel['u'], dtype=float)\\n    pairs = np.triu_indices(len(reference), 1)\\n    coefficients = []\\n    for x, y in zip(reference.T, readout.T):\\n        dx = (x[:, None] - x)[pairs]\\n        dy = (y[:, None] - y)[pairs]\\n        valid = np.abs(dx) > 1e-8\\n        slope = np.median(dy[valid] / dx[valid])\\n        offset = np.median(y - slope * x)\\n        design = _affine_design(x)\\n        for _ in range(5):\\n            error = np.abs(y - offset - slope * x)\\n            keep = error <= max(5 * np.median(error), 0.00035)\\n            offset, slope = _linear_fit(design[keep], y[keep])\\n        coefficients.append((offset, slope))\\n    return np.asarray(coefficients).T\\n\\n\\ndef _quadratic(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((_affine_design(x), x[:, i] * x[:, j]))\\n\\n\\ndef _curvature(x, q):\\n    xx = x * x\\n    return np.column_stack((_affine_design(x), xx, xx / (1 + q[0] * xx)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train_x = np.asarray(study['train']['x'], dtype=float)\\n    test_x = np.asarray(study['test']['x'], dtype=float)\\n    n_train = len(train_x)\\n    offset, slope = _align(study['panel_a'])\\n    x = (np.vstack((train_x, test_x)) - offset) / slope\\n    panel = study['panel_c']\\n    u = np.asarray(panel['u'], dtype=float)\\n    v1 = np.asarray(panel['v1'], dtype=float)\\n    v2 = np.asarray(panel['v2'], dtype=float)\\n    quad = _quadratic(x) @ _linear_fit(_quadratic(u), v1)\\n\\n    def residual(q):\\n        f = _curvature(u, q)\\n        return (f @ _linear_fit(f, v2) - v2).ravel()\\n\\n    q = least_squares(residual, [0.25], bounds=([0.08], [0.65]), gtol=1e-13).x\\n    curve = _curvature(x, q) @ _linear_fit(_curvature(u, q), v2)\\n    features = np.column_stack((quad, curve))\\n    training = features[:n_train]\\n    features = 0.6 * (features - training.mean(axis=0)) / np.maximum(training.std(axis=0), 0.1)\\n    return {'features': features, 'n_train': n_train}\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived coordinatewise softsign -> H2 calibrated quadratic and rational panel maps; worst MAE across five probe splits was 0.03215, with public-split probe MAEs of 0.01142 for y and 0.01224 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Append raw calibrated coordinates\",\"rejected_reason\":\"They increased worst-split MAE to 0.04548 versus 0.03215 for the panel-only feature map.\"}],\"rationale\":\"Save the panel-derived feature map that cleared both thresholds on all five probe splits. It uses training inputs only for normalization and preserves the frozen nodes and their contracts. Run the official evaluator in an isolated Python process on the saved artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "87316bf17e53dad79536d1cc18cb7bb429762641363f4e1950fcda02714d7c28",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29999.64,
+      "usage_known": true,
+      "prompt_tokens": 34587,
+      "cached_tokens": 12672,
+      "completion_tokens": 1050
+    }
+  ]
+}

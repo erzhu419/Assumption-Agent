@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f8fe49ea935e47a6b2735989cfd215e3",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:55.936199+00:00",
+  "ended_at_utc": "2026-11-28T15:14:23.619186+00:00",
+  "request_sha256": "220e3a5fb56e1b985139f0eb13803177150d184ec43ee0bbe73fea0d9eb13ca3",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 64730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38418,
+    "cached_tokens": 12672,
+    "completion_tokens": 1092
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, numpy as np\\npath='/holdout_task/test_dag_candidate.py'\\nns={'__file__':path,'__name__':'__main__'}\\nexec(compile(open(path).read().split('\\\\nst = pickle.load',1)[0],path,'exec'),ns)\\nrun=ns['run_dag']\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nt=s['train']; n=len(t['x']); idx=np.arange(n)\\nrng=np.random.default_rng(710)\\nfolds=[(f'random_{i}',j) for i,j in enumerate(np.array_split(rng.permutation(n),4))]\\nfor axis in range(t['x'].shape[1]):\\n    order=np.argsort(t['x'][:,axis]); folds += [(f'x{axis}_low',order[:14]),(f'x{axis}_high',order[-14:])]\\nfolds += [('largest_scalar',np.argsort(abs(t['y']))[-14:]),('largest_trajectory',np.argsort(abs(t['traj'][:,-1]))[-14:])]\\nrows=[]\\ndef evaluate(name,j,drop=None):\\n    i=np.setdiff1d(idx,j); sample=copy.deepcopy(s)\\n    sample['train']={k:t[k][i] for k in ('x','y','traj')}\\n    y=t['y'][i]; end=t['traj'][i,-1]\\n    sample['train']['summary']=np.array([y.mean(),y.std(),end.mean(),end.std()])\\n    sample['test']={'x':t['x'][j]}\\n    if drop:\\n        panel,k=drop\\n        sample[panel]={key:np.delete(value,k,axis=0) for key,value in sample[panel].items()}\\n    out,counts=run(sample)\\n    yp=out['y_hat']; tr=out['state_pred']; last=tr[:,-1]\\n    assert set(out)=={'y_hat','state_pred','diagnostics_vec'} and set(counts.values())=={1}\\n    assert yp.shape==t['y'][j].shape and tr.shape==t['traj'][j].shape\\n    assert np.isfinite(yp).all() and np.isfinite(tr).all()\\n    np.testing.assert_allclose(out['diagnostics_vec'],[yp.mean(),yp.std(),last.mean(),last.std()])\\n    rows.append((name,np.mean(abs(yp-t['y'][j])),np.mean(abs(tr-t['traj'][j])),np.max(np.mean(abs(tr-t['traj'][j]),axis=0))))\\nfor name,j in folds: evaluate(name,j)\\nfor p in ('panel_a','panel_c'):\\n    for k in range(len(s[p]['u'])): evaluate(f'{p}_leave_{k}', idx[-20:], (p,k))\\nfor col,name in enumerate(('scalar MAE','trajectory MAE','worst horizon MAE'),1):\\n    worst=max(rows,key=lambda row:row[col]); print(f'{name}: {worst[col]:.6f} ({worst[0]})'); assert worst[col] <= .038\\nprint(f'Passed {len(rows)} stress slices')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic decoder → H2 calibrated matched and shifted panel interactions; accepted public holdout MAE is 0.004800 for the scalar and 0.004311 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the accepted public split alone\",\n      \"rejected_reason\": \"The single split does not test coordinate extremes, large responses, or sensitivity to individual reference rows.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifacts unchanged and stress-test the full DAG on held-out extremes and leave-one-reference-row-out slices, checking both outputs, individual horizons, and the diagnostics handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "20dd6a18f652f644c7910c7f03556cd35a54d768da840871e16eef8895ec41fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28091.65,
+      "usage_known": true,
+      "prompt_tokens": 38418,
+      "cached_tokens": 12672,
+      "completion_tokens": 1092
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "be35983cb13e4db49b249a18bbe12f40",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:59:51.762180+00:00",
+  "ended_at_utc": "2026-11-28T15:00:18.569704+00:00",
+  "request_sha256": "9cb42a9d2690e8122b1ed379e9b76736cae855dc8470d7ef533cbd22f7b525de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39127,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29538,
+    "cached_tokens": 14720,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/mixed.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): from probe import *\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import svd\\nnp.set_printoptions(precision=5,suppress=True,linewidth=180)\\ndef prod(x):return np.c_[x[:,0]*x[:,1],x[:,0]*x[:,3],x[:,1]*x[:,2],x[:,2]*x[:,3]]\\nU=prod(u); C=fit(one(U),c['v1']); a1=one(prod(x))@C; a2=maps['v2']; print('C1 matrix',C,'noise',np.std(one(U)@C-c['v1'])); p=.2696617; c2f=lambda x:one(np.c_[x,x*x,x*x/(1+p*x*x)]); D=fit(c2f(u),c['v2']); print('C2 matrix',D,'Ratios',D[5:9]/D[1:5],D[9:]/D[1:5]);\\nP=PolynomialFeatures(3); F=P.fit_transform(x); cf=fit(F[:52],Y[:52]); print('cubic coefficients',list(zip(P.get_feature_names_out(),cf.round(4)))); print('cubic std',np.std(F[:52]@cf-Y[:52],axis=0))\\ndef report(name,F):\\n F=one(F); co=fit(F[:52],Y[:52]); err=F[52:]@co-Y[52:]; print(name,len(co),np.round(np.std(F[:52]@co-Y[:52],axis=0),5),np.round(np.r_[np.mean(abs(err),0),np.mean(abs(err[:,1:]@T.T))],5)); return co\\nmul=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nfor name,z in [('x',x),('B',b),('c2',a2)]:\\n for quad in [False,True]:\\n  f=np.c_[a1,z,z*z] if quad else np.c_[a1,z]; report(name+str(quad),f); report(name+str(quad)+' int',np.c_[f,mul(a1,z)]); report(name+str(quad)+' diag int',np.c_[f,a1*z]);\\nfor z, name in [(a1,'c1'),(a2,'c2'),(x,'x'),(b,'b')]:\\n for kind,fn in [('sin',lambda z:np.sin(1.25*z)),('tanh',lambda z:np.tanh(1.25*z)),('rat2',lambda z:z/(1+.22*z*z)),('ratabs',lambda z:z/(1+.22*abs(z))),('sq',lambda z:z*z/(1+.22*z*z))]:\\n  f=np.c_[a1,a2,fn(z)]; report(name+' '+kind,f)\\nfor q in [0,.1,.22,.4,1]:\\n for k,zz in [('x',x),('a1',a1),('c2',a2),('b',b)]:\\n  # Per-coordinate quotients of mixed interactions, including a common norm gate.\\n  rr=1/(1+q*zz**2); sf=np.c_[a1,a2,a1*rr,a2*rr,a1/(1+q*np.sum(zz**2,axis=1,keepdims=True))]; report('quot '+k+str(q),sf)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixed.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: use the sparse panel-C bilinear operator and test how it combines with the curvature operator; aligned cubic ridge gives 52/20 MAEs of 0.0254 for y and 0.0319 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the cubic ridge model\",\"rejected_reason\":\"It passes the prescribed split but has little trajectory margin and does not use the recovered operator structure.\"}],\"rationale\":\"The four dominant bilinear terms in panel C v1 suggest a compact basis. Compare operator compositions against the cubic baseline to reduce extrapolation error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "038c1bfb1f0dc784a2e8f3206675f83a17bc50d7e3419cc8eab867cc9bef4831",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26806.35,
+      "usage_known": true,
+      "prompt_tokens": 29538,
+      "cached_tokens": 14720,
+      "completion_tokens": 1102
+    }
+  ]
+}

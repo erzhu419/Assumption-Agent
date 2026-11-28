@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee1679704f264bbfba547ca1fa436404",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:53.080947+00:00",
+  "ended_at_utc": "2026-11-28T15:42:35.076266+00:00",
+  "request_sha256": "b7d66c66781c9b8e929e3a31267346fc6f804bb9b55da05ecf590fea48a461a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58282,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38429,
+    "cached_tokens": 12672,
+    "completion_tokens": 1810
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover calibrated cosine coordinates and fit the two readouts independently.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _operator(study):\\n    u, v = (np.asarray(study['panel_a'][key], float) for key in ('u', 'v'))\\n    distance = np.max(np.abs(v-u), axis=1)\\n    med = np.median(distance)\\n    keep = distance < med + 8*max(np.median(abs(distance-med)), 1e-8)\\n    u, v = u[keep], v[keep]\\n    um, vm = u.mean(0), v.mean(0)\\n    gain = np.sum((u-um)*(v-vm), axis=0)/np.sum((u-um)**2, axis=0)\\n    pu, pv = (np.asarray(study['panel_b'][key], float) for key in ('u', 'v'))\\n    def design(x, k):\\n        return _affine(np.cos(k*x))\\n    def loss(k):\\n        a = design(pu, k)\\n        return np.sum((a@_fit(a, pv)-pv)**2)\\n    grid = np.linspace(0.2, 6., 100)\\n    j = np.argmin([loss(k) for k in grid])\\n    k = minimize_scalar(loss, bounds=(grid[max(0,j-1)], grid[min(len(grid)-1,j+1)]), method='bounded').x\\n    w = _fit(design(pu, k), pv)\\n    return lambda x: design((x-vm)/gain+um, k)@w\\n\\n\\ndef _quadratic(z):\\n    return np.column_stack((_affine(z), *[z[:, i]*z[:, j] for i, j in combinations_with_replacement(range(z.shape[1]), 2)]))\\n\\n\\ndef _trajectory(a, b, t, observations):\\n    # Variable projection over time constants after projecting onto panel coordinates.\\n    c = _fit(a, observations)\\n    fitted = a@c\\n    def basis(p):\\n        return -np.expm1(-t[:,None]*np.exp(p))\\n    def residual(p):\\n        f = basis(p)\\n        return (f@_fit(f, fitted.T)-fitted.T).ravel()\\n    p = least_squares(residual, np.log([0.42, 1.8]), bounds=(-5., 5.)).x\\n    f = basis(p)\\n    return b@(_fit(f, c.T).T@f.T)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    transform = _operator(study)\\n    z = transform(np.asarray(train['x'], float))\\n    q = transform(np.asarray(study['test']['x'], float))\\n    y_hat = _quadratic(q)@_fit(_quadratic(z), np.asarray(train['y'], float))\\n    state_pred = _trajectory(_affine(z), _affine(q), np.asarray(study['eval_times'], float), np.asarray(train['traj'], float))\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/check11.py <<'PY'\\nimport sys,pickle,itertools\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['y']); N=np.arange(n)\\nz=m._operator(s)(tr['x']); A=m._quadratic(z); Y=tr['y']; C=m._fit(A[:52],Y[:52]); print('time',s['eval_times']); print('coef',C.round(6)); print('quadratic eig',np.linalg.eigvalsh(np.diag(C[[5,9,12,14]])+sum((C[k]/2*(np.eye(4)[i,:,None]*np.eye(4)[j,None,:]+np.eye(4)[j,:,None]*np.eye(4)[i,None,:]) for k,(i,j) in enumerate(itertools.combinations_with_replacement(range(4),2),5) if i!=j)))\\nfor name,I,J in [('required',N[:52],N[52:])]+[(f'random {j}',*(lambda p:(p[:52],p[52:]))(np.random.default_rng(j).permutation(n))) for j in range(8)]+[(f'boundary {j}',*(lambda p:(p[:52],p[52:]))(np.argsort(z[:,j]))) for j in range(4)]+[('outer radius',*(lambda p:(p[:52],p[52:]))(np.argsort(np.linalg.norm(z-z.mean(0),axis=1))))]:\\n ss={**s,'train':{k:(v[I] if len(v)==n else v) for k,v in tr.items()},'test':{'x':tr['x'][J]}}\\n o=m.solve_batch(ss); ey=abs(o['y_hat']-tr['y'][J]); et=abs(o['state_pred']-tr['traj'][J]); raw=abs(m._affine(z[J])@m._fit(m._affine(z[I]),tr['traj'][I])-tr['traj'][J]); print(name,'y mean/max',ey.mean(),ey.max(),'state mean/last/max horizon',et.mean(),et[:,-1].mean(),et.mean(0).max(),'unconstrained state',raw.mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check11.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 (linear panel-B readouts) -> H2 (quadratic scalar readout and linear two-mode trajectory); 52/20 scalar MAE improved from 0.06966 to 0.00429, and the linear trajectory fit had a worst-horizon MAE of 0.00528.\",\n  \"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine readout of panel B suffices for both outputs.\",\"empirical_witness\":\"On identical panel features, adding quadratic terms reduces 52/20 scalar MAE from 0.06966 to 0.00429, but worsens trajectory MAE.\",\"causal_blanket_diagnosis\":\"The scalar readout has nonlinear dependence on the panel coordinates that is not needed for the trajectory.\",\"sublated_pivot\":\"Fit separate quadratic scalar and linear two-mode trajectory readouts.\",\"risk_kind\":\"Missing scalar interaction terms and unnecessary trajectory interaction terms.\",\"resolves_nogood_ids\":[\"ng_t05\"]},\n  \"considered_alternatives\":[{\"option\":\"Share the quadratic readout across both outputs\",\"rejected_reason\":\"Held-out trajectory residuals increase despite lower training residuals.\"}],\n  \"rationale\":\"Write the panel-anchored solver, verify the public schema, then measure whether temporal coupling and scalar interactions remain reliable on random and extrapolation splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ed24ff965e5f7fe3a1976a827e855ca491f013a602c0128d4fc483998884fbf8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43094.45,
+      "usage_known": true,
+      "prompt_tokens": 38429,
+      "cached_tokens": 12672,
+      "completion_tokens": 1810
+    }
+  ]
+}

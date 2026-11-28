@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe45081d90be4bada7b439a9f9f33b2c",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:20.300195+00:00",
+  "ended_at_utc": "2026-11-28T15:31:58.132160+00:00",
+  "request_sha256": "a53c4e2fe42fe9a7bd87ac43ab76d62783fb8a5b247414af67763e8d3b9c9b48",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45408,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32640,
+    "cached_tokens": 12672,
+    "completion_tokens": 1585
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/ridge.py <<'PY'\\nfrom graph import *\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=160)\\nz,A,B,C,D=ops(s,np.r_[s['train']['x'],s['test']['x']]); x=s['train']['x']; Y=s['train']['y']; T=s['train']['traj']; n=52\\nprint('meta',s['telemetry_vec'],s['train']['summary']); print('range',z.min(0),z.max(0),Y.min(),Y.max(),'B',B(z).min(0),B(z).max(0)); print('samples',np.c_[z[:20],Y[:20],T[:20,[0,3,7]]]);print('archive');print(open('/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py').read())\\n# Profile the panel mixing matrices against shared coordinatewise transformations.\\nfor d,key,base in [(s['panel_b'],'v','odd'),(s['panel_c'],'v2','even')]:\\n u=d['u']; v=d[key];print('PANEL',base)\\n fs={'odd':[('sin',lambda u,p:u+p[1]*np.sin(p[0]*u),[2.9,-.4]),('sin+cub',lambda u,p:u+p[1]*np.sin(p[0]*u)+p[2]*u**3,[2.9,-.4,0]),('sin+sin',lambda u,p:u+p[1]*np.sin(p[0]*u)+p[3]*np.sin(p[2]*u),[2.9,-.4,5.,.01]),('sin+cos',lambda u,p:u+p[1]*np.sin(p[0]*u)+p[2]*(1-np.cos(p[0]*u)),[2.9,-.4,0]),('cub',lambda u,p:u**3+p[0]*u,[.05])],'even':[('cos',lambda u,p:u+p[1]*(1-np.cos(p[0]*u)),[1.3,.65]),('cos+quad',lambda u,p:u+p[1]*(1-np.cos(p[0]*u))+p[2]*u**2,[1.3,.65,0]),('cos+sin',lambda u,p:u+p[1]*(1-np.cos(p[0]*u))+p[2]*np.sin(p[0]*u),[1.3,.65,0])]}[base]\\n for name,f,p in fs:\\n  def resid(p):\\n   F=aff(f(u,p));return (F@ls(F,v)-v).ravel()\\n  o=least_squares(resid,p,max_nfev=300);print(name,o.x,np.std(o.fun));\\n# Search for a one-dimensional shared latent driver with nonlinear readout.\\nbase={'x':np.r_[x,s['test']['x']],'z':z,'B':B(z),'C':C(z),'D':D(z),'BD':np.c_[B(z),D(z)],'zB':np.c_[z,B(z)],'zD':np.c_[z,D(z)],'BzC':np.c_[B(z),C(z)],'BC':B(z)+C(z),'CB':C(B(z)),'DB':D(B(z)),'BDcomp':B(D(z))}\\nq=np.c_[Y,T[:,[0,2,5,7]]]; scale=q[:n].std(0);q=q/scale\\nrng=np.random.default_rng(484)\\nfor name,a in base.items():\\n a=a[:72];a=(a-a[:n].mean(0))/(a[:n].std(0)+1e-9); candidates=[]\\n for typ in ['poly','sin','tanh']:\\n  def f(w,a):\\n   r=a@w\\n   if typ=='poly':return np.c_[np.ones(len(r)),r,r*r,r**3]\\n   if typ=='sin':return np.c_[np.ones(len(r)),r,np.sin(r),np.cos(r)]\\n   return np.c_[np.ones(len(r)),r,np.tanh(r),1-np.tanh(r)**2]\\n  def res(w):\\n   F=f(w,a[:n]);return (F@ls(F,q[:n])-q[:n]).ravel()\\n  init=ls(aff(a[:n]),q[:n])[-a.shape[1]:,0];init=init/(np.linalg.norm(init)+1e-9); scores=[]\\n  for w in [init]+[rng.normal(size=len(init))*sc for sc in [.35,.7,1.3] for _ in range(6)]:\\n   o=least_squares(res,np.clip(w,-4.99,4.99),bounds=(-5,5),max_nfev=130); F=f(o.x,a); pred=F@ls(F[:n],q[:n]); er=abs(pred-q)*scale; scores.append((np.mean(o.fun**2),er[n:,0].mean(),er[n:,1:].mean(),o.x))\\n  score=min(scores,key=lambda r:r[0]); candidates.append((typ,*score))\\n print('RIDGE',name,candidates,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed readouts of panel cuts -> H2 a learned shared nonlinear projection; the best screened 52/20 cut scored 0.05973 y MAE and 0.05081 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best kernel cut as the final solver\",\n      \"rejected_reason\": \"It misses both 0.038 validation thresholds and its leave-one-out error is substantially higher.\"\n    }\n  ],\n  \"rationale\": \"The nearly rank-one trajectory suggests a shared latent driver. Test whether a learned nonlinear projection of a compact panel cut can recover that driver, while using the panel measurements independently to refine the auxiliary maps.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9f193686c07c76e2488bc8e3856f45f1f1e9cb7910904dd1c8049fc0f01386a1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37830.75,
+      "usage_known": true,
+      "prompt_tokens": 32640,
+      "cached_tokens": 12672,
+      "completion_tokens": 1585
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31ce0d1ea67c444fb7a2b7ca3984d80d",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:40:28.450244+00:00",
+  "ended_at_utc": "2026-11-28T16:41:00.013889+00:00",
+  "request_sha256": "064181e90cb6c1a0fbed961d7507f59f13373e38ff0106472b9d8b3a35457572",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35885,
+    "cached_tokens": 12672,
+    "completion_tokens": 1218
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -24 /holdout_task/_frozen_nodes/node_00.py; sed -i 's/L=np.r_\\\\[J\\\\[4:5\\\\],J\\\\[25:29\\\\]\\\\]@W/L=np.r_[J[4:5],J[25:29]].T@W/' /tmp/hegel_restrict.py; cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Robust trajectory and readout calibration in the frozen spatial basis.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _regress(design, target, penalty, robust=False):\\n    scale = np.maximum(np.sqrt(np.mean(design**2, axis=0)), 1e-10)\\n    a = design / scale\\n    p = np.diag(np.broadcast_to(penalty, (a.shape[1],)))\\n    out = solve(a.T @ a + p, a.T @ target, assume_a='pos')\\n    if robust:\\n        for _ in range(12):\\n            err = np.sqrt(np.mean((a @ out - target)**2, axis=1))\\n            tau = max(2 * np.median(err), .006)\\n            w = 1 / (1 + (err / tau)**2)\\n            out = solve(a.T @ (a * w[:, None]) + p, a.T @ (target * w[:, None]), assume_a='pos')\\n    return out / (scale if target.ndim == 1 else scale[:, None])\\n\\n\\ndef _state_map(study, x):\\n    panel = study['panel_b']\\n    u, v = (np.asarray(panel[k], float) for k in ('u', 'v'))\\n    def design(f):\\n        return np.c_[np.ones(len(u)), u, np.sin(f[0]*u)]\\n    def residual(f):\\n        a = design(f)\\n        return (a @ np.linalg.lstsq(a, v, rcond=1e-10)[0] - v).ravel()\\n    result = min((least_squares(residual, [a], bounds=(.3,9)) for a in (1.,2.9,5.5,8.)), key=lambda o:o.cost)\\n    z = x[:, :4]\\n    w = z - .4*np.sin(result.x[0]*z)\\n    j = np.eye(x.shape[1]); q, r = np.triu_indices(4)\\n    ab = np.r_[j[4:5], j[25:29]].T\\n    c = np.linalg.lstsq(x @ ab, w, rcond=1e-10)[0]\\n    linear = ab @ c\\n    squared = (j[4:5].T * c[:1]**2 + j[25:29].T @ (2*c[:1]*c[1:]) +\\n               j[15:25].T @ ((1+(q!=r))[:,None]*c[1:][q]*c[1:][r]))\\n    return np.c_[j[:5].T, j[[5,9,12,14]].T, squared, linear]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, features = inputs['__input__'], inputs['node_00']\\n    train = study['train']\\n    r = np.asarray(features['readout_train'], float)\\n    x = np.asarray(features['z'], float)\\n    readout = _regress(r, np.asarray(train['y'],float).reshape(-1),\\n                      np.r_[np.full(4,.0001),np.full(10,.3),1e-7,np.full(10,.3),np.full(16,.001),np.full(4,.0001)])\\n    transform = _state_map(study, x)\\n    coef = transform @ _regress(x @ transform, np.asarray(train['traj'],float), .04642, True)\\n    return {'readout_coef': readout, 'state_coef': coef}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/hegel_restrict.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted spatial ridge -> H2 robust diagonal quadratics in recovered warp coordinates; the exact-warp probe achieved 0.0262 public and 0.0698 worst-fold trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change the frozen feature blocks\",\"rejected_reason\":\"The diagonal warp restriction can be mapped algebraically to the existing coefficient interface.\"}],\"rationale\":\"Save a runnable editable node now, correct the basis-map transpose in the probe, and verify the exact implementation against the public gate and alternate folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e752c72f34aa8fb94aa73167bdf5efcb51b34c6d44ec2a8e3413fd5cd4f95844",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31562.34,
+      "usage_known": true,
+      "prompt_tokens": 35885,
+      "cached_tokens": 12672,
+      "completion_tokens": 1218
+    }
+  ]
+}

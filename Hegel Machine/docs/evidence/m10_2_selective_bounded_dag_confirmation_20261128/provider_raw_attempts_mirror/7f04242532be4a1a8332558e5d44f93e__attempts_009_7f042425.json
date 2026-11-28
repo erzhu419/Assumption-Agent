@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f04242532be4a1a8332558e5d44f93e",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:26.165110+00:00",
+  "ended_at_utc": "2026-11-28T15:20:58.268872+00:00",
+  "request_sha256": "7c4a223c5594cb49980f29e1a089f65544187e7cc0b599bc5de2626cdeff6f78",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35313,
+    "cached_tokens": 12672,
+    "completion_tokens": 1278
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = \\\"    y = d[n:] @ _ls(d[:n], train['y'])\\\"\\nnew = \\\"\\\"\\\"    # Keep the two dominant interactions and shrink the remaining curvature.\\n    pair = d[:, [0, 1, 2, 3, 4, 7, 11]]  # affine terms, z0*z2, z1*z3\\n    sparse = pair[n:] @ _ls(pair[:n], train['y'])\\n    full = d[n:] @ _ls(d[:n], train['y'])\\n    y = sparse + .25 * (full - sparse)\\\"\\\"\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nsp = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(sp)\\nsp.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']\\nz = m._latent(s,tr['x'])\\nrng = np.random.default_rng(677)\\nsplits = [np.arange(72)] + [rng.permutation(72) for _ in range(30)] + [np.argsort(np.linalg.norm(z,axis=1))]\\nrows = []\\nfor k, split in enumerate(splits):\\n    i,j = split[:52], split[52:]\\n    case = dict(s, train={name:tr[name][i] for name in ('x','y','traj')}, test={'x':tr['x'][j]})\\n    tt, yy = case['train']['traj'], case['train']['y']\\n    case['train']['summary'] = np.array([yy.mean(), yy.std(), tt[:,-1].mean(), tt[:,-1].std()])\\n    p = m.solve_batch(case)\\n    e = np.abs(p['state_pred'] - tr['traj'][j]); r = np.abs(p['y_hat'] - tr['y'][j]); rows.append([r.mean(), e.mean(), e.mean(0).max(), e[:,-1].mean()])\\n    assert np.all(np.isfinite(rows[-1])) and max(rows[-1]) <= .038, (k, rows[-1])\\nfor label, v in [('fixed_52_20',rows[0]),('random_worst',np.max(rows[1:-1],axis=0)),('high_latent_holdout',rows[-1])]:\\n    print(label, dict(zip(('scalar_mae','trajectory_mae','worst_horizon_mae','final_horizon_mae'),v)))\\nc = s['panel_c']\\nfor label, design in [('affine_C1',m._aff(c['u'])),('interaction_C1',m._interaction(c['u']))]:\\n    errs = []\\n    for j in range(len(design)):\\n        keep = np.arange(len(design)) != j\\n        errs.append(design[j] @ m._ls(design[keep],c['v1'][keep]) - c['v1'][j])\\n    print(label, 'leave_one_out_channel_RMSE', np.sqrt(np.mean(np.square(errs),axis=0)))\\np = m.solve_batch(s)\\ny, t = p['y_hat'], p['state_pred']\\nassert y.shape == (36,) and t.shape == (36,8)\\nassert np.isfinite(y).all() and np.isfinite(t).all()\\nnp.testing.assert_array_equal(p['diagnostics_vec'], [y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])\\nprint('Isolated process: public outputs and diagnostics verified.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic scalar head -> H2 pair interactions with a 25% full-quadratic correction; scalar MAE is 0.004309 on the fixed split and 0.009337 on the high-latent holdout.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unrestricted quadratic\",\n      \"rejected_reason\": \"It improves fixed-split MAE by only 0.000626 but increases high-latent holdout MAE from 0.009337 to 0.016777.\"\n    }\n  ],\n  \"rationale\": \"The shrunk correction improves the worst scalar slice while preserving the fixed-split margin. Verify the exact saved solver on both prediction heads, every trajectory horizon, and the diagnostics; repeat the panel C1 leave-one-out comparison to check the interaction basis directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "de95527fcb86a90c3eae8c2e7cf487ced3876b85e97e0b9b2cba91c051c2d9cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32553.14,
+      "usage_known": true,
+      "prompt_tokens": 35313,
+      "cached_tokens": 12672,
+      "completion_tokens": 1278
+    }
+  ]
+}

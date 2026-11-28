@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae8d75b6049b4508b4f0e32430b76677",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:09:17.710959+00:00",
+  "ended_at_utc": "2026-11-28T16:09:40.179497+00:00",
+  "request_sha256": "a1d4ea0686178d46f9b374c92ee83befd30577ec74a178a0035f8ec1e8395e61",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69364,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40199,
+    "cached_tokens": 12672,
+    "completion_tokens": 902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\nns = {'__name__':'__stress__','__file__':str(p)}\\nexec(compile(p.read_text().split('\\\\nst = pickle.load', 1)[0], str(p), 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t = s['train']; x=t['x']; ix=np.arange(len(x)); f=ns['fns']['node_00']; g=f.__globals__\\nz = g['_align'](s['panel_a'],x); radius=np.max(abs(z),axis=1)\\nfor name, valid in [(f'block_{k}',a) for k,a in enumerate(np.array_split(ix,4))]+[('large_latent_magnitude',np.argsort(radius)[-18:])]:\\n    keep=np.setdiff1d(ix,valid); q=copy.deepcopy(s)\\n    y=t['y'][keep]; traj=t['traj'][keep]; q['train']={'x':x[keep],'y':y,'traj':traj,'summary':np.array([y.mean(),y.std(),traj[:,-1].mean(),traj[:,-1].std()])}; q['test']={'x':x[valid]}\\n    pred, ec=ns['run_dag'](q); assert all(v==1 for v in ec.values()) and all(np.isfinite(a).all() for a in pred.values())\\n    dy=abs(pred['y_hat']-t['y'][valid]); dt=abs(pred['state_pred']-t['traj'][valid]); print(name,'y_mae',round(dy.mean(),6),'traj_mae',round(dt.mean(),6),'worst_horizon_mae',round(dt.mean(0).max(),6))\\nc=s['panel_c']; ii=np.arange(len(c['u'])); cal=[]\\nfor valid in np.array_split(ii,4):\\n    keep=np.setdiff1d(ii,valid); pred=g['_panel_maps']({k:v[keep] for k,v in c.items()},c['u'][valid]); ref=np.c_[c['v1'][valid],c['v2'][valid]]; cal.append([np.sqrt(np.mean(a*a)) for a in np.hsplit(pred-ref,2)])\\nprint('worst_calibration_block_rmse_v1_v2',np.max(cal,axis=0).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The cyclic cubic inverse and compact tanh–neighbor v2 map pass the official check with y/trajectory MAEs of 0.014970/0.012338; blocked and high-magnitude slices are next.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the accepted candidate on the official split\",\n      \"rejected_reason\": \"Both official errors are well below 0.038; independent stress slices give more useful evidence than further tuning on the same split.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified artifact unchanged and test contiguous holdouts, the largest latent inputs, and withheld calibration rows. Report y and trajectory errors separately, including the worst trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5121022147a84906cb90a3c2a32bbdb2aca3a06cdbc6ff201634705b0b72cfa3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23093.92,
+      "usage_known": true,
+      "prompt_tokens": 40199,
+      "cached_tokens": 12672,
+      "completion_tokens": 902
+    }
+  ]
+}

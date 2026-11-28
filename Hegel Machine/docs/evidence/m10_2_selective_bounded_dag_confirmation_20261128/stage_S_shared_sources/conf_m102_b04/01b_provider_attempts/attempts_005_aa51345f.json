@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa51345fdbd94933b30fcaf87c39b3be",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:52:38.006314+00:00",
+  "ended_at_utc": "2026-11-28T14:53:11.293556+00:00",
+  "request_sha256": "a8c43ef2dd2f8b4cba8ea2b977f2c7f98d8aacdeb18ee88a276b2186440d48eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39584,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30306,
+    "cached_tokens": 5504,
+    "completion_tokens": 1310
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom math import factorial\\nfrom sklearn.preprocessing import PolynomialFeatures\\nsys.path.insert(0,'/holdout_task'); from batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; m=np.c_[y,z]; np.set_printoptions(precision=4,suppress=True)\\nB=np.linalg.lstsq(np.c_[np.ones(24),s['panel_b']['u']],s['panel_b']['v'],rcond=None)[0]; xb=np.c_[np.ones(72),x]@B\\nfor name,xx in [('raw',x),('B',xb)]:\\n p=PolynomialFeatures(3); X=p.fit_transform(xx); W=np.linalg.lstsq(X,m[:,:],rcond=None)[0]; print(name,'y and final state',list(zip(p.get_feature_names_out(),W[:,[0,-1]].round(4).tolist())))\\n for j in [0,-1]:\\n  C=np.zeros((4,4,4));Q=np.zeros((4,4));\\n  for inds in np.ndindex(C.shape):\\n   a=np.bincount(inds,minlength=4); C[inds]=W[np.all(p.powers_==a,axis=1),j].item()*np.prod([factorial(k) for k in a])/6\\n  for inds in np.ndindex(Q.shape):\\n   a=np.bincount(inds,minlength=4); Q[inds]=W[np.all(p.powers_==a,axis=1),j].item()*np.prod([factorial(k) for k in a])/2\\n  print('j',j,'Q eigen',np.linalg.eigh(Q),'C sv',np.linalg.svd(C.reshape(4,-1),full_matrices=False)[1]);print('C modes',np.linalg.svd(C.reshape(4,-1),full_matrices=False)[0])\\np=PolynomialFeatures(6); P=p.fit_transform(x); d=p.powers_.sum(axis=1); n=52\\nres=[]\\nfor weighting in ['monomial','isotropic']:\\n for cr in [.25,.5,1]:\\n  for fac in [0,.075,.15,.3,.5]:\\n   S=cr**np.maximum(d-2,0).clip(max=1)*fac**np.maximum(d-3,0)\\n   if weighting=='isotropic': S=S*np.sqrt(np.array([factorial(a.sum())/np.prod([factorial(k) for k in a]) for a in p.powers_]))\\n   H=(P*S)@(P*S).T\\n   for a in [1e-5,.0002,.001,.004,.012,.035]:\\n    inv=np.linalg.inv(H[:n,:n]+a*np.eye(n)); C=inv@m[:n]; E=abs(C/np.diag(inv)[:,None]); R=abs(H[n:,:n]@C-m[n:]); res.append((E[:,0].mean(),E[:,1:].mean(),R[:,0].mean(),R[:,1:].mean(),weighting,cr,fac,a))\\nfor j in [0,1]: print('top LOO target',j,*[tuple(np.round(r[:4],5))+r[4:] for r in sorted(res,key=lambda r:r[j])[:8]],sep='\\\\n')\\nfrom copy import deepcopy\\nfor name,idx in [('prescribed',np.arange(52,72)),('large norm',np.argsort(np.linalg.norm(x,axis=1))[-20:]),('large max coordinate',np.argsort(abs(x).max(1))[-20:]),('first 20',np.arange(20))]+[(f'random{i}',np.random.default_rng(i).choice(72,20,False)) for i in range(5)]:\\n tr=np.setdiff1d(np.arange(72),idx); S=deepcopy(s); S['train']={'x':x[tr],'y':y[tr],'traj':z[tr]}; S['test']={'x':x[idx]}; o=solve_batch(S); e=abs(o['y_hat']-y[idx]); f=abs(o['state_pred']-z[idx]); print(name, np.round([e.mean(),e.max(),f.mean(),f.mean(0).max(),f.max()],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic response -> H2 structured higher-order correction; prior prescribed holdout scalar MAE is 0.0122 and worst-horizon state MAE is 0.0214.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Impose a specific relaxation law\",\"rejected_reason\":\"The two best time laws have nearly identical residuals, so the data do not distinguish them.\"}],\"rationale\":\"Stress-test the saved solver on edge-of-domain slices, then use training-only leave-one-out scores and coefficient structure to assess whether higher-degree corrections improve generalization.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3f4d1ef90cd497508c277e52044664907ed5f31d79eb71557c4b2d3f92a32311",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33285.96,
+      "usage_known": true,
+      "prompt_tokens": 30306,
+      "cached_tokens": 5504,
+      "completion_tokens": 1310
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da8f28ca2b3c493fb7d245514f5a638f",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:17:39.375497+00:00",
+  "ended_at_utc": "2026-11-28T16:18:15.606031+00:00",
+  "request_sha256": "60335c20e6be2b741a122aec4b7c56df4209d7488d068362bbf219080e4c6b66",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57457,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35839,
+    "cached_tokens": 0,
+    "completion_tokens": 1467
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Invert the reference calibration and fit separate scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar, root\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, obs, upstream):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    gain, offset = upstream['gain'], upstream['offset']\\n    delta = np.max(np.abs(v - u * gain - offset), axis=1)\\n    m = np.median(delta)\\n    good = delta < m + max(.42, 5 * np.median(abs(delta - m)))\\n    def design(q, p, j):\\n        a, b = q[:, j], q[:, (j + 2) % 4]\\n        return np.c_[np.ones(len(q)), a, b, np.sin(p[0]*a), np.sin(p[1]*b), a**3]\\n    def fit(p, mask):\\n        ds = [design(u[mask], p, j) for j in range(4)]\\n        co = [_ls(a, v[mask, j]) for j, a in enumerate(ds)]\\n        return co, np.column_stack([a @ w - v[mask, j] for j, (a,w) in enumerate(zip(ds,co))])\\n    def opt(mask):\\n        return least_squares(lambda p: fit(p, mask)[1].ravel(), [2.4, 2.4], bounds=([1., 1.], [4., 4.])).x\\n    p = opt(good)\\n    c, _ = fit(p, good)\\n    def forward(q):\\n        return np.column_stack([design(q, p, j) @ c[j] for j in range(4)])\\n    err = np.max(abs(forward(u) - v), axis=1)\\n    med = np.median(err)\\n    good = err < max(.015, 6 * med)\\n    if good.sum() >= 20:\\n        p = opt(good)\\n        c, _ = fit(p, good)\\n    def inv(row):\\n        init = (row - offset) / gain\\n        fun = lambda x: forward(x[None,:])[0] - row\\n        sol = root(fun, init)\\n        if np.linalg.norm(fun(sol.x)) > 1e-7:\\n            sol = least_squares(fun, np.clip(init, -1.49, 1.49), bounds=(-1.5, 1.5))\\n        return sol.x\\n    return np.array([inv(row) for row in obs])\\n\\n\\ndef _mapped(q, fitted):\\n    scale, power, exponent = fitted['p']\\n    logabs = np.log(np.maximum(np.abs(q), np.finfo(float).tiny))\\n    h = q * np.exp(exponent * np.logaddexp(0, power * (np.log(scale) + logabs)))\\n    return np.c_[np.ones(len(q)), q, h] @ fitted['w']\\n\\n\\ndef _scalar(q, b, c, y, k):\\n    h = q[:, 2]\\n    gate = 1 / (1+k*h*h)\\n    bg = b*gate[:, None]\\n    design = np.c_[np.ones(len(q)), bg, c, bg*h[:,None]**3]\\n    return design[len(y):] @ _ls(design[:len(y)], y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    fitted = inputs['node_00']\\n    train = study['train']\\n    n = len(train['x'])\\n    q = _calibrate(study['panel_a'], np.vstack((train['x'], study['test']['x'])), fitted)\\n    b = _mapped(q, fitted)\\n    c = b*np.roll(q, -1, axis=1)\\n    y = _scalar(q, b, c, np.asarray(train['y']), float(study['telemetry_vec'][2]))\\n    design = np.c_[np.ones(len(q)), b, c]\\n    state = design[n:] @ _ls(design[:n], train['traj'])\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed -n '134,230p' /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic cross-products -> H2 cyclic panel-B products and a coordinate-2 rational gate; repeated-holdout MAEs are 0.03168 scalar and 0.00734 trajectory before the calibration refinement.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use all sixteen cross-products in the trajectory readout\",\n      \"rejected_reason\": \"The four cyclic terms give lower repeated-holdout MAE, 0.00734 versus 0.00828.\"\n    }\n  ],\n  \"rationale\": \"Save the compact candidate, fit its nonlinear inverse from panel A without using response labels, and run the acceptance test in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5640db380e989523edad99f5ecad4a0fe0a2e5baa5df55142c124327392492b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36685.34,
+      "usage_known": true,
+      "prompt_tokens": 35839,
+      "cached_tokens": 0,
+      "completion_tokens": 1467
+    }
+  ]
+}

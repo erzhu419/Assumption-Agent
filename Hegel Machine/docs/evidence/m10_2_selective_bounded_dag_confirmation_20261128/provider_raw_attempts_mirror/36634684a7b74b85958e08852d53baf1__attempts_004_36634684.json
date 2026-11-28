@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36634684a7b74b85958e08852d53baf1",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:07:55.872167+00:00",
+  "ended_at_utc": "2026-11-28T16:08:27.343601+00:00",
+  "request_sha256": "98665b7a4170509da24f98eeb57597a3b5a398d127a81811c504c35b8645a850",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25166,
+    "cached_tokens": 12672,
+    "completion_tokens": 1329
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe2.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('ks=')[0])\\nfrom scipy.optimize import minimize_scalar\\nprint('archive diagnostics',open('/tmp/hegel_continual_archive/archive_manifest.json').read()[:2600]); print(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json').read()[:5000]); print('ranges U',U.min(0),U.max(0)); print('cal error quantiles',np.quantile(np.linalg.norm(n._forward(s['panel_a']['u'],n._calibrate(s['panel_a'],f))-s['panel_a']['v'],axis=1),[0,.5,.8,.9,1])); print('T correlation',np.round(np.corrcoef(T.T)[0],4))\\nfun={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'atan':np.arctan,'asinh':np.arcsinh,'inv3':lambda x:np.sinh(np.arcsinh(x)/3),'rat':lambda x:x/(1+x*x),'sat':lambda x:x/np.sqrt(1+x*x),'r2':lambda x:1/(1+x*x),'soft':lambda x:np.sqrt(1+x*x)}\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef pair(x):return np.stack([x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(x.shape[1]),2)],axis=1)\\ndef solve(x,y,idx):return np.linalg.lstsq(x[idx],y[idx],rcond=1e-10)[0]\\ndef fit(x,y,k,extra=False):\\n fn=fun[k]; idx=np.arange(len(x))<len(x)*.76\\n def d(g):return np.c_[aff(x),fn(g*x)] if extra else aff(fn(g*x))\\n def loss(g):\\n  z=d(g); return np.mean((z[idx]@solve(z,y,idx)-y[idx])**2)\\n g=minimize_scalar(loss,bounds=(.05,7),method='bounded').x; z=d(g); q=solve(z,y,idx); e=z@q-y\\n return np.round([g,np.abs(e[idx]).mean(),np.abs(e[~idx]).mean()],5),lambda x: (np.c_[aff(x),fn(g*x)] if extra else aff(fn(g*x)))@q\\nfor name,p,y in [('B',b,b['v']),('C1',c,c['v1']),('C2',c,c['v2'])]:\\n x=p['u']; print(name, 'aff residual',np.round(np.std(y-aff(x)@np.linalg.lstsq(aff(x),y,rcond=None)[0],axis=0),6))\\n print('transforms',[(k,fit(x,y,k,extra)[0].tolist()) for extra in [False,True] for k in fun]); print('quadratic coefficients',np.round(np.linalg.lstsq(np.c_[aff(x),pair(x)],y,rcond=None)[0],3))\\nB=fit(b['u'],b['v'],'sin',True)[1]; C1=fit(c['u'],c['v1'],'asinh',True)[1]; C2=lambda x:np.c_[aff(x),pair(x)]@np.linalg.lstsq(np.c_[aff(c['u']),pair(c['u'])],c['v2'],rcond=None)[0];\\nV={'U':U,'W':W,'Bfit':B(U),'C1':C1(U),'C2':C2(U)}\\nfor key,x in list(V.items()):\\n for kk in ('cos','r2','soft'):\\n  print(key,kk,fit(x[:72],np.c_[Y,T],kk,True)[0]);\\nfor ys in [Y,T]:\\n for k,x in V.items():\\n  for fe in [aff(x),np.c_[aff(x),pair(x)],np.c_[aff(x),*[fn(2.15*x) for fn in (np.sin,np.cos,np.tanh)]],np.c_[aff(x),pair(np.tanh(2.15*x)),pair(np.sin(2.15*x))]]:\\n   idx=np.arange(72)<52; er=fe[:72]@solve(fe[:72],ys,idx)-ys; print(k,fe.shape[1],round(abs(er[idx]).mean(),4),round(abs(er[~idx]).mean(),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe2.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 recover sensor coordinates -> H2 compose measured panel maps before fitting readouts; direct coordinate bases had best observed tail MAE 0.253 for y and 0.340 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Direct polynomial regression on sensor coordinates\",\n      \"rejected_reason\": \"Held-out errors are far above tolerance; intermediate panel maps offer a better-constrained basis.\"\n    }\n  ],\n  \"rationale\": \"Check calibration residuals, identify each panel’s nonlinear basis, and test whether its reconstructed outputs explain the shared trajectory and scalar readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7f7779285a1ce402f23e023d936c01af92b7dbbc903fd07a2908f44a9c234045",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32098.53,
+      "usage_known": true,
+      "prompt_tokens": 25166,
+      "cached_tokens": 12672,
+      "completion_tokens": 1329
+    }
+  ]
+}

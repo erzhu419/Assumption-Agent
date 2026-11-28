@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f433560b7b442d5bb725c2952771687",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:16.411858+00:00",
+  "ended_at_utc": "2026-11-28T14:54:00.217958+00:00",
+  "request_sha256": "48259fb3db6b012570d44770f7b9e41be116f923fb148e035a70fdd132381293",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44709,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32969,
+    "cached_tokens": 12672,
+    "completion_tokens": 1840
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/grammar.py <<'PY'\\nimport pickle,numpy as np\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; M=np.c_[y,z]; n=52\\nA=[]\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; v=p.get('v',p.get('v1')); H=np.c_[np.ones(len(u)),u]; w=np.linalg.lstsq(H,v,rcond=None)[0];\\n if k=='panel_a':\\n  for i in range(10):\\n   j=np.argsort(np.linalg.norm(H@w-v,axis=1))[:39]; w=np.linalg.lstsq(H[j],v[j],rcond=None)[0]\\n A.append(w)\\nxf=(x-A[0][0])/A[0][1:].diagonal(); xb=(np.c_[np.ones(len(x)),xf]@A[1]); xc=(np.c_[np.ones(len(x)),xf]@A[2]);\\nI=np.arange(len(x)); folds=[I[52:],np.argsort(np.linalg.norm(x,axis=1))[-20:],np.argsort(abs(x).max(1))[-20:],I[:20]]+[np.random.default_rng(i).choice(72,20,False) for i in range(8)]\\ndef scores(F,reg):\\n R=[]; K=F@F.T\\n for te in folds:\\n  tr=np.setdiff1d(I,te); rr=M[te]-K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+reg*np.eye(len(tr)),M[tr]); e=abs(rr); R.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()])\\n R=np.array(R);return np.array([R[0],R.max(0),R.mean(0)])\\nf=PolynomialFeatures(5); raw=f.fit_transform(x); d=f.powers_.sum(1)\\nfor c,a,l in [(1,0,.006),(.5,0,.012),(.5,.075,.012),(.25,.15,.004),(.25,.3,.004),(.25,.15,.012)]:\\n print('cubic grid',c,a,l,scores(raw*(c**np.minimum(np.maximum(d-2,0),1)*a**np.maximum(d-3,0)),l).round(5).tolist())\\nrows=[]\\ndef test(label,F,regs=(.001,.012,.05)):\\n for r in regs:\\n  T=scores(F,r);rows.append((T[2].sum(),label,r,T))\\nfor name,X in [('raw',x),('cal',xf),('B',xb),('C',xc)]:\\n for fac in [.3,.6,1,1.5]:\\n  for fn,fun in [('sin',np.sin),('tanh',np.tanh),('asinh',np.arcsinh),('rational',lambda a:a/(1+a*a)),('softsign',lambda a:a/np.sqrt(1+a*a))]:\\n   xx=fun(fac*X)/fac\\n   for deg in [2,3]:\\n    F=PolynomialFeatures(deg).fit_transform(xx);test((name,fac,fn,deg),F)\\n for fac in [.3,.8,1.3]:\\n  P=PolynomialFeatures(2).fit_transform(X); dX=np.sin(fac*X)/fac-X\\n  test((name,fac,'sin_add'),np.c_[P,4*dX]);test((name,fac,'sin_cross'),np.c_[P,4*dX,(X[:,:,None]*dX[:,None,:]).reshape(len(X),-1)])\\nfor _,lab,r,T in sorted(rows,key=lambda a:a[0])[:14]:print('structured',lab,r,T.round(5).tolist())\\n# Fit a constrained rational correction, using one denominator per scalar and temporal amplitude.\\nB=np.c_[-np.expm1(-1.533*t),np.log1p(1.01*t)]; U=np.linalg.lstsq(B,z.T,rcond=None)[0].T; Y=np.c_[y,U]; P=raw[:,d<=3]; reg=.005*np.where(d[d<=3]==3,4,1)\\nfor typ in ['quadratic','rankone','radial']:\\n out=[]\\n for te in folds:\\n  tr=np.setdiff1d(I,te); pred=[]\\n  for target in Y.T:\\n   def denom(p):\\n    if typ=='quadratic':return np.exp(np.clip(raw[:,d==2]@p,-2,2))\\n    if typ=='rankone':return 1+(x@p)**2\\n    return 1+p[0]*np.sum(x*x,1)\\n   def coeff(p):\\n    F=P[tr]/denom(p)[tr,None]; return np.linalg.solve(F.T@F+np.diag(reg),F.T@target[tr])\\n   def res(p):\\n    w=coeff(p); return np.r_[P[tr]@w/denom(p)[tr]-target[tr],np.sqrt(reg)*w,.06*p]\\n   nparam={'quadratic':10,'rankone':4,'radial':1}[typ]; init=np.full(nparam,.03); bounds=(0,1) if typ=='radial' else (-.7,.7)\\n   w=least_squares(res,init,bounds=bounds,max_nfev=55).x; pred.append(P[te]@coeff(w)/denom(w)[te])\\n  q=np.array(pred).T; ez=abs(q[:,1:]@B.T-z[te]);out.append([abs(q[:,0]-y[te]).mean(),ez.mean(),ez.mean(0).max()])\\n R=np.array(out);print('denominator',typ,np.array([R[0],R.max(0),R.mean(0)]).round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic amplitudes -> H2 regularized higher-order or operator-aligned amplitudes; baseline worst-slice scalar MAE is 0.0371 and worst-horizon MAE is 0.0389.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Finalize the passing cubic baseline\",\"rejected_reason\":\"The high-norm slice exposes a weaker margin, so compare regularized cubic, operator-aligned, and rational candidates before finalizing.\"}],\"rationale\":\"Compare both outputs on the same held-out slices. Use the known panel maps as candidate coordinates, not as evidence that those panels participate in the physical law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5567f8d89c1b60b42bf2f1351709e1e30e1cdd5127938d134efed07d9d16d22c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43804.74,
+      "usage_known": true,
+      "prompt_tokens": 32969,
+      "cached_tokens": 12672,
+      "completion_tokens": 1840
+    }
+  ]
+}

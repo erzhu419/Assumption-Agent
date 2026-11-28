@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77f408c8fcdb4744b0e3ec142372c03e",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:05:44.444615+00:00",
+  "ended_at_utc": "2026-11-28T16:06:14.856381+00:00",
+  "request_sha256": "acb068b9c5fb47581956028089fadc0fc4238c8fe8f0d7134b7c2840be9cbfb4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35067,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26839,
+    "cached_tokens": 12672,
+    "completion_tokens": 1270
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/explore.py <<'PY'\\nimport pickle,numpy as np,glob,importlib.util\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52\\nls=lambda a,b: np.linalg.lstsq(a,b,rcond=None)[0]\\naff=lambda x:np.c_[np.ones(len(x)),x]\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); o=m.solve_batch(dict(s,train={k:v[:n] if k!='summary' else v for k,v in tr.items()},test={'x':tr['x'][n:]})); print(f[-18:],np.mean(abs(o['y_hat']-tr['y'][n:])),np.mean(abs(o['state_pred']-tr['traj'][n:])))\\n except Exception as e: print(f,e)\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; q=np.roll(u,1,axis=1); r=np.roll(u,-1,axis=1); h=np.roll(u,2,axis=1); pairs=np.array([u[:,i]*u[:,j] for i in range(4) for j in range(i+1,4)]).T\\n for ky,v in p.items():\\n  if ky=='u':continue\\n  print(k,ky)\\n  if k=='panel_a':\\n   for typ in range(6):\\n    er=[]; co=[]\\n    for j in range(4):\\n     x=u[:,j]; y=v[:,j]; z=[r,q,h][typ%3][:,j]; A=aff(np.c_[x,z,x*z,x**3] if typ<3 else np.c_[x,np.tanh(1.8*x),np.sin(2.4*z)]); ix=np.arange(len(x))\\n     for _ in range(12):\\n      w=ls(A[ix],y[ix]); e=abs(A@w-y); ix=np.argsort(e)[:39]\\n     er.append(np.sqrt(np.mean(e[ix]**2))); co.append(w)\\n    print(typ,np.round(er,6),np.round(co,3))\\n   continue\\n  D={'aff':u,'pair':np.c_[u,pairs],'poly2':np.c_[u,u*u,pairs],'diag3':np.c_[u,u*u,u**3], 'c_archive':np.tanh(1.75*u)+.3*np.sin(2.1*q),'dead':np.sign(u)*np.maximum(abs(u)-.35,0)**1.5,'cos':np.cos(2.6*u),'sin':np.sin(2.15*u),'tanhsin':np.c_[np.tanh(1.75*u),np.sin(2.1*u)],'tanhsinprod':np.c_[np.tanh(1.75*u),np.sin(2.1*u),pairs],'rat':np.c_[u/(1+1.25*u*u),u*u,pairs],'archive_aug':np.c_[u,np.cos(2.6*u),np.sin(2.15*u),pairs]}\\n  for nm,a in D.items():\\n   a=aff(a); e=a@ls(a,v)-v; lev=np.sum(np.linalg.qr(a,mode='reduced')[0]**2,axis=1); print(nm, np.sqrt(np.mean(e*e)).round(5),np.sqrt(np.mean((e/(1-lev[:,None]))**2)).round(5))\\nt=s['eval_times']; Y=tr['traj'].T\\nfor fun in [lambda t,r:-np.expm1(-t*r),lambda t,r:np.c_[-np.expm1(-t[:,0]*r[0]), t[:,0]*np.exp(-t[:,0]*r[1])],lambda t,r:np.c_[-np.expm1(-t[:,0]*r[0]),(1-np.exp(-t[:,0]*r[1]))**2]]:\\n def err(p):\\n  a=fun(t[:,None],p); return ((a@ls(a,Y)-Y).ravel())\\n p=least_squares(err,[2,.3],bounds=([.001,.001],[12,12])).x; a=fun(t[:,None],p); print('time',p,np.sqrt(np.mean(err(p)**2)),np.round(ls(a,Y)[:,:12],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archive transfer -> H2: campaign-specific calibrated operators with a rank-two temporal response; pre-LLM worst 52/20 MAE was 0.550328.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure archive transfer directly, then use robust calibration residuals and leave-one-row-out panel errors to identify the individual operators.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "36ea8fb7ab34f937f69c15ead0aee28a161bed5914e6f796ff32a9edc8438bb2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30410.8,
+      "usage_known": true,
+      "prompt_tokens": 26839,
+      "cached_tokens": 12672,
+      "completion_tokens": 1270
+    }
+  ]
+}

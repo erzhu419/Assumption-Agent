@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb14a50602c04240b326fe4884ca3086",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:30:41.346160+00:00",
+  "ended_at_utc": "2026-11-28T16:31:26.376963+00:00",
+  "request_sha256": "b901e84418a3ccc6bb8a61fb01b83c973f45ed63090b4d8f58a446ef8214f4ac",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59243,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35881,
+    "cached_tokens": 12672,
+    "completion_tokens": 2053
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; export OPENBLAS_NUM_THREADS=1; sed -n '35,140p' /tmp/hegel_continual_archive/conf_m102_a03_batch_08_solver.py; python3 /tmp/model14.py | head -23; cat > /tmp/search14.py <<'PY'\\nexec(open('/tmp/model14.py').read().split(\\\"print('ranges'\\\")[0])\\nimport importlib.util\\nspec=importlib.util.spec_from_file_location('head','/holdout_task/_frozen_nodes/node_01.py');head=importlib.util.module_from_spec(spec);spec.loader.exec_module(head)\\ny=s['train']['y']; t=s['train']['traj']; q=np.linalg.svd(t[:52],full_matrices=False)[2][:2]; v=t@q.T\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nfrom itertools import combinations_with_replacement as cwr\\n\\ndef poly(z):\\n i,j=np.triu_indices(z.shape[1]);return z[:,i]*z[:,j]\\n\\ndef report(name,A,tar):\\n U,sv,V=np.linalg.svd(A[:52],full_matrices=False); X=A@V.T/np.maximum(sv,1e-9); best=None\\n for l in np.logspace(-7,0,26):\\n  h=sv**2/(sv**2+l); w=(U.T@tar[:52])*h.reshape((-1,)+(1,)*(tar.ndim-1)); err=(U@w-tar[:52])/np.maximum(1-(U*U)@h,1e-5).reshape((-1,)+(1,)*(tar.ndim-1)); score=np.mean(abs(err)); pred=X[52:]@w\\n  if best is None or score<best[0]:best=(score,pred,l)\\n e=best[1]-tar[52:]; return (round(best[0],4),round(np.mean(abs(e if tar.ndim==1 else e@q)),4),best[2])\\n\\nmaps={'x':x,'b':b,'c':c,'d':d}\\nbase=np.c_[np.ones(n),x,b,c,d]; pd=np.c_[np.ones(n),x,b,c,d,poly(x),poly(b),poly(c),poly(d)];\\nfor name,X in list(maps.items())+[('base',base),('pd',pd)]:\\n for deg in (1,2,3):\\n  if deg>2 and X.shape[1]>4:continue\\n  A=np.c_[np.ones(n),X,*[np.column_stack([np.prod(X[:,jj],axis=1) for jj in cwr(range(X.shape[1]),i)]) for i in range(2,deg+1)]]\\n  print(name,deg,report(name,A,y),report(name,A,v),flush=True)\\nfor combo in [np.c_[x,b],np.c_[x,c],np.c_[x,d],np.c_[c,d],np.c_[x,c,d],np.c_[x,b,c,d]]:\\n for f in (.25,.5,1,2,4,8):\\n  dist=np.sum((combo[:,None]-combo[None,:])**2,axis=2)/combo.shape[1]; K=np.exp(-f*dist); U,sv,_=np.linalg.svd(K); A=np.c_[pd,U*sv**.5];print('kernel',combo.shape[1],f,report('',A,y),report('',A,v))\\n# Screen structured additive and cross-channel products; refit solely on the prefix.\\ndef dictionary(x,b,c,d):\\n n=len(x); mats=[]; names=[]\\n def add(a,name):\\n  if a.ndim==1:a=a[:,None]\\n  mats.append(a); names.extend([f'{name}:{k}' for k in range(a.shape[1])])\\n add(np.ones(n),'bias'); add(np.c_[x,b,c,d],'linear');\\n for name,z in zip('xbcd',[x,b,c,d]):\\n  add(poly(z),name+'quad'); add(z**3,name+'cube');\\n  for f in np.arange(.5,6.51,.25):\\n   for kind,fn in [('sin',np.sin),('cos',np.cos),('atan',np.arctan),('tanh',np.tanh)]:add(fn(f*z),f'{name}{kind}{f}')\\n  pairs=np.array(list(__import__('itertools').combinations(range(4),2)))\\n  for sign in (-1,1):\\n   u=z[:,pairs[:,0]]+sign*z[:,pairs[:,1]]\\n   for f in (.5,1,1.25,1.5,2,2.15,2.5,3,4):\\n    add(np.sin(f*u),f'{name}pair{sign}sin{f}');add(np.cos(f*u),f'{name}pair{sign}cos{f}');add(np.tanh(f*u),f'{name}pair{sign}tanh{f}')\\n for i,j in __import__('itertools').combinations(range(4),2):add((list(maps.values())[i][:,:,None]*list(maps.values())[j][:,None,:]).reshape(n,-1),f'cross{i}{j}')\\n return np.column_stack(mats),np.array(names)\\nD,names=dictionary(x,b,c,d)\\nfor nam,tar in [('y',y),('t',v[:,0])]:\\n for key,core in [('x',np.c_[np.ones(n),x]),('b',np.c_[np.ones(n),b,poly(b)]),('c',np.c_[np.ones(n),c]),('cd',np.c_[np.ones(n),c,d]),('xc',np.c_[np.ones(n),x,c]),('xd',np.c_[np.ones(n),x,d])]:\\n  def sparse(A,T,ntrain,maxk=20):\\n   sel=[]; out=[]\\n   for k in range(maxk+1):\\n    M=np.c_[A,D[:,sel]]; U,sv,_=np.linalg.svd(M[:ntrain],full_matrices=False); U=U[:,sv>1e-7]; r=T[:ntrain]-U@(U.T@T[:ntrain]); loo=np.mean(abs(r/np.maximum(1-np.sum(U*U,axis=1),1e-7))); pred=M[ntrain:]@np.linalg.lstsq(M[:ntrain],T[:ntrain],rcond=1e-7)[0];out.append((loo,np.mean(abs(pred-T[ntrain:])),sel.copy())); norms=np.sqrt(np.maximum(0,np.sum(D[:ntrain]**2,axis=0)-np.sum((U.T@D[:ntrain])**2,axis=0))); score=abs(r@D[:ntrain])/np.maximum(norms,1e-6); score[norms<.005]=0; sel.append(int(np.argmax(score)))\\n   return min(out,key=lambda l:l[0]),min(out,key=lambda l:l[1]);\\n  aa,bb=sparse(core,tar,52);print('sparse',nam,key,(aa[:2],names[aa[2]].tolist()),(bb[:2],names[bb[2]].tolist()),flush=True)\\nPY\\npython3 /tmp/search14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated panel main effects → H2 separate response interactions and dominant trajectory-mode basis; latest public MAEs are 0.107119 and 0.083534.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test compact polynomial, cross-panel, and paired nonlinear terms on the training prefix and score both heads on the withheld rows. Use the results to isolate missing features before editing the deliverable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7a1c22c4b07e09f79066bf4fa79d3d8c32d401bcf1326abc280b697ee9bef831",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46079.96,
+      "usage_known": true,
+      "prompt_tokens": 35881,
+      "cached_tokens": 12672,
+      "completion_tokens": 2053
+    }
+  ]
+}

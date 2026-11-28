@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89ef7c6dca3f4909992a3629facacb9e",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:57.595954+00:00",
+  "ended_at_utc": "2026-11-28T15:45:30.126503+00:00",
+  "request_sha256": "91e515657462b5de45583a2dd9a6f70884c302a24d87c000195425b9b5ccb146",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44587,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29922,
+    "cached_tokens": 12672,
+    "completion_tokens": 1370
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_read.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import root,least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_a'][k] for k in ('u','v')); ok=np.max(abs(v-u),axis=1)<2; u,v=u[ok],v[ok]; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\nf=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); pp=f['run_node']({'__input__':s}); tr=s['train']; x=tr['x']; n=len(x)\\nfor mode in ['poly5','poly7','sin','tanh','rational','exp']:\\n def design(q,p):\\n  z=np.atleast_2d(q); a,b=z[:,0],z[:,1]; g={'sin':lambda z: np.sin(p*z),'tanh':lambda z:np.tanh(p*z),'rational':lambda z:z/(1+p*z*z),'exp':lambda z:z*np.exp(-p*z*z)}\\n  r=[a**3,b**3,a**5,b**5]+([a**7,b**7] if mode=='poly7' else []) if mode.startswith('poly') else [g[mode](a),g[mode](b)]; return np.column_stack([np.ones(len(z)),z]+r)\\n q=np.zeros_like(x); aerrs=[]\\n for idx in [[0,2],[1,3]]:\\n  U,V=u[:,idx],v[:,idx]; p=0.\\n  if not mode.startswith('poly'):\\n   def res(p):\\n    d=design(U,p[0]); return (d@ls(d,V)-V).ravel()\\n   p=least_squares(res,[1.],bounds=(.03,8)).x[0]\\n  d=design(U,p); w=ls(d,V); aerrs.append((round(p,5),np.mean(abs(d@w-V)),np.round(w.T,4))); start=ls(np.c_[np.ones(len(V)),V],U); q[:,idx]=[root(lambda t:(design(t,p)@w)[0]-y,np.r_[1,y]@start).x for y in x[:,idx]]\\n print('CAL',mode,aerrs,flush=True)\\n b=f['_b_features'](q,pp['p'])@pp['w']; c=b*np.roll(q,-1,axis=1); one=np.ones(n)\\n def score(d,y):\\n  e=[]\\n  for te in [np.arange(52,72)]+list(np.array_split(np.random.default_rng(553).permutation(n),4)):\\n   ti=np.setdiff1d(np.arange(n),te); e.append(np.mean(abs(d[te]@ls(d[ti],y[ti])-y[te])))\\n  return np.round([e[0],max(e),np.mean(e)],6)\\n for nm,d in [('b sumc',np.c_[one,b,c.sum(1)]),('b c',np.c_[one,b,c]),('q b',np.c_[one,q,b]),('q',np.c_[one,q])]:print('state',nm,score(d,tr['traj']))\\n rank=[]\\n quad=np.column_stack([q[:,i]*q[:,j] for i,j in combinations_with_replacement(range(4),2)])\\n for j in range(4):\\n  h=q[:,j]\\n  for g in [.0,.22,1.25,2.15]:\\n   gate=1/(1+g*h*h); bg=b*gate[:,None]\\n   for nm,d in [('arch',np.c_[one,bg,c,b[:,3]*h**3*gate]),('both',np.c_[one,b,bg,c]),('c gated',np.c_[one,bg,c*gate[:,None]]),('cubic gated',np.c_[one,bg,c,b*h[:,None]**3*gate[:,None]]),('qg',np.c_[one,q*gate[:,None],c]),('poly',np.c_[one,b,bg,quad,c])]:\\n    z=score(d,tr['y']);rank.append((z[1],z[0],z[2],j,g,nm))\\n print('SCALAR',sorted(rank)[:12],flush=True)\\n if mode=='poly7':np.savez('/tmp/probe_coords.npz',q=q,b=b,c=c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_read.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: restore the paired odd nonlinear calibration terms and retest both readouts; the degree-five paired fit reduces panel-A residual MAE to 0.00164 or less per block.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\"option\": \"Fit a dense inverse directly\", \"rejected_reason\": \"The observed two-block structure supports fewer parameters and can be checked against the forward panel measurements.\"}\n  ],\n  \"rationale\": \"Compare compact odd response functions and low-degree expansions using the independent calibration panel, then measure the worst held-out errors for each readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c0238599561bbeb2bfa568f2482f09a5732956a8561ef293ad8f3b2256f8d007",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32529.26,
+      "usage_known": true,
+      "prompt_tokens": 29922,
+      "cached_tokens": 12672,
+      "completion_tokens": 1370
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "39dcc35000b14aa0a2c6e4d3928bae09",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:01.457000+00:00",
+  "ended_at_utc": "2026-11-28T15:44:34.566881+00:00",
+  "request_sha256": "7ee264cd1a17f921d80fffceae958d2c3635dc641c77143a547a6aadac535768",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45409,
+    "cached_tokens": 12672,
+    "completion_tokens": 1454
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline08.py\\nsed -i '/^def _even(/,/^def _project(/{ /^def _project(/!d; }; /^def solve_batch(/,$d' /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _cross(a, b):\\n    return (a[:, :, None] * b[:, None, :]).reshape(len(a), -1)\\n\\n\\ndef _ridge(f, y, reg):\\n    n = len(y)\\n    f = (f - f[:n].mean(0)) / np.maximum(f[:n].std(0), 1e-8)\\n    mu = y.mean(0)\\n    a = f[:n]\\n    return mu + f[n:] @ np.linalg.solve(a.T @ a + reg * np.eye(a.shape[1]), a.T @ (y - mu))\\n\\n\\ndef _kernel(c, d, z, y, reg, local):\\n    n = len(y)\\n    l = _gram(np.c_[c, d], n)\\n    p = _gram(_cross(c, d), n)\\n    k = 10 + l + p + .4 * _gram(z, n)\\n    if local:\\n        v = np.diag(l)\\n        k += .5 * np.exp(-.25 * np.maximum(v[:, None] + v[None, :] - 2*l, 0))\\n    else:\\n        k += .05*l**2 + .03*l**3 + .10*l*p\\n    mu = y.mean(0)\\n    return mu + k[n:, :n] @ np.linalg.solve(k[:n, :n] + reg*np.eye(n), y-mu)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.vstack((train['x'], study['test']['x']))\\n    gain = float(study['telemetry_vec'][0])\\n    z = _calibrate(study['panel_a'], x)\\n    _, c0, d0 = _branches(study, x)\\n    c = np.tanh(gain*c0)\\n    d = np.arctan(gain*d0)\\n    target = train['y']\\n    # Average compact saturating interactions with a regularized residual model.\\n    feature = np.c_[c, d, z, np.sin(gain*_cross(c, d))]\\n    y = .55*_ridge(feature, target, .04)\\n    y += .30*_kernel(c, d, z, target, .003, False)\\n    y += .15*_kernel(c, d, z, target, .035, True)\\n    target = train['traj']\\n    # A rational interaction complements the local correction at late times.\\n    cf = c0 / (1 + gain*c0**2)\\n    df = np.tanh(gain*d0)\\n    state = .65*_kernel(np.arctan(gain*c0), d, z, target, .003, True)\\n    state += .35*_ridge(np.c_[c0, df, z, _cross(cf, df)], target, .25)\\n    tail = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/candidate_cv.py\\ncd /holdout_task; python3 validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, importlib.util, numpy as np\\np='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; z=m._calibrate(s['panel_a'],t['x']); _,c,d=m._branches(s,t['x']); U=np.c_[z,c,d]; U=(U-U.mean(0))/U.std(0)\\nbase=m.solve_batch(s); tail=base['state_pred'][:,-1]; y=base['y_hat']; assert np.allclose(base['diagnostics_vec'],[y.mean(),y.std(),tail.mean(),tail.std()])\\nfor name,score in [('radius',np.linalg.norm(U,axis=1)),('C amplitude',np.linalg.norm(c,axis=1)),('D amplitude',np.linalg.norm(d,axis=1))]:\\n te=np.argsort(score)[-20:]; tr=np.setdiff1d(np.arange(len(z)),te); pred=m.solve_batch(dict(s,train={k:t[k][tr] for k in ('x','y','traj')},test={'x':t['x'][te]})); print('tail slice',name,np.mean(abs(pred['y_hat']-t['y'][te])),np.mean(abs(pred['state_pred']-t['traj'][te])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent kernel readouts → H2 compact interaction readouts with kernel corrections; baseline worst scalar and trajectory MAEs are 0.056010 and 0.048140 across 12 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the original kernel-only candidate\",\n      \"rejected_reason\": \"Its scalar gate margin was narrow, and the trigonometric and rational interaction challengers improved complementary held-out metrics.\"\n    }\n  ],\n  \"rationale\": \"Combine the strongest complementary readouts, then verify the exact artifact on the designated split, blocked and random splits, and high-amplitude extrapolation slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "bf412e144b54058bfcab21b3afcc112e74d9f573575a2a0b09d5fb1cdcb62803",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33108.03,
+      "usage_known": true,
+      "prompt_tokens": 45409,
+      "cached_tokens": 12672,
+      "completion_tokens": 1454
+    }
+  ]
+}

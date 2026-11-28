@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7aa02f5a67f74200944514ceef299b9b",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:38.939849+00:00",
+  "ended_at_utc": "2026-11-28T16:00:11.644507+00:00",
+  "request_sha256": "610e656eb9bcf22d91b48554d070838b54a3b7f245c21c210ee0f5167d054378",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68484,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39045,
+    "cached_tokens": 12672,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/node_01.py /tmp/node_01_accepted.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\npath = Path('/holdout_task/node_01.py')\\ns = path.read_text().replace('from scipy.spatial.distance import cdist\\\\n', '')\\na, b = s.index('def _features('), s.index('def run_node(')\\ns = s[:a] + '''def _scalar(q, y):\\n    # Profile the quadratic baseline and affine switching coefficients out of\\n    # the fit of a single smooth, tilted transition in calibrated coordinates.\\n    n = len(y)\\n    affine = np.c_[np.ones(len(q)), q]\\n    poly = np.c_[affine, *[q[:, i]*q[:, j]\\n                          for i, j in combinations_with_replacement(range(4), 2)]]\\n    x_train = affine[:n]\\n    a_train = poly[:n]\\n\\n    def design(p, x, a):\\n        return np.c_[a, x*np.tanh(x@p)[:, None]]\\n\\n    def residual(p):\\n        f = design(p, x_train, a_train)\\n        return f@_ls(f, y)-y\\n\\n    starts = [np.r_[0., scale*axis] for scale in (6., 2.) for axis in np.eye(4)]\\n    bounds = ([-3., -15., -15., -15., -15.], [3., 15., 15., 15., 15.])\\n    fit = min((least_squares(residual, p, bounds=bounds, max_nfev=65)\\n               for p in starts), key=lambda result: result.cost)\\n    return design(fit.x, affine[n:], poly[n:])@_ls(design(fit.x, x_train, a_train), y)\\n\\n\\n''' + s[b:]\\ns = s.replace(\\\"_scalar(q,b,c,study['telemetry_vec'],tr['y'])\\\", \\\"_scalar(q,tr['y'])\\\")\\npath.write_text(s)\\nPY\\ncat >/tmp/final_stress11.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nstudy = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nupstream = runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':study})\\nnode = runpy.run_path('/holdout_task/node_01.py')['run_node']\\ntr = study['train']; all_ids = np.arange(len(tr['x']))\\nfolds = [all_ids[-20:]] + list(np.array_split(np.random.default_rng(123).permutation(len(all_ids)), 5))\\nfor x in tr['x'].T:\\n    ix = np.argsort(x)\\n    folds.extend([ix[:12], ix[-12:]])\\nerrors = []\\nfor test in folds:\\n    train = np.setdiff1d(all_ids, test)\\n    inp = {**study, 'train':{k:tr[k][train] for k in ('x','y','traj')}, 'test':{'x':tr['x'][test]}}\\n    out = node({'__input__':inp, 'node_00':upstream})\\n    errors.append([np.mean(abs(out['y_hat']-tr['y'][test])),np.mean(abs(out['state_pred']-tr['traj'][test]))])\\nerrors = np.array(errors)\\nprint('Final artifact split MAEs (scalar, trajectory):', np.round(errors,6).tolist())\\nprint('Worst standard split:', np.round(errors[:6].max(axis=0),6).tolist(), 'Worst coordinate-tail split:',np.round(errors[6:].max(axis=0),6).tolist())\\nassert np.isfinite(errors).all() and np.all(errors[:6].max(axis=0) <= .038)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nif python3 -I /holdout_task/test_dag_candidate.py | tee /tmp/verify11.json | grep -q '\\\"accepted\\\": true' && python3 -I /tmp/final_stress11.py; then cat /tmp/verify11.json; else cp /tmp/node_01_accepted.py /holdout_task/node_01.py; python3 -I /holdout_task/test_dag_candidate.py; fi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 training-selected gated ensemble -> H2 quadratic baseline with an affine tilted tanh readout; worst scalar MAE across six held-out splits fell from 0.042299 to 0.015896 in the probe.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the accepted ensemble\",\n      \"rejected_reason\": \"It passes the official split but exceeds the scalar tolerance on two additional splits.\"\n    },\n    {\n      \"option\": \"Use a tilted rational gate\",\n      \"rejected_reason\": \"Its worst and mean holdout MAEs were both higher than those of the tilted tanh model.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact scalar model that improves the worst held-out slice while leaving calibration and trajectory prediction unchanged. Re-run the official validator and stress-test the exact artifact in isolated Python before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "00bf607b2035c6cc5ac1259cd327953b56eca4e13cacf80e0778fd301d8c0eef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33233.9,
+      "usage_known": true,
+      "prompt_tokens": 39045,
+      "cached_tokens": 12672,
+      "completion_tokens": 1354
+    }
+  ]
+}

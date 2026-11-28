@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0103875167be44ba99661d559a1ceff4",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:19:52.206455+00:00",
+  "ended_at_utc": "2026-11-28T16:20:28.419561+00:00",
+  "request_sha256": "582234f18a6f9528bceedba6b849ed657c2d5c6535d03233fe5993e08adec1ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59382,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37262,
+    "cached_tokens": 12672,
+    "completion_tokens": 1502
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/orth14.py <<'PY'\\nfrom graph14 import *\\nfrom scipy.linalg import orthogonal_procrustes\\nfrom scipy.interpolate import UnivariateSpline, PchipInterpolator\\nfrom scipy.optimize import differential_evolution\\nB=S['panel_b']; u,v=B['u'],B['v']; tr=S['train']; z=m._inverse(tr['x'],calibrate(S)); Y=np.c_[tr['y'],tr['traj']]; n=52\\n# Jointly estimate a shared odd profile and an orthogonal mixing matrix.\\ndef get(d):\\n dc=d-d.mean(0); vc=v-v.mean(0); R,scale=orthogonal_procrustes(dc,vc); scale/=np.sum(dc**2); return R,scale,v.mean(0)-scale*d.mean(0)@R\\nR,sc,b=get(u)\\nfor _ in range(25):\\n q=((v-b)@R.T).ravel(); a=u.ravel(); order=np.argsort(abs(a)); xx=abs(a)[order]; yy=(q*np.sign(a))[order]; spl=UnivariateSpline(np.r_[0,xx],np.r_[0,yy],s=.00006); d=np.sign(u)*spl(abs(u)); R,sc,b=get(d)\\nprint('orthogonal residual',np.std(sc*d@R+b-v),'range',xx[-1], 'R',R,'bias',b); print('profile',np.round(np.c_[np.arange(0,1.41,.05),spl(np.arange(0,1.41,.05))],6));print('even odd checks',[(t,np.std((v-b)@R.T-t)) for t in [u,d]])\\nD={'rat':lambda x,p:x/(1+p[0]*x*x),'tanh':lambda x,p:np.tanh(p[0]*x),'atan':lambda x,p:np.arctan(p[0]*x),'sin':lambda x,p:np.sin(p[0]*x),'gauss':lambda x,p:x*np.exp(-p[0]*x*x),'rat3':lambda x,p:x/(1+p[0]*abs(x)**3),'tanh3':lambda x,p:np.tanh(p[0]*x**3),'sin3':lambda x,p:np.sin(p[0]*x**3),'atan3':lambda x,p:np.arctan(p[0]*x**3),'soft':lambda x,p:x/(1+p[0]*abs(x)),'cubic':lambda x,p:x**3,'ratp':lambda x,p:x/(1+p[0]*abs(x)**p[1]),'gaup':lambda x,p:x*np.exp(-p[0]*abs(x)**p[1]),'pow':lambda x,p:np.sign(x)*abs(x)**p[0],'gauss3':lambda x,p:x*np.exp(-p[0]*abs(x)**3)}\\nq=(v-b)@R.T; models=[]\\nfor names in [(k,) for k in D]+list(itertools.combinations(D,2)):\\n def mat(x,p):\\n  ci=0; out=[x]\\n  for k in names:\\n   kk=2 if k in ('ratp','gaup') else 1;out.append(D[k](x,p[ci:ci+kk]));ci+=kk\\n  return np.column_stack([a.ravel() for a in out])\\n def obj(p):\\n  a=mat(u,p);return np.mean((a@ls(a,q.ravel())-q.ravel())**2)\\n bounds=sum(([ (.03,8),(.5,6)] if k in ('ratp','gaup') else [(.03,8)] for k in names),[]); o=differential_evolution(obj,bounds,seed=3,popsize=6,maxiter=45,tol=1e-6); w=ls(mat(u,o.x),q.ravel()); d=(mat(u,o.x)@w).reshape(u.shape); rr,ss,bb=get(d); h=(mat(z,o.x)@w).reshape(z.shape); models.append((np.std(ss*d@rr+bb-v),names,o.x,w,ss*h@rr+bb))\\nmodels.sort(key=lambda q:q[0]); print('ORTH MODEL',*[q[:4] for q in models[:20]],sep='\\\\n');np.savez('/tmp/orthops14.npz',z=z,**{f'b{i}':q[-1] for i,q in enumerate(models[:12])},spl=np.sign(z)*spl(abs(z))@R+b)\\nfor idx,(_,names,_,_,h) in enumerate(models[:12]+[(0,('spline',),0,0,np.sign(z)*spl(abs(z))@R+b)]):\\n f=feats(np.c_[z,h]); mu=f[:n,1:].mean(0); sig=np.maximum(f[:n,1:].std(0),1e-6); f[:,1:]=(f[:,1:]-mu)/sig; best=[]\\n for l in (0,.001,.003,.01,.03,.1):\\n  w=ls(np.r_[f[:n],np.sqrt(l)*np.eye(f.shape[1])],np.r_[Y[:n],np.zeros((f.shape[1],9))]); er=abs(f@w-Y);best.append((l,er[n:,0].mean(),er[n:,1:].mean()))\\n print('downstream',idx,names,np.round(best,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/orth14.py > /tmp/orth14.out; cat /tmp/orth14.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained panel B fits -> H2 shared nonlinear profile with orthogonal mixing; current joint 52/20 MAEs are 0.04835 scalar and 0.01435 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Near-equal singular values in panel B suggest an orthogonal mixing matrix. Testing that constraint directly can recover the shared componentwise law without using downstream holdout labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b98343e3ae19cf065bbb88869f60a068c5cfe70deca681f648a48c6c24aff03a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36739.06,
+      "usage_known": true,
+      "prompt_tokens": 37262,
+      "cached_tokens": 12672,
+      "completion_tokens": 1502
+    }
+  ]
+}

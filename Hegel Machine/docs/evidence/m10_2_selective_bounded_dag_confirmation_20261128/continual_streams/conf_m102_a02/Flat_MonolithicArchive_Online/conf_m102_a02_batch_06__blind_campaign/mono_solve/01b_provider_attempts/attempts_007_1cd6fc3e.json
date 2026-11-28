@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1cd6fc3e6d824d15ba363fa8ad29adbd",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:09.669171+00:00",
+  "ended_at_utc": "2026-11-28T15:36:07.203347+00:00",
+  "request_sha256": "0c7e1c58d8e0678f4cce5bb49ef49fe24580b6d606b208b5ff055f06cd875ea3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50539,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32620,
+    "cached_tokens": 12672,
+    "completion_tokens": 1491
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('forms=')[0])\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\nu,v=s['panel_b']['u'],s['panel_b']['v']; print('B ranges',u.min(0),u.max(0)); print('B linear',ls(aff(u),v));\\nfs={}\\nfor p in [.22,.5,.75,1,1.25,1.5,2,2.5,3]:\\n for n,g in [('exp',lambda z,p:z*np.exp(-p*z*z)),('expa',lambda z,p:z*np.exp(-p*abs(z))),('rat',lambda z,p:z/(1+p*z*z)),('rt',lambda z,p:z/np.sqrt(1+p*z*z)),('tan',lambda z,p:np.tanh(p*z)),('sin',lambda z,p:np.sin(p*z))]:fs[n+str(p)]=lambda z,g=g,p=p:g(z,p)\\nfs['odd7']=lambda z:np.c_[z**3,z**5,z**7]; fs['odd9']=lambda z:np.c_[z**3,z**5,z**7,z**9];\\nops=[]\\nfor name,f in fs.items():\\n for tag,g in [('aff',aff),('cyc',lambda z:np.c_[aff(z),z*np.roll(z,-1,axis=1)]),('cube',lambda z:np.c_[aff(z),z**3]),('xy',lambda z:np.c_[aff(z),z[:,ia]*z[:,ja]])]:\\n  def gg(z,f=f,g=g):return np.c_[g(z),f(z)]\\n  A=gg(u); P=np.linalg.pinv(A); w=P@v; err=A@w-v; hat=np.einsum('ij,ji->i',A,P); loo=np.mean(abs(err)/np.maximum(1-hat[:,None],1e-8)); ops.append((loo,name,tag,gg,w));\\nfor l,n,k,g,w in sorted(ops,key=lambda a:a[0])[:10]: print('B op',l,n,k,np.round(w,3) if k=='aff' and n in ('exp1','exp1.25') else '')\\nb=min(ops,key=lambda a:a[0]); h=b[3](x)@b[4];\\np=s['panel_c']; U=p['u']; cfun=lambda q:np.c_[aff(q),q*np.exp(-1.0223*abs(q)**.9585)]; dfun=lambda q:np.c_[aff(q),q*q,np.exp(-.7109*q*q)]; C=lambda q:cfun(q)@ls(cfun(U),p['v1']); D=lambda q:dfun(q)@ls(dfun(U),p['v2']);\\nY=np.c_[s['train']['y'],s['train']['traj']]; H=quad(h); E=Y-H@ls(H[:52],Y[:52]); print('h range',h.min(0),h.max(0)); print('quadratic weights y/end',np.round(ls(H[:52],Y[:52])[:,[0,-1]],3)); print('errors B',np.abs(E[52:]).mean(0));\\nR=[]\\nfor n,z in [('h',h),('x',x),('C(x)',C(x)),('D(x)',D(x)),('C(h)',C(h)),('D(h)',D(h)),('B(C(x))',b[3](C(x))@b[4]),('B(D(x))',b[3](D(x))@b[4]),('x/h',np.c_[x,h]),('C/D',np.c_[C(x),D(x)])]:\\n for m,F in [('aff',aff(z)),('quad',np.c_[aff(z),*(z[:,k]*z[:,l] for k,l in it.combinations_with_replacement(range(z.shape[1]),2))]),('sep3',np.c_[aff(z),z*z,z**3])]:\\n  for add in [0,1]:\\n   A=np.c_[H,F[:,1:]] if add else F\\n   ss=np.maximum(np.linalg.norm(A[:52],axis=0),1e-9); A=A/ss\\n   for alpha in [.00001,.001,.01]:\\n    o=A@np.linalg.solve(A[:52].T@A[:52]+alpha*np.eye(A.shape[1]),A[:52].T@Y[:52]); e=abs(o-Y);R.append((e[52:,0].mean(),e[52:,1:].mean(),e[:52,0].mean(),e[:52,1:].mean(),n,m,add,alpha))\\nfor j in (0,1):print('extension',j,sorted(R,key=lambda r:r[j])[:7]);\\nfor n,g in fs.items():\\n if n in ['exp1','exp1.25','rat1.25','tan1.25','odd7']:\\n  A=np.c_[aff(u),g(u)];w=ls(A,v); print('B',n,np.round(w,3),'res first',np.round((A@w-v)[:5],4))\\nprint('ranges Y',Y.min(0),Y.max(0));print('summary',s['train']['summary'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | tail -75\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 bare panel-B quadratic → H2 refine the panel-B operator and test mixed branches; best 52/20 MAEs remain 0.1393 for y and 0.07655 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure whether panel B needs missing cross-coordinate terms, and whether adding calibrated or auxiliary branches explains the remaining endpoint and trajectory errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "09fe1f07fd654a3e8ac2b24654d96c3eb7a6d9c5184b99a67975dc144d8289a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58073.72,
+      "usage_known": true,
+      "prompt_tokens": 32620,
+      "cached_tokens": 12672,
+      "completion_tokens": 1491
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "644532eb12c3455da3e779197ffa16ad",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:01.084600+00:00",
+  "ended_at_utc": "2026-11-28T15:01:39.971931+00:00",
+  "request_sha256": "02bd59fe4478890f2b20552b8bbb33311ec53a98d8150f3253a8ba8e7aed6774",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48136,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34323,
+    "cached_tokens": 12672,
+    "completion_tokens": 1644
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Robust coordinate calibration and a two-mode relaxation model.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibration(panel):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    # Median pairwise slopes initialize the fit without giving outliers leverage.\\n    a, b = np.triu_indices(len(u), 1)\\n    du = u[a] - u[b]\\n    dv = v[a] - v[b]\\n    slope = np.nanmedian(np.divide(dv, du, out=np.full_like(du, np.nan), where=abs(du)>1e-10), axis=0)\\n    shift = np.median(v - u*slope, axis=0)\\n    for j in range(u.shape[1]):\\n        r = v[:,j] - u[:,j]*slope[j] - shift[j]\\n        keep = abs(r) <= max(1e-7, 6*np.median(abs(r)))\\n        if keep.sum() >= 3:\\n            shift[j], slope[j] = np.linalg.lstsq(np.c_[np.ones(keep.sum()), u[keep,j]], v[keep,j], rcond=None)[0]\\n    return shift, slope\\n\\n\\ndef _time_basis(t, z):\\n    def basis(r):\\n        return -np.expm1(-t[:,None]*r)\\n    def resid(r):\\n        B = basis(r)\\n        return (np.linalg.lstsq(B,z.T,rcond=None)[0].T @ B.T - z).ravel()\\n    r = least_squares(resid, [1.8,.4], bounds=([.8,.03],[8.,.79])).x\\n    return basis(r)\\n\\n\\ndef _design(x):\\n    return np.c_[np.ones(len(x)), x, np.tanh(1.25*x)]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    shift, slope = _calibration(study['panel_a'])\\n    A = _design((tr['x']-shift)/slope)\\n    Q = _design((study['test']['x']-shift)/slope)\\n    B = _time_basis(np.asarray(study['eval_times']), np.asarray(tr['traj']))\\n    y = Q @ np.linalg.lstsq(A,tr['y'],rcond=None)[0]\\n    amp = np.linalg.lstsq(B,tr['traj'].T,rcond=None)[0].T\\n    z = (Q @ np.linalg.lstsq(A,amp,rcond=None)[0]) @ B.T\\n    return {'y_hat':y, 'state_pred':z, 'diagnostics_vec':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])}\\nPY\\ncat >/tmp/scan.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _calibration,_time_basis,solve_batch\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; b,d=_calibration(s['panel_a']); X=(tr['x']-b)/d; z=tr['traj']; t=s['eval_times']; B=_time_basis(t,z[:52]); Y=np.c_[tr['y'],z@np.linalg.pinv(B.T)]; print('calib',b,d,'B',B[:1],flush=True)\\nP=np.c_[np.ones(len(X)),X]; i,j=np.triu_indices(4,1); cross=X[:,i]*X[:,j]; triple=np.column_stack([X[:,k].prod(1) for k in combinations(range(4),3)])\\nfn={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'sqrt':lambda a:a/np.sqrt(1+a*a),'rat':lambda a:a/(1+a*a),'rcube':lambda a:a**3/(1+a**6),'rabs':lambda a:a*abs(a)/(1+a*a),'soft':lambda a:a/(1+abs(a)),'sinh':np.sinh}\\nfor label,f in fn.items():\\n for mode in [0,1,2,3]:\\n    base=np.c_[P,*([X*X] if mode&1 else []),*([cross,triple] if mode&2 else [])];\\n    def des(p): return np.c_[base,f(X*p[:4]+(p[4:] if len(p)==8 else 0))]\\n    def calc(p):\\n        A=des(p); c=np.linalg.lstsq(A[:52],Y[:52],rcond=None)[0]; return A@c,c\\n    def res(p):\\n        R=(calc(p)[0]-Y)[:52]; return np.c_[R[:,0],R[:,1:]@B.T/np.sqrt(8)].ravel()\\n    sols=[]\\n    for shift in [False,True]:\\n        q=least_squares(res,np.r_[[1.25]*4,[0]*4] if shift else [1.25]*4,bounds=(np.r_[[.06]*4,[-2]*4] if shift else [.06]*4,np.r_[[7]*4,[2]*4] if shift else [7]*4),max_nfev=200)\\n        r=calc(q.x)[0]-Y; r=np.c_[r[:,0],r[:,1:]@B.T]; sols.append((np.round(q.x,3).tolist(),np.round(np.mean(abs(r[:52]),0)[[0,-1]],4).tolist(),np.round(np.mean(abs(r[52:]),0)[[0,-1]],4).tolist()))\\n    print(label,mode,sols,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scan.py\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (dense cubic) -> H2 (inverse-calibrated additive saturation and two relaxation modes); fixed tanh features yield 52/20 y MAE 0.0196 and worst timestamp MAE 0.0162.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use raw coordinates\",\"rejected_reason\":\"The same additive tanh basis in raw coordinates gives 0.0252 y MAE and up to 0.0322 trajectory MAE.\"}],\"rationale\":\"Save a model with margin on both public gates, then test whether learning the coordinate response shape or adding interactions improves that margin.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "469825be040383311f7429f31e77978d0e776cee5692233bf519aed2d98b910b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38886.01,
+      "usage_known": true,
+      "prompt_tokens": 34323,
+      "cached_tokens": 12672,
+      "completion_tokens": 1644
+    }
+  ]
+}

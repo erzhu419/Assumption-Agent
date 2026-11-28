@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1b50c70f79ce4e24990fcada5f73ee23",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__init_decomp_conf_m102_b03_batch_05",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:53.158285+00:00",
+  "ended_at_utc": "2026-11-28T15:16:39.513871+00:00",
+  "request_sha256": "192bd304bc8c5016a8df34574a3d6dfcab63d7b76d137bed5fb8c3143e639599",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 6059,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14689,
+    "cached_tokens": 0,
+    "completion_tokens": 2082
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Panel calibration and feature construction are independent of the training responses, so they form a reusable transform that returns six computed arrays. The sink keeps kernel selection and trajectory reconstruction together because the reconstruction can use the selected scalar forecast. This refactor preserves the source calculations and output contract; public CV was not rerun. The role-blind shifts do not identify which stage to change.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"]\n  ],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _product_design(w):\\n    return _ones(w[:, [0, 0, 1, 2]] * w[:, [1, 3, 2, 3]])\\n\\n\\ndef _cosine_design(w):\\n    return _ones(np.cos(2.4 * w))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    x = np.vstack([s['train']['x'], s['test']['x']])\\n    u, v = (s['panel_a'][k] for k in ('u', 'v'))\\n    i, j = np.triu_indices(len(u), 1)\\n    pars = []\\n    for k in range(u.shape[1]):\\n        d = u[i, k] - u[j, k]\\n        ok = np.abs(d) > 1e-8\\n        m = np.median((v[i[ok], k] - v[j[ok], k]) / d[ok])\\n        r = v[:, k] - m * u[:, k]\\n        r -= np.median(r)\\n        g = np.abs(r) < max(.001, 6 * np.median(abs(r)))\\n        pars.append(_ls(_ones(u[g, k:k+1]), v[g, k]))\\n    off, scale = np.array(pars).T\\n    z = (x - off) / scale\\n    b, c = s['panel_b'], s['panel_c']\\n    product = _product_design(z)\\n    cosine = _cosine_design(z)\\n    L = _ones(z) @ _ls(_ones(b['u']), b['v'])\\n    Q = product @ _ls(_product_design(c['u']), c['v1'])\\n    R = cosine @ _ls(_cosine_design(c['u']), c['v2'])\\n    return {'z': z, 'L': L, 'Q': Q, 'R': R, 'product': product[:, 1:], 'cosine': cosine[:, 1:]}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _dist(a):\\n    return np.maximum(0, ((a[:, None, :] - a[None, :, :]) ** 2).sum(-1))\\n\\n\\ndef _models(z, l, q, r, p, c):\\n    cross = (p[:, :, None] * c[:, None, :]).reshape(len(z), -1)\\n    ds = _dist(z)\\n    fs = [_ones(np.c_[p, c, cross]), _ones(np.c_[z, p, c, cross]),\\n          _ones(np.c_[p, c, (q * r).sum(1)]), np.ones((len(z), 1))]\\n    for ix, F in enumerate(fs):\\n        lin = F @ F.T / F.shape[1]\\n        for D in [ds, _dist(np.c_[q, r]), ds + .5 * _dist(np.c_[q, r]), ds + .5 * _dist(l)]:\\n            for h in [.9, 1.7, 3., 5.]:\\n                for K in [np.exp(-D / h**2), (1 + D / h**2)**(-2)]:\\n                    for w in [.1, 1., 10., 100.] if ix < 3 else [1.]:\\n                        yield K + w * lin\\n    yield fs[0] @ fs[0].T / fs[0].shape[1]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    t = inputs['__input__']['train']\\n    features = inputs['node_00']\\n    z, l, q, r, product, cosine = (features[k] for k in ('z', 'L', 'Q', 'R', 'product', 'cosine'))\\n    n = len(t['x'])\\n    traj = t['traj']\\n    _, _, V = np.linalg.svd(traj, full_matrices=False)\\n    H = V[:3]\\n    target = np.c_[t['y'], traj @ H.T]\\n    count = target.shape[1]\\n    models = [[] for _ in range(count)]\\n    I = np.eye(n)\\n    for K in _models(z, l, q, r, product, cosine):\\n        for lam in [1e-6, 1e-4, .002, .025]:\\n            f = cho_factor(K[:n, :n] + lam * I, check_finite=False)\\n            alpha = cho_solve(f, target, check_finite=False)\\n            inv = cho_solve(f, I, check_finite=False).diagonal()\\n            e = np.mean(abs(alpha / inv[:, None]), axis=0)\\n            pred = K[n:, :n] @ alpha\\n            for j in range(count):\\n                models[j].append((e[j], pred[:, j]))\\n    out = []\\n    for m in models:\\n        best = sorted(m, key=lambda v: v[0])[:10]\\n        w = np.exp(-15 * (np.array([a for a, b in best]) / best[0][0] - 1))\\n        out.append(np.average(np.stack([b for a, b in best]), axis=0, weights=w))\\n    pred = np.array(out).T\\n    bilinear = (product[:, :, None] * cosine[:, None, :]).reshape(len(product), -1)\\n    F = _ones(np.c_[product, cosine, bilinear])\\n    Y = np.c_[t['y'], traj]\\n    E = Y - F[:n] @ _ls(F[:n], Y)\\n    _, sig, unit = np.linalg.svd(E, full_matrices=False)\\n    load = unit[0]\\n    if abs(load[0]) > .15 and sig[0] > 5 * sig[1]:\\n        ratio = load[1:] / load[0]\\n        orthogonal = traj - t['y'][:, None] * ratio\\n        state = F[n:] @ _ls(F[:n], orthogonal) + pred[:, 0, None] * ratio\\n    else:\\n        state = pred[:, 1:] @ H\\n    y = pred[:, 0]\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "6c3bf3a21466fbb583df3fa6a6400ab702401642f5be319268b771f5d8dd6e9b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46774.47,
+      "usage_known": true,
+      "prompt_tokens": 14689,
+      "cached_tokens": 0,
+      "completion_tokens": 2082
+    }
+  ]
+}

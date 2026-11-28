@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5671aa99180e4c00bbe1108a119da209",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:29.408838+00:00",
+  "ended_at_utc": "2026-11-28T15:11:05.866944+00:00",
+  "request_sha256": "f74bdbb213766fbe7ce78fd15c91b43d9e0961531d063911959b7535487c15dd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34190,
+    "cached_tokens": 12672,
+    "completion_tokens": 1610
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('def _rational_readout(')\\nb = s.index('\\\\ndef solve_batch',a)\\ns = s[:a] + '''def _rational_readout(z, q, y):\\n    P, Q = _quad(z), _quad(q)\\n    keep = np.ones(P.shape[1], dtype=bool)\\n    keep[12] = False  # In the rational branch, w**2*g = -w**2-g/alpha.\\n    # Shrink mainly the quadratic correction, not the base affine law.\\n    R = np.diag(np.sqrt(.004 * np.r_[np.zeros(5), np.full(10, .05),\\n                                     np.full(5, .1), np.ones(9)]))\\n    target = np.r_[y, np.zeros(len(R))]\\n    bounds = ([.025, .05, -.8, -.8, -.8], [5., 2., .8, .8, .8])\\n    starts = [(1., .42, .03, -.1, -.08), (1., .42, -.24, -.1, -.08)]\\n\\n    def branch(root):\\n        def design(x, base, p):\\n            alpha, k, delta, b, d = p\\n            w = x[:, 2] - k*x[:, 0] + delta + b*x[:, 1] + d*x[:, 3]\\n            t = alpha * w**2\\n            g = 1/np.sqrt(1+t)-1 if root else -t/(1+t)\\n            return np.c_[base, base[:, keep] * g[:, None]]\\n\\n        def fit(p):\\n            F = np.r_[design(z, P, p), R]\\n            c = np.linalg.lstsq(F, target, rcond=1e-11)[0]\\n            return F @ c - target, c\\n\\n        opts = [least_squares(lambda p: fit(p)[0], p0, bounds=bounds,\\n                              max_nfev=110) for p0 in starts]\\n        p = min(opts, key=lambda result: result.cost).x\\n        return design(q, Q, p) @ fit(p)[1]\\n\\n    # The rational quotient is primary; a weaker tail shape reduces\\n    # sensitivity to the fitted denominator on high-leverage inputs.\\n    return .75 * branch(False) + .25 * branch(True)\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\ncat > /tmp/final_verify.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nsp = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(sp)\\nsp.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr = s['train']\\nids = np.arange(len(tr['y']))\\nrng = np.random.default_rng(45)\\nsh,sc = m._calibrate(s['panel_a'])\\nz = (tr['x']-sh)/sc\\nl = m._aff(z)\\nh = np.sum(l * np.linalg.solve(l.T@l,l.T).T, axis=1)\\nsplits = [('gate',ids[:52],ids[52:])]\\nfor k in range(20):\\n    p = rng.permutation(ids)\\n    splits.append((f'random{k}',p[:52],p[52:]))\\nfor k,u in enumerate([abs(z[:,2]-.42*z[:,0]),np.linalg.norm(z,axis=1),*z.T,*(-z.T),h]):\\n    p = np.argsort(u,kind='stable')\\n    splits.append((f'tail{k}',p[:-12],p[-12:]))\\n\\ndef check(o,n):\\n    a,b,d = (o[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    for v,shape in zip((a,b,d),((n,),(n,len(s['eval_times'])),(4,))):\\n        assert isinstance(v,np.ndarray) and v.shape == shape and np.isfinite(v).all()\\n    np.testing.assert_allclose(d,[a.mean(),a.std(),b[:,-1].mean(),b[:,-1].std()],rtol=0,atol=1e-13)\\n    return a,b\\n\\ncheck(m.solve_batch(s),len(s['test']['x']))\\nrows = []\\nfor name,i,j in splits:\\n    ss = dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]})\\n    a,b = check(m.solve_batch(ss),len(j))\\n    e,r = abs(a-tr['y'][j]),abs(b-tr['traj'][j])\\n    rows.append((name,e.mean(),r.mean(),r.mean(axis=0).max()))\\nprint('gate (slice, scalar MAE, state MAE, worst time MAE):',rows[0])\\nfor k in range(1,4): print('worst',k,max(rows,key=lambda a:a[k]))\\nassert max(a[1] for a in rows) <= .038\\nprint('validated',len(rows),'slices and full production output')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_verify.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unregularized rational readout -> H2 mildly regularized rational-dominant readout; the challenger reduced worst scalar slice MAE from 0.039301 to 0.033163 and prescribed-split MAE from 0.009716 to 0.007226.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Deploy the mildly regularized rational quotient alone\",\"rejected_reason\":\"It passed the audit, but the rational-dominant blend lowered both the worst tail MAE (0.034456 to 0.033163) and the worst random-split MAE (0.015563 to 0.015136).\"}],\"rationale\":\"Promote the challenger because it improves the scalar tolerance margin across the prescribed split and extreme inputs without changing the trajectory estimator. Verify the exact saved artifact in an isolated Python process, including all return shapes and diagnostics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ac3a328736d88d030ec0bcdaa246a1e6eb79570e6cd07ecd6209a47decee3192",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37014.9,
+      "usage_known": true,
+      "prompt_tokens": 34190,
+      "cached_tokens": 12672,
+      "completion_tokens": 1610
+    }
+  ]
+}

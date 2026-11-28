@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2a4d4b75f574789afb8e217b027835d",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:21.522985+00:00",
+  "ended_at_utc": "2026-11-28T15:02:02.229199+00:00",
+  "request_sha256": "6eba041436b43695f8641a4e5e09e5711b6a4696993b4e0fe7c34c9944d04464",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42367,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29640,
+    "cached_tokens": 12672,
+    "completion_tokens": 1751
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -u /tmp/profile_b.py | head -18; cat >/tmp/sweep_b.py <<'PY'\\nimport numpy as np,pickle,sys,runpy\\nfrom scipy.optimize import minimize_scalar\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; arc=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py'); pred=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']; u,v=(S['panel_b'][k] for k in ('u','v')); n=len(S['train']['x']); X=arc['_operator'](dict(S,panel_b={'u':np.r_[np.zeros((1,4)),np.eye(4)],'v':np.r_[np.zeros((1,4)),np.eye(4)]}),S['train']['x']); aff=arc['_aff']; ls=arc['_ls']; print('x ranges',u.min(0),u.max(0),X.min(0),X.max(0))\\ndef cv(W,masks):\\n r=[]\\n for test in masks:\\n  train=np.setdiff1d(np.arange(n),test); o=pred({'__input__':{'train':{k:S['train'][k][train] for k in ('y','traj')}},'node_00':{'w':W[np.r_[train,test]]}}); r.append([np.mean(abs(o['y_hat']-S['train']['y'][test])),np.mean(abs(o['state_pred']-S['train']['traj'][test]))])\\n return np.array(r)\\nmasks=[np.arange(52,72),*np.array_split(np.random.default_rng(21).permutation(n),4)]\\nfuncs={'power':(lambda z,g:z*abs(z)**(g-1),1.25,(1,6)), 'powerlin':(lambda z,g:z*abs(z)**(g-1),3,(1.1,6)), 'tanh':(lambda z,g:np.tanh(g*z),1.25,(.15,5)), 'sin':(lambda z,g:np.sin(g*z),1.25,(.15,5)), 'sinh':(lambda z,g:np.sinh(g*z),1.25,(.05,5)), 'asinh':(lambda z,g:np.arcsinh(g*z),1.25,(.05,5)), 'atan':(lambda z,g:np.arctan(g*z),1.25,(.05,5)), 'rat':(lambda z,g:z**3/(1+g*z*z),1.25,(0,8)), 'tanhcube':(lambda z,g:np.tanh(g*z)**3,1.25,(.05,5)), 'cubelin':(lambda z,g:z**3+g*z,.22,(-1,3)), 'cubelinInvG':(lambda z,g:z+g*z**3,1.25,(0,50)), 'sqrtcube':(lambda z,g:z**3/np.sqrt(1+g*z*z),1.25,(0,20)), 'coshcube':(lambda z,g:z**3/np.cosh(g*z),1.25,(0,4)), 'quant':(lambda z,g:z+g*np.sign(z),1.25,(-1,2)), 'rat2':(lambda z,g:z**3/(1+g*abs(z)),1.25,(0,20)), 'inv3':(lambda z,g:np.sinh(np.arcsinh(g*z)/3),1.25,(.05,8)), 'softsign':(lambda z,g:z/(1+g*abs(z)),1.25,(.05,8))}\\nresults=[]\\ndef check(name,F):\\n A=F(u); b=ls(A,v); err=A@b-v; h=(np.linalg.svd(A,full_matrices=False)[0]**2).sum(1); fit=np.sqrt(np.mean(err**2)); loo=np.sqrt(np.mean((err/(1-h)[:,None])**2)); C=cv(F(X)@b,masks); results.append((name,fit,loo,*C[0],*C[1:].max(0)))\\ncheck('affine',aff)\\nfor name,(fn,g0,rg) in funcs.items():\\n for plus in (False,True):\\n  def F(z,g): return np.c_[aff(z),fn(z,g)] if plus else aff(fn(z,g))\\n  def obj(g):\\n   A=F(u,g);return np.mean((A@ls(A,v)-v)**2)\\n  G=np.linspace(*rg,95); i=np.argmin([obj(g) for g in G]); g=minimize_scalar(obj,bounds=(G[max(i-1,0)],G[min(i+1,len(G)-1)]),method='bounded').x\\n  for g in set([g0,g,1.25] if not name.startswith('power') else [g0,g,3.]): check(f'{name}+{int(plus)}@{g:.6f}',lambda z:F(z,g))\\nprint('name, panel fit, panel LOO, public y/traj, worst 4fold y/traj');\\nfor strs,vals in [(r[0],r[1:]) for r in sorted(results,key=lambda r:r[2])[:25]]: print(strs,np.round(vals,6))\\nprint('best downstream')\\nfor strs,vals in [(r[0],r[1:]) for r in sorted(results,key=lambda r:max(r[3:5]))[:20]]: print(strs,np.round(vals,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sweep_b.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel B -> H2 an elementwise nonlinear basis followed by affine mixing; archived public CV MAEs are 0.295219 for y and 0.243834 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived affine panel B basis is sufficient on the current batch.\",\"empirical_witness\":\"Affine fit errors span 0.123–0.155 RMSE across channels, and the diagonal cubic coefficients are substantially larger than the corresponding linear coefficients after adding powers.\",\"causal_blanket_diagnosis\":\"Panel B has structured calibration residuals upstream of the shared w input; the two failed downstream metrics do not by themselves implicate separate predictor shifts.\",\"sublated_pivot\":\"Retain robust panel A normalization and panel B affine mixing, but profile compact elementwise nonlinear bases before mixing.\",\"risk_kind\":\"calibration_basis_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Nonlinearity after the affine projection\",\"rejected_reason\":\"Profiled single-index corrections still leave large panel residuals, whereas the elementwise cubic terms align with the mixing coefficients.\"}],\"rationale\":\"Fit candidate maps on independent panel measurements and report panel leave-one-out and downstream errors separately. Extra downstream splits check whether any gain extends beyond the published tail split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "85923c9f22014c60285eb83012e23e2f11df3d2d46a078bb121ca0f159e9cd33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41174.97,
+      "usage_known": true,
+      "prompt_tokens": 29640,
+      "cached_tokens": 12672,
+      "completion_tokens": 1751
+    }
+  ]
+}

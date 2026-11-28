@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f706c3ea9ca4396b2117e4e01961fe4",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:46.637582+00:00",
+  "ended_at_utc": "2026-11-28T15:51:19.346549+00:00",
+  "request_sha256": "a4b1ecb73cc5d3498557543d91e9b561d444961c25365fa721dc77a391f8f4bc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29864,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24322,
+    "cached_tokens": 12672,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/panel_probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom scipy.optimize import minimize_scalar, least_squares\\np='/tmp/hegel_continual_archive/conf_m102_a04_batch_00_solver.py'\\ns=importlib.util.spec_from_file_location('base',p); b=importlib.util.module_from_spec(s); s.loader.exec_module(b)\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u=st['panel_c']['u']; v=st['panel_c']['v2']; n=len(u); rng=np.random.default_rng(521); folds=np.array_split(rng.permutation(n),6)\\nlin=b.lin\\nbases={\\n 'affine':(lambda x,q:b.one(x),None),\\n 'quad':(lambda x,q:b.one(np.c_[x,x*x]),None),\\n 'quartic':(lambda x,q:b.one(np.c_[x,x*x,x**4]),None),\\n 'rational_archive':(lambda x,q:b.one(np.c_[x,x*x,x*x/(1+q*x*x)]),(.08,.65)),\\n 'rational_wide':(lambda x,q:b.one(np.c_[x,x*x,x*x/(1+q*x*x)]),(.005,15)),\\n 'cos':(lambda x,q:b.one(np.cos(q*x)),(.05,9)),\\n 'cos+linear':(lambda x,q:b.one(np.c_[x,np.cos(q*x)]),(.05,9)),\\n 'cos+quad':(lambda x,q:b.one(np.c_[x,x*x,np.cos(q*x)]),(.05,9)),\\n 'sin':(lambda x,q:b.one(np.sin(q*x)),(.05,9)),\\n 'sin+linear':(lambda x,q:b.one(np.c_[x,np.sin(q*x)]),(.05,9)),\\n 'fourier':(lambda x,q:b.one(np.c_[np.cos(q*x),np.sin(q*x)]),(.05,9)),\\n 'gaussian':(lambda x,q:b.one(np.exp(-q*x*x)),(.005,15)),\\n 'gaussian+linear':(lambda x,q:b.one(np.c_[x,np.exp(-q*x*x)]),(.005,15)),\\n 'cosh+linear':(lambda x,q:b.one(np.c_[x,np.cosh(q*x)]),(.05,6)),\\n 'tanh+linear':(lambda x,q:b.one(np.c_[x,np.tanh(q*x)]),(.05,9)),\\n 'atan+linear':(lambda x,q:b.one(np.c_[x,np.arctan(q*x)]),(.05,9)),\\n 'exp+linear':(lambda x,q:b.one(np.c_[x,np.exp(q*x)]),(-6,6)),\\n 'pairwise':(lambda x,q:b.one(np.c_[x,*(x[:,i]*x[:,j] for i in range(4) for j in range(i,4))]),None),\\n}\\ndef fit(fun,box,I):\\n def eval(q):\\n  f=fun(u[I],q); c=lin(f,v[I]); return np.mean((f@c-v[I])**2),c\\n if box is None:q=0\\n else:\\n  grid=np.linspace(*box,120); k=np.argmin([eval(q)[0] for q in grid]); q=minimize_scalar(lambda q:eval(q)[0],bounds=(grid[max(0,k-1)],grid[min(k+1,len(grid)-1)]),method='bounded',options={'xatol':1e-12}).x\\n return q,eval(q)[1]\\nfor name,(fun,box) in bases.items():\\n q,c=fit(fun,box,np.arange(n)); errors=[]\\n for J in folds:\\n  qi,ci=fit(fun,box,np.setdiff1d(np.arange(n),J)); errors.append(np.abs(fun(u[J],qi)@ci-v[J]))\\n print(name,'q',round(q,8),'fit',round(np.mean(np.abs(fun(u,q)@c-v)),8),'CV',round(np.mean(errors),8),'worst fold',round(max(np.mean(e) for e in errors),8))\\na,sc=b._align(st['panel_a']); r=np.abs(st['panel_a']['v']-a-st['panel_a']['u']*sc); print('align offset',a,'scale',sc,'resid percentiles',np.percentile(r,[25,50,75,90,100]));\\ntrain=st['train']; t=st['eval_times']; tr=train['traj']; basis=b._time_basis(t,tr); print('trajectory basis projection MAE',np.mean(abs((basis@lin(basis,tr.T)).T-tr)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_probe.py; sed -n '1,90p' /tmp/hegel_continual_archive/conf_m102_a04_batch_06_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived rational curvature -> H2 compare shared-shape response bases on held-out calibration rows; archived trajectory CV MAE is 0.043887.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Copy the archived cosine response unchanged\",\n      \"rejected_reason\": \"A cosine appears in a different archived regime, but its form and frequency must be checked against this batch’s calibration measurements.\"\n    }\n  ],\n  \"rationale\": \"Refit each candidate inside every calibration fold and measure its worst-fold error. Independently measure affine alignment and temporal projection residuals to locate the source of the downstream error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "c724ed1aeb17098a459082801a84ecbd2b0cfa081070e3273531ed64201fbcb6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33794.45,
+      "usage_known": true,
+      "prompt_tokens": 24322,
+      "cached_tokens": 12672,
+      "completion_tokens": 1392
+    }
+  ]
+}

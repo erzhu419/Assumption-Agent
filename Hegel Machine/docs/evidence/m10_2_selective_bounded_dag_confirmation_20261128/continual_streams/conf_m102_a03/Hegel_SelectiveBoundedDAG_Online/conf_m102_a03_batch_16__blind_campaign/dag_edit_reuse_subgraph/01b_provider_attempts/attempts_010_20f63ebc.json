@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20f63ebcff1e4e5a9068a0098c7e1dfc",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:41:06.982889+00:00",
+  "ended_at_utc": "2026-11-28T16:41:41.921389+00:00",
+  "request_sha256": "90f0fd42a27c5cb967613cceee1a67bda5e7b8020e658a9235ec4f658e87b4f5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61934,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38053,
+    "cached_tokens": 12672,
+    "completion_tokens": 1476
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/node_01.py /tmp/hegel_v01.py\\npython3 - <<'PY'\\np='/tmp/hegel_v01.py'\\ns=open(p).read().replace('j[:5].T, j[[5,9,12,14]].T, squared, linear','j[:5].T, squared, linear')\\npos=s.index('\\\\ndef run_node')\\ns=s[:pos]+'''\\ndef _state_fit(design, target, times):\\n    # Fit two shared saturation modes, then reconstruct at all requested times.\\n    basis = -np.expm1(-np.outer(times, [.404, 1.857]))\\n    amplitudes = np.linalg.lstsq(basis, target.T, rcond=1e-10)[0].T\\n    scale = np.maximum(np.sqrt(np.mean(design**2, axis=0)), 1e-10)\\n    a = design / scale\\n    penalty = .04 * np.eye(a.shape[1])\\n    coefficients = solve(a.T @ a + penalty, a.T @ amplitudes, assume_a='pos')\\n    for tau in (.16, .08, .04, .02, .02, .02):\\n        for _ in range(8):\\n            e = np.mean((a @ coefficients - amplitudes)**2, axis=1)\\n            w = 1 / (1 + e / tau**2)\\n            aw = a * w[:, None]\\n            coefficients = solve(a.T @ aw + penalty, aw.T @ amplitudes, assume_a='pos')\\n    return (coefficients / scale[:, None]) @ basis.T\\n\\n'''+s[pos:]\\ns=s.replace('_regress(x @ transform, np.asarray(train[\\\\'traj\\\\'],float), .04642, True)', '_state_fit(x @ transform, np.asarray(train[\\\\'traj\\\\'], float), np.asarray(study[\\\\'eval_times\\\\'], float))')\\nopen('/tmp/hegel_v02.py','w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, importlib.util, numpy as np, copy, shutil\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00, node_02\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate',path)\\n    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); idx=np.arange(n)\\nfolds=[idx[-20:]]+[f for seed,k in [(19,4),(58,4),(82,5)] for f in np.array_split(np.random.default_rng(seed).permutation(n),k)]\\nmods=[load('/tmp/hegel_v01.py'),load('/tmp/hegel_v02.py')]; errors=[[],[]]\\nfor hold in folds:\\n    a=np.setdiff1d(idx,hold); subset=copy.deepcopy(s)\\n    subset['train']={k:tr[k][a] for k in ('x','y','traj')}; l=subset['train']; l['summary']=np.array([l['y'].mean(),l['y'].std(),l['traj'][:,-1].mean(),l['traj'][:,-1].std()]); subset['test']={'x':tr['x'][hold]}\\n    f=node_00.run_node({'__input__':subset});\\n    for m,es in zip(mods,errors):\\n        out=node_02.run_node({'node_00':f,'node_01':m.run_node({'__input__':subset,'node_00':f})})\\n        es.append([np.mean(abs(out['y_hat']-tr['y'][hold])),np.mean(abs(out['state_pred']-tr['traj'][hold])),np.max(np.mean(abs(out['state_pred']-tr['traj'][hold]),axis=0))])\\nb,c=map(np.asarray,errors)\\nfor name,e in [('baseline',b),('challenger',c)]: print(name,'public',e[0],'alternate mean',e[1:].mean(0),'alternate worst',e[1:].max(0),'trajectory folds',np.round(e[:,1],6))\\nif max(c[0,:2])<=.038 and c[0,1]<b[0,1] and c[1:,1].mean()<b[1:,1].mean() and c[1:,1].max()<=b[1:,1].max()+.002:\\n    shutil.copyfile('/tmp/hegel_v02.py','/holdout_task/node_01.py'); print('Promoted challenger')\\nelse: print('Retained baseline')\\nPY\\nif ! OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; then cp /tmp/hegel_v01.py /holdout_task/node_01.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; fi\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal warp plus raw-coordinate quadratics -> H2 sparse warp quadratics with two saturation modes; H1 passes the public gate at 0.021293 trajectory MAE, and the H2 probe reached 0.06626 worst alternate-fold trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the verified baseline immediately\",\"rejected_reason\":\"The simpler two-mode model lowered trajectory error in preliminary folds; compare the exact implementations on more splits before deciding.\"}],\"rationale\":\"Compare both implementations on identical held-out rows, check readout and temporal slices separately, and promote only if trajectory accuracy improves without materially degrading the worst fold. Then rerun the official validator on the exact saved artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ded33b53a7cf9789956ee4c39e83fa4be50b0c55ddfb5ab024ad13f96a850323",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35471.47,
+      "usage_known": true,
+      "prompt_tokens": 38053,
+      "cached_tokens": 12672,
+      "completion_tokens": 1476
+    }
+  ]
+}

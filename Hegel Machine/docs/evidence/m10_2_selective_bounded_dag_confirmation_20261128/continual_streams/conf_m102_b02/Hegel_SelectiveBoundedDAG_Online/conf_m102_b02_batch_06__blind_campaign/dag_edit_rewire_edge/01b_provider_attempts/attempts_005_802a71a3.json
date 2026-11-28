@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "802a71a3197049f98d34c42b3d5eeb72",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:23.912388+00:00",
+  "ended_at_utc": "2026-11-28T15:37:59.861509+00:00",
+  "request_sha256": "b0becee03ee7668ca07a94b3b7897173df365db9957a7a761872b3548344bc23",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39988,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28534,
+    "cached_tokens": 5504,
+    "completion_tokens": 1501
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/link.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nfrom itertools import combinations_with_replacement\\nf=np.load('/tmp/coords.npz'); X,C,D,Y=[f[k] for k in ('X','C','D','Y')]; n=len(Y)\\nrng=np.random.default_rng(51); splits=[(np.arange(n-20),np.arange(n-20,n))]+[(p[20:],p[:20]) for p in [rng.permutation(n) for _ in range(8)]]\\nxx=np.column_stack([X[:,i]*X[:,j] for i,j in combinations_with_replacement(range(4),2)])\\ncc=np.column_stack([C[:,i]*C[:,j] for i,j in combinations_with_replacement(range(4),2)])\\nlinks={'tanh':(np.tanh,lambda p:1-np.tanh(p)**2),'erf':(erf,lambda p:2/np.sqrt(np.pi)*np.exp(-p*p)),'rat':(lambda p:p/np.sqrt(1+p*p),lambda p:(1+p*p)**-1.5),'atan':(np.arctan,lambda p:1/(1+p*p)),'sin':(np.sin,np.cos)}\\nA0={'x':D[:,:5],'xc':D[:,:9],'d':D,'dxx':np.c_[D,xx],'dcc':np.c_[D,cc]}; B0={'none':D[:,:0],'const':D[:,:1],'x':D[:,:5],'xc':D[:,:9],'d':D,'cross':D[:,9:],'xcross':np.c_[D[:,:5],D[:,9:]],'xx':xx,'dxx':np.c_[D,xx]}\\ndef fit(A,B,y,link,reg):\\n fun,der=links[link]; ma=np.maximum(A.std(0),.04); ma[0]=1; a=A/ma; mb=np.maximum(B.std(0),.04); mb[mb==.04]=1; b=B/mb\\n p=a.shape[1]; q=b.shape[1]; r=np.sqrt(reg)*np.r_[np.repeat(.5,p),0.,np.ones(q)]; r[0]=0\\n init=np.r_[np.linalg.lstsq(a,y,rcond=None)[0]/2.5,2.5,np.zeros(q)]\\n def calc(w):return a@w[:p],w[p],w[p+1:]\\n def resid(w):\\n  z,h,v=calc(w);return np.r_[h*fun(z)+b@v-y,r*w]\\n def jac(w):\\n  z,h,v=calc(w);return np.vstack([np.c_[h*der(z)[:,None]*a,fun(z),b],np.diag(r)])\\n lo=np.full(len(init),-np.inf); hi=-lo; lo[p]=.15; hi[p]=15\\n w=least_squares(resid,init,jac=jac,bounds=(lo,hi),max_nfev=65).x\\n return w[:p]/ma,w[p],w[p+1:]/mb\\nresults=[]\\nfor ln in links:\\n for ak,A in A0.items():\\n  for bk,B in B0.items():\\n   if ak not in ('x','xc','d') and bk not in ('none','const'):continue\\n   for reg in (.0001,.003,.03):\\n    scores=[]\\n    for i,j in splits:\\n     a,h,b=fit(A[i],B[i],Y[i],ln,reg); scores.append(np.mean(abs(h*links[ln][0](A[j]@a)+B[j]@b-Y[j])))\\n    results.append((round(np.mean(scores),6),round(max(scores),6),round(scores[0],6),ln,ak,bk,reg))\\nfor row in sorted(results)[:28]:\\n print(row)\\nfor row in sorted(results)[:4]:\\n _,_,_,ln,ak,bk,reg=row; a,h,b=fit(A0[ak],B0[bk],Y,ln,reg); print(ln,ak,bk,h,np.round(a,4),np.round(b,4),np.mean(abs(h*links[ln][0](A0[ak]@a)+B0[bk]@b-Y)))\\nprint('trajectory block MAEs',[round(np.mean(np.abs((D[j]@np.linalg.lstsq(D[i],f['T'][i],rcond=None)[0])-f['T'][j])),6) for i,j in splits])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/link.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive polynomial expansion -> H2 saturating index with a separate interaction branch; the best transformed bilinear probe had mean MAE 0.03896 and worst-fold MAE 0.05107.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Unstructured quadratic and cubic completion of the bilinear basis is sufficient for validated scalar recovery.\",\n    \"empirical_witness\": \"All six tested polynomial extensions worsened the best mean fold MAE relative to the transformed bilinear basis; the full degree-three expansion exceeded 0.139 mean MAE.\",\n    \"causal_blanket_diagnosis\": \"The calibrated coordinates are predictive, but adding free monomials consumes degrees of freedom without representing the global scalar compression.\",\n    \"sublated_pivot\": \"Retain calibrated coordinates and compact bilinear features while testing a nonlinear index and a distinct additive interaction term.\",\n    \"risk_kind\": \"scalar model misspecification and extrapolation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fixed tanh inverse with amplitude 2.5\",\n      \"rejected_reason\": \"It passes the public suffix but reaches 0.05097 MAE on another fold, so the suffix result alone is insufficient.\"\n    }\n  ],\n  \"rationale\": \"Fit every link and coefficient using training rows only. Compare the nonlinear decompositions on the same held-out rows and audit trajectory error separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bb854a37f5ad5a6a7d4ffc51d297e9c9cb56941ec906a94b248963777ddd9eb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36462.67,
+      "usage_known": true,
+      "prompt_tokens": 28534,
+      "cached_tokens": 5504,
+      "completion_tokens": 1501
+    }
+  ]
+}

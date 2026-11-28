@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b7facf17132e453e8759657a20c980d0",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_16__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:35.213276+00:00",
+  "ended_at_utc": "2026-11-28T15:21:15.577984+00:00",
+  "request_sha256": "fda47181b5ef44b025886a16d7d709e89df52af87582ea2663d5d74692e756d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60543,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39145,
+    "cached_tokens": 12672,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"grep -n 'time readout\\\\|profile' /tmp/{rational,structure}.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py | grep 'time readout'; cat > /tmp/ardfit.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"for p in ['panel_a'\\\")[0])\\nfrom scipy.optimize import minimize\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\n\\ndef pred(w,r,tr,va,kind):\\n X=np.c_[np.ones(len(w)),w]; Q,R,VT=np.linalg.svd(X[tr],full_matrices=True); U=Q[:,5:]; L=X[va]@np.linalg.pinv(X[tr]); yy=U.T@r[tr]; w=w-w[tr].mean(0); ds=(w[:,None,:]-w[None,:,:])**2; ps=w[:,None,:]*w[None,:,:]; I=np.eye(len(yy)); sq=np.stack([w[:,i]*w[:,j] for i,j in combinations_with_replacement(range(4),2)],1); g=sq@sq.T\\n def kernel(p):\\n  a=np.exp(p[:4]); D=ds@a; ww=np.exp(p[4:]); k0=np.exp(-D/2); J=-.5*k0; k2=g\\n  if kind=='mat':\\n   h=np.sqrt(3*D); k0=(1+h)*np.exp(-h); J=-1.5*np.exp(-h)\\n  if kind=='add':\\n   k0=np.exp(-ds*a/2); J=-.5*k0; return ww[0]*k0.sum(2)+ww[1]*np.exp(-D/2)+ww[2]*k2, np.concatenate((ww[0]*J*ds*a-.5*ww[1]*np.exp(-D/2)[:,:,None]*ds*a, (ww[0]*k0.sum(2))[:,:,None],(ww[1]*np.exp(-D/2))[:,:,None],(ww[2]*k2)[:,:,None]),2)\\n  return ww[0]*k0+ww[1]*k2,np.concatenate((ww[0]*J[:,:,None]*ds*a,(ww[0]*k0)[:,:,None],(ww[1]*k2)[:,:,None]),2)\\n def loss(p):\\n  G,D=kernel(p); K=U.T@G[tr[:,None],tr]@U+np.exp(p[-1])*I; c=cho_factor(K); al=cho_solve(c,yy); E=cho_solve(c,I)-np.outer(al,al); d=.5*np.einsum('ij,ijk->k',U@E@U.T,D[tr[:,None],tr]); pen=.75*np.sum((p[:4]-p[:4].mean())**2); d[:4]+=1.5*(p[:4]-p[:4].mean()); return .5*yy@al+np.log(c[0].diagonal()).sum()+pen, np.r_[d,.5*np.trace(E)*np.exp(p[-1])]\\n seed=[-1]*4+[-3]*({'add':3}.get(kind,2))+[-10]; fit=minimize(loss,seed,method='L-BFGS-B',jac=True,bounds=[(-5,3)]*4+[(-16,2)]*(len(seed)-5)+[(-16,-4)]); p=fit.x; G=kernel(p)[0]; K=G[tr[:,None],tr]; al=cho_solve(cho_factor(U.T@K@U+np.exp(p[-1])*I),yy); return L@r[tr]+(G[va[:,None],tr]-L@K)@U@al\\nif __name__=='__main__':\\n rng=np.random.default_rng(801); splits=[np.arange(len(x))]+[rng.permutation(len(x)) for _ in range(8)]; allp=[]\\n for p in splits:\\n  tr,va=p[:n],p[n:]; S={**s,'train':{**s['train'],**{k:s['train'][k][tr] for k in ['x','y','traj']}},'test':{'x':x[va]}}; old=m.solve_batch(S); V=np.linalg.svd(t[tr],full_matrices=False)[2][0]; a=t@V; pp=[]; names=[]\\n  for kind in ('rbf','mat','add'):\\n   for k,w in [('x',x),('z',z),('h',h)]:\\n    pp.append((pred(w,y,tr,va,kind),pred(w,a,tr,va,kind)[:,None]*V)); names.append(kind+k)\\n  pp.append((old['y_hat'],old['state_pred'])); names.append('old'); pp.append(tuple(np.mean([q[j] for q in pp],0) for j in range(2))); names.append('avg'); print('split',[[name,round(np.mean(abs(q[0]-y[va])),5),round(np.mean(abs(q[1]-t[va])),5)] for name,q in zip(names,pp)],flush=True); allp.append((va,pp))\\n import pickle;pickle.dump((names,allp),open('/tmp/ardfit.pkl','wb'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ardfit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed covariance mixtures -> H2 learn continuous anisotropy within each fold; the best reported fixed mixture averaged 0.03994 scalar MAE with a 0.05796 worst split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the larger panel kernel bank\",\"rejected_reason\":\"The larger bank worsened both the prescribed and mean scalar validation errors.\"}],\"rationale\":\"Compare continuous anisotropy and additive versus joint smoothness against the archived solver on identical splits. Recover the trajectory-readout probe to see whether the two outputs should share more than input coordinates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9bee411197678b1fc887e76b32f5c951af9572c3ee1e861a699af8222616676f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41230.23,
+      "usage_known": true,
+      "prompt_tokens": 39145,
+      "cached_tokens": 12672,
+      "completion_tokens": 1575
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b84674dd0a714b868e5ca2ae594d26e3",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:30:44.588303+00:00",
+  "ended_at_utc": "2026-11-28T15:31:10.926466+00:00",
+  "request_sha256": "fd0d94c8fda4078e6c626a7ab60376a000009e18130a2988a8a99b76db7a402b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38445,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27704,
+    "cached_tokens": 12672,
+    "completion_tokens": 1077
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport conf_m102_b03_batch_11_solver as b, conf_m102_b03_batch_00_solver as a\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ls=b._ols; D=b._design\\nz=b._calibration(s['panel_a'])(tr['x']); n=52; u=s['panel_c']['u']; vs=[s['panel_c'][k] for k in ['v1','v2']]; c,d=[f(z) for f in b._branches(s['panel_c'])]; ca,da=[a._branch(s['panel_c'],z,k) for k in (1,2)]\\ndef score(x,y):\\n e=x[n:]@ls(x[:n],y[:n])-y[n:];return np.mean(abs(e))\\nfor name, aa,bb in [('archive11',c,d),('archive00',ca,da)]:\\n ff=D(np.c_[aa,bb,np.sum(aa*bb,axis=1)]); gg=D(np.c_[aa,bb,(aa[:,:,None]*bb[:,None,:]).reshape(len(z),16)]); print(name,score(ff,tr['y']),score(gg,tr['traj']), 'panel RMSE', [(np.mean((f(u)-v)**2))**.5 for f,v in zip(b._branches(s['panel_c']),vs)] if name=='archive11' else [np.mean((a._branch(s['panel_c'],u,k)-v)**2)**.5 for k,v in enumerate(vs,1)])\\nfrom itertools import combinations_with_replacement\\nfor deg in [1,2,3]:\\n X=D(np.column_stack([np.prod(z[:,co],axis=1) for k in range(1,deg+1) for co in combinations_with_replacement(range(4),k)])); print('poly',deg,score(X,tr['y']),score(X,tr['traj']))\\ntrans={'soft':b._soft,'tanh':np.tanh,'sin':np.sin,'cos':np.cos,'lorentz':lambda x:1/(1+x*x),'atan':np.arctan,'sqrt':lambda x:np.sqrt(1+x*x),'exp':lambda x:np.exp(-x*x),'rational':lambda x:x/(1+x*x),'softabs':lambda x:abs(x)/(1+abs(x))}\\nfor v in vs:\\n out=[]\\n for name,fn in trans.items():\\n  for phase in [False,True]:\\n   def obj(p):\\n    f=D(np.c_[u,fn(p[0]*u+(p[1:] if phase else 0))]);return (f@ls(f,v)-v).ravel()\\n   sols=[least_squares(obj,[f0]+([p0]*4 if phase else []),bounds=([.04]+([-6]*4 if phase else []),[8]+([6]*4 if phase else [])),max_nfev=120) for f0 in [.5,1.25,2.15,4.] for p0 in ([0.,.7] if phase else [0.])]; best=min(sols,key=lambda r:r.cost);out.append((np.sqrt(np.mean(best.fun**2)),name,phase,np.round(best.x,3)))\\n print('branch fits:',sorted(out,key=lambda r:r[0])[:10])\\nprint('panel b coefficients',ls(D(s['panel_b']['u']),s['panel_b']['v']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: The archived inverse nearly recovers the clean calibration pairs; test whether archived branch functions transfer before changing response features (reused-node MAEs 0.354048 and 0.219813).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare the two archived response models and fit candidate nonlinear branch terms directly on panel C, independently of the response holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d985d14c7a97026da6fd114da506707c7e383f3ac4c4e8e3d363602efe718d2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26337.28,
+      "usage_known": true,
+      "prompt_tokens": 27704,
+      "cached_tokens": 12672,
+      "completion_tokens": 1077
+    }
+  ]
+}

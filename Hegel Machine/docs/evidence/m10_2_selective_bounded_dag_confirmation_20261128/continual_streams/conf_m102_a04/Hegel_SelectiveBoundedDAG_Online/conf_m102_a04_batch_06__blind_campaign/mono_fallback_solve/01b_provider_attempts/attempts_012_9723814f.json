@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9723814f862a4f97abf94d81be7235f5",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:27:35.270188+00:00",
+  "ended_at_utc": "2026-11-28T15:28:15.575658+00:00",
+  "request_sha256": "c473194aa007d29df676bd2b4911077b7a92c43e08873c0f94ba6d82f8bb0e4d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72099,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43657,
+    "cached_tokens": 12672,
+    "completion_tokens": 1566
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/finish06.py <<'PY'\\nfrom cv06 import *\\nfrom itertools import combinations,product\\nfrom scipy.optimize import least_squares\\nT=np.c_[y,t]; n=len(z); one=np.ones(n); Z=z*np.roll(c,1,axis=1); D=c*d\\nbase=np.c_[one,Z,D,c,d]; a=np.arange(52); b=np.arange(52,72)\\nQ=np.linalg.qr(base[a])[0]; R=T[a]-Q@(Q.T@T[a]); print('base residual svd',np.linalg.svd(R,compute_uv=False)); pr=lambda f:f-Q@(Q.T@f)\\ncols=[]; names=[]\\ndef add(name,h):names.append(name);cols.append(h)\\nblocks={'z':z,'c':c,'d':d,'zc':Z,'cd':D}; vv=[(f'{k}{i}',v[:,i]) for k,v in blocks.items() for i in range(4)]+[('sumzc',Z.sum(1)),('sumcd',D.sum(1)),('sumc',c.sum(1)),('sumd',d.sum(1))]\\nfor (k,x),(l,h) in combinations(vv,2):\\n add(k+'*'+l,x*h)\\n for g in (-1,-.5,.5,1):\\n  q=x+g*h; nm=f'{k}{g:+g}{l}';\\n  for f in (0.5,1,1.25,2.4,3.2):\\n   add(f'cos{f}({nm})',np.cos(f*q)); add(f'sin{f}({nm})',np.sin(f*q)); add(f'tanh{f}({nm})',np.tanh(f*q));\\n  add(f'rat({nm})',q/(1+.22*q*q)); add(f'sqr({nm})',q*q/(1+.22*q*q));\\nfor k,x in vv:\\n for g in [.5,1,1.25,2.4,3.2]:\\n  add(f'cos{g}({k})',np.cos(g*x));add(f'sin{g}({k})',np.sin(g*x));add(f'tanh{g}({k})',np.tanh(g*x))\\nA=np.column_stack(cols); H=pr(A[a]); N=np.linalg.norm(H,axis=0).clip(1e-9); U,ss,V=np.linalg.svd(R,full_matrices=False)\\nfor j in range(3):\\n sc=abs(H.T@U[:,j])/N; jj=np.argsort(sc)[-12:][::-1]; print(j,[(names[i],round(sc[i],4)) for i in jj]);\\nfor j in range(9):\\n sc=abs(H.T@R[:,j])/N/np.linalg.norm(R[:,j]); jj=np.argsort(sc)[-3:][::-1]; print('out',j,[(names[i],round(sc[i],4)) for i in jj]);\\n# Separate output: scalar law is already near panel noise. For state keep mechanistic base, then model residual in the dominant temporal directions.\\ndef fn(a,b,lam=0.,k=0,fixed=()):\\n B=np.c_[base,A[:,list(fixed)]]; C=m._ls(B[a],T[a]); P=B@C; r=T[a,1:]-P[a,1:]; Q=np.linalg.qr(B[a])[0]; X=A[a]-Q@(Q.T@A[a]); nx=np.linalg.norm(X,axis=0).clip(1e-8); selected=[]\\n if lam:\\n  # Residual GP with a projected normalized operator kernel.\\n  M=A-B@m._ls(B[a],A[a]); M/=np.maximum(np.linalg.norm(M[a],axis=0),.03); K=M@M[a].T/A.shape[1]; P[b,1:]+=K[b]@np.linalg.solve(K[a]+lam*np.eye(len(a)),r)\\n else:\\n  for _ in range(k):\\n   sc=np.linalg.norm(X.T@r,axis=1)/nx; sc[selected]=-1;selected.append(sc.argmax()); G=np.c_[B,A[:,selected]]; C=m._ls(G[a],T[a,1:]); P[:,1:]=G@C; r=T[a,1:]-P[a,1:];Q=np.linalg.qr(G[a])[0];nx=np.linalg.norm(A[a]-Q@(Q.T@A[a]),axis=0).clip(1e-8)\\n return P[b,0],P[b,1:]\\nfor k in (0,2,4,6,9,12,16):\\n E=evaluate(lambda a,b:fn(a,b,k=k));print('k',k,E[0].round(5),E[1:9].max(0).round(5),E[9:].max(0).round(5))\\nfor lam in (1e-6,1e-5,1e-4,1e-3,1e-2):\\n E=evaluate(lambda a,b:fn(a,b,lam=lam));print('ridge',lam,E[0].round(5),E[1:9].max(0).round(5),E[9:].max(0).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/finish06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unstable joint sparse fit -> H2: separate the near-exact scalar law from the low-rank state residual; compact scalar MAE is 0.00728 on the public split, but compact trajectory MAE is 0.08376.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace both outputs with the compact fit\",\"rejected_reason\":\"Its trajectory error misses the public gate.\"}],\"rationale\":\"Keep the verified baseline intact while screening residual state operators. The compact readout already fits the scalar independently, while the leading residual singular value is over 25 times the next.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a5cf9d2932290795d23d292196960e3bbcaa6126a4afcfd5194dd1bb7c2e9691",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40304.19,
+      "usage_known": true,
+      "prompt_tokens": 43657,
+      "cached_tokens": 12672,
+      "completion_tokens": 1566
+    }
+  ]
+}

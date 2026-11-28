@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4cf61bf8051e4d4482a58b49fd7abfe9",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:38:30.748798+00:00",
+  "ended_at_utc": "2026-11-28T15:39:15.868338+00:00",
+  "request_sha256": "3cd4be0bbbd518983e325df7dea1964ed3777bd7c790aef98fd9e8b5b509475a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70597,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42136,
+    "cached_tokens": 12672,
+    "completion_tokens": 1894
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\nsrc=next(Path('/tmp/hegel_continual_archive').glob('*04_solver.py')).read_text().split('def _operator')[0]; Path('/holdout_task/batch_solver.py').write_text(src)\\nPY\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _operator(panel):\\n    u, v = panel['u'], panel['v']\\n    def design(x, p):\\n        f = abs(x)**p[1]\\n        return np.c_[_affine(x), x*f/(1+p[0]*f)]\\n    def residual(p):\\n        a = design(u,p)\\n        return (a@_ls(a,v)-v).ravel()\\n    p = least_squares(residual, [1.1,2.5], bounds=([.02,.3],[8,6])).x\\n    w = _ls(design(u,p),v)\\n    return lambda x: design(x,p)@w\\n\\n\\ndef _quad(x):\\n    i,j = np.triu_indices(x.shape[1]); return np.c_[_affine(x),x[:,i]*x[:,j]]\\n\\n\\ndef _features(x,b):\\n    return np.c_[_quad(x),_quad(b)[:,1:],x*b,x*np.roll(b,-1,axis=1),b*np.roll(x,-1,axis=1)]\\n\\n\\ndef _ridge(a,y,aq,lam):\\n    scale=np.maximum(np.linalg.norm(a,axis=0),1e-10)\\n    a=a/scale\\n    return (aq/scale) @ np.linalg.solve(a.T@a+lam*np.eye(a.shape[1]),a.T@y)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']; c=_calibration(study['panel_a']); b=_operator(study['panel_b'])\\n    x=_inverse(tr['x'],c); q=_inverse(study['test']['x'],c)\\n    a=_features(x,b(x)); aq=_features(q,b(q))\\n    y=_ridge(a,tr['y'],aq,.003)\\n    state=_ridge(a,tr['traj'],aq,.0003)\\n    end=state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),end.mean(),end.std()]) if len(y) else np.zeros(4)}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/late.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=m._inverse(s['train']['x'],m._calibration(s['panel_a'])); b=m._operator(s['panel_b'])(x); y=s['train']['y']; S=s['train']['traj']; splits=[np.arange(len(x))]+[np.random.default_rng(k).permutation(len(x)) for k in range(4)]\\nA=m._features(x,b); U=np.c_[x,b]; D=np.c_[np.ones(len(x)),U,U**2]; R=[]\\nfor bn,F in [('a',A),('full',m._quad(U)),('bare',m._quad(b)),('add',A[:,:29]),('sparse',np.c_[m._quad(b),x,x*b,x*np.roll(b,-1,axis=1),b*np.roll(x,-1,axis=1)])]:\\n for dn,G in [('x',x),('b',b),('xb',U),('qxb',D[:,1:]),('mix',np.c_[x,b,x*b]),('sumdiff',np.c_[x,b,b+np.roll(b,-1,axis=1),b-np.roll(b,-1,axis=1),x+np.roll(x,-1,axis=1),x-np.roll(x,-1,axis=1)])]:\\n  for lam in [.0001,.001,.005]:\\n   for mode in ['none','grid','proj','lin']:\\n    out=[]; details=[]\\n    for ids in splits:\\n     tr,te=ids[:52],ids[52:]; f=F/np.maximum(np.linalg.norm(F[tr],axis=0),1e-10); g=G/np.maximum(G[tr].std(0),.1); ft=f[tr]; gt=g[tr]; yt=y[tr]; E=np.eye(f.shape[1]);\\n     def fit(d):\\n      a=ft/d[tr,None]; w=np.linalg.solve(a.T@a+lam*E,a.T@yt); return a@w-yt,w\\n     if mode=='none':d=np.ones(len(x))\\n     if mode=='grid':\\n      opts=[1+c*g[:,j]**2 for j in range(g.shape[1]) for c in [.05,.15,.35,.8]]; d=min(opts,key=lambda z:np.mean(fit(z)[0]**2)+.0003*np.mean((z[tr]-1)**2))\\n     if mode=='proj':\\n      def fun(p):return np.r_[fit(1+(g@p)**2)[0],.10*p]\\n      P=[]\\n      for j in np.argsort(abs(gt.T@fit(np.ones(len(x)))[0]))[-2:]:\\n       start=np.zeros(g.shape[1]); start[j]=.25; P.append(least_squares(fun,start,max_nfev=40))\\n      p=min(P,key=lambda z:z.cost).x; d=1+(g@p)**2; details.append(p.round(2))\\n     if mode=='lin':\\n      dt=g*g; a=np.c_[ft,-yt[:,None]*dt[tr]]; p=np.linalg.solve(a.T@a+np.diag(np.r_[np.repeat(lam,f.shape[1]),np.repeat(.3,g.shape[1])]),a.T@yt)[f.shape[1]:]; d=np.maximum(.4,1+dt@p)\\n     e,w=fit(d); out.append(np.mean(abs(f[te]@w/d[te]-y[te])))\\n    R.append((np.array(out),bn,dn,lam,mode,details[:1]))\\nfor k in [lambda r:r[0][0],lambda r:r[0].mean(),lambda r:max(r[0])]:\\n for r in sorted(R,key=k)[:7]:print('R',r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/late.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 mixed quadratic readout → H2 test a rational scalar readout while retaining the mixed quadratic trajectory model; fixed-split MAEs are 0.0539 for y and 0.0249 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Save and schema-check the validated trajectory model and a scalar baseline first. Fit each candidate denominator inside its training fold and compare both the prescribed split and the worst additional split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "43d124df04c723480c5e39f38e76c9accd7cbe413fb257027d5ace3bfb1db606",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45117.77,
+      "usage_known": true,
+      "prompt_tokens": 42136,
+      "cached_tokens": 12672,
+      "completion_tokens": 1894
+    }
+  ]
+}

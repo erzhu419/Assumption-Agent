@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "807e758c04d0417a85d50d1304fffd85",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__init_decomp_conf_m102_a03_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:22.024728+00:00",
+  "ended_at_utc": "2026-11-28T14:58:50.640107+00:00",
+  "request_sha256": "96e2d76aec190e3e2c07bb04df026ad275f3e3a18eca47b9837e5395786b53b8",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4539,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14087,
+    "cached_tokens": 0,
+    "completion_tokens": 1176
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The panel fits and row encoding form a reusable numerical transform that does not use the training labels. The prediction node consumes the encoded rows once for both heads and reads the labels directly from the study. Keeping the two heads together limits raw-input fan-out to two. The split preserves the source computations and outputs; the role-blind shift statistics do not identify a stage to change.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    a = _affine(u)\\n    coef = _fit(a, v)\\n    for _ in range(24):\\n        residual = np.linalg.norm(a @ coef - v, axis=1)\\n        scale = max(float(np.median(residual)), 1e-12)\\n        weight = np.sqrt(np.minimum(1., 1.5 * scale / np.maximum(residual, 1e-12)))\\n        coef = _fit(a * weight[:, None], v * weight[:, None])\\n    residual = np.linalg.norm(a @ coef - v, axis=1)\\n    good = residual <= 5 * max(float(np.median(residual)), 1e-12)\\n    if good.sum() >= a.shape[1] and np.linalg.matrix_rank(a[good]) == a.shape[1]:\\n        coef = _fit(a[good], v[good])\\n        mat = coef[1:]\\n        off = mat - np.diag(np.diag(mat))\\n        if np.linalg.norm(off) <= 5 * max(float(np.median(residual)), 1e-12):\\n            for j in range(u.shape[1]):\\n                coef[0, j], coef[j + 1, j] = _fit(a[good][:, [0, j + 1]], v[good, j])\\n            coef[1:] = np.diag(np.diag(coef[1:]))\\n    return coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.asarray(study['train']['x'], dtype=float)\\n    target = np.asarray(study['test']['x'], dtype=float)\\n    a = _calibration(study['panel_a'])\\n    b = _fit(_affine(study['panel_b']['u']), study['panel_b']['v'])\\n\\n    def encode(rows):\\n        calibrated = np.linalg.solve(a[1:].T, (rows - a[0]).T).T\\n        return _affine(calibrated) @ b\\n\\n    return {'z': encode(x), 'zt': encode(target)}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _readout(z):\\n    return np.column_stack((z, z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    encoded = inputs['node_00']\\n    z, zt = encoded['z'], encoded['zt']\\n    yh = _readout(zt) @ _fit(_readout(z), train['y'])\\n    q, r = np.linalg.qr(z, mode='reduced')\\n    u, sv, vh = np.linalg.svd(q.T @ train['traj'], full_matrices=False)\\n    rank = min(2, len(sv))\\n    coef = _fit(r, (u[:, :rank] * sv[:rank]) @ vh[:rank])\\n    sp = zt @ coef\\n    diag = np.array([yh.mean(), yh.std(), sp[:, -1].mean(), sp[:, -1].std()])\\n    return {'y_hat': yh, 'state_pred': sp, 'diagnostics_vec': diag}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "a371442973bc42c392de7234b8ab8b5b86c88afe737b3a83966390113d188362",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28614.04,
+      "usage_known": true,
+      "prompt_tokens": 14087,
+      "cached_tokens": 0,
+      "completion_tokens": 1176
+    }
+  ]
+}

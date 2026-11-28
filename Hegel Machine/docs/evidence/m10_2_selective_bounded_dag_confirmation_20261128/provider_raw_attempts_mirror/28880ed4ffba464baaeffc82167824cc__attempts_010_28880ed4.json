@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28880ed4ffba464baaeffc82167824cc",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:20:56.036048+00:00",
+  "ended_at_utc": "2026-11-28T16:21:39.558037+00:00",
+  "request_sha256": "05b160cbc3cc8ac75dd470e3566388a72b5ee7fbcb43e61c996d2326a70c36e0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66653,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41911,
+    "cached_tokens": 12672,
+    "completion_tokens": 1912
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ard.py <<'PY'\\nfrom features import *\\nfrom itertools import combinations,combinations_with_replacement\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nP=lambda v:v*np.roll(v,-1,axis=1)\\npr=s['panel_c']; u=pr['u']; WC=fit(D(P(u)),pr['v1']); E=lambda x:D(np.sqrt(1+.924227*x*x)+.831839*x); WE=fit(E(u),pr['v2']);\\np=P(b); cb=D(p)@WC; eb=E(b)@WE\\n\\ndef build(z,b,c,e,cb,eb):\\n p=P(b); src=dict(z=z,b=b,c=c,e=e,p=p,cb=cb,eb=eb); fs={}\\n for name,v in list(src.items()):\\n  for fn,f in [('id',lambda x:x),('square',np.square),('cube',lambda x:x**3),('abs',abs),('sin',np.sin),('tanh',np.tanh),('asinh',np.arcsinh),('rat',lambda x:x/(1+x*x))]:\\n   for k in ([1.] if fn in ['id','square','cube','abs'] else [1.25,2.5,5.]):\\n    fs[f'{name}:{fn}:{k}']=f(k*v)\\n for k in [.176,.22,.275,.5,1.25]:\\n  for name,v in [('z',z),('e',e),('eb',eb),('cb',cb)]:\\n   for sg in [1,-1]:\\n    w=b+sg*k*v; key=f'b{sg:+d}{k}{name}'; fs[key+'p']=P(w)\\n    for n,f in [('sin',np.sin),('tanh',np.tanh),('asinh',np.arcsinh),('rat',lambda x:x/(1+x*x))]:fs[key+n]=f(1.25*w)\\n for a,h in combinations_with_replacement(['z','b','p'],2):\\n  f=src[a];v=src[h];fs[a+'*'+h]=np.einsum('ni,nj->nij',f,v).reshape(len(z),-1)\\n return fs\\n\\ndef solve_cov(K,y0,pen=.03,maxiter=100):\\n n=len(y0);I=np.eye(n);m=len(K);KF=K.reshape(m,-1); norm=max(np.std(y0),.01);y0=y0/norm\\n def loss(s):\\n  w=np.exp(s);A=(w@KF).reshape(n,n);A.flat[::n+1]+=1e-8\\n  f=cho_factor(A,check_finite=False);u=cho_solve(f,y0,check_finite=False); inv=cho_solve(f,I,check_finite=False);Q=inv-np.outer(u,u);return .5*(y0@u+2*np.log(f[0].diagonal()).sum())+pen*np.sum(w),w*(.5*(KF@Q.ravel())+pen)\\n st=np.full(m,-np.log(m));st[0]=0;st[-1]=-4\\n r=minimize(loss,st,jac=True,method='L-BFGS-B',bounds=[(-16,5)]*m,options={'maxiter':maxiter,'ftol':1e-8});return np.exp(r.x)\\n\\ndef kernels(z,b,c,e,cb,eb,i,wide=True):\\n fs=build(z,b,c,e,cb,eb); n=len(z); Ks=[np.ones((n,n))]; names=['const']\\n for key,v in fs.items():\\n  w=v-v[i].mean(0); w=w/np.maximum(.005,w[i].std(0));\\n  if wide:\\n   for j in range(w.shape[1]):Ks.append(np.outer(w[:,j],w[:,j]));names.append((key,j))\\n  else:Ks.append(w@w.T/w.shape[1]);names.append(key)\\n for key,v in dict(z=z,b=b,p=P(b),cb=cb,eb=eb,e=e,zb=np.c_[.4*z,b],zbp=np.c_[.25*z,b,1.5*cb],q=np.c_[.22*z,b,1.2*D(P(b+.45*e))@WC]).items():\\n  w=v-v[i].mean(0); w=w/max(.025,np.sqrt(np.mean(w[i]**2))); L=w@w.T/w.shape[1]; d=np.maximum(L.diagonal()[:,None]+L.diagonal()-2*L,0)\\n  for k in [.125,.5,1.5,5.]:Ks.append(np.exp(-k*d));names.append((key,'rbf',k))\\n  for k in [2,3]:Ks.append((1+L)**k);names.append((key,'poly',k))\\n Ks.append(np.eye(n));names.append('noise');return np.array(Ks),names\\n\\ndef pred(K,i,j,Y,w):\\n A=np.einsum('ijk,i->jk',K,w);return A[np.ix_(j,i)]@np.linalg.solve(A[np.ix_(i,i)]+1e-8*np.eye(len(i)),Y[i])\\nif __name__=='__main__':\\n for wide in [False,True]:\\n  for i,j in splits:\\n   K,nm=kernels(z,b,c,e,cb,eb,i,wide); w=solve_cov(K[:,i][:,:,i],y[i],maxiter=230); yh=pred(K,i,j,y,w); print('ARD',wide,round(abs(yh-y[j]).mean(),6),'noise',round(w[-1],6),[(nm[k],round(w[k],4)) for k in np.argsort(w)[-12:][::-1]],flush=True)\\n print('WB',fit(D(np.sign(s['panel_b']['u'])*np.maximum(abs(s['panel_b']['u'])-.35,0)**1.5),s['panel_b']['v']).round(4),'WC',WC.round(4),'WE',WE.round(4));print('svd',np.linalg.svd(g-g.mean(0),compute_uv=False));print('linear trajectory fit residuals')\\n for v in (z,b,np.c_[z,p],np.c_[z,b,p],np.c_[z,p,z*z,p*p],np.c_[z,p,eb]):\\n  A=D(v);print([np.abs(A[j]@fit(A[i],g[i])-g[j]).mean().round(5) for i,j in splits]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ard.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed composed features → H2 sparse readout selected inside each fold; best 52/20 MAEs so far are 0.07266 for y and 0.00999 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select individual transforms by their lowest 52/20 score\",\"rejected_reason\":\"The preceding screen found poor transfer to other folds; select feature weights using training labels only.\"}],\"rationale\":\"Fit sparse covariance weights over explicit composed features and residual kernels, and separately check whether simpler trajectory laws retain the verified accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cac48c8a576b780fc9cc87731d831f94b74bad64c63e2d38351f82b59dde29b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44073.04,
+      "usage_known": true,
+      "prompt_tokens": 41911,
+      "cached_tokens": 12672,
+      "completion_tokens": 1912
+    }
+  ]
+}

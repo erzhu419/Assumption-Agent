@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "575ca59796704edda8aab2f14ee7edf9",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:11.797757+00:00",
+  "ended_at_utc": "2026-11-28T15:43:42.666318+00:00",
+  "request_sha256": "46de6c016b2caa6758531ee1023fd08ca35cb7157f1b456bc602d5f389e113c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53079,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35103,
+    "cached_tokens": 12672,
+    "completion_tokens": 1342
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/model11.py /holdout_task/batch_solver.py\\ncat >>/holdout_task/batch_solver.py <<'PY'\\n\\n\\ndef _fit_state(times, observed, p, q):\\n    n = len(observed)\\n    dot = np.sum(p * q, axis=1)\\n    cross = (p[:, :, None] * q[:, None, :]).reshape(len(p), -1)\\n    # Fit both relaxation amplitudes in observation space, rather than\\n    # regressing on independently projected (and more noisy) amplitudes.\\n    def design(rates, fast, slow, rows):\\n        h = -np.expm1(-times[:, None] * rates)\\n        return np.concatenate((fast[rows, None, :] * h[None, :, :1],\\n                               slow[rows, None, :] * h[None, :, 1:]), axis=2).reshape(-1, fast.shape[1] + slow.shape[1])\\n    train, test = slice(None, n), slice(n, None)\\n    target = observed.ravel()\\n    _, _, rates, _ = trajectory(times, observed)\\n    fast_options = [D(np.c_[p, dot]), D(np.c_[p, q, dot]), D(p)]\\n    slow_options = [D(q), D(np.c_[q, dot])] + [D(np.c_[q, a]) for a in cross.T]\\n    candidates = []\\n    for fast in fast_options:\\n        for slow in slow_options:\\n            a = design(rates, fast, slow, train)\\n            e = a @ ls(a, target) - target\\n            candidates.append((e @ e + 3e-5 * a.shape[1], fast, slow))\\n    predictions = []\\n    for _, fast, slow in sorted(candidates, key=lambda item: item[0])[:6]:\\n        def residual(r):\\n            a = design(r, fast, slow, train)\\n            return a @ ls(a, target) - target\\n        fit = least_squares(residual, rates, bounds=([.8,.03],[5,1.3]))\\n        a = design(fit.x, fast, slow, train)\\n        score = fit.fun @ fit.fun + 3e-5 * a.shape[1]\\n        pred = design(fit.x, fast, slow, test) @ ls(a, target)\\n        predictions.append((score, pred.reshape(len(p) - n, len(times))))\\n    return min(predictions, key=lambda item: item[0])[1]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    z = calibrate(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    _, (p, _, _), (q, _, _) = panels(study, z)\\n    X = D(np.c_[p, q, np.sum(p * q, axis=1)])\\n    y = X[n:] @ ls(X[:n], train['y'])\\n    state = _fit_state(np.asarray(study['eval_times']), train['traj'], p, q)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom batch_solver import solve_batch,calibrate\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];t=s['train']; rng=np.random.default_rng(11); z=calibrate(s['panel_a'],t['x']);\\nfor name,idx in [('required',np.arange(72)),('reverse',np.arange(71,-1,-1)),('radius',np.argsort(np.linalg.norm(z,axis=1)))]+[(f'z{k}',np.argsort(z[:,k])) for k in range(4)]+[(f'random{k}',rng.permutation(72)) for k in range(5)]:\\n a,b=idx[:52],idx[52:]; rr=solve_batch(dict(s,train={k:v[a] if len(v)==72 else v for k,v in t.items()},test={'x':t['x'][b]})); ey=abs(rr['y_hat']-t['y'][b]); es=abs(rr['state_pred']-t['traj'][b]);print(name,ey.mean(),es.mean(),es.mean(0).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: calibrated panel-C outputs and their dot product predict y at 0.00389 MAE on the required split; jointly fit and stress-test the two trajectory modes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Regress the two trajectory amplitudes independently\",\"rejected_reason\":\"Their temporal basis functions are correlated; fitting in observation space lets each mode use its own spatial structure without amplifying projection noise.\"}],\"rationale\":\"The measured endpoint error supports the compact dual-branch interaction. Fit a small set of trajectory interaction alternatives on training rows only, then check both outputs across the prescribed and boundary splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8f1bf5962d8c2cac7d3c9197d458c8100e5c1ea415a518656a37dbbedeb9c4ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31375.28,
+      "usage_known": true,
+      "prompt_tokens": 35103,
+      "cached_tokens": 12672,
+      "completion_tokens": 1342
+    }
+  ]
+}

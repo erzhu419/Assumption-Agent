@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0090bea55a94430be29407214111704",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:29.670773+00:00",
+  "ended_at_utc": "2026-11-28T15:50:11.997096+00:00",
+  "request_sha256": "39aa703de145c7c2fb0155815ed58048fb092a31c81a4a6eb73d71d835317c08",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46342,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32024,
+    "cached_tokens": 12672,
+    "completion_tokens": 1837
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /holdout_task/node_00.py /tmp/hegel_node00_cheb.py\\ncat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel):\\n    u, v = (np.asarray(panel[key], dtype=float) for key in ('u', 'v'))\\n    n, p = u.shape\\n    eye = np.tile(np.eye(p), (n, 1))\\n    z = u.ravel()\\n    opposite = np.roll(u, -2, axis=1).ravel()\\n    d = np.column_stack((eye, eye * z[:, None], np.tanh(1.8 * z), np.sin(2.4 * opposite)))\\n    target = v.ravel()\\n\\n    def fit(rows):\\n        k = np.repeat(rows, p)\\n        return np.linalg.lstsq(d[k], target[k], rcond=None)[0]\\n\\n    center = np.median(v, axis=0)\\n    mad = np.maximum(np.median(np.abs(v - center), axis=0), 1e-8)\\n    good = np.max(np.abs(v - center) / mad, axis=1) < 6\\n    if good.sum() < n // 2:\\n        good[:] = True\\n    q = fit(good)\\n    # Refine on whole rows using forward residuals, not response magnitude.\\n    for _ in range(8):\\n        err = np.linalg.norm((d @ q - target).reshape(n, p), axis=1)\\n        k = max(p + 2, int(np.ceil(0.8 * n)))\\n        keep = np.argsort(err)[:k]\\n        good = np.zeros(n, dtype=bool)\\n        good[keep] = True\\n        q = fit(good)\\n    err = np.linalg.norm((d @ q - target).reshape(n, p), axis=1)\\n    q = fit(err <= max(8 * np.median(err), 1e-3))\\n    return q[:p], q[p:2*p], q[-2], q[-1]\\n\\n\\ndef _forward(z, fit):\\n    off, slope, a, b = fit\\n    return off + slope * z + a * np.tanh(1.8 * z) + b * np.sin(2.4 * np.roll(z, -2, axis=1))\\n\\n\\ndef _inverse(x, fit):\\n    off, slope, a, b = fit\\n    z = (x - off) / slope\\n    j = np.arange(x.shape[1])\\n    jac = np.zeros((len(x), len(j), len(j)))\\n    for _ in range(32):\\n        h = np.tanh(1.8 * z)\\n        cross = 2.4 * np.roll(z, -2, axis=1)\\n        residual = off + slope * z + a * h + b * np.sin(cross) - x\\n        if np.max(np.abs(residual), initial=0.) < 1e-12:\\n            break\\n        jac[:, j, j] = slope + 1.8 * a * (1 - h * h)\\n        jac[:, j, (j + 2) % len(j)] = 2.4 * b * np.cos(cross)\\n        step = np.linalg.solve(jac, residual[..., None])[..., 0]\\n        z -= np.clip(step, -0.5, 0.5)\\n    return z\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.concatenate((study['train']['x'], study['test']['x']), axis=0)\\n    z = _inverse(x, _calibrate(study['panel_a']))\\n    b = study['panel_b']\\n    return {'w': _aff(z) @ np.linalg.lstsq(_aff(b['u']), b['v'], rcond=None)[0]}\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys, numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport node_00 as m\\nbatch=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nrng=np.random.default_rng(335)\\nfor i,item in enumerate(batch):\\n s=item['study']; u,v=[s['panel_a'][k] for k in ('u','v')]; fit=m._calibrate(s['panel_a']); off,sl,a,b=fit\\n good=np.linalg.norm(m._forward(u,fit)-v,axis=1)<.005\\n assert a>0 and np.min(sl)>2.4*abs(b)\\n pred=[]\\n for j in np.flatnonzero(good):\\n  k=np.arange(len(u))!=j\\n  pred.append(m._inverse(v[j:j+1],m._calibrate({'u':u[k],'v':v[k]}))[0])\\n err=np.abs(np.array(pred)-u[good]); edge=np.abs(u[good])>=1.0\\n grid=np.r_[rng.uniform(-2.5,2.5,(10000,4)),np.array(np.meshgrid(*[[-2.5,2.5]]*4)).reshape(4,-1).T]; ge=np.max(np.abs(m._inverse(m._forward(grid,fit),fit)-grid))\\n x=np.r_[s['train']['x'],s['test']['x']]; qe=np.max(np.abs(m._forward(m._inverse(x,fit),fit)-x))\\n print('study',i,'contaminated rows',sum(~good),'forward rms',np.std((m._forward(u,fit)-v)[good]),'strict diagonal margin',np.min(sl)-2.4*abs(b),'leave-row worst channel MAE',err.mean(0).max(),'boundary MAE/max',err[edge].mean(),err[edge].max(),'extended grid max',ge,'observed inverse residual',qe)\\n assert err[edge].max()<.001 and ge<1e-8 and qe<1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared odd polynomial calibration → compact tanh self-response plus sinusoidal opposite-channel coupling; baseline public MAEs are 0.007485 and 0.005837, with worst held-out boundary inverse error 0.001560.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the verified Chebyshev baseline\",\n      \"rejected_reason\": \"It passes both prediction heads, but the compact law fits at the observed noise floor and provides a globally bounded cross-channel derivative without extrapolating a polynomial.\"\n    }\n  ],\n  \"rationale\": \"The measurements identify tanh and sine frequencies near 1.8 and 2.4. Check the compact law against both public heads, held-out calibration rows, and an extended inverse grid before promoting it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ab4abd9fdc3a5a4f7335cb6f97b000612e594bee405a61a63a6ea0e7c39f6145",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42899.56,
+      "usage_known": true,
+      "prompt_tokens": 32024,
+      "cached_tokens": 12672,
+      "completion_tokens": 1837
+    }
+  ]
+}

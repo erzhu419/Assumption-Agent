@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd0e7db6b3844a17a89d74bcace4479b",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:17.186464+00:00",
+  "ended_at_utc": "2026-11-28T15:06:45.079813+00:00",
+  "request_sha256": "45a577645e7ed9af3ffb9184186eea92f274bbf6130d00d7d0ad3719ba61bc9a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20947,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20911,
+    "cached_tokens": 12672,
+    "completion_tokens": 914
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel Procrustes affine calibration'; python3 - <<'PY'\\nimport pickle,numpy as np,runpy\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b03_batch_00_solver.py')\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; print(k)\\n for name,v in p.items():\\n  if name=='u': continue\\n  for deg in (1,2,3):\\n   X=np.c_[np.ones(len(u)),u]\\n   if deg>=2: X=np.c_[X,*[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]]\\n   if deg==3: X=np.c_[X,*[u[:,i]*u[:,j]*u[:,l] for i in range(4) for j in range(i,4) for l in range(j,4)]]\\n   L=np.linalg.lstsq(X,v,rcond=None)[0]; E=v-X@L; print(name,deg,np.quantile(abs(E),[.25,.5,.75,.9,1]));\\n   if deg==1:\\n    R=np.column_stack([least_squares(lambda b:X@b-v[:,j],L[:,j],loss='soft_l1',f_scale=.008).x for j in range(4)]); print('affine',R,'robust residual quantiles',np.quantile(abs(v-X@R),[.25,.5,.75,.9,1]),'per row',np.round(np.linalg.norm(v-X@R,axis=1),3))\\n for b in (1,2):\\n  if k=='panel_c': print('archive branch fit',b,np.quantile(abs(a['_branch'](p,u,b)-p['v'+str(b)]),[.5,.9,1]))\\nprint('old diag calibration',a['_align'](s['panel_a']))\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; yy,tt=a['_predict'](s,slice(52),x[52:]); print('baseline',np.mean(abs(yy-y[52:])),np.mean(abs(tt-t[52:])))\\nPY\\npython3 - <<'PY'\\nimport json\\nfor f in ('archive_manifest.json','pre_llm_gate_diagnostic.json'):\\n d=json.load(open('/tmp/hegel_continual_archive/'+f)); print(f); print(str(d)[:2200])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived diagonal calibration and branch products -> H2 test full affine calibration and localize residual response terms; no candidate CV measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the frozen temporal basis\",\n      \"rejected_reason\": \"The probe does not isolate a temporal-basis failure, and the node is outside the editable scope.\"\n    }\n  ],\n  \"rationale\": \"Measure panel residuals and archived held-out errors separately to distinguish a calibration shift from a change in the response equations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ce15e8028483a2bad71d30bed7f0bf696d24ed4d5a66286a76fbf89469b42139",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27892.38,
+      "usage_known": true,
+      "prompt_tokens": 20911,
+      "cached_tokens": 12672,
+      "completion_tokens": 914
+    }
+  ]
+}

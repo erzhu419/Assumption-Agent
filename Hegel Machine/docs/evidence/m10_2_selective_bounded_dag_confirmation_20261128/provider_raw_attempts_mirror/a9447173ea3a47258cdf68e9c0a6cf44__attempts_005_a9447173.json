@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9447173ea3a47258cdf68e9c0a6cf44",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:30.554690+00:00",
+  "ended_at_utc": "2026-11-28T15:13:58.679134+00:00",
+  "request_sha256": "6e28f097e80c5981eda3762b7a3281afed56a78ab525b01d9816dd046175e920",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42074,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31293,
+    "cached_tokens": 12672,
+    "completion_tokens": 1147
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/clean_probe.py <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u=s['panel_a']['u']; v=s['panel_a']['v']; keep=np.max(abs(v),axis=1)<4; print('Grossly corrupted rows:',np.flatnonzero(~keep));u=u[keep];v=v[keep];p=u.shape[1]; np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nfor deg in range(1,4):\\n terms=[t for d in range(deg+1) for t in itertools.combinations_with_replacement(range(p),d)]; X=np.array([np.prod(u[:,t],axis=1) for t in terms]).T; B=np.linalg.lstsq(X,v,rcond=None)[0]; R=X@B-v; h=np.sum(np.linalg.svd(X,full_matrices=False)[0]**2,axis=1);print('poly',deg,'rmse',np.sqrt(np.mean(R**2,axis=0)),'loo',np.sqrt(np.mean((R/(1-h[:,None]))**2,axis=0))); \\n if deg<3: print(list(zip(terms,B)))\\nX=np.c_[np.ones(len(u)),u]; Q=np.linalg.qr(X)[0]; ortho=lambda x:x-Q@(Q.T@x);R=ortho(v); print('clean residual svd',np.linalg.svd(R,full_matrices=False)[1]); print('max clean v',abs(v).max(0));\\nD={}\\nfor i in range(p):\\n for j in range(i,p):\\n  for a in ([0] if i==j else np.r_[np.arange(-2,0,.25),np.arange(.25,2.01,.25)]):\\n   z=u[:,i]+a*u[:,j]\\n   for d in range(2,5): D[i,j,a,'power',d]=z**d\\n   for w in np.arange(.5,10.01,.25):\\n    D[i,j,a,'sin',w]=np.sin(w*z);D[i,j,a,'cos',w]=np.cos(w*z);D[i,j,a,'tanh',w]=np.tanh(w*z);D[i,j,a,'rational',w]=z/(1+w*z*z)\\n   if i!=j:\\n    for w in np.arange(.5,10.01,.25):D[i,j,a,'sin_product',w]=np.sin(w*u[:,i]*u[:,j]);D[i,j,a,'cos_product',w]=np.cos(w*u[:,i]*u[:,j]);\\nkeys=list(D); F=ortho(np.column_stack(list(D.values()))); F/=np.maximum(np.linalg.norm(F,axis=0),1e-12); C=F.T@R/np.linalg.norm(R,axis=0)\\nfor j in range(p):\\n k=np.argmax(abs(C[:,j])); r=R[:,j]-F[:,k]*(F[:,k]@R[:,j]); c=F.T@r/np.linalg.norm(r); ids=np.argsort(-abs(c))[:4];print('column',j,'first',keys[k],C[k,j],'next',[(keys[i],round(c[i],5)) for i in ids]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/clean_probe.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS outlier regression'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel A with gross row corruption → H2 gross row corruption plus structured cross-channel calibration; the best robust affine probe still has median row error 0.307.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat every large affine residual as a corrupted observation\",\n      \"rejected_reason\": \"Three rows have residual norms near 12, but the other 45 still show widespread deviations up to 1.24; those smaller deviations may be calibration signal.\"\n    }\n  ],\n  \"rationale\": \"Isolate the three grossly corrupted rows for discovery, then use leave-one-out errors and residual term searches to distinguish cross-channel structure from polynomial overfit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "de67f21ee59acb359270c61edadfd6edaa3e47db2c5e55ca06180fa453189198",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28122.87,
+      "usage_known": true,
+      "prompt_tokens": 31293,
+      "cached_tokens": 12672,
+      "completion_tokens": 1147
+    }
+  ]
+}

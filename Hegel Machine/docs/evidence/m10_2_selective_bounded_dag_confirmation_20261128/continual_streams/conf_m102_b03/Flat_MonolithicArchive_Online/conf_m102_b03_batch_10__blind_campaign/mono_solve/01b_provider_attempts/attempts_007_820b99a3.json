@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "820b99a3b26947f1ba6e64bc2c066237",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:41.574274+00:00",
+  "ended_at_utc": "2026-11-28T15:38:22.735858+00:00",
+  "request_sha256": "8d624b45ec922fba67bd468acadbf8d32fd7f3a5d1a85beac2afb4c01a81a988",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45084,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29807,
+    "cached_tokens": 12672,
+    "completion_tokens": 1773
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/model10.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ndef D(x): return np.c_[np.ones(len(x)),x]\\ndef ls(x,y): return np.linalg.lstsq(x,y,rcond=1e-10)[0]\\n\\ndef calibrate(panel,x):\\n u,v=panel['u'],panel['v']; l=D(u); rng=np.random.default_rng(45)\\n a=min((ls(l[i],v[i]) for i in (rng.choice(len(u),8,False) for _ in range(240))),key=lambda a:np.median(np.linalg.norm(l@a-v,axis=1)))\\n r=np.linalg.norm(l@a-v,axis=1); good=r<5*np.median(r)\\n a=ls(l[good],v[good]); w=np.roll(u,-1,axis=1)\\n b,d,e,f,g=np.stack([ls(D(np.c_[u[:,j],w[:,j],u[:,j]*w[:,j],u[:,j]**3])[good],v[good,j]) for j in range(4)],axis=1)\\n z=np.linalg.solve(a[1:].T,(x-a[0]).T).T; j=np.arange(4)\\n for _ in range(20):\\n  w=np.roll(z,-1,axis=1); r=b+d*z+e*w+f*z*w+g*z**3-x\\n  if not r.size or abs(r).max()<1e-12: break\\n  J=np.zeros((len(z),4,4)); J[:,j,j]=d+f*w+3*g*z*z; J[:,j,(j+1)%4]=e+f*z\\n  z-=np.linalg.solve(J,r[...,None])[...,0]\\n return z\\n\\nFUN={'softsign':lambda x:x/(1+abs(x)),'tanh':np.tanh,'sin':np.sin,'cos':np.cos,'rat':lambda x:x/(1+x*x),'softplus':lambda x:np.logaddexp(0,x),'silu':lambda x:x/(1+np.exp(-x)),'gauss':lambda x:np.exp(-x*x),'erf':__import__('scipy.special',fromlist=['erf']).erf,'arctan':np.arctan}\\ndef branch(u,v,z,name,cat=1,shift=1,k0=1.2):\\n fun=FUN[name]\\n def mat(a,p):\\n  q=fun(a*p[0]+(p[1:] if shift else 0)); return D(np.c_[a,q] if cat else q)\\n def res(p):\\n  H=mat(u,p); return (H@ls(H,v)-v).ravel()\\n p=least_squares(res,[k0]+[0.]*(4*shift),bounds=([.04]+[-5.]*(4*shift),[7.]+[5.]*(4*shift)),max_nfev=160).x\\n h=mat(u,p); return np.std(res(p)),p,mat(z,p)@ls(h,v),mat(z,p)\\n\\ndef timebasis(t,Y):\\n def h(p): return -np.expm1(-t[:,None]*p)\\n def loss(p):\\n  H=h(p); return (H@ls(H,Y.T)-Y.T).ravel()\\n return h(least_squares(loss,[1.8,.4],bounds=([.8,.025],[6.,.79])).x)\\n\\nif __name__=='__main__':\\n import pickle\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u=s['panel_c']['u']; tr=s['train']; z=calibrate(s['panel_a'],tr['x']); b=D(z)@ls(D(s['panel_b']['u']),s['panel_b']['v']); print('z range',z.min(0),z.max(0));\\n t=timebasis(s['eval_times'],tr['traj'][:52]); Y=np.c_[tr['y'],ls(t,tr['traj'].T).T]\\n def cv(f):\\n  f=D(f); R=f[52:]@ls(f[:52],Y[:52])-Y[52:]; return np.round(np.r_[np.mean(abs(R),0),np.mean(abs(R[:,1:]@t.T))],5)\\n def pair(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\n cand={}\\n for k in ['v1','v2']:\\n  v=s['panel_c'][k]; L=[]\\n  for name in FUN:\\n   for cat in [0,1]:\\n    for shift in [0,1]:\\n     for k0 in ([1.,2.4,3.5] if name in ['sin','cos'] else [1.2]):\\n      a=branch(u,v,z,name,cat,shift,k0); L.append((*a[:2],name,cat,shift,k0,a[2],a[3]))\\n  L.sort(key=lambda a:a[0]); cand[k]=L; print(k,[(round(a[0],7),a[1].round(4),a[2:6]) for a in L[:10]])\\n for j in [0,1,2,3,5,8]:\\n  a=cand['v1'][j][-2]; c=cand['v2'][0][-2]; cross=pair(a,c); dot=(a*c).sum(1)\\n  for name,f in [('a,c,dot',np.c_[a,c,dot]),('a,c,dot,c01',np.c_[a,c,dot,a[:,0]*c[:,1]]),('a,c,cross',np.c_[a,c,cross]),('z,a,c,cross',np.c_[z,a,c,cross]),('b,a,c,dot',np.c_[b,a,c,dot]),('a,c,all2',np.c_[a,c,pair(a,a),cross,pair(c,c)])]: print(j,name,cv(f))\\n for q in [z,b]:\\n  for a in [q,cand['v1'][0][-2],cand['v2'][0][-2]]:\\n   print('base',cv(np.c_[q,a,pair(q,a)]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/model10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal alignment → H2 cyclic cubic alignment with two relaxation modes; inlier calibration residual SD is below 0.000102 in every channel, while spatial 52/20 MAE is pending.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An independent affine channel map explains panel A.\",\"empirical_witness\":\"Across 45 inliers, the forward-neighbor linear, bilinear, and self-cubic terms reduce residual SD to 0.000079–0.000102 per channel, versus roughly 0.17–0.20 for the affine fit.\",\"causal_blanket_diagnosis\":\"The calibration residual is structured by the next channel and the channel's own cubic response, not just sparse contamination.\",\"sublated_pivot\":\"Robustly fit the cyclic calibration and invert it before comparing downstream operators.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the best unshifted panel C fit\",\"rejected_reason\":\"The v1 residual remains about 0.01, so shifted channel activations and their downstream products warrant testing.\"}],\"rationale\":\"Use the recovered calibration and time basis to compare explicit panel maps and their cross-products on the required held-out split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f8ef73f654fcbd6a33832a16a7621a44aa2413314b3aa6dd499b44fd7b652d66",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41160.03,
+      "usage_known": true,
+      "prompt_tokens": 29807,
+      "cached_tokens": 12672,
+      "completion_tokens": 1773
+    }
+  ]
+}

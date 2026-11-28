@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dea6f28689b9434bb4ef1faa836b5f9b",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:44.709006+00:00",
+  "ended_at_utc": "2026-11-28T15:56:22.927677+00:00",
+  "request_sha256": "e42d1929eedf61e317731bfaf789637e3823d674d1fa7bcaca90b5a23b102687",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44186,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29747,
+    "cached_tokens": 12672,
+    "completion_tokens": 1675
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators13.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\naff=lambda u:np.c_[np.ones(len(u)),u]\\nquad=lambda u:np.c_[[u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)]].T\\nfn={'lin':lambda x,k:x,'sin':lambda x,k:np.sin(k*x),'cos':lambda x,k:np.cos(k*x),'tanh':lambda x,k:np.tanh(k*x),'asinh':lambda x,k:np.arcsinh(k*x),'rat':lambda x,k:x/(1+k*x*x),'sq':lambda x,k:x*x}\\ndef scan(p,key,kinds):\\n u,v=p['u'],p[key]; records=[]\\n for names,feat,ini in kinds:\\n  def res(k):\\n   d=aff(feat(u,k));return (d@ls(d,v)-v).ravel()\\n  o=least_squares(res,ini,bounds=(.06,6),max_nfev=100); d=aff(feat(u,o.x)); w=ls(d,v); h=np.sum(d*np.linalg.pinv(d).T,1); e=res(o.x).reshape(v.shape); records.append((np.sqrt(np.mean((e/(1-h[:,None]))**2)),np.std(e),names,o.x,w,feat))\\n for loo,err,n,k,w,_ in sorted(records,key=lambda a:a[0])[:9]:print(key,n,np.round(k,4),round(err,6),round(loo,6), 'coef',np.round(w,3).tolist() if err<.004 else '')\\n return sorted(records,key=lambda a:a[0])\\nB=[]; C=[]\\nfor base in ('cos','tanh','asinh','rat','sin'):\\n for extra in ('none','lin','sin','cos','sq','tanh','asinh','rat','quad','sinprod'):\\n  def f(u,k,base=base,extra=extra):\\n   a=fn[base](u,k[0]);\\n   if extra=='none':return a\\n   if extra=='quad':return np.c_[a,quad(u)]\\n   if extra=='sinprod':return np.c_[a,np.sin(k[1]*u*np.roll(u,1,axis=1))]\\n   return np.c_[a,fn[extra](u,k[1])]\\n  (B if base=='cos' else C).append((base+'+'+extra,f,[2,1.5] if extra not in ('none','quad') else [2]))\\nfor rot in [-1,1,2,0]:\\n def f(u,k,rot=rot):return np.tanh(k[0]*u)+k[2]*np.sin(k[1]*np.roll(u,rot,axis=1))\\n C.append((f'coupled{rot}',f,[1.75,2.1,.3]));\\nfor rot in [-1,1,2,0]:\\n def f(u,k,rot=rot):return np.cos(k[0]*u)+k[2]*np.sin(k[1]*np.roll(u,rot,axis=1))\\n B.append((f'coupled{rot}',f,[2,2,.15]));\\nb=scan(s['panel_b'],'v',B); c=scan(s['panel_c'],'v1',C)\\np=s['panel_c'];u,v=p['u'],p['v2']; print('C2 quad',np.round(ls(aff(np.c_[u,quad(u)]),v),4)); print('C2 cross only',np.std(aff(np.c_[u,u*np.roll(u,1,axis=1)])@ls(aff(np.c_[u,u*np.roll(u,1,axis=1)]),v)-v));print('telemetry',s['telemetry_vec'],'times',s['eval_times'])\\n# Compare candidate stage inputs and outputs, with fixed basis and fit on the first 52 rows.\\na=s['panel_a']; co=[]\\nfor j in range(4):\\n d=aff(a['u'][:,j]); z=a['v'][:,j]; ix=np.arange(len(z));\\n for _ in range(10):ix=np.argsort(abs(d@ls(d[ix],z[ix])-z))[:40]\\n e=abs(d@ls(d[ix],z[ix])-z);ix=e<.001;co.append(ls(d[ix],z[ix]))\\nco=np.array(co);x=(s['train']['x']-co[:,0])/co[:,1];T=s['train']['traj'];Y=np.c_[s['train']['y'],T]; n=52\\nops=[]\\nfor key,records in [('b',b),('c1',c)]:\\n for _,_,name,k,w,f in records[:4]:ops.append((key+name,lambda u,k=k,w=w,f=f:aff(f(u,k))@w))\\nw=ls(aff(np.c_[u,quad(u)]),v);ops.append(('c2',lambda u:aff(np.c_[u,quad(u)])@w));\\ncoords=[('z',x)]+[(name,f(x)) for name,f in ops]; coords += [(bn+':'+cn,cf(bf(x))) for bn,bf in ops if bn.startswith('b') for cn,cf in ops if cn.startswith('c')]; coords += [(bn+':'+cn,cf(bf(x))) for bn,bf in ops if bn.startswith('c') for cn,cf in ops if cn.startswith('b')];\\nD=[]\\nfor name,z in coords:\\n for k,d in [('lin',aff(z)),('quad',aff(np.c_[z,quad(z)]))]:\\n  e=np.mean(abs(d[n:]@ls(d[:n],Y[:n])-Y[n:]),0);D.append((e[1:].mean(),e[0],name,k))\\nprint('trajectory',sorted(D)[:14]);print('scalar',sorted(D,key=lambda a:a[1])[:14]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators13.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived dead-zone and affine operator compositions → H2: diagonal calibration, even Panel B map, dual Panel C outputs, and two temporal modes; temporal fit RMSE is 0.00455, while archived 52/20 MAEs remain above tolerance.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel B strongly favors an even component, Panel C v2 favors quadratic terms, and the trajectory supports two shared rates. Fit sparse operator candidates and compare directed compositions on the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6245de3610b505509b8b39d7e155ca4060b7282010b79c77c81de6583a860b69",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38750.23,
+      "usage_known": true,
+      "prompt_tokens": 29747,
+      "cached_tokens": 12672,
+      "completion_tokens": 1675
+    }
+  ]
+}

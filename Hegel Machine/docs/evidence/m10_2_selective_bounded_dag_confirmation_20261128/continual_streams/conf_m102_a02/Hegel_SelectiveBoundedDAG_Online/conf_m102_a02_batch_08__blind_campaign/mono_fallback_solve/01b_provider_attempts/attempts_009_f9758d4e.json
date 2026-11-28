@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9758d4ea04141f4855286f1bdcbc3bc",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:32.955822+00:00",
+  "ended_at_utc": "2026-11-28T15:40:04.860483+00:00",
+  "request_sha256": "a044acccb94f18325f194a543355e67b1ab8f26d38f1e0b41d1e6607c94afe17",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54728,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37151,
+    "cached_tokens": 12672,
+    "completion_tokens": 1369
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/expand08.py <<'PY'\\nexec(open('/tmp/read08.py').read().split(\\\"print('C range'\\\")[0]); from scipy.optimize import least_squares\\nh=q[:,2]; N=np.ones(len(q)); X=np.c_[N,b]; rng=np.random.default_rng(412); folds=folds+[(np.setdiff1d(np.arange(52),j),j) for j in np.array_split(rng.permutation(52),4)];\\ndef run(fun,p0=[],bounds=(-np.inf,np.inf),reg=0):\\n es=[]; ps=[]; rs=[]; ws=[]\\n for i,j in folds:\\n  def fit(p):\\n   f=fun(p)[i]; w=ls(f,y[i]);return f@w-y[i],w\\n  p=least_squares(lambda p:np.r_[fit(p)[0],np.sqrt(reg)*(p-np.array(p0))],p0,bounds=bounds,max_nfev=150).x if len(p0) else []\\n  r,w=fit(p);es.append(err(fun(p)[j]@w-y[j]));ps.append(p);rs.append(np.sqrt(np.mean(r*r)));ws.append(w)\\n e=np.array(es);return np.mean(e[1:]),np.max(e[1:]),e[0],rs[0],fmt(ps[0]),fmt(ws[0])\\nR=[]\\ndef add(k,f,p0=[],bd=(-np.inf,np.inf),reg=0):R.append((k,run(f,p0,bd,reg)))\\nfor name,H in [('q',q),('x',x),('b',b)]:\\n for kind in ['shift','tilt','squared','anis']:\\n  for mode in ['B','X','all','mixed','quad','mixed3']:\\n   a0=[.3,0] if kind=='shift' else ([.3] if kind=='squared' else [.3,0,0,0,0] if kind=='anis' else [.3,0,0,0]);bd=([0]+[-.7]*(len(a0)-1),[2]+[.7]*(len(a0)-1))\\n   def f(p):\\n    hh=H[:,2]; t=H[:,[0,1,3]]\\n    g=p[0]*(hh+(p[1] if kind=='shift' else t@p[1:] if kind=='tilt' else 0))**2\\n    if kind=='anis':g+=np.sum((t*p[1:4])**2,axis=1)+p[4]*hh\\n    rr=1/np.maximum(.25,1+g);rr=rr[:,None]\\n    if mode=='B':return np.c_[N,C,b*rr]\\n    if mode=='X':return np.c_[C,X*rr]\\n    if mode=='all':return np.c_[N,np.c_[b,C]*rr]\\n    if mode=='mixed':return np.c_[base,b*(hh**2*rr[:,0])[:,None]]\\n    if mode=='quad':return np.c_[N,C,b*rr,b*(hh*rr[:,0])[:,None]]\\n    return np.c_[base,b*(hh**2*rr[:,0])[:,None],b*hh[:,None]]\\n   add((name,kind,mode),f,a0,bd,.01 if kind in ['tilt','anis'] else 0)\\nfor deg in (1,2,3,4):\\n for mode in ['b','X','full','partial']:\\n  def f(p):\\n   hh=h[:,None]; d=np.c_[*[b*hh**k for k in range(1,deg+1)]]\\n   if mode=='b':return np.c_[base,d]\\n   if mode=='X':return np.c_[base,d,*[hh**k for k in range(1,deg+1)]]\\n   if mode=='full':return np.c_[full,d]\\n   return np.c_[base,b*hh**2,b[:,3]*h]\\n  add(('poly',deg,mode),f)\\nfor k,v in sorted(R,key=lambda r:r[1][0])[:32]:print(k, tuple(np.round(v[:4],5)),v[4],v[5]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/expand08.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 one-coordinate rational gate → H2 distinguish a shifted or tilted gate from independently modulated panel-B components; current passing 52/20 scalar MAE is 0.0369 and worst inner-fold MAE is 0.0441.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The squared-coordinate expansion favors a gate, but differing component attenuation and a useful odd term suggest a shifted gate or a second branch. Compare these hypotheses on repeated folds within the first 52 rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "465e6846b5a2e6e41bbcaa87b42add8e0a79fd8af9fa152b420aaedbd4c31fbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31903.15,
+      "usage_known": true,
+      "prompt_tokens": 37151,
+      "cached_tokens": 12672,
+      "completion_tokens": 1369
+    }
+  ]
+}

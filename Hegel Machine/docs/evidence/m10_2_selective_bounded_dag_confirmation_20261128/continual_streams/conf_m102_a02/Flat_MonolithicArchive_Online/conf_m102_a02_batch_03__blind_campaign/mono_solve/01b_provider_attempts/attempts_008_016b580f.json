@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "016b580fea7f44849216a4a4f1e64e3d",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:43.736087+00:00",
+  "ended_at_utc": "2026-11-28T15:17:24.238438+00:00",
+  "request_sha256": "b6b62da492452bc1e8bfb594a34baec81f64c7f80a2eddb60c9866f22419637c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49260,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33234,
+    "cached_tokens": 12672,
+    "completion_tokens": 1742
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Cyclic coordinate calibration and shared two-mode relaxation forecasts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _next(x):\\n    return np.roll(x, -1, axis=1)\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    w = []\\n    for a, b, y in zip(u.T, _next(u).T, v.T):\\n        f = np.column_stack((np.ones(len(a)), a, b, a*b, a**3))\\n        # Least-trimmed pilot: the coordinate law is overdetermined even\\n        # after discarding the largest residuals in each channel.\\n        p = _ls(f, y)\\n        k = max(f.shape[1]+1, int(.8*len(a)))\\n        for _ in range(8):\\n            keep = np.argsort(abs(f@p-y))[:k]\\n            p = _ls(f[keep], y[keep])\\n        r = abs(f@p-y)\\n        keep = r <= max(7*np.median(r), 1e-6)\\n        w.append(_ls(f[keep], y[keep]) if keep.sum() >= f.shape[1] else p)\\n    return np.asarray(w).T\\n\\n\\ndef _inverse(x, w):\\n    c, a, b, p, d = w\\n    z = (x-c)/a\\n    j = np.arange(x.shape[1]); J = np.zeros((len(x), len(j), len(j)))\\n    for _ in range(20):\\n        nxt = _next(z)\\n        r = c+a*z+b*nxt+p*z*nxt+d*z**3-x\\n        if np.max(abs(r), initial=0.) < 1e-11:\\n            break\\n        J[:,j,j] = a+p*nxt+3*d*z*z\\n        J[:,j,(j+1)%len(j)] = b+p*z\\n        step = np.linalg.solve(J, r[...,None])[...,0]\\n        z -= np.clip(step, -.5, .5)\\n    return z\\n\\n\\ndef _basis(t, traj):\\n    def basis(k):\\n        return -np.expm1(-t[:,None]*k)\\n    def err(k):\\n        B = basis(k)\\n        return (B@_ls(B, traj.T)-traj.T).ravel()\\n    rates = least_squares(err, [1.8,.4], bounds=([.8,.03],[8.,.79])).x\\n    return basis(rates)\\n\\n\\ndef _design(x, kind):\\n    i, j = np.triu_indices(x.shape[1])\\n    s = {'rat': lambda q:q/(1+q*q), 'tanh':np.tanh,\\n         'gauss':lambda q:q*np.exp(-q*q)}[kind](x)\\n    return np.column_stack((np.ones(len(x)), x, x[:,i]*x[:,j], s,\\n                            (x[:,:,None]*s[:,None,:]).reshape(len(x), x.shape[1]**2)))\\n\\n\\ndef _predict(x, q, target, kind, penalty):\\n    f, g = _design(x, kind), _design(q, kind)\\n    reg = np.eye(f.shape[1])*np.sqrt(penalty)\\n    return g@_ls(np.r_[f,reg], np.r_[target, np.zeros((len(reg),target.shape[1]))])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    w = _calibration(study['panel_a'])\\n    x, q = [_inverse(np.asarray(m['x'], dtype=float), w) for m in (train, study['test'])]\\n    B = _basis(np.asarray(study['eval_times']), np.asarray(train['traj']))\\n    target = np.column_stack((train['y'], _ls(B,np.asarray(train['traj']).T).T))\\n    result = (.55*_predict(x,q,target,'rat',.02) + .25*_predict(x,q,target,'gauss',.02)\\n              + .2*_predict(x,q,target,'tanh',.02))\\n    y, z = result[:,0], result[:,1:]@B.T\\n    return {'y_hat':y, 'state_pred':z,\\n            'diagnostics_vec':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])}\\nPY\\ncat >/tmp/check.py <<'PY'\\nimport numpy as np, pickle, runpy\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/holdout_task/batch_solver.py'); t=s['train']; x=t['x']; y=t['y']; z=t['traj']; w=m['_calibration'](s['panel_a']); print('calibration',w)\\nu=m['_inverse'](x,w); orders=[np.arange(72)]+[np.random.default_rng(k).permutation(72) for k in range(12)]+[np.argsort(g) for g in [np.linalg.norm(u,axis=1),*u.T,*(-u).T]]\\nfor k,o in enumerate(orders):\\n i,j=o[:52],o[52:]; a=m['solve_batch']({**s,'train':{**t,'x':x[i],'y':y[i],'traj':z[i]},'test':{'x':x[j]}}); e=abs(a['y_hat']-y[j]); r=abs(a['state_pred']-z[j]); print(k, np.round([e.mean(),r.mean(),r.mean(axis=0).max(),e.max(),r.max()],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (raw-coordinate nonlinear regression) -> H2 (inverse cyclic calibration with nonlinear relaxation amplitudes); the inverse-calibrated prototype reached 52/20 MAEs of 0.007323 for response and 0.014215 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use panel C outputs directly as features\",\"rejected_reason\":\"The tested operator approximations underperformed the inverse-calibrated nonlinear interaction basis for both outputs.\"}],\"rationale\":\"Save a standalone solver with the cubic calibration term supported by panel residuals. Verify the required split, random holdouts, and coordinate-tail holdouts before refining the spatial law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "173fe182e8b23e6c93f20aa7db43accffadacb4ed6df951feeb1b22ab752b68e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40501.06,
+      "usage_known": true,
+      "prompt_tokens": 33234,
+      "cached_tokens": 12672,
+      "completion_tokens": 1742
+    }
+  ]
+}

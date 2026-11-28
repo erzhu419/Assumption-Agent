@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32f6881a906b4466854c25b2618617cb",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:51.708627+00:00",
+  "ended_at_utc": "2026-11-28T15:02:23.319111+00:00",
+  "request_sha256": "8fe7822f655ab7b9dc37bbb6728cd84775804c5274c53aaf0eb3dab902b6bd7f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54402,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37855,
+    "cached_tokens": 12672,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; cat > /tmp/branch8.py <<'PY'\\nexec(open('/tmp/graph7.py').read().split('print(\\\\'summary\\\\'')[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations\\nrng=n.random.default_rng(33)\\n# Probe residual updates, including auxiliary operators evaluated at the same intermediate input.\\nB,C=v,v1\\nrv=n.linalg.svd(T[:52],full_matrices=False)[2][:2]; target=n.c_[y,T@rv.T]; sc=target[:52].std(0)\\nsplits=[n.arange(72)]+[rng.permutation(72) for _ in range(4)]\\ndef reg(D,a):\\n mu=D.mean(0); sig=n.maximum(.005,D.std(0)); return n.c_[n.ones(len(D)),(D-mu)/sig]\\ndef assess(D,allfold=False):\\n es=[]\\n for P in (splits if allfold else splits[:1]):\\n  i,j=P[:52],P[52:];a=D[i]; d,U=n.linalg.eigh(a@a.T); pred=(D[j]@a.T@U)[None,:,:]@((U.T@target[i])[None,:,:]/(d[None,:,None]+n.array([.00001,.0002,.003,.03,.2])[:,None,None])); es.append(n.mean(abs(pred-target[j]),axis=1))\\n return n.array(es)\\ndef features(W,typ):\\n if typ=='lin':return reg(n.c_[tuple(W)],0)\\n if typ=='diag':return reg(n.c_[tuple(W+[w*w for w in W])],0)\\n if typ=='cross':return reg(n.c_[tuple(W+[W[i]*W[j] for i,j in combinations(range(len(W)),2)])],0)\\n if typ=='full':return reg(n.c_[tuple([poly(w,2)[:,1:] for w in W])],0)\\n if typ=='cube':return reg(n.c_[tuple([poly(w,2)[:,1:] for w in W]+[w**3 for w in W])],0)\\nrows=[]\\nfor a in [-2,-1,-.5,-.22,0,.22,.5,.75,1,1.25,1.5,2,3,5]:\\n for init,w in [('z+aB',z+a*B(z)),('z+aC',z+a*C(z)),('B+az',B(z)+a*z),('z+aV',z+a*V(z)),('C+az',C(z)+a*z),('aB',a*B(z)),('aC',a*C(z))]:\\n  W={'z':z,'w':w,'B':B(w),'C':C(w),'V':V(w),'BC':B(C(w)),'CB':C(B(w)),'VB':V(B(w)),'VC':V(C(w))}\\n  groups=[k for m in [1,2,3] for k in combinations(W,m) if m<3 or k[0] in ['z','w']]+[('w','B','C','V'),('w','C','V','CB'),('z','C','V','CB'),('w','C','V','VB')]\\n  for keys in groups:\\n   for typ in ['lin','diag','cross','full','cube']:\\n    D=features([W[k] for k in keys],typ); e=assess(D)[0];\\n    for col in range(3):\\n     i=e[:,col].argmin();rows.append((e[i,col],col,a,init,keys,typ,i,e[i],D)) if e[i,col]/sc[col]<.19 else None\\nfor col in range(3):\\n print('BEST',col)\\n for _,_,a,init,keys,typ,i,e,D in sorted((r for r in rows if r[1]==col),key=lambda r:r[0])[:12]:print(a,init,keys,typ,i,e,'CV',assess(D,True)[1:,i,col])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct panel compositions -> H2 residual updates and parallel branches; regularized direct compositions reach about 0.074 y MAE and 0.059 mean trajectory MAE on 52/20.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the direct-composition kernel\",\"rejected_reason\":\"Both output errors remain above 0.038.\"}],\"rationale\":\"The current models compose panel maps without testing residual updates. Probe shared intermediate inputs and low-order branch interactions, then check leading structures on additional splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "72e8da1190ef2c6ce9b2bacd4e1171bd3d0ed068cfac8b8b6d443fb11348b4e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32079.26,
+      "usage_known": true,
+      "prompt_tokens": 37855,
+      "cached_tokens": 12672,
+      "completion_tokens": 1305
+    }
+  ]
+}

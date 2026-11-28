@@ -1,0 +1,176 @@
+"""Compiled ExecutableComputationDAG runtime (`M10.1` instrumented anti-aliasing & `exec_count == 1`)."""
+from __future__ import annotations
+from copy import deepcopy
+import hashlib
+import json
+import math
+import os
+import numpy as np
+
+_DAG_SPEC = '{"dag_id": "dag_22", "depth": 1, "fanout_by_node": {"node_00": 0}, "incoming": {"node_00": ["__input__"]}, "max_fanout": 0, "node_code_shas": {"node_00": "e63ed3a5fa4c14b25d7e9ecdcf9d59d14be9b608a221b3cbb50922b12d1da284"}, "shared_fanout_nodes": [], "sink_node_id": "node_00", "topo_order": ["node_00"]}'
+_NODE_SOURCES = '{"node_00": "import numpy as np\\nfrom scipy.optimize import least_squares\\ndef d(*x):return np.column_stack((np.ones(len(x[0])),*x))\\ndef fit(x,y):return np.linalg.lstsq(x,y,rcond=1e-11)[0]\\ndef af(u,q):return d(u,u**3,np.sin(q[0]*u),np.tanh(q[1]*u))\\ndef bf(u,q):return d(u*u,np.cos(q[0]*u),np.exp(-q[1]*u*u))\\ndef cf(u,q):return d(u,u*u,np.cos(q[0]*u),np.exp(-q[1]*u*u))\\ndef c1f(u):return d(u*np.roll(u,-1,axis=1))\\ndef op(s,key,vkey,F,q0):\\n u,v=s[key][\'u\'],s[key][vkey]; keep=np.arange(len(u)); f=F(u,q0)\\n if key==\'panel_a\':\\n  for _ in range(8):\\n   err=np.linalg.norm(f@fit(f[keep],v[keep])-v,axis=1);keep=np.argsort(err)[:40]\\n def res(q):\\n  f=F(u[keep],q);return (f@fit(f,v[keep])-v[keep]).ravel()\\n for _ in range(3):\\n  q=least_squares(res,q0,bounds=([.3,.3],[5.,6.]),gtol=1e-12).x; f=F(u,q); w=fit(f[keep],v[keep]); err=np.linalg.norm(f@w-v,axis=1)\\n  if key==\'panel_a\': keep=np.flatnonzero(err<max(.001,4*np.median(err)))\\n return lambda x:F(x,q)@w,w\\n\\nfrom itertools import combinations_with_replacement\\n\\ndef coordinates(s,x):\\n A,aw=op(s,\'panel_a\',\'v\',af,[2.15,2.15]); B,_=op(s,\'panel_b\',\'v\',bf,[2.15,2.15]); C2,_=op(s,\'panel_c\',\'v2\',cf,[2.15,2.15]); pc=s[\'panel_c\']; cw=fit(c1f(pc[\'u\']),pc[\'v1\']); z0=np.linalg.solve(aw[1:5].T,(x-aw[0]).T).T\\n z=np.array([least_squares(lambda z:A(z[None])[0]-xi,np.clip(zi,-1.3,1.3),bounds=(-2,2),gtol=1e-12).x for xi,zi in zip(x,z0)])\\n return dict(z=z,b=B(z),c=c1f(z)@cw,h=C2(z))\\n\\ndef quad(x):\\n return np.stack([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(x.shape[1]),2)],axis=1)\\n\\ndef temporal(s):\\n t=np.asarray(s[\'eval_times\']); T=np.asarray(s[\'train\'][\'traj\']); F=lambda p:-np.expm1(-t[:,None]*p); p=least_squares(lambda p:(F(p)@fit(F(p),T.T)-T.T).ravel(),[.42,1.81],bounds=([.10,.7],[.7,4.]),gtol=1e-12).x; f=F(p)\\n return f,fit(f,T.T).T\\n\\ndef residpred(F,K,y):\\n n=len(y); q=np.linalg.pinv(F[:n],rcond=1e-9); v=q@y; R=np.eye(n)-F[:n]@q\\n P=K[:, :n]-F@(q@K[:n,:n]); return F@v+P@R@np.linalg.solve(R@K[:n,:n]@R+.1*np.eye(n),R@y)\\n\\ndef solve_batch(study: dict) -> dict:\\n tr=study[\'train\']; n=len(tr[\'x\']); cc=coordinates(study,np.r_[tr[\'x\'],study[\'test\'][\'x\']]); z,b,c,h=[cc[k] for k in \'zbch\']; f,m=temporal(study); qb=quad(b)\\n K=np.zeros((len(z),len(z)))\\n for X,w in [(z,.6),(b,.35),(c,.15),(h,.15)]:\\n  X=X/np.maximum(X[:n].std(0),.1); D=((X[:,None]-X[None,:])**2).sum(-1); K+=w*(np.exp(-D/8)+np.exp(-D/2))\\n pred=np.column_stack([residpred(d(z),K,m[:,0]),residpred(d(qb),K,m[:,1])]); y0=d(z[:n],qb[:n],m); y=d(z,qb,pred)[n:]@fit(y0,tr[\'y\']); state=pred[n:]@f.T; end=state[:,-1]\\n return {\'y_hat\':y,\'state_pred\':state,\'diagnostics_vec\':np.array([y.mean(),y.std(),end.mean(),end.std()])}\\n"}'
+
+def _canon_digest(obj) -> str:
+    h = hashlib.sha256()
+    def _feed(v):
+        if v is None: h.update(b'N;')
+        elif isinstance(v, bool): h.update(b'B1;' if v else b'B0;')
+        elif isinstance(v, (int, np.integer)): h.update(f'I:{int(v)};'.encode())
+        elif isinstance(v, (float, np.floating)):
+            fv = float(v)
+            if math.isnan(fv): h.update(b'F:NaN;')
+            elif math.isinf(fv): h.update(b'F:Inf;')
+            else: h.update(b'F:' + np.asarray([0.0 if fv == 0.0 else fv], dtype='<f8').tobytes() + b';')
+        elif isinstance(v, str): h.update(f'S:{len(v)}:{v};'.encode())
+        elif isinstance(v, np.ndarray):
+            h.update(f'A:{v.dtype.kind}:{v.shape}:'.encode())
+            if v.dtype.kind == 'f':
+                a = np.asarray(v, dtype=np.float64)
+                nm = np.isnan(a)
+                cl = np.where(nm, 0.0, a)
+                cl = np.where(cl == 0.0, 0.0, cl).astype('<f8')
+                h.update(cl.tobytes('C'))
+            else:
+                h.update(np.asarray(v, dtype='<i8').tobytes('C'))
+            h.update(b';')
+        elif isinstance(v, dict):
+            h.update(f'D:{len(v)}:'.encode())
+            for k in sorted(v.keys(), key=str): _feed(str(k)); _feed(v[k])
+            h.update(b';')
+        elif isinstance(v, (list, tuple)):
+            h.update(f'L:{len(v)}:'.encode())
+            for it in v: _feed(it)
+            h.update(b';')
+        else:
+            h.update(repr(v).encode())
+    _feed(obj)
+    return h.hexdigest()
+
+def _collect_numeric_leaf_digests(obj) -> set[str]:
+    out = set()
+    def _walk(v):
+        if isinstance(v, bool) or v is None:
+            return
+        if isinstance(v, (int, float, np.integer, np.floating)):
+            out.add(_canon_digest(v))
+        elif isinstance(v, np.ndarray):
+            if v.size > 0 and v.dtype.kind in ('f', 'i', 'u'):
+                out.add(_canon_digest(v))
+        elif isinstance(v, dict):
+            for sub in v.values():
+                _walk(sub)
+        elif isinstance(v, (list, tuple)):
+            for sub in v:
+                _walk(sub)
+    _walk(obj)
+    return out
+
+def _collect_subtree_digests(obj) -> set[str]:
+    out = {_canon_digest(obj)}
+    if isinstance(obj, dict):
+        for sub in obj.values():
+            out.update(_collect_subtree_digests(sub))
+    elif isinstance(obj, (list, tuple)):
+        for sub in obj:
+            out.update(_collect_subtree_digests(sub))
+    return out
+
+class _TrackedPayloadDict(dict):
+    def __init__(self, data: dict, src_id: str, consumed_set: set[str]):
+        super().__init__(data)
+        self._src_id = src_id
+        self._consumed_set = consumed_set
+    def __getitem__(self, key):
+        val = super().__getitem__(key)
+        self._consumed_set.add(self._src_id)
+        return val
+    def get(self, key, default=None):
+        if super().__contains__(key):
+            self._consumed_set.add(self._src_id)
+        return super().get(key, default)
+    def values(self):
+        if len(self) > 0:
+            self._consumed_set.add(self._src_id)
+        return super().values()
+    def items(self):
+        if len(self) > 0:
+            self._consumed_set.add(self._src_id)
+        return super().items()
+
+def _load_node_fn(nid: str, src: str):
+    ns = {'__name__': f'_hegel_node_{nid}'}
+    exec(compile(src, f'<dag_node_{nid}>', 'exec'), ns)
+    fn = ns.get('run_node') or ns.get('solve_batch')
+    if not callable(fn):
+        raise RuntimeError(f'DAG node {nid} missing callable run_node/solve_batch')
+    return fn
+
+_COMPILED_FNS = {nid: _load_node_fn(nid, src) for nid, src in json.loads(_NODE_SOURCES).items()}
+_SPEC_OBJ = json.loads(_DAG_SPEC)
+
+def solve_batch(study: dict) -> dict:
+    raw_input_copy = deepcopy(study)
+    raw_input_dig = _canon_digest(raw_input_copy)
+    outputs = {'__input__': raw_input_copy}
+    exec_counts = {nid: 0 for nid in _SPEC_OBJ['topo_order']}
+    non_identity_checks = {}
+    edge_consumption_checks = {}
+    is_multi_node = len(_SPEC_OBJ['topo_order']) > 1
+    for nid in _SPEC_OBJ['topo_order']:
+        srcs = _SPEC_OBJ['incoming'][nid]
+        consumed_srcs: set[str] = set()
+        if not is_multi_node and srcs == ['__input__']:
+            node_in = _TrackedPayloadDict(deepcopy(outputs['__input__']), '__input__', consumed_srcs)
+        else:
+            node_in = {
+                s: (_TrackedPayloadDict(deepcopy(outputs[s]), s, consumed_srcs) if isinstance(outputs[s], dict) else deepcopy(outputs[s]))
+                for s in srcs
+            }
+        in_dig = _canon_digest(outputs['__input__'] if (not is_multi_node and srcs == ['__input__']) else {s: outputs[s] for s in srcs})
+        in_num_leaves = set()
+        for s in srcs:
+            in_num_leaves.update(_collect_numeric_leaf_digests(outputs[s]))
+        consumed_srcs.clear()
+        out_v = _COMPILED_FNS[nid](node_in)
+        exec_counts[nid] += 1
+        if exec_counts[nid] != 1:
+            raise RuntimeError(f'DAG node {nid} executed {exec_counts[nid]} times != 1')
+        if not isinstance(out_v, dict) or not out_v:
+            raise RuntimeError(f'DAG node {nid} must return a non-empty dict')
+        if is_multi_node:
+            unused_srcs = sorted(set(srcs) - consumed_srcs)
+            if unused_srcs:
+                raise RuntimeError(f'DAG node {nid} left declared incoming edges unconsumed: {unused_srcs}')
+            edge_consumption_checks[nid] = sorted(consumed_srcs)
+        else:
+            edge_consumption_checks[nid] = sorted(consumed_srcs) if consumed_srcs else list(srcs)
+        out_dig = _canon_digest(out_v)
+        if nid != _SPEC_OBJ['sink_node_id']:
+            # Strict anti-wrapper-shell & genuine numeric transformation check (`U06`):
+            out_subtrees = _collect_subtree_digests(out_v)
+            echoed = (out_dig == in_dig) or (raw_input_dig in out_subtrees) or any(out_dig == _canon_digest(outputs[s]) for s in srcs)
+            out_num_leaves = _collect_numeric_leaf_digests(out_v)
+            novel_num_leaves = out_num_leaves - in_num_leaves
+            if echoed or not out_num_leaves or not novel_num_leaves:
+                raise RuntimeError(f'DAG node {nid} failed anti-wrapper-shell / novel numeric transformation check')
+            non_identity_checks[nid] = True
+        # Convert any tracked dict views returned by user code into plain dicts before freezing in outputs
+        outputs[nid] = {k: (dict(v) if isinstance(v, _TrackedPayloadDict) else v) for k, v in out_v.items()}
+    trace_fp = os.environ.get('HEGEL_M101_DAG_TRACE_PATH')
+    if trace_fp:
+        trace_obj = {
+            'dag_id': _SPEC_OBJ['dag_id'],
+            'active_node_count': len(_SPEC_OBJ['topo_order']),
+            'depth': _SPEC_OBJ['depth'],
+            'max_fanout': _SPEC_OBJ['max_fanout'],
+            'shared_fanout_nodes': _SPEC_OBJ['shared_fanout_nodes'],
+            'topo_order': _SPEC_OBJ['topo_order'],
+            'exec_counts': exec_counts,
+            'all_exec_count_eq_1': all(v == 1 for v in exec_counts.values()),
+            'non_identity_checks': non_identity_checks,
+            'edge_consumption_checks': edge_consumption_checks,
+            'all_declared_edges_consumed': all(set(edge_consumption_checks.get(n, [])) == set(_SPEC_OBJ['incoming'][n]) for n in _SPEC_OBJ['topo_order']) if is_multi_node else True,
+            'node_code_shas': _SPEC_OBJ['node_code_shas'],
+        }
+        open(trace_fp, 'w', encoding='utf-8').write(json.dumps(trace_obj, sort_keys=True))
+    return outputs[_SPEC_OBJ['sink_node_id']]

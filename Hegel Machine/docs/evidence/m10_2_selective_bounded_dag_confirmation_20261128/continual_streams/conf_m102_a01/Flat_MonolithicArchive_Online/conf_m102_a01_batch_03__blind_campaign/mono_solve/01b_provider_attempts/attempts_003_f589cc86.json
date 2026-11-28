@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f589cc86dbd9465a9a9f2660f36d3974",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:59:07.976953+00:00",
+  "ended_at_utc": "2026-11-28T14:59:30.435299+00:00",
+  "request_sha256": "8a4113e3ce44f8ca5cab083239ce47299222e276fdb852136d74bb598215ec34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21559,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21776,
+    "cached_tokens": 12672,
+    "completion_tokens": 880
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; cat > /tmp/probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations_with_replacement as comb\\nsys.path.insert(0,'/tmp/hegel_continual_archive');import conf_m102_a01_batch_00_solver as prior\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; n=52; np.set_printoptions(precision=5,suppress=True)\\ndef poly(x,d):return np.stack([np.prod(x[:,i],axis=1) for k in range(d+1) for i in comb(range(x.shape[1]),k)],axis=1)\\ndef fit(A,b):return np.linalg.lstsq(A,b,rcond=None)[0]\\nz,h=prior._coordinates(s,x); print('t,tele',s['eval_times'],s['telemetry_vec']); print('coords offset/basis',fit(poly(x,1),z),fit(poly(x,1),h))\\nfor panel in ['panel_a','panel_b','panel_c']:\\n p=s[panel];u=p['u']; print(panel)\\n for k,v in p.items():\\n  if k=='u':continue\\n  for name,w in [('direct',v),('atanh',np.arctanh(np.clip(v,-.99999,.99999)))]:\\n   for d in [1,2,3]:\\n    A=poly(u,d); c=fit(A,w);print(k,name,d,np.sqrt(np.mean((A@c-w)**2)),np.sqrt(np.mean((A[-5:]@fit(A[:-5],w[:-5])-w[-5:])**2)))\\n  if panel=='panel_c':print('quadratic coefficients',fit(poly(u,2),v))\\na=prior.solve_batch({**s,'train':{k:(v[:n] if k!='summary' else v) for k,v in s['train'].items()},'test':{'x':x[n:]}});print('archive y error',np.round(a['y_hat']-y[n:],4));\\nfor w in [x,z,h]:\\n for d in [1,2,3]:\\n  A=poly(w,d); b=np.c_[y,T]; c=fit(A[:n],b[:n]); print('polynomial',d,np.mean(abs(A[n:]@c-b[n:]),axis=0), 'magnitude residual y train',np.std((A[:n]@c-b[:n])[:,0]));\\n print('T coeff linear',fit(poly(w,1),T));print('y coeff second',fit(poly(w,2),y))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived calibrated surrogate) -> H2 (recover a panel-specific nonlinear basis and shared time response); archived 52/20 MAE is 0.040803 for y and 0.010249 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Regress y solely on trajectories\",\"rejected_reason\":\"Linear readout from the measured trajectories leaves a residual standard deviation of 0.5164, suggesting a separate input branch.\"}],\"rationale\":\"Compare exact low-order bases in calibrated coordinates and verify nonlinear panel fits on withheld panel rows rather than selecting by interpolation error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "390da1bd0f61baf010e5e71d7cfe82a918e362d9502d3e160a66a87b1731c729",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22454.08,
+      "usage_known": true,
+      "prompt_tokens": 21776,
+      "cached_tokens": 12672,
+      "completion_tokens": 880
+    }
+  ]
+}

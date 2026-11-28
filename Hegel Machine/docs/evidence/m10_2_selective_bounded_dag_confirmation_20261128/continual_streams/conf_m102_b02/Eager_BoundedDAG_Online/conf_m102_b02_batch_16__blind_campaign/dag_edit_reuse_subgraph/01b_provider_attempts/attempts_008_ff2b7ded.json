@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff2b7ded884243e1a9f7a621088bb2ea",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:29:33.531988+00:00",
+  "ended_at_utc": "2026-11-28T17:30:41.363454+00:00",
+  "request_sha256": "5bba24d3b5615d2b7ce178e342f70df913983a35d416535091f6adde3785f0e8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44769,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30699,
+    "cached_tokens": 12672,
+    "completion_tokens": 2122
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/exact23.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nfrom model23 import D,fit,get\\nfrom probe23 import S\\n\\ndef sat(x,a,k):\\n if k=='tanh': return np.tanh(a*x)\\n if k=='erf': return erf(a*x)\\n if k=='sin': return np.sin(a*x)\\n if k=='rat': return x/(1+(a*x)**2)\\n if k=='soft': return x/np.sqrt(1+(a*x)**2)\\n if k=='atan': return np.arctan(a*x)\\n\\ndef models(s,verbose=False):\\n z0,b0,c,f,Y,aux=get(s); keep=aux[1]; u,v=[s['panel_a'][k][keep] for k in ['u','v']]; x=np.r_[s['train']['x'],s['test']['x']]\\n cand=[]\\n for k in ['tanh','erf','sin','rat','soft','atan']:\\n  for typ in [0,1,2]:\\n   def F(z,a,k=k,typ=typ):\\n    h=sat(z,a,k); return D(np.c_[z,h] if typ==0 else np.c_[z,h,z*z] if typ==1 else np.c_[z,h,z*np.roll(z,-1,axis=1)])\\n   def e(a):\\n    A=F(u,a);return (A@fit(A,v)-v).ravel()\\n   r=least_squares(e,1.25,bounds=(.1,5));cand.append((np.mean(r.fun**2)**.5,k,typ,r.x,F))\\n cand.sort(key=lambda t:t[0]); ee,k,typ,a,F=cand[0]; w=fit(F(u,a),v); z=np.array([least_squares(lambda zz:(F(zz[None,:],a)@w-xx).ravel(),zz,bounds=(-3,3)).x for xx,zz in zip(x,z0)])\\n if verbose:print('A',[(round(e,7),k,t,a.round(5)) for e,k,t,a,_ in cand[:10]],'z',z.min(),z.max(),'inverse',np.max(abs(F(z,a)@w-x)), 'w',w.round(4),flush=True)\\n u,v=[s['panel_b'][k] for k in ['u','v']]; H=lambda z:D(np.sign(z)*np.maximum(abs(z)-.35,0)**1.5); B=lambda z:H(z)@fit(H(u),v)\\n u,h=[s['panel_c'][k] for k in ['u','v2']]; cand=[]\\n for k in ['tanh','erf','sin','rat','soft','atan']:\\n  for typ in range(4):\\n   def F(z,a,k=k,typ=typ):\\n    h=sat(z,a,k);return D([h,h*h][0] if typ==0 else np.c_[z,h] if typ==1 else np.c_[h,h*h] if typ==2 else np.c_[z,h,h*h])\\n   def e(a):\\n    A=F(u,a);return (A@fit(A,h)-h).ravel()\\n   r=least_squares(e,1.25,bounds=(.1,5));cand.append((np.mean(r.fun**2)**.5,k,typ,r.x,F))\\n cand.sort(key=lambda t:t[0]); ee,k,typ,a,F=cand[0];w=fit(F(u,a),h); E=lambda z:F(z,a)@w\\n if verbose:print('C2',[(round(e,7),k,t,a.round(5)) for e,k,t,a,_ in cand[:10]],w.round(4),flush=True)\\n return z,B,c,E,f,Y\\n\\nif __name__=='__main__':\\n z,B,C,E,f,Y=models(S,True); b=B(z); n=len(Y); rng=np.random.default_rng(171); splits=[]\\n for rep in range(2):\\n  ii=rng.permutation(n)\\n  for ts in np.array_split(ii,4):splits.append((np.setdiff1d(np.arange(n),ts),ts))\\n splits.append((np.arange(52),np.arange(52,n)))\\n def score(K,ridge):\\n  a=[]\\n  for tr,ts in splits:\\n   p=K[np.ix_(ts,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+ridge*np.eye(len(tr)),Y[tr]); e=p-Y[ts]; a.append([abs(e[:,0]).mean(),abs(e[:,1:]@f.T).mean()]);\\n  a=np.array(a);return a[:-1].mean(0),a[-1]\\n base={'z':z,'b':b,'cz':C(z),'cb':C(b),'ez':E(z),'eb':E(b)}\\n for a in [-2,-1,-.5,.5,1,2]:\\n  for name,g in [('i',lambda x:x),('c',C),('e',E)]:base[f'{name}(b{a:+}z)']=g(b+a*z)\\n sets=dict(base)\\n for a,xa in base.items():\\n  for b,xb in base.items():\\n   if a<b and (a in ['z','b','cz','cb','ez','eb'] or b in ['z','b','cz','cb','ez','eb']): sets[a+' '+b]=np.c_[xa,xb]\\n sets['all']=np.c_[tuple(base[k] for k in ['z','b','cz','cb','ez','eb'])]\\n rows=[]\\n for nm,xx in sets.items():\\n  for gf,x in [('raw',xx),('asinh',np.arcsinh(xx)),('tanh',np.tanh(1.25*xx)),('rational',xx/(1+(1.25*xx)**2))]:\\n   x=x[:n]; dot=x@x.T/x.shape[1]; dist=np.maximum(np.diag(dot)[:,None]+np.diag(dot)-2*dot,0)\\n   for deg,dec in [(1,0),(2,0),(3,0),(2,.5),(3,1.4)]:\\n    K=(1+dot)**deg+(np.exp(-dec*dist) if dec else 0)\\n    for r in [1e-6,.001,.02]:\\n     m,p=score(K,r);rows.append((*m,*p,nm,gf,deg,dec,r))\\n for i in range(2):\\n  print('CV',i,sorted(rows,key=lambda t:t[i])[:12]); print('public',i,sorted(rows,key=lambda t:t[i+2])[:6]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/exact23.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cubic inverse → saturation-aware inverse and panel-C compositions; the cubic inverse missed observed inputs by up to 1.112, and archived split MAEs were 0.100389 scalar and 0.131553 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The cyclic quadratic plus diagonal cubic panel-A map is adequate for inversion.\",\n    \"empirical_witness\": \"Its trimmed calibration RMSE is 0.01857, and its numerical inverse leaves a forward residual of up to 1.112 on observed inputs.\",\n    \"causal_blanket_diagnosis\": \"A truncated cubic can introduce turning points and corrupt latent coordinates before either prediction head.\",\n    \"sublated_pivot\": \"Retain robust trimming and the exact threshold-power panel B; profile saturation families for panel A and test panel-C compositions.\",\n    \"risk_kind\": \"off-manifold calibration inverse\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the archived kernel and cubic inverse\",\n      \"rejected_reason\": \"It missed both public MAE thresholds, and improving the head alone would not address the inverse residual.\"\n    }\n  ],\n  \"rationale\": \"Identify calibration maps from panel measurements, then rank prediction features on shuffled folds separately from the official public split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c5c61bab668be49e384554f999314127aa060d085923ea6fa2e059716c0c663b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 69112.71,
+      "usage_known": true,
+      "prompt_tokens": 30699,
+      "cached_tokens": 12672,
+      "completion_tokens": 2122
+    }
+  ]
+}

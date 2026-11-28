@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "614e1a0ae6cd43148deaa36c55189f21",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:39:44.242928+00:00",
+  "ended_at_utc": "2026-11-28T16:40:14.922723+00:00",
+  "request_sha256": "f4d6402b0f8a6649a7530da01d41a83ccd6829531ea72208e975d6caca338923",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52499,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34589,
+    "cached_tokens": 12672,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); s=s[:s.index('def _kernel')]; s=s.replace('import numpy as np','import numpy as np\\\\nfrom scipy.special import erf')\\ns+='''def _mixed_design(b, h):\\n    # Include every bilinear interaction, but only diagonal pure quadratics.\\n    return _design(np.column_stack((b, h, b*b, h*h,\\n                                   (b[:, :, None] * h[:, None, :]).reshape(len(b), 16))))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = np.asarray(train['x']), np.asarray(study['test']['x'])\\n    n = len(x)\\n    b = _coordinates(study, np.concatenate((x, xt)))\\n    traj = np.asarray(train['traj'])\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    modes = traj @ basis.T\\n    targets = np.column_stack((train['y'], modes))\\n    soft = b / np.sqrt(1 + (1.4*b)**2)\\n    specs = ((soft, .0003, True, True),\\n             (np.tanh(1.75*b), .0003, True, False),\\n             (np.arctan(1.75*b), .0003, True, False),\\n             (b / (1 + b*b), .003, False, True),\\n             (np.tanh(1.4*b), .003, False, True),\\n             (erf(1.4*b), .003, False, True))\\n    y = np.zeros(len(xt))\\n    predicted_modes = np.zeros((len(xt), len(basis)))\\n    eye = np.eye(n)\\n    for h, ridge, scalar, dynamic in specs:\\n        f = _mixed_design(b, h)\\n        p = (f[n:] @ f[:n].T) @ np.linalg.solve(f[:n] @ f[:n].T + ridge*eye, targets)\\n        if scalar:\\n            y += p[:, 0] / 3\\n        if dynamic:\\n            predicted_modes += p[:, 1:] / 4\\n    state = predicted_modes @ basis\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress11.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat /tmp/hegel_continual_archive/conf_m102_b02_batch_05_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,sys\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=m._coordinates(s,s['train']['x']); b=m._coordinates(s,s['test']['x']); print('train/test coordinate ranges',a.min(0),a.max(0),b.min(0),b.max(0)); print('train/test norm quantiles',*[np.quantile(np.linalg.norm(c,axis=1),[0,.5,.9,1]) for c in [a,b]]); print('summary comparison',s['train']['summary'],s['train']['y'].mean(),s['train']['y'].std(),s['train']['traj'][:,-1].mean(),s['train']['traj'][:,-1].std())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense asinh head → H2 separate saturation ensembles; fixed scalar/trajectory MAE 0.02339/0.02137, with worst fresh randomized trajectory MAE 0.04018 and radial trajectory MAE 0.04141.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the verified asinh head\",\n      \"rejected_reason\": \"Its fresh randomized and radial trajectory errors were higher, although it did better on the most extreme one-coordinate trajectory slices.\"\n    }\n  ],\n  \"rationale\": \"Install the ensemble that improves both heads on fresh randomized folds while retaining the prescribed margin. Re-run the schema and split checks on the exact artifact, and compare train and test coordinate support to assess the relevance of the directional extrapolation failures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ee89bd7bb831abd697e75b478773426b9b13870795a1366fa92b0640cd745399",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30678.39,
+      "usage_known": true,
+      "prompt_tokens": 34589,
+      "cached_tokens": 12672,
+      "completion_tokens": 1240
+    }
+  ]
+}

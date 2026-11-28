@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32d40f8df167407588cf0ba74ff49184",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:06.870199+00:00",
+  "ended_at_utc": "2026-11-28T16:02:45.576914+00:00",
+  "request_sha256": "2bdfa0f5d5bf5e68f591eaaa30bf34c07a4a05c80ac7f2b4180da88d983b768b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34646,
+    "cached_tokens": 12672,
+    "completion_tokens": 1740
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated bilinear predictor for the scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _cal_terms(u):\\n    v = np.roll(u, -1, axis=-1)\\n    return np.stack([np.ones_like(u), u, v, u*v, u**3], axis=-1)\\n\\n\\ndef _calibrate(panel, x):\\n    a = _cal_terms(panel['u'])\\n    v = panel['v']\\n    keep = np.ones(len(v), dtype=bool)\\n    for _ in range(6):\\n        c = np.array([_ls(a[keep,j], v[keep,j]) for j in range(4)])\\n        residual = np.linalg.norm(np.einsum('nij,ij->ni', a,c)-v, axis=1)\\n        take = residual < max(0.001, 3*np.median(residual))\\n        if take.sum() < 10 or np.array_equal(take, keep):\\n            break\\n        keep = take\\n    return np.array([least_squares(lambda q: (_cal_terms(q)*c).sum(1)-r, r,\\n                                  gtol=1e-11).x for r in x]).reshape(-1,4)\\n\\n\\ndef _panel(panel, key, basis, start, bounds):\\n    u,v = panel['u'], panel[key]\\n    def design(x,p):\\n        return np.column_stack([np.ones(len(x)), basis(x,p)])\\n    def residual(p):\\n        a = design(u,p)\\n        return (a@_ls(a,v)-v).ravel()\\n    q = least_squares(residual, start, bounds=bounds, max_nfev=200).x\\n    c = _ls(design(u,q),v)\\n    return lambda x: design(x,q)@c\\n\\n\\ndef _coords(study,x):\\n    z = _calibrate(study['panel_a'],x)\\n    def bshape(x,p):\\n        return x+p[2]*np.tanh(p[0]*x)+p[3]*x/(1+p[1]*x*x)\\n    def cshape(x,p):\\n        return np.c_[np.sin(p[0]*x),np.tanh(p[1]*x)]\\n    b = _panel(study['panel_b'],'v',bshape,[3.53,5.99,-1.16,3.12],\\n               ([.15,.15,-6,-6],[6,6,6,6]))\\n    c = _panel(study['panel_c'],'v1',cshape,[2.1,1.75],([.15,.15],[6,6]))\\n    return z,c(b(z))\\n\\n\\ndef _features(z,h):\\n    return np.c_[z,h,(z[:,:,None]*h[:,None,:]).reshape(len(z),16)]\\n\\n\\ndef _ridge(x,y,xt,alpha):\\n    center=x.mean(0)\\n    scale=np.maximum(x.std(0),1e-8)\\n    a=(x-center)/scale\\n    ym=y.mean(0)\\n    return ym+(xt-center)/scale@np.linalg.solve(a.T@a+alpha*np.eye(x.shape[1]),a.T@(y-ym))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train=study['train']\\n    n=len(train['x'])\\n    d=_features(*_coords(study,np.r_[train['x'],study['test']['x']]))\\n    pred=_ridge(d[:n],np.c_[train['y'],train['traj']],d[n:],.003)\\n    y,state=pred[:,0],pred[:,1:]\\n    end=state[:,-1]\\n    diag=np.array([y.mean(),y.std(),end.mean(),end.std()])\\n    return dict(y_hat=y,state_pred=state,diagnostics_vec=diag)\\nPY\\ncat > /tmp/stress.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=s['train']; y=np.c_[t['y'],t['traj']]; xx=np.r_[t['x'],s['test']['x']]\\ndef split(i,j):return dict(s,train={k:v[i] if k!='summary' else v for k,v in t.items()},test={'x':t['x'][j]})\\nns=np.arange(72); order=np.argsort(np.linalg.norm(t['x'],axis=1)); slices=[('52/20', ns[:52],ns[52:]),('high norm',order[:52],order[52:])]+[(f'block {k}',np.delete(ns,np.arange(k,k+18)),ns[k:k+18]) for k in range(0,72,18)]+[(f'extremes x{k}',(j:=np.argsort(t['x'][:,k]))[9:-9],np.r_[j[:9],j[-9:]]) for k in range(4)]\\nif __name__=='__main__':\\n for name,i,j in slices:\\n  p=m.solve_batch(split(i,j));e=np.abs(np.c_[p['y_hat'],p['state_pred']]-y[j]); print(name,np.round([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max(),e[-1].max()],6))\\n z,h=m._coords(s,xx);d=m._features(z,h); c=m._ls(np.c_[np.ones(72),d[:72]],y); print('scalar coef',np.round(c[:,0],3));print('state coef endpoints',np.round(c[:,[1,8]],3)); print('latent ranges',z.min(0),z.max(0));print('all in fit',np.mean(np.abs(np.c_[np.ones(72),d[:72]]@c-y),0))\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 -I /tmp/stress.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independently fitted panels -> H2 calibrated inputs and C1-after-B bilinear readouts; 52/20 MAEs are 0.006501 for y and 0.008863 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use only corresponding-coordinate products\",\"rejected_reason\":\"Its trajectory MAE was 0.054151; the full bilinear basis reduced it to 0.008863.\"}],\"rationale\":\"Implement the validated graph as a standalone solver and compare it across contiguous, high-norm, and coordinate-extreme slices; inspect bilinear coefficients to see whether a smaller basis is supported.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1db554a9c431f2fe215c233d362dc07c324055d592429f19c23c20ec0bf25ad1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39964.44,
+      "usage_known": true,
+      "prompt_tokens": 34646,
+      "cached_tokens": 12672,
+      "completion_tokens": 1740
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "23b0574a4aee414bb52700262c256d94",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:22.480635+00:00",
+  "ended_at_utc": "2026-11-28T15:18:45.447378+00:00",
+  "request_sha256": "dd1dac4a9dbd0fc028535695dbd1b9a4add10ed997d6e33fba32e391452ee704",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51173,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34094,
+    "cached_tokens": 12672,
+    "completion_tokens": 740
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -i '$s/$/)/' /tmp/stress06.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/stress06.py\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/holdout_task/batch_solver.py'); tr=s['train']; q=dict(s,train={k:(v if k=='summary' else v[:52]) for k,v in tr.items()},test={'x':tr['x'][52:]}); p=m['solve_batch'](q); e=np.mean(abs(p['y_hat']-tr['y'][52:])); f=np.mean(abs(p['state_pred']-tr['traj'][52:])); print('isolated public_cv_y_mae',e,'public_cv_traj_mae',f); assert max(e,f)<=.038\\nF=m['_design'](s,tr['x']); Y=tr['traj']; V=np.linalg.svd(Y[:52],full_matrices=False)[2];\\nfor k in (2,3,4):\\n b=V[:k]; pred=(F[52:]@m['_ls'](F[:52],Y[:52]@b.T))@b; print('temporal rank',k,'52/20 trajectory MAE',np.mean(abs(pred-Y[52:])), '52/20 rank projection RMSE',np.sqrt(np.mean((Y[52:]@b.T@b-Y[52:])**2)))\\nr=m['solve_batch'](s); y,z=r['y_hat'],r['state_pred']; assert y.shape==(36,) and z.shape==(36,8) and all(np.isfinite(a).all() for a in r.values()); np.testing.assert_allclose(r['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); print('isolated exact-artifact contract passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: broad calibrated interactions → H2: calibrated-input × product and product × cosine terms with three temporal modes; exploratory 52/20 MAEs were 0.01099 for y and 0.00966 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check\",\n      \"rejected_reason\": \"The stress script stopped at a syntax error, so the saved solver still needs scientific verification.\"\n    }\n  ],\n  \"rationale\": \"Fix only the stress script, then verify the unchanged artifact on blocked, randomized, and boundary splits. Compare temporal ranks on the same held-out rows and check the full output contract in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "af4721d4167239a77b1df4f4990e2b8357006b68713b2602481c13c9fe6c1525",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22965.15,
+      "usage_known": true,
+      "prompt_tokens": 34094,
+      "cached_tokens": 12672,
+      "completion_tokens": 740
+    }
+  ]
+}

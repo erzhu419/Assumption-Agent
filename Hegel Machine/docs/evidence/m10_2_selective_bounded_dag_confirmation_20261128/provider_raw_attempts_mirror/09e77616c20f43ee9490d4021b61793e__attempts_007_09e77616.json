@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09e77616c20f43ee9490d4021b61793e",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:37.413634+00:00",
+  "ended_at_utc": "2026-11-28T15:10:11.004889+00:00",
+  "request_sha256": "16acd1f180a6d114a1c88899be5692a5498419d57be4f49e7254c77793dd1727",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43629,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30304,
+    "cached_tokens": 12672,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit02.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=(tr[k] for k in ('x','y','traj')); ix=np.arange(len(x)); z=m._calibrate(s['panel_a'],x); b=s['panel_b']; w=m._aff(z)@m._fit(m._aff(b['u']),b['v']); h=m._latent(s,x); F=m._aff(h); S=np.c_[F,h[:,0]*h[:,2],h[:,1]*h[:,3]]; pairs=[(0,1),(0,3),(1,2),(2,3)]; D=np.column_stack([((w[:,i]+w[:,j])**2-(w[:,i]-w[:,j])**2)/4 for i,j in pairs]); print('signed-square identity max error',np.max(abs(D-m._products(w)))); print('study keys',sorted(s),'train keys',sorted(tr),'telemetry shape',np.shape(s['telemetry_vec']))\\nQ=np.c_[h,w,*[(h[:,i]-h[:,j])[:,None] for i,j in pairs]]\\nbank=[(j,a,1+a*(Q[:,j]/max(np.std(Q[:,j]),1e-9))**2) for j in range(Q.shape[1]) for a in (.0005,.002,.01,.05,.2)]\\ndef pred(i,j,X,Y,rank=False):\\n    B=m._fit(X[i],Y[i]); p=X[j]@B\\n    if rank:\\n        V=np.linalg.svd(X[i]@B,full_matrices=False)[2][:2]; p=(p@V.T)@V\\n    return p\\ndef mae(e):return np.mean(abs(e))\\ndef rational(i,j,X,Y,rank):\\n    splits=np.array_split(np.random.default_rng(74).permutation(i),4)\\n    best=(float('inf'),None,None)\\n    for col,a,d in bank:\\n        xx=X/d[:,None]; v=np.mean([mae(pred(np.setdiff1d(i,k),k,xx,Y,rank)-Y[k]) for k in splits]);\\n        if v<best[0]: best=(v,col,a); B=xx\\n    return pred(i,j,B,Y,rank),best[1:]\\nC=s['panel_c']; W=m._fit(m._aff(m._products(C['u'])),C['v1']); raw=m._aff(m._products(z))@W\\nfull2=np.c_[m._aff(z),*[z[:,a]*z[:,b] for a in range(4) for b in range(a,4)]]\\ntrip=np.column_stack([h[:,a]*h[:,b]*h[:,c] for a,b,c in ((0,1,2),(0,1,3),(0,2,3),(1,2,3))]);\\nrows=[]\\nfor name,j in [('public',ix[52:]),('early',ix[:20]),('high_input',np.argsort(np.linalg.norm(z,axis=1))[-20:]),('high_latent',np.argsort(np.linalg.norm(h,axis=1))[-20:]),('low_y',np.argsort(y)[:20]),('high_y',np.argsort(y)[-20:])]:\\n    i=np.setdiff1d(ix,j); a=m.solve_batch(dict(s,train={'x':x[i],'y':y[i],'traj':T[i]},test={'x':x[j]})); ry,sy=rational(i,j,S,y,False); rt,st=rational(i,j,F,T,True)\\n    e=a['state_pred']-T[j]; row=[mae(a['y_hat']-y[j]),mae(e),max(np.mean(abs(e),axis=0)),mae(ry-y[j]),mae(rt-T[j]),mae(pred(i,j,np.c_[S,trip],y)-y[j]),mae(pred(i,j,full2,T,True)-T[j]),mae(pred(i,j,m._aff(raw),T,True)-T[j])]; rows.append(row); print(name,*[f'{r:.6f}' for r in row], 'rational',sy,st)\\nprint('columns: scalar trajectory worst_horizon rational_scalar rational_trajectory triple_scalar unrestricted_quadratic_trajectory omit_B_trajectory'); print('maxima',np.max(rows,axis=0))\\na=m.solve_batch(s); np.testing.assert_array_equal(a['diagnostics_vec'],[a['y_hat'].mean(),a['y_hat'].std(),a['state_pred'][:,-1].mean(),a['state_pred'][:,-1].std()]); assert np.max(rows,axis=0)[:3].max()<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit02.py && python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine spatial model) -> H2 (calibrated sparse quadratic operator and separate readouts); prior worst MAEs were 0.004674 scalar, 0.004470 trajectory, and 0.006321 per horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, PDE drift, or within-batch classification\",\"rejected_reason\":\"The supplied single-study regression contract has no relay, drift operator observations, batch labels, or class labels.\"}],\"rationale\":\"Test algebraic equivalence of signed-pair squares, triple interactions, a nested-selected rational correction, and removal of panel B on real held-out rows. Recheck the unchanged artifact and diagnostic identities in an isolated Python process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "93fb292fc247c9f8bc176ccf7086c4c850beea778b3634e77f4b8fa5b84b864d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34165.39,
+      "usage_known": true,
+      "prompt_tokens": 30304,
+      "cached_tokens": 12672,
+      "completion_tokens": 1418
+    }
+  ]
+}

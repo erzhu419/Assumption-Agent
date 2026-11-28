@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f986daf43e54089b4480addc374c476",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:37.029550+00:00",
+  "ended_at_utc": "2026-11-28T15:01:00.517492+00:00",
+  "request_sha256": "b9c9bc731533e659dab9bbc4356daf80f16b5f612aa004f9e7494895f16dcde8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43286,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32259,
+    "cached_tokens": 12672,
+    "completion_tokens": 856
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -i 's/return quad(w)\\\\[:,1:\\\\]/return np.c_[w,w[:,np.triu_indices(4)[0]]*w[:,np.triu_indices(4)[1]]]/' /tmp/dag.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/dag.py | tail -95; cat >/tmp/spatial.py <<'PY'\\nexec(open('/tmp/dag.py').read().split('ops=')[0])\\nfrom sklearn.metrics.pairwise import euclidean_distances\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import solve\\nM=ts@np.linalg.pinv(H.T); Z=np.c_[y,M];print('corr outputs',np.corrcoef(np.c_[y,ts,M].T)[[0,-3,-2,-1]].round(3)); print('amplitude stats',M.mean(0),M.std(0)); radi=euclidean_distances(z); np.fill_diagonal(radi,np.inf); k=np.argsort(radi.min(1))[:16]; j=radi.argmin(1)[k];print('nearest',np.c_[radi[k,j],z[k],Z[k],Z[j]].round(3));\\nfor name,w in [('z',z),('z+C',np.c_[z,Q(z),R(z)]),('z+B+C(B)',np.c_[z,Q(L(z)),R(L(z))])]:\\n d=euclidean_distances(w,squared=True); best=[]\\n for p in [.5,1,1.5,2]:\\n  for h in np.geomspace(.3,8,9):\\n   for lam in [1e-6,.001,.01,.1]:\\n    for form in [0,1]:\\n     K=(np.exp(-(d/h**2)**(p/2)) if not form else (1+d/h**2)**(-p)); F=K[:52,:52]+lam*np.eye(52); wgt=solve(F,np.c_[y,ts][:52],assume_a='pos'); err=abs(K[52:,:52]@wgt-np.c_[y,ts][52:]); best.append((err[:,0].mean(),err[:,1:].mean(),p,h,lam,form))\\n print('kernel',name,sorted(best)[:3]);\\nfor w in [z,L(z)]:\\n for d in range(1,6):\\n  F=PolynomialFeatures(d).fit_transform(w); b=ls(F[:52],np.c_[y,ts][:52]); e=abs(F@b-np.c_[y,ts]); print('poly',d,e[:52,0].mean(),e[52:,0].mean(),e[52:,1:].mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/spatial.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test parallel branch fusion and whether the readout shares the three trajectory amplitudes; the best single-branch validation y MAE is 0.543, versus 0.00344 for temporal projection alone.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Complete the interrupted interaction screen and use nearby points and temporal coefficients to diagnose what the panel compositions are missing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a408aa1345e112d17c442245fdf48bb0ba25ae93ac84b46765a7e53a54cc436d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23486.51,
+      "usage_known": true,
+      "prompt_tokens": 32259,
+      "cached_tokens": 12672,
+      "completion_tokens": 856
+    }
+  ]
+}

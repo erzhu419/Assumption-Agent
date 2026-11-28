@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25ec023651b048a9b018b85b4897dacc",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:04.844323+00:00",
+  "ended_at_utc": "2026-11-28T15:04:37.895433+00:00",
+  "request_sha256": "1594ce4c38ad868f3b66711cde8428524454a50b51a3ade5c76f5a0f857856fc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43270,
+    "cached_tokens": 12672,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/state11.py <<'PY'\\nexec(open('/tmp/cv_exact.py').read().split('P=[np.arange')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nX=tr['x']; T=tr['traj']; tt=s['eval_times']; cal=m._calibration(s['panel_a']); z=np.linalg.solve(cal[1:].T,(X-cal[0]).T).T\\npb,pc=s['panel_b'],s['panel_c']; B=m._operator(pb['u'],pb['v'],erf); C=m._operator(pc['u'],pc['v1'],np.arcsinh)\\nls=m._ls\\nvdes=lambda w:np.c_[np.ones(len(w)),w,w*w]; vc=ls(vdes(pc['u']),pc['v2']); V=lambda w:vdes(w)@vc\\nb=B(z); h=C(b); r=C(z); v=V(b); zg=V(z); dot=lambda w:w.sum(1)[:,None]\\nbase=[z,h,dot(z*h)]; baseline=np.c_[z,r,h,z*r,z*h,r*h]; basic=np.column_stack(base)\\nWs={'z':z,'B':b,'C':r,'CB':h,'VB':v,'V':zg,'VC':V(r),'BC':B(r),'delta':z-h,'sum':z+h,'zCB':z*h,'zB':z*b}\\nPs=[np.arange(72)]+[rng.permutation(72) for _ in range(12)]+[np.argsort(k*X[:,j]) for j in range(4) for k in [-1,1]]\\ndef cv(D,alpha=.003):\\n E=[]\\n for p in Ps:\\n  i,j=p[:52],p[52:]; u=np.r_[i,j]; f=m._ridge(D[u],T[i],alpha,52); e=abs(f-T[j]); E.append([e.mean(),e[:,-1].mean()])\\n E=np.array(E); return np.r_[E[0],E[:13].max(0),E[13:].max(0),E[13:].mean(0)]\\nprint('base',cv(baseline)); print('basic',cv(basic))\\nFs={**Ws}\\nfor k,w in Ws.items():\\n for label, f in [('sq',lambda x:x*x),('cube',lambda x:x**3),('rat',lambda x:x/(1+x*x)),('abs',np.abs),('log',lambda x:np.log1p(x*x))]+[(f'{name}{a}',lambda x,fn=fn,a=a:fn(a*x)) for name,fn in [('tanh',np.tanh),('sin',np.sin),('asinh',np.arcsinh)] for a in [.6,1.25,2.5,3.5,5]]:\\n  Fs[k+label]=f(w)\\nfor k,w in list(Ws.items())[:8]:\\n for l,g in list(Ws.items())[:8]:\\n  if k<l: Fs[k+'x'+l]=w*g\\nrows=[]\\nfor name,D in Fs.items():\\n for label,d in [('full',D),('sum',dot(D))]:\\n  for typ,bs in [('s',basic),('l',baseline)]:\\n   f=np.c_[bs,d]; e=cv(f); rows.append((e[4]+.35*e[2]+.5*e[6],name,label,typ,e))\\nfor a in sorted(rows,key=lambda t:t[0])[:22]:print(a)\\n# Look at transferable residual directions and their dependence on individual branches.\\nF=lambda q:-np.expm1(-tt[:,None]*np.exp(q))\\no=least_squares(lambda q:(F(q)@ls(F(q),T.T)-T.T).ravel(),np.log([.41,1.795])); H=ls(F(o.x),T.T).T\\nprint('time',np.exp(o.x),'basic coefs',ls(np.c_[np.ones(72),basic],H));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/state11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted trajectory interactions -> H2 compact readout with a missing nonlinear term; verified 52/20 MAEs are 0.00870 for y and 0.01355 for state, but directional state MAE reaches 0.06632.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the current verified candidate\",\"rejected_reason\":\"The required split passes, but directional slices reveal a trajectory extrapolation weakness worth testing before submission.\"}],\"rationale\":\"Keep the verified candidate intact while screening compact trajectory alternatives against both the required split and directional stress tests.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "044c5612c7fae3fa70ca81205d605bd442e7d431cf25f3b12ad21f4db9c39d1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33544.77,
+      "usage_known": true,
+      "prompt_tokens": 43270,
+      "cached_tokens": 12672,
+      "completion_tokens": 1323
+    }
+  ]
+}

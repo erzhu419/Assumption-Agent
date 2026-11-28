@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3f6ddf997d444017ba2f710a4345077e",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:25.276902+00:00",
+  "ended_at_utc": "2026-11-28T15:16:09.458440+00:00",
+  "request_sha256": "6d9c829c745f07886aa51ec4db7945e572524ee861147f780526590d9515dca1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32703,
+    "cached_tokens": 12672,
+    "completion_tokens": 1967
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat _frozen_nodes/node_00.py; cat >/tmp/ridge_scan.py <<'PY'\\nexec(open('/tmp/panel_scan.py').read().split('for name,q in Q.items():')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nsplits=[np.arange(52,72),np.arange(0,20),np.arange(26,46),np.random.default_rng(726).permutation(len(x))[:20]]\\nfor ii,va in enumerate(splits):\\n ti=np.setdiff1d(np.arange(len(x)),va); yy=z[ti]; _,ss,vt=np.linalg.svd(yy,full_matrices=False); yy=yy@vt[:2].T\\n def loss(pred):return np.mean(abs(pred@vt[:2]-z[va]))\\n print('FOLD',ii,flush=True)\\n for name in ['raw','Av','Bw','Bwv']:\\n  q=Q[name]; pred=np.column_stack([gp(q[ti],q[va],y,True) for y in yy.T]); print('GP',name,loss(pred),flush=True)\\n q=(x-x[ti].mean(0))/x[ti].std(0)\\n for f in ('sin','tanh','exp','rat','atan'):\\n  for d in (1,2):\\n   for m in (1,2,3):\\n    fn={'sin':np.sin,'tanh':np.tanh,'exp':lambda v:np.exp(-v*v), 'rat':lambda v:v/(1+v*v), 'atan':np.arctan}[f]\\n    base=np.c_[np.ones(len(x)),q];\\n    if d==2:base=np.c_[base,*[q[:,j]*q[:,k] for j,k in combinations_with_replacement(range(4),2)]]\\n    aq=np.c_[np.ones(len(q)),q]; target=yy[:,0]; penalty=0.012\\n    def calc(p):\\n     dd=np.c_[base,fn(aq@p.reshape(m,5).T)]; X=dd[ti]; R=np.eye(X.shape[1])*penalty; c=np.linalg.solve(X.T@X+R,X.T@target); return dd,c\\n    def obj(p):\\n     dd,c=calc(p); return np.r_[dd[ti]@c-target,np.sqrt(penalty)*c,.012*p]\\n    rng=np.random.default_rng(23); opts=[]\\n    for j in range(5):\\n     fitp=least_squares(obj,rng.normal(0,.7,(m,5)).ravel(),max_nfev=110,ftol=1e-6); opts.append((fitp.cost,fitp.x))\\n    cost,p=min(opts,key=lambda o:o[0]); dd,c=calc(p); p2=gp(q[ti],q[va],yy[:,1],True); print(f,d,m,round(cost,5),round(loss(np.c_[dd[va]@c,p2]),5),flush=True)\\nPY\\ncat > node_01.py <<'PY'\\n\\\"\\\"\\\"Scalar kernel transfer and separate trajectory-mode regressions.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\n\\n\\ndef _ridge(f, y, lam):\\n    k = f @ f[:len(y)].T\\n    return k[len(y):] @ cho_solve(cho_factor(k[:len(y)] + lam*np.eye(len(y))), y)\\n\\n\\ndef _gp(x, n, y):\\n    y0 = y.mean()\\n    scale = max(y.std(), 1e-12)\\n    u = (y-y0)/scale\\n    dist = (x[:, None, :] - x[None, :, :])**2\\n    d = x.shape[1]\\n    def terms(ds, p):\\n        e = -ds*np.exp(p[:d])\\n        joint = np.exp(e.sum(axis=2))\\n        add = np.exp(e+p[d])\\n        return e, joint, add\\n    def loss(p):\\n        e, j, a = terms(dist[:n,:n], p)\\n        noise = np.exp(p[-1])\\n        fact = cho_factor(j+a.sum(axis=2)+noise*np.eye(n))\\n        v = cho_solve(fact, u)\\n        g = .5*(cho_solve(fact,np.eye(n))-np.outer(v,v))\\n        grad = np.einsum('ij,ijk->k',g,e*(j[:,:,None]+a))\\n        return .5*u@v+np.log(np.diag(fact[0])).sum(), np.r_[grad,np.sum(g*a.sum(2)),noise*np.trace(g)]\\n    p = minimize(loss,np.r_[np.zeros(d),-2.,-9.],jac=True,method='L-BFGS-B',bounds=[(-11,7)]*d+[(-10,5),(-15,-2)]).x\\n    _, j, a = terms(dist[:,:n], p)\\n    k = j+a.sum(axis=2)\\n    return y0+scale*k[n:]@cho_solve(cho_factor(k[:n]+np.exp(p[-1])*np.eye(n)),u)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, parent = inputs['__input__'], inputs['node_00']\\n    train = study['train']\\n    n = len(train['x'])\\n    y = .8*_ridge(parent['hybrid'],train['y'],.007)+.2*_ridge(parent['raw'],train['y'],.012)\\n    x = np.concatenate((train['x'],study['test']['x']))\\n    z = train['traj']\\n    basis = np.linalg.svd(z,full_matrices=False)[2][:2]\\n    state = np.column_stack([_gp(x,n,a) for a in (z@basis.T).T])@basis\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/ridge_scan.py >/tmp/ridge_scan.out; grep -E 'FOLD|GP' /tmp/ridge_scan.out; python3 - <<'PY'\\na={}\\nfor l in open('/tmp/ridge_scan.out'):\\n t=l.split()\\n if len(t)==5 and t[0] in ('sin','tanh','exp','rat','atan'):a.setdefault(tuple(t[:3]),[]).append(float(t[-1]))\\nfor k,v in sorted(a.items(),key=lambda q:max(q[1]))[:12]:print(k,v)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic spatial kernels -> H2 low-dimensional nonlinear projections; additive GP remains the baseline at 0.0360 public trajectory MAE and 0.0585 worst-slice MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best isotropic pairwise kernel\",\n      \"rejected_reason\": \"Its 0.05722 worst-slice trajectory MAE does not improve on the best anisotropic panel GP.\"\n    }\n  ],\n  \"rationale\": \"Save and test a contract-compliant baseline with the archived scalar blend, then check whether a compact nonlinear spatial projection can improve the dominant trajectory mode across slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a3ce50192d68951de508ec1601917c1e65da4b90d3398388d0a7a287c72fe888",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44180.33,
+      "usage_known": true,
+      "prompt_tokens": 32703,
+      "cached_tokens": 12672,
+      "completion_tokens": 1967
+    }
+  ]
+}

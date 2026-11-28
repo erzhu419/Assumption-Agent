@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3012d563b2c4ef0974e761eff62e841",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:59:49.848304+00:00",
+  "ended_at_utc": "2026-11-28T15:00:09.101655+00:00",
+  "request_sha256": "679b59ab31d1258df5678730a0096c3971bb3c7c76e7a10f21e575d0c27527c8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21115,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20479,
+    "cached_tokens": 12672,
+    "completion_tokens": 678
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,runpy,copy\\nb=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\\nm=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b02_batch_00_solver.py')\\nfor k,d in b.items():\\n if isinstance(d,dict):\\n  for n,v in d.items():\\n   a=np.asarray(v); print(k,n,a.shape,'min/max',a.min(),a.max(),'first',a[:2],'std',a.std(axis=0))\\n else: print(k,d)\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=b[k]; print('\\\\nPANEL',k); u=p['u']; x=np.c_[np.ones(len(u)),u];\\n for vk in set(p)-{'u'}:\\n  v=p[vk]; c=np.linalg.lstsq(x,v,rcond=None)[0]; r=x@c-v; print(vk,'coef',c,'row residual norms',np.linalg.norm(r,axis=1),'first residuals',r[:8],sep='\\\\n');\\n  if vk=='v': print('robust',m['_affine'](p,True), 'robust resid',np.linalg.norm(x@m['_affine'](p,True)-v,axis=1))\\nfor ind in [np.arange(52,72),*np.array_split(np.random.default_rng(42).permutation(72),4)]:\\n s=copy.deepcopy(b); keep=np.setdiff1d(np.arange(72),ind); s['train']={k:b['train'][k][keep] for k in ('x','y','traj')}; s['test']={'x':b['train']['x'][ind]}; o=m['solve_batch'](s); print('archive MAEs',np.mean(abs(o['y_hat']-b['train']['y'][ind])),np.mean(abs(o['state_pred']-b['train']['traj'][ind])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 ordinary panel_b fit → H2 robust or structurally corrected calibration; no MAE measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived predictions across holdout slices and inspect row-wise calibration residuals to distinguish isolated corruption from a missing transform term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "10d233f9bea142e449f4e24e54c1e7c2b53057367c11ad4cf8e15329cf1579d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19252.5,
+      "usage_known": true,
+      "prompt_tokens": 20479,
+      "cached_tokens": 12672,
+      "completion_tokens": 678
+    }
+  ]
+}

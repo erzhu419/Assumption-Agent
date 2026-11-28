@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d0428f85a114209af28666afafa2c52",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:37.222022+00:00",
+  "ended_at_utc": "2026-11-28T15:41:14.006557+00:00",
+  "request_sha256": "4dfc1d4b0d9a310cb8158ec301911124c63b61240d5be10fa49e855c99afdc27",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44966,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31381,
+    "cached_tokens": 12672,
+    "completion_tokens": 1590
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py | sed -n '/^correlation/,+7p; /^kernel top/,+10p'; sed -n '138,220p' /holdout_task/test_dag_candidate.py; cat > /tmp/atoms.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations,product\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; z=t['traj']; V=np.linalg.svd(z,full_matrices=False)[2][:2]; Y=np.c_[t['y'],z@V.T/np.sqrt(z.shape[1])]; A=s['panel_a']; C=s['panel_c']; aff=lambda x:np.c_[np.ones(len(x)),x]; i=np.argsort(np.linalg.norm(A['u']-A['v'],axis=1))[:-3]; M=np.linalg.lstsq(aff(A['u'])[i],A['v'][i],rcond=None)[0]; xc=np.linalg.solve(M[1:].T,(x-M[0]).T).T; L=np.linalg.lstsq(aff(C['u']),C['v1'],rcond=None)[0]; U,_,W=np.linalg.svd(L[1:]); np.set_printoptions(precision=4,suppress=True); print('panel A',M,'target spectrum',np.linalg.svd(Y,compute_uv=False)); print('target covariance',np.corrcoef(Y.T));print('Y least squares against other state',np.mean(abs(Y[:,0]-aff(Y[:,1:])@np.linalg.lstsq(aff(Y[:,1:]),Y[:,0],rcond=None)[0])));\\nfolds=list(KFold(6,shuffle=True,random_state=12).split(x)); out=[]\\ndef err(p,j):\\n e=p-Y[j]; return np.array([np.abs(e[:,0]).mean(),np.abs(e[:,1:]@V).mean()*np.sqrt(z.shape[1])])\\ndef score(F,lam=.001):\\n E=[]\\n for i,j in folds:\\n  f=F[i]; E.append(err(F[j]@np.linalg.solve(f.T@f+lam*np.eye(f.shape[1]),f.T@Y[i]),j))\\n return np.mean(E,0)\\nfor nam,q in [('x',x),('cal',xc),('C',aff(xc)@L),('orth',xc@U@W)]:\\n R=np.sum(q*q,axis=1); G=aff(q); Q=np.column_stack([G]+[q[:,a]*q[:,b] for a,b in combinations(range(4),2)]+[q*q]);\\n for f in np.arange(.5,7,.15):\\n  for n,F in [('periodic',np.c_[G,np.sin(f*q),np.cos(f*q)]),('radial',np.c_[Q,np.cos(f*np.sqrt(R)),np.sin(f*R),np.cos(f*R)]),('radial-rational',np.c_[G,Q[:,5:]/(1+f*R[:,None]),G*np.exp(-f*R[:,None])]),('add-rational',np.c_[G,q*q/(1+f*q*q),q/(1+f*q*q)]),('sine-square',np.c_[G,np.sin(f*q*q),np.cos(f*q*q)])]:out.append((score(F),nam,n,round(f,2)))\\nfor j in [0,1]:print('univariate',j, *sorted(out,key=lambda a:a[0][j])[:8],sep='\\\\n')\\n# Profile one nonlinear ridge atom jointly, testing single-index oscillation, projected square, or rational saturation.\\nfor nam,q in [('raw',x),('cal',xc)]:\\n G=aff(q); Q=np.c_[G,q*q,*[q[:,a]*q[:,b] for a,b in combinations(range(4),2)]]\\n for base in [G,Q]:\\n  for kind in ['wave','squarewave','tanh','rational','bump']:\\n   def form(w,idx):\\n    a=G[idx]@w\\n    if kind=='wave': F=np.c_[np.sin(a),np.cos(a)]\\n    elif kind=='squarewave': F=np.sin(a*a)[:,None]\\n    elif kind=='tanh': F=np.tanh(a)[:,None]\\n    elif kind=='rational': F=(a/(1+a*a))[:,None]\\n    else: F=np.exp(-a*a)[:,None]\\n    return np.c_[base[idx],F]\\n   def fit(i):\\n    def prof(w,ret=False):\\n     F=form(w,i); B=np.linalg.lstsq(F,Y[i],rcond=1e-8)[0];return B if ret else (F@B-Y[i]).ravel()\\n    rng=np.random.default_rng(249); starts=[np.r_[0,2.15*d] for d in np.eye(4)]+list(rng.normal(size=(20,5))*1.5); fits=[least_squares(prof,u,max_nfev=110,bounds=(-21,21)) for u in starts]; m=min(fits,key=lambda r:r.cost); return m.x,prof(m.x,True),m.cost\\n   ii=np.arange(len(q)); w,b,cost=fit(ii); errors=[]\\n   for i,j in folds:\\n    wf,bf,_=fit(i);errors.append(err(form(wf,j)@bf,j))\\n   print(nam,base.shape[1],kind,'train',err(form(w,ii)@b,ii),'CV',np.mean(errors,0),'w',w,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/atoms.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cubic panel heads → test shared low-dimensional spatial atoms; the last measured cubic worst-fold MAEs were 0.1712 scalar and 0.1961 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a dense kernel as the final head\",\"rejected_reason\":\"First test whether the low-rank trajectories and scalar response share an identifiable nonlinear spatial feature.\"}],\"rationale\":\"Compare radial, additive, and projected nonlinear features. Fit projected directions inside each fold so validation measures prediction rather than reconstruction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "35f0367efc0291d9d13940e8026039b0a681b602497e49a85438f04b3acd016b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37331.57,
+      "usage_known": true,
+      "prompt_tokens": 31381,
+      "cached_tokens": 12672,
+      "completion_tokens": 1590
+    }
+  ]
+}

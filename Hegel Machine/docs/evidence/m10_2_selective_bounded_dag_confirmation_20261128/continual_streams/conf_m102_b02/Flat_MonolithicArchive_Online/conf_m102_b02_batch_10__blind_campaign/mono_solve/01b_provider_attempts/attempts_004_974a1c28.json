@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "974a1c281e47401790e54aa6986d0928",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:11.400358+00:00",
+  "ended_at_utc": "2026-11-28T15:49:33.471904+00:00",
+  "request_sha256": "f6c948446fe55c6df7fc89089a64aefd8170af8d0c138952b81d84247cff3df3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30271,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24643,
+    "cached_tokens": 12672,
+    "completion_tokens": 860
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; cat conf_m102_b02_batch_{02,06,09}_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; F=s['train']['traj'][:52]; u,sv,v=np.linalg.svd(F,full_matrices=False); print('SVD',sv,'time vectors',v[:3]);\\nfor exp1 in [lambda t,a:1-np.exp(-a*t),lambda t,a: t*np.exp(-a*t),lambda t,a: np.exp(-a*t),lambda t,a:np.sin(a*t),lambda t,a:np.tanh(a*t)]:\\n for exp2 in [lambda t,a:1-np.exp(-a*t),lambda t,a:t*np.exp(-a*t),lambda t,a: np.exp(-a*t),lambda t,a: np.sin(a*t),lambda t,a:np.tanh(a*t)]:\\n  def des(q):return np.stack((exp1(t,q[0]),exp2(t,q[1])))\\n  def res(q):A=des(q);return (np.linalg.lstsq(A.T,F.T,rcond=1e-9)[0].T@A-F).ravel()\\n  r=least_squares(res,[.7,1.35],bounds=(.0001,8)); print(round(np.std(r.fun),7),r.x,end='; ')\\n print()\\nfor p in ['panel_b','panel_c']:\\n U=s[p]['u']; i,j=np.triu_indices(4,1); pair=U[:,i]*U[:,j];\\n for name,V in s[p].items():\\n  if name=='u':continue\\n  for basis,d in [('lin',U),('quad',np.c_[U,U**2,pair]),('odd',np.c_[U,U**3]),('pair',np.c_[U,pair]),('tri',np.c_[U,U**2,pair,U**3]),('sin',np.c_[U,np.sin(2.15*U)]),('sat',np.c_[U,np.tanh(2.15*U)]),('den',np.c_[U,U/(1+.22*U**2)])]:\\n   A=np.c_[np.ones(len(U)),d]; P=A@np.linalg.pinv(A); err=(V-P@V)/(1-P.diagonal()[:,None]); print(p,name,basis,round(np.linalg.norm(err)/err.size**.5,5),end='; ')\\n  print()\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived readouts -> H2 discover a shared two-mode trajectory basis and nonlinear panel maps; best archived 52/20 MAEs were 0.0995 response and 0.1756 trajectory, from different solvers.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight independent trajectory regressions\",\"rejected_reason\":\"The centered trajectory has two dominant singular values; fitting shared modes should reduce noise and expose the spatial operator.\"}],\"rationale\":\"Fit candidate temporal bases on the first 52 observations and use panel leave-one-out residuals to distinguish nonlinear operator terms from interpolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b9fdad2f58cbd72b332036452ee66f097bfea283d4186ad48110088b8e5d6600",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22517.12,
+      "usage_known": true,
+      "prompt_tokens": 24643,
+      "cached_tokens": 12672,
+      "completion_tokens": 860
+    }
+  ]
+}

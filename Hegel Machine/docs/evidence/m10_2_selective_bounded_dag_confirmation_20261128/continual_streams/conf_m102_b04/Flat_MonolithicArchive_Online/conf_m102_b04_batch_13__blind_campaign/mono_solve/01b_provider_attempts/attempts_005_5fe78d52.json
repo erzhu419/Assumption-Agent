@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5fe78d5242fd4085b739cf4fae9b977a",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:29.194070+00:00",
+  "ended_at_utc": "2026-11-28T15:52:01.063862+00:00",
+  "request_sha256": "7701f8e1cdf5014d05f893b2d9d52c4f34c3c413a74ed78afe5e024c8457fa1a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39134,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28298,
+    "cached_tokens": 12672,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph13.py <<'PY'\\nimport sys,pickle,importlib.util\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef af(x):return np.c_[np.ones(len(x)),x]\\ndef quad(x):return np.column_stack([af(x)]+[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(x.shape[1]),2)])\\ndef rm(x):return np.mean(x*x)**.5\\nfor p in sorted(Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n spec=importlib.util.spec_from_file_location('arch',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\n if '09' in p.stem: old=m\\n tr=s['train']; st={**s,'train':{**tr,**{k:tr[k][:52] for k in ('x','y','traj')}},'test':{'x':tr['x'][52:]}}\\n try:\\n  o=m.solve_batch(st); print(p.stem,*[np.mean(abs(o[a]-tr[b][52:])) for a,b in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(e)\\nu,v=[s['panel_a'][k] for k in ('u','v')]; keep=np.linalg.norm(v-u,axis=1)<3\\nprint('cal retained',keep.sum()); cal=old._calibration(s['panel_a']); print('cal09',cal)\\nz=old._invert(s['train']['x'],cal)\\nprint('inverse ranges',z.min(0),z.max(0))\\ndef op(u,v,mode):\\n def tx(z,p):\\n  k=p[0]; f=k*z\\n  if mode=='cos': return np.cos(f)\\n  if mode=='soft': return z/(1+abs(f))\\n  if mode=='softlin': return z/(1+abs(f))+p[1]*z\\n  if mode=='tanhlin':return np.tanh(f)+p[1]*z\\n  if mode=='asin':return np.arcsinh(f)\\n  if mode=='sat':return z/(1+f*f)**.5\\n  if mode=='sq':return np.c_[z,z*z]\\n  if mode=='quad':return quad(z)[:,1:]\\n def fit(p):return ls(af(tx(u,p)),v)\\n def res(p):return (af(tx(u,p))@fit(p)-v).ravel()\\n p=min([least_squares(res,[k,0.] if mode.endswith('lin') else [k],max_nfev=300) for k in (.5,1.4,2.6)],key=lambda o:o.cost).x\\n return p,rm(res(p)),lambda z:af(tx(z,p))@fit(p)\\nb={};\\nfor panel,key,modes in [('panel_b','v',['cos']),('panel_c','v1',['soft','softlin','tanhlin','asin','sat']),('panel_c','v2',['sq','quad'])]:\\n for mode in modes:\\n  p,e,f=op(s[panel]['u'],s[panel][key],mode); print(panel,key,mode,p,e); b[mode]=f\\nY,T=[s['train'][k] for k in ('y','traj')]\\ndef check(name,h):\\n a=af(h); d=quad(h) if h.shape[1]<=8 else a\\n def score(a,y):\\n  e=a[52:]@ls(a[:52],y[:52])-y[52:];return np.mean(abs(e)),rm(a[:52]@ls(a[:52],y[:52])-y[:52])\\n print(name,'T',np.round(score(a,T),5),'Y',np.round(score(a,Y),5),'YQ',np.round(score(d,Y),5))\\ncheck('raw',z)\\nfor name,f in b.items():\\n for parent,w in [('z',z),('B',b['cos'](z)),('Csoft',b['soft'](z))]:\\n  h=f(w); check(name+'('+parent+')',h); check('z+'+name+'('+parent+')',np.c_[z,h]);\\n  if name!='cos':check('B+'+name+'('+parent+')',np.c_[b['cos'](z),h])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (single inherited graph) → H2 (opposite-coordinate sinusoidal calibration with independently tested panel branches); archived 52/20 scalar and trajectory MAEs are 0.742504 and 0.818721.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the cosine panel as the only active operator\",\n      \"rejected_reason\": \"Its low calibration residual identifies its local law, not whether either output depends on it.\"\n    }\n  ],\n  \"rationale\": \"Compare archive baselines with parallel and serial operator candidates; use training residuals to identify missing structure and the prescribed split to measure transfer separately for both outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dc4ae084fcd24e2df4425d39ecb60d6c6771a8414016a58b1d82b4e5012693e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32397.8,
+      "usage_known": true,
+      "prompt_tokens": 28298,
+      "cached_tokens": 12672,
+      "completion_tokens": 1366
+    }
+  ]
+}

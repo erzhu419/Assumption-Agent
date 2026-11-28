@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c26b2b72fea1463fba1ab2b8ba933e75",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:09.802768+00:00",
+  "ended_at_utc": "2026-11-28T15:51:55.909018+00:00",
+  "request_sha256": "66c028a9ffdd5d64809f0a650c540da17fd0987baa21d7c526a9ab733228cc23",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50753,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34375,
+    "cached_tokens": 12672,
+    "completion_tokens": 2029
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict both readouts from a robustly calibrated panel composition.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _intercept(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-11)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    a = _intercept(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(6):\\n        r = np.linalg.norm(a @ _ls(a[keep], v[keep]) - v, axis=1)\\n        keep = r < max(.002, 3*np.median(r))\\n    opposite = (np.arange(4) + 2) % 4\\n\\n    def nonlinear(q):\\n        return np.tanh(q[0]*u[keep]), np.sin(q[1]*u[keep][:, opposite])\\n\\n    def fit(q):\\n        f, g = nonlinear(q)\\n        # Offsets and gains are per channel; nonlinear amplitudes are shared.\\n        n = len(f)\\n        d = np.zeros((n, 4, 10))\\n        j = np.arange(4)\\n        d[:, j, j] = 1\\n        d[:, j, j+4] = u[keep]\\n        d[:, :, 8], d[:, :, 9] = f, g\\n        d = d.reshape(-1, 10)\\n        c = _ls(d, v[keep].ravel())\\n        return c, d @ c - v[keep].ravel()\\n\\n    q = least_squares(lambda q:fit(q)[1], [1.8,2.4], bounds=([1.,1.8],[2.6,3.]), gtol=1e-13).x\\n    c, _ = fit(q)\\n    def forward(z):\\n        return c[:4] + c[4:8]*z + c[8]*np.tanh(q[0]*z) + c[9]*np.sin(q[1]*z[opposite])\\n    return np.array([least_squares(lambda z:forward(z)-r, (r-c[:4])/c[4:8], gtol=1e-12).x for r in x]).reshape(-1,4)\\n\\n\\ndef _middle(panel, z):\\n    u, v = panel['u'], panel['v']\\n    def design(x, q):\\n        return _intercept(np.column_stack((x,np.tanh(q[0]*x),np.arcsinh(q[1]*x))))\\n    def residual(q):\\n        d = design(u, q)\\n        inv = np.linalg.pinv(d)\\n        lev = np.sum(d*inv.T, axis=1)\\n        return ((d @ (inv @ v) - v)/np.maximum(1-lev[:,None],.002)).ravel()\\n    q = least_squares(residual,[5.5,6.],bounds=(.08,8.)).x\\n    return design(z,q) @ _ls(design(u,q),v)\\n\\n\\ndef _features(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    w = _middle(study['panel_b'], z)\\n    p = study['panel_c']\\n    i,j=np.triu_indices(4,1)\\n    u=p['u']\\n    d=u[:,i]*u[:,j]\\n    active=np.linalg.norm(_ls(_intercept(d),p['v1'])[1:],axis=1) > .002\\n    h=_intercept(w[:,i[active]]*w[:,j[active]]) @ _ls(_intercept(d[:,active]),p['v1'])\\n    cross=(z[:,:,None]*h[:,None,:]).reshape(len(z),16)\\n    return z,w,h,cross\\n\\n\\ndef _ridge(x, y, test, penalty):\\n    mu=x.mean(axis=0)\\n    sd=np.maximum(x.std(axis=0),1e-10)\\n    x=(x-mu)/sd\\n    target=y.mean(axis=0)\\n    c=np.linalg.solve(x.T@x+penalty*np.eye(x.shape[1]), x.T@(y-target))\\n    return target+(test-mu)/sd @ c\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']\\n    n=len(tr['x'])\\n    z,w,h,cross=_features(study,np.vstack((tr['x'],study['test']['x'])))\\n    f=np.column_stack((z,h,cross))\\n    y=_ridge(f[:n],tr['y'],f[n:],.01)\\n    traj=np.asarray(tr['traj'])\\n    modes=np.linalg.svd(traj,full_matrices=False)[2][:2]\\n    state=_ridge(f[:n],traj@modes.T,f[n:],.02)@modes\\n    end=state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),end.mean(),end.std()])}\\nPY\\ncat > /tmp/audit10.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['x']); rng=np.random.default_rng(10)\\nfor k in range(7):\\n ids=np.arange(N) if k==0 else rng.permutation(N); a,b=ids[:52],ids[52:]; cv=dict(s,train={key:val if key=='summary' else val[a] for key,val in tr.items()},test={'x':tr['x'][b]}); o=m.solve_batch(cv); ry=np.abs(o['y_hat']-tr['y'][b]); rt=np.abs(o['state_pred']-tr['traj'][b]); print(k,'MAE',ry.mean(),rt.mean(),'worst time',rt.mean(0).max(),'worst row',ry.max(),rt.mean(1).max())\\nz,w,h,c=m._features(s,tr['x']); F=m._intercept(np.c_[z,h,c]); coef=m._ls(F,np.c_[tr['y'],tr['traj'][:,[1,-1]]]); print('coefficients rows = 1,z,h,z*h:');print(coef.round(4)); print('train residual std',np.std(F@coef-np.c_[tr['y'],tr['traj'][:,[1,-1]]],axis=0)); print('times',s['eval_times']); print('telemetry',s['telemetry_vec']);print('test coordinate ranges',[(round(a.min(),3),round(a.max(),3)) for a in m._features(s,s['test']['x'])]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit10.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 panel composition with a linear readout -> H2 calibrated B→C1 composition with latent bilinear interactions; prescribed 52/20 MAEs are 0.00534 response and 0.00887 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include Panel C v2 in both readouts\",\n      \"rejected_reason\": \"Adding v2 to the bilinear readout raised trajectory MAE from 0.00887 to 0.02209 on the prescribed split.\"\n    }\n  ],\n  \"rationale\": \"Save the passing structure, then check whether its error remains low across alternate splits and inspect the fitted coefficients for a simpler readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3fca0444bdfd217b9defce2dd73e73d170034c9e750f768a35a0bc39ef2895e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47173.77,
+      "usage_known": true,
+      "prompt_tokens": 34375,
+      "cached_tokens": 12672,
+      "completion_tokens": 2029
+    }
+  ]
+}

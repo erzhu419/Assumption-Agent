@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6b2ff25c0c743b38c4599665b0a99ab",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:47:13.528112+00:00",
+  "ended_at_utc": "2026-11-28T15:47:38.438860+00:00",
+  "request_sha256": "567b04582a7b972b11582a98c49cde6fdcc9193b5ec6294693a58e69fa62c78c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32209,
+    "cached_tokens": 12672,
+    "completion_tokens": 979
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, copy, io, pickle, runpy\\nimport numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    try:\\n        runpy.run_path('/holdout_task/test_dag_candidate.py', run_name='__main__')\\n    except SystemExit as exc:\\n        assert exc.code == 0\\n    run_dag = runpy.run_path('/holdout_task/test_dag_candidate.py', run_name='stress_check') if False else None\\n# Load the harness definitions without executing its top-level test.\\npath = '/holdout_task/test_dag_candidate.py'\\nsource = open(path).read().split('\\\\nst = pickle.load', 1)[0]\\nns = {'__file__': path, '__name__': 'stress_check'}\\nexec(compile(source, path, 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; n = len(t['x']); idx = np.arange(n)\\nm = runpy.run_path('/holdout_task/node_00.py')\\nz = m['_coords'](s['panel_a'], t['x'])\\nslices = [(f'block_{j}', q) for j, q in enumerate(np.array_split(idx, 4))]\\nslices += [(f'extreme_axis_{j}', np.argsort(np.abs(z[:, j]))[-18:]) for j in range(z.shape[1])]\\nrows = []\\nfor label, val in slices:\\n    tr = np.setdiff1d(idx, val)\\n    cv = copy.deepcopy(s)\\n    y, traj = t['y'][tr], t['traj'][tr]\\n    cv['train'] = {'x': t['x'][tr], 'y': y, 'traj': traj, 'summary': np.array([y.mean(), y.std(), traj[:, -1].mean(), traj[:, -1].std()])}\\n    cv['test'] = {'x': t['x'][val]}\\n    out, counts = ns['run_dag'](cv)\\n    ye = np.abs(out['y_hat'] - t['y'][val]); te = np.abs(out['state_pred'] - t['traj'][val])\\n    assert all(k == 1 for k in counts.values()) and np.isfinite(ye).all() and np.isfinite(te).all()\\n    rows.append((label, ye.mean(), te.mean(), te.mean(axis=0).max()))\\nfor label, y, tr, horizon in rows:\\n    print(f'{label}: y_mae={y:.6f}, traj_mae={tr:.6f}, worst_horizon_mae={horizon:.6f}')\\nassert max(max(row[1:]) for row in rows) < .038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived polynomial coupling → H2 own-coordinate tanh plus opposite-coordinate sine; the accepted public split gives y MAE 0.003316 and trajectory MAE 0.003728, with extreme-coordinate slices pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the accepted calibration\",\n      \"rejected_reason\": \"The reference-only law already passes both public thresholds by a wide margin; test its generalization without changing the artifact.\"\n    }\n  ],\n  \"rationale\": \"The exact artifact passed the official test and closed the calibration residual. Verify it on disjoint blocks and extreme latent coordinates, and check the worst trajectory horizon separately before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ee5761a45ffd947ffbf88646dffa5a70b5dcd6ab7aa608a6a154258f0aaebe1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24909.47,
+      "usage_known": true,
+      "prompt_tokens": 32209,
+      "cached_tokens": 12672,
+      "completion_tokens": 979
+    }
+  ]
+}

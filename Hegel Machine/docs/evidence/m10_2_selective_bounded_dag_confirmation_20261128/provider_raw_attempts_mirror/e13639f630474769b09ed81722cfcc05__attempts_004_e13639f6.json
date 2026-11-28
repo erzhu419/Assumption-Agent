@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e13639f630474769b09ed81722cfcc05",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:50.884104+00:00",
+  "ended_at_utc": "2026-11-28T15:05:19.080363+00:00",
+  "request_sha256": "3a977a1bd1825d55fae5610d40ea136392ccca59ec2e1db91a52d535f9c4f868",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25712,
+    "cached_tokens": 12672,
+    "completion_tokens": 999
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py > /tmp/probe.out; grep -A18 '^times' /tmp/probe.out; cat > /tmp/next.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"print('times'\\\")[0])\\nfrom conf_m102_a03_batch_01_solver import _inverse\\nfrom scipy.optimize import least_squares\\npa=s['panel_a']; ua,va=pa['u'],pa['v']; fs=P(ua,2); c=fit(fs,va)\\nfor _ in range(30):\\n r=np.linalg.norm(fs@c-va,axis=1); wt=np.sqrt(np.minimum(1,1.5*np.median(r)/np.maximum(r,1e-12))); c=fit(fs*wt[:,None],va*wt[:,None]);\\ngood=r<5*np.median(r); print('A good',good.sum());\\nfor d in (1,2,3):\\n f=P(ua,d); c=fit(f[good],va[good]); print('A',d,np.std((f@c-va)[good]),c.T)\\nvv=np.roll(ua,-1,axis=1); aa=np.stack([np.ones_like(ua),ua,vv,ua*vv,ua**3],axis=1); print('old A residual',np.sort(np.linalg.norm(np.einsum('ijk,jk->ik',aa,a)-va,axis=1))); print('old A coef',a)\\nqs={'x':x,'Ainv':_inverse(x,a),'Afor':np.einsum('ijk,jk->ik',np.stack([np.ones_like(x),x,np.roll(x,-1,1),x*np.roll(x,-1,1),x**3],axis=1),a)}\\nfor key in list(qs): qs[key+' B']=A(qs[key])@b\\nfor key,q in qs.items():\\n print('\\\\nMODEL',key)\\n for deg in (1,2,3,4,5):\\n  for mode in (['full'] if deg<=2 else ['pure','full'] if deg==3 else ['pure']):\\n   F=P(q,deg) if mode=='full' else np.c_[A(q),*[q**i for i in range(2,deg+1)]]\\n   if np.max(np.abs(F))>1e6: continue\\n   c=fit(F[:n],y[:n]); print(deg,mode,np.mean(abs((F@c-y)[:n])),np.mean(abs((F@c-y)[n:])),c if deg<=3 else '')\\n print('traj',np.mean(abs((A(q)@fit(A(q)[:n],t[:n])-t)[n:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/next.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration plus bilinear readout → H2 test structured nonlinear coordinates and sparse cubic terms; the best reported broad polynomial has 52/20 readout MAE 0.058285.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived affine/bilinear feature set is sufficient for the readout.\",\"empirical_witness\":\"The archived readout MAE is 0.100264; raw quadratic and cubic expansions improve it to 0.064997 and 0.058285 but still miss 0.038.\",\"causal_blanket_diagnosis\":\"The error is concentrated in the scalar readout: the trajectory already reaches MAE 0.003942.\",\"sublated_pivot\":\"Retain the low-rank trajectory branch and identify sparse nonlinear readout terms in valid coordinates.\",\"risk_kind\":\"numerical extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Unrestricted quartic\",\"rejected_reason\":\"It interpolates training labels but worsens held-out MAE to 0.097205.\"}],\"rationale\":\"The previous probe accidentally treated the archived nonlinear calibration coefficients as an affine matrix. Evaluate the genuine forward and inverse calibration maps, then compare sparse powers with the full polynomial basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5184b6f178358b82b27782c062640ab458d15dbe3796890b7889b17fbd8ed97a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28708.73,
+      "usage_known": true,
+      "prompt_tokens": 25712,
+      "cached_tokens": 12672,
+      "completion_tokens": 999
+    }
+  ]
+}

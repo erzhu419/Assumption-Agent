@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b5f78d1dbaf467889f332a52e8fe2e6",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:21.470884+00:00",
+  "ended_at_utc": "2026-11-28T15:11:58.731926+00:00",
+  "request_sha256": "d299e43670cc92bd7410ac78b400aa9d40329066dd7651e2200b3df428dc33d1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 36852,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27829,
+    "cached_tokens": 12672,
+    "completion_tokens": 1577
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/dag_fit.py <<'PY'\\nfrom dag_probe import *\\nfrom itertools import combinations_with_replacement\\nrng=np.random.default_rng(91)\\ndef terms(d): return [()]+[c for k in range(1,d+1) for c in combinations_with_replacement(range(4),k)]\\ndef Aof(u,tt): return np.column_stack([np.prod(u[:,c],axis=1) for c in tt])\\ndef cal(p):\\n u,v=p['u'],p['v']; tt=terms(3); A=Aof(u,tt); B=[]\\n for j in range(4):\\n  y=v[:,j]; cy=(j+1)%4; h0=np.abs(y-ls(ones(u),y)@ones(u).T)<2.5\\n  # Gross corruptions are orders of magnitude larger than calibration noise.\\n  h=h0.copy(); b=ls(A[h],y[h]); print('cal initial',j,sum(h),np.quantile(abs(A[h]@b-y[h]),[.5,1]),[(c,round(w,6)) for c,w in zip(tt,b) if abs(w)>.001]);\\n  for thresh in [.01,.003,.001]:\\n   keep=abs(b)>thresh; b2=np.zeros(len(tt)); b2[keep]=ls(A[h][:,keep],y[h]);\\n   if np.max(abs(A[h]@b2-y[h]))<.001:b=b2\\n  B.append(b)\\n return tt,np.array(B).T\\ndef inv(x,tt,B):\\n from scipy.optimize import root\\n z0=(x-B[0])@np.linalg.inv(B[1:5]);return np.array([root(lambda z: Aof(z[None],tt)[0]@B-y,z).x for z,y in zip(z0,x)])\\ndef fitness(F,y,key,splits):\\n o=[]\\n for i,j in splits:\\n  p=F[j]@ls(F[i],y[i]);o.append(np.mean(abs(p-y[j])))\\n return key,F.shape[1],np.round(o,5)\\nif __name__=='__main__':\\n tt,B=cal(s['panel_a']); p=s['panel_c']; u=p['u']; train=s['train']; z=inv(train['x'],tt,B); print('inverse',np.max(abs(Aof(z,tt)@B-train['x'])),np.max(abs(z)),z[:2]);\\n A=poly(u,2); bw=ls(A,p['v1']);print('branch1 coefficients',[(c,np.round(w,5).tolist()) for c,w in zip(terms(2),bw)]);c=poly(z,2)@bw; d=old._branch(p,z,2);\\n print('branch2 amplitudes range', np.min(d,axis=0),np.max(d,axis=0)); q=s['panel_b']; bw=ls(ones(q['u']),q['v']); print('panelB',np.round(bw,6)); zm=ones(z)@bw;\\n dot=np.sum(c*d,axis=1); cross=(d[:,:,None]*c[:,None,:]).reshape(len(z),-1); zz=np.c_[c,d]; print('telemetry',s['telemetry_vec']);\\n Fs={'arch scalar':ones(np.c_[zz,dot]),'arch traj':ones(np.c_[zz,cross]),'arch+z':ones(np.c_[z,zz,cross]),'polyz2':poly(z,2),'polyz3':poly(z,3),'polyc+d2':poly(zz,2),'diag c+d':ones(np.c_[zz,c*d,zz**2]),'atan c+d':ones(np.c_[zz,np.arctan(1.25*zz),cross]),'tanh c+d':ones(np.c_[zz,np.tanh(1.25*zz),cross]),'cubic c+d':ones(np.c_[zz,zz**2,zz**3,cross]),'cubic+dot':ones(np.c_[zz,zz**2,zz**3,dot]),'sin c+d':ones(np.c_[zz,np.sin(1.25*zz),cross]),'rat c+d':ones(np.c_[zz,zz/(1+1.25*zz**2),cross]),'softsign c+d':ones(np.c_[zz,zz/(1+1.25*abs(zz)),cross])};\\n ids=np.arange(len(z)); splits=[(ids[:52],ids[52:])]; splits.extend((np.setdiff1d(ids,j),j) for j in np.array_split(rng.permutation(ids),4));\\n for k,f in Fs.items(): print(fitness(f,train['y'],k,splits),fitness(f,train['traj'],k,splits)[2]);\\n np.savez('/tmp/dag_features.npz',z=z,c=c,d=d,zm=zm,y=train['y'],t=train['traj'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_fit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived diagonal alignment and softsign branch → H2 coupled cubic calibration and quadratic first branch; archived public CV MAEs are 0.746890 scalar and 0.825450 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived diagonal affine calibration and softsign first branch transfer unchanged.\",\n    \"empirical_witness\": \"The archived first branch has panel RMSE 0.56545, whereas a quadratic basis reaches median absolute residuals below 0.00005; coupled cubic calibration also reaches near-noise residuals on two channels before explicit outlier removal.\",\n    \"causal_blanket_diagnosis\": \"The mismatch is already visible in reference panels upstream of readout and time projection.\",\n    \"sublated_pivot\": \"Recover a sparse coupled cubic calibration after gross-outlier screening, invert it, and test the quadratic first branch alongside the archived cosine second branch.\",\n    \"risk_kind\": \"missing_algebraic_basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit only the archived readout\",\n      \"rejected_reason\": \"The reference-panel errors show that its input features are already misspecified.\"\n    }\n  ],\n  \"rationale\": \"Recover calibration from independent panels, then measure scalar and trajectory errors separately on the official split and four complementary folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b9d627245145d22d59224a03075b6c2d01d344f7840512cc2511fbbce9b62e78",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37257.57,
+      "usage_known": true,
+      "prompt_tokens": 27829,
+      "cached_tokens": 12672,
+      "completion_tokens": 1577
+    }
+  ]
+}

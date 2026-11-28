@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22e49a6c81094ebd8072c7bcaf0af1ee",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:51.727449+00:00",
+  "ended_at_utc": "2026-11-28T15:15:21.221283+00:00",
+  "request_sha256": "69e2621695685299c2b858d9d65e7d3fe2637a2f351891c9f0cfedbdc0f6a771",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25572,
+    "cached_tokens": 12672,
+    "completion_tokens": 1210
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*01_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=150)\\nprint('time telemetry summary',s['eval_times'],s['telemetry_vec'],s['train']['summary'])\\ndef poly(x,d): return np.column_stack([np.prod(x[:,p],axis=1) for k in range(d+1) for p in itertools.combinations_with_replacement(range(4),k)])\\nfor key in ['panel_a','panel_b','panel_c']:\\n p=s[key]; x=p['u']; print(key,'range',x.min(0),x.max(0))\\n for nm,y in p.items():\\n  if nm=='u':continue\\n  if key=='panel_a':\\n   good=np.linalg.norm(y,axis=1)<8; x=x[good]; y=y[good]\\n  for d in [1,2,3]:\\n   F=poly(x,d); W=np.linalg.lstsq(F,y,rcond=None)[0]; print(nm,d,'rmse',np.sqrt(np.mean((F@W-y)**2,0))); print(W if d<3 else '')\\n  for d in [1,2,3]:\\n   F=np.c_[np.ones(len(x)),*[(-np.roll(x,i,axis=1) if False else np.roll(x,i,axis=1)) for i in []]] if False else poly(x,d)\\n  for j in range(4):\\n   u=x[:,j]; v=y[:,j]; M=np.c_[np.ones(len(u)),u,u*u,u**3,np.roll(x,1,axis=1)[:,j],np.roll(x,1,axis=1)[:,j]**2]; w=np.linalg.lstsq(M,v,rcond=None)[0]; print('own/prev',j,w,np.std(M@w-v))\\n  if key=='panel_c':\\n   X=poly(x,1)\\n   for fun in [np.tanh,np.sin,lambda z:z/np.sqrt(1+z*z),lambda z:z/(1+z*z),lambda z:z+.2*z*z,lambda z:z+.2*z**3]:\\n    rr=[]\\n    for j in range(4):\\n     w=np.linalg.lstsq(X,y[:,j],rcond=None)[0]; f=least_squares(lambda p:p[-2]+p[-1]*fun(X@p[:-2])-y[:,j],np.r_[w,0.,2.],max_nfev=300); rr.append(np.std(f.fun))\\n    print(fun,rr)\\nt=s['eval_times']; z=s['train']['traj'][:52]; print('time basis')\\ndef obj(r):\\n B=-np.expm1(-t[:,None]*r); coef=np.linalg.lstsq(B,z.T,rcond=None)[0]; return (B@coef-z.T).ravel()\\nf=least_squares(obj,[2,.4],bounds=([.01,.001],[20,20])); print(f.x,np.std(f.fun)); B=-np.expm1(-t[:,None]*f.x); print(B)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine state amplitudes) -> H2 (panel-conditioned nonlinear amplitudes with shared time modes); the strongest archived solver gives 52/20 MAEs of 0.041117 for response and 0.089000 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine spatial basis is sufficient for the two trajectory modes.\",\n    \"empirical_witness\": \"The trajectory has only two singular values above the noise floor, yet affine trajectory MAE is 0.205165 and a quadratic spatial basis lowers it to 0.091825 on the same holdout.\",\n    \"causal_blanket_diagnosis\": \"The temporal rank is supported; the affine spatial feature set is missing nonlinear dependence.\",\n    \"sublated_pivot\": \"Keep two shared temporal modes and identify the panel maps before fitting nonlinear spatial amplitudes.\",\n    \"risk_kind\": \"off-manifold extrapolation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase raw polynomial degree\",\n      \"rejected_reason\": \"Degree four interpolated the fit rows but raised held-out trajectory MAE to 0.191051.\"\n    }\n  ],\n  \"rationale\": \"Compare each panel against affine, quadratic, and nonlinear candidates independently, and fit relaxation rates using only the 52 training trajectories.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "db8ee96561ae31943d09e112873cf5da35abf2378b0a879e11ba61319dc447ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29895.55,
+      "usage_known": true,
+      "prompt_tokens": 25572,
+      "cached_tokens": 12672,
+      "completion_tokens": 1210
+    }
+  ]
+}

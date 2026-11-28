@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3b0f40d2c8b4b28af8d1a5c4ef79138",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:13:25.509314+00:00",
+  "ended_at_utc": "2026-11-28T16:14:18.178583+00:00",
+  "request_sha256": "69fdc49ed594aae1b0ec63ce244c19e0a18f57575d6cca1936d08a22a5b22a60",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32677,
+    "cached_tokens": 5504,
+    "completion_tokens": 1371
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/next14.py <<'PY'\\nexec(open('/tmp/read14.py').read().split('for f in (1.25')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cr\\nU=b['u']; V=b['v']; C=s['panel_c']; A=aff(U)\\nfor key,p,q in [('b',b,'v'),('c1',C,'v1'),('c2',C,'v2')]:\\n X=p['u']; Y=p[q];D=aff(X); print(key,X.shape,'baseline',np.std(D@fit(D,Y)-Y))\\n for name,fn in [('sin',np.sin),('tanh',np.tanh),('rat',lambda x:x/(1+x*x)),('cos',np.cos)]:\\n  def e(theta):\\n   D1=aff(X+theta[0]*fn(theta[1]*X));return (D1@fit(D1,Y)-Y).ravel()\\n  vals=[least_squares(e,[w,f],bounds=([-20,.25],[20,5])) for w in [-.8,-.3,.3,1,3] for f in [1.25,2.5]]; o=min(vals,key=lambda o:o.cost);print('pre',name,o.x,np.std(o.fun))\\n  if key=='b' and name in ('sin','tanh','rat'):\\n   co=fit(aff(X+o.x[0]*fn(o.x[1]*X)),Y);globals()['z'+name]=aff(u+o.x[0]*fn(o.x[1]*u))@co\\n  def post(t):\\n   L=D@t[:-2].reshape(D.shape[1],-1);return (L+t[-2]*fn(t[-1]*L)-Y).ravel()\\n  o=least_squares(post,np.r_[fit(D,Y).ravel(),.22,1.25],max_nfev=200);print('post',name,o.x[-2:],np.std(o.fun))\\n  if key=='b' and name in ('sin','tanh','rat'):\\n   l=aff(u)@o.x[:-2].reshape(5,4);globals()['p'+name]=l+o.x[-2]*fn(o.x[-1]*l)\\nT=s['train']['traj']; yy=s['train']['y']; _,_,W=np.linalg.svd(T[:52],full_matrices=False); targets=np.c_[yy,T@W[:3].T];print('times',s['eval_times']);n=52\\n\\ndef poly(x,d):return np.column_stack([np.prod(x[:,q],axis=1) for q in cr(range(4),d)])\\ndef check(name,z):\\n Q=np.c_[aff(z),poly(z,2)]; j=fit(Q[:n],targets[:n]); print(name,'quad',np.round(j[:,0],3),np.round(j[:,1],3));\\n for h in (0,1):\\n  t=targets[:,h]; vals=[]\\n  for base in (aff(z),Q):\\n   B=base[:n]; pinv=np.linalg.pinv(B); res=t[:n]-B@(pinv@t[:n]);rng=np.random.default_rng(55)\\n   for fn in (np.tanh,np.sin,np.cos,lambda p:p/(1+p*p),lambda p:p*p*p):\\n    def DD(q):return fn(aff(z)@q)\\n    def err(q):\\n     p=DD(q)[:n]; p-=B@(pinv@p);return res-p*((p@res)/max(p@p,1e-14))\\n    opts=[least_squares(err,v,max_nfev=110) for v in [np.r_[0,j[1:5,h]],np.r_[.1,np.eye(4)*2][0:5] if False else np.array([.1,1.,.6,1.,.6])]+list(rng.normal(0,1.25,(7,5)))]\\n    o=min(opts,key=lambda o:o.cost);D=np.c_[base,DD(o.x)]; co=fit(D[:n],t[:n]); e=abs(t-D@co);vals.append((e[:n].mean(),e[n:].mean(),fn.__name__,len(co),np.round(o.x,3),np.round(co,3)))\\n  print('profile',h,sorted(vals,key=lambda a:a[0])[:3])\\nfor k in ('ztanh','psin','ptanh','prat'):check(k,globals()[k])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/next14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Elementwise pre-mix calibration → compare post-mix calibration and nonlinear index readouts; best prior scalar and trajectory MAEs are 0.10298 and 0.05634.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more unrestricted polynomial terms\",\"rejected_reason\":\"Prior held-out errors increased; a compact nonlinear projection is a more direct test of the remaining structure.\"}],\"rationale\":\"Determine where panel saturation acts, then profile nonlinear projections separately for the scalar and leading trajectory mode using only fit rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9a37df53aab57b43dab51dac9fa8b7087dbcb9b8be92b4bd7dd48982cb92652b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53941.43,
+      "usage_known": true,
+      "prompt_tokens": 32677,
+      "cached_tokens": 5504,
+      "completion_tokens": 1371
+    }
+  ]
+}

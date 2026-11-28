@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e9adf76eea246c8a8a1ab3d814fad29",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:20:33.826431+00:00",
+  "ended_at_utc": "2026-11-28T16:21:12.407574+00:00",
+  "request_sha256": "c0f474077dbafb7b1c10658606c325c20b33dcaf9f3bfe457575451d07a54026",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67393,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41026,
+    "cached_tokens": 12672,
+    "completion_tokens": 1705
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe14.py <<'PY'\\nfrom graph14 import *\\nfrom scipy.linalg import orthogonal_procrustes\\nfrom numpy.polynomial.chebyshev import chebvander\\nfrom scipy.optimize import least_squares\\nB=S['panel_b']; u,v=B['u'],B['v']; tr=S['train']; z=m._inverse(tr['x'],calibrate(S)); Y=np.c_[tr['y'],tr['traj']]\\ndef get(d,uu=u,vv=v):\\n R,sc=orthogonal_procrustes(d-d.mean(0),vv-vv.mean(0)); sc/=np.sum((d-d.mean(0))**2); return R*sc,vv.mean(0)-d.mean(0)@(R*sc)\\ndef make(typ,deg,lam,idx):\\n uu,vv=u[idx],v[idx]; w,b=get(uu,uu,vv)\\n def design(x):\\n  D=chebvander(x/1.25,deg); return D[...,1::2] if typ=='odd' else D[...,1:]\\n D=design(uu); d=D.reshape(-1,D.shape[-1]); reg=np.diag(np.arange(1,d.shape[1]+1)**2*np.sqrt(lam)); dd=np.r_[d,reg]; p=np.linalg.pinv(dd)[:,:len(d)];\\n for i in range(30):\\n  target=(vv-b)@np.linalg.inv(w); c=p@target.ravel(); h=D@c; w,b=get(h,uu,vv)\\n def op(x):return (design(x)@c)@w+b\\n return op,c,w,b\\nops={}; all=np.arange(len(u)); rng=np.random.default_rng(3); folds=np.array_split(rng.permutation(len(u)),4)\\nfor typ,deg,la in itertools.product(['odd','full'],[5,7,9,11,13,15,17,21],[1e-9,1e-6,1e-4]):\\n cv=np.mean([np.mean((make(typ,deg,la,np.setdiff1d(all,f))[0](u[f])-v[f])**2) for f in folds])**.5; op,c,w,b=make(typ,deg,la,all); ops[typ,deg,la]=(cv,op,c,w,b); print('panel',typ,deg,la,cv,np.std(op(u)-v))\\nprint('profiles'); sel=sorted(ops,key=lambda k:ops[k][0])[:8];\\nfor k in sel[:4]:\\n cv,op,c,w,b=ops[k]; xx=np.arange(-1.2,1.201,.05); print(k,cv,c,b,np.round(((op(np.repeat(xx[:,None],4,axis=1))-b)@np.linalg.inv(w))[:,0],5)); err=(v-op(u))@np.linalg.inv(w); print('corr',np.corrcoef(np.c_[u,err].T)[:4,4:]);\\nF['gauss3']=lambda x,p:x*np.exp(-p*abs(x)**3); F['tanh3']=lambda x,p:np.tanh(p*x**3)\\ndef orig(x):\\n def D(x):return np.c_[aff(x),F['gauss3'](x,3.22429526),F['tanh3'](x,1.64761629)]\\n return D(x)@ls(D(u),v)\\nbs={'orig':orig(z),**{str(k):ops[k][1](z) for k in sel}}; cvspl=[np.arange(52,72)]+list(np.array_split(np.random.default_rng(14).permutation(72),4)); all=np.arange(72); n=52\\nfor name,b in bs.items():\\n h=b.copy(); h-=aff(z)@ls(aff(z),b)\\n designs={'full':feats(np.c_[z,b]),'sep':np.c_[feats(z),feats(b)[:,1:],z*b,z*np.roll(b,-1,axis=1),b*np.roll(z,-1,axis=1)],'mult':np.c_[feats(np.c_[z,b]),*[z*np.roll(z,k,axis=1)*np.roll(h,j,axis=1) for k in (0,1) for j in (0,1)],z**3,b**3]}\\n for typ,a in designs.items():\\n  for la in [0,.0005,.003,.02,.1]:\\n   es=[]\\n   for f in cvspl:\\n    q=np.setdiff1d(all,f); scale=np.r_[1,np.maximum(a[q,1:].std(0),.035)]; ar=a/scale; d=np.sqrt(la)*np.eye(a.shape[1]); d[0,0]=0; w=ls(np.r_[ar[q],d],np.r_[Y[q],np.zeros((len(d),9))]); er=abs(ar[f]@w-Y[f]); es.append([er[:,0].mean(),er[:,1:].mean()]);\\n   es=np.array(es); print('down',name,typ,la,np.round(es[0],5),np.round(es[1:].max(0),5),np.round(es[1:].mean(0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py >/tmp/probe14.out; grep '^panel' /tmp/probe14.out | sort -nk5 | head -16; sed -n '/profiles/,/^down/p' /tmp/probe14.out | head -63; grep '^down' /tmp/probe14.out | sed 's/[][]//g' | sort -nk8 | head -25; grep '^down orig' /tmp/probe14.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted odd panel approximation -> H2 cross-validated common profile with even terms and structured downstream interactions; current 52/20 MAEs are 0.04835 scalar and 0.01435 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the interpolating orthogonal spline\",\"rejected_reason\":\"Its low in-sample panel error produced a scalar holdout MAE above 0.48 even with ridge regularization.\"}],\"rationale\":\"Use independent panel folds to select profile smoothness and symmetry, then compare readout bases across multiple training splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "063c5aa8eefaeb2b3012df3f95afbd6187dea05b6e2d8cda283019a7234d89a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39106.51,
+      "usage_known": true,
+      "prompt_tokens": 41026,
+      "cached_tokens": 12672,
+      "completion_tokens": 1705
+    }
+  ]
+}

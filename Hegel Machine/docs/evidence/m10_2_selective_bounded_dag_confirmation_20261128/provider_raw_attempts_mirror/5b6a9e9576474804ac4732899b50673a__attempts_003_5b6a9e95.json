@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b6a9e9576474804ac4732899b50673a",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:04.221281+00:00",
+  "ended_at_utc": "2026-11-28T15:07:36.339260+00:00",
+  "request_sha256": "334f1651a4e6dcc4644e7baa1b769f7aeee85b9957725daa95a53673f9963eae",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21171,
+    "cached_tokens": 12672,
+    "completion_tokens": 1335
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/archive_manifest.json; sed -n '114,190p' test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -25; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np,runpy,itertools\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; w=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['w'][:72]; y=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']; ar=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py')\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\naff=lambda x:np.c_[np.ones(len(x)),x]\\nnp.set_printoptions(precision=3,suppress=True); p=s['panel_c']; print('panel_c',np.c_[p['u'],p['v1'],p['v2']][:10]); print('panel_c ranges',[(k,z.min(0),z.max(0)) for k,z in p.items()]); print('panel correlations',np.corrcoef(np.c_[p['u'],p['v1'],p['v2']].T)[:4,4:]); print('b max',np.max(abs(s['panel_b']['u']),0));\\n_,_,vt=np.linalg.svd(tr,full_matrices=False); print('temporal modes',vt[:2]);\\ndef tl(k):\\n d=np.c_[-np.expm1(-k*t),t]; return np.mean((d@ls(d,tr.T)-tr.T)**2)\\nr=minimize_scalar(tl,bounds=(.05,6),method='bounded'); print('exp plus linear fit',r.x,r.fun**.5); print('rank2 noise',np.mean((tr-tr@vt[:2].T@vt[:2])**2)**.5)\\nfor n in [48,54,57,58,60]:\\n print('archive',n,*[np.mean(abs(ar['_predict'](w,z[:n],i,k)-z[n:])) for z,i,k in [(y,True,'asinh'),(y,True,'atan'),(tr,False,'inv3')]])\\nfolds=np.array_split(np.random.default_rng(11).permutation(len(w)),6)\\nfuncs={'id':lambda x:x,'asinh':np.arcsinh,'atan':np.arctan,'inv3':lambda x:np.sinh(np.arcsinh(x)/3),'tanh':np.tanh,'sin':np.sin,'rational':lambda x:x/np.sqrt(1+x*x),'cubic':lambda x:x**3}\\nfor kind,f in funcs.items():\\n for gram in ['add','square','pair','mixed','cubic']:\\n  scores=[]\\n  for g in ([1] if kind in ['id','cubic'] else [.75,1.25,2,3,4,6]):\\n   z=f(g*w); terms=[w,z];\\n   if gram in ('square','pair','mixed','cubic'): terms.extend([z[:,i:i+1]*z[:,j:j+1] for i,j in itertools.combinations_with_replacement(range(4),2) if gram!='square' or i==j]);\\n   if gram=='mixed': terms += [w[:,i:i+1]*z[:,j:j+1] for i in range(4) for j in range(4)];\\n   if gram=='cubic': terms += [np.prod(z[:,ix],axis=1)[:,None] for ix in itertools.combinations_with_replacement(range(4),3)];\\n   a=aff(np.column_stack(terms)); errors=[]\\n   for vi in folds:\\n    ti=np.setdiff1d(np.arange(len(w)),vi); pred=a[vi]@ls(a[ti],np.c_[y,tr][ti]); errors.append(np.mean(abs(pred-np.c_[y,tr][vi]),axis=0));\\n   e=np.mean(errors,axis=0); scores.append([g,e[0],np.mean(e[1:])]);\\n  print(kind,gram,'best y',min(scores,key=lambda v:v[1]),'best tr',min(scores,key=lambda v:v[2]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test the archived nonlinear heads against alternative interaction grammars and a rank-two temporal model; out-of-fold errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit frozen calibration\",\n      \"rejected_reason\": \"Panel B is affine to about 0.0001 RMS, and the requested edit is confined to the sink.\"\n    }\n  ],\n  \"rationale\": \"The trajectory singular spectrum suggests two shared temporal modes. Compare candidate spatial grammars on held-out rows and inspect Panel C for a reusable transformation before committing to either head.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ebe022128b8fffee5ccf600fadd4408f23e3e473f4444df211c6247c83a566b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32116.82,
+      "usage_known": true,
+      "prompt_tokens": 21171,
+      "cached_tokens": 12672,
+      "completion_tokens": 1335
+    }
+  ]
+}

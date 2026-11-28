@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "291f2cce947e4da383102e5bd1c76c6c",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:06.823415+00:00",
+  "ended_at_utc": "2026-11-28T15:29:30.511718+00:00",
+  "request_sha256": "5f1fc082e51219b500794e76d809be075985c21a89151013c75874e213dceb49",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42681,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29321,
+    "cached_tokens": 12672,
+    "completion_tokens": 904
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/_frozen_nodes/node_01.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('a','/tmp/hegel_continual_archive/conf_m102_b03_batch_03_solver.py'); a=importlib.util.module_from_spec(sp);sp.loader.exec_module(a)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=[s['panel_a'][k] for k in ('u','v')]; mask=np.max(abs(v),axis=1)<3; print('calibration inverse on likely inliers',np.quantile(np.linalg.norm(a._calibrate(s['panel_a'],v[mask])-u[mask],axis=1),[0,.5,.85,.95,1]));u,v=[s['panel_c'][k] for k in ('u','v1')];ls=a._ls\\nfor f in [np.tanh,np.sin,lambda z:z/(1+abs(z)),lambda z:z/(1+z*z),lambda z:z/np.sqrt(1+z*z),lambda z:np.clip(z,-1,1)]:\\n for linear in [False,True]:\\n  for order in [0,2,3]:\\n   if order==3 and not linear:continue\\n   def des(p):\\n    z=u*p[0]+p[1:5]; blocks=[np.ones(len(u)),f(z)];\\n    if linear:blocks.append(u)\\n    if order>=2:blocks.append(u*np.roll(u,-1,axis=1))\\n    if order==3:blocks.append(u**2)\\n    return np.column_stack(blocks)\\n   def res(p):\\n    A=des(p);return (A@ls(A,v)-v).ravel()\\n   r=min((least_squares(res,[k,0,0,0,0],bounds=([.03]+[-1]*4,[5]+[1]*4),max_nfev=120) for k in [.8,1.5,2.4]),key=lambda r:r.cost)\\n   print(f.__name__,linear,order,round(np.std(r.fun),7),np.round(r.x,4))\\nprint('panel scales',np.std(u,axis=0),np.std(v,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived nonlinear calibration and cosine second branch -> isolate the first-branch nonlinearity; panel RMSE is 0.0000795 for branch two versus 0.009867 for the best tested branch-one basis.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived softsign basis unchanged\",\n      \"rejected_reason\": \"Its panel error is about 150 times the cosine branch's error, so it is not yet supported as the exact first-branch transform.\"\n    }\n  ],\n  \"rationale\": \"Recover the full frozen feature contract, verify calibration inversion on paired measurements, and test whether first-branch residuals come from an omitted interaction or an unnecessary linear term before fitting the downstream responses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7fb27c9867dcea8aad37f8ae8e811837590bea39cacfc6e0aefe5c6b1e219df2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23686.7,
+      "usage_known": true,
+      "prompt_tokens": 29321,
+      "cached_tokens": 12672,
+      "completion_tokens": 904
+    }
+  ]
+}

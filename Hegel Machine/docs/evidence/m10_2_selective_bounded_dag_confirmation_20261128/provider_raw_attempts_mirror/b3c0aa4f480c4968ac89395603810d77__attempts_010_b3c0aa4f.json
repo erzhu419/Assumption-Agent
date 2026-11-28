@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3c0aa4f480c4968ac89395603810d77",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:20.209647+00:00",
+  "ended_at_utc": "2026-11-28T15:20:42.374475+00:00",
+  "request_sha256": "6c26c8f617b8729100cb041de008bb24432f745afc2207709dcc09042604a3a6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36409,
+    "cached_tokens": 12672,
+    "completion_tokens": 760
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task')\\ns=pickle.load((p/'public_batch.pkl').open('rb'))[0]['study']\\nf=[runpy.run_path(str(p/'_frozen_nodes'/f'node_{i:02}.py'))['run_node'] for i in range(3)]\\nsink=runpy.run_path(str(p/'node_03.py'))['run_node']\\ntrain=s['train']; n=len(train['y']); rows=np.arange(n); rng=np.random.default_rng(139)\\nerrors=[]\\nfor _ in range(5):\\n for va in np.array_split(rng.permutation(n),4):\\n  tr=np.setdiff1d(rows,va); st=dict(s,train={k:train[k][tr] for k in ('x','y','traj')},test={'x':train['x'][va]})\\n  a=f[0]({'__input__':st}); b=f[1]({'__input__':st}); c=f[2]({'node_00':a,'node_01':b}); o=sink({'node_00':a,'node_01':b,'node_02':c})\\n  yh,th,d=o['y_hat'],o['state_pred'],o['diagnostics_vec']; assert yh.shape==(len(va),) and th.shape==train['traj'][va].shape and np.isfinite(th).all() and np.isfinite(yh).all(); np.testing.assert_allclose(d,[yh.mean(),yh.std(),th[:,-1].mean(),th[:,-1].std()]); errors.append([np.abs(yh-train['y'][va]).mean(),np.abs(th-train['traj'][va]).mean()])\\nprint('20 nested outer folds; mean and worst scalar/trajectory MAE:',np.mean(errors,0),np.max(errors,0))\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 output-specific quadratic selection suffices → H2 the frozen sign-invariant representation limits prediction; the saved candidate’s official scalar and trajectory MAEs are 0.742253 and 0.607629.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the polynomial dictionary again\",\"rejected_reason\":\"The earlier degree-three screen did not close the validation gap, and more terms cannot distinguish opposite latent vectors under the frozen map.\"}],\"rationale\":\"Verify the exact saved artifact in an isolated process and measure worst-fold performance with feature and penalty selection nested inside each outer training split. Report structural verification separately from threshold acceptance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cd83eeb09457bbe97014b8c64c8bc7842d8d4fb9cac7707cf726c84099df543b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22614.14,
+      "usage_known": true,
+      "prompt_tokens": 36409,
+      "cached_tokens": 12672,
+      "completion_tokens": 760
+    }
+  ]
+}

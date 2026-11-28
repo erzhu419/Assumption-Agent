@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abece9872d1a4da5b9855657c7328a70",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:44.774804+00:00",
+  "ended_at_utc": "2026-11-28T15:29:25.340312+00:00",
+  "request_sha256": "d1a4f728677324185fa6ae6198d6a6126cf33a61082e71159f1c524b76586948",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45622,
+    "cached_tokens": 0,
+    "completion_tokens": 1520
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom itertools import combinations_with_replacement\\n\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\ndef one(a): return np.c_[np.ones(len(a)),a]\\ndef pair(a): return a*np.roll(a,-1,axis=1)\\ndef align(panel,x):\\n    u,v=panel['u'],panel['v']\\n    def f(a): return one(np.c_[a,pair(a),a**3])\\n    F=f(u); mask=np.max(abs(v-np.median(v,axis=0)),axis=1)<6\\n    for _ in range(3):\\n        c=ls(F[mask],v[mask]); r=np.linalg.norm(F@c-v,axis=1); mask=r<max(7*np.median(r),.001)\\n    c[abs(c)<.001]=0\\n    return np.array([least_squares(lambda a:(f(a[None])@c)[0]-q,np.linalg.solve(c[1:5].T,q-c[0]),gtol=1e-11).x for q in x])\\ndef features(s,z):\\n    b=s['panel_b']; w=one(z)@ls(one(b['u']),b['v']); p=s['panel_c']; u=p['u']; cp=ls(one(pair(u)),p['v1']); cq=ls(one(np.cos(2.4*u)),p['v2']); c=one(pair(z))@cp; d=one(np.cos(2.4*z))@cq\\n    return w,c,d\\n\\ndef solve_batch(study):\\n    tr=study['train']; n=len(tr['y']); z=align(study['panel_a'],np.vstack([tr['x'],study['test']['x']])); w,c,d=features(study,z)\\n    X=np.c_[z,pair(z),np.cos(2.4*z)]\\n    X=X/np.maximum(X[:n].std(0),.1); G=X@X.T/X.shape[1]; D=np.maximum(G.diagonal()[:,None]+G.diagonal()-2*G,0)\\n    K=(1+.45*G)**3+.1*np.exp(-.25*D)\\n    Y=np.c_[tr['y'],tr['traj']]; pred=K[n:,:n]@solve(K[:n,:n]+.002*np.eye(n),Y,assume_a='pos'); y,T=pred[:,0],pred[:,1:]\\n    return dict(y_hat=y,state_pred=T,diagnostics_vec=np.array([y.mean(),y.std(),T[:,-1].mean(),T[:,-1].std()]))\\nPY\\ncat > /tmp/residual_probe.py <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nsys.path.insert(0,'/holdout_task'); from batch_solver import *\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=align(s['panel_a'],tr['x']); w,c,d=features(s,z); t=s['eval_times']; T=tr['traj']; y=tr['y']; a=slice(0,52); h=slice(52,None); np.set_printoptions(precision=3,suppress=True)\\nF=-np.expm1(-t[:,None]*[.37633,1.78968,5.5352]); H=ls(F,T.T).T; Y=np.c_[y,H]; print('H3 corrs',np.corrcoef(Y.T));\\ninds=[()]+[j for m in range(1,4) for j in itertools.combinations_with_replacement(range(4),m)]; P=np.column_stack([z[:,j].prod(1) for j in inds]); co=ls(P[a],Y[a]); print('cubic H3',[(j,round(k,3)) for j,k in zip(inds,co[:,3]) if abs(k)>.02]);\\n# Sweep groupwise additive rather than high-dimensional full interactions.\\nblocks={'z':z,'p':pair(z),'q':np.cos(2.4*z),'w':w,'c':c,'d':d,'cw':pair(w),'dw':np.cos(2.4*w)}\\nfor k in range(4):\\n print('out',k)\\n for label,X in blocks.items():\\n  for typ,fun in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('r',lambda q:q/(1+q*q))]:\\n   full=[]\\n   for f in [.5,1,1.25,1.5,2,2.4,3,4,5,6]:\\n    cols=one(np.c_[z,pair(z),np.cos(2.4*z),fun(f*X)]); p=cols@ls(cols[a],Y[a,k]); full.append((abs(p[h]-Y[h,k]).mean(),f,abs(p[a]-Y[a,k]).mean()))\\n   b=min(full)\\n   if b[0]<[.43,.36,.20,.085][k]:print(label,typ,b)\\n# See whether residuals of the three laws collapse into shared directions after linear physical terms.\\nfor X in [one(z),one(np.c_[z,pair(z),np.cos(2.4*z)]),P[:,:15],P]:\\n E=Y-X@ls(X,Y); print('residual sv',np.linalg.svd(E,full_matrices=False)[1:]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/residual_probe.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (free Fourier ridges) -> H2 (shared spatial structure across temporal modes); the best tested Fourier-ridge scalar 52/20 MAE is 0.536.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a runnable calibrated baseline now, then test whether the nearly cubic fast mode identifies reusable structure in the remaining outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7b0cb7fd07e88700f64020fd77c25a598dd1b75a6d9546e113ec7ae4da757260",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40563.76,
+      "usage_known": true,
+      "prompt_tokens": 45622,
+      "cached_tokens": 0,
+      "completion_tokens": 1520
+    }
+  ]
+}

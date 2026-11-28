@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f16cbe1ef7342d2a0f2151e94b4196b",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__init_decomp_conf_m102_b02_batch_13",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:04:47.520200+00:00",
+  "ended_at_utc": "2026-11-28T16:05:23.444266+00:00",
+  "request_sha256": "b94a58546af3930f6bd95157202179a6fb95603cbfc1f98bad5761f26df9e85f",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 5359,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14349,
+    "cached_tokens": 11392,
+    "completion_tokens": 1459
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The spatial design and trajectory targets are computed independently and meet only at the ridge regression. Keep calibration and the two panel operators together because each consumes the previous stage’s coordinates. The three-node DAG preserves the source formulas and fitting settings, so it produces the same predictions without retuning. The role-blind statistics do not identify which transform caused the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = (np.asarray(panel[k], float) for k in ('u', 'v'))\\n    corrected = np.empty_like(x, dtype=float)\\n    for j in range(u.shape[1]):\\n        d = np.column_stack((np.ones(len(u)), u[:, j]))\\n        keep = np.ones(len(u), bool)\\n        for _ in range(8):\\n            offset, gain = np.linalg.lstsq(d[keep], v[keep, j], rcond=None)[0]\\n            r = v[:, j] - offset - gain*u[:, j]\\n            next_keep = abs(r) <= max(.0006, 4*np.median(abs(r)))\\n            if next_keep.sum() < 3 or np.array_equal(next_keep, keep):\\n                break\\n            keep = next_keep\\n        corrected[:, j] = (x[:, j]-offset)/gain\\n    return corrected\\n\\n\\ndef _operator(panel, key, x, kind):\\n    u, v = (np.asarray(panel[k], float) for k in ('u', key))\\n\\n    def features(q, p):\\n        k, a, b = p[:3]\\n        if kind == 'b':\\n            z = erf(np.exp(k)*q + a*q**3) + b*q**3 + p[3]*q\\n        else:\\n            z = q*abs(q)/(1+np.exp(k)*abs(q)) + a*q**3 + b*q\\n        return np.column_stack((np.ones(len(q)), z))\\n\\n    def fit(p):\\n        d = features(u, p)\\n        coef = np.linalg.lstsq(d, v, rcond=None)[0]\\n        return (d@coef-v).ravel(), coef\\n\\n    initial = [.63, 4., -.62, -2.13] if kind == 'b' else [-.42, -.02, -1.08]\\n    pars = least_squares(lambda p: fit(p)[0], initial, max_nfev=200).x\\n    return features(x, pars)@fit(pars)[1]\\n\\n\\ndef _design(x, c):\\n    return np.column_stack((np.ones(len(x)), x, c,\\n                            (x[:, :, None]*c[:, None, :]).reshape(len(x), 16)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train_x = study['train']['x']\\n    n = len(train_x)\\n    x = _calibrate(study['panel_a'], np.concatenate((train_x, study['test']['x'])))\\n    b = _operator(study['panel_b'], 'v', x, 'b')\\n    c = _operator(study['panel_c'], 'v1', b, 'c')\\n    d = _design(x/x[:n].std(0), c/c[:n].std(0))\\n    return {'train_design': d[:n], 'test_design': d[n:]}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    t = np.asarray(study['eval_times'])\\n    traj = np.asarray(train['traj'])\\n\\n    def time_basis(rates):\\n        return np.column_stack((-np.expm1(-rates[0]*t), t/(1+rates[1]*t)))\\n\\n    def time_residual(rates):\\n        basis = time_basis(rates)\\n        return (basis @ np.linalg.lstsq(basis, traj.T, rcond=None)[0] - traj.T).ravel()\\n\\n    rates = least_squares(time_residual, [1.8, .4], bounds=([.2, .05], [5., 2.])).x\\n    time = time_basis(rates)\\n    target = np.column_stack((train['y'], np.linalg.lstsq(time, traj.T, rcond=None)[0].T))\\n    return {'time': time, 'target': target}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    spatial = inputs['node_00']\\n    temporal = inputs['node_01']\\n    a = spatial['train_design']\\n    target = temporal['target']\\n    time = temporal['time']\\n    w = np.linalg.solve(a.T@a+.003*np.eye(a.shape[1]), a.T@target)\\n    pred = spatial['test_design']@w\\n    y, state = pred[:, 0], pred[:, 1:]@time.T\\n    return dict(y_hat=y, state_pred=state, diagnostics_vec=np.array(\\n        [y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()]))\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "65269ab6119009e966c52ef917688188a247f2c9477fd2c2f214b3e23f9c9093",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36552.68,
+      "usage_known": true,
+      "prompt_tokens": 14349,
+      "cached_tokens": 11392,
+      "completion_tokens": 1459
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0dd8ee9a5c948f4a3333ab60cf99ea5",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:25.313716+00:00",
+  "ended_at_utc": "2026-11-28T15:52:50.491667+00:00",
+  "request_sha256": "f4da3151e9bd9c4ad24d5f4936d40d2d92b2d5a085c0274fa70aeca5fe2651c3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34539,
+    "cached_tokens": 12672,
+    "completion_tokens": 988
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\ndef load(name, path):\\n    s=importlib.util.spec_from_file_location(name, root+path)\\n    m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m.run_node\\nf0=load('f0','_frozen_nodes/node_00.py'); f1=load('f1','node_01.py'); f2=load('f2','_frozen_nodes/node_02.py')\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x); rng=np.random.default_rng(307)\\nall_i=np.arange(n)\\nfolds=[(f'block_{lo}',np.arange(lo,min(lo+18,n))) for lo in range(0,n,18)]\\nfolds += [(f'random_{i}',rng.permutation(n)[-20:]) for i in range(24)]\\nfolds += [('largest_norm',np.argsort(np.linalg.norm(x,axis=1))[-14:])]\\nfor j in range(x.shape[1]):\\n    ranks=np.argsort(x[:,j]); folds.extend([(f'low_{j}',ranks[:14]),(f'high_{j}',ranks[-14:])])\\ndef check(name,va,drop=None):\\n    ti=np.setdiff1d(all_i,va); a=copy.deepcopy(s)\\n    a['train']={k:tr[k][ti] for k in ('x','y','traj')}; a['test']={'x':x[va]}\\n    if drop is not None:\\n        a['panel_a']={k:np.delete(p,drop,axis=0) for k,p in s['panel_a'].items()}\\n    k=f0({'__input__':a}); b=f1({'__input__':a,'node_00':k}); o=f2({'node_00':k,'node_01':b})\\n    y=o['y_hat']; t=o['state_pred']; assert y.shape==(len(va),) and t.shape==tr['traj'][va].shape\\n    np.testing.assert_allclose(o['diagnostics_vec'],[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]); assert all(np.isfinite(z).all() for z in b.values())\\n    h=np.mean(abs(t-tr['traj'][va]),axis=0)\\n    return (name,np.mean(abs(y-tr['y'][va])),h.mean(),h.max())\\nfor name, results in [('input slices',[check(name,va) for name,va in folds]),('panel leave-one-out',[check(f'omit_{i}',all_i[-20:],i) for i in range(len(s['panel_a']['u']))])]:\\n    print(name, 'cases',len(results))\\n    for col,label in enumerate(('endpoint','trajectory','individual horizon'),1):\\n        w=max(results,key=lambda a:a[col]); print(f'  worst {label}: {w[col]:.6f} ({w[0]})'); assert w[col]<0.038\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw cubic readout -> H2 opposite-coordinate sinusoidal calibration and rank-two trajectory; the saved candidate passed official CV with endpoint MAE 0.003159 and trajectory MAE 0.004684.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the unchanged artifact on blocks, coordinate extremes, and reference-row omissions, checking endpoint, trajectory, and each horizon separately before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5451e9940eac89ad3f9b38a0b87321415e07e490dde667e28b36b9cf3082f715",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25176.62,
+      "usage_known": true,
+      "prompt_tokens": 34539,
+      "cached_tokens": 12672,
+      "completion_tokens": 988
+    }
+  ]
+}

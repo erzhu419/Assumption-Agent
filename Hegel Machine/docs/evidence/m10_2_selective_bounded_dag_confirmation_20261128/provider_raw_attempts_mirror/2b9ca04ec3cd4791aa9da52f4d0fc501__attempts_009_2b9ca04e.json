@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b9ca04ec3cd4791aa9da52f4d0fc501",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:47.069054+00:00",
+  "ended_at_utc": "2026-11-28T15:51:21.254572+00:00",
+  "request_sha256": "2700e1a8aaa62308b69e93be9b5ed3cf2b8a51e9009c8146828f63d7e73e33dd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40847,
+    "cached_tokens": 12672,
+    "completion_tokens": 1484
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/deep9.py <<'PY'\\nexec(open('/tmp/graph7.py').read().split('for dg in (1,2,3):')[0]); from scipy.optimize import least_squares\\nfrom itertools import combinations\\np=s['panel_b']; U,V=p['u'],p['v'];\\n# Undo a possible output mixing matrix and inspect each independent source.\\nfor i in range(4):\\n a=U[:,i]; F=np.c_[np.ones(len(U)),V]; H=np.c_[a,a**2,a**3,a**4,a**5,a**7]; R=H-F@ls(F,H); _,sv,vh=np.linalg.svd(R,full_matrices=False); co=vh[-1];print('source',i,sv,co/np.max(abs(co)))\\nforms={\\n'cube': (lambda x,w:x+w[0]*x**3,[.4]),\\n'poly': (lambda x,w:x+w[0]*x**3+w[1]*x**5+w[2]*x**7,[.4,-.1,.02]),\\n'ratcube': (lambda x,w:(x+w[0]*x**3)/(1+np.exp(w[1])*x*x),[1,-1]),\\n'ratpure': (lambda x,w:x**3/(1+np.exp(w[0])*x*x),[-1]),\\n'ratsq': (lambda x,w:(x+w[0]*x**3)/(1+np.exp(w[1])*x*x)**2,[1,-1]),\\n'shift': (lambda x,w:((x+w[2])+w[0]*(x+w[2])**3)/(1+np.exp(w[1])*(x+w[2])**2),[1,-1,0]),\\n'rat4': (lambda x,w:(x+w[0]*x**3)/(1+np.exp(w[1])*x*x+np.exp(w[2])*x**4),[1,-1,-2]),\\n'arctan': (lambda x,w:x+w[0]*np.arctan(np.exp(w[1])*x),[-.6,.3]),\\n'sin': (lambda x,w:x+w[0]*np.sin(np.exp(w[1])*x),[-.4,1]),\\n'rattele': (lambda x,w:x/(1+.22*x*x),[]),\\n'rcut': (lambda x,w:x**3/(1+.22*x*x),[]),\\n}\\nbest=[]\\nfor tag,(fun,ini) in forms.items():\\n for extra in ('','lin','cyc','sq','other'):\\n  def feat(x,w):\\n   h=fun(x,w); return aff(np.c_[h,*{'':[], 'lin':[x], 'cyc':[x*roll(x)],'sq':[x*x],'other':[x, x*roll(x),x*x]}[extra]])\\n  def err(w):\\n   H=feat(U,w);return (H@ls(H,V)-V).ravel()\\n  w=least_squares(err,ini,bounds=(-10,10),max_nfev=100).x if ini else []\\n  H=feat(U,w); er=err(w).reshape(V.shape); lev=np.sum(H*np.linalg.pinv(H).T,axis=1); cv=np.mean(abs(er/(1-np.minimum(lev,.999))[:,None]));\\n  h=feat(z,w)@ls(H,V); F=PolynomialFeatures(2).fit_transform(h); e=score(F);best.append((cv,np.std(er),tag,extra,np.round(w,6),e[0],e[1:].mean()));D[tag+extra]=h\\nprint('panel best',sorted(best,key=lambda a:a[0])[:16]);print('readout best',sorted(best,key=lambda a:a[-2])[:12]);\\nfor tag in ['B(z)','ratcube','ratcube lin'.replace(' ',''),'poly','rcutlin']:\\n if tag not in D:continue\\n h=D[tag]; F=PolynomialFeatures(2).fit_transform(h); c=ls(F[:52],Y[:52]); r=Y-F@c; print('readout',tag,'in/out',np.mean(abs(r[:52]),0)[[0,1,8]],np.mean(abs(r[52:]),0)[[0,1,8]]); print('coef',np.round(c[:,[0,1,8]],3).T)\\n# Is temporal residual governed by two separable bases?\\nt=s['eval_times']; T=Y[:,1:]; mu=T[:52].mean(0); _,sing,Vh=np.linalg.svd(T[:52]-mu,full_matrices=False);print('traj',sing,mu,Vh[:3]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/deep9.py | tail -26\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Examine componentwise rational-cubic mixing and separate temporal modes; the last confirmed 52/20 MAEs are 0.103811 for y and 0.049830 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Rational-cubic features can capture the apparent superlinear response without relying on cancellation between large fitted coefficients. Panel-only errors will test that hypothesis independently of downstream prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "282b83937da944e01fc6fd4d55efefbd85cb4db5947e47262179fd3d1324ad1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35271.3,
+      "usage_known": true,
+      "prompt_tokens": 40847,
+      "cached_tokens": 12672,
+      "completion_tokens": 1484
+    }
+  ]
+}

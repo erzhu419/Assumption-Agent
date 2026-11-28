@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dae329ebe8ea4bbb86646bc72916bc73",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:55.301295+00:00",
+  "ended_at_utc": "2026-11-28T15:17:23.537485+00:00",
+  "request_sha256": "467ae6669dae3f356b10e5b28a0cdea972ceae799056fed54cce1df2cef69a61",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29060,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23978,
+    "cached_tokens": 12672,
+    "completion_tokens": 1182
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*02_solver.py; cat /holdout_task/validate_public_schema.py; cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']['traj']; Y=s['train']['y']; x=s['train']['x']; t=s['eval_times']; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]; ic=lambda a:np.column_stack((np.ones(len(a)),a));\\ndef cald(u,mode):\\n if mode==0:return [ic(u)]*4\\n if mode==1:return [ic(np.c_[u,u**2,u**3])]*4\\n if mode==2:return [ic(np.c_[u[:,i],u[:,(i+1)%4],u[:,i]*u[:,(i+1)%4],u[:,i]**3]) for i in range(4)]\\n if mode==3:return [ic(np.c_[u,u**2,u**3,*[u[:,i]*u[:,j] for i in range(4) for j in range(i+1,4)]])]*4\\n if mode==4:return [ic(np.c_[u,u**3])]*4\\n\\ndef calfit(mode):\\n u,v=s['panel_a'].values(); d=cald(u,mode); r=np.linalg.norm(v-u,axis=1); keep=r<np.median(r)*3\\n for _ in range(7):\\n  c=[ls(a[keep],b[keep]) for a,b in zip(d,v.T)]; e=np.linalg.norm(np.column_stack([a@b for a,b in zip(d,c)])-v,axis=1); keep=e<max(.0003,3*np.median(e))\\n return lambda z:np.column_stack([a@b for a,b in zip(cald(z,mode),c)]), np.sort(e)\\nfs={'asinh':np.arcsinh,'erf':erf,'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'soft':lambda z:z/np.sqrt(1+z*z),'rat':lambda z:z/(1+z*z),'cos':np.cos,'square':lambda z:z*z,'cubic':lambda z:z**3,'exp':lambda z:np.exp(-z*z)}\\ndef opfit(u,v,fn=None,combined=False,free=False):\\n if fn is None:\\n  return lambda z:ic(z)@ls(ic(u),v),np.sqrt(np.mean((ic(u)@ls(ic(u),v)-v)**2)),[]\\n def d(u,q):return ic(np.c_[u,fn(u*np.exp(q))] if combined else fn(u*np.exp(q)))\\n def e(q):\\n  a=d(u,q);return (a@ls(a,v)-v).ravel()\\n fit=min([least_squares(e,np.full(4 if free else 1,p),bounds=(-2.5,1.6),max_nfev=90) for p in [-.3,.5,1.15]],key=lambda f:f.cost); q=fit.x; c=ls(d(u,q),v)\\n return lambda z:d(z,q)@c,np.sqrt(np.mean(e(q)**2)),np.exp(q)\\nif __name__=='__main__':\\n print('sv',np.linalg.svd(T,compute_uv=False),'times',t,'telemetry',s['telemetry_vec']);\\n for mode in range(5):print('cal',mode,np.round(calfit(mode)[1][::3],6))\\n for panel,out in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  u,v=s[panel]['u'],s[panel][out]; print(panel,out,'affine',opfit(u,v,None)[1]); rows=[]\\n  for name,fn in fs.items():\\n   for combined in [False,True]:\\n    for free in [False,True]:\\n     _,e,q=opfit(u,v,fn,combined,free);rows.append((e,name,combined,free,np.round(q,4)))\\n  for row in sorted(rows,key=lambda r:r[0])[:14]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived generic surrogate -> H2 a graph built from operators identified by panel residuals; baseline 52/20 MAE is 0.070497 for y and 0.106427 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare affine, cyclic polynomial, and nonlinear panel laws directly against calibration observations, and measure the trajectory’s numerical rank before fitting its readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "58f261f91537ea8ab96a9b5c1d85cced7f91a3ebc1719db0edb8601a506d014c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28233.01,
+      "usage_known": true,
+      "prompt_tokens": 23978,
+      "cached_tokens": 12672,
+      "completion_tokens": 1182
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff93154a437340578cc6e1823716ee06",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:37:59.034384+00:00",
+  "ended_at_utc": "2026-11-28T16:38:35.492967+00:00",
+  "request_sha256": "e1399d143d0a105c0c774f40797ed99369878cbf0080bc7bd2831a84dfc66654",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29897,
+    "cached_tokens": 12672,
+    "completion_tokens": 1472
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine11.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations,product\\nfrom scipy.linalg import qr\\nq=np.load('/tmp/d11.npz'); b=q['b']; Y=np.c_[q['y'],q['T']]; n=len(Y); rng=np.random.default_rng(811); splits=[np.arange(n)]+[rng.permutation(n) for _ in range(20)]+[np.argsort(np.linalg.norm(b,axis=1))]; ij=[(p[:52],p[52:]) for p in splits]; pairs=list(combinations(range(4),2)); tele=2.15\\n\\ndef err(F,reg=0):\\n G=F@F.T; E=[]\\n for i,j in ij:\\n  if reg: p=G[np.ix_(j,i)]@np.linalg.solve(G[np.ix_(i,i)]+reg*np.eye(len(i)),Y[i]);\\n  else: p=F[j]@np.linalg.lstsq(F[i],Y[i],rcond=1e-8)[0]\\n  e=abs(p-Y[j]); E.append([e[:,0].mean(),e[:,1:].mean()])\\n return np.array(E)\\n\\ndef mats(seq):return np.column_stack(seq)\\n\\ndef gram(k,variant):\\n h=np.arcsinh(k*b); g=np.c_[.4*b,h]; R=np.c_[tuple(b[:,i]*b[:,j] for i,j in pairs)]\\n A=[np.ones(n),b,h]; diag=[b*b,b*h,h*h]; cross=[mats([u[:,i]*v[:,j] for i,j in pairs]+([v[:,i]*u[:,j] for i,j in pairs] if l==1 else [])) for l,(u,v) in enumerate([(b,b),(b,h),(h,h)])]; cc=[mats([np.arcsinh(k*(b[:,i]+sg*b[:,j])) for i,j in pairs for sg in (1,-1)]),mats([b[:,i]*b[:,j]/(1+.22*(b[:,i]-sg*b[:,j])**2) for i,j in pairs for sg in (1,-1)]),mats([h[:,i]*h[:,j]/(1+.22*(b[:,i]-sg*b[:,j])**2) for i,j in pairs for sg in (1,-1)])];\\n if variant=='state': return np.c_[tuple(A+diag+cross)]\\n if variant=='mono':return np.c_[tuple(A+diag)]\\n if variant=='sparse':return np.c_[tuple(A+diag+[cross[-1]])]\\n if variant=='coupling':return np.c_[tuple(A+diag+cc)]\\n if variant=='sum':return np.c_[tuple(A+diag+cc[:1])]\\n if variant=='rat':return np.c_[tuple(A+diag+cc[1:2])]\\n if variant=='rath':return np.c_[tuple(A+diag+cc[2:])]\\n if variant=='archive':return np.c_[np.ones(n),g/2,mats([g[:,i]*g[:,j]/(8 if i==j else np.sqrt(32)) for i in range(8) for j in range(i,8)])]\\n if variant=='honly':return np.c_[np.ones(n),h,h*h,cross[-1]]\\n if variant=='proj':return np.c_[tuple(A+diag+[cross[1]])]\\n if variant=='triple':return np.c_[tuple(A+diag+[cross[-1],mats([h[:,i]*h[:,j]*h[:,l] for i,j,l in combinations(range(4),3)])])]\\n if variant=='saturate':return np.c_[tuple(A+diag+[b/(1+.22*b*b),1/(1+.22*b*b),cross[-1]])]\\n\\na=[]\\nfor k,v,reg in product([.5,1,1.5,2,2.15,2.5,3,4,6],['state','mono','sparse','coupling','sum','rat','rath','archive','honly','proj','triple','saturate'],[0,1e-6,.0001,.003]):\\n F=gram(k,v); E=err(F,reg); a.append((E,k,v,reg))\\nfor l in (0,1):\\n for crit in (lambda e:e[1:-1,l].mean(),lambda e:e[-1,l]):\\n  print('HEAD',l)\\n  for E,k,v,reg in sorted(a,key=lambda r:crit(r[0]))[:10]:print(k,v,reg,np.round([E[0,l],E[1:-1,l].mean(),E[1:-1,l].max(),E[-1,l]],5))\\nfor k,v in [(2.15,'archive'),(2.15,'sparse'),(2.15,'state')]:\\n F=gram(k,v); c=np.linalg.lstsq(F,Y,rcond=1e-8)[0]; print(k,v,'fit',np.abs(F@c-Y).mean(0),'first9',c[:9, [0,8]].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense quadratic compressed-coordinate head -> H2 sparse pairwise or rational spatial law; verified fixed trajectory MAE 0.02174, random worst 0.04256, radial extrapolation 0.06911.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the current verified candidate\",\"rejected_reason\":\"It passes the prescribed split, but the radial and worst randomized slices leave room for a better constrained spatial law.\"}],\"rationale\":\"Compare compact pairwise, rational, and cross-term bases on identical splits to see whether fewer spatial degrees of freedom improve extrapolation without sacrificing the prescribed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a6d2f5dff93e8e8e2c9516459a348559ca52d3bf7d229af24382d43e35261e21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37227.61,
+      "usage_known": true,
+      "prompt_tokens": 29897,
+      "cached_tokens": 12672,
+      "completion_tokens": 1472
+    }
+  ]
+}

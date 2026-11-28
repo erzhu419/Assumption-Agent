@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "72cba76059c343b8b4ce95c632826017",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:51.354174+00:00",
+  "ended_at_utc": "2026-11-28T15:58:10.564153+00:00",
+  "request_sha256": "b63adbd274438c3f60eab72c5ba865690f004b97db7c01f2a8b6eff147aeca04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45627,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31366,
+    "cached_tokens": 12672,
+    "completion_tokens": 715
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*11_solver.py; cat >/tmp/branches14.py <<'PY'\\nfrom model14 import *\\nimport pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; print('telemetry',s['telemetry_vec']); p=s['panel_c']; u=p['u']; print('panel range',u.min(),u.max())\\nfix={'adj':u*np.roll(u,-1,axis=1),'opp':u*np.roll(u,2,axis=1),'cube':u**3,'square':u**2,'none':u[:,:0]}\\nfor key in ('v1','v2'):\\n v=p[key]; ans=[]\\n for f in fun:\\n  if f in ('sq','cube'):continue\\n  for g,w in fix.items():\\n   for linear in (False,True):\\n    def mat(k):return D(np.c_[u if linear else u[:,:0],w,fun[f](k[0]*u)])\\n    def err(k):\\n     a=mat(k);return (a@ls(a,v)-v).ravel()\\n    for k0 in (0.8,2.2,3.6):\\n     r=least_squares(err,[k0],bounds=(.08,6),max_nfev=60); a=mat(r.x); e=r.fun.reshape(v.shape)/np.maximum(1-np.diag(a@np.linalg.pinv(a)),.001)[:,None]; ans.append((np.std(e),np.std(r.fun),f,g,linear,r.x[0],ls(a,v)))\\n ans.sort(key=lambda q:q[0]); print(key)\\n seen=set()\\n for q in ans:\\n  if q[2:5] in seen:continue\\n  seen.add(q[2:5]); print(q[:6]);\\n  if len(seen)==1: print(q[-1])\\n  if len(seen)==10:break\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branches14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single nonlinear blocks -> H2 composed nonlinear operators with an independently identified calibration; best archived 52/20 worst MAE remains 0.14281.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the best single-block panel C fit\",\"rejected_reason\":\"Panel C leave-one-out RMSE is 0.0171 and 0.0743 for the two branches, well above the calibration noise scale.\"}],\"rationale\":\"Test additive interaction and unary bases against the operator panels before estimating downstream targets.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "39717a8e86eb891547a78c0b1ae7d6e0d94919cf12139efe347fda7fe6e59478",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19207.81,
+      "usage_known": true,
+      "prompt_tokens": 31366,
+      "cached_tokens": 12672,
+      "completion_tokens": 715
+    }
+  ]
+}

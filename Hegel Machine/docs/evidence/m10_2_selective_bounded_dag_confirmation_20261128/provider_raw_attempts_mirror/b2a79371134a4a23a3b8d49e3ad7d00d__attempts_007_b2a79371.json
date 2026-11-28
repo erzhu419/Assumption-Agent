@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2a79371134a4a23a3b8d49e3ad7d00d",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:24.068295+00:00",
+  "ended_at_utc": "2026-11-28T15:37:56.276390+00:00",
+  "request_sha256": "b556f374d752b90f78cba140a2be8a982b3d8c4b09471d230f70279b924392a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50816,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34887,
+    "cached_tokens": 12672,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/down.py <<'PY'\\nfrom discover import *\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\nfrom sklearn.model_selection import KFold\\ntr=S['train']; z=coords(S,tr['x']); p=S['panel_b']; u,v=p['u'],p['v'];\\nfs={'erf':erf,'sin':np.sin,'tanh':np.tanh,'rat':lambda x:x/(1+x*x),'asinh':np.arcsinh,'atan':np.arctan,'log':lambda x:x*np.log1p(x*x),'soft':lambda x:x/np.sqrt(1+x*x)}\\nB={}\\nfor name,f in fs.items():\\n for mode in [0,1,2]:\\n  def F(q,a):\\n   h=f(a*q[0]); return D(np.c_[a,h] if mode==0 else a+q[1]*h if mode==1 else a+q[1:5]*f(a*q[0]))\\n  def r(q):\\n   G=F(q,u);return (G@fit(G,v)-v).ravel()\\n  opts=[least_squares(r,np.r_[k,np.full([0,1,4][mode],-1/k)],bounds=(np.r_[.03,np.full([0,1,4][mode],-100)],np.r_[7,np.full([0,1,4][mode],100)]),max_nfev=130) for k in [.45,.9,1.5,2.9,4.5]]\\n  o=min(opts,key=lambda o:o.cost); print('B',name,mode,o.x,np.std(o.fun));B[name+str(mode)]=(np.std(o.fun),F(o.x,z)@fit(F(o.x,u),v))\\nbs=sorted(B,key=lambda n:B[n][0]); print('best',bs[:8]);\\nt=S['eval_times']; T=tr['traj']; a,b=1.7936,.4178; F=np.array([-np.expm1(-a*t),-np.expm1(-b*t)]).T; Y=np.c_[tr['y'],(np.linalg.pinv(F)@T.T).T]; print('Y',np.std(Y,0),Y[:10]);\\ncv=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=921).split(z));\\nfor bn in bs[:4]:\\n b=B[bn][1]; X=np.c_[z,b]; w=X/X.std(0);\\n groups=[('base',w),('quad',P(w,2)[:,9:]),('triple',P(w,3)[:,45:]),('rat',w*w/(1+w*w)),('tanh',np.tanh(w)),('sin',np.sin(w)),('square',w*w),('abs',abs(w)),('roll',np.c_[z*np.roll(b,1,axis=1),z*b,z*np.roll(b,-1,axis=1)])];\\n for label,keys in [('base',[0]),('quadratic',[0,1]),('sq',[0,6]),('cyclic',[0,8]),('nonlin',[0,3,4,5,6,7,8]),('full',[0,1,2,3,4,5,7])]:\\n  X1=D(np.column_stack([groups[k][1] for k in keys]));out=[]\\n  for lam in [1e-7,.0001,.003,.03,.15,.5,2,8]:\\n   es=[]\\n   for i,j in cv:\\n    sc=np.maximum(X1[i].std(0),.05);sc[0]=1; A=X1/sc; K=A@A[i].T; pred=K[j]@np.linalg.solve(K[i]+lam*np.eye(len(i)),Y[i]); es.append(np.r_[np.mean(abs(pred-Y[j]),0),np.mean(abs(pred[:,1:]@F.T-T[j]))]);\\n   es=np.array(es);out.append((es[0,[0,3]],es[1:,[0,3]].mean(0),lam))\\n  print('down',bn,label,*sorted(out,key=lambda x:sum(x[0])+sum(x[1]))[:2]);\\n print('lin residual rank/coef',np.linalg.lstsq(D(w),Y,rcond=None)[0],np.linalg.svd(Y-D(w)@fit(D(w),Y))[1]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/down.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: calibrated coordinates plus panel B outperform the other tested branches; 52/20 MAE is 0.05604 for y and 0.05346 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Include every auxiliary branch\",\"rejected_reason\":\"The tested all-branch models did not improve the prescribed holdout over the calibrated panel B model.\"}],\"rationale\":\"Distinguish panel B approximation error from downstream basis error by testing shared nonlinear shapes and comparing sparse algebraic heads on the prescribed split and four additional folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1eb7a86c459760e98c49bab58144d791f92ad179ab4ebb37bcc640670765f5a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32721.47,
+      "usage_known": true,
+      "prompt_tokens": 34887,
+      "cached_tokens": 12672,
+      "completion_tokens": 1359
+    }
+  ]
+}

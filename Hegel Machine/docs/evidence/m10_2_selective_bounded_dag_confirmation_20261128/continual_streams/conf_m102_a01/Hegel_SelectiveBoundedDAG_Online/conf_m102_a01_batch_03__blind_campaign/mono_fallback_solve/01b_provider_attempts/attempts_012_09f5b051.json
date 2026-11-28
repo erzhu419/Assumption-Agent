@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09f5b051dc1a4612b1aea358a67a7971",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:19.453665+00:00",
+  "ended_at_utc": "2026-11-28T15:04:39.756532+00:00",
+  "request_sha256": "f06f827a1a72cb50d01c332670562fc53bf3c557edc04fef97f76cb630ddef11",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68537,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40691,
+    "cached_tokens": 12672,
+    "completion_tokens": 757
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; t=s['train']; x,y,a=(t[k] for k in ('x','y','traj'))\\ndef pred(i,j):\\n q={**s,'train':{'x':x[i],'y':y[i],'traj':a[i],'summary':np.array([y[i].mean(),y[i].std(),a[i,-1].mean(),a[i,-1].std()])},'test':{'x':x[j]}}; o=m.solve_batch(q); b,c=o['y_hat'],o['state_pred']; assert b.shape==(len(j),) and c.shape==(len(j),a.shape[1]); assert np.isfinite(b).all() and np.isfinite(c).all(); np.testing.assert_allclose(o['diagnostics_vec'],[b.mean(),b.std(),c[:,-1].mean(),c[:,-1].std()]); return np.abs(b-y[j]),np.abs(c-a[j])\\ne,f=pred(np.arange(52),np.arange(52,72)); print('52/20 y, trajectory, worst timestamp MAE:',e.mean(),f.mean(),f.mean(axis=0).max()); assert e.mean()<=.038 and f.mean()<=.038\\nallidx=np.arange(len(x)); runs=[]\\nfor seed in (19,23,29):\\n for j in np.array_split(np.random.default_rng(seed).permutation(allidx),4):\\n  runs.append(tuple(v.mean() for v in pred(np.setdiff1d(allidx,j),j)))\\nprint('Repeated four-fold mean and worst-fold y/trajectory MAE:',np.mean(runs,axis=0),np.max(runs,axis=0));\\nfor tag,axis in [('raw input radius',np.linalg.norm(x,axis=1)),('response magnitude',abs(y))]:\\n j=np.argsort(axis)[-18:]; e,f=pred(np.setdiff1d(allidx,j),j); print(tag,'held-out upper quartile y/trajectory MAE:',e.mean(),f.mean())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed predictor → H2 degree-regularized ensemble with a rank-two trajectory: the exact artifact passed both 0.038 MAE gates; worst-slice metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Keep the verified artifact unchanged. Measure its exact gate margins and quantify how prediction degrades on additional held-out folds and extreme slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1faac07fce2843571f315eca331c61f68acf185bedca105245d05afcd75da305",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20796.88,
+      "usage_known": true,
+      "prompt_tokens": 40691,
+      "cached_tokens": 12672,
+      "completion_tokens": 757
+    }
+  ]
+}

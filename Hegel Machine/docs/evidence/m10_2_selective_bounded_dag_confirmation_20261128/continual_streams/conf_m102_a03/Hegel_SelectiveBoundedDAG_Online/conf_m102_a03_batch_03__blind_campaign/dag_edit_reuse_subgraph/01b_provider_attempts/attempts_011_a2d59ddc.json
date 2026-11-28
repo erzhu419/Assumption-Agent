@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2d59ddc91a64679b2984f02a6294554",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:49.166115+00:00",
+  "ended_at_utc": "2026-11-28T15:18:07.107412+00:00",
+  "request_sha256": "d988df2b6dbe19dfaa4ee077b72b93017e15c54d97e689aaa2a299c351beccbe",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 67905,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35001,
+    "cached_tokens": 5504,
+    "completion_tokens": 620
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nbase='/holdout_task/'\\na,b,c=(runpy.run_path(base+p)['run_node'] for p in ('node_00.py','node_01.py','_frozen_nodes/node_02.py'))\\ns=pickle.load(open(base+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); worst=np.zeros(3)\\nslices=list(np.array_split(np.arange(n),5))+[np.arange(n-20,n),np.argsort(np.linalg.norm(tr['x'],axis=1))[-12:]]\\nfor j,ix in enumerate(slices):\\n    mask=np.ones(n,dtype=bool); mask[ix]=False\\n    st=dict(s,train={k:v[mask] if isinstance(v,np.ndarray) and v.ndim and v.shape[0]==n else v for k,v in tr.items()},test={'x':tr['x'][ix]})\\n    f=a({'__input__':st}); g=b({'__input__':st,'node_00':f}); out=c({'node_00':f,'node_01':g})\\n    assert out['y_hat'].shape==tr['y'][ix].shape and out['state_pred'].shape==tr['traj'][ix].shape\\n    e=np.abs(out['state_pred']-tr['traj'][ix]); m=np.array([np.abs(out['y_hat']-tr['y'][ix]).mean(),e.mean(),e.mean(0).max()]); assert np.isfinite(m).all(); worst=np.maximum(worst,m)\\n    print(f'Fold {j}: scalar, trajectory, worst horizon MAE = {m.round(6)}')\\nprint('Worst across seven slices:',worst.round(6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed sinusoidal features -> H2 training-fitted additive kernels with two temporal modes; accepted public CV MAEs are 0.014789 for scalar readout and 0.007584 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"Reverify the unchanged accepted artifacts in isolated Python and rerun the seven-slice stress check, masking row-aligned training arrays without indexing split metadata.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b95a120609657c2dc4f2b593dffe9aba2801abcdd9f42f47e14c69c50640b2b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18366.24,
+      "usage_known": true,
+      "prompt_tokens": 35001,
+      "cached_tokens": 5504,
+      "completion_tokens": 620
+    }
+  ]
+}

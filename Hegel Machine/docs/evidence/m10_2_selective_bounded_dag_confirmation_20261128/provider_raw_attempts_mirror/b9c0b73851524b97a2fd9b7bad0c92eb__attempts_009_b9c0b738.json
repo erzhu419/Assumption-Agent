@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b9c0b73851524b97a2fd9b7bad0c92eb",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:14:28.928579+00:00",
+  "ended_at_utc": "2026-11-28T16:15:15.066309+00:00",
+  "request_sha256": "680da3e894b46c827f19f85b3696209d82bfd99a7e7a995a4b34c3954977fc50",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61910,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39710,
+    "cached_tokens": 12672,
+    "completion_tokens": 2066
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py; tail -10 _frozen_nodes/node_00.py; cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrated panel transfer and supervised scalar and trajectory readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _panel(u, panel, key, kind, initial):\\n    x, y = panel['u'], panel[key]\\n    def design(t, x):\\n        return _aff(x + t[0]*kind(t[1]*x))\\n    def residual(t):\\n        a = design(t, x)\\n        return (a@_fit(a,y)-y).ravel()\\n    t = least_squares(residual, initial, max_nfev=120).x\\n    return design(t,u) @ _fit(design(t,x),y)\\n\\n\\ndef _coords(st, z):\\n    b = st['panel_b']\\n    coef = _fit(_aff(b['u']),b['v'])\\n    u = np.linalg.solve(coef[1:].T, (z-coef[0]).T).T\\n    return _panel(u,b,'v',np.sin,[-.4,2.9])\\n\\n\\ndef _quad(z):\\n    return np.column_stack([z[:,i]*z[:,j] for i,j in combinations_with_replacement(range(z.shape[1]),2)])\\n\\n\\ndef _predict(st,z,zt):\\n    a,b=np.c_[_aff(z),_quad(z)],np.c_[_aff(zt),_quad(zt)]\\n    return b@_fit(a,np.column_stack((st['train']['y'],st['train']['traj'])))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    st, enc = inputs['__input__'], inputs['node_00']\\n    n = len(st['train']['x'])\\n    z = _coords(st,np.concatenate((enc['z'],enc['z_test'])))\\n    p = _predict(st,z[:n],z[n:])\\n    y,t = p[:,0],p[:,1:]\\n    return {'y_hat':y,'state_pred':t,'diagnostics_vec':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}\\nPY\\nsed -n '$p' _frozen_nodes/node_00.py; python3 -I test_dag_candidate.py; cat >/tmp/sparse14.py <<'PY'\\nimport os, sys, pickle, runpy, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nos.chdir('/holdout_task');sys.path.insert(0,os.getcwd());from node_01 import _coords,_aff,_fit,_quad,_panel\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];en=runpy.run_path('_frozen_nodes/node_00.py')['run_node']({'__input__':s});z=_coords(s,en['z']); print('z minmax',z.min(0),z.max(0)); T=s['train']['traj']; Y=np.c_[s['train']['y'],T]; n=52\\nv=_panel(z,s['panel_c'],'v1',np.tanh,[2.,2.27]);w=_panel(z,s['panel_c'],'v2',np.cos,[-.65,1.29]);\\ndef met(D):\\n P=D@_fit(D[:n],Y[:n]); E=abs(Y-P);return tuple(np.round([E[:n,0].mean(),E[:n,1:].mean(),E[n:,0].mean(),E[n:,1:].mean()],5))\\nq=_aff(z); c=_fit(q[:n],Y[:n]); E=Y-q@c; print('resid sv',np.linalg.svd(E[:n],compute_uv=False)); print('resid corr',np.corrcoef(E.T)[0]);print('yc',c[:,[0,-1]]);\\nfor use in ('z','v','w','all'):\\n for quad in (False,True):\\n  A=np.c_[q,_quad(z)] if quad else q; cols=[]; labels=[]\\n  def add(k,x):\\n   x=np.asarray(x);cols.append(x);labels.append(k)\\n  X={'z':z,'v':v,'w':w}; blocks=list(X) if use=='all' else [use];\\n  for k in blocks:\\n   x=X[k];\\n   for i in range(4):\\n    p=x[:,i]\\n    for f in [.5,1.25,2.15,2.9,4.,5.]:\\n     for nn,fn in [('tan',np.tanh),('sin',np.sin),('cos',np.cos),('rat',lambda a:a/(1+a*a))]:add((k,i,nn,f),fn(f*p))\\n   for i,j in combinations(range(4),2):\\n    add((k,'prod',i,j),x[:,i]*x[:,j]);\\n    for sign in (-1,1):\\n     p=x[:,i]+sign*x[:,j];\\n     for f in [1.25,2.15,3.,4.]:\\n      for nn,fn in [('tan',np.tanh),('sin',np.sin),('cos',np.cos),('rat',lambda a:a/(1+a*a))]:add((k,i,j,sign,nn,f),fn(f*p))\\n   for inds in combinations(range(4),3):add((k,'triple',inds),np.prod(x[:,inds],axis=1))\\n  F=np.array(cols).T;remain=list(range(len(cols)));active=[]\\n  for step in range(8):\\n   d=A[:n];P=np.linalg.pinv(d);R=Y[:n]-d@(P@Y[:n]);G=F[:n,remain]-d@(P@F[:n,remain]);gain=((G.T@R)**2)@np.r_[1.,np.ones(8)/4]/np.maximum(np.sum(G*G,axis=0),1e-15); ix=remain.pop(np.argmax(gain));active.append(labels[ix]);A=np.c_[A,F[:,ix]];print(use,quad,step,labels[ix],met(A),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse14.py > /tmp/sparse14.out; head -10 /tmp/sparse14.out; sort -k1,1 /tmp/sparse14.out | grep 'False\\\\|True' | python3 -c 'import sys,ast; L=list(sys.stdin); print(\\\"\\\".join(sorted(L,key=lambda l:sum(ast.literal_eval(l[l.rfind(\\\"(\\\"):])[2:]))[:18]))'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel post-mix nonlinearity → pre-mix nonlinear transfer with shared readout structure; previous best scalar and trajectory MAEs were 0.10298 and 0.05634.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"A coordinatewise correction after affine mixing explains panel B.\",\"empirical_witness\":\"The profiled post-mix panel B residual standard deviation was at least 0.1258, versus 0.00612 for calibrated pre-mix sine.\",\"causal_blanket_diagnosis\":\"Nonlinearity acts in input coordinates; mixing first obscures the separable response.\",\"sublated_pivot\":\"Retain the frozen encoder, recover pre-panel coordinates, and apply the calibrated nonlinear transform before the affine mix.\",\"risk_kind\":\"mechanism_order\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a runnable calibrated sink now, then test whether the scalar and trajectory residuals share a sparse nonlinear correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1e7b5e3e97ae9063310332cd3f7c7511660a82cd0f06061a126ecae1c65028a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47050.15,
+      "usage_known": true,
+      "prompt_tokens": 39710,
+      "cached_tokens": 12672,
+      "completion_tokens": 2066
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "29b7e3f7631445bda65a3eec4c067493",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:21:15.185861+00:00",
+  "ended_at_utc": "2026-11-28T16:21:59.622742+00:00",
+  "request_sha256": "9ec7211e71ce6b8f691bb77e9624c8479487cba41943b6c7baa43a458fb8e944",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74089,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44091,
+    "cached_tokens": 14720,
+    "completion_tokens": 1958
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nf=/holdout_task/batch_solver.py\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/conf_m102_a02_batch_09_solver.py > \\\"$f\\\"\\ncat >> \\\"$f\\\" <<'PY'\\ndef _operator(panel, z):\\n    def basis(x):\\n        return np.c_[_aff(x), x*np.exp(-3.22429526*abs(x)**3), np.tanh(1.64761629*x**3)]\\n    return basis(z) @ _ls(basis(panel['u']),panel['v'])\\n\\ndef _quadratic(x):\\n    i,j=np.triu_indices(x.shape[1]); return np.c_[_aff(x),x[:,i]*x[:,j]]\\n\\ndef _predict(a, q, y, penalty):\\n    scale=np.r_[1,np.maximum(a[:,1:].std(0),.035)]\\n    d=np.sqrt(penalty)*np.eye(a.shape[1]); d[0,0]=0\\n    return (q/scale) @ _ls(np.r_[a/scale,d],np.r_[y,np.zeros((len(d),)+y.shape[1:])])\\n\\ndef solve_batch(study):\\n    tr=study['train']; x=np.r_[tr['x'],study['test']['x']]; n=len(tr['x'])\\n    z=_inverse(x,_calibrate(study['panel_a'])); b=_operator(study['panel_b'],z)\\n    a=_quadratic(np.c_[z,b]); y=_predict(a[:n],a[n:],tr['y'],.003); t=_predict(a[:n],a[n:],tr['traj'],.003)\\n    return {'y_hat':y,'state_pred':t,'diagnostics_vec':np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat >/tmp/dead14.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nfrom panels14 import *\\nfrom scipy.linalg import orthogonal_procrustes\\nfrom scipy.special import expit,erf\\nu,v=S['panel_b'].values();tr=S['train'];z=m._inverse(tr['x'],m._calibrate(S['panel_a'])); T=tr['traj']; y=tr['y'];Y=np.c_[y,T]; t=S['eval_times']; ss=np.linalg.svd(T[:52],full_matrices=False);print('temporal singular',ss[1]); Q=T@ss[2][:3].T\\nF={\\n 'hinge2':(lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1],[.29,1.35],([.05,.5],[.65,3])),\\n 'logistic':(lambda x,p:x*expit(p[0]*(abs(x)-p[1])),[8,.62],([1,.1],[50,1])),\\n 'softplus':(lambda x,p:np.sign(x)*np.logaddexp(0,p[0]*(abs(x)-p[1]))**p[2],[20,.36,1.35],([1,.08,.5],[100,.85,3])),\\n 'smoothstep':(lambda x,p:x*(1-np.exp(-(abs(x)/p[0])**p[1])),[.8,4],([.2,1],[1.5,20])),\\n 'smoothhinge':(lambda x,p:np.sign(x)*(.5*(abs(x)-p[0]+np.sqrt((abs(x)-p[0])**2+p[1]**2)))**p[2],[.33,.09,1.4],([.05,.0001,.5],[.85,.5,3])),\\n 'hill':(lambda x,p:x*expit(p[1]*np.log(np.maximum(abs(x),1e-12)/p[0])),[.7,6],([.2,1],[1.5,20])),\\n 'oddexp':(lambda x,p:x-np.tanh(p[0]*x)/p[0],[1.5],([.1],[20])),\\n 'exp2':(lambda x,p:x*(1-np.exp(-p[0]*x*x))**p[1],[1.,1.5],([.02,.1],[10,10])),\\n}\\nfolds=[np.arange(52,72)]+list(np.array_split(np.random.default_rng(14).permutation(72),4));out=[]\\nops={'base':m._operator(S['panel_b'],z)}\\nfor k,(fn,p0,bnd) in F.items():\\n for term in ['','lin','sin','lin_sin','quadlin']:\\n  def ds(x,p):\\n   a=[np.ones(len(x)),fn(x,p)]\\n   if 'lin' in term:a.append(x)\\n   if 'sin' in term:a.append(np.sin(p[-1]*x))\\n   if term=='quadlin':a.extend([x**3,x**5])\\n   return np.c_[tuple(a)]\\n  for fr in ([4,10,17,25] if 'sin' in term else [0]):\\n   p=p0+([fr] if fr else []); bb=[list(bnd[0])+([.5] if fr else []),list(bnd[1])+([35] if fr else [])];\\n   def fun(p):\\n    a=ds(u,p);return (a@ls(a,v)-v).ravel()\\n   fit=least_squares(fun,p,bounds=bb,max_nfev=110); op=ds(z,fit.x)@ls(ds(u,fit.x),v); out.append((np.std(fit.fun),k,term,fit.x,op))\\nout.sort(key=lambda a:a[0]);print('panel',*[q[:4] for q in out[:15]],sep='\\\\n')\\nfor j,q in enumerate(out[:20]):ops[str(j)]=q[-1]\\nnp.savez('/tmp/dead14.npz',z=z,**ops)\\nresult=[]\\nfor k,b in ops.items():\\n for typ,a in [('full',m._quadratic(np.c_[z,b])),('sep',np.c_[m._quadratic(z),m._quadratic(b)[:,1:],z*b,z*np.roll(b,-1,axis=1),b*np.roll(z,-1,axis=1)]),('state',np.c_[m._quadratic(np.c_[z,b]),Q]),('qonly',m._quadratic(np.c_[z,b,Q[:,:2]]))]:\\n  for la in [.0001,.003,.02,.07]:\\n   es=[]\\n   for idx in folds:\\n    a0=np.setdiff1d(np.arange(72),idx);pred=m._predict(a[a0],a[idx],Y[a0],la);e=abs(pred-Y[idx]);es.append([e[:,0].mean(),e[:,1:].mean()]);\\n   es=np.array(es);result.append((es[0,0],es[1:,0].max(),es[1:,0].mean(),es[0,1],k,typ,la))\\nprint('rank',*sorted(result)[:28],sep='\\\\n'); print('rob',*sorted(result,key=lambda a:max(a[:2]))[:15],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dead14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 odd smooth approximation -> H2 a dead-zone panel response and a separate scalar readout; current 52/20 MAEs are 0.04835 scalar and 0.01435 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save and schema-check the best executable baseline now, then test dead-zone grammars directly on the paired panel. State-augmented rows are diagnostic only because they use observed held-out states.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9f6da8a69ae7be8f911d4305e35e28b8b2d7f12a174a813df6e57aa26fe67637",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44988.14,
+      "usage_known": true,
+      "prompt_tokens": 44091,
+      "cached_tokens": 14720,
+      "completion_tokens": 1958
+    }
+  ]
+}

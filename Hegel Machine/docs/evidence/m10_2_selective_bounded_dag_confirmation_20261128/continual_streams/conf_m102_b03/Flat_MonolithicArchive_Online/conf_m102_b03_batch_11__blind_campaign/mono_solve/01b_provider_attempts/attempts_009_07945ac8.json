@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "07945ac833a743b090e84fe87d5953de",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:48.661941+00:00",
+  "ended_at_utc": "2026-11-28T15:44:09.757352+00:00",
+  "request_sha256": "afbbcc256b361882ad494fbeb62550ed6dba05b6bcfefb77d5c68c70b30aa1e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58760,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36872,
+    "cached_tokens": 12672,
+    "completion_tokens": 755
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\na = s['panel_a']; tr = s['train']\\ne = []\\nfor j in range(len(a['u'])):\\n    keep = np.arange(len(a['u'])) != j\\n    panel = {k: v[keep] for k,v in a.items()}\\n    z = m.calibrate(panel, a['v'][j:j+1])\\n    e.append(np.max(np.abs(z-a['u'][j])))\\ne = np.sort(e)\\nprint('Panel A leave-one-row-out inverse max-coordinate errors: median, 45th, and 3 largest:', np.r_[np.median(e),e[44:]])\\nassert e[44] < .003\\ncv = dict(s, train={k:v[:52] if len(v)==72 else v for k,v in tr.items()}, test={'x':tr['x'][52:]})\\np = m.solve_batch(cv)\\nyerr = np.mean(np.abs(p['y_hat']-tr['y'][52:])); terr = np.mean(np.abs(p['state_pred']-tr['traj'][52:]),axis=0)\\nprint('52/20 y MAE:', yerr, 'state MAE:', terr.mean(), 'worst horizon:', terr.max())\\nassert max(yerr,terr.max()) <= .038\\np = m.solve_batch(s)\\ny,h,d = (p[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\nassert (y.shape,h.shape,d.shape) == ((36,),(36,8),(4,))\\nassert all(np.isfinite(a).all() for a in (y,h,d))\\nnp.testing.assert_allclose(d,[y.mean(),y.std(),h[:,-1].mean(),h[:,-1].std()],rtol=0,atol=0)\\nprint('Isolated artifact passed all checks.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace the archived calibration with an opposite-channel tanh–sine inverse feeding the dual-branch response and two relaxation modes; required 52/20 MAEs are 0.003893 for y and 0.004642 for state, with worst stress-slice horizon MAE 0.009754.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"The public schema and all tested splits pass. Verify the exact artifact in isolated Python and directly test the calibration inverse by leaving out each reference row in turn.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ffba1e61ac3f7631488cbddf150d1d9371f705439684feb88808651c12ddcf94",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21094.05,
+      "usage_known": true,
+      "prompt_tokens": 36872,
+      "cached_tokens": 12672,
+      "completion_tokens": 755
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "40c1c853d44a4a85b3da462bbb4b97a6",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:04:27.059519+00:00",
+  "ended_at_utc": "2026-11-28T16:05:20.047882+00:00",
+  "request_sha256": "4de5be439741b6b2c6161a05cefe61f40d42e89c65c415da3cd8fbc10d243837",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53477,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27922,
+    "cached_tokens": 7552,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit15.py <<'PY'\\nimport sys,pickle,importlib.util\\nimport numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; t=s['eval_times']; u=s['panel_a']['u']; v=s['panel_a']['v']; w=np.roll(u,-1,axis=1)\\nprint('study fields',sorted(s),'train fields',sorted(tr),'telemetry shape',s['telemetry_vec'].shape, 'target dtype',y.dtype)\\n# Identify gross panel contamination independently of the candidate basis.\\ng=np.argsort(np.linalg.norm(v-u,axis=1))\\ndef features(pair):\\n    a=[np.ones_like(u),u,w,u**3];return np.stack(a+([u*w] if pair else []),axis=-1)\\nA=features(True);rng=np.random.default_rng(918)\\ndef fit(a, rows):return np.stack([m._ls(a[rows,j],v[rows,j]) for j in range(4)])\\ndef residual(a,c):return np.einsum('ijk,jk->ij',a,c)-v\\npilots=[fit(A,rng.choice(len(u),8,False)) for _ in range(96)]\\nc=min(pilots,key=lambda c:np.median(np.max(np.abs(residual(A,c)),axis=1)))\\ng=np.flatnonzero(np.max(np.abs(residual(A,c)),axis=1)<.001)\\nfor pair in (False,True):\\n    a=features(pair); E=np.array([residual(a,fit(a,g[g!=i]))[i] for i in g]);print('calibration leave-one-inlier-out pair',pair,'n',len(g),'MAE',np.mean(abs(E)),'max',abs(E).max())\\nz=m._calibrate(s['panel_a'],tr['x']); p,q=m._branches(s['panel_c'],z); dot=(p*q).sum(1); cross=p[:,0]*q[:,1]\\nS=m._design(np.c_[p,q,dot]); F=np.c_[S,cross]; Q=m._design(np.c_[q,cross]); dif=p-q; plus=p+q\\n# Extra linear sums and differences are already in span; test nonlinear combinations separately.\\nprint('linear pair sum/difference nesting error',np.max(abs(S@m._ls(S,np.c_[plus,dif])-np.c_[plus,dif])))\\naug={'base':np.empty((len(y),0)),'pair_squared':np.c_[dif**2,plus**2], 'rational':np.c_[p/(1+.22*q*q),q/(1+.22*p*p)], 'triple':np.c_[dot[:,None]*p,dot[:,None]*q]}\\nfolds=[np.arange(len(y)),*[rng.permutation(len(y)) for _ in range(10)],np.argsort(np.linalg.norm(tr['x'],axis=1)),np.argsort(np.linalg.norm(tr['x'],axis=1))[::-1]]\\nfor name,E in aug.items():\\n    R=[]\\n    for idx in folds:\\n        a,b=idx[:52],idx[52:]; ix=np.r_[a,b]; S1=np.c_[S,E]; F1=np.c_[F,E]; Q1=np.c_[Q,E]; yh=S1[b]@m._ls(S1[a],y[a]); st=m._predict_trajectory(t,T[a],F1[ix],Q1[ix]); e=np.abs(st-T[b]);R.append([np.mean(abs(yh-y[b])),e.mean(),e.mean(0).max()])\\n    print(name,'prescribed',np.round(R[0],7),'mean',np.round(np.mean(R,axis=0),7),'worst',np.round(np.max(R,axis=0),7))\\n# Compare time-only shared relaxation span with noise level to check for a missing dynamical mode.\\nfrom scipy.optimize import least_squares\\nH=lambda r:-np.expm1(-t[:,None]*r)\\ndef er(r):h=H(r);return (h@m._ls(h,T[:52].T)-T[:52].T).ravel()\\nr=least_squares(er,[1.8,.42]).x; h=H(r);print('relaxation rates',r,'held-out projection noise MAE',np.mean(abs(h@m._ls(h,T[52:].T)-T[52:].T)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit15.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted calibration and readout terms -> H2 cyclic product calibration with sparse two-mode readouts; existing worst held-out MAEs are 0.00622 for y and 0.00485 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relay states, a drift operator, or batch centering\",\n      \"rejected_reason\": \"The supplied measurements have continuous targets and relaxation trajectories, with no relay state, batch labels, or spatial density observations to identify those mechanisms.\"\n    }\n  ],\n  \"rationale\": \"Measure the calibration term's contribution on held-out panel rows and compare rational, pairwise, and three-way readout extensions across matched 52/20 splits. Keep the verified artifact unchanged until the audit identifies a material improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9a34efbc02d132c21b396027c03b1c87eb7696bbc5221a9d45778d59ea62bb09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53617.03,
+      "usage_known": true,
+      "prompt_tokens": 27922,
+      "cached_tokens": 7552,
+      "completion_tokens": 1416
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e4c6a2cb73b43a2b1953b3ac7118388",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:24.273684+00:00",
+  "ended_at_utc": "2026-11-28T15:25:57.284414+00:00",
+  "request_sha256": "5d36806e3e7419c6766c0ca8c12ece7ed050020917e6598dd94b835db0242f33",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57402,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37242,
+    "cached_tokens": 12672,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -56 /holdout_task/test_dag_candidate.py; tail -20 /holdout_task/_frozen_nodes/node_00.py; cat > /tmp/links07.py <<'PY'\\nexec(open('/tmp/compose07.py').read().split('rows=[]')[0])\\nprint('response range',y.min(),y.max(),'traj amplitude',T[:,-1].min(),T[:,-1].max());\\nfor fn,p0 in [(lambda x,p:aff(x+p[1]*np.sin(p[0]*x)+p[2]*x**3), [2.9,-.4,0]),(lambda x,p:aff(x+p[1]*np.sin(p[0]*x)+p[2]*np.sin(2*p[0]*x)),[2.9,-.4,0]),(lambda x,p:aff(x+p[1]*np.sin(p[0]*x)+p[2]*x*x),[2.9,-.4,0]),(lambda x,p:aff(x+p[1]*np.tanh(p[0]*x)+p[2]*x**3),[1.4,-1,0]),(lambda x,p:np.c_[aff(x),np.sin(p[0]*x),x**3], [2.9])]:\\n er,F=calibrate(b['u'],b['v'],fn,p0); print('new B',er); Bx=F(u); base['new'+str(len(base))]=np.c_[Bx,P(Bx),C2(u)]\\n_,_,vt=np.linalg.svd(T,full_matrices=False); time=vt[0]*np.sign(vt[0,-1]); amp=T@time; print('amp range',amp.min(),amp.max(),'corr',np.corrcoef(y,amp)[0,1]);\\nfrom scipy.optimize import least_squares\\nacts={'lin':lambda x:x,'tanh':np.tanh,'sin':np.sin,'sinh':lambda x:np.sinh(np.clip(x,-8,8)),'atan':np.arctan,'cubic':lambda x:x+x**3,'soft':lambda x:x/np.sqrt(1+x*x),'silu':lambda x:x/(1+np.exp(-np.clip(x,-50,50))), 'mix':lambda x:x+np.sin(x)}\\nparts=[np.arange(52,72)]+[np.arange(i,i+18) for i in range(0,72,18)]\\nsets={k:v for k,v in base.items() if 'B' in k or k.startswith('new')}; sets.update({'bp':np.c_[base['B0'],P(base['B0'])],'bq':np.c_[base['B0'],C2(u)],'all':np.c_[base['B0'],P(base['B0']),C2(u),u]})\\nfor i,z0 in enumerate((y,amp)):\\n rows=[]\\n for name,x in sets.items():\\n  X=aff(x); X[:,1:]/=np.maximum(np.std(X[:,1:],axis=0),.001)\\n  for k,act in acts.items():\\n   for mode in (0,1):\\n    es=[]\\n    for h in parts:\\n     tr=np.setdiff1d(np.arange(n),h); A=X[tr]; v=z0[tr]; c0=fit(A,v); sd=np.std(v); \\n     def pred(M,p):return p[-2]+p[-1]*act(M@p[:M.shape[1]])+(M@p[M.shape[1]:-2] if mode else 0)\\n     init=np.r_[c0/sd*(.65 if mode else 1),c0*.35 if mode else [],0,sd];\\n     opt=least_squares(lambda p:np.r_[pred(A,p)-v, .01*p],init,max_nfev=85).x; es.append(np.mean(abs(pred(X[h],opt)-z0[h]))*(1 if i==0 else time.mean()))\\n    rows.append((max(es),es[0],np.mean(es[1:]),name,k,mode))\\n print('LINK',i,*sorted(rows)[:18],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/links07.py | tail -60\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear readouts of calibrated features -> H2 nonlinear links on shared latent scores; current worst-slice response and trajectory MAEs are 0.1100 and 0.0706.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The trajectory is nearly rank one, and transforming individual features did not close the prediction gap. Test nonlinear links after projection and check for missing harmonics in panel B.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2cdd9a90ed12c2e857138834ef5ecae895cc6b35a854e6762b8bb3f2ef974a5d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33009.61,
+      "usage_known": true,
+      "prompt_tokens": 37242,
+      "cached_tokens": 12672,
+      "completion_tokens": 1240
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20bf2f9f23ec4471a266e17b0dcfd880",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:08:07.327005+00:00",
+  "ended_at_utc": "2026-11-28T16:08:36.851149+00:00",
+  "request_sha256": "cd685588b9e78dbc9c17674c2df24277d110c95d7925353b38e548ef9f37de56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45399,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31354,
+    "cached_tokens": 12672,
+    "completion_tokens": 1219
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; python3 /tmp/pan13.py | cut -c1-1250; python3 /tmp/explore13.py | head -25; cat >/tmp/graph13.py <<'PY'\\nimport numpy as np,pickle,runpy,itertools\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52\\nm=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_a02_batch_06_solver.py'); x=m['_inverse'](tr['x'],m['_calibration'](s['panel_a'])); ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; aff=lambda x:np.c_[np.ones(len(x)),x]; idx=np.triu_indices(4); quad=lambda x:np.c_[aff(x),x[:,idx[0]]*x[:,idx[1]]]\\ndef panel(key,out,fun):\\n u,v=s[key]['u'],s[key][out]; p=minimize_scalar(lambda p:np.mean((fun(u,p)@ls(fun(u,p),v)-v)**2),bounds=(1.6,3) if out=='v1' else (.8,1.7),method='bounded').x; b=ls(fun(u,p),v); print(key,out,p,np.sqrt(np.mean((fun(u,p)@b-v)**2)),b.round(3)); return lambda x:fun(x,p)@b\\nc1=panel('panel_c','v1',lambda x,p:np.c_[aff(x),np.tanh(p*x)]); c2=panel('panel_c','v2',lambda x,p:np.c_[aff(x),np.cos(p*x)]);\\nu,v=s['panel_b']['u'],s['panel_b']['v']; fs={'cosx':lambda x,p:np.cos(p*x),'cossum':lambda x,p:np.cos(p*(x+np.roll(x,-1,1))),'cosdiff':lambda x,p:np.cos(p*(x-np.roll(x,-1,1))),'cosopp':lambda x,p:np.cos(p*(x-np.roll(x,2,1)))[:,:2],'sinprod':lambda x,p:np.sin(p*x*np.roll(x,-1,1))}; bs={}\\nfor k,f in fs.items():\\n def d(x,p):return np.c_[aff(x),f(x,p)]\\n def loss(p):return np.mean((d(u,p)@ls(d(u,p),v)-v)**2)\\n p0=min(np.linspace(.15,6,120),key=loss);p=minimize_scalar(loss,bounds=(max(.03,p0-.1),p0+.1),method='bounded').x;b=ls(d(u,p),v);print(k,p,loss(p)**.5);bs[k]=lambda x,p=p,b=b,f=f:np.c_[aff(x),f(x,p)]@b\\nbs['bpoly']=lambda x:quad(x)@ls(quad(u),v)\\nops={'C':c1,'D':c2,**bs}; bases={'x':x,'raw':tr['x']}; stages={**bases,**{k:f(x) for k,f in ops.items()},**{k+'raw':f(tr['x']) for k,f in ops.items()}}\\nfor k,j in itertools.product(ops,repeat=2):stages[k+j]=ops[j](stages[k]);\\nh=tr['traj'][:,-1]; y=tr['y']; scores=[[],[]];\\nfor k,z in stages.items():\\n for k2,d in [('a',aff(z)),('q',quad(z)),('xq',np.c_[quad(x),quad(z)[:,1:]]),('xa',np.c_[aff(x),aff(z)[:,1:]])]:\\n  scale=np.maximum(np.linalg.norm(d[:n],axis=0),1e-10);D=d/scale\\n  for a in (0,.003,.03):\\n   yh=D[n:]@ls(np.r_[D[:n],np.sqrt(a)*np.eye(D.shape[1])],np.r_[np.c_[y,h][:n],np.zeros((D.shape[1],2))]); e=np.mean(abs(yh-np.c_[y,h][n:]),axis=0)\\n   for i in range(2):scores[i].append((e[i],k,k2,a))\\nfor sc in scores:print(sorted(sc)[:27])\\nPY\\npython3 /tmp/graph13.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived graph transfer → panel-specific nonlinear operators; the best archived 52/20 trajectory MAE is 0.22563.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the strong tanh and cosine signatures in panel C to test short operator compositions, and rank scalar and terminal-state fits separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "bdc8c9d19290b5cdd6592f0d098361b216f261ed231ac59ec4e3cbdfd17192f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30131.93,
+      "usage_known": true,
+      "prompt_tokens": 31354,
+      "cached_tokens": 12672,
+      "completion_tokens": 1219
+    }
+  ]
+}

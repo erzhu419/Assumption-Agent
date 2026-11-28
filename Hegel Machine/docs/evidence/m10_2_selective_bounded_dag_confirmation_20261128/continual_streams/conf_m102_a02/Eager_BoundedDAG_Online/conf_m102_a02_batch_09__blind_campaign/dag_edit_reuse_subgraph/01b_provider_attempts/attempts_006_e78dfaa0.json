@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e78dfaa0c80b4d7da0db84a44f6993fb",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:14.981198+00:00",
+  "ended_at_utc": "2026-11-28T15:51:50.565734+00:00",
+  "request_sha256": "96a0adaa62667a67f948c082cefbd3f4df8a9993154745d922e21e2f69297c73",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47003,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33321,
+    "cached_tokens": 12672,
+    "completion_tokens": 1449
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/*.py; cat >/tmp/readouts.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations_with_replacement as cwr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef ls(a,y): return np.linalg.lstsq(a,y,rcond=1e-10)[0]\\ndef aff(a):return np.c_[np.ones(len(a)),a]\\ndef cal(u,v,kind='sin'):\\n    keep=np.linalg.norm(v-u,axis=1)<2.5\\n    u,v=u[keep],v[keep]\\n    f=np.sin if kind.startswith('sin') else lambda t:t/(1+t*t)\\n    blocks=lambda a,i,w:aff(np.c_[a[:,i],a[:,(i+2)%4],f(w*a[:,i]),f(w*a[:,(i+2)%4])])\\n    def obj(w,ret=False):\\n        c=np.array([ls(blocks(u,i,w),v[:,i]) for i in range(4)])\\n        err=v-np.column_stack([blocks(u,i,w)@c[i] for i in range(4)])\\n        return (c,err) if ret else np.mean(err**2)\\n    o=minimize_scalar(obj,bounds=(1.7,3.1) if kind.startswith('sin') else (.4,1.1),method='bounded'); C,err=obj(o.x,True)\\n    return o.x,C,err\\n\\ndef invert(x,w,C,kind):\\n    f=np.sin if kind.startswith('sin') else lambda t:t/(1+t*t)\\n    df=np.cos if kind.startswith('sin') else lambda t:(1-t*t)/(1+t*t)**2\\n    z=x.copy(); j=np.arange(4); k=(j+2)%4\\n    for _ in range(25):\\n        e=C[:,0]+z*C[:,1]+z[:,k]*C[:,2]+f(w*z)*C[:,3]+f(w*z[:,k])*C[:,4]-x\\n        J=np.zeros((len(x),4,4)); J[:,j,j]=C[:,1]+w*df(w*z)*C[:,3];J[:,j,k]=C[:,2]+w*df(w*z[:,k])*C[:,4]\\n        dz=np.linalg.solve(J,e[...,None])[...,0]; z-=np.clip(dz,-.5,.5)\\n    return z\\n\\ndef pol(x,d):return np.column_stack([np.ones(len(x))]+[x[:,i].prod(axis=1) for k in range(1,d+1) for i in cwr(range(x.shape[1]),k)])\\n\\ndef design(z):\\n    b=s['panel_b']; g=aff(z)@ls(aff(b['u']),b['v']);\\n    v=z*np.roll(g,1,axis=1); q=g[:,:2]*g[:,2:];\\n    return {'z':aff(z),'q':pol(z,2),'c':pol(z,3),'arc':aff(np.c_[g,z,v,q]),'sin':aff(np.c_[z,np.sin(2.15*z)]),'q+s':np.c_[pol(z,2),np.sin(2.15*z)],'q+s+zsin':np.c_[pol(z,2),np.sin(2.15*z),(z[:,:,None]*np.sin(2.15*z[:,None,:])).reshape(len(z),-1)],'q+tanh':np.c_[pol(z,2),np.tanh(2.15*z)],'q+t+s':np.c_[pol(z,2),np.tanh(2.15*z),np.sin(2.15*z)]}\\nif __name__=='__main__':\\n t=s['train'];x=t['x']; Y=np.c_[t['y'],t['traj']];rng=np.random.default_rng(17); folds=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(72) for _ in range(12)]]\\n for kind in ('sin','rat'):\\n    w,C,E=cal(**s['panel_a'],kind=kind);print(kind,w,'resid rmse',np.sqrt(np.mean(E**2)),C)\\n    z=invert(x,w,C,kind);print('inverse extents',z.min(),z.max());\\n    for nm,A in design(z).items():\\n      err=np.array([np.mean(abs(A[b]@ls(A[a],Y[a])-Y[b]),axis=0) for a,b in folds]);print(nm,'first,mean,worst',np.c_[err[:,0],err[:,1:].mean(axis=1),err[:,-1]][[0]],err[:,0].mean(),err[:,1:].mean(),np.max(err,axis=0)[[0,-1]])\\n      if nm in ('z','q'): print('coeff y, final',ls(A,Y)[:,[0,-1]].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readouts.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw cubic readout -> H2 invert a sparse opposite-coordinate calibration and fit a rank-two trajectory; raw cubic final-horizon LOO MAE was 0.11239.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the lowest in-sample panel error to choose the inverse\",\"rejected_reason\":\"Similar panel errors can hide different inverse behavior; downstream blocked CV and readout sparsity are needed.\"}],\"rationale\":\"Profile the sinusoidal and rational calibration models, then compare their downstream prediction errors on the prescribed holdout and additional splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "00fc55104604fa44de277e7ff455a51ccea837152f9194173887364423725cae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36123.07,
+      "usage_known": true,
+      "prompt_tokens": 33321,
+      "cached_tokens": 12672,
+      "completion_tokens": 1449
+    }
+  ]
+}

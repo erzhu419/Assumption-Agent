@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8506effd26ba4dfaa49c3955e6ab4eff",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:56.743598+00:00",
+  "ended_at_utc": "2026-11-28T15:09:22.696005+00:00",
+  "request_sha256": "17658b1bccb70c46c3b09f6966c3a2733054322c9d7c3cd83965d60f3fa57594",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20609,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20832,
+    "cached_tokens": 12672,
+    "completion_tokens": 612
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel calibration robust alignment' 2>&1 | head -25; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\nfor key in ('panel_a','panel_b','panel_c'):\\n p=s[key];u=p['u'];A=np.c_[np.ones(len(u)),u]\\n for k,v in p.items():\\n  if k=='u':continue\\n  q=ls(A,v); R=v-A@q\\n  print(key,k,'range u,v',np.stack([u.min(0),u.max(0),v.min(0),v.max(0)]),'affine',q,'err rms',np.sqrt(np.mean(R**2,0)))\\n  for j in range(u.shape[1]):\\n   t=u[:,j];z=v[:,j];ix=np.argsort(t);X=np.column_stack([t**d for d in range(6)]);errs=[]\\n   for d in (1,2,3,4,5):\\n    D=X[:,:d+1]; qq=ls(D,z)\\n    for _ in range(12):\\n     keep=np.argsort(abs(D@qq-z))[:int(.875*len(t))];qq=ls(D[keep],z[keep]);\\n    errs.append(np.quantile(abs(D@qq-z),[.5,.85,1]))\\n   print(j,'trimmed residual q50/85/max by degree',np.array(errs).T)\\n   if key=='panel_a':print(np.c_[t[ix],z[ix]][::2].T)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust diagonal affine calibration -> H2 test for nonlinear or cross-coordinate terms in panel A; prediction CV not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare per-coordinate and joint calibration residuals before fitting the inverse, keeping prediction labels out of model identification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "49cc941e77682c210d4f532c6f2df5df50713189f02d22dbbf7e9cbd4ac1be18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26523.66,
+      "usage_known": true,
+      "prompt_tokens": 20832,
+      "cached_tokens": 12672,
+      "completion_tokens": 612
+    }
+  ]
+}

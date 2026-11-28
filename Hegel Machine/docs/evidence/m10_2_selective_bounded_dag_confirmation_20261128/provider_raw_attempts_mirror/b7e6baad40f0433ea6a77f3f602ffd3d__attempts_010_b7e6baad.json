@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b7e6baad40f0433ea6a77f3f602ffd3d",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:38.682275+00:00",
+  "ended_at_utc": "2026-11-28T15:44:05.921675+00:00",
+  "request_sha256": "49d1b8b34c5c75b84906f930d44404dfcccda1fbb432dadb98c2d7dce6677ee0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 72610,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40437,
+    "cached_tokens": 12672,
+    "completion_tokens": 1111
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x'])\\nm=runpy.run_path(root+'node_00.py'); run=m['run_node']; temporal=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']; sink=runpy.run_path(root+'_frozen_nodes/node_02.py')['run_node']\\np=s['panel_a']; inv=m['_calibration'](p); model=dict(zip(inv.__code__.co_freevars,inv.__closure__))['model'].cell_contents\\nx=np.vstack((tr['x'],s['test']['x'])); z=inv(x); closure=float(np.max(np.abs(model(z)-x))); panel_a=np.sort(np.linalg.norm(inv(p['v'])-p['u'],axis=1)); print('panel A inverse closure',closure,'trimmed max',panel_a[-4],'three outlier errors',panel_a[-3:]); assert closure<1e-7 and panel_a[-4]<.002\\np=s['panel_c']; pred=[]\\nfor j in range(len(p['u'])):\\n    keep=np.arange(len(p['u']))!=j; f=m['_branches']({k:v[keep] for k,v in p.items()})[1]; pred.append(f(p['u'][j:j+1])[0])\\nerr=np.asarray(pred)-p['v2']; print('panel C branch 2 leave-one-out RMS',np.mean(err**2)**.5,'worst row RMS',np.max(np.mean(err**2,axis=1)**.5)); assert np.max(np.abs(err))<.005\\nrng=np.random.default_rng(2026); slices=[(f'random_{i}',rng.permutation(n)[:20]) for i in range(12)]\\nzz=z[:n]; slices += [(f'axis_{j}_{tail}',np.argsort(zz[:,j])[sl]) for j in range(4) for tail,sl in [('low',slice(0,12)),('high',slice(-12,None))]]\\nmetrics=[]\\nfor label, val in slices:\\n    keep=np.ones(n,dtype=bool); keep[val]=False; trn={k:tr[k][keep] for k in ('x','y','traj')}; trn['summary']=np.array([trn['y'].mean(),trn['y'].std(),trn['traj'][:,-1].mean(),trn['traj'][:,-1].std()]); study={**s,'train':trn,'test':{'x':tr['x'][val]}}; inp={'__input__':study}; middle=run(inp); assert set(middle)=={'y_hat','unprojected'}; out=sink({'node_00':middle,'node_01':temporal(inp)}); assert out['y_hat'].shape==(len(val),) and out['state_pred'].shape==tr['traj'][val].shape and all(np.isfinite(v).all() for v in out.values()); metrics.append((label,np.mean(np.abs(out['y_hat']-tr['y'][val])),np.mean(np.abs(out['state_pred']-tr['traj'][val]))))\\nfor col in (1,2): print('worst labeled holdout',col,max(metrics,key=lambda r:r[col]))\\nassert max(max(r[1:]) for r in metrics)<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable second branch → H2 additive tanh and cyclic neighbor products after cubic calibration; public scalar/trajectory CV MAEs are 0.004877/0.004791 and held-out branch RMS is 0.000350.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Simplify the passing artifact before submission\",\n      \"rejected_reason\": \"The current artifact clears both gates by a wide margin; stress-test it unchanged rather than creating a new candidate.\"\n    }\n  ],\n  \"rationale\": \"The official split passes. Verify the same artifact on randomized and coordinate-tail holdouts, and test calibration closure and branch leave-one-out error separately to support both structural repairs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4328276fcefc191c97449e8a6d0ab6a158ed3b44133f59dfe30b44436fdeaaff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27237.69,
+      "usage_known": true,
+      "prompt_tokens": 40437,
+      "cached_tokens": 12672,
+      "completion_tokens": 1111
+    }
+  ]
+}

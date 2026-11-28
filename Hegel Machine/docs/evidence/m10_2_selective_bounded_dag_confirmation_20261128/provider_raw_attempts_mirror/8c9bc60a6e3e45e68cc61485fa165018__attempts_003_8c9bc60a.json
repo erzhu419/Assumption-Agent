@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c9bc60a6e3e45e68cc61485fa165018",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:29.922194+00:00",
+  "ended_at_utc": "2026-11-28T15:20:50.204698+00:00",
+  "request_sha256": "93b49cdf78d10a507585b40c6a9734902545abc5ffd630b7d85b435935e81d57",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 21146,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21377,
+    "cached_tokens": 12672,
+    "completion_tokens": 733
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=4,suppress=True)\\ndef f(x,d=1):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for k in range(1,d+1) for j in combinations_with_replacement(range(x.shape[1]),k)])\\nfor p in ['panel_a','panel_b','panel_c']:\\n a=s[p];u=a['u'];print(p,'u range',u.min(),u.max())\\n for k,v in a.items():\\n  if k=='u':continue\\n  for d in (1,2):\\n   q=f(u,d);b=np.linalg.lstsq(q,v,rcond=None)[0];print(k,d,'mae',np.abs(q@b-v).mean(),'med',np.median(abs(q@b-v)), 'coeff',b if d==1 else '')\\n  print('sv',np.linalg.svd(v-v.mean(0),compute_uv=False));print('pair C',np.corrcoef(np.c_[u,v].T)[:4,4:])\\nx,y,z=[s['train'][k] for k in ('x','y','traj')];t=s['eval_times'];print('x ranges',x.min(0),x.max(0),'y range',y.min(),y.max());print('trajectory sv',np.linalg.svd(z,compute_uv=False));print('z minmax',z.min(0),z.max(0));print('corr x,y,z\\\\n',np.corrcoef(np.c_[x,y,z].T)[:5,4:]);print('x,y,z rows\\\\n',np.c_[x,y,z][:24]);print('increments rows\\\\n',np.diff(z,axis=1)[:16])\\nfor d in (1,2,3):\\n q=f(x,d);b=np.linalg.lstsq(q[:52],np.c_[y,z][:52],rcond=None)[0];print('Poly',d,abs(q[52:]@b-np.c_[y,z][52:]).mean(0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic kernel fits -> H2 recover panel coordinates and a trajectory response law; head-specific CV MAEs are not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure panel-map residuals, trajectory rank and increments, and polynomial holdout errors before choosing the two heads.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8a3e397bb26990ad4dc99d76083f8373012a96925a8ec70844e8640b1b8ec329",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20732.06,
+      "usage_known": true,
+      "prompt_tokens": 21377,
+      "cached_tokens": 12672,
+      "completion_tokens": 733
+    }
+  ]
+}

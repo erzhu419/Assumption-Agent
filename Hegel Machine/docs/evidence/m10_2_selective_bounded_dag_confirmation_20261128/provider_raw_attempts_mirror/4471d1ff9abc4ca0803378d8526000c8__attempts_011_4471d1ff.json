@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4471d1ff9abc4ca0803378d8526000c8",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:45.962326+00:00",
+  "ended_at_utc": "2026-11-28T16:19:22.186841+00:00",
+  "request_sha256": "2430669d1d1b1d567885f5b878f859cd42fb1f3fd17d6bcbe9bb6ad0f4b8cd81",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58082,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34906,
+    "cached_tokens": 12672,
+    "completion_tokens": 1586
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/node_01.py /tmp/node14_baseline.py\\nsed -n '63,80p' /tmp/hegel_continual_archive/conf_m102_a02_batch_08_solver.py\\ncat > /tmp/scalar14.py <<'PY'\\ndef _scalar(q, b, c, y, k):\\n    n = len(y)\\n    one = np.ones(len(q))\\n    def designs():\\n        for a in (q, b):\\n            scores = list(a.T)\\n            scores += [a[:,i] + s*a[:,j] for i in range(4) for j in range(i+1,4) for s in (-1,1)]\\n            for h in scores:\\n                for strength in (k, 1.25):\\n                    g = 1/(1 + strength*h*h)\\n                    bg = b*g[:,None]\\n                    yield np.c_[one, bg, c]\\n                    yield np.c_[one, bg, c, bg*h[:,None]**3]\\n                    yield np.c_[one, bg, c, h, h*g, h*h*g]\\n                    yield np.c_[one, bg, c, b]\\n                    yield np.c_[one, bg, c, h**3*g]\\n                    yield np.c_[one, bg, c, h**3]\\n                    yield np.c_[one, bg, c, g]\\n                    yield np.c_[one, bg, c*g[:,None]]\\n        yield np.c_[one,b,c]\\n    results = []\\n    for a in designs():\\n        x = a[:n]\\n        u,s,vt = np.linalg.svd(x, full_matrices=False)\\n        keep = s > s[0]*1e-9\\n        u = u[:,keep]\\n        d = u.T@y\\n        e = abs(y-u@d)/np.maximum(1-np.sum(u*u,axis=1),.05)\\n        score = e.mean()\\n        results.append((score, a[n:] @ (vt[keep].T @ (d/s[keep]))))\\n    results.sort(key=lambda t:t[0])\\n    best = results[0][0]\\n    sel = [(s,p) for s,p in results[:8] if s < best + .006 or s == best]\\n    w = np.exp(-(np.array([s for s,p in sel])-best)/.0015)\\n    return np.average([p for s,p in sel], axis=0, weights=w)\\nPY\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/node14_baseline.py').read_text()\\nPath('/tmp/node14_challenger.py').write_text(p[:p.index('def _scalar(')]+Path('/tmp/scalar14.py').read_text()+'\\\\n\\\\n'+p[p.index('def run_node('):])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np,pathlib\\n\\ndef load(name,path):\\n s=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; f=load('up','/holdout_task/_frozen_nodes/node_00.py').run_node({'__input__':s});t=s['train'];\\nmods=[load(k,'/tmp/node14_'+k+'.py') for k in ('baseline','challenger')]; q=mods[0]._calibrate(s['panel_a'],t['x'],f);b=mods[0]._mapped(q,f);c=b*np.roll(q,-1,axis=1);y=t['y'];k=float(s['telemetry_vec'][2]); order=np.argsort(np.linalg.norm(t['x'],axis=1)); rng=np.random.default_rng(618)\\nsplits=[np.arange(52,72)]+[rng.permutation(len(q))[-20:] for _ in range(16)]+[order[-20:],order[:20]]\\nerrs=[]\\nfor v in splits:\\n i=np.setdiff1d(np.arange(len(q)),v);p=np.r_[i,v];errs.append([abs(m._scalar(q[p],b[p],c[p],y[i],k)-y[v]).mean() for m in mods]);\\na=np.asarray(errs);print('baseline/challenger official, random max, high norm, low norm:', a[0],a[1:17].max(0),a[-2],a[-1]);print('mean:',a.mean(0))\\nif a[0,1] <= .038 and a[:,1].max() < a[:,0].max()*.92 and a[1:17,1].max() < a[1:17,0].max() and a[:,1].mean() < a[:,0].mean():\\n print('Promoting training-only gate selection');pathlib.Path('/holdout_task/node_01.py').write_bytes(pathlib.Path('/tmp/node14_challenger.py').read_bytes())\\nelse: print('Retaining verified baseline')\\nPY\\nif ! OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; then cp /tmp/node14_baseline.py /holdout_task/node_01.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; fi\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed coordinate-2 gate -> H2 training-only selection among compact rational gates; baseline worst high-norm MAEs are 0.063561 scalar and 0.005497 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Keep the verified inverse and trajectory model. Promote a scalar challenger only if it improves worst-slice and mean errors while preserving official acceptance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9920f71bdcbabb401ca393a7448dc3dd816f4a87407cf984a7eb3cd7de890113",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36703.75,
+      "usage_known": true,
+      "prompt_tokens": 34906,
+      "cached_tokens": 12672,
+      "completion_tokens": 1586
+    }
+  ]
+}

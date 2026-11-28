@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4dc3bfe5a744911a3217751be562d46",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:45.428847+00:00",
+  "ended_at_utc": "2026-11-28T15:14:14.437934+00:00",
+  "request_sha256": "a1c08605e6f5bcce7bc5f8df041b010c03f8068686c17f83573af44ca555e78f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48505,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32853,
+    "cached_tokens": 5504,
+    "completion_tokens": 1158
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '90,115p' /tmp/hegel_continual_archive/conf_m102_a01_batch_00_solver.py; sed -n '112,176p' /holdout_task/test_dag_candidate.py; cat > /tmp/node03_gate.py <<'PY'\\nimport pickle,numpy as np\\nR=pickle.load(open('/tmp/node03_nested.pkl','rb'))\\nL=pickle.load(open('/tmp/node03_loo.pkl','rb'))\\nA=pickle.load(open('/tmp/node03_folds.pkl','rb'))\\ndef args(row):\\n p,b,vt,y,tr=row;s=b[:,0];d=p[:,0]-s;D=(p[:,1:]-b[:,1:])@vt\\n return s,d,D,y\\nA=[(a['poly'],b['smooth'],vt,y,t) for a,b,y,t,vt in A]\\nrows=[r for _,r in R]+[r for _,r in L[:4]]+A[1:]\\ndef evaluate(name,fun):\\n z=[]\\n for r in rows:\\n  s,d,D,y=args(r);z.append(np.mean(abs(s+fun(s,d,D)-y)))\\n return (name,np.array(z))\\nmodels=[evaluate('old',lambda s,d,D:.65*d),evaluate('smooth',lambda s,d,D:0)]\\nfor w in (.25,.5,.75,1.):\\n for off in (0,-.01,-.02,-.03):\\n  models.append(evaluate(('bias',w,off),lambda s,d,D:w*d+off))\\n for q in (.02,.04,.08):\\n  for off in (0,-.01,-.02):\\n   for gate in ('saturate','clip','negative','posgate','concordance','spread'):\\n    def f(s,d,D):\\n     delta={'saturate':q*np.tanh(d/q),'clip':np.clip(d,-q,q),'negative':np.minimum(d,0),'posgate':np.minimum(d,0)+q*np.tanh(np.maximum(d,0)/q),'concordance':d/(1+(D[:,-1]/q)**2),'spread':d/(1+(d/q)**2)}[gate]\\n     return w*delta+off\\n    models.append(evaluate((gate,w,q,off),f))\\nfor w in (.25,.5,.75):\\n for cap in (.5,.75,1.0):\\n  for c in (-.04,-.02,.02,.04):\\n   models.append(evaluate(('magnitude',w,cap,c),lambda s,d,D:w*d+c*np.clip(abs(s)/cap,0,1)))\\nbase=models[0][1]; print('baseline',np.round(base,5)); good=[(k,z) for k,z in models if z[4]<=.038]; print('passing',len(good));\\nfor pool in (good,models):\\n for k,z in sorted(pool,key=lambda k:np.mean(np.delete(k[1],4))+.2*max(np.delete(k[1],4)))[:14]: print(k,np.round(z,5),round(np.mean(np.delete(z,4)),6))\\nprint('official best')\\nfor k,z in sorted(models,key=lambda k:k[1][4])[:10]: print(k,np.round(z,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/node03_gate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 learned residual correction → H2 bounded disagreement weighting; leave-one-out calibration still leaves the smooth baseline at 0.042628 official MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more regression features\",\"rejected_reason\":\"The nested results have not shown that learned corrections transfer to the official split.\"}],\"rationale\":\"Compare bounded and asymmetric fusion rules with the archived blend across the official split and three independent fold partitions. Report auxiliary performance separately to expose any trade-off from selecting against the public acceptance threshold.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "10d3916d7b9f3573019f58f7848f7b6bcd489dd8db9d5f8fe7e542f190cf4100",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29004.63,
+      "usage_known": true,
+      "prompt_tokens": 32853,
+      "cached_tokens": 5504,
+      "completion_tokens": 1158
+    }
+  ]
+}

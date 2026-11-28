@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "07a7a7e67b19423db80a7785d3a915a7",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:58.572706+00:00",
+  "ended_at_utc": "2026-11-28T14:59:21.353343+00:00",
+  "request_sha256": "b31cd3eb0e59fac99e53f8672c27003fbdfd43d3d1c2a3f1cf00a2fbb2aaa479",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21598,
+    "cached_tokens": 14720,
+    "completion_tokens": 879
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as n\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True,linewidth=140)\\ndef mat(x,d):\\n return n.column_stack([n.ones(len(x))]+[n.prod(x[:,j],axis=1) for k in range(1,d+1) for j in combinations_with_replacement(range(4),k)])\\ndef fit(x,y):return n.linalg.lstsq(x,y,rcond=None)[0]\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec'])\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; x=p['u']; print(k)\\n for j,y in p.items():\\n  if j=='u':continue\\n  print(j,'range',y.min(0),y.max(0)); A=mat(x,1); b=fit(A,y); print('affine',b); print('affine residual norms',n.sort(n.linalg.norm(A@b-y,axis=1)))\\n  for transf in (lambda y:y,n.arctanh,n.arcsinh,n.arcsin):\\n   if transf in (n.arctanh,n.arcsin) and n.max(n.abs(y))>=1:continue\\n   t=transf(y); print(getattr(transf,'__name__'),*[n.round(n.sqrt(n.mean((mat(x,d)@fit(mat(x,d),t)-t)**2,axis=0)),5) for d in (1,2)])\\np=s['train']; x=p['x']; Y=n.c_[p['y'],p['traj']]; print('affine targets',fit(mat(x,1),Y));print('sv vectors',n.linalg.svd(p['traj'],full_matrices=False)[2][:2]);\\na=s['panel_a']; A=mat(a['u'],1); keep=n.ones(len(A),bool)\\nfor _ in range(8):\\n b=fit(A[keep],a['v'][keep]); r=n.linalg.norm(A@b-a['v'],axis=1); keep=r<max(.001,3*n.median(r))\\nprint('robust A',b,'sv',n.linalg.svd(b[1:],compute_uv=False),'kept',keep.sum()); print('x raw/inverse ranges',x.min(0),x.max(0)); z=n.linalg.solve(b[1:].T,(x-b[0]).T).T;print(z.min(0),z.max(0));print('aligned linear targets',fit(mat(z,1),Y)[:,[0,1,-1]])\\nfor d in (1,2,3,4):\\n A=mat(z,d); yp=A[52:]@fit(A[:52],Y[:52]); print('degree',d,n.mean(abs(yp-Y[52:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine mixing -> H2 recover the current calibration and test nonlinear operator signatures; transfer MAEs remain 0.245615 for y and 0.233993 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The trajectory spectrum supports two shared temporal modes. Compact panel diagnostics and polynomial holdout baselines will help separate nonlinear input operators from the time evolution.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "367e069fbe661826b8b85f81371eb99d0e84f6ef3ab8d8e7355c2606d8049318",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23284.08,
+      "usage_known": true,
+      "prompt_tokens": 21598,
+      "cached_tokens": 14720,
+      "completion_tokens": 879
+    }
+  ]
+}

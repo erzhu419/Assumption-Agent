@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2f1f32b152540029e3678c70960c47c",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__init_decomp_conf_m102_a02_batch_08",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:25.756575+00:00",
+  "ended_at_utc": "2026-11-28T15:45:07.327611+00:00",
+  "request_sha256": "382869d6f9246901b8b639fd8c43e90d396460ac65e5d1dd52a9fdbc4776aafc",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 5953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14579,
+    "cached_tokens": 0,
+    "completion_tokens": 1782
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The source has three distinct stages: cyclic calibration and inversion, panel mapping of the calibrated coordinates, and supervised readout. The calibrated coordinates are computed once and shared by the mapper and the sink. Keeping both readouts in the sink lets them reuse the same design matrix. The split preserves the source's numerical operations; the role-blind statistics do not identify which stage caused the target-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"], [\"node_00\", \"node_02\"], [\"node_01\", \"node_02\"], [\"__input__\", \"node_02\"]],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = (np.asarray(panel[k], float) for k in ('u', 'v'))\\n\\n    def block(a, i):\\n        p, q = a[:, i], a[:, (i + 1) % 4]\\n        return np.column_stack((np.ones(len(a)), p, q, p*q, p**3))\\n\\n    blocks = [block(u, i) for i in range(4)]\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        coef = [_fit(a[mask], v[mask, i]) for i, a in enumerate(blocks)]\\n        err = np.linalg.norm(v - np.column_stack([a @ c for a, c in zip(blocks, coef)]), axis=1)\\n        med = np.median(err[mask])\\n        mad = np.median(abs(err[mask] - med))\\n        updated = err <= max(0.002, med + 5 * 1.4826 * mad)\\n        if updated.sum() < 12 or np.array_equal(updated, mask):\\n            break\\n        mask = updated\\n    c = np.stack([_fit(a[mask], v[mask, i]) for i, a in enumerate(blocks)])\\n\\n    def forward(a):\\n        b = np.roll(a, -1)\\n        return c[:, 0] + c[:, 1]*a + c[:, 2]*b + c[:, 3]*a*b + c[:, 4]*a**3\\n\\n    def jac(a):\\n        i = np.arange(4)\\n        j = np.diag(c[:, 1] + c[:, 3]*np.roll(a, -1) + 3*c[:, 4]*a*a)\\n        j[i, (i+1)%4] = c[:, 2] + c[:, 3]*a\\n        return j\\n\\n    return np.asarray([least_squares(lambda a: forward(a) - b, b, jac=jac, max_nfev=60).x for b in x]).reshape(-1, 4)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.asarray(study['train']['x'], float)\\n    test = np.asarray(study['test']['x'], float)\\n    z = _calibrate(study['panel_a'], np.concatenate((x, test)))\\n    return {'z': z, 'train_idx': np.arange(len(x)), 'test_idx': np.arange(len(x), len(z))}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.special import erf\\n\\n\\ndef _aff(a):\\n    return np.column_stack((np.ones(len(a)), a))\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    panel = inputs['__input__']['panel_b']\\n    z = inputs['node_00']['z']\\n    u, v = (np.asarray(panel[k], float) for k in ('u', 'v'))\\n\\n    def design(a, w):\\n        return np.column_stack((_aff(a), erf(w*a)))\\n\\n    def loss(w):\\n        a = design(u, w)\\n        return np.mean((a @ _fit(a, v) - v)**2)\\n\\n    w = minimize_scalar(loss, bounds=(0.4, 3.0), method='bounded').x\\n    return {'g': design(z, w) @ _fit(design(u, w), v)}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _aff(a):\\n    return np.column_stack((np.ones(len(a)), a))\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    calibrated = inputs['node_00']\\n    z = calibrated['z']\\n    train_idx, test_idx = calibrated['train_idx'], calibrated['test_idx']\\n    g = inputs['node_01']['g']\\n    y, traj = np.asarray(train['y']), np.asarray(train['traj'])\\n\\n    v = z * np.roll(g, 1, axis=1)\\n    a = _aff(np.column_stack((g, z, v)))\\n    q = g[:, :2] * g[:, 2:]\\n    b = np.column_stack((a, q))\\n    extras = np.column_stack((z*g, z*np.roll(v, 2, axis=1), g*np.roll(g, 1, axis=1)))\\n    core = _fit(b[train_idx], np.column_stack((y, extras[train_idx])))\\n    r = y - b[train_idx] @ core[:, 0]\\n    e = extras - b @ core[:, 1:]\\n    scl = np.maximum(np.linalg.norm(e[train_idx], axis=0), 1e-8)\\n    e = e / scl\\n    w = np.linalg.solve(e[train_idx].T @ e[train_idx] + 2.0*np.eye(e.shape[1]), e[train_idx].T @ r)\\n    yp = b[test_idx] @ core[:, 0] + e[test_idx] @ w\\n\\n    _, _, vt = np.linalg.svd(traj, full_matrices=False)\\n    modes = vt[:3]\\n    tp = (a[test_idx] @ _fit(a[train_idx], traj @ modes.T)) @ modes\\n    diagnostic = np.array([yp.mean(), yp.std(), tp[:, -1].mean(), tp[:, -1].std()])\\n    return {'y_hat': yp, 'state_pred': tp, 'diagnostics_vec': diagnostic}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "26e4fd67e02d570a6f660bcfcff566a28a8c778015e5365bbb7be38e82222ca8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41569.48,
+      "usage_known": true,
+      "prompt_tokens": 14579,
+      "cached_tokens": 0,
+      "completion_tokens": 1782
+    }
+  ]
+}

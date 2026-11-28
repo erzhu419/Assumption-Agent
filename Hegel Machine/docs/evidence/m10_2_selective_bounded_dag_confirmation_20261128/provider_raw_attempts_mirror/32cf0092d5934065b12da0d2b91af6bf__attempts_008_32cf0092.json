@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32cf0092d5934065b12da0d2b91af6bf",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:03:40.254927+00:00",
+  "ended_at_utc": "2026-11-28T16:04:03.032298+00:00",
+  "request_sha256": "e851911813a124bb2e09fac4d27e60ec297f1e76ff97cea7ccb25c5b7c636048",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54955,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35099,
+    "cached_tokens": 12672,
+    "completion_tokens": 924
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nsource = Path('test_dag_candidate.py').read_text()\\nns = {'__name__': '__main__', '__file__': '/holdout_task/test_dag_candidate.py'}\\nexec(compile(source.split('\\\\nst = pickle.load', 1)[0], ns['__file__'], 'exec'), ns)\\nstudy = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\ntrain = study['train']\\nn = len(train['x'])\\nrows = np.arange(n)\\nrng = np.random.default_rng(2026)\\nfolds = [(f'fold_{i}', idx) for i, idx in enumerate(np.array_split(rng.permutation(n), 6))]\\nfolds.append(('largest_input_norm', np.argsort(np.linalg.norm(train['x'], axis=1))[-12:]))\\nmetrics = []\\nfor name, va in folds:\\n    tr = np.setdiff1d(rows, va)\\n    s = copy.deepcopy(study)\\n    s['train'] = {k: train[k][tr] for k in ('x', 'y', 'traj')}\\n    y, traj = s['train']['y'], s['train']['traj']\\n    s['train']['summary'] = np.array([y.mean(), y.std(), traj[:, -1].mean(), traj[:, -1].std()])\\n    s['test'] = {'x': train['x'][va]}\\n    pred, counts = ns['run_dag'](s)\\n    assert all(v == 1 for v in counts.values())\\n    ey = np.abs(pred['y_hat'] - train['y'][va])\\n    et = np.abs(pred['state_pred'] - train['traj'][va])\\n    assert ey.shape == (len(va),) and et.shape == train['traj'][va].shape\\n    assert np.isfinite(ey).all() and np.isfinite(et).all()\\n    metrics.append((ey.mean(), et.mean(), et.mean(axis=0).max()))\\n    print(f'{name}: y_mae={metrics[-1][0]:.6f} traj_mae={metrics[-1][1]:.6f} worst_horizon_mae={metrics[-1][2]:.6f}')\\nprint('Worst slice: y, trajectory, horizon MAE', np.max(metrics, axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived separable mapping) -> H2 (paired nonlinear calibration with distinct panel-C response bases); public holdout MAE is 0.006853 for y and 0.008398 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the model against the official public split\",\n      \"rejected_reason\": \"Both official errors are already well within tolerance; additional held-out slices better test whether that margin generalizes.\"\n    }\n  ],\n  \"rationale\": \"The official harness accepted the exact artifact. Stress-test it unchanged across six additional folds and a high-norm extrapolation slice, reporting both targets and the worst trajectory horizon separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0eff19f9eabc89e803e9b6ab3f48c1e0cf7fa6dd14109ab94f14dd0648e6f169",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23433.82,
+      "usage_known": true,
+      "prompt_tokens": 35099,
+      "cached_tokens": 12672,
+      "completion_tokens": 924
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e89eb791a1b4fecba02b1a55ebcb881",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:59:50.447625+00:00",
+  "ended_at_utc": "2026-11-28T15:00:26.798708+00:00",
+  "request_sha256": "723ac3b9603a6e70f930676ff5e4ea0aac2491034ad413e72a7d98c6f435b88a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39233,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29246,
+    "cached_tokens": 12672,
+    "completion_tokens": 1598
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/spatial.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef ls(f,v):return np.linalg.lstsq(f,v,rcond=None)[0]\\ndef one(x):return np.ones((len(x),1))\\ndef poly(x,d):return np.column_stack([one(x)]+[np.prod(x[:,i],axis=1) for n in range(1,d+1) for i in cr(range(x.shape[1]),n)])\\na=s['panel_a']; u=a['u'];v=a['v']; R=np.empty((2,4))\\nfor j in range(4):\\n z=np.array([np.median((v[1:,j]-v[:-1,j])/(u[1:,j]-u[:-1,j])),0]); z[1]=np.median(v[:,j]-u[:,j]*z[0]); keep=np.argsort(abs(v[:,j]-np.c_[u[:,j],one(u)]@z))[:40];R[:,j]=ls(np.c_[u[:,j],one(u)][keep],v[keep,j])\\ndef cal(x):return (x-R[1])/R[0]\\ntr=s['train']; x=cal(tr['x']); y=tr['y']; t=tr['traj']; b=s['panel_b']; c=s['panel_c']\\ndef fitfun(u,v,fun,z,bounds=(-np.inf,np.inf)):\\n def resid(a):\\n  f=fun(u,a);return (f@ls(f,v)-v).ravel()\\n o=least_squares(resid,z,bounds=bounds,max_nfev=250);f=fun(u,o.x); W=ls(f,v)\\n return np.linalg.norm(o.fun),o.x,lambda x:fun(x,o.x)@W\\n\\ndef cv(f):\\n l=[]\\n for p in [np.arange(len(x)),*[np.random.default_rng(j).permutation(len(x)) for j in range(8)]]:\\n  a,b=p[:52],p[52:];l.append([np.mean(abs(y[b]-f[b]@ls(f[a],y[a]))),np.mean(abs(t[b]-f[b]@ls(f[a],t[a])))])\\n return np.round(np.r_[l[0],np.mean(l,axis=0),np.max(l,axis=0)],5)\\nfs={}\\nfor name,p,v in [('B',b,b['v']),('C1',c,c['v1']),('C2',c,c['v2'])]:\\n funcs=[('poly2',lambda u,a:poly(u,2),[0]),('pures3',lambda u,a:np.c_[one(u),u,u*u,u**3],[0]),('pures4',lambda u,a:np.c_[one(u),u,u*u,u**3,u**4],[0]),('sin_cos',lambda u,a:np.c_[one(u),np.sin(a[0]*u),np.cos(a[0]*u)],[2.]),('sin_cos_x',lambda u,a:np.c_[one(u),u,np.sin(a[0]*u),np.cos(a[0]*u)],[2.]),('sincos_sep',lambda u,a:np.c_[one(u),np.sin(u*a),np.cos(u*a)],[2.]*4),('odd_sat',lambda u,a:np.c_[one(u),u/(1+abs(a[0]*u)**a[1])**a[2]],[1.3,1.,1.]),('odd_sat_x',lambda u,a:np.c_[one(u),u,u/(1+abs(a[0]*u)**a[1])**a[2]],[1.3,1.,1.]),('shift_rat',lambda u,a:np.c_[one(u),(u+a[1])/(1+(a[0]*(u+a[1]))**2)],[.4,-1.125]),('shift_rat_x',lambda u,a:np.c_[one(u),u,(u+a[1])/(1+(a[0]*(u+a[1]))**2)],[.4,-1.125]),('rat_x_sq',lambda u,a:np.c_[one(u),u,u*u/(1+(a[0]*u)**2)],[.5])]\\n for tag,fun,z in funcs:\\n  err,a,op=fitfun(p['u'],v,fun,z);f=op(x);fs[name,tag]=f\\n  print(name,tag,round(err,6),np.round(a,4),'aff',cv(np.c_[one(x),f]),'raw+op',cv(np.c_[one(x),x,f]))\\nprint('pure calib',cv(np.c_[one(x),x,x*x,x**3]));print('pure raw',cv(np.c_[one(x),tr['x'],tr['x']**2,tr['x']**3]))\\nfor tags in [('sin_cos','odd_sat','shift_rat'),('sin_cos_x','odd_sat','shift_rat'),('pures3','odd_sat','shift_rat'),('pures4','odd_sat','shift_rat_x')]:\\n f=[fs[j,k] for j,k in zip(('B','C1','C2'),tags)];print('combination',tags,cv(np.c_[one(x),*f]),cv(np.c_[one(x),x,*f])); print('b+c2',cv(np.c_[one(x),f[0],f[2]]),'c1+c2',cv(np.c_[one(x),f[1],f[2]]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/spatial.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted cubic regression -> H2 shared univariate auxiliary operators; current 52/20 y/trajectory MAEs are 0.04854/0.04609.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit compact candidate operators on the independent panels, then compare their standalone and combined predictive power across the required split and eight alternate splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0d7ca0248690c234f28976c7c67ec0eac3718be965d9762f6e3d3a5e9475ae2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36349.93,
+      "usage_known": true,
+      "prompt_tokens": 29246,
+      "cached_tokens": 12672,
+      "completion_tokens": 1598
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79cc5f1b5d2f4ccf88e24cbcfec38675",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:10.761132+00:00",
+  "ended_at_utc": "2026-11-28T15:02:48.132654+00:00",
+  "request_sha256": "643c682c24c726e411e4b9c2856e7aca6d863b72001489c88fa78ccad33425b2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48809,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31609,
+    "cached_tokens": 12672,
+    "completion_tokens": 1591
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/causal_audit.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsp=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=(tr[k] for k in ('x','y','traj')); t=s['eval_times']; A,B=(s[k] for k in ('panel_a','panel_b')); fit=m._fit; aug=m._affine\\nu,v=A['u'],A['v']; c=m._calibration(A); w=np.roll(u,-1,axis=1); residual=np.linalg.norm(c[0]+c[1]*u+c[2]*w+c[3]*u*w+c[4]*u**3-v,axis=1); good=residual<6*np.median(residual); print('Calibration inliers/outliers',good.sum(),(~good).sum())\\nfor name,F in [('affine',lambda r:aug(r)),('quadratic',lambda r:np.c_[aug(r),*[r[:,i]*r[:,j] for i in range(4) for j in range(i,4)]])]:\\n e=[]\\n for k in np.flatnonzero(good):\\n  mask=good.copy(); mask[k]=False; e.append(F(u[k:k+1])@fit(F(u[mask]),v[mask])-v[k]);\\n print('Calibration LOO',name,'MAE',np.mean(np.abs(e)))\\te=[]\\nfor k in np.flatnonzero(good):\\n mask=np.arange(len(u))!=k; cc=m._calibration({'u':u[mask],'v':v[mask]}); r=u[k]; n=np.roll(r,-1); e.append(cc[0]+cc[1]*r+cc[2]*n+cc[3]*r*n+cc[4]*r**3-v[k]);\\nprint('Calibration LOO cyclic cubic MAE/max',np.mean(np.abs(e)),np.max(np.abs(e)))\\nq=m._inverse(x,c); F=aug(B['u']); b=fit(F,B['v']); z=aug(q)@b; print('Panel B affine residual MAE',np.mean(abs(F@b-B['v'])))\\np=z[:,0]*z[:,2]; r=z[:,1]*z[:,3]; design={'sum':np.c_[z,p+r],'difference':np.c_[z,p-r],'separate':np.c_[z,p,r],'all_quadratic':np.c_[aug(z),*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]]}; errors={k:[] for k in (*design,'rational')}; coeff=[]\\nfor order in [np.arange(len(x))]+[np.random.default_rng(j).permutation(len(x)) for j in range(32)]:\\n a,j=order[:52],order[52:];\\n for name,D in design.items(): errors[name].append(np.mean(abs(D[j]@fit(D[a],y[a])-y[j])))\\n Ds=design['sum']; terms=[z[:,i]+sg*z[:,j] for i in range(4) for j in range(i+1,4) for sg in (-1,1)]+[p+r,p-r]\\n best=None\\n for term in terms:\\n  h=term**2/max(np.mean(term[a]**2),1e-12)\\n  def err(alpha):\\n   d=Ds[a]/(1+alpha*h[a,None]); rr=d@fit(d,y[a])-y[a]; return rr@rr\\n  o=minimize_scalar(err,bounds=(0,1),method='bounded'); rec=(o.fun,o.x,h)\\n  if best is None or rec[0]<best[0]: best=rec\\n _,alpha,h=best; d=Ds/(1+alpha*h[:,None]); errors['rational'].append(np.mean(abs(d[j]@fit(d[a],y[a])-y[j]))); coeff.append(alpha)\\nfor k,e in errors.items(): print('Readout',k,'prescribed/mean/worst',e[0],np.mean(e),max(e))\\nprint('Rational fitted alpha range',min(coeff),max(coeff)); print('Study fields',sorted(s),'Train fields',sorted(tr),'telemetry shape',np.shape(s['telemetry_vec']))\\n# Remove one independent calibration or operator reference row at a time.\\na,j=np.arange(52),np.arange(52,72); fold=dict(s,train={k:tr[k][a] for k in ('x','y','traj')},test={'x':x[j]}); err=[]\\nfor name in ('panel_a','panel_b'):\\n for k in range(len(s[name]['u'])):\\n  f=dict(fold); f[name]={field:np.delete(arr,k,axis=0) for field,arr in s[name].items()}; o=m.solve_batch(f); err.append([np.mean(abs(o['y_hat']-y[j])),np.mean(abs(o['state_pred']-T[j]))]);\\nprint('Reference-row jackknife worst y/traj MAE',np.max(err,axis=0)); assert np.max(err)<.038\\nPY\\nsed -i 's/;[[:blank:]]*e=\\\\[\\\\]$/;\\\\ne=[]/' /tmp/causal_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/causal_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration → H2 cyclic cubic calibration, affine Panel B, symmetric bilinear readout, and two exponential state modes; the verified worst scalar, trajectory, and timestamp MAEs are 0.00456, 0.00448, and 0.00579.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, drift-operator, or classification batch-centering tests\",\n      \"rejected_reason\": \"The public contract provides continuous outputs and no relay labels, spatial drift measurements, or sample-level batch identifiers.\"\n    }\n  ],\n  \"rationale\": \"Test the calibration correction directly on held-out panel measurements, challenge the readout with rational and signed-pair alternatives selected inside each training split, and measure sensitivity to removing any single reference row.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "64152281935a04a99841721b918dd50c2641d24691d486885f58e56c26b9b938",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37370.37,
+      "usage_known": true,
+      "prompt_tokens": 31609,
+      "cached_tokens": 12672,
+      "completion_tokens": 1591
+    }
+  ]
+}

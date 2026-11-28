@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2f5110ddaa84650bc576fde0aaa2d8c",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_09__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:46.425848+00:00",
+  "ended_at_utc": "2026-11-28T15:36:22.817076+00:00",
+  "request_sha256": "b87bc0077620298bd6acfc7fd6c821797a99aae4d6a512c83c5a41ec96110e2b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36367,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27259,
+    "cached_tokens": 12672,
+    "completion_tokens": 1570
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/operators09.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef fit(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\\na,b,c=[s['panel_'+k] for k in 'abc']; U=aff(a['u']); V=a['v']; m=np.arange(len(U))\\nfor _ in range(8):\\n A=fit(U[m],V[m]); r=np.linalg.norm(U@A-V,axis=1); m=np.argsort(r)[:38]\\nprint('A',A,'resids',np.sort(r)); A=fit(U[r<.05],V[r<.05]); print('A refined',A)\\nB=fit(aff(b['u']),b['v']); u=c['u'];\\ndef rm(g,v):\\n rr=v-g@fit(g,v); return np.sqrt(np.mean(rr**2))\\nF={'atan':lambda x,k:np.arctan(k*x), 'tanh':lambda x,k:np.tanh(k*x),'soft':lambda x,k:x/np.sqrt(1+k*x*x),'rat':lambda x,k:x/(1+k*x*x),'sin':lambda x,k:np.sin(k*x),'asinh':lambda x,k:np.arcsinh(k*x),'sat2':lambda x,k:x*x/(1+k*x*x),'cos':lambda x,k:np.cos(k*x),'log':lambda x,k:np.log1p(k*x*x),'exp2':lambda x,k:np.exp(-k*x*x)}\\nC=[]\\nfor label in ('v1','v2'):\\n v=c[label]; rs=[]\\n for name,f in F.items():\\n  for extra in (False,True):\\n   features=lambda q,k: np.c_[aff(q),f(q,k)] if extra else aff(f(q,k)); opt=minimize_scalar(lambda k:rm(features(u,k),v),bounds=(.005,4),method='bounded'); rs.append((opt.fun,name,extra,opt.x))\\n print(label,'best direct',sorted(rs)[:10]);\\n for name,f in {'atan':lambda x,k:np.tan(k*x),'tanh':lambda x,k:np.arctanh(k*x),'soft':lambda x,k:x/np.sqrt(1-k*x*x),'sin':lambda x,k:np.arcsin(k*x)}.items():\\n  opt=minimize_scalar(lambda k:rm(aff(u),f(v,k))/k,bounds=(.001,.999/np.max(abs(v))),method='bounded'); print('inverse',name,opt.fun,opt.x)\\n if label=='v1': C.append(lambda q:aff(np.arctan(2.15*q))@fit(aff(np.arctan(2.15*u)),c['v1']))\\n else:\\n  _,name,_,k=next(rr for rr in sorted(rs) if rr[2]); print('best v2 coefficients',fit(np.c_[aff(u),F[name](u,k)],v)); C.append(lambda q:np.c_[aff(q),F[name](q,k)]@fit(np.c_[aff(u),F[name](u,k)],c['v2']))\\ndef coordinates(x):\\n ca=(x-A[0])@np.linalg.inv(A[1:]); aa=aff(x)@A\\n return {'x':x,'ca':ca,'aa':aa, 'b':aff(x)@B,'ba':aff(ca)@B,'ab':(aff(x)@B-A[0])@np.linalg.inv(A[1:]),'bAA':aff(aa)@B}\\ndef powers(x,d): return np.column_stack([np.prod(x[:,j],axis=1) for j in cr(range(x.shape[1]),d)])\\nif __name__=='__main__':\\n x=s['train']['x']; yz=np.c_[s['train']['y'],s['train']['traj']]; n=52; fs=[]\\n base=coordinates(x)\\n for j,cmap in enumerate(C):\\n  for key,q in list(coordinates(x).items()):base[f'c{1+j}:{key}']=cmap(q)\\n for key,q in base.items():\\n  for nm,w in [('id',q)]+[(f'{nm}:{k}',f(q,k)) for nm,f in F.items() if nm in ('atan','tanh','soft','asinh') for k in (.22,.55,1.25,2.15)]:\\n   for d in (1,2,3):\\n    design=np.column_stack([np.ones(len(w))]+[powers(w,j) for j in range(1,d+1)]); h=design[:n];\\n    for lam in (1e-7,.001,.02):\\n     pred=design@np.linalg.solve(h.T@h+lam*np.eye(h.shape[1]),h.T@yz[:n]); r=abs(yz-pred); fs.append((r[n:,0].mean(),r[n:,1:].mean(),r[:n,0].mean(),r[:n,1:].mean(),key,nm,d,lam))\\n for axis in (0,1):\\n  print('TOP',axis); print(*sorted(fs,key=lambda row:row[axis])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators09.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace diagonal calibration and affine auxiliary assumptions with full affine calibration and measured nonlinear panel maps; archived 52/20 MAEs are 0.075308 for readout and 0.103185 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a general cubic interpolator for panel C\",\n      \"rejected_reason\": \"The panel has only 24 rows, and the less constrained polynomial fits already showed large leave-one-out errors.\"\n    }\n  ],\n  \"rationale\": \"Fit the calibration using the full matrix, profile nonlinear panel maps against their direct measurements, and screen whether composed coordinates improve each held-out output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ce37c9fa94d887580100b6a017517f4502ad5a6d9c8609c4f8a0e9ab14e1bb0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36930.61,
+      "usage_known": true,
+      "prompt_tokens": 27259,
+      "cached_tokens": 12672,
+      "completion_tokens": 1570
+    }
+  ]
+}

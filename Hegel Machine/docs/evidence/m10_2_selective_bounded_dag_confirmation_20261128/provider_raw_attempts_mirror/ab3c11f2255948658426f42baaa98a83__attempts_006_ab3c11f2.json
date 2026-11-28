@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab3c11f2255948658426f42baaa98a83",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:42.725835+00:00",
+  "ended_at_utc": "2026-11-28T15:50:13.494623+00:00",
+  "request_sha256": "222755d55cb3a4994dd2535ce71f5002450033a4b44b829db86308ec294594e9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44336,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30418,
+    "cached_tokens": 12672,
+    "completion_tokens": 1195
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine10.py <<'PY'\\nexec(open('/tmp/cyclic10.py').read().split('for name,Q')[0])\\nQ=a8['_invert'](s['train']['x'],co); G=b(Q); print('times',s['eval_times'],'calibration coeff',[(k,term,np.round(row,5)) for k,(term,row) in enumerate(zip(a8['_TERMS'],co)) if np.any(row)]); print('calibration worst rows',np.sort(np.max(abs(a8['_design'](pa['u'],len(co))@co-pa['v']),axis=1))[-18:]); print('tests deviation range',np.quantile(Q-q,[0,.01,.5,.99,1])); print('panelB MAE',np.mean(abs(b(s['panel_b']['u'])-s['panel_b']['v']),axis=0));\\nT=np.c_[t,y]; cyclic=lambda X,B,j:B*np.roll(X,-j,axis=1); c=cyclic(Q,G,1); a=cyclic(u,bu,1)\\nfor M in [f(u,bu),f(u,bu,pairs(u)),f(u,bu,a),f(u,bu,pairs(u),a),f(u,bu,a,pairs(bu))]:\\n P=ls(M,np.c_[v1,v2]); print('CMAE',M.shape,np.mean(abs(M@P-np.c_[v1,v2]),axis=0).round(5)); print('coeff',np.round(P,2) if M.shape[1]==19 else '')\\nA=f(u,bu,pairs(u)); V=f(Q,G,pairs(Q))@ls(A,np.c_[v1,v2]);\\nZ={'cyc':c,'C':V,'G':G,'Q':Q,'Q2':pairs(Q),'gdiff':G-Q,'G2':pairs(G),'qG':(Q[:,:,None]*G[:,None,:]).reshape(len(Q),-1),'abs':abs(Q),'odd':Q*abs(Q),'inv':1/(1+1.25*Q**2),'tanh':np.tanh(1.25*Q),'gatedG':G/(1+1.25*Q**2),'Q3':Q**3,'GC':G*np.roll(V[:,:4],-1,axis=1)}\\nsplits=[(np.arange(n),np.arange(n,len(t)))]+[(np.setdiff1d(np.arange(len(t)),i),i) for i in np.array_split(np.random.default_rng(12).permutation(len(t)),5)]\\ndef ev(x, alpha=0):\\n out=[]\\n for tr,te in splits:\\n  F=x[tr]; Y=T[tr]; m=F.mean(0); h=np.maximum(F.std(0),.02); H=(F-m)/h; p=ls(np.r_[H,np.eye(H.shape[1])*np.sqrt(alpha)],np.r_[Y-Y.mean(0),np.zeros((H.shape[1],Y.shape[1]))]); e=abs((x[te]-m)/h@p+Y.mean(0)-T[te]); out.append([e[:,:-1].mean(),e[:,-1].mean()]);\\n return np.array(out)\\nfor base in [('G','cyc'),('G','cyc','C'),('G',)]:\\n results=[]\\n for size in range(3):\\n  for ext in itertools.combinations([k for k in Z if k not in base],size):\\n   X=np.column_stack([Z[k] for k in (*base,*ext)]);\\n   for alpha in [0,.025,.25,1]:\\n    e=ev(X,alpha); results.append((e[1:].mean(0)[0],e[:,0].max(),e[0,0],e[0,1],e[:,1].max(),ext,alpha))\\n print('base',base,'trajectory rank'); print(*sorted(results)[:12],sep='\\\\n'); print('scalar rank',*sorted(results,key=lambda r:(r[4],r[3]))[:7],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine10.py | grep -E 'times|coeff|worst|deviation|MAE|base|rank|^\\\\(' | tail -85\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic panel-B readout → H2 recalibrated cyclic panel-B plus compact cross-stage terms; public trajectory MAE is 0.03978 and scalar MAE is 0.03581.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived sink unchanged\",\"rejected_reason\":\"It misses both public tolerances on this batch.\"}],\"rationale\":\"Separate reference-panel calibration error from readout misspecification and compare compact extensions across multiple labeled splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9da550635686e1284999d01d8203f42ebae73821cf2861cb59529a8599ca8cf1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31341.79,
+      "usage_known": true,
+      "prompt_tokens": 30418,
+      "cached_tokens": 12672,
+      "completion_tokens": 1195
+    }
+  ]
+}

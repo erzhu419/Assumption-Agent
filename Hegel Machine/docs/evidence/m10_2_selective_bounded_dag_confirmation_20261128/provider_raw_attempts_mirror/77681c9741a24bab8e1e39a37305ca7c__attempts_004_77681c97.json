@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77681c9741a24bab8e1e39a37305ca7c",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:05.140165+00:00",
+  "ended_at_utc": "2026-11-28T15:37:31.847108+00:00",
+  "request_sha256": "93f01328936aa53af39f2b1903148f9dd0c69a280ae3dc6ddd4e2655b47610a6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29102,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24225,
+    "cached_tokens": 12672,
+    "completion_tokens": 1025
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe08.py <<'PY'\\nimport pickle, numpy as np, importlib.util,glob\\nfrom itertools import combinations_with_replacement as cwr\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=[s['train'][k] for k in ('x','y','traj')]\\nnp.set_printoptions(suppress=True,precision=4,linewidth=160)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef poly(a,d=2):return np.column_stack([np.prod(a[:,k],axis=1) for j in range(d+1) for k in cwr(range(a.shape[1]),j)])\\ndef err(r):return np.mean(abs(r),axis=0)\\ndef load(f):\\n spec=importlib.util.spec_from_file_location('old',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n m=load(f); sub=dict(s,train={**s['train'],**{k:s['train'][k][:52] for k in ('x','y','traj')}},test={'x':x[52:]});out=m.solve_batch(sub);print(f[-18:],err(out['y_hat']-y[52:]),err(out['state_pred']-z[52:]).mean());\\n if '06_solver' in f: m6=m\\nu,v=[s['panel_a'][k] for k in ('u','v')];co=m6._fit_calibration(s['panel_a']);print('a co',co[np.any(co,axis=1)]);print('a res',np.sort(np.linalg.norm(v-poly(u,3)@co,axis=1)));q=m6._invert(x,co)\\nfeatures={'x':x,'q':q,'b_old':m6._panel_b(s['panel_b'],q)}\\nfor name in ('panel_b','panel_c'):\\n d=s[name]; u=d['u'];\\n for key,v in d.items():\\n  if key=='u':continue\\n  for tag,fun in [('aff',lambda a:poly(a,1)),('quad',poly),('cyclic',lambda a:np.c_[poly(a,1),a*a,a*np.roll(a,-1,axis=1)]),('sep',lambda a:np.c_[poly(a,1),a*a,a**3]),('odd',lambda a:np.c_[poly(a,1),a**3,np.tanh(a)]),('all3',lambda a:poly(a,3))]:\\n   f=fun(u);w=ls(f,v);h=(f*np.linalg.pinv(f).T).sum(1);print(name,key,tag,'fit',err(f@w-v).mean(),'LOO',err((f@w-v)/np.maximum(1-h[:,None],1e-9)).mean());\\n   if tag!='all3':features[name+key+tag]=fun(q)@w\\nfor tag,a in features.items():\\n print(tag,[(round(err(f[52:]@ls(f[:52],y[:52])-y[52:]),5),round(err(f[52:]@ls(f[:52],z[:52])-z[52:]).mean(),5)) for f in [poly(a,1),poly(a),np.c_[poly(a,1),a*np.roll(q,-1,axis=1)]]]);\\nfor a in [x,q]:\\n f=poly(a);print('y quad coef',ls(f,y));print('z last quad coef',ls(f,z[:,-1]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe08.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived operator reuse → H2 identify the active auxiliary representation and scalar interactions; reported baseline 52/20 y MAE is 0.055974.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived readouts with panel-specific polynomial bases, using panel leave-one-out errors to distinguish operator fidelity from downstream prediction accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0503f63559697d1ea9d426c1bdbfaccf71a8d38aa9ba2395f072faacad61ba20",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27220.25,
+      "usage_known": true,
+      "prompt_tokens": 24225,
+      "cached_tokens": 12672,
+      "completion_tokens": 1025
+    }
+  ]
+}

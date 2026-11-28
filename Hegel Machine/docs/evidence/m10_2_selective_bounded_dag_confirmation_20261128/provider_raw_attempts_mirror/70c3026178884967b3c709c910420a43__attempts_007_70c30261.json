@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70c3026178884967b3c709c910420a43",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:24:59.187858+00:00",
+  "ended_at_utc": "2026-11-28T15:25:31.683923+00:00",
+  "request_sha256": "f8e098e9262c54ac39fe0d994006dd5fdeb268b5ea5dde479dd20d8ea4b760b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39604,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27596,
+    "cached_tokens": 12672,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/operators10.py <<'PY'\\nexec(open('/tmp/explore.py').read().split('ops=[]')[0])\\nY=s['panel_c']['v1']; t=s['eval_times']; b=s['panel_b']; tel=s['telemetry_vec']; print('times',t,'telemetry',tel)\\nfuncs={'tanh':lambda x,k:np.tanh(k*x),'sin':lambda x,k:np.sin(k*x),'rational':lambda x,k:x/(1+k*x*x),'radical':lambda x,k:x/np.sqrt(1+k*x*x),'atan':lambda x,k:np.arctan(k*x),'erf':__import__('scipy.special',fromlist=['erf']).erf,'softsign':lambda x,k:x/(1+k*abs(x))}\\nfuncs['erf']=lambda x,k:__import__('scipy.special',fromlist=['erf']).erf(k*x)\\nextra={'lin':lambda x:x,'cubic':lambda x:x**3,'quintic':lambda x:x**5,'square':lambda x:x*x,'pairprod':lambda x:x*np.roll(x,-1,axis=1),'evenrat':lambda x:x*x/(1+.25*x*x)}\\nfrom itertools import combinations\\nfits=[]\\nfor name,f in funcs.items():\\n for nm in [(),*( (a,) for a in extra),*combinations(extra,2),('lin','cubic','quintic')]:\\n  for tie in (False,True):\\n   if tie and len(nm)!=1: continue\\n   def ds(x,p):\\n    v=f(x,p[0]); es=[extra[a](x) for a in nm]; return one(v+p[1]*es[0]) if tie else one(np.c_[v,*es]);\\n   def loss(p):\\n    d=ds(u,p);return (d@ls(d,Y)-Y).ravel()\\n   fit=min((least_squares(loss,[k,0] if tie else [k],bounds=([.05,-20],[8,20]) if tie else ([.05],[8]),max_nfev=100) for k in (.5,1.5,2.5)),key=lambda r:np.std(r.fun)); fits.append((np.std(fit.fun),name,nm,tie,fit.x))\\nfor row in sorted(fits,key=lambda x:x[0])[:28]:print(row)\\nfor name,f in funcs.items():\\n for name2,h in list(funcs.items())+[('cos',lambda x,k:np.cos(k*x))]:\\n  if name==name2:continue\\n  def ds(x,p):return one(f(x,p[0])+p[2]*h(x,p[1]))\\n  def loss(p):\\n   d=ds(u,p);return (d@ls(d,Y)-Y).ravel()\\n  fit=min((least_squares(loss,p,bounds=([.05,.05,-30],[8,8,30]),max_nfev=100) for p in ([1.8,2.4,.2],[1.3,1.3,-.2],[2.4,1.4,.2])),key=lambda r:np.std(r.fun));\\n  if np.std(fit.fun)<.006:print('combo',name,name2,np.std(fit.fun),fit.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators10.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: approximate archived maps -> H2: cosine and corrected odd operator with bilinear readout; 52/20 MAE is 0.012597 for y and 0.012536 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived panel nonlinearities and a single shared bilinear contraction suffice for both outputs.\",\n    \"empirical_witness\": \"A shared-frequency cosine fits panel v2 at residual standard deviation 0.000083, and a full bilinear readout reduces trajectory holdout MAE from 0.086956 to 0.012536 with the same corrected panel maps.\",\n    \"causal_blanket_diagnosis\": \"The trajectory response distinguishes cross-channel products that the scalar contraction discards.\",\n    \"sublated_pivot\": \"Retain cyclic calibration; identify the remaining panel v1 nonlinearity and fit the two readouts separately.\",\n    \"risk_kind\": \"operator_and_readout_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the first passing approximation\",\n      \"rejected_reason\": \"Panel v1 still has 0.01285 residual standard deviation, well above the panel v2 noise floor.\"\n    }\n  ],\n  \"rationale\": \"Search independently measured panel v1 for compact odd kernels and corrections before fitting or pruning the downstream readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1b66c01a1e75c89a56454726399269dddaa0b0003df198484d74db67d437404a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32494.82,
+      "usage_known": true,
+      "prompt_tokens": 27596,
+      "cached_tokens": 12672,
+      "completion_tokens": 1202
+    }
+  ]
+}

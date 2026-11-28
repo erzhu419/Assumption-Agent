@@ -1,0 +1,141 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_b04_batch_09_8843ce773efc",
+    "source_hash": "8843ce773efc034fd1bd0a6b67e1cce09fd52f29cf176b29d3b3045338864c1d",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_b04_batch_09__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 3184,
+        "sha256": "1a5e74bcd2f41cab68d5c25c1ef8646ffe83dbe7ce543a8d2a23be12f270541d"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_b04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_b04_batch_00_solver.py",
+        "bytes": 1977,
+        "sha256": "959cceac76d7554394a049b04e248c199794aab59e434d58400e09b5840e2d8a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cat /holdout_task/_frozen_nodes/node_00.py /tmp/hegel_continual_archive/*; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment nonlinear calibration ridge nuisance profiling' || true; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'));print('batch',len(s)); s=s[0]['study']; np.set_printoptions(precision=5,suppress=True)\nfor k,v in s.items():\n for kk,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a);print(k,kk,a.shape,a.dtype, a[:5] if a.ndim else a); \n  if a.ndim and a.dtype.kind in 'fi': ",
+      "cat /tmp/hegel_continual_archive/*solver.py /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as n\nfrom itertools import combinations_with_replacement as cw\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True); print('times',s['eval_times'])\ndef f(x,d=1):return n.column_stack([n.ones(len(x))]+[n.prod(x[:,j],axis=1) for k in range(1,d+1) for j in cw(range(x.shape[1]),k)])\nfor p in ('panel_a','panel_b','panel_c'):\n u=s[p]['u']; X=f(u)\n for key,v in s[p].items():\n ",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement as cw\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=4,suppress=True,linewidth=160)\nprint('times',s['eval_times']); print('keys',list(s));\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for k in range(1,d+1) for j in cw(range(4),k)])\nb=s['panel_b']; B=np.linalg.lstsq(aff(b['u']),b['v'],rcond=None)[0];print('B gram',B[1:]@B[1:].T,B[1:].T@B[1:]);\nfor p,",
+      "cat > /tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nfrom itertools import combinations_with_replacement as cw\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(x); ix=np.arange(n); np.set_printoptions(precision=5,suppress=True)\ndef aff(u):return np.c_[np.ones(len(u)),u]\ndef ls(f,v):return np.linalg.lstsq(f,v,rcond=None)[0]\ndef panel(p,k,func,guess):\n u,v=s[p]['u'],s[p][k]; idx=np.arange(len(u));\n if p=='panel_a':idx=np.wh",
+      "sed -n '1,245p' /holdout_task/test_dag_candidate.py; cat > /holdout_task/node_01.py <<'PY'\n\"\"\"Recover latent coordinates from the reference panel, then fit each outcome.\"\"\"\nfrom itertools import combinations_with_replacement\nimport numpy as np\n\n\ndef _calibrate(panel, x, seed):\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\n    pair = np.arange(u.shape[1]) ^ 2\n    # Gross corruption is rowwise. Remove only the separated residual tail.\n    a = np.column_stack((np.ones(len(u)), u))\n    keep = np.arange(len(u))\n    for _ in range(4):\n        coef = np.linalg.lstsq(a[keep], v[ke",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport contextlib, io, numpy as np, pickle, runpy\nwith contextlib.redirect_stdout(io.StringIO()) as log:\n    try:\n        ctx = runpy.run_path('/holdout_task/test_dag_candidate.py')\n    except SystemExit as e:\n        if e.code != 0:\n            raise RuntimeError(log.getvalue()) from e\nprint(log.getvalue().strip())\n# Use the exact same DAG runner on disjoint blocks and high-leverage rows.\n# The public validator exits on success, so load the runner definitions separately.\np='/holdout_task/test_dag_candidate.py'\nns={'__file__':p}; exec(compile(open(p)."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe.py",
+      "primary_producer_container_path": "/tmp/probe.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 2894,
+        "sha256": "483db6ede5a755681fc229ea7d0ea1c67d138a09bea99e1c488b6887fb3d5d80",
+        "content_addressed_ref": "content_addressed_blobs/483db6ede5a755681fc229ea7d0ea1c67d138a09bea99e1c488b6887fb3d5d80.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "aff",
+      "ls",
+      "poly",
+      "_affine",
+      "_basis",
+      "_panel_features",
+      "_ridge",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8843ce773efc034fd1bd0a6b67e1cce09fd52f29cf176b29d3b3045338864c1d",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "sed -n '1,245p' /holdout_task/test_dag_candidate.py; cat > /holdout_task/node_01.py <<'PY'\n\"\"\"Recover latent coordinates from the reference panel, then fit each outcome.\"\"\"\nfrom itertools import combinations_with_replacement\nimport numpy as",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8843ce773efc034fd1bd0a6b67e1cce09fd52f29cf176b29d3b3045338864c1d",
+        "expected_candidate_sha256": "8843ce773efc034fd1bd0a6b67e1cce09fd52f29cf176b29d3b3045338864c1d",
+        "computed_candidate_sha256": "8843ce773efc034fd1bd0a6b67e1cce09fd52f29cf176b29d3b3045338864c1d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 2894
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8843ce77"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "aff",
+        "code": "def aff(u):\n    return np.c_[np.ones(len(u)), u]"
+      },
+      {
+        "name": "ls",
+        "code": "def ls(f, v):\n    return np.linalg.lstsq(f, v, rcond=None)[0]"
+      },
+      {
+        "name": "poly",
+        "code": "def poly(u, d):\n    from itertools import combinations_with_replacement as cw\n    return np.column_stack([np.ones(len(u))] + [np.prod(u[:, j], axis=1) for k in range(1, d + 1) for j in cw(range(u.shape[1]), k)])"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_basis",
+        "code": "def _basis(x):\n    from itertools import combinations_with_replacement\n    return np.column_stack([np.ones(len(x))] + [np.prod(x[:, j], axis=1) for d in (1, 2, 3) for j in combinations_with_replacement(range(x.shape[1]), d)])"
+      },
+      {
+        "name": "_panel_features",
+        "code": "def _panel_features(study, x):\n    (a, c) = (study['panel_a'], study['panel_c'])\n    (u, v) = (a['u'], a['v'])\n    f = _affine(u)\n    fit = np.linalg.lstsq(f, v, rcond=None)[0]\n    for _ in range(10):\n        err = np.linalg.norm(f @ fit - v, axis=1)\n        keep = np.argsort(err)[:int(0.82 * len(u))]\n        fit = np.linalg.lstsq(f[keep], v[keep], rcond=None)[0]\n    maps = np.linalg.lstsq(_affine(c['u']), c['v1'], rcond=None)[0]\n    raw = _affine(x) @ maps\n    calibrated = (x - fit[0]) / fit[1:].diagonal()\n    aligned = _affine(calibrated) @ maps\n    squash = lambda q: q / np.sqrt(1 + 0.09 * q * q)\n    return (_basis(squash(raw)), _basis(squash(aligned)), calibrated)"
+      },
+      {
+        "name": "_ridge",
+        "code": "def _ridge(x, y, q, penalty):\n    return q @ np.linalg.solve(x.T @ x + penalty * np.eye(x.shape[1]), x.T @ y)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    n = len(train['x'])\n    x = np.vstack((train['x'], study['test']['x']))\n    (raw, aligned, calibrated) = _panel_features(study, x)\n    hybrid = np.column_stack((aligned, _basis(calibrated)))\n    y = 0.8 * _ridge(hybrid[:n], train['y'], hybrid[n:], 0.007)\n    y += 0.2 * _ridge(raw[:n], train['y'], raw[n:], 0.012)\n    z = train['traj']\n    time_basis = np.linalg.svd(z, full_matrices=False)[2][:2]\n    amps = z @ time_basis.T\n    state = (0.5 * _ridge(raw[:n], amps, raw[n:], 0.014) + 0.5 * _ridge(aligned[:n], amps, aligned[n:], 0.014)) @ time_basis\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}"
+      }
+    ]
+  }
+}

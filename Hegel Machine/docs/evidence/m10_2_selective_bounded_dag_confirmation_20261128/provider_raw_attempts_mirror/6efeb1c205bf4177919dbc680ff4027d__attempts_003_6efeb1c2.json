@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6efeb1c205bf4177919dbc680ff4027d",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:52.004622+00:00",
+  "ended_at_utc": "2026-11-28T15:29:34.342592+00:00",
+  "request_sha256": "3ff5a5bb571665b9ab4bf92a42f924aebb40f9c041f1c10e3498d375e0a9763f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21166,
+    "cached_tokens": 12672,
+    "completion_tokens": 868
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef cv(f,y,n=52):return np.mean(abs(f[n:]@fit(f[:n],y[:n])-y[n:]),axis=0)\\nops={}\\nfor key in ('panel_a','panel_b','panel_c'):\\n p=s[key]; u=p['u']; a=aff(u)\\n for k,v in p.items():\\n  if k=='u':continue\\n  w=np.ones(len(a))\\n  for it in range(32):\\n   c=fit(a*w[:,None],v*w[:,None]);r=np.linalg.norm(a@c-v,axis=1);w=np.sqrt(np.minimum(1,1.5*np.median(r)/np.maximum(r,1e-13)))\\n  g=r<=5*np.median(r)+1e-10;c=fit(a[g],v[g]);r=np.linalg.norm(a@c-v,axis=1)\\n  print(key,k,'coef',c,'residual quantiles',np.quantile(r,[0,.5,.8,.9,1]));ops[key[-1]+k]=c\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; print('times',s['eval_times'],'telemetry',s['telemetry_vec']);print('SVD traj',np.linalg.svd(t,compute_uv=False)); print('linear y,traj coefficient',fit(aff(x[:52]),np.c_[y,t][:52]));\\nfor deg in range(1,4):\\n f=PolynomialFeatures(deg).fit_transform(x);print('poly',deg,'y',cv(f,y),'traj',cv(f,t))\\na=ops['av']; z=(x-a[0])@np.linalg.inv(a[1:]);fs={'x':x,'z':z}\\nfor nm in ('bv','cv1','cv2'):\\n c=ops[nm];fs[nm]=aff(z)@c;fs[nm+'raw']=aff(x)@c\\nfor nm,z in fs.items():\\n for fname,f in [('linear',aff(z)),('tanh',aff(np.tanh(z))),('sq',np.c_[aff(z),z*z]),('tanh+linear',np.c_[aff(z),np.tanh(z)])]: print(nm,fname,cv(f,y),cv(f,t).mean())\\nfor j in range(8):\\n print('time',j,'corr',np.corrcoef(t[:,j],t[:,-1])[0,1],'quantile',np.quantile(t[:,j], [0,.25,.5,.75,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived linear/bilinear mapping -> H2 calibrated nonlinear operators; archived holdout y/trajectory MAE 0.306386/0.208759.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Recover each panel's operator, measure trajectory rank, and compare raw and calibrated nonlinear bases on the fixed holdout split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "75ad965b04b5986ca15002a377a38ac0250b890e74fe4e11c076c624f85cfc2a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42336.67,
+      "usage_known": true,
+      "prompt_tokens": 21166,
+      "cached_tokens": 12672,
+      "completion_tokens": 868
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb08361efe384625a7342a41767074e3",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:18.569807+00:00",
+  "ended_at_utc": "2026-11-28T15:07:53.556704+00:00",
+  "request_sha256": "6634e864c34c2f9b3e94bc77e357afad6d136354978404b18cc347b57ce946f5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38942,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28887,
+    "cached_tokens": 12672,
+    "completion_tokens": 1428
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Calibrate the observed coordinates and fit the two response readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _design(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, observed):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    affine = _design(u)\\n    err = np.linalg.norm(v - affine @ _ls(affine, v), axis=1)\\n    good = err <= 4 * max(np.median(err), 1e-8)\\n    nxt = np.roll(np.arange(u.shape[1]), -1)\\n    designs = [_design(np.column_stack((u[:, j], u[:, k], u[:, j]*u[:, k], u[:, j]**3)))\\n               for j, k in enumerate(nxt)]\\n    for _ in range(4):\\n        coef = np.array([_ls(d[good], v[good, j]) for j, d in enumerate(designs)]).T\\n        residual = np.column_stack([d @ coef[:, j] - v[:, j] for j, d in enumerate(designs)])\\n        err = np.linalg.norm(residual, axis=1)\\n        updated = err <= max(1e-7, 6 * np.median(err))\\n        if np.array_equal(updated, good) or updated.sum() < 6:\\n            break\\n        good = updated\\n    offset, scale, coupling, pair, cubic = coef\\n    z = (observed - offset) / scale\\n    rows = np.arange(len(scale))\\n\\n    def residual(z):\\n        return offset + scale*z + (coupling + pair*z)*z[:, nxt] + cubic*z**3 - observed\\n\\n    r = residual(z)\\n    for _ in range(35):\\n        norm = np.sum(r*r, axis=1)\\n        if np.max(norm, initial=0.) < 1e-24:\\n            break\\n        jac = np.zeros((len(z), len(scale), len(scale)))\\n        jac[:, rows, rows] = scale + pair*z[:, nxt] + 3*cubic*z*z\\n        jac[:, rows, nxt] = coupling + pair*z\\n        step = np.linalg.solve(jac, r[..., None])[..., 0]\\n        factor = np.ones((len(z), 1))\\n        candidate = z - step\\n        for _ in range(15):\\n            rc = residual(candidate)\\n            worse = np.sum(rc*rc, axis=1) > norm\\n            if not np.any(worse):\\n                break\\n            factor[worse] *= .5\\n            candidate[worse] = z[worse] - factor[worse]*step[worse]\\n        z = candidate\\n        r = residual(z)\\n    return z\\n\\n\\ndef _branch(panel, z, k):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'+str(k)])\\n\\n    def basis(x, p):\\n        w = p[0]*x + p[1:]\\n        nonlinear = w/(1+np.abs(w)) if k == 1 else np.cos(w)\\n        return _design(np.column_stack((x, nonlinear)))\\n\\n    def residual(p):\\n        d = basis(u, p)\\n        return (d @ _ls(d, v) - v).ravel()\\n\\n    start = np.r_[.84 if k == 1 else 1.27, np.zeros(u.shape[1])]\\n    p = least_squares(residual, start, max_nfev=150).x\\n    return basis(z, p) @ _ls(basis(u, p), v)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    n = len(train['x'])\\n    z = _calibrate(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    c, d = (_branch(study['panel_c'], z, k) for k in (1, 2))\\n    y_design = _design(np.column_stack((d, c, np.sum(c*d, axis=1))))\\n    cross = (d[:, :, None] * c[:, None, :]).reshape(len(z), -1)\\n    traj_design = _design(np.column_stack((d, c, cross)))\\n    return {'y_hat': y_design[n:] @ _ls(y_design[:n], train['y']),\\n            'unprojected': traj_design[n:] @ _ls(traj_design[:n], train['traj'])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine misalignment → H2 cyclic bilinear and coordinatewise cubic calibration; archived public MAEs are 0.094226 for y and 0.201611 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert an unrestricted cubic fit\",\n      \"rejected_reason\": \"The estimated coefficients point to a sparse cyclic map; unrestricted terms would amplify panel noise during inversion.\"\n    }\n  ],\n  \"rationale\": \"Fit and invert the sparse cubic map found in panel A. Retain both archived response designs for this test to measure how much of each public error is explained by calibration alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e69b7989d0d32ff833c50b34417f77c9c348cbe5e0f21270eeb81265b6c58393",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35389.39,
+      "usage_known": true,
+      "prompt_tokens": 28887,
+      "cached_tokens": 12672,
+      "completion_tokens": 1428
+    }
+  ]
+}

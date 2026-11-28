@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8814fbe3dda140bbb2cf883bfd826209",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:11:48.557911+00:00",
+  "ended_at_utc": "2026-11-28T16:12:25.105504+00:00",
+  "request_sha256": "94bb22e9423eef2704d1b7aeac7c86c48c3b00fec458e31cdd8c409645a8e0b7",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69021,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40429,
+    "cached_tokens": 12672,
+    "completion_tokens": 1579
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/node_01.py /tmp/node13_verified_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/node_01.py')\\ns=p.read_text().replace('from scipy.optimize import minimize_scalar, root','from scipy.optimize import least_squares, minimize_scalar, root').replace('return features(q,freq)@_ls(a,v)','f = features(q,freq)\\\\n    return f@_ls(a,v), f[:,1:]')\\na=s.index('def _scalar('); z=s.index('\\\\n\\\\ndef run_node',a)\\ns=s[:a]+'''def _scalar(cosines, b, y):\\n    n = len(y)\\n    h = np.c_[np.ones(len(b)), b]\\n    quadratic = np.c_[h, *[b[:, i]*b[:, j] for i, j in\\n                              combinations_with_replacement(range(b.shape[1]), 2)]]\\n    c0, c2 = cosines[:, 0], cosines[:, 2]\\n\\n    def design(params):\\n        strength, ratio = params\\n        gate = 1. / (1. + strength*(c0-ratio*c2)**2)\\n        # The gate intercept is included only once.\\n        return np.c_[h, quadratic*gate[:, None]]\\n\\n    def residual(params):\\n        a = design(params)[:n]\\n        return a@_ls(a, y)-y\\n\\n    fit = least_squares(residual, [2., 1.], bounds=([.01, .3], [15., 2.]), max_nfev=100)\\n    a = design(fit.x)\\n    return a[n:]@_ls(a[:n], y)\\n'''+s[z:]\\ns=s.replace(\\\"b = _panel_b(study['panel_b'],q)\\\\n    y = _scalar(q,b,train['y'])\\\", \\\"b, cosines = _panel_b(study['panel_b'],q)\\\\n    y = _scalar(cosines,b,train['y'])\\\")\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/stress_node13.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate',path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm=load('/holdout_task/node_01.py')\\nup=load('/holdout_task/_frozen_nodes/node_00.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nf=up.run_node({'__input__':s})\\nt=s['train']; n=len(t['x']); ids=np.arange(n)\\nq=m._calibrate(s['panel_a'],f,t['x'])\\nrng=np.random.default_rng(135)\\nsplits={f'block_{j}':ids[j:j+18] for j in (0,18,36,54)}\\nsplits.update(public=ids[52:], interleaved=ids[::4], outer_radius=np.argsort(np.max(abs(q),axis=1))[-15:], extreme_square_difference=np.argsort(abs(q[:,0]**2-q[:,2]**2))[-15:])\\nsplits.update({f'random_{j}':rng.choice(ids,18,False) for j in range(16)})\\nrows=[]\\nfor name,j in splits.items():\\n    i=np.setdiff1d(ids,j)\\n    sf={**s,'train':{k:t[k][i] for k in ('x','y','traj')},'test':{'x':t['x'][j]}}\\n    result=m.run_node({'__input__':sf,'node_00':f})\\n    y,st,d=(result[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape==(len(j),) and st.shape==(len(j),t['traj'].shape[1]) and d.shape==(4,)\\n    assert np.all(np.isfinite(st)) and np.all(np.isfinite(y))\\n    assert np.allclose(d,[y.mean(),y.std(),st[:,-1].mean(),st[:,-1].std()])\\n    rows.append((name,float(np.mean(abs(y-t['y'][j]))),float(np.mean(abs(st-t['traj'][j]))),float(np.max(np.mean(abs(st-t['traj'][j]),axis=0)))))\\nfor row in rows: print('%s %.6f %.6f %.6f'%row)\\nprint('worst scalar',max(rows,key=lambda row:row[1])); print('worst state and horizon',max(r[2] for r in rows),max(r[3] for r in rows))\\nassert max(max(r[1:]) for r in rows)<.038\\nPY\\npython3 -I /tmp/stress_node13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic readout with a squared-coordinate gate -> H2 an affine readout plus gated quadratic cosine terms; fold-local screening reduced worst-slice scalar MAE from 0.05363 to 0.02204.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the accepted squared-coordinate gate\",\n      \"rejected_reason\": \"It clears the public split but exceeds 0.038 MAE on the coordinate-contrast stress slice.\"\n    },\n    {\n      \"option\": \"Gate a full quadratic baseline with another quadratic\",\n      \"rejected_reason\": \"The larger basis fits training data better but has a worse fold-local maximum error.\"\n    }\n  ],\n  \"rationale\": \"Promote the more compact cosine gate because it improves both the public split and the worst stress slice without changing the validated calibration or state readout. Verify the exact artifact in isolation and audit both outputs on blocked, random, and extrapolation slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "541b532d0cee28858233a3a83fcffeaca65b0c407968f495380296f195404239",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37147.37,
+      "usage_known": true,
+      "prompt_tokens": 40429,
+      "cached_tokens": 12672,
+      "completion_tokens": 1579
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82cae5a8e03d4567bf7225b9e7fe2025",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:07.168068+00:00",
+  "ended_at_utc": "2026-11-28T15:48:54.436441+00:00",
+  "request_sha256": "26433801a54f2c70a2ad784db1dfcf23e83dd3a0fa092c48a3d4196ce4e6701d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40522,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29761,
+    "cached_tokens": 12672,
+    "completion_tokens": 2072
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom numpy.polynomial.chebyshev import chebvander, chebval, chebder\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    # Gross contamination affects whole calibration rows.\\n    center = np.median(v, axis=0)\\n    mad = np.maximum(np.median(abs(v - center), axis=0), 1e-8)\\n    keep = np.max(abs(v - center) / mad, axis=1) < 6\\n    u, v = u[keep], v[keep]\\n    n, p = u.shape\\n    eye = np.tile(np.eye(p), (n, 1))\\n    t = u.ravel()\\n    z = np.roll(u, -2, axis=1).ravel()\\n    radius = 1.3\\n    d = np.column_stack((eye, eye * t[:, None], chebvander(t / radius, 9)[:, 3::2], chebvander(z / radius, 9)[:, 1::2]))\\n    q = np.linalg.lstsq(d, v.ravel(), rcond=None)[0]\\n    a, b = np.zeros(10), np.zeros(10)\\n    a[3::2], b[1::2] = q[2*p:2*p+4], q[2*p+4:]\\n    return q[:p], q[p:2*p], a, b, radius\\n\\n\\ndef _inverse(x, fit):\\n    off, slope, a, b, radius = fit\\n    da, db = chebder(a) / radius, chebder(b) / radius\\n    def evaluate(z, c, dc):\\n        t = np.clip(z, -radius, radius)\\n        grad = chebval(t / radius, dc)\\n        return chebval(t / radius, c) + grad * (z - t), grad\\n    z = (x - off) / slope\\n    j = np.arange(x.shape[1])\\n    jac = np.zeros((len(x), len(j), len(j)))\\n    for _ in range(24):\\n        self_term, self_grad = evaluate(z, a, da)\\n        cross_term, cross_grad = evaluate(np.roll(z, -2, axis=1), b, db)\\n        residual = off + slope * z + self_term + cross_term - x\\n        if np.max(abs(residual), initial=0.) < 1e-12:\\n            break\\n        jac[:, j, j] = slope + self_grad\\n        jac[:, j, (j + 2) % len(j)] = cross_grad\\n        step = np.linalg.solve(jac, residual[..., None])[..., 0]\\n        z -= np.clip(step, -0.5, 0.5)\\n    return z\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.concatenate((study['train']['x'], study['test']['x']), axis=0)\\n    z = _inverse(x, _calibrate(study['panel_a']))\\n    b = study['panel_b']\\n    return {'w': _aff(z) @ np.linalg.lstsq(_aff(b['u']), b['v'], rcond=None)[0]}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,sys\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task'); import node_00 as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_a'][k] for k in ('u','v')); keep=np.max(abs(v-np.median(v,axis=0))/np.median(abs(v-np.median(v,axis=0)),axis=0),axis=1)<6; print('excluded',np.flatnonzero(~keep)); u,v=u[keep],v[keep]; n,p=u.shape; x=u.ravel(); z=np.roll(u,-2,axis=1).ravel(); y=v.ravel(); e=np.tile(np.eye(p),(n,1)); d0=np.c_[e,e*x[:,None]]\\ndef fit(d): return np.linalg.lstsq(d,y,rcond=None)[0]\\ndef report(name,d,params=()):\\n q=fit(d); r=y-d@q; h=np.einsum('ij,ji->i',d,np.linalg.pinv(d)); print(name,'param',np.round(params,6),'coeff',np.round(q,7),'rms max loo',np.round([np.std(r),np.max(abs(r)),np.sqrt(np.mean((r/(1-h))**2))],8))\\nfor deg in (5,7,9,11,13): report('poly'+str(deg),np.c_[d0,*[x**k for k in range(3,deg+1,2)],*[z**k for k in range(1,deg+1,2)]])\\nfor name,f,init in [('sin-sin',lambda t:[np.sin(t[0]*x),np.sin(t[1]*z)],[3.1,2.4]),('sin+cube-sin',lambda t:[np.sin(t[0]*x),x**3,np.sin(t[1]*z)],[3.1,2.4]),('sin+quintic-sin',lambda t:[np.sin(t[0]*x),x**5,np.sin(t[1]*z)],[3.1,2.4]),('sin-sin+linear',lambda t:[np.sin(t[0]*x),np.sin(t[1]*z),z],[3.1,2.4]),('rational-sin',lambda t:[x/(1+t[0]*x*x),np.sin(t[1]*z)],[.2,2.4]),('two sin-sin',lambda t:[np.sin(t[0]*x),np.sin(t[1]*x),np.sin(t[2]*z)],[2.15,4.3,2.4])]:\\n def d(t): return np.column_stack((d0,*f(t)))\\n opt=least_squares(lambda t:d(t)@fit(d(t))-y,init,bounds=(.01,8),max_nfev=200); report(name,d(opt.x),opt.x)\\nx=np.r_[s['train']['x'],s['test']['x']]; q=m._calibrate(s['panel_a']); z=m._inverse(x,q); print('latent range',z.min(),z.max()); print('observed inverse max',np.max(abs(m._inverse(v,q)-u)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent affine calibration → shared odd nonlinear terms for opposite-channel pairs; the prior per-channel septic leave-one-row RMSE was at most 0.00174, and downstream CV is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Fit each channel’s nonlinear coefficients independently\",\"rejected_reason\":\"The four sets of odd coefficients are similar enough to test a shared law, which uses fewer parameters and should improve boundary stability.\"}],\"rationale\":\"Build and test the coupled inverse now, while comparing compact parametric laws against the pooled odd basis to see whether a simpler law fits at the calibration noise floor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "96ab0f9fe061dc4054a42de597fd13f8c4e0bc6424c96d0d31abdeb5257656ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48265.9,
+      "usage_known": true,
+      "prompt_tokens": 29761,
+      "cached_tokens": 12672,
+      "completion_tokens": 2072
+    }
+  ]
+}

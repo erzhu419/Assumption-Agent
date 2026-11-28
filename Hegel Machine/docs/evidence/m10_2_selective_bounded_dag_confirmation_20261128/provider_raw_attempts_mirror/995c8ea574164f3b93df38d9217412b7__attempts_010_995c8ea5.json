@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "995c8ea574164f3b93df38d9217412b7",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:19.157786+00:00",
+  "ended_at_utc": "2026-11-28T16:18:41.373113+00:00",
+  "request_sha256": "94611a0133cb49800b05be96a2e21795c7fa8a8978dbf3d95e737d465427cfd9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61618,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36520,
+    "cached_tokens": 12672,
+    "completion_tokens": 847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\n\\ndef load(tag, path):\\n    spec = importlib.util.spec_from_file_location(tag, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nbase = '/holdout_task/'\\nupstream = load('frozen', base + '_frozen_nodes/node_00.py')\\nsink = load('sink', base + 'node_01.py')\\nstudy = pickle.load(open(base + 'public_batch.pkl', 'rb'))[0]['study']\\nfitted = upstream.run_node({'__input__': study})\\nt = study['train']\\nrng = np.random.default_rng(618)\\norder = np.argsort(np.linalg.norm(t['x'], axis=1))\\nsplits = [rng.permutation(len(order))[-20:] for _ in range(16)]\\nsplits += [order[-20:], order[:20]]\\nerrs = []\\nfor val in splits:\\n    tr = np.setdiff1d(np.arange(len(order)), val)\\n    s = copy.copy(study)\\n    s['train'] = {k: t[k][tr] for k in ('x', 'y', 'traj')}\\n    st = s['train']; last = st['traj'][:, -1]\\n    st['summary'] = np.array([st['y'].mean(), st['y'].std(), last.mean(), last.std()])\\n    s['test'] = {'x': t['x'][val]}\\n    out = sink.run_node({'__input__': s, 'node_00': fitted})\\n    y, z, d = [out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec')]\\n    assert y.shape == (20,) and z.shape == t['traj'][val].shape and d.shape == (4,)\\n    assert all(np.isfinite(a).all() for a in (y, z, d))\\n    np.testing.assert_allclose(d, [y.mean(), y.std(), z[:, -1].mean(), z[:, -1].std()])\\n    errs.append([abs(y-t['y'][val]).mean(), abs(z-t['traj'][val]).mean()])\\nprint('random_holdout_worst_scalar_trajectory', np.max(errs[:16], axis=0))\\nprint('high_and_low_input_norm_holdout_scalar_trajectory', np.asarray(errs[-2:]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine inverse and generic products -> H2 coupled nonlinear inverse, cyclic interactions, and rational scalar gate; official public holdout MAEs are 0.022610 scalar and 0.005029 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The saved artifact passed the isolated acceptance test. Stress the unchanged artifact on randomized and input-norm holdouts to check sensitivity to the official split and verify diagnostics independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "268086fae997e28ea1cf97e7f3e883e2a48cebb2d8212b653cef765fc73488df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22214.05,
+      "usage_known": true,
+      "prompt_tokens": 36520,
+      "cached_tokens": 12672,
+      "completion_tokens": 847
+    }
+  ]
+}

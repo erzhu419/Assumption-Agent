@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3f3cd73669df4f7e8728395f0b66032d",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__init_decomp_conf_m102_b02_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:22.603214+00:00",
+  "ended_at_utc": "2026-11-28T14:58:48.008265+00:00",
+  "request_sha256": "8764e38358219b09a28867ecca9536bd9043302ff7facfeae7b7d5c155530272",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4160,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13931,
+    "cached_tokens": 0,
+    "completion_tokens": 1037
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"Calibration and trajectory projection are independent numerical transforms: one computes calibrated train and test coordinates, while the other computes the trajectory basis and regression targets. The sink consumes both and preserves the original kernel solve, reconstruction, and diagnostics. The split leaves the source estimator unchanged; the role-blind statistics do not establish which stage caused the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(panel, robust=False):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    design = np.column_stack((np.ones(len(u)), u))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(6 if robust else 1):\\n        coef = np.linalg.lstsq(design[keep], v[keep], rcond=None)[0]\\n        residual = np.linalg.norm(design @ coef - v, axis=1)\\n        proposed = residual < max(0.001, 3 * np.median(residual))\\n        if not robust or np.array_equal(proposed, keep) or proposed.sum() < design.shape[1]:\\n            break\\n        keep = proposed\\n    return coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.asarray(study['train']['x'], dtype=float)\\n    xt = np.asarray(study['test']['x'], dtype=float)\\n    a = _affine(study['panel_a'], robust=True)\\n    b = _affine(study['panel_b'])\\n    z = np.linalg.solve(a[1:].T, (np.vstack((x, xt)) - a[0]).T).T @ b[1:] + b[0]\\n    return {'z': z[:len(x)], 'zt': z[len(x):]}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    traj = np.asarray(train['traj'], dtype=float)\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    targets = np.column_stack((train['y'], traj @ modes.T))\\n    return {'modes': modes, 'targets': targets}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _kernel(z, w):\\n    h, g = np.arcsinh(3.5 * z), np.arcsinh(3.5 * w)\\n    linear = z @ w.T\\n    compressed = h @ g.T\\n    return (1 + linear + compressed + (h*h) @ (g*g).T\\n            + (z*h) @ (w*g).T + 0.2 * (compressed + 0.25*linear)**2)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    coordinates = inputs['node_00']\\n    projected = inputs['node_01']\\n    z, zt = coordinates['z'], coordinates['zt']\\n    modes, targets = projected['modes'], projected['targets']\\n    gram = _kernel(z, z)\\n    gram.flat[::len(z)+1] += 1e-6 * np.mean(np.diag(gram))\\n    pred = _kernel(zt, z) @ np.linalg.solve(gram, targets)\\n    y = pred[:, 0].copy()\\n    state = pred[:, 1:] @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "2932cf34ca54a71841e2853f69a943aee17cf907475dbbe3c0b50f464c39a014",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25403.18,
+      "usage_known": true,
+      "prompt_tokens": 13931,
+      "cached_tokens": 0,
+      "completion_tokens": 1037
+    }
+  ]
+}

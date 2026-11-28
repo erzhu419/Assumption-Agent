@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ef5a125b21c4265a8155565741557a2",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:54:30.947503+00:00",
+  "ended_at_utc": "2026-11-28T15:55:02.255644+00:00",
+  "request_sha256": "9ca1df1dc9008459b6ff028b59de32e28f4527066994276c852a35fbb308f801",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44760,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30046,
+    "cached_tokens": 12672,
+    "completion_tokens": 1321
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal15.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nls=lambda a,y:np.linalg.lstsq(a,y,rcond=1e-10)[0]\\none=lambda z:np.c_[np.ones(len(z)),z]\\nu=s['panel_a']['u'];v=s['panel_a']['v']; raw=np.vstack([s['train']['x'],s['test']['x']]); init=np.linalg.norm(v,axis=1)<4\\nnames=['1']+['x'+str(i) for i in range(4)]+['p'+str(i)+str(j) for i in range(4) for j in range(i,4)]+['c'+str(i) for i in range(4)]\\ndef poly(x):return np.c_[one(x),np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]),x**3]\\ndef test(fn,q0=None, verbose=False):\\n m=init.copy(); q=q0\\n for _ in range(5):\\n  def solve(q):\\n   f=fn(u,q); w=np.array([ls(f[m,j],v[m,j]) for j in range(4)]);return w,(f*w).sum(-1)-v\\n  if q0 is not None:q=least_squares(lambda q:solve(q)[1][m].ravel(),q,bounds=(.05,7),max_nfev=100).x\\n  w,r=solve(q); e=np.linalg.norm(r,axis=1);mm=e<max(.001,5*np.median(e));\\n  if np.array_equal(mm,m) or mm.sum()<25:break\\n  m=mm\\n if verbose:print('m',np.flatnonzero(~m),'w',np.round(w,4))\\n return np.std(r[m]),m.sum(),q,w,m\\nD={}\\nD['fullpoly']=(lambda x,q:np.repeat(poly(x)[:,None,:],4,axis=1),None)\\nfor k in (1,2,3):\\n for name,f in {'poly':lambda a,b,q:[a,b,a*b,a**3], 'poly2':lambda a,b,q:[a,b,a*b,a**2,b**2,a**3,b**3], 'trig':lambda a,b,q:[a,b,np.tanh(q[0]*a),np.sin(q[1]*b)],'rat':lambda a,b,q:[a,b,a/(1+(q[0]*a)**2),np.sin(q[1]*b)],'mix':lambda a,b,q:[a,b,a*b,np.sin(q[0]*a),np.sin(q[1]*b)],'ratmix':lambda a,b,q:[a,b,a*b,np.sin(q[1]*b),a/(1+(q[0]*a)**2)]}.items():\\n  D[f'{name}{k}']=(lambda x,q,k=k,f=f:np.stack([np.ones_like(x)]+f(x,np.roll(x,-k,axis=1),q),axis=-1),None if name.startswith('poly') else [1.5,2.3])\\nfor name,f in {'fulltanh':lambda x,q:np.c_[one(x),np.tanh(q[0]*x)],'fullsin':lambda x,q:np.c_[one(x),np.sin(q[0]*x)],'fullsinrat':lambda x,q:np.c_[one(x),np.sin(q[0]*x),x/(1+(q[1]*x)**2)],'fullpolytrig':lambda x,q:np.c_[poly(x)[:,:15],np.sin(q[0]*x),np.tanh(q[1]*x)]}.items():D[name]=(lambda x,q,f=f:np.repeat(f(x,q)[:,None,:],4,axis=1),[2.2,1.5])\\nfor name,(fn,q0) in D.items():\\n e,n,q,w,m=test(fn,q0);print(name,round(e,7),n,q)\\n if name in ('fullpoly','fullsin','fulltanh','fullsinrat','fullpolytrig'):\\n  print(np.round(w,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal15.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment' | head -8\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 intact archive transfer -> H2 recover the calibration inverse before fitting the readouts; the two-mode temporal projection has held-out residual SD 0.00413, while the best archived end-to-end MAEs are 0.105787 and 0.065061.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a separate spatial model at every timestamp\",\n      \"rejected_reason\": \"Two shared exponential modes reconstruct the held-out observed trajectories to residual SD 0.00413.\"\n    }\n  ],\n  \"rationale\": \"Compare cyclic and fully mixed calibration bases on panel A alone, using robust row trimming and coefficient patterns to identify a compact forward map that can be inverted.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "49ea6d49d79a204fa8de3f104a7ae7e94de1285dd52df7a340fe21ffdf5830b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31842.65,
+      "usage_known": true,
+      "prompt_tokens": 30046,
+      "cached_tokens": 12672,
+      "completion_tokens": 1321
+    }
+  ]
+}

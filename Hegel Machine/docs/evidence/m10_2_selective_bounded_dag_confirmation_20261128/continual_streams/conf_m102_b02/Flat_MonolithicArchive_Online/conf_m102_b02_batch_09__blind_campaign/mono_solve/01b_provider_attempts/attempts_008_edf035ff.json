@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "edf035ffb0874379a878852c579d1ae5",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:26.600421+00:00",
+  "ended_at_utc": "2026-11-28T15:45:03.378178+00:00",
+  "request_sha256": "3411158b8b94e8be1b20e657db0763753afa6ee790f6cae49cd1f012619fbf92",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49341,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33576,
+    "cached_tokens": 12672,
+    "completion_tokens": 1623
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout.py <<'PY'\\nfrom panel import *\\nfrom scipy.optimize import root,minimize_scalar\\nfrom itertools import combinations,combinations_with_replacement\\nu,v=s['panel_a']['u'],s['panel_a']['v']; m=np.abs(v).max(1)<3; u,v=u[m],v[m]\\ndef F(x):return .18*np.tanh(1.8*x)-.32*np.sin(2.4*np.roll(x,2,axis=1))\\na=np.array([ls(I(u[:,j]),(v-F(u))[:,j]) for j in range(4)])\\nx=np.r_[s['train']['x'],s['test']['x']]\\nz=np.array([root(lambda w:a[:,0]+a[:,1]*w+F(w)-r,(r-a[:,0])/a[:,1]).x for r in x]);print('A rmse',np.std(a[:,0]+a[:,1]*u+F(u)-v))\\np=s['panel_b'];bc=ls(I(p['u']),p['v']);b=lambda x:I(x)@bc\\np=s['panel_c'];u=p['u'];v=p['v1']; funcs.update(log=lambda x:np.logaddexp(x,-x), ex=lambda x:np.expm1(-x*x), cube=lambda x:x**3, ars=lambda x:np.arcsinh(2.15*x))\\ndef make(q):\\n aq=np.arcsinh(2.65*q);return I(np.c_[q,aq,q/(1+(5.47*q)**2)])\\nc=lambda x:make(x)@ls(make(u),v)\\n_,_,d=op(u,p['v2'],'sqrt','both')\\ncoords={'z':z,'x':x,'b':b(z),'c':c(z),'d':d(z),'bc':c(b(z)),'bd':d(b(z)),'cb':b(c(z)),'db':b(d(z))}\\nt=s['eval_times'];tr=s['train']['traj'];y=s['train']['y'];trt=np.c_[y,tr]\\nsplits=[(np.arange(52),np.arange(52,72))];rng=np.random.default_rng(802)\\nfor _ in range(4):\\n ix=rng.permutation(72);splits.append((ix[:52],ix[52:]))\\ndef eval(D,alpha=.003,reg=None):\\n if D.ndim==1:D=D[:,None]\\n E=[]\\n for ii,jj in splits:\\n  X=D[ii]; mu=X.mean(0); sd=np.maximum(X.std(0),1e-8); U=(X-mu)/sd; V=(D[jj]-mu)/sd\\n  yy=trt[ii]; ym=yy.mean(0); C=np.linalg.solve(U.T@U+alpha*np.eye(U.shape[1]),U.T@(yy-ym)); er=np.abs(V@C+ym-trt[jj]); E.append((er[:,0].mean(),er[:,1:].mean(),er[:,-1].mean()))\\n return np.array(E)\\ndef display(records):\\n for k in (0,1):\\n  print('ENDPOINT',k)\\n  for name,e in sorted(records,key=lambda a:a[1][:,k].mean())[:18]:print(name,e[0].round(4),e.mean(0).round(4),e.max(0).round(4))\\ndef P2(A):return np.column_stack([A[:,i]*A[:,j] for i,j in combinations_with_replacement(range(A.shape[1]),2)])\\ndef feat(A):return np.c_[A,np.tanh(2.15*A),np.arcsinh(2.15*A),A**2,A**3,np.sin(2.15*A),A/(1+.22*A*A)]\\nif __name__=='__main__':\\n print('stats',y.std(),tr.std(0),np.linalg.svd(tr,compute_uv=False)); rec=[]\\n for k,A in coords.items():\\n  for nm,ft in [('lin',A),('p2',np.c_[A,P2(A)]),('nlin',feat(A))]:rec.append((k+nm,eval(ft)))\\n for (k,A),(l,B) in combinations(coords.items(),2):\\n  for nm,ft in [('lin',np.c_[A,B]),('diag',np.c_[A,B,A*B]),('sq',np.c_[A,B,A*A,B*B,A*B]),('outer',np.c_[A,B,(A[:,:,None]*B[:,None,:]).reshape(len(A),-1)]),('sum',np.c_[A,B,np.sum(A*B,1)])]:rec.append((k+l+nm,eval(ft)))\\n for keys in [('z','c','d'),('z','bc','bd'),('z','b','bc','bd'),('z','c','bd'),('z','bc','d'),('z','c','d','bc','bd')]:\\n  ft=np.column_stack([coords[k] for k in keys]); rec.append((str(keys),eval(ft)));rec.append((str(keys)+'diag',eval(np.c_[ft,*[coords[k]*coords[l] for k,l in combinations_with_replacement(keys,2)]])))\\n display(rec)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo $f; grep -E '(^def |tanh|arcsinh|cos\\\\(|sin\\\\(|dy =|ds =|np.exp\\\\()' \\\"$f\\\" | tail -20; done\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse calibration -> validate downstream readouts on calibrated operator paths; calibration fits at roughly 0.0001 RMSE, while the best archived 52/20 worst-endpoint MAE is 0.10902.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep a separate self-channel family per calibration output\",\n      \"rejected_reason\": \"The shared tanh and opposite-channel sine recover the same coefficients across channels to panel noise precision.\"\n    }\n  ],\n  \"rationale\": \"Compare compact linear and bilinear readouts across plausible operator paths on the required split and four additional splits, scoring y, trajectory, and terminal state separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7c739c557122ea14b1f2e522effae8cb692c7c22ff1a79490022bc8d52691181",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36775.72,
+      "usage_known": true,
+      "prompt_tokens": 33576,
+      "cached_tokens": 12672,
+      "completion_tokens": 1623
+    }
+  ]
+}

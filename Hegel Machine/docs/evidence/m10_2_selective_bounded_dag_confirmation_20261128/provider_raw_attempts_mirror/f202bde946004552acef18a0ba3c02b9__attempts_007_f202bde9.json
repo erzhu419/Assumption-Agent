@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f202bde946004552acef18a0ba3c02b9",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:01.858304+00:00",
+  "ended_at_utc": "2026-11-28T15:13:34.275054+00:00",
+  "request_sha256": "f413b5837e1b95dea07a3cb296e068ba313e0ff4fe46296724386d07d8c62b5d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47019,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32538,
+    "cached_tokens": 12672,
+    "completion_tokens": 1351
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/warp_probe.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('U,D,V=')[0])\\nfrom scipy.special import erf\\nfrom scipy.optimize import minimize_scalar\\nfrom numpy.polynomial.legendre import legval\\n\\ndef measure(name,g,u=u,v=v,z=z):\\n d=aff(g(u)); c=fit(d,v); w=g(z)@c[1:]+c[0]; r=d@c-v\\n wy=np.c_[w,w[:,0]*w[:,2]+w[:,1]*w[:,3]]\\n errs=[]\\n for hold in [np.arange(52,72)]+[np.random.default_rng(i).permutation(72)[52:] for i in range(12)]:\\n  sel=np.setdiff1d(np.arange(72),hold); p=wy[hold]@fit(wy[sel],Y[sel,0]);\\n  f=-np.expm1(-np.outer(t,[.42,1.8])); a=fit(f,Y[sel,1:].T).T; p2=w[hold]@fit(w[sel],a)@f.T\\n  errs.append([abs(p-Y[hold,0]).mean(),abs(p2-Y[hold,1:]).mean()])\\n print(name,'panel',np.std(r),'row residual med/max',np.median(np.linalg.norm(r,axis=1)),np.max(np.linalg.norm(r,axis=1)), '52/20',np.array(errs[0]),'worst',np.max(errs,axis=0))\\n return r\\nprint('B bounds',u.min(),u.max(),'A raw outliers',np.sort(np.linalg.norm(s['panel_a']['u']-s['panel_a']['v'],axis=1))[-6:]); print('telemetry',s['telemetry_vec'])\\nfor deg in [3,5,7,9,11]:\\n for odd in [True,False]:\\n  ker=np.polynomial.legendre.legvander\\n  order=list(range(3,deg+1,2)) if odd else list(range(2,deg+1)); sc=max(1.2,np.max(abs(u)))\\n  def warp(x,p):return x/sc+ker(x/sc,deg)[...,order]@p\\n  def res(p):\\n   d=aff(warp(u,p));return (d@fit(d,v)-v).ravel()\\n  p=least_squares(res,np.zeros(len(order)),max_nfev=250).x; measure((deg,odd,p),lambda x:warp(x,p))\\nfor name,fn,start in [('sinerf',lambda x,p:x+p[0]*erf(p[1]*x)+p[2]*np.sin(p[3]*x),[-.647,1.47,.01,3.8]),('exp',lambda x,p:x+p[0]*x*np.exp(-p[1]*x*x),[-1.11,1.05]),('rational',lambda x,p:x+p[0]*x/(1+p[1]*x*x),[-1.08,.82]),('tanh3',lambda x,p:np.tanh(p[0]*x)+p[1]*x**3,[1.,1.]),('asinh',lambda x,p:x+p[0]*np.arcsinh(p[1]*x),[-1.,1.]),('atan',lambda x,p:x+p[0]*np.arctan(p[1]*x),[-.78,1.35]),('sin',lambda x,p:x+p[0]*np.sin(p[1]*x),[-.4,2.87]),('sin_cub',lambda x,p:x+p[0]*np.sin(p[1]*x)+p[2]*x**3,[-.4,2.87,0.]),('erf',lambda x,p:x+p[0]*erf(p[1]*x),[-.648,1.47])]:\\n def res(p):\\n  d=aff(fn(u,p));return (d@fit(d,v)-v).ravel()\\n p=least_squares(res,start,max_nfev=300).x\\n r=measure((name,p),lambda x:fn(x,p)); print('  residual split',np.std(r[:12]),np.std(r[12:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/warp_probe.py; cat /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 flexible nonlinear operator -> H2 shared channel warp with compact readouts; the tied exponential candidate reaches 0.00764 scalar and 0.00792 trajectory MAE on the 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the warp from the best single split\",\"rejected_reason\":\"Several plausible forms have similar errors; repeated splits can distinguish variation due to sample choice from a stable improvement.\"}],\"rationale\":\"Compare compact analytic and shared polynomial warps across held-out splits, while checking whether residual structure supports a more precise operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "64f6eb62aaa4c1d0e992f0dcc8e8bcafae698f852f5e03b13d72686e3498a3a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32415.4,
+      "usage_known": true,
+      "prompt_tokens": 32538,
+      "cached_tokens": 12672,
+      "completion_tokens": 1351
+    }
+  ]
+}

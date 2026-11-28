@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c840f085fd7422bb1237b6028456c45",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:33.068302+00:00",
+  "ended_at_utc": "2026-11-28T15:44:02.109050+00:00",
+  "request_sha256": "01ec3fcb6a5115c581f7bd757f60dcc1efd740ea98928839385dba2584a2e9e1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29361,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24899,
+    "cached_tokens": 12672,
+    "completion_tokens": 1053
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_0[12]_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust affine calibration'; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,runpy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_a'][k] for k in ('u','v')); sel=np.max(abs(v),axis=1)<3; print('gross outliers',np.where(~sel)[0]); u,v=u[sel],v[sel]; n,d=u.shape\\nb=s['panel_b']; bb=np.linalg.lstsq(np.c_[np.ones(len(b['u'])),b['u']],b['v'],rcond=None)[0]; print('B affine',np.round(bb,4),'rmse',np.sqrt(np.mean((np.c_[np.ones(len(b['u'])),b['u']]@bb-b['v'])**2))); x=s['train']['x']; r1=runpy.run_path('_frozen_nodes/node_01.py')['run_node']; r2=runpy.run_path('_frozen_nodes/node_02.py')['run_node']; ix=np.arange(len(x)); folds=[(ix[:52],ix[52:])]+[(np.setdiff1d(ix,t),t) for t in np.array_split(np.random.default_rng(9).permutation(ix),4)];\\ndef cv(z):\\n o=[]\\n for a,t in folds:\\n  r=r1({'__input__':{'train':{k:s['train'][k][a] for k in ('y','traj')}}}); p=r2({'node_00':{'z':z[a],'zt':z[t]},'node_01':r}); o.append([np.mean(abs(p['y_hat']-s['train']['y'][t])),np.mean(abs(p['state_pred']-s['train']['traj'][t]))]);\\n return np.round(np.vstack((o[0],np.mean(o[1:],axis=0),np.max(o[1:],axis=0))),5)\\nfor k,z in [('raw',x),('B only',x@bb[1:]+bb[0]),('panel-A OLS+B',(x-np.linalg.lstsq(np.c_[np.ones(n),u],v,rcond=None)[0][0])@np.linalg.inv(np.linalg.lstsq(np.c_[np.ones(n),u],v,rcond=None)[0][1:])@bb[1:]+bb[0])]: print(k,cv(z).tolist());\\na=np.c_[np.ones(n),u]; c=np.linalg.lstsq(a,v,rcond=None)[0]; print('A affine',np.round(c,5)); r=v-a@c; print('A residual quantiles',np.round(np.quantile(abs(r),[0,.25,.5,.75,.95,1],axis=0),4)); print('A residual rows',np.round(np.c_[u,r],3));\\nimport itertools\\nfor src,dest in [(u,v),(v,u)]:\\n cols=[np.ones(n)];\\n for degree in [1,2,3]:\\n  cols.extend(np.prod(src[:,j],axis=1) for j in itertools.combinations_with_replacement(range(d),degree)); a=np.array(cols).T; q=np.linalg.qr(a)[0]; e=(dest-a@np.linalg.lstsq(a,dest,rcond=None)[0])/(1-(q*q).sum(1,keepdims=True)); print('LOO polynomial',degree,np.round(np.sqrt((e*e).mean(0)),5));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 uncontaminated affine calibration → H2 contamination-aware calibration with an explicit test for nonlinear terms; downstream CV is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate gross panel outliers before testing whether an affine map is adequate, and establish raw, panel-B-only, and affine-inverse baselines on the official split and independent folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "703d351454f881fd3d7bfd40a803b24b3153a91f2812f552c9e75246364615a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29039.37,
+      "usage_known": true,
+      "prompt_tokens": 24899,
+      "cached_tokens": 12672,
+      "completion_tokens": 1053
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4dbe7eb09c3549b9bdb5f0529befee47",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:59.122681+00:00",
+  "ended_at_utc": "2026-11-28T15:22:27.138264+00:00",
+  "request_sha256": "55ca23ef44c86944628219df5c4e7acfffdd203621a8ad087391ca73f7be2feb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33841,
+    "cached_tokens": 12672,
+    "completion_tokens": 1035
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path[:0]=['/holdout_task','/holdout_task/_frozen_nodes']\\nimport node_00 as a,node_01 as b,node_02 as c,node_03 as d\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_a'][k] for k in ('u','v')); p=u.shape[1]; j=(np.arange(p)+1)%p; coef=[]\\nfor i in range(p):\\n x,w=u[:,i],u[:,j[i]]; f=np.column_stack((np.ones(len(x)),x,w,x**3,x*w)); yy=v[:,i]; beta=least_squares(lambda q:f@q-yy,a._linear(f,yy),jac=lambda q:f.copy(),loss='cauchy',f_scale=.04).x\\n for _ in range(4):\\n  r=abs(f@beta-yy); keep=r<=max(.001,5*np.median(r))\\n  if keep.sum()>=f.shape[1]: beta=a._linear(f[keep],yy[keep])\\n coef.append(beta)\\no,g,h,k,l=np.array(coef).T\\nz=np.array([[.2,.4,-.7,.1],[.65,-.25,.5,-.4],[.8,.3,.3,-.4]]); z=np.r_[z,-z]; x=o+g*z+h*z[:,j]+k*z**3+l*z*z[:,j]; assert np.max(abs(a._calibrate(s['panel_a'],x)-z))<1e-8\\ns=dict(s,test={'x':x}); A=a.run_node({'__input__':s}); B=b.run_node({'__input__':s}); C=c.run_node({'node_00':A,'node_01':B}); D=d.run_node({'node_00':A,'node_01':B,'node_02':C}); n=A['n_train']\\nfor name,val in [('features',A['features'][n:]),('upstream predictions',C['fit']),('scalar output',D['y_hat']),('trajectory output',D['state_pred'])]:\\n delta=np.max(abs(val[:3]-val[3:])); print(name,'antipodal difference',delta); assert delta<1e-7\\nassert D['diagnostics_vec'].shape==(4,) and np.isfinite(D['diagnostics_vec']).all()\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sign-invariant ensemble → end-to-end antipodal stress test; official MAEs were 0.746054 scalar and 0.599819 trajectory, and worst split MAEs were 1.08081 and 0.73770.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a richer model on the same frozen payloads\",\n      \"rejected_reason\": \"Model flexibility cannot separate two test rows whose feature payloads are identical under latent sign reversal.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved artifact in an isolated process and test whether the sign collision survives the full DAG. This distinguishes a structural limitation from the separately measured public threshold failures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "61af53b712062def52e0360ee41e24ddad713368b1f4bfc872c5af2dea775c98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28014.48,
+      "usage_known": true,
+      "prompt_tokens": 33841,
+      "cached_tokens": 12672,
+      "completion_tokens": 1035
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96f4afc5b8e64f8783fbbcbcf6f96f62",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:03.905644+00:00",
+  "ended_at_utc": "2026-11-28T15:13:26.671004+00:00",
+  "request_sha256": "9176786c3e6f520a87ffa1af6cc50e75dde540c195dc1465729358bc7a60da91",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 22573,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21852,
+    "cached_tokens": 5504,
+    "completion_tokens": 900
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_dag.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']\\ndef D(x,d):\\n return np.column_stack([np.ones(len(x))]+[x[:,i].prod(1) for k in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef fit(a,b,n):\\n w=np.linalg.lstsq(a[:n],b[:n],rcond=None)[0]; return np.mean(abs(a[:n]@w-b[:n])),np.mean(abs(a[n:]@w-b[n:]))\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; print(k,'n',len(u))\\n for name,v in p.items():\\n  if name=='u': continue\\n  print(name,'poly', [fit(D(u,d),v,len(u)*3//4) for d in (1,2,3)],'delta sv',np.linalg.svd(v-u,compute_uv=False)); print('affine',np.round(np.linalg.lstsq(D(u,1),v,rcond=None)[0],3))\\nprint('x covariance', np.round(np.cov(x.T),3)); print('tr sv',np.linalg.svd(tr,compute_uv=False))\\nparams=[]\\nfor z in tr:\\n def obj(r,ret=False):\\n  h=-np.expm1(-r*t); a=(z@h)/(h@h); return (a,r,np.mean(abs(a*h-z))) if ret else np.sum((a*h-z)**2)\\n rr=minimize_scalar(obj,bounds=(0.03,5),method='bounded').x; params.append(obj(rr,1))\\np=np.array(params); print('a,rate,resid percentiles',np.percentile(p,[0,10,50,90,100],axis=0)); print(np.round(np.c_[x,y,p][:20],4));\\nfor d in (1,2,3,4):\\n a=D(x,d); print('degree',d,[(name,fit(a,z,52)) for name,z in [('y',y),('tr',tr),('amp',p[:,0]),('rate',p[:,1])]]);\\n if d<=2: print('coef y amp and rate',np.round(np.linalg.lstsq(a,np.c_[y,p[:,:2]],rcond=None)[0],3))\\nprint('amplitude correlations',np.corrcoef(np.c_[x,y,p[:,:2]].T).round(2))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_dag.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine trajectory → H2 nonlinear spatial amplitudes and rates; the archived public trajectory MAE is 0.205189.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted trajectory regressor\",\"rejected_reason\":\"The observed saturation suggests a low-dimensional temporal law worth testing before fitting eight separate responses.\"}],\"rationale\":\"Quantify panel calibration and test whether a saturating temporal basis separates the trajectory into learnable spatial factors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "ae064ab722f838d3020b068f968498aff5d1ae0c52d8afd225a1fd582404aace",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22764.45,
+      "usage_known": true,
+      "prompt_tokens": 21852,
+      "cached_tokens": 5504,
+      "completion_tokens": 900
+    }
+  ]
+}

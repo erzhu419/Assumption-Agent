@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9196aa063f554e2bb3b3c6521206c124",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:08.994061+00:00",
+  "ended_at_utc": "2026-11-28T15:24:00.220479+00:00",
+  "request_sha256": "a7209639037a5ea72029215cdb16078112458048f630a24e0755409ff5e2d311",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61291,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38734,
+    "cached_tokens": 12672,
+    "completion_tokens": 2260
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^for pn /,$d' /tmp/probe.py >/tmp/p10.py; cat >>/tmp/p10.py <<'PY'\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.special import erf\\nfrom scipy.linalg import solve\\nprint('frozen align source:'); import inspect;print(inspect.getsource(f.run_node))\\nW={};Y=np.c_[y,T]; n=52; rng=np.random.default_rng(211); folds=[(np.setdiff1d(np.arange(n),v),v) for v in np.array_split(rng.permutation(n),4)];folds.append((np.arange(n),np.arange(n,len(y))))\\ndef measure(pred):\\n m=np.array([[np.mean(abs(E[:,0])),np.mean(abs(E[:,1:]))] for E in pred]);return np.r_[m[:-1].mean(0),m[-1]]\\ndef ev(D):return measure([D[b]@ls(D[a],Y[a])-Y[b] for a,b in folds])\\ndef app(x,h,typ):return {'gau':lambda:x*np.exp(-(h*x)**2),'sin':lambda:np.sin(h*x),'atan':lambda:np.arctan(h*x),'cos':lambda:1/(1+(h*x)**2),'tanh':lambda:np.tanh(h*x),'erf':lambda:erf(h*x)}[typ]()\\ndef mapping(p,k,types):\\n U=s[p]['u'];V=s[p][k]; cand=[]\\n for typ in types:\\n  def design(x,h):return np.c_[f._affine(x),app(x,h,typ)]\\n  def err(h):\\n   D=design(U,h);return np.linalg.norm(D@ls(D,V)-V)\\n  g=np.linspace(.2,4,40); j=np.argmin([err(h) for h in g]); q=minimize_scalar(err,bounds=(max(.05,g[j]-.15),g[j]+.15),method='bounded'); C=ls(design(U,q.x),V);cand.append((q.fun,typ,q.x,C))\\n e,typ,h,C=min(cand,key=lambda a:a[0]); print('map',p,k,e,typ,h,'panel rms',np.std(U,axis=0));return lambda x: np.c_[f._affine(x),app(x,h,typ)]@C\\nB=mapping('panel_b','v',['gau','sin']); C=mapping('panel_c','v1',['gau','sin','atan','tanh','erf','cos']); F=mapping('panel_c','v2',['cos']); X=B(raw);\\nprint('raw invert mismatch',np.max(abs(raw-f._inverse(tr['x'],f._fit_sensor(s['panel_a'])))));print('panel ranges and Z',[(k,np.min(s[k]['u']),np.max(s[k]['u'])) for k in ('panel_a','panel_b','panel_c')],X.min(),X.max());\\nfor nm,U in [('B',X),('raw',raw),('C(B)',C(X)),('F(B)',F(X)),('C(raw)',C(raw)),('F(raw)',F(raw)),('B(C(raw))',B(C(raw))),('B(F(raw))',B(F(raw)))]:\\n Q=poly(U,2)[0];print(nm,'Q',ev(Q).round(4));print(nm,'Q+affC+affF',ev(np.c_[Q,C(U),F(U)]).round(4));print(nm,'Q+quadC',ev(np.c_[Q,poly(C(U),2)[0][:,1:]]).round(4));\\n if nm not in ('B','raw','C(B)','F(B)'):continue\\n R=[]\\n for typ in ('cos','sin','gau','atan','tanh'):\\n  for h in (.4,.65,1.,1.3,1.6,2.2,2.8,3.5):\\n   A=app(U,h,typ);P=lambda x:poly(x,2)[0]\\n   for j,D in enumerate([np.c_[Q,A],np.c_[Q,A,U*A],np.c_[Q,A,U*A,np.stack([U[:,i]*A[:,j]+U[:,j]*A[:,i] for i in range(4) for j in range(i+1,4)],1)],P(A),np.c_[P(A),U],np.c_[Q,P(A)[:,1:]]]):\\n    E=ev(D);R.append((E[:2].mean(),typ,h,j,E))\\n print('best feat',nm,[(typ,h,j,E.round(4)) for _,typ,h,j,E in sorted(R,key=lambda a:a[0])[:8]])\\n if nm not in ('B','raw'):continue\\n R=[]; A=f._affine(U); D2=cdist(U,U,'sqeuclidean');\\n for typ in ('gauss','matern','laplace','poly3','poly4','poly5','poly6'):\\n  for h in (.2,.4,.7,1.,1.5,2.,3.,5.,8.):\\n   r=np.sqrt(D2)*h;G={'gauss':lambda:np.exp(-r*r/2),'matern':lambda:(1+r+r*r/3)*np.exp(-r),'laplace':lambda:np.exp(-r)}.get(typ,lambda:(1+h*U@U.T)**int(typ[-1]))();G/=np.mean(np.diag(G));\\n   for a0 in (.00001,.0001,.001,.01,.1):\\n    for D in (A,Q):\\n     E=[]\\n     for a,b in folds:\\n      K=G[np.ix_(a,a)]+a0*np.eye(len(a)); cross=G[np.ix_(b,a)]; aD=D[a]; sol=solve(K,np.c_[Y[a],aD],assume_a='pos'); S=sol[:,:Y.shape[1]]; F0=sol[:,Y.shape[1]:]; co=ls(aD.T@F0,aD.T@S); E.append(cross@(S-F0@co)+D[b]@co-Y[b]);\\n     M=measure(E);R.append((M[:2].mean(),typ,h,a0,D.shape[1],M))\\n print('kernel',nm,[(typ,h,a,d,E.round(4)) for _,typ,h,a,d,E in sorted(R,key=lambda a:a[0])[:8]])\\n# Assess how closely readouts agree with a common squashed affine coordinate and its quadratic interactions.\\nfor xx,nm in [(X,'B'),(raw,'raw'),(C(X),'CB')]:\\n for typ in ['rat','sin','tanh','gau','poly']:\\n  for mode in [0,1,2]:\\n   def F0(x,p):\\n    h=np.exp(np.clip(p[0],-4,2)); z=x if mode==0 else x+p[3:7] if mode==1 else x@p[3:].reshape(4,4);\\n    W={'rat':lambda:z/(1+(h*z)**2),'sin':lambda:np.sin(h*z),'tanh':lambda:np.tanh(h*z),'gau':lambda:z*np.exp(-(h*z)**2),'poly':lambda:z**3}[typ]();return x+p[1]*W+p[2]*z**2\\n   def feat(x,p):return poly(F0(x,p),2)[0]\\n   out=[]; pars=[]\\n   for a,b in (folds[0],folds[-1]):\\n    def res(p):\\n     D=feat(xx[a],p);return (D@ls(D,Y[a])-Y[a]).ravel()\\n    pextra=[] if mode==0 else [0]*4 if mode==1 else np.eye(4).ravel(); opt=min([least_squares(res,np.r_[h,b0,0,pextra],max_nfev=55) for h,b0 in [(-.7,.3),(-.2,-.3),(.6,.3)]],key=lambda q:q.cost); DD=feat(xx,opt.x); E=abs(DD[b]@ls(DD[a],Y[a])-Y[b]);out.append((E[:,0].mean(),E[:,1:].mean()));pars.append(opt.x[:3].round(3));\\n   print('super',nm,typ,mode,np.array(out).ravel().round(4),pars)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/p10.py > /tmp/p10.out; cat /tmp/p10.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel-B warp plus quadratic readouts → test whether panel-C transforms or shared nonlinear coordinates recover both response laws; official scalar and trajectory MAEs are 0.096326 and 0.069273.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare panel-C compositions, nonlinear coordinate laws, and regularized smooth models using training-only fits and multiple validation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f09ece393a1c10320830959b80765fb8359ffa725abbd99bbb9804bb650c340f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52267.69,
+      "usage_known": true,
+      "prompt_tokens": 38734,
+      "cached_tokens": 12672,
+      "completion_tokens": 2260
+    }
+  ]
+}

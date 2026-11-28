@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "172896c98c5c49789916b9cff5b354b1",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:00.374559+00:00",
+  "ended_at_utc": "2026-11-28T15:45:37.561120+00:00",
+  "request_sha256": "902f7e51a02ca18e75d493a88ef32c7f44b00cc473f890c38c19fea321d8f2ed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33025,
+    "cached_tokens": 12672,
+    "completion_tokens": 1643
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph9.py <<'PY'\\nexec(open('/tmp/recover9.py').read().split('for j in range(4):')[0])\\nfrom itertools import combinations\\nj=np.arange(4); k=(j+2)%4\\nfamilies={'rat':(lambda x,p: x/(1+p[0]*abs(x)**p[1]),[.7,2.],([.01,.5],[20.,6.])), 'tanh':(lambda x,p:np.tanh(x*p[0]),[1.2],([.01],[8.])), 'sin':(lambda x,p:np.sin(x*p[0]),[2.4],([.01],[8.])), 'oddg':(lambda x,p:x*np.exp(-p[0]*abs(x)**p[1]),[.7,2.],([.01,.5],[10.,6.]))}\\nfits=[]\\nfor n,(fn,p0,bd) in families.items():\\n for m,(gn,q0,be) in families.items():\\n  def design(w,i,p):\\n   a,b=w[:,i],w[:,k[i]]\\n   return np.c_[np.ones(len(w)),a,b,fn(a,p[:len(p0)]),gn(b,p[len(p0):])]\\n  def obj(p):return np.column_stack([design(u,i,p)@L(design(u,i,p),v[:,i])-v[:,i] for i in j]).ravel()\\n  fit=least_squares(obj,p0+q0,bounds=(bd[0]+be[0],bd[1]+be[1]));p=fit.x\\n  fits.append((np.std(fit.fun),n,m,p,np.column_stack([L(design(u,i,p),v[:,i]) for i in j])))\\nfor row in sorted(fits,key=lambda a:a[0])[:8]:print('calfit',*row)\\n_,n,m,p,c=min(fits,key=lambda a:a[0]);fn,p0,_=families[n];gn,_,_=families[m]\\ndef cal(w):return c[0]+c[1]*w+c[2]*w[:,k]+c[3]*fn(w,p[:len(p0)])+c[4]*gn(w[:,k],p[len(p0):])\\ndef inv(w):\\n z=w.copy(); ii=np.arange(4)\\n for _ in range(40):\\n  e=cal(z)-w\\n  if np.max(abs(e))<1e-11:break\\n  jac=np.empty((len(z),4,4))\\n  for i in ii:\\n   zz=z.copy();zz[:,i]+=1e-6;jac[:,:,i]=(cal(zz)-cal(z))/1e-6\\n  z-=np.clip(np.linalg.solve(jac,e[...,None])[...,0],-.5,.5)\\n print('inverse err',abs(cal(z)-w).max());return z\\nx=inv(s['train']['x']); cp=s['panel_c']; bp=s['panel_b']; b=A(x)@L(A(bp['u']),bp['v']); h=[]; primitive=[]\\nfor key,fun,p0,bd in [('v1',families['rat'][0],[1.,1.1],([.01,.3],[10.,5.])),('v2',lambda x,p:np.expm1(-p[0]*x*x),[.3],([.01],[4.]))]:\\n def des(x,p):return np.c_[A(x),fun(x,p)]\\n u=cp['u'];v=cp[key]; opt=least_squares(lambda p:(des(u,p)@L(des(u,p),v)-v).ravel(),p0,bounds=bd);p=opt.x\\n print(key,p,np.std(opt.fun)); h.append(des(x,p)@L(des(u,p),v)); primitive.append(fun(x,p))\\nc,d=h; r,g=primitive\\nY=np.c_[s['train']['y'],s['train']['traj']]; A0=np.ones((len(x),1)); tr=np.arange(52);te=np.arange(52,len(x))\\ndef score(f):\\n w=L(f[tr],Y[tr]);e=np.abs(f@w-Y);return np.round([e[tr,0].mean(),e[te,0].mean(),e[tr,1:].mean(),e[te,1:].mean()],6)\\ndef quad(x):i,j=np.triu_indices(x.shape[1]);return x[:,i]*x[:,j]\\ndef cross(x,y):return (x[:,:,None]*y[:,None,:]).reshape(len(x),-1)\\ngroups={'x':x,'b':b,'c':c,'d':d,'r':r,'g':g,'xq':quad(x),'bq':quad(b),'cq':quad(c),'dq':quad(d),'xc':cross(x,c),'xd':cross(x,d),'bc':cross(b,c),'bd':cross(b,d),'cd':cross(c,d),'x3':x**3,'c3':c**3,'tanhc':np.tanh(c),'tanhb':np.tanh(b),'tanhd':np.tanh(d)}\\nfor base in [('x',),('c',),('d',),('c','d'),('x','c'),('x','c','d')]:\\n f=np.column_stack([A0,*[groups[k] for k in base]]); print('base',base,score(f))\\n for key,g0 in groups.items():\\n  if key not in base: print(key,score(np.c_[f,g0]),end='; ')\\n print()\\nnp.savez('/tmp/graph9.npz',Y=Y,**groups)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph9.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Fit separate nonlinearities for the diagonal and opposite-index calibration paths, then screen compositions of the recovered operators; current 52/20 MAEs are 0.046097 for y and 0.047588 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a dense high-degree calibration polynomial\",\"rejected_reason\":\"Sparse cubic terms identify opposite-coordinate coupling, but higher degrees still miss the observed inlier accuracy and risk unstable inversion.\"}],\"rationale\":\"Recover calibration from panel measurements alone, then compare which downstream operator terms explain each output on the fixed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b6c87aa45b81daabfd249b6be49cc66155cafa3c1749880680d43fe18db0dc48",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37184.68,
+      "usage_known": true,
+      "prompt_tokens": 33025,
+      "cached_tokens": 12672,
+      "completion_tokens": 1643
+    }
+  ]
+}

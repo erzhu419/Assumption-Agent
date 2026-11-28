@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8291023460bf4eedada99ed6e4f163e4",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:27:12.091725+00:00",
+  "ended_at_utc": "2026-11-28T16:27:38.923627+00:00",
+  "request_sha256": "edf246f8562375c2261d3d3a9b8bca0461548b007a2cdb8caf7584bf4d1388cc",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33789,
+    "cached_tokens": 12672,
+    "completion_tokens": 1129
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location(path.stem, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nn0 = load(root/'_frozen_nodes/node_00.py')\\nn1 = load(root/'node_01.py')\\nn2 = load(root/'_frozen_nodes/node_02.py')\\nwith (root/'public_batch.pkl').open('rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nx, y, t = (train[k] for k in ('x','y','traj'))\\nrng = np.random.default_rng(311)\\norders = [(f'random_{i}', rng.permutation(len(x))) for i in range(32)]\\norders += [('high_norm', np.argsort(np.linalg.norm(x, axis=1)))]\\nfor j in range(x.shape[1]):\\n    order = np.argsort(x[:,j]); orders += [(f'high_axis_{j}', order), (f'low_axis_{j}', order[::-1])]\\nmetrics = {}\\nfor name, order in orders:\\n    i, j = order[:-20], order[-20:]\\n    fold = dict(study, train={k: train[k][i] for k in ('x','y','traj')}, test={'x': x[j]})\\n    raw = n0.run_node({'__input__': fold})\\n    fit = n1.run_node({'__input__': fold, 'node_00': raw})\\n    out = n2.run_node({'node_00': raw, 'node_01': fit})\\n    ye, te = abs(out['y_hat']-y[j]), abs(out['state_pred']-t[j])\\n    metrics[name] = [float(ye.mean()), float(te.mean()), float(te.mean(axis=0).max())]\\nworst = {c: max((m[i], name) for name, m in metrics.items()) for i, c in enumerate(('endpoint_mae','trajectory_mae','single_horizon_mae'))}\\nprint(json.dumps({'folds':len(metrics), 'worst':worst}, allow_nan=False))\\nassert max(pair[0] for pair in worst.values()) < 0.038\\n\\npanel = study['panel_a']\\nu, v = panel['u'], panel['v']\\nsize = np.abs(v).max(axis=1)\\nmed = np.median(size)\\nclean = size <= med + 8*max(1.4826*np.median(abs(size-med)), 0.1)\\nerrors = []\\nfor j in np.flatnonzero(clean):\\n    keep = np.arange(len(u)) != j\\n    estimated = n1._calibrate({'u':u[keep], 'v':v[keep]}, v[j:j+1])[0]\\n    errors.append(float(np.max(abs(estimated-u[j]))))\\nprint(json.dumps({'panel_a_leave_one_reference_out_rows':len(errors), 'worst_absolute_coordinate_error':max(errors)}, allow_nan=False))\\nassert max(errors) < 0.005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 self-cubic calibration → H2 opposite-coordinate tanh/sine calibration with cosine-panel readouts; the exact candidate passed official CV at 0.002572 endpoint MAE and 0.004951 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"The official split passed, but the exact artifact has not yet been tested on coordinate-tail holdouts or leave-one-reference-out calibration.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged. Test both outputs and each trajectory horizon on held-out measured rows, and independently check calibration inversion on held-out reference pairs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dcb1de5bba9b91794067fd76b613977e5e8b0885c553e5d60810aaefd86b749d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27340.78,
+      "usage_known": true,
+      "prompt_tokens": 33789,
+      "cached_tokens": 12672,
+      "completion_tokens": 1129
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c4068f2aa67548ea9d599f0347033eda",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:01.968168+00:00",
+  "ended_at_utc": "2026-11-28T15:05:52.123715+00:00",
+  "request_sha256": "0644358d5121ec47f7b3952695ede21c279d321aa987e9c5c22592bf500c3281",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80731,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 47934,
+    "cached_tokens": 12672,
+    "completion_tokens": 2060
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/lastscan.py <<'PY'\\nfrom operators import *\\nfrom itertools import combinations, product\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nx=s['train']['x']; z=(x-a)/b; n=52; t=s['eval_times']; tr=s['train']['traj']; H=-np.expm1(-t[:,None]*np.array([.38,1.8,5.4])); Y=np.c_[s['train']['y'],fit(H,tr.T).T]; Q=PolynomialFeatures(2).fit_transform(z); P=PolynomialFeatures(3).fit_transform(z); Z={'z':z,'B':Bf(z),'Bt':(z-B[0])@B[1:].T,'BL':z@B[1:],'BT':z@B[1:].T}; c=s['panel_c']; u=c['u']; C=fit(PolynomialFeatures(2).fit_transform(u),c['v1']); C[abs(C)<.0005]=0; G=fit(F(np.cos(2.4*u)),c['v2']);\\nfor k,w in list(Z.items()):Z[k+'q']=PolynomialFeatures(2).fit_transform(w)@C; Z[k+'c']=F(np.cos(2.4*w))@G\\nscores=[]; preds=[]\\ndef ridge(K,d,l,key):\\n D=d[:n]; N=np.column_stack((K[:n,:n]+l*np.eye(n),D)); U=np.r_[N,np.c_[D.T,np.zeros((D.shape[1],D.shape[1]))]]; I=np.linalg.inv(U)[:n,:n]; A=I@Y[:n]; beta=fit(D,Y[:n]-N[:,:n]@A); pred=K[n:,:n]@A+d[n:]@beta; e=A/np.diag(I)[:,None]; scores.append((abs(e).mean(0),abs(pred-Y[n:]).mean(0),key));preds.append(pred)\\ndef kk(M):\\n M=M-M[:n].mean(0); M=M/np.maximum(M[:n].std(0),.03);return M@M.T/max(1,M.shape[1])\\nblocks={}; Db={}\\nfor k,w in Z.items():\\n if len(k)>2 and k not in ['BL','BT']: continue\\n v1=np.column_stack([w[:,i]+sg*w[:,j] for i,j in combinations(range(4),2) for sg in [1,-1]])\\n v2=np.column_stack([w[:,i]*w[:,j] for i,j in combinations(range(4),2)])\\n v3=np.column_stack([w[:,i]**2+sg*w[:,j]**2 for i,j in combinations(range(4),2) for sg in [1,-1]])\\n v4=np.c_[v1[:,:4]*w[:,2,None],v1[:,4:8]*w[:,3,None],w[:,0]*w[:,2]*w[:,3],w[:,0]*w[:,1]*w[:,2],w[:,1]*w[:,2]*w[:,3],w[:,0]*w[:,1]*w[:,3]]\\n Db[k]={'lin':np.c_[w,v1],'product':v2,'sqpair':v3,'triple':v4}\\n for nm,V in Db[k].items():\\n  for power in [.625,1.25,2.4,3.75]:\\n   for f,fun in [('trig',lambda d:np.c_[np.sin(d),np.cos(d)]),('abs',np.abs),('rational',lambda d:np.c_[d/(1+d*d),1/(1+d*d)]),('sat',lambda d:np.c_[np.tanh(d),d/(1+abs(d))])]:\\n    T=fun(V*power); blocks[k,nm,power,f]=kk(T)\\n   if nm=='lin':\\n    T=np.cos(power*V); blocks[k,nm,power,'lintrig']=kk((w[:,:,None]*T[:,None,:]).reshape(len(w),-1))\\nfor key,K in list(blocks.items()):\\n for l in [.0002,.005,.05,.2]:ridge(K+.2*kk(P[:,15:]),Q,l,key+(l,))\\nfor k,w in Z.items():\\n d=cdist(w,w,'sqeuclidean');\\n for g in [.02,.07,.2,.55,1.2,2.5]:\\n  for l in [.0001,.001,.01,.05,.2]:\\n   for mode,D in enumerate([F(z),Q]):\\n    for name,K in [('rbf',np.exp(-g*d)),('imq',1/np.sqrt(1+g*d)),('matern',(1+np.sqrt(g*d))*np.exp(-np.sqrt(g*d)))]:ridge(K,D,l,(k,name,g,l,mode))\\n# Sparse one-feature augmentation, residualized on quadratic backbone. Rank with leverage-corrected training predictions.\\nfor k, vv in Db.items():\\n for nm,v in vv.items():\\n  for i,d in enumerate(v.T):\\n   for gain in [.22,.625,1.25,2.4,3.75]:\\n    for fn,f in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('abs',np.abs),('rat',lambda w:1/(1+w*w))]:\\n     j=f(gain*d)\\n     for mm,D in [('add',np.c_[Q,j]),('lin',np.c_[Q,F(z)*j[:,None]]),('uv',np.c_[Q,v*j[:,None]])]:\\n      U,S,V=np.linalg.svd(D[:n],full_matrices=False); use=S>S[0]*1e-6; U=U[:,use]; B=(V[use].T/S[use])@(U.T@Y[:n]); p=D[n:]@B; e=(Y[:n]-D[:n]@B)/(1-(U*U).sum(1)[:,None]); scores.append((abs(e).mean(0),abs(p-Y[n:]).mean(0),(k,nm,i,gain,fn,mm)));preds.append(p)\\nS=np.array([v[0] for v in scores]); E=np.array([v[1] for v in scores]);\\nfor j in range(4):\\n print('OUTPUT',j)\\n for order in [np.argsort(S[:,j]),np.argsort(E[:,j])]:\\n  for i in order[:5]:print(np.round(S[i,j],4),np.round(E[i,j],4),scores[i][2])\\nfor k in [1,5,20,75,250]:\\n p=np.column_stack([np.mean([preds[i][:,j] for i in np.argsort(S[:,j])[:k]],axis=0) for j in range(4)]);print('ensemble',k,abs(p-Y[n:]).mean(0),abs(p[:,1:]@H.T-tr[n:]).mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/lastscan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (mode-specific ridge baseline) → H2 (shifted pairwise interactions with leave-one-out selection); the current artifact has 52/20 MAEs of 0.251442 for y and 0.425344 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select features by training residual alone\",\"rejected_reason\":\"Near-zero rational-model fitting errors did not transfer to the 20 held-out observations.\"}],\"rationale\":\"Test omitted nonlinearities of pairwise products and squared-coordinate differences. Use exact leave-one-out errors on the first 52 rows to select candidates without consulting the required holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4f4d6b27df9b0299ff5024f8b7e88d40d98ec6fe860d8d61aeac0fb4533ce3d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50154.14,
+      "usage_known": true,
+      "prompt_tokens": 47934,
+      "cached_tokens": 12672,
+      "completion_tokens": 2060
+    }
+  ]
+}

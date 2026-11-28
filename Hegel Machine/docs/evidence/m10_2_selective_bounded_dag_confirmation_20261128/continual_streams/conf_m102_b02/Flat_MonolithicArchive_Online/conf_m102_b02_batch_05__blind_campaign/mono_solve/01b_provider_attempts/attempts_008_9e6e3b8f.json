@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e6e3b8fca494118b45141a0ac57c91b",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:45.114887+00:00",
+  "ended_at_utc": "2026-11-28T15:26:31.607998+00:00",
+  "request_sha256": "d8fc7d8995d8d746dcf58d00319bca0d071f0817919c5d9219b452511de18480",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54247,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35890,
+    "cached_tokens": 12672,
+    "completion_tokens": 1898
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/*03_solver.py /tmp/old03.py; python3 - <<'PY'\\np='/tmp/old03.py'; s=open(p).read(); open('/holdout_task/batch_solver.py','w').write(s[:s.index('def _operator')])\\nPY\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _b_operator(panel, w):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u','v'))\\n    def design(a, q):\\n        return _intercept(np.column_stack((a, np.sin(a * np.exp(q)))))\\n    def residual(q):\\n        d = design(u, q)\\n        return (d @ _ls(d, v) - v).ravel()\\n    fit = least_squares(residual, np.full(4, np.log(3.)), bounds=(np.log(1.5), np.log(4.5)), gtol=1e-11)\\n    return design(w, fit.x) @ _ls(design(u, fit.x), v)\\n\\n\\ndef _features(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    w = _b_operator(study['panel_b'], z)\\n    panel = study['panel_c']\\n    def design(a):\\n        return _intercept(a * np.roll(a, -1, axis=1))\\n    q = design(w) @ _ls(design(panel['u']), panel['v1'])\\n    base = _intercept(np.column_stack((z, q)))\\n    cross = z[:, :, None] * q[:, None, :]\\n    return (np.column_stack((base, np.trace(cross, axis1=1, axis2=2))),\\n            np.column_stack((base, cross.reshape(len(z), -1))))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    fy, fs = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    y = fy[n:] @ _ls(fy[:n], train['y'])\\n    traj = np.asarray(train['traj'], dtype=float)\\n    mean = traj.mean(axis=0)\\n    modes = np.linalg.svd(traj - mean, full_matrices=False)[2][:2]\\n    state = (fs[n:] @ _ls(fs[:n], (traj - mean) @ modes.T)) @ modes + mean\\n    end = state[:, -1]\\n    return dict(y_hat=y, state_pred=state,\\n                diagnostics_vec=np.array([y.mean(), y.std(), end.mean(), end.std()]))\\nPY\\ncat > /tmp/probe_b.py <<'PY'\\nimport sys; sys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\nimport itertools,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52; ts=s['eval_times']; np.set_printoptions(precision=5,suppress=True)\\nz=m._calibrate(s['panel_a'],tr['x']); p=s['panel_b']; u,v=p['u'],p['v']; I=m._intercept; ls=m._ls\\nc=s['panel_c']; C=lambda x:I(x*np.roll(x,-1,axis=1)); cc=ls(C(c['u']),c['v1'])\\ndef report(w):\\n q=C(w)@cc; cross=(z[:,:,None]*q[:,None,:]); a=I(np.c_[z,q,np.trace(cross,axis1=1,axis2=2)]); b=I(np.c_[z,q,cross.reshape(len(z),-1)]); y=tr['y']; t=tr['traj']; cy=ls(a[:n],y[:n]); ct=ls(b[:n],t[:n]); return [np.mean(abs(a[n:]@cy-y[n:])),np.mean(abs(b[n:]@ct-t[n:])),np.std(a[:n]@cy-y[:n]),np.std(b[:n]@ct-t[:n])]\\nprint('baseline', report(m._b_operator(p,z))); print('times',ts); print('mean trajectory',tr['traj'].mean(0)); print('SVD modes',np.linalg.svd(tr['traj']-tr['traj'].mean(0),full_matrices=False)[2][:2]);\\nfor name, fn, g in [('sin',np.sin,2.9),('erf',erf,1.45),('rational',lambda x:x/(1+x*x),.9),('asinh',np.arcsinh,1.8),('tanh',np.tanh,1.45),('gauss',lambda x:x*np.exp(-x*x),1.04)]:\\n for mode in ('cyc','mix','mixbias','cubic','sin2','diagbias'):\\n  def D(a,p):\\n   scale=np.exp(p[:4]); W=np.diag(scale); j=np.arange(4)\\n   if mode=='cyc': W[(j+1)%4,j]=p[4:8]\\n   if mode.startswith('mix'): W[~np.eye(4,dtype=bool)]=p[4:16]\\n   shift=p[-4:] if mode in ('mixbias','diagbias') else 0\\n   t=fn(a@W+shift)\\n   if mode=='cubic':t=np.c_[t,a**3]\\n   if mode=='sin2':t=np.c_[t,np.sin(a*p[4])]\\n   return I(np.c_[a,t]);\\n  def obj(p):d=D(u,p);return (d@ls(d,v)-v).ravel()\\n  extra={'cyc':4,'mix':12,'mixbias':16,'cubic':0,'sin2':1,'diagbias':4}[mode]\\n  init=np.r_[np.full(4,np.log(g)),np.zeros(extra)];\\n  if mode=='sin2':init[-1]=1.25\\n  f=least_squares(obj,init,max_nfev=150,bounds=(np.r_[np.full(4,-2.),np.full(extra,-5.)],np.r_[np.full(4,1.6),np.full(extra,5.)])); d=D(u,f.x); coef=ls(d,v); print(name,mode,'panel',np.sqrt(np.mean(f.fun**2)),'cv',np.round(report(D(z,f.x)@coef),6),'q',np.round(f.x,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_b.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic cubic calibration → panel B then panel C v1 with separate readouts; 52/20 MAEs are 0.00390 for y and 0.01232 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include panel C v2 in the forward graph\",\n      \"rejected_reason\": \"The strongest held-out fits use C v1 after B and do not need v2.\"\n    }\n  ],\n  \"rationale\": \"Save the graph that clears both error gates, then test whether missing panel B terms explain its residuals and limit trajectory accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "68e4fea17055c659f1799228df02a2b441eee2fd72139c19b1907c0b2e999dff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46491.77,
+      "usage_known": true,
+      "prompt_tokens": 35890,
+      "cached_tokens": 12672,
+      "completion_tokens": 1898
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae4955aef8b24e59a78331e7b319c625",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:03.651996+00:00",
+  "ended_at_utc": "2026-11-28T15:16:37.734351+00:00",
+  "request_sha256": "ca0c49975f604feae7ba94c2b52e8f27d354902ec4033ad1566103de8980fde4",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37241,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26628,
+    "cached_tokens": 5504,
+    "completion_tokens": 1403
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.special import erf\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nsys.path.insert(0,'/holdout_task/_frozen_nodes'); import node_00\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=node_00._affine(s['panel_a'],True); b=node_00._affine(s['panel_b']); x=np.linalg.solve(a[1:].T,(s['train']['x']-a[0]).T).T; z=node_00.run_node({'__input__':s})['z']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(Y); ids=np.arange(n); splits=[(ids[(ids<l)|(ids>=r)],ids[l:r]) for l,r in [(52,72),(0,20),(20,40),(40,60)]]\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; print(k)\\n for j in p.keys()-{'u'}:\\n  v=p[j]; print(j,[(d,round(np.mean(abs((f:=PolynomialFeatures(d).fit_transform(u))@np.linalg.lstsq(f,v,rcond=None)[0]-v)),6)) for d in (1,2,3)])\\nprint('x range',x.min(0),x.max(0)); print('trajectory temporal modes',np.linalg.svd(Y[:,1:],full_matrices=False)[2][:2]); print('Y correlations linear',np.round(np.corrcoef(np.c_[x,Y[:,0],Y[:,1],Y[:,-1]].T)[:4,-3:],3))\\ndef score(K,l):\\n scores=[]\\n for i,j in splits:\\n  E=abs(K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+l*np.eye(len(i)),Y[i])-Y[j]); scores.append([E[:,0].mean(),E[:,1:].mean()])\\n S=np.array(scores); return max(S.max(0)),S[0],S.max(0)\\nres=[]\\nfor nm,w in [('x',x),('z',z),('both',np.c_[x,z])]:\\n for conv in ('identity','tanh','asinh','erf','sin'):\\n  for a in ([1] if conv=='identity' else [.75,1.5,2.5,3.5,5]):\\n   h={'identity':lambda u:u,'tanh':np.tanh,'asinh':np.arcsinh,'erf':erf,'sin':np.sin}[conv](a*w)\\n   h=h/np.maximum(h.std(0),.01); v=w/np.maximum(w.std(0),.01)\\n   for form,g in [('h',h),('vh',np.c_[v,h])]:\\n    lin=g@g.T/g.shape[1]; D=cdist(g,g,'sqeuclidean')/g.shape[1];\\n    for typ,K in [(f'p{d}',(1+lin)**d) for d in (1,2,3,4)] + [(f'g{d}',np.exp(-d*D)+(1+lin)**2) for d in (.1,.5,2,5)]:\\n     for l in (1e-7,1e-4,.002,.02,.15): res.append((score(K,l), (nm,conv,a,form,typ,l)))\\nfor r in sorted(res,key=lambda r:r[0][0])[:18]: print(r)\\nfor w in [x,z]:\\n F=PolynomialFeatures(2).fit_transform(w); C=np.linalg.lstsq(F,Y[:,[0,1,-1]],rcond=None)[0]; print('quadratic terms',np.round(C,3)); print('quad train MAE',np.mean(abs(F@C-Y[:,[0,1,-1]]),0))\\nPY\\npython3 /tmp/probe.py; grep -E 'stat_0[489]|stat_1[014]|mae' /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reuse archived features → H2 test new nonlinear bases; the better archive has official-split MAE 0.23758 for y and 0.17614 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived feature and kernel choices can be reused unchanged on the current campaign.\",\n    \"empirical_witness\": \"Both archives exceed both 0.038 MAE limits; even the better archive gives 0.23758 and 0.17614 on the official split.\",\n    \"causal_blanket_diagnosis\": \"Trajectory rank is not the primary bottleneck: the frozen two-mode reconstruction error is only 0.00352.\",\n    \"sublated_pivot\": \"Keep the frozen handoffs and test nonlinear and interaction bases before adopting a new mechanism.\",\n    \"risk_kind\": \"out-of-sample prediction error\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the newer archived solver unchanged\",\n      \"rejected_reason\": \"It misses both official tolerances by more than fourfold.\"\n    }\n  ],\n  \"rationale\": \"Compare polynomial and nonlinear interaction families across four blocked splits. Examine the original latent coordinates only as a diagnostic for directional structure; the final sink must operate on the frozen handoffs alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "13735927279e828a2a2e6203a4354b711490d6e277033247ee7ce93248f3eef3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34501.62,
+      "usage_known": true,
+      "prompt_tokens": 26628,
+      "cached_tokens": 5504,
+      "completion_tokens": 1403
+    }
+  ]
+}

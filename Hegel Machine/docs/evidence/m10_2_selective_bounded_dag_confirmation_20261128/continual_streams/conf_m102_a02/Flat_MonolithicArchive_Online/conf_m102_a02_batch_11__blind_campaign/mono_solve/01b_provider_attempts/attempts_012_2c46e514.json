@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c46e514266147be9d352062006cb963",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:21.778813+00:00",
+  "ended_at_utc": "2026-11-28T15:59:44.768446+00:00",
+  "request_sha256": "79c7e046bd8d2f1d3cd092ecf548b163d85f01683b2cfb6768d0b3b47f23c036",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69893,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41839,
+    "cached_tokens": 12672,
+    "completion_tokens": 875
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/batch_solver_v01.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\na = s.index('def _response(')\\nb = s.index('def solve_batch(', a)\\ns = s[:a] + '''def _response(x, y, q):\\n    \\\"\\\"\\\"Profile a quadratic readout plus two saturating projections.\\\"\\\"\\\"\\n    def design(z, p):\\n        h = z[:, 2] + z[:, [0, 1, 3]] @ p[:3] + p[3]\\n        return np.column_stack((_quadratic(z), np.tanh(p[4]*h),\\n                                np.tanh(z @ p[5:9] + p[9])))\\n\\n    penalty = np.diag(np.r_[np.zeros(5), np.full(10, .003), [.008, .008]])\\n    target = np.r_[y, np.zeros(len(penalty))]\\n\\n    def profile(p):\\n        d = np.vstack((design(x, p), penalty))\\n        w = _ls(d, target)\\n        return d @ w - target, w\\n\\n    starts = [a+b for a in [[-.52,-.15,-.12,0,1.8], [-.5,-.15,-.12,-.5,2.15]]\\n              for b in [[1,0,-1,0,0], [0,1,0,-1,0], [-.5,-.15,1,-.12,0]]]\\n    bounds = ([-3]*4 + [.2] + [-5]*5, [3]*4 + [6.] + [5]*5)\\n    fit = min((least_squares(lambda p: profile(p)[0], p, bounds=bounds,\\n                            max_nfev=100) for p in starts), key=lambda r: r.cost)\\n    return design(q, fit.x) @ profile(fit.x)[1]\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /tmp/verify11.py | tee /tmp/final11.log\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear calibration) → H2 (quadratic readout plus two saturating projections); the challenger scored 0.00970 on the prescribed split and 0.04100 on the worst directional split, down from 0.09831.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the single-gate solver\",\n      \"rejected_reason\": \"Its slightly better prescribed and random-split scores do not outweigh the challenger's reduction in directional error.\"\n    }\n  ],\n  \"rationale\": \"Promote the two-projection readout while leaving the trajectory model unchanged, then rerun the schema validator and all holdouts in a clean process against the exact saved artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "76c0ad88ac59f108b44378e5e417fb3042d0d3fa1900fed286b689313536ca42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23558.44,
+      "usage_known": true,
+      "prompt_tokens": 41839,
+      "cached_tokens": 12672,
+      "completion_tokens": 875
+    }
+  ]
+}

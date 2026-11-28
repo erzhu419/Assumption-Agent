@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "33ff346e51ca4f439e6dbc0183242a4b",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:07:21.450399+00:00",
+  "ended_at_utc": "2026-11-28T16:08:00.080717+00:00",
+  "request_sha256": "a62b51f3f9df63a16e7efcc79037a5f44d91d24c6da4eeab8f4f25f6bd00d8ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32101,
+    "cached_tokens": 12672,
+    "completion_tokens": 1731
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Reconstruct the shared panel operators and fit the two observed readouts.\\\"\\\"\\\"\\nfrom itertools import combinations\\n\\nimport numpy as np\\nfrom scipy.optimize import root, least_squares\\n\\n\\n_EDGES = ((0, 1), (0, 3), (1, 2), (2, 3))\\n_ALL_EDGES = tuple(combinations(range(4), 2))\\n\\n\\ndef _ls(design, values):\\n    return np.linalg.lstsq(design, values, rcond=None)[0]\\n\\n\\ndef _aff(values):\\n    return np.column_stack((np.ones(len(values)), values))\\n\\n\\ndef _pair(values, edges):\\n    return np.column_stack([values[:, i] * values[:, j] for i, j in edges])\\n\\n\\ndef _cal_basis(z):\\n    return np.stack((np.ones_like(z), z, np.tanh(1.8*z),\\n                     np.sin(2.4*np.roll(z, 2, axis=-1))), axis=-1)\\n\\n\\ndef _calibrate(panel, x):\\n    design = _cal_basis(np.asarray(panel['u']))\\n    coef = []\\n    for j in range(4):\\n        d, y = design[:, j], panel['v'][:, j]\\n        idx = np.arange(len(d))\\n        for _ in range(15):\\n            err = np.abs(d @ _ls(d[idx], y[idx]) - y)\\n            idx = np.argsort(err)[:int(.82*len(d))]\\n        good = err < max(.001, 8*np.median(err))\\n        coef.append(_ls(d[good], y[good]))\\n    coef = np.asarray(coef)\\n\\n    def invert(row):\\n        def residual(z):\\n            return (_cal_basis(z)*coef).sum(axis=-1) - row\\n        est = root(residual, row, tol=1e-10)\\n        if np.max(np.abs(est.fun)) > 1e-8:\\n            est = least_squares(residual, est.x, gtol=1e-12)\\n        return est.x\\n\\n    return np.asarray([invert(row) for row in x]).reshape(-1, 4)\\n\\n\\ndef _coordinates(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    b, c = study['panel_b'], study['panel_c']\\n    b_design = lambda x: _aff(np.cos(2.6*x))\\n    w = b_design(z) @ _ls(b_design(b['u']), b['v'])\\n    p = _aff(_pair(w, _EDGES))\\n    q = p @ _ls(_aff(_pair(c['u'], _EDGES)), c['v1'])\\n    return w, p, q\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    w, p, q = _coordinates(study, np.concatenate((train['x'], study['test']['x'])))\\n    d = np.column_stack((p, _pair(q, _ALL_EDGES)))\\n    y = d[n:] @ _ls(d[:n], train['y'])\\n    state = p[n:] @ _ls(p[:n], train['traj'])\\n    tail = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task python3 - <<'PY'\\nimport pickle,numpy as np\\nimport batch_solver as m\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; r=s['train']; y=r['y']; T=r['traj']; t=s['eval_times']; w,p,q=m._coordinates(s,r['x']); cp=m._pair(q,m._ALL_EDGES); l=m._ls\\nD=np.c_[p,cp]; print('scalar coefficients',l(D[:52],y[:52]),'rank',np.linalg.svd(D,compute_uv=False)); print('affine q co:',l(np.c_[m._aff(q),cp][:52],y[:52])); print('trajectory spatial coef SVD:',np.linalg.svd(l(p,T),compute_uv=False));\\nfor a in [p,np.c_[p,cp],np.c_[m._aff(q),cp],np.c_[m._aff(q),cp[:,[1,4]]]]:\\n ee=[]\\n for v in [np.arange(52,72),np.arange(20),np.arange(26,46)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(40)]:\\n  i=np.setdiff1d(np.arange(72),v); ee.append(np.mean(abs(a[v]@l(a[i],y[i])-y[v])))\\n print('scalar',ee[:3],max(ee))\\nfor typ in ['raw','svd','exp','fixedexp']:\\n ee=[]\\n for v in [np.arange(52,72),np.arange(20),np.arange(26,46)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(40)]:\\n  i=np.setdiff1d(np.arange(72),v); fit=l(p[i],T[i]); f=p[i]@fit\\n  if typ=='svd':\\n   b=np.linalg.svd(f,full_matrices=False)[2][:2]; fit=fit@b.T@b\\n  if typ in ['exp','fixedexp']:\\n   def b(r): return -np.expm1(-t[:,None]*r)\\n   def e(r):\\n    a=b(r); return (a@l(a,f.T)-f.T).ravel()\\n   rates=least_squares(e,[.42,1.8],bounds=([.05,1],[.99,4])).x if typ=='exp' else [.42,1.8]\\n   a=b(rates); fit=l(a,fit.T).T@a.T\\n  ee.append(np.mean(abs(p[v]@fit-T[v])))\\n print('state',typ,ee[:3],max(ee))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: pair interactions alone -> H2: shared sparse pair coordinates with a C1 scalar branch; prior scalar MAE was 0.00365 on 52/20 and at most 0.00511 over four splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Include the C2 branch in either readout\",\"rejected_reason\":\"C2 features did not match the held-out improvement from C1 pair products, and the trajectory already fits the shared sparse pair coordinates.\"}],\"rationale\":\"Save the panel-validated graph, run the public gate, and compare compact scalar and temporal bases over additional splits before final verification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9df2c7968efb1d7f00f0e76b857c4a1aa7f413d60f1f68956bd9cbefd6cb8aef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39895.25,
+      "usage_known": true,
+      "prompt_tokens": 32101,
+      "cached_tokens": 12672,
+      "completion_tokens": 1731
+    }
+  ]
+}

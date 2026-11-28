@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a046a8af292340078751016ac663a9a0",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:07.231799+00:00",
+  "ended_at_utc": "2026-11-28T15:17:38.177097+00:00",
+  "request_sha256": "2efa48343f979ec611e54ce698c3e22519cbbca98e40bcff89c6250ca1e9419b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41569,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31030,
+    "cached_tokens": 12672,
+    "completion_tokens": 1207
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/mech.py <<'PY'\\nexec(open('/tmp/fit.py').read().split(\\\"print('B linear'\\\")[0])\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nu,v=b['u'],b['v']; A=aff(u); vu=v\\nfor kind in ['linear','cubic','tanh','sin','sinh','atan','softsign','tanh+cubic','outputcube','outputatan','cubic-input','tanh-input']:\\n def pred(p,A):\\n  L=A@p[:20].reshape(5,4); g=p[20:24]; h=p[24:28]; j=p[28:32]\\n  if kind=='linear': return L\\n  if kind=='cubic': return L+g*L**3\\n  if kind=='tanh': return g*np.tanh(L)+h\\n  if kind=='sin': return g*np.sin(L)+h\\n  if kind=='sinh': return g*np.sinh(np.clip(L,-6,6))+h\\n  if kind=='atan': return g*np.arctan(L)+h\\n  if kind=='softsign': return g*L/np.sqrt(1+L*L)+h\\n  if kind=='tanh+cubic': return g*np.tanh(L)+h*L**3+j\\n  if kind=='outputcube': return np.sinh(np.arcsinh(g*L)/3)*h+j\\n  if kind=='outputatan': return np.arcsinh(g*L)*h+j\\n  U=A[:,1:]; U=(U+U**3*g) if kind=='cubic-input' else np.tanh(U*g); return aff(U)@p[:20].reshape(5,4)\\n p=np.r_[ls(A,v).ravel(),np.ones(4),np.zeros(4),np.zeros(4)];\\n if kind in ('outputcube','outputatan'): p[24:28]=1\\n sol=least_squares(lambda p:(pred(p,A)-v).ravel(),p,max_nfev=350); r=pred(sol.x,A)-v; print('B',kind,np.mean(abs(r),0),np.max(abs(r)),sol.x[20:]);\\n if np.mean(abs(r))<.02: print(sol.x[:20].reshape(5,4)); np.savez('/tmp/B_'+kind,p=sol.x,bx=pred(sol.x,aff(x)),lin=aff(x)@sol.x[:20].reshape(5,4))\\nprint('B samples',np.c_[u,v][:14]);\\nu,v=c['u'],c['v2'];\\nfor name,z in [('poly2sep',np.c_[aff(u),u*u]),('poly3sep',np.c_[aff(u),u*u,u**3]),('poly4sep',np.c_[aff(u),u*u,u**3,u**4]),('exp',aff(np.exp(.88*u))),('inputsin',np.c_[aff(u+.44*u*u),np.sin(1.25*u)]),('exp+linear',np.c_[aff(np.exp(.88*u)),u])]:\\n r=v-z@ls(z,v); h=np.sum(z*np.linalg.pinv(z).T,axis=1); print('C2',name,np.mean(abs(r),0),np.mean(abs(r/(1-h[:,None])),0)); print(ls(z,v) if name=='poly3sep' else '')\\nY=np.c_[tr['y'],tr['traj']]; U,S,V=np.linalg.svd(tr['traj'],full_matrices=False); print('time vectors',V[:2]); print('targets',np.c_[x[:24],Y[:24,0],U[:24,:2]*S[:2]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mech.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace the downstream use of an affine or quadratic panel-B proxy with a testable nonlinear calibration; current repeated-holdout worst MAEs are 0.1018 for the scalar and 0.1251 for the trajectory with full quadratic inputs.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the dense quadratic outcome fit\",\"rejected_reason\":\"Both prescribed-split errors exceed 0.038, and the fit extrapolates poorly across repeated holdouts.\"}],\"rationale\":\"Panel B has substantial residual even in the complete quadratic basis, whereas the trajectory is nearly rank two. Recover the sensor nonlinearity and inspect the two trajectory modes before fitting readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "afdc2acf8dd598d27b7574842a369edd52baf49a1fefb4a0dc5e39964e77f40a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31345.58,
+      "usage_known": true,
+      "prompt_tokens": 31030,
+      "cached_tokens": 12672,
+      "completion_tokens": 1207
+    }
+  ]
+}

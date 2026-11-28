@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da13c3717c1343d2b770762a88df9733",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:16:01.780452+00:00",
+  "ended_at_utc": "2026-11-28T16:16:26.092123+00:00",
+  "request_sha256": "afb099b779a14f2d925bbb7f1afe32003c8f9990f1329f53fd60f11c87842673",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38972,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27883,
+    "cached_tokens": 12672,
+    "completion_tokens": 949
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; sed -n '1,49p' conf_m102_a02_batch_06_solver.py; sed -n '1,49p' conf_m102_a02_batch_08_solver.py; grep -nE 'sin|cos|roll|tanh|exp|gate|poly' *solver.py | head -70; cat > /tmp/cal14.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe14 import *\\nu=s['panel_a']['u']; v=s['panel_a']['v']; good=np.max(abs(v-(u*f['gain']+f['offset'])),axis=1)<1\\nprint('A bad rows',np.where(~good)); print('clean residual ranges',np.min((v-u*f['gain']-f['offset'])[good],axis=0),np.max((v-u*f['gain']-f['offset'])[good],axis=0))\\ndef fit(a,t):\\n c=np.linalg.lstsq(a[good],t[good],rcond=None)[0]; print(np.mean(abs(a[good]@c-t[good]),axis=0)); return c\\nfor d in (1,2,3):\\n a=poly(u,d); c=fit(a,v); print('degree',d,'coefs',[(j,np.round(row,4).tolist()) for j,row in enumerate(c) if np.max(abs(row))>.015])\\nfor label,func in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh)]:\\n for freq in (1,2,2.15,3,4,6):\\n  a=np.c_[poly(u,1),func(freq*u)]; print(label,freq,end=' '); fit(a,v)\\nfor r in (1,2):\\n u=s['panel_c']['u']; v=s['panel_c'][f'v{r}']; print('C',r)\\n a=poly(u,2); c=np.linalg.lstsq(a,v,rcond=None)[0]; print(np.round(c,3));\\n for label,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh)]:\\n  def des(w): return np.c_[poly(u,1),fn(w*u)]\\n  def res(w): a=des(w); return (a@np.linalg.lstsq(a,v,rcond=None)[0]-v).ravel()\\n  opt=min([least_squares(res,[w],bounds=(.1,15)) for w in (1,2,3,5,8,12)],key=lambda o:o.cost); print(label,opt.x,np.mean(abs(opt.fun)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel-A calibration and low-order readouts -> H2 nonlinear panel-A inverse before fitting readouts; best tested held-out scalar and trajectory MAEs are 0.259 and 0.236.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The frozen per-coordinate affine fit is a sufficient inverse calibration for this batch.\",\"empirical_witness\":\"Median absolute panel-A residuals are 0.153–0.221 across all four channels, so a few gross outliers cannot explain the calibration error.\",\"causal_blanket_diagnosis\":\"Unmodeled panel-A response contaminates the inferred input coordinates to both readouts.\",\"sublated_pivot\":\"Identify the missing calibration terms on panel A while retaining the accurately fitted frozen panel-B map.\",\"risk_kind\":\"coordinate_model_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the polynomial readout directly on the frozen affine inverse\",\"rejected_reason\":\"The larger dictionaries lowered training errors while increasing held-out errors.\"}],\"rationale\":\"Fit calibration on the independent panel first, using coefficient structure and residuals to identify a compact map before testing readout generalization.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2d87c99371f27c2d4100284ae7f7e47a902f7e41339de1c997c2705662e80ca1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24310.08,
+      "usage_known": true,
+      "prompt_tokens": 27883,
+      "cached_tokens": 12672,
+      "completion_tokens": 949
+    }
+  ]
+}

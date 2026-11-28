@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1997e85b2f3f4761be2420c010501f75",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:33.769373+00:00",
+  "ended_at_utc": "2026-11-28T15:03:09.835102+00:00",
+  "request_sha256": "9dc72acc3d06f8b6ca0b715c6174c423ece6aaeb876fae991f1aec0ac72afcb0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48817,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33420,
+    "cached_tokens": 12672,
+    "completion_tokens": 1515
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/np.set_printoptions/,$d' /tmp/panel_probe.py > /tmp/sparseprobe.py; cat >> /tmp/sparseprobe.py <<'PY'\\nfrom itertools import combinations, combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True)\\nb=s['panel_b'];c=s['panel_c'];bx,bv=b['u'],b['v'];cx,cv,dv=c['u'],c['v1'],c['v2'];B=fit(aff(bx),bv);z=np.linalg.solve(B[1:].T,(w-B[0]).T).T\\nprint('panel sizes',[(k,{j:np.shape(a) for j,a in s[k].items()}) for k in ('panel_a','panel_b','panel_c')]);print('times',t)\\npairs=list(combinations(range(4),2)); triples=list(combinations_with_replacement(range(4),3)); triples=[k for k in triples if len(set(k))>1]\\ndef prod(x,ks):return np.column_stack([np.prod(x[:,k],axis=1) for k in ks])\\ndef cvstats(a,v):\\n h=np.sum(np.linalg.svd(a,full_matrices=False)[0]**2,axis=1); e=v-a@fit(a,v);return np.std(e),np.sqrt(np.mean((e/(1-h[:,None]))**2))\\nmodels={}\\ndef add(name,f):\\n a=f(bx);q=fit(a,bv);v=f(z)@q;models[name]=v;print(name,'panel',np.round(cvstats(a,bv),5))\\n return q\\nf0=lambda x:np.c_[aff(x),x**3]\\nfor ks in [[],pairs,triples[:0],list(combinations_with_replacement(range(4),2))]:\\n if ks:add('base+'+str(len(ks)),lambda x:np.c_[f0(x),prod(x,ks)])\\nextra={str(k):lambda x,k=k:np.prod(x[:,k],axis=1) for k in list(combinations_with_replacement(range(4),2))+triples}\\nextra.update({f'p{p}i{i}':lambda x,p=p,i=i:x[:,i]**p for p in (4,5,7) for i in range(4)})\\nchosen=[]\\nfor k in range(5):\\n def f(x,keys):return np.column_stack([f0(x)]+[extra[j](x) for j in keys]);\\n key=min((q for q in extra if q not in chosen),key=lambda q:cvstats(f(bx,chosen+[q]),bv)[1]);chosen.append(key)\\n add('step'+str(k),lambda x:f(x,chosen));print('selected',chosen)\\nfor label,fun,x0 in [('cubic',lambda x,p:x**3+x*p,np.full(4,.22)),('cubicshift',lambda x,p:(x+p[4:])**3+x*p[:4],np.r_[np.full(4,.22),np.zeros(4)]),('sinh',lambda x,p:np.sinh(x*p),np.full(4,2.)),('mix',lambda x,p:x**3+x*p[0],np.array([.22])),('powers',lambda x,p:np.sign(x)*abs(x)**p[0]+x*p[1],np.array([3,.22]))]:\\n for keys in [[],pairs]:\\n  def ff(x,p):return np.column_stack([aff(fun(x,p))]+([prod(x,keys)] if keys else []))\\n  def r(p):\\n   a=ff(bx,p);return (a@fit(a,bv)-bv).ravel()\\n  q=least_squares(r,x0,max_nfev=100);print(label,keys,q.x);add(label+str(len(keys)),lambda x:ff(x,q.x))\\nmodels['base']=f0(z)@fit(f0(bx),bv)\\nfn={'atan':np.arctan,'asinh':np.arcsinh,'tanh':np.tanh,'inv3':lambda u:np.sinh(np.arcsinh(u)/3)}\\nc2=lambda u:poly(u,2)@fit(poly(cx,2),dv)\\nprint('C2 coefficients',fit(poly(cx,2),dv))\\nfor name,v in models.items():\\n for k,f in fn.items():\\n  g=minimize_scalar(lambda g:np.mean((aff(f(cx*g))@fit(aff(f(cx*g)),cv)-cv)**2),bounds=(.1,8),method='bounded').x\\n  d=aff(f(v*g)); h=d@fit(aff(f(cx*g)),cv); e=c2(v)\\n  E=[errs(a) for a in (d,np.c_[d,e],np.c_[d,v],np.c_[d,e,v],np.c_[d,prod(h,pairs)],np.c_[d,e,prod(h,pairs)],np.c_[aff(v),e])]; best=min(range(len(E)),key=lambda i:max(E[i][2:]));print(name,k,best,E[best],E[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparseprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate coordinatewise cubics for panel B -> H2 identify a sparse nonlinear correction before fitting the heads; best measured holdout MAEs are 0.057/0.062.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the approximate cubic pipeline now\",\"rejected_reason\":\"Both public holdout errors still exceed 0.038.\"}],\"rationale\":\"Use leave-one-out panel errors to distinguish tied cubics, shifts, and sparse interactions, then check whether lower calibration error transfers to both prediction heads.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8ba4818c6a64cbdc128be7e8840196d0db0ee38dd84e83e30b2d28f866eeebcd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36064.7,
+      "usage_known": true,
+      "prompt_tokens": 33420,
+      "cached_tokens": 12672,
+      "completion_tokens": 1515
+    }
+  ]
+}

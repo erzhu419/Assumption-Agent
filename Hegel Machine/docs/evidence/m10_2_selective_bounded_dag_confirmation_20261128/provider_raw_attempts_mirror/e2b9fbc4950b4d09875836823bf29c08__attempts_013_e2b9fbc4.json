@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2b9fbc4950b4d09875836823bf29c08",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:54.797724+00:00",
+  "ended_at_utc": "2026-11-28T15:27:25.002997+00:00",
+  "request_sha256": "bcc4e601c3323f936c6a8d2745a3eec027bfb3a4db8e700ccbce776c25e75227",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43840,
+    "cached_tokens": 0,
+    "completion_tokens": 1154
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/batch_solver_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\nneedle = \\\"def solve_batch(study: dict) -> dict:\\\"\\nextra = '''def _quadratic(z):\\n    return np.column_stack([z[:, i]*z[:, j]\\n                            for i, j in combinations_with_replacement(range(4), 2)])\\n\\n\\ndef _adaptive_scalar(q, qt, y):\\n    scale = np.sqrt(np.mean(q*q, axis=0)).clip(1e-8)\\n    design = q/scale\\n    gram = design.T @ design\\n    rhs = design.T @ y\\n    coef = np.linalg.solve(gram + .03*np.eye(gram.shape[0]), rhs)\\n    for _ in range(5):\\n        penalty = .003/(np.abs(coef)+.035)**2\\n        penalty[:9] *= .1\\n        coef = np.linalg.solve(gram + np.diag(penalty), rhs)\\n    return (qt/scale) @ coef\\n\\n\\n'''\\ns = s.replace(needle, extra + needle)\\nold = '    y_hat=_ridge(_mixed(z,_warp(z,py)),_mixed(zt,_warp(zt,py)),y,.006)'\\nassert old in s\\ns = s.replace(old, '''    adaptive = _adaptive_scalar(_mixed(z,_warp(z,py)), _mixed(zt,_warp(zt,py)), y)\\n    fixed, fixed_test = [np.column_stack((_mixed(v,_warp(v,[.42,1.25])),_quadratic(v)))\\n                         for v in (z,zt)]\\n    y_hat = .75*adaptive + .25*_ridge(fixed,fixed_test,y,.03)''')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nfrom sklearn.model_selection import KFold\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['y']); results=[]\\nfor i,j in [(np.arange(52),np.arange(52,n)),*(fold for seed in (41,76,208) for fold in KFold(5,shuffle=True,random_state=seed).split(t['x']))]:\\n p=dict(s,train=dict(t,x=t['x'][i],y=t['y'][i],traj=t['traj'][i]),test={'x':t['x'][j]}); r=m.solve_batch(p)\\n y,h,d=(r[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n assert y.shape==(len(j),) and h.shape==(len(j),len(s['eval_times'])) and all(np.isfinite(x).all() for x in (y,h,d))\\n np.testing.assert_allclose(d,[y.mean(),y.std(),h[:,-1].mean(),h[:,-1].std()]); e=np.abs(h-t['traj'][j]); results.append((np.mean(abs(y-t['y'][j])),e.mean(),e.mean(0).max()))\\na=np.array(results); print('Prescribed 52/20 (y MAE, trajectory MAE, worst time MAE):',a[0]); print('Repeated-fold mean:',a[1:].mean(0),'worst:',a[1:].max(0)); assert a[0,0] <= .038 and a[0,1] <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unstructured mixed ridge -> H2 adaptive shrinkage with a fixed-basis blend; the challenger measured 0.03203 prescribed scalar MAE and 0.04647 worst repeated-fold scalar MAE, versus 0.03256 and 0.05298 for baseline.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the lowest-error candidate on the prescribed split\",\n      \"rejected_reason\": \"Its repeated-fold mean and worst scalar errors were both higher than those of the selected blend.\"\n    }\n  ],\n  \"rationale\": \"Promote the blend that improves prescribed, mean, and worst-fold scalar error without changing the trajectory estimator. Verify the exact artifact in an isolated process, including a fresh fold seed, each output shape, and the diagnostic identities.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "937b3eab8bb13a24155d7e3c058511fcf0cf6816701180b11bf04dec0101cde4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30203.97,
+      "usage_known": true,
+      "prompt_tokens": 43840,
+      "cached_tokens": 0,
+      "completion_tokens": 1154
+    }
+  ]
+}

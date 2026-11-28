@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a88a1f4e5e84563a363a5d0ffb7e924",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:42.927986+00:00",
+  "ended_at_utc": "2026-11-28T15:06:17.717185+00:00",
+  "request_sha256": "559062d4684356b122a5d1137e745cee68bc1602e0f6eca8b1328fda5707ab1d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43606,
+    "cached_tokens": 0,
+    "completion_tokens": 1128
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = \\\"    pred = d[n:] @ _ls(d[:n], tr['traj'])\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, \\\"    # Use only training trajectories to estimate the two shared temporal modes.\\\\n    modes = np.linalg.svd(tr['traj'], full_matrices=False)[2][:2]\\\\n    pred = (d[n:] @ _ls(d[:n], tr['traj'] @ modes.T)) @ modes\\\"))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nt = s['train']; x = t['x']; ids = np.arange(len(x)); rng = np.random.default_rng(517)\\nfolds = [ids] + [rng.permutation(ids) for _ in range(16)] + list(np.argsort(np.abs(m._calibrate(s['panel_a'], x)), axis=0).T)\\nmetrics = []\\nfor j in folds:\\n    i,k = j[:52],j[52:]\\n    sub = dict(s, train={key:t[key][i] for key in ('x','y','traj')}, test={'x':x[k]})\\n    sub['train']['summary'] = np.array([t['y'][i].mean(),t['y'][i].std(),t['traj'][i,-1].mean(),t['traj'][i,-1].std()])\\n    r = m.solve_batch(sub)\\n    ey = np.abs(r['y_hat']-t['y'][k]); et = np.abs(r['state_pred']-t['traj'][k]); metrics.append([ey.mean(),et.mean(),et.mean(0).max()])\\nassert np.max(metrics) <= .038\\nprint('Metrics [scalar MAE, trajectory MAE, worst horizon MAE]:', '52/20', metrics[0], 'worst of 21 splits', np.max(metrics,axis=0))\\nr = m.solve_batch(s); y = r['y_hat']; T = r['state_pred']\\nassert y.shape == (36,) and T.shape == (36,8) and all(np.isfinite(v).all() for v in r.values())\\nnp.testing.assert_array_equal(r['diagnostics_vec'], [y.mean(),y.std(),T[:,-1].mean(),T[:,-1].std()])\\nfor key, out, fun, init, bounds in [('panel_b','v',m._b,[.35,1.5],([0.,.25],[.8,4.])),('panel_c','v1',m._c,[.98,.37,.05,.087],([0,0,0,-1],[20,20,20,1]))]:\\n    u,v=s[key]['u'],s[key][out]; A=m._aff(u); p=m._panel(u,v,fun,init,bounds)\\n    print(key,'affine RMSE',np.sqrt(np.mean((A@m._ls(A,v)-v)**2)),'nonlinear RMSE',np.sqrt(np.mean((p(u)-v)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted affine trajectory readout) → H2 (two shared temporal modes); fold-local comparison lowered worst stress-split horizon MAE from 0.00940 to 0.00588 while leaving scalar MAE unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all eight trajectory readouts unrestricted\",\n      \"rejected_reason\": \"The two-mode readout reduces worst-horizon error across stress splits without changing the scalar model.\"\n    }\n  ],\n  \"rationale\": \"Promote the rank-two readout and exercise the exact final entry point in an isolated Python process on the designated split, 20 stress splits, and the public test inputs. Rerun the schema validator on the edited artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1257f15c9bf30cfdd0839165a9e3391237a07f7ac4409f5ab85d599db0f5d217",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34787.9,
+      "usage_known": true,
+      "prompt_tokens": 43606,
+      "cached_tokens": 0,
+      "completion_tokens": 1128
+    }
+  ]
+}

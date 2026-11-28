@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e3dd87297b2402dbe269c843d8a38e6",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:36:58.965067+00:00",
+  "ended_at_utc": "2026-11-28T15:37:28.597662+00:00",
+  "request_sha256": "81e97887e9c51c4cba04277bd57e891e0c8d48648dcd2bbd05cccc4348719f23",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43483,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30785,
+    "cached_tokens": 14720,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef lin(f,y):return np.linalg.lstsq(f,y,rcond=1e-9)[0]\\ndef one(x):return np.c_[np.ones(len(x)),x]\\np=s['panel_a']; keep=np.linalg.norm(p['v'],axis=1)<4; u,v=p['u'][keep],p['v'][keep]\\nP=PolynomialFeatures(3); F=P.fit_transform(u); names=P.get_feature_names_out(); W=lin(F,v)\\nfor j in range(4):print('A cubic',j,[(names[i],round(W[i,j],4)) for i in np.argsort(-abs(W[:,j]))[:10]])\\nfuncs={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'soft':lambda x:x/(1+abs(x)),'rat':lambda x:x/(1+x*x),'atan':np.arctan}\\nfor stage in ['a','c']:\\n if stage=='a': U,V=u,v; bases={'lin':one(U)}\\n else:\\n  U,V=s['panel_c']['u'],s['panel_c']['v2']; bases={'const':one(U[:,:0]),'sq':one(U**2),'lin':one(U)}\\n out=[]\\n for bn,B in bases.items():\\n  for an,fn in funcs.items():\\n   def design(q):return np.c_[B,fn(q[0]*U)]\\n   def err(q):\\n    f=design(q);return (f@lin(f,V)-V).ravel()\\n   qs=[least_squares(err,[k],bounds=(.1,12),gtol=1e-12) for k in [.7,1.8,3.2,4.8,6.5,8.3,10.5]];q=min(qs,key=lambda x:np.linalg.norm(x.fun));out.append((np.std(q.fun),bn,an,q.x))\\n print(stage,'univariate',sorted(out,key=lambda x:x[0])[:12])\\n# Compare dense calibration with one or two shared nonlinear frequencies, and expose coefficients.\\nfor an,bn in itertools.product(['sin','tanh','rat'], repeat=2):\\n def design(q):return one(np.c_[u,funcs[an](q[0]*u),funcs[bn](q[1]*u)])\\n def err(q):\\n  f=design(q);return (f@lin(f,v)-v).ravel()\\n q=min((least_squares(err,k,bounds=(.15,10),max_nfev=100) for k in [[1,2],[2,4],[4,2],[3,6],[6,3],[5,5]]),key=lambda x:np.linalg.norm(x.fun));print('A double',an,bn,np.std(q.fun),q.x)\\n if np.std(q.fun)<.004: print(np.round(lin(design(q.x),v),4))\\n# Test v2 on parity-respecting pairwise sums and differences.\\nfor stage,U,V in [('a',u,v),('c',s['panel_c']['u'],s['panel_c']['v2'])]:\\n B=one(U if stage=='a' else U**2)\\n for kind,fn in funcs.items():\\n  if stage=='c' and kind not in ('cos',):continue\\n  for shift in (1,2,3):\\n   for sign in (1,-1):\\n    def design(q):return np.c_[B,fn(q[0]*(U+sign*np.roll(U,shift,axis=1)))]\\n    def err(q):\\n     f=design(q);return (f@lin(f,V)-V).ravel()\\n    q=min((least_squares(err,[k],bounds=(.1,9)) for k in [1,2.5,4,6]),key=lambda x:np.linalg.norm(x.fun))\\n    if np.std(q.fun)<.035 or stage=='c':print('pair',stage,kind,shift,sign,np.std(q.fun),q.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived graph structures -> H2 cyclic quadratic panel C1 and profiled nonlinear calibration/C2; best archived 52/20 MAEs are 0.399469 for y and 0.621854 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all cubic terms to C2\",\"rejected_reason\":\"There are more cubic terms than panel rows, so a zero training residual does not identify the map.\"}],\"rationale\":\"C1 is identified to measurement precision by cyclic pair products. Profile shared nonlinear parameters for the unresolved calibration and C2 maps before fitting the readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9317039caa9927106eacd59b52f418e82ce821b6f883f2da13e872b9e7fd6fe8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30145.91,
+      "usage_known": true,
+      "prompt_tokens": 30785,
+      "cached_tokens": 14720,
+      "completion_tokens": 1252
+    }
+  ]
+}

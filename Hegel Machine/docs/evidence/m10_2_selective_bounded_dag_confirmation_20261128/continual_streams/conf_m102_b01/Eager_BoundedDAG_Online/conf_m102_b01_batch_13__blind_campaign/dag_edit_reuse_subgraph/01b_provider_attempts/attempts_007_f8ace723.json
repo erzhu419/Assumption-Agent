@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f8ace7230aa541bf8c6f67b33e766a44",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:03:34.998277+00:00",
+  "ended_at_utc": "2026-11-28T16:03:56.815755+00:00",
+  "request_sha256": "cc579cca3212955291e4d53c7886235cab29256ce393acd2912afaa50124e3d6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49919,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35096,
+    "cached_tokens": 12672,
+    "completion_tokens": 740
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nfrozen = runpy.run_path('_frozen_nodes/node_00.py')['run_node']\\nsink = runpy.run_path('node_01.py')['run_node']\\nx = s['train']['x']\\nidx = np.arange(len(x))\\nslices = {f'block_{i}': t for i,t in enumerate(np.array_split(idx,4))}\\nfor j in range(x.shape[1]):\\n    order = np.argsort(x[:,j])\\n    slices[f'x{j}_low'] = order[:12]\\n    slices[f'x{j}_high'] = order[-12:]\\nworst = {}\\nfor name, val in slices.items():\\n    fit = np.setdiff1d(idx,val)\\n    sub = copy.deepcopy(s)\\n    for k in ('x','y','traj'):\\n        sub['train'][k] = s['train'][k][fit]\\n    sub['test']['x'] = x[val]\\n    out = sink({'__input__':sub,'node_00':frozen({'__input__':sub})})\\n    assert set(out) == {'y_hat','state_pred','diagnostics_vec'}\\n    assert all(np.isfinite(a).all() for a in out.values())\\n    assert np.shape(out['diagnostics_vec']) == (4,)\\n    for k, label in [('y_hat','y'),('state_pred','traj')]:\\n        target = s['train'][label][val]\\n        assert np.shape(out[k]) == target.shape\\n        delta = np.abs(out[k]-target)\\n        for key,error in [(label,delta.mean())]+([(label+'_horizon',delta.mean(axis=0).max())] if delta.ndim==2 else []):\\n            if key not in worst or error > worst[key][0]: worst[key]=(float(error),name)\\nprint('Worst blocked and coordinate-tail slices:',worst)\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel B -> H2 shared cosine before mixing; official CV MAE is 0.009064 for y and 0.006597 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Both official metrics pass with substantial margin. Stress-test the unchanged end-to-end artifact on blocked and coordinate-tail holdouts, including each trajectory horizon, before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2f98bcbd1355610d33c9ccb4aadf2076ef94cc681b56a25b58d578aa172097a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22473.58,
+      "usage_known": true,
+      "prompt_tokens": 35096,
+      "cached_tokens": 12672,
+      "completion_tokens": 740
+    }
+  ]
+}

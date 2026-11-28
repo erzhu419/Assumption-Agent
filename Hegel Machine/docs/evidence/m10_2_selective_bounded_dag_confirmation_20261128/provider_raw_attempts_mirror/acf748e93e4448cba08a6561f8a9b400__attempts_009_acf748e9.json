@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acf748e93e4448cba08a6561f8a9b400",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:20.557515+00:00",
+  "ended_at_utc": "2026-11-28T15:21:46.613920+00:00",
+  "request_sha256": "ef2dbd419d7e362baa3ca10949b19789301190db415f4be96c9c991feab6c67d",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 63030,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38566,
+    "cached_tokens": 12672,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/stress05.py <<'PY'\\nimport runpy,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nm=runpy.run_path('/holdout_task/node_01.py'); cases=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('cases',len(cases)); rng=np.random.default_rng(503)\\nfor case in cases:\\n s=case['study']; t=s['train']; b=m['_calibrate'](s['panel_a']); x=m['_invert'](t['x'],b); y=np.column_stack((t['y'],t['traj'])); n,d=x.shape; near=np.roll(x,-1,axis=1); q=np.column_stack([x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(d),2)]); a=np.c_[np.ones(n),x]; sn=np.sin(3*x); cs=np.cos(3*x); u=x-.4*sn; \\n def products(w):return np.column_stack([w[:,i]*w[:,j] for i,j in combinations_with_replacement(range(d),2)])\\n cuts=[np.arange(i,n,4) for i in range(4)]+[rng.permutation(n)[:20] for i in range(24)]+[np.arange(n-20,n)]; radial=np.linalg.norm(x,axis=1); cuts.append(np.argsort(radial)[-14:]);\\n opts={'baseline':(np.c_[a,q,sn,cs],.04), 'sine-only':(np.c_[a,q,sn],.002), 'trajectory-linear-sine':(np.c_[a,sn],.001), 'warped-quadratic':(np.c_[np.ones(n),u,products(u)],.003), 'sine-plus-warped-quadratic':(np.c_[a,sn,products(u)],.005), 'raw-and-warped':(np.c_[a,sn,q,products(u)],.02), 'cyclic-mixed':(np.c_[a,q,sn,cs,np.sin(3*x*near),np.sin(3*(x+near)),np.sin(3*(x-near))],.05)}\\n for name,(z,l) in opts.items():\\n  def fit(idx):return np.linalg.solve(z[idx].T@z[idx]+l*np.eye(z.shape[1]),z[idx].T@y[idx]);\\n  def err(e):return np.array([abs(e[:,0]).mean(),abs(e[:,1:]).mean()]);\\n  e=[err(z[v]@fit(np.setdiff1d(np.arange(n),v))-y[v]) for v in cuts]; print(name,'mean/worst/public/radial',np.round([np.mean(e[:-2],axis=0),np.max(e,axis=0),e[-2],e[-1]],5).tolist(),'train',np.round(err(z@fit(np.arange(n))-y),5));\\n  if name in ('sine-only','trajectory-linear-sine'): print('linear and sine',np.round(fit(np.arange(n))[np.r_[1:5,z.shape[1]-4:z.shape[1]]][:,[0,1,-1]],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether a compact sine readout improves the verified quadratic-harmonic model; public holdout MAEs are 0.022415 endpoint and 0.014197 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote independently tuned coordinate frequencies\",\n      \"rejected_reason\": \"The unconstrained probe improved training fit only modestly; paired held-out slices are needed before adding those parameters.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted files unchanged while comparing compact readouts on identical holdouts, including the largest-radius latent points where an overly flexible model is most likely to fail.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5d55148dc0b46bc7ded980978c0a3a11442295d0bd4ce7a0e14553efc07e12fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26538.24,
+      "usage_known": true,
+      "prompt_tokens": 38566,
+      "cached_tokens": 12672,
+      "completion_tokens": 1065
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3ee4dfc60e54338a9036676d928cf64",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_16__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:22:58.285094+00:00",
+  "ended_at_utc": "2026-11-28T15:23:21.555577+00:00",
+  "request_sha256": "b433ad3031a90d5fe61b5adb284fa0dd9b0ee6e38864cf03af91628388302136",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70911,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41328,
+    "cached_tokens": 12672,
+    "completion_tokens": 864
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/batch_solver_verified_v1.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py')\\ns=p.read_text().replace('from scipy.optimize import minimize','from scipy.optimize import minimize, least_squares')\\nidx=s.index('\\\\ndef solve_batch(')\\ns=s[:idx]+'''\\ndef _linked_readout(x, y, xt):\\n    \\\"\\\"\\\"Fit saturating links of a quadratic spatial score on labeled rows only.\\\"\\\"\\\"\\n    def design(a):\\n        return np.column_stack((np.ones(len(a)), a, *(\\n            a[:, i] * a[:, j] for i, j in combinations_with_replacement(range(a.shape[1]), 2))))\\n    X, Xt = design(x), design(xt)\\n    c = np.linalg.lstsq(X, y, rcond=None)[0]\\n    outputs = []\\n    for link in (np.tanh, np.arctan, lambda z: z / (1 + np.abs(z))):\\n        def predict(A, p):\\n            return p[-2] + np.exp(np.clip(p[-1], -35., 35.)) * link(A @ p[:-2])\\n        def residual(p):\\n            return np.r_[predict(X, p) - y, .004 * p[:-2]]\\n        fits = (least_squares(residual, np.r_[c / scale, 0., np.log(scale)], max_nfev=180)\\n                for scale in (.75, 1.5, 3., 7.))\\n        best = min(fits, key=lambda fit: fit.cost)\\n        outputs.append(predict(Xt, best.x))\\n    return np.mean(outputs, axis=0)\\n\\n''' + s[idx:]\\ns=s.replace('    y_hat = np.mean(ys, axis=0)','    y_hat = .65 * np.mean(ys, axis=0) + .35 * _linked_readout(x[:n], y, x[n:])')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nif ! python3 /holdout_task/validate_public_schema.py || ! python3 -I /tmp/checkbatch.py; then\\n  cp /tmp/batch_solver_verified_v1.py batch_solver.py\\n  python3 /holdout_task/validate_public_schema.py\\n  python3 -I /tmp/checkbatch.py\\nfi\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated covariance ensemble -> H2 blend in saturating quadratic readouts; the verified incumbent has 0.036865 prescribed scalar MAE and 0.130457 response-extreme MAE, while individual 25% tanh and arctangent blends improved both.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the covariance ensemble with a single saturating link\",\"rejected_reason\":\"Individual links improved the prescribed split but performed worse on several randomized splits.\"}],\"rationale\":\"Test a conservative blend that preserves the verified trajectory model and aims to improve both the prescribed scalar margin and extrapolation. Re-run the public validator and all stress splits on the exact artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "6b19b97b0ad15d69c5d94f20d0e1b0369eb3fee3115a797e4f85b14f908a758a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23835.63,
+      "usage_known": true,
+      "prompt_tokens": 41328,
+      "cached_tokens": 12672,
+      "completion_tokens": 864
+    }
+  ]
+}

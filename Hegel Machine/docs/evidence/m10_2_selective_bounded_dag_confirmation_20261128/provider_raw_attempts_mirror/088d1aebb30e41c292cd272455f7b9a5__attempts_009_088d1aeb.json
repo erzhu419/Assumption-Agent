@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "088d1aebb30e41c292cd272455f7b9a5",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:23.553382+00:00",
+  "ended_at_utc": "2026-11-28T15:44:04.143003+00:00",
+  "request_sha256": "ecbe3204fd3b66e2076f250136f422498598e7931881339ede6f8aa41a4591a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49236,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32280,
+    "cached_tokens": 12672,
+    "completion_tokens": 1765
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_batch.py <<'PY'\\nimport pickle, importlib.util\\nimport numpy as np\\nfrom scipy.optimize import minimize, minimize_scalar\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,z=(tr[k] for k in ('x','y','traj')); t=s['eval_times']; n=len(x)\\naff=m._affine; quad=m._quadratic\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\na=s['panel_a']; off,gain=m._calibration(a); q=(x-off)/gain; print('keys', {k:sorted(v) if isinstance(v,dict) else v.shape for k,v in s.items()}); print('calibration',off,gain,'per-channel outliers',np.sum(abs(a['v']-a['u']*gain-off)>.002,axis=0)); print('times',t)\\npb=s['panel_b']; u,v=pb['u'],pb['v']; out={k:[] for k in ('raw_quadratic','full_sine_quadratic','diagonal_sine')}; freq=[]\\nfor i in range(len(u)):\\n k=np.arange(len(u))!=i\\n for name in out:\\n  if name=='raw_quadratic': F=quad(u)\\n  else:\\n   f=(lambda h:quad(np.sin(h*u))) if name=='full_sine_quadratic' else (lambda h:aff(np.sin(h*u)**2))\\n   def loss(h):\\n    a=f(h)[k]; return np.sum((a@ls(a,v[k])-v[k])**2)\\n   h=minimize_scalar(loss,bounds=(1.05,1.55),method='bounded').x; F=f(h)\\n   if name=='diagonal_sine': freq.append(h)\\n  out[name].append(F[i]@ls(F[k],v[k])-v[i])\\nprint('panel B true leave-one-out RMSE', {k:np.sqrt(np.mean(np.array(v)**2)) for k,v in out.items()}, 'frequency range',min(freq),max(freq))\\nb=m._operator(pb,q); F=quad(b); H=aff(b); z2=H@ls(H,z)\\nprint('quadratic y coefficient matrix order upper triangle',ls(F[:52],y[:52]).round(5)); print('trajectory residual RMSE by timestamp',np.sqrt(np.mean((z-z2)**2,0)))\\ni,j=np.triu_indices(4,1); Q=np.c_[b,b[:,i]+b[:,j],b[:,i]-b[:,j],b[:,i]+.5*b[:,j],b[:,i]-.5*b[:,j]]\\ndef challenger(f,x,y,train,test):\\n # Select one rational quotient using only the outer training set, in inner folds.\\n inner=np.array_split(train,4); objects=[(0,None,f)]\\n for a in (.03,.1,.3,1.):\\n  for col in range(x.shape[1]): objects.append((a,col,f/(1+a*x[:,col,None]**2)))\\n def score(g):\\n  return np.mean([np.mean(abs(g[iv]@ls(g[np.setdiff1d(train,iv)],y[np.setdiff1d(train,iv)])-y[iv])) for iv in inner])\\n a,j,g=min(objects,key=lambda row:score(row[2])); return g[test]@ls(g[train],y[train]),(a,j)\\ndef timefit(k,ii,kind):\\n def temp(p):\\n  a,c=np.exp(p); return np.column_stack((-np.expm1(-a*t), -np.expm1(-c*t) if kind=='exp' else t/(1+c*t)))\\n def solve(T): return ls(H[k],z[k]@np.linalg.pinv(T.T))\\n def loss(p):\\n  T=temp(p); return np.sum((H[k]@solve(T)@T.T-z[k])**2)\\n rate=minimize(loss,np.log([1.8,.4]),method='L-BFGS-B',bounds=[(-4,4),(-4,4)]).x; T=temp(rate); return H[ii]@solve(T)@T.T\\nsplits=[np.arange(52,72),np.arange(20),np.arange(26,46),np.argsort(np.linalg.norm(x,axis=1))[-20:]]+[np.argsort(sign*x[:,kk])[-20:] for kk in range(4) for sign in (-1,1)]\\nr=[]\\nfor ii in splits:\\n k=np.setdiff1d(np.arange(n),ii); base_y=F[ii]@ls(F[k],y[k]); yr,pick=challenger(F,Q,y,k,ii); modes=np.linalg.svd(z[k],full_matrices=False)[2][:2]; base_z=(H[ii]@ls(H[k],z[k]@modes.T))@modes\\n def ez(pred): return abs(pred-z[ii]).mean()\\n r.append([abs(base_y-y[ii]).mean(),abs(yr-y[ii]).mean(),ez(base_z),ez(timefit(k,ii,'exp')),ez(timefit(k,ii,'rat'))]); print('outer',len(r),np.round(r[-1],6),'rational choice',pick)\\nprint('worst',np.max(r,axis=0)); print('pairwise algebra rank',np.linalg.matrix_rank(F),np.linalg.matrix_rank(np.c_[F,Q,Q**2]))\\n# There are no batch tags or categorical outcomes. Probe continuous residuals by row blocks as a check for drift.\\npy=F@ls(F,y); hy=np.linalg.qr(F)[0]; ey=(y-py)/(1-(hy**2).sum(1)); hz=np.linalg.qr(H)[0]; ez=(z-z2)/(1-(hz**2).sum(1))[:,None]; print('row-block LOO mean residuals',[(float(ey[k].mean()),float(ez[k].mean()),float(ez[k,-1].mean())) for k in np.array_split(np.arange(n),4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Squared-sine panel B with separate readouts → audit rational alternatives and constrained time laws; verified worst scalar MAE is 0.00588 and worst per-timestamp trajectory MAE is 0.00660.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit relay modes, Fokker–Planck/HJB drift, or a batch-balanced classifier\",\"rejected_reason\":\"The stated measurements contain continuous scalar and trajectory outputs but no relay state, spatial density or control observations, batch labels, or classes. The audit instead checks physical time bases and row-block residual drift.\"}],\"rationale\":\"Refit panel B on every leave-one-row-out fold to directly test the basis-order finding. Compare a nested-CV rational challenger, including pairwise sums and differences, and test constrained trajectory bases on the same outer holdouts without changing the verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "59ad3276264d257309d1c3f8a147046b99a4890262bd5b1d25638f4ba4aac2c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40588.38,
+      "usage_known": true,
+      "prompt_tokens": 32280,
+      "cached_tokens": 12672,
+      "completion_tokens": 1765
+    }
+  ]
+}

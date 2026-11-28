@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "778af0a597304c98af36961aa84df65a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:49.620300+00:00",
+  "ended_at_utc": "2026-11-28T15:02:21.808752+00:00",
+  "request_sha256": "d854e0c0d796d09d3568c4fb990415dcd226604a88e611ba2599345a8e5b2ada",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44124,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31342,
+    "cached_tokens": 5504,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nroot = '/holdout_task/'\\nenc = runpy.run_path(root + 'node_00.py')\\nhead = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\nbatch = pickle.load(open(root + 'public_batch.pkl', 'rb'))\\nrng = np.random.default_rng(41)\\nworst_cv = np.zeros(2)\\nworst_panel = np.zeros(2)\\nworst_roundtrip = 0.\\nworst_panel_resid = 0.\\nkeys = ('y_hat', 'state_pred')\\ndef evaluate(s, tr, va):\\n    fold = dict(s, train=dict(s['train']), test={'x': s['train']['x'][va]})\\n    for k in ('x', 'y', 'traj'):\\n        fold['train'][k] = s['train'][k][tr]\\n    z = enc['run_node']({'__input__': fold})\\n    assert set(z) == {'z', 'zt'} and z['z'].shape == (len(tr), 4) and z['zt'].shape == (len(va), 4)\\n    p = head({'__input__': fold, 'node_00': z})\\n    return np.array([np.mean(np.abs(p[k] - s['train'][t][va])) for k, t in zip(keys, ('y', 'traj'))])\\nfor item in batch:\\n    s = item['study']\\n    n = len(s['train']['x'])\\n    m = n - 52 if n > 52 else max(1, n // 4)\\n    x = s['train']['x']\\n    a = enc['_fit_sensor'](s['panel_a'])\\n    rows = np.concatenate((x, s['test']['x']))\\n    z = enc['_inverse'](rows, a)\\n    worst_roundtrip = max(worst_roundtrip, np.max(np.abs(enc['_sensor'](z, a[0], a[1], *a[2]) - rows)))\\n    ids = np.arange(n)\\n    slices = [ids[-m:]] + [rng.permutation(n)[:m] for _ in range(24)]\\n    slices += [np.argsort(v)[-m:] for v in [np.linalg.norm(x, axis=1), *x.T, *(-x.T)]]\\n    for va in slices:\\n        worst_cv = np.maximum(worst_cv, evaluate(s, np.setdiff1d(ids, va), va))\\n    panel = s['panel_a']\\n    full_resid = np.linalg.norm(enc['_sensor'](panel['u'], a[0], a[1], *a[2]) - panel['v'], axis=1)\\n    inliers = full_resid < 0.01\\n    for i in range(len(panel['u'])):\\n        keep = np.arange(len(panel['u'])) != i\\n        sub = dict(s, panel_a={k: v[keep] for k, v in panel.items()})\\n        sub_a = enc['_fit_sensor'](sub['panel_a'])\\n        if inliers[i]:\\n            residual = enc['_sensor'](panel['u'][i:i+1], sub_a[0], sub_a[1], *sub_a[2]) - panel['v'][i:i+1]\\n            worst_panel_resid = max(worst_panel_resid, np.linalg.norm(residual))\\n        worst_panel = np.maximum(worst_panel, evaluate(sub, ids[:-m], ids[-m:]))\\nprint('Worst random/tail holdout scalar and trajectory MAE:', worst_cv)\\nprint('Worst leave-one-calibration-row-out scalar and trajectory MAE:', worst_panel)\\nprint('Max inverse roundtrip error:', worst_roundtrip, 'max held-out inlier panel L2 error:', worst_panel_resid)\\nassert np.all(worst_cv <= .038) and np.all(worst_panel <= .038) and worst_roundtrip < 1e-8 and worst_panel_resid < .001\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine inverse → robust cyclic cubic inverse with affine alignment; the isolated public gate passed with scalar MAE 0.003415 and trajectory MAE 0.003810.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public gate alone\",\n      \"rejected_reason\": \"The gate passes, but coordinate-tail and calibration-row holdouts directly test whether the inverse remains reliable away from the nominal split.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the verified artifact without editing it. Check both frozen heads on random and coordinate-tail holdouts, then test calibration-row sensitivity and forward–inverse consistency independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2082d8453ae51324aecac6eb84b07a617b2f66bfbd8f98bbebf7b26391f5f0d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32657.61,
+      "usage_known": true,
+      "prompt_tokens": 31342,
+      "cached_tokens": 5504,
+      "completion_tokens": 1268
+    }
+  ]
+}

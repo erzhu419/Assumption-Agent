@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee6d512c38de4f80af88f4d093ef786d",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:12.257589+00:00",
+  "ended_at_utc": "2026-11-28T15:12:38.622805+00:00",
+  "request_sha256": "d4eeaa8ccd9c230d5980cb226bafb235fdd759b23f45245977fd0b7a5a8365ff",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42344,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29606,
+    "cached_tokens": 5504,
+    "completion_tokens": 871
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/node03_calibration.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nimport node_00,node_01,node_02\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['y']); dev=np.arange(n-20); official=np.arange(n-20,n)\\ndef build(train,valid):\\n q=node_00.run_node({'__input__':{**s,'train':{k:t[k][train] for k in ('x','y','traj')},'test':{'x':t['x'][valid]}}}); p=node_01.run_node({'node_00':q})['poly']; b=node_02.run_node({'node_00':q}); return p,b['smooth'],b['vt'],t['y'][valid],t['traj'][valid]\\ndef cross(ids,seed,k):\\n return [build(np.setdiff1d(ids,v),v) for v in np.array_split(np.random.default_rng(seed).permutation(ids),k)]\\nif __name__=='__main__':\\n outer=np.array_split(np.random.default_rng(962).permutation(dev),4); out=[]\\n for j,v in enumerate(outer):\\n  a=np.setdiff1d(dev,v); out.append((sum([cross(a,r,5) for r in (44,109)],[]),build(a,v)))\\n out.append((sum([cross(dev,r,6) for r in (44,109,203)],[]),build(dev,official)))\\n pickle.dump(out,open('/tmp/node03_nested.pkl','wb'))\\n for j,(_, (p,b,vt,y,tr)) in enumerate(out):\\n  z=(.4*p[:,1:]+.6*b[:,1:])@vt; dz=(p[:,1:]-b[:,1:])@vt\\n  print(j,'base',np.mean(abs(y-b[:,0])),np.mean(abs(z-tr)))\\n  if j==4: print(np.round(np.column_stack((y,b[:,0],y-b[:,0],p[:,0]-b[:,0],z[:,0],z[:,-1],dz[:,0],dz[:,-1])),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/node03_calibration.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic low-order correction → H2 correction calibrated strictly within development folds; the previous broad ridge correction reached 0.04429 on the official split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the fusion to the official validation residuals\",\"rejected_reason\":\"It would use the evaluation labels to train the sink.\"}],\"rationale\":\"The earlier auxiliary folds overlapped the official validation samples. Generate fresh nested calibration predictions using only the first 52 rows, while retaining the exact trajectory blend.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c829d7472e2a9b3af055e70889bf93ffdfc453227158d0709e2ef2955ac5e27e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26364.24,
+      "usage_known": true,
+      "prompt_tokens": 29606,
+      "cached_tokens": 5504,
+      "completion_tokens": 871
+    }
+  ]
+}

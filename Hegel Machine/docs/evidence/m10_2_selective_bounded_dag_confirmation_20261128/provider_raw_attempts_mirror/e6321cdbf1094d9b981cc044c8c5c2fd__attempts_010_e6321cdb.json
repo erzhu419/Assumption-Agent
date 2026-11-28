@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e6321cdbf1094d9b981cc044c8c5c2fd",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:12:19.158803+00:00",
+  "ended_at_utc": "2026-11-28T16:13:25.704657+00:00",
+  "request_sha256": "949207ab27569eafc7d557268b96407d49d0543b62c62f007a21320de7d47700",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35180,
+    "cached_tokens": 5504,
+    "completion_tokens": 2078
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^for name,a in /,$d' /tmp/read15.py >/tmp/rational15.py; cat >>/tmp/rational15.py <<'PY'\\nfrom itertools import combinations, product\\nfrom scipy.linalg import qr\\nfrom scipy.spatial.distance import cdist\\nu=np.cos(2.600025*z); y=Y[:,0]; ids=np.arange(len(y)); B=aff(g); Q=q(g); P=np.c_[B,Q]; pairs=list(combinations_with_replacement(range(4),2)); S=Q[:,[pairs.index((0,2)),pairs.index((1,3))]]\\ndef ev(fn):\\n a=[]\\n for v in folds:\\n  t=np.setdiff1d(ids,v); p=fn(t,v); a.append(np.mean(abs(y[v]-p)))\\n return np.round(a,5)\\ndef regress(D,t,v):return D[v]@fit(D[t],y[t])\\ncs={'g':g,'u':u,'z':z,'h':hg,'k':kg,'hz':hz,'kz':kz}; E={}; den={}\\nfor k,a in cs.items():\\n for i in range(4):\\n  den[k,str(i)]=a[:,i]\\n for i,j in combinations(range(4),2):\\n  for c in [1,-1,.5,-.5]:den[k,i,j,c]=a[:,i]+c*a[:,j]\\n for i,j in combinations_with_replacement(range(4),2):den[k,i,j,'prod']=a[:,i]*a[:,j]\\n# Whole-readout rational models, with denominator profiling on training only.\\nfor D in [B,np.c_[B,S],P]:\\n for ks in [list(den),[k for k in den if k[0] in ['u','g']]]:\\n  H=np.column_stack([den[k]**2 for k in ks]); C=[]\\n  for v in folds:\\n   t=np.setdiff1d(ids,v); opt=[]\\n   for j,k in enumerate(ks):\\n    d=H[:,j]\\n    def loss(c,ret=False):\\n     A=D/(1+c*d[:,None]); U=qr(A[t],mode='economic')[0]; r=y[t]-U@(U.T@y[t]); l=np.mean((r/(1-(U**2).sum(1)))**2);return (l,regress(A,t,v)) if ret else l\\n    m=minimize_scalar(loss,bounds=(0,8),method='bounded',options={'xatol':.003});opt.append((m.fun,k,m.x,j))\\n   oo=sorted(opt)[:3]; C.append([(k,round(c,3),round(l**.5,5),round(abs(loss2-y[v]).mean(),5)) for l,k,c,j in oo for d in [H[:,j]] for loss2 in [loss(c,True)[1]]]);\\n  print('whole',D.shape[1],len(ks),C,flush=True)\\n# Explicit additional features, screened with leave-one-out inside each training split.\\nfor k,d in den.items():\\n for c in [.22,.5,1.25,2.15,4]:\\n  h=1/(1+c*d*d)\\n  E[k,c,'R']=h\\n  if len(k)<=2 or k[0] in ('g','u'):\\n   for nk,a in [('u',u),('g',g),('z',z)]:\\n    for i in range(4):E[k,c,nk,i]=h*a[:,i]\\n  if k[0] in ('g','u'):\\n   for i in range(2):E[k,c,'pair',i]=h*S[:,i]\\n for c in [1.25,2.15,2.6]:\\n  E[k,c,'T']=np.tanh(c*d); E[k,c,'C']=np.cos(c*d);E[k,c,'S']=np.sin(c*d)\\nfor name,a in cs.items():\\n for i,j,k in combinations_with_replacement(range(4),3):E[name,i,j,k,'cube']=a[:,i]*a[:,j]*a[:,k]\\nkeys=list(E); A=np.column_stack(list(E.values()));\\nfor bn,D in [('aff',B),('cross',np.c_[B,S]),('quad',P)]:\\n for v in folds:\\n  t=np.setdiff1d(ids,v); cur=D; sel=[]\\n  for step in range(5):\\n   U=qr(cur[t],mode='economic')[0]; r=y[t]-U@(U.T@y[t]); R=A[t]-U@(U.T@A[t]); n=np.linalg.norm(R,axis=0); R/=np.maximum(n,1e-8); h=(U**2).sum(1)[:,None]; cv=(r[:,None]-R*(r@R))/(np.maximum(1-h-R*R,.025)); s=np.mean(cv*cv,axis=0);s[n<1e-6]=np.inf; j=np.argmin(s);cur=np.c_[cur,A[:,j]];sel.append((keys[j],round(s[j]**.5,4),round(abs(regress(cur,t,v)-y[v]).mean(),4)))\\n  print('sparse',bn,sel,flush=True)\\n# Broad extrapolation comparison: residual kernel plus polynomial trend.\\nfor dn,a in [('g',g),('z',z),('u',u),('z_u',np.c_[z,u]),('z_g',np.c_[z,g])]:\\n a=a/a.std(0); d=cdist(a,a,'sqeuclidean');\\n for bn,D in [('lin',B),('cross',np.c_[B,S]),('poly',P)]:\\n  vout=[]\\n  for v in folds:\\n   t=np.setdiff1d(ids,v); X=D[t]; Q1=qr(X,mode='economic')[0]; J=np.eye(len(t))-Q1@Q1.T; best=(np.inf,None,None)\\n   for w in [.005,.014,.04,.1,.25,.6,1.2]:\\n    for K in [np.exp(-w*d),(1+w*d)**-1,np.sqrt(1+w*d)*-1]:\\n     KT=K[np.ix_(t,t)]; lam,U=np.linalg.eigh(J@KT@J); lam=np.maximum(0,lam); U=J@U; Uy=U.T@y[t]\\n     for reg in [1e-7,1e-5,.0003,.01,.1]:\\n      M=U/(lam+reg); alpha=M@Uy; e=np.mean(np.abs(alpha/np.maximum((M*U).sum(1),1e-10)));\\n      if e<best[0]:best=(e,alpha,K)\\n   e,alpha,K=best; pred=D[v]@fit(X,y[t]-K[np.ix_(t,t)]@alpha)+K[np.ix_(v,t)]@alpha;vout.append((round(e,5),round(abs(y[v]-pred).mean(),5)))\\n  print('kernel',dn,bn,vout,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted quadratic endpoint → H2 sparse rational endpoint correction; official MAEs are 0.071918 for the endpoint and 0.004494 for the trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the quadratic endpoint\",\"rejected_reason\":\"Its official MAE is nearly twice the 0.038 limit.\"}],\"rationale\":\"Keep the validated trajectory fixed. Compare structured rational endpoint forms and smooth residual alternatives, using only inner training rows for feature and parameter selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "75ba4c1de0c07e5dabf432c4a3b8fb7530ea4c95af5c785fa74875f290c597b2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 67802.05,
+      "usage_known": true,
+      "prompt_tokens": 35180,
+      "cached_tokens": 5504,
+      "completion_tokens": 2078
+    }
+  ]
+}

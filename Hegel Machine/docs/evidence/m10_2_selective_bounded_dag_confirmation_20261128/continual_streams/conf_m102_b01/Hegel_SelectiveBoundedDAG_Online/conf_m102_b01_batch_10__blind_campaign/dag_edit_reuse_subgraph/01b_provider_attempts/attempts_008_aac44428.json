@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aac44428ac4a47f98cd377e3944efa98",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:54:36.681014+00:00",
+  "ended_at_utc": "2026-11-28T15:55:08.348619+00:00",
+  "request_sha256": "606df604737e9fe1dfd14c5c4299305c6a0461f7f3200416fdbd084ab7b3cb3f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53433,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34453,
+    "cached_tokens": 12672,
+    "completion_tokens": 1303
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/search.py <<'PY'\\nfrom maps import *\\nfrom scipy.optimize import least_squares\\n\\ndef inverse(f,coef,x):\\n zz=(x-coef[0])@np.linalg.pinv(coef[1:5]);\\n for _ in range(35):\\n  r=f(zz)@coef-x; j=np.stack([(f(zz+e)@coef-f(zz-e)@coef)/.00002 for e in np.eye(4)*.00001],axis=2)\\n  step=np.linalg.solve(j+1e-8*np.eye(4),r[...,None])[...,0]; zz-=np.clip(step,-.2,.2)\\n return zz,np.max(abs(f(zz)@coef-x))\\nAA,BB=pickle.load(open('/tmp/mapfits','rb'))\\nAs=[]\\nfor kind,base,h in [(k,b,h) for _,k,b,h,_ in AA[:7]]:\\n def f(x):return aff(np.c_[x,feats(x,kind,h)] if base else feats(x,kind,h))\\n cf=ls(f(U[good]),V[good]); zz,err=inverse(f,cf,X);print('inverse',kind,err,np.min(zz),np.max(zz),flush=True);As.append((kind,zz))\\n if kind in ['sin','quint']:print('coeff',kind,np.round(cf,4))\\n# Sparse sinusoidal / rational calibration: inspect shared coefficients and try richer diagonal corrections.\\nfor fk,init in [(lambda x,h:np.c_[np.sin(h[0]*x),np.sin(h[1]*x)],[2.3,4.1]),(lambda x,h:np.c_[np.sin(h[0]*x),x/(1+h[1]**2*x*x)],[2.4,.7]),(lambda x,h:np.c_[np.sin(h[0]*x),np.cbrt(x)],[2.4]),(lambda x,h:np.c_[np.sin(h[0]*x),np.tanh(h[1]*x)],[2.4,1.1])]:\\n def f(x,h):return aff(np.c_[x,fk(x,h)])\\n def res(h):\\n  a=f(U[good],h);return (a@ls(a,V[good])-V[good]).ravel()\\n q=least_squares(res,init,max_nfev=150); ff=lambda x:f(x,q.x); cf=ls(ff(U[good]),V[good]); zz,err=inverse(ff,cf,X);print('new A',q.x,np.std(q.fun),err,np.round(cf,4));As.append((str(q.x),zz))\\nbs=[('raw',lambda x:x)]\\nfor _,k,b,h,c in BB[:10]:\\n bs.append((k,lambda x,k=k,b=b,h=h,c=c:aff(np.c_[x,feats(x,k,h)] if b else feats(x,k,h))@c))\\nbs.append(('affineB',lambda x:aff(x)@ls(aff(u),v)))\\nresults=[]\\nfor an,zz in As:\\n for bn,fun in bs:\\n  b=fun(zz); d0=A['_even'](zz)@dfit;d=np.tanh(1.25*d0);c0=pair(b)@cfit;c=np.arcsinh(1.25*c0)\\n  for wn,w in [('one',b),('b+tanh',np.tanh(2.15*b)),('asinhB',np.arcsinh(2.15*b)),('sinhB',np.sinh(1.25*b)),('c0',c0),('c',c),('c215',np.arcsinh(2.15*c0)),('c0tanh',np.tanh(2.15*c0)),('d',d),('d0',d0),('v1+v2',np.c_[c,d]),('b+d',np.c_[b,d]),('sinB',np.sin(2.15*b))]:\\n   sc=cv(w);results.append((max(sc[0]),an,bn,wn,w))\\nfor sc,an,bn,wn,w in sorted(results,key=lambda t:t[0])[:20]:print('SCORE',an,bn,wn,cv(w,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic panel-A calibration → H2 full linear mixing plus separable nonlinear corrections; panel-A leave-one-row-out RMSE improved to 0.00321, with downstream validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose the calibration from in-sample residual alone\",\"rejected_reason\":\"The inverse must also remain stable over the prediction range and produce the active bilinear coordinates expected by the frozen head.\"}],\"rationale\":\"Invert the leading measured panel-A maps, check their forward residuals, and test direct and transformed panel-B handoffs through the frozen head.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "915788270abb5a39e92977dc5d899289bc406083ac2ab49a4a9ec2e6c94ac4c8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31666.37,
+      "usage_known": true,
+      "prompt_tokens": 34453,
+      "cached_tokens": 12672,
+      "completion_tokens": 1303
+    }
+  ]
+}

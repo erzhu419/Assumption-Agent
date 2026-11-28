@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d947718ccc234e63a1c51d84d74b330f",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:58:43.841712+00:00",
+  "ended_at_utc": "2026-11-28T15:59:11.395111+00:00",
+  "request_sha256": "9314f7ea85613c6500054efc1c888eaee90f37a4d680e4af2ef7b441036c3997",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 65418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37980,
+    "cached_tokens": 12672,
+    "completion_tokens": 1182
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && cat >/tmp/stress11.py <<'PY'\\nimport numpy as np,runpy\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=np.load('/tmp/read11.npz'); q,b,c,y,z,t=[s[k][:72] if k!='t' else s[k] for k in ('q','b','c','y','z','t')]; n=len(y); o=np.ones(n); A=np.c_[o,b,c]; Q=np.c_[o,q,*[q[:,i]*q[:,j] for i,j in combinations_with_replacement(range(4),2)]]; ls=lambda f,y:np.linalg.lstsq(f,y,rcond=None)[0]; base=runpy.run_path('/holdout_task/node_01.py'); folds=[np.arange(n-20,n)]+list(np.array_split(np.random.default_rng(123).permutation(n),5)); models=[]\\ndef make(p,kind,key,x,b,c,A,Q):\\n h=x@p[1:]+p[0]; g=np.tanh(h) if kind=='tanh' else 1/(1+h*h); o=np.ones(len(x)); g0=1/(1+t[0]*x[:,2]**2); prior=np.c_[o,c,b*g0[:,None],b[:,3]*x[:,2]**3*g0]; bases=[(A,np.c_[o,b]),(Q,Q[:,:5]),(A,np.c_[o,x]),(prior,np.c_[o,b]),(prior,np.c_[o,x]),(np.c_[o,c],np.c_[o,b]),(A,b),(prior,b),(np.c_[o,c],np.c_[b,b*x[:,2,None]**3])]; L,R=bases[key]; return np.c_[L,R*g[:,None]]\\ndef fit(I,J,kind,key):\\n arrays=[q,b,c,A,Q]; train=[x[I] for x in arrays]; yy=y[I];\\n def residual(p):\\n  f=make(p,kind,key,*train); return f@ls(f,yy)-yy\\n starts=np.r_[np.c_[np.zeros(4),np.eye(4)* (6 if kind=='tanh' else np.sqrt(t[1]))],np.c_[np.zeros(4),np.eye(4)* (2 if kind=='tanh' else np.sqrt(t[0]))]]\\n opt=min((least_squares(residual,p,bounds=([-3,-15,-15,-15,-15],[3,15,15,15,15]),max_nfev=65) for p in starts),key=lambda r:r.cost); F=make(opt.x,kind,key,*arrays)\\n return abs(F[J]@ls(F[I],yy)-y[J]).mean(),opt.x,np.mean(abs(opt.fun))\\nby=[]\\nfor J in folds:\\n I=np.setdiff1d(np.arange(n),J); v=np.r_[I,J]; by.append(abs(base['_scalar'](q[v],b[v],c[v],t,y[I])-y[J]).mean())\\nprint('current nested splits',np.round(by,6),flush=True)\\nfor kind in ('tanh','rational'):\\n for key in range(9):\\n  res=[fit(np.setdiff1d(np.arange(n),J),J,kind,key) for J in folds]; errs=np.array([r[0] for r in res]); print(kind,key,np.round(errs,5), 'worst', round(max(errs),6),'mean',round(errs.mean(),6),'gate',np.round(res[0][1],4),'train',round(res[0][2],6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress11.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single-coordinate scalar gate → H2 training-selected gated and regularized readouts; official scalar and trajectory MAE are 0.035284 and 0.003793, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted estimator with the archived tilted gate\",\n      \"rejected_reason\": \"The archived gate uses a different feature basis; it needs to demonstrate lower worst-split error before replacing the accepted artifact.\"\n    }\n  ],\n  \"rationale\": \"Verify the accepted artifact in an isolated Python process, then measure its margin on additional holdouts and compare low-dimensional gate fits without modifying the deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c76f640faf96e5eeb44841af6c0a48eefcfeffeb1564fe03f1cadd3e6620ad98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28313.63,
+      "usage_known": true,
+      "prompt_tokens": 37980,
+      "cached_tokens": 12672,
+      "completion_tokens": 1182
+    }
+  ]
+}

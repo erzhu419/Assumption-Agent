@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd4bcec21ac94e9b9ec193b313d77312",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:04.709584+00:00",
+  "ended_at_utc": "2026-11-28T15:09:38.080663+00:00",
+  "request_sha256": "818dc69589160ff309cf9f1e06ca77c390eaf74c70b708f6d98ef67f94ba60ad",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32759,
+    "cached_tokens": 12672,
+    "completion_tokens": 1315
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress_rational.py <<'PY'\\nimport sys,importlib.util,numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py'); bs=importlib.util.module_from_spec(sp); sp.loader.exec_module(bs)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; ids=np.arange(len(y)); sh,sc=bs._calibrate(s['panel_a']); z=(tr['x']-sh)/sc; P=bs._quad(z)\\nrng=np.random.default_rng(45); splits=[('gate',ids[:52],ids[52:])]+[(f'r{k}',p[:52],p[52:]) for k in range(8) for p in [rng.permutation(ids)]]\\nfor k,u in enumerate([abs(z[:,2]-.42*z[:,0]),np.linalg.norm(z,axis=1),z[:,2],-z[:,2]]):\\n order=np.argsort(u); splits.append((f'e{k}',order[:-12],order[-12:]))\\n\\ndef candidate(i,j,penalty,typ):\\n def f(p):\\n  a,k,d,b,c=p; w=z[:,2]-k*z[:,0]+d+b*z[:,1]+c*z[:,3]; u=a*w*w\\n  g={'rat':lambda:-u/(1+u),'exp':lambda:np.expm1(-u),'sq':lambda:1/(1+u)**2-1,'root':lambda:1/np.sqrt(1+u)-1}[typ]()\\n  return np.c_[P,P[:,np.arange(15)!=12]*g[:,None]]\\n R=np.diag(np.sqrt(penalty)*np.r_[np.zeros(5),np.ones(10)*.05,np.ones(5)*.1,np.ones(9)])\\n def calc(p,ret=False):\\n  F=f(p); U=np.r_[F[i],R]; Y=np.r_[y[i],np.zeros(len(R))]; c=np.linalg.lstsq(U,Y,rcond=1e-11)[0]; return (F[j]@c,p,c) if ret else U@c-Y\\n opt=min([least_squares(calc,p,bounds=([.025,.05,-.8,-.8,-.8],[5,2,.8,.8,.8]),max_nfev=110) for p in [[1,.42,.03,-.1,-.08],[1,.42,-.24,-.1,-.08]]],key=lambda r:r.cost)\\n return calc(opt.x,True)\\nprint('public fields',s.keys(),tr.keys(),'test/calibrated max norms',np.linalg.norm((s['test']['x']-sh)/sc,axis=1).max(),np.linalg.norm(z,axis=1).max())\\nfor typ in ['rat','exp','sq','root']:\\n for p in [0,.0003,.002,.01,.05,.2]:\\n  es=[]\\n  for _,i,j in splits:\\n   pred,_,_=candidate(i,j,p,typ); es.append(np.mean(abs(pred-y[j])))\\n  print(typ,p,'gate/mean random/worst random',np.round([es[0],np.mean(es[1:9]),max(es[1:9])],6),'tails',np.round(es[9:],6))\\nfor _,i,j in [splits[0],splits[-3],('all',ids,ids)]:\\n pred,p,c=candidate(i,j,0,'rat'); print('rational profile',p.round(4),c.round(4)); print('residual rms',np.sqrt(np.mean((pred-y[j])**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_rational.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unregularized rational readout -> H2 regularized or more compact rational readout; the current scalar worst-slice MAE is 0.036511 versus 0.009716 on the prescribed split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Batch centering, relay-mode checks, or drift operators\",\n      \"rejected_reason\": \"The supplied task is continuous regression on one study and provides no cohort labels, relay modes, or observed drift operator. The relevant stress test is extrapolation in calibrated coordinates.\"\n    }\n  ],\n  \"rationale\": \"Compare rational denominator forms and numerator shrinkage on real extreme-coordinate and high-norm holdouts, accounting for the exact polynomial dependency in the rational basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "464c4bee9fff63694f98934a17427cc35c865b2461759b99bcbcb1f2c7ea3fd0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33369.82,
+      "usage_known": true,
+      "prompt_tokens": 32759,
+      "cached_tokens": 12672,
+      "completion_tokens": 1315
+    }
+  ]
+}

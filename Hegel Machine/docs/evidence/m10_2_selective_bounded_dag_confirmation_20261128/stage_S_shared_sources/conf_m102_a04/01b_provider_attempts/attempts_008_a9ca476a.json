@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9ca476ac0254ca9952e29674bee8969",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:54:38.814268+00:00",
+  "ended_at_utc": "2026-11-28T14:55:19.977525+00:00",
+  "request_sha256": "07b8516f390fe6008287721bdd3e75bdf926d5cbbbf273d495573def90ffe943",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34370,
+    "cached_tokens": 12672,
+    "completion_tokens": 1627
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit8.py <<'PY'\\nimport sys,pickle,numpy as np,importlib.util\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nsp=importlib.util.spec_from_file_location('c','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; p=s['panel_c']; u=p['u']; v=p['v1']; lin=m.lin; one=m.one\\nprint('study fields',list(s),'training fields',list(tr),'unique telemetry',np.unique(s['telemetry_vec'])); a,b=m._align(s['panel_a']); z=(x-a)/b; zte=(s['test']['x']-a)/b; print('radii train/test max',np.linalg.norm(z,axis=1).max(),np.linalg.norm(zte,axis=1).max())\\nfor name,fun in [('asinh',np.arcsinh),('atan',np.arctan),('tanh',np.tanh),('softsign',lambda w:w/(1+abs(w))),('softsqrt',lambda w:w/np.sqrt(1+w*w)),('softplusodd',lambda w:np.sign(w)*np.log1p(abs(w)))]:\\n def ft(q,X):return np.c_[one(X),fun(q[0]*X)]\\n def fit(I):\\n  def funr(q):\\n   f=ft(q,u[I]);return (f@lin(f,v[I])-v[I]).ravel()\\n  p=least_squares(funr,[2],bounds=(.1,35));f=ft(p.x,u[I]);return p.x,lin(f,v[I]),np.std(p.fun)\\n q,B,err=fit(np.arange(len(u))); cv=[]\\n for I in np.array_split(np.random.default_rng(42).permutation(len(u)),4):\\n  r,C,_=fit(np.setdiff1d(np.arange(len(u)),I));cv.extend((ft(r,u[I])@C-v[I]).ravel())\\n print(name,q,err,np.std(cv),'linear/nonlinear proportional error',np.linalg.norm(B[1:5]-B[5:]*(np.sum(B[1:5]*B[5:])/np.sum(B[5:]**2)))/np.linalg.norm(B[1:5]))\\n if name=='asinh':print('asinh coefficients',np.round(B,4))\\nM=m.fitc(p); C=M[0](z); D=m._square(z)@lin(m._square(u),p['v2']); V=np.c_[C,D]; Y=np.c_[y,T]; N=len(Y); II=np.arange(52); JJ=np.arange(52,N); folds=[np.array_split(np.random.default_rng(k).permutation(II),4) for k in [44,4]]\\ndef kernel(W):\\n G=W@W.T/W.shape[1]; dd=G.diagonal(); return G,np.maximum(dd[:,None]+dd-2*G,0)\\ndef vf(V):\\n parts=[V,V*V,np.tanh(V),np.sin(V),np.arcsinh(V)]\\n for mix in (.5,1,2):\\n  plus=np.column_stack([V[:,i]+mix*V[:,j] for i,j in combinations(range(8),2)]); minus=np.column_stack([V[:,i]-mix*V[:,j] for i,j in combinations(range(8),2)]);\\n  parts.extend([np.tanh(plus)/3,np.tanh(minus)/3])\\n for alpha in (.15,.5,1.):\\n  parts.append(np.column_stack([V[:,i]/(1+alpha*V[:,j]**2) for i in range(8) for j in range(8)])/3)\\n parts.append(np.column_stack([V[:,i]*V[:,j]*V[:,k] for i,j,k in combinations(range(8),3)])/3)\\n return np.column_stack(parts)\\nW=(V-V[II].mean(0))/V[II].std(0); G,d=kernel(W); F=vf(W); H=F@F.T/F.shape[1]; base=(1+.25*G)**2+np.exp(-.06*d)\\nrows=[]\\nfor name,K in [('baseline',base),('cubic',(1+.06*G)**3),('quadratic',(1+.25*G)**2),('rational+pair+triple',base+H*.01),('rational+pair+triple strong',base+H*.1),('separable+poly',base+.1*np.exp(-.2*(W[:,:,None]-W.T[None,:,:])**2).mean(1))]:\\n for al in [3e-6,3e-5,3e-4,3e-3]:\\n  def err(I,J):return Y[J]-K[np.ix_(J,I)]@np.linalg.solve(K[np.ix_(I,I)]+al*np.eye(len(I)),Y[I]);\\n  E=[np.abs(np.vstack([err(np.setdiff1d(II,J),J) for J in fs])).mean(0) for fs in folds]; P=abs(err(II,JJ)).mean(0); rows.append((max(max(e[0],e[1:].mean()) for e in E),name,al,*(np.round([e[0],e[1:].mean(),e[-1]],5).tolist() for e in (*E,P))))\\nprint('inner ranked [y,trajectory,terminal] inner1/inner2/public');print(*sorted(rows)[:16],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/audit8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated dual-panel kernel → H2 explicit pair, rational, and three-way features; the verified baseline’s worst split y MAE is 0.0255 and worst trajectory horizon MAE is 0.0362.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply a batch classifier or relay-mode stratification\",\"rejected_reason\":\"The supplied task is continuous regression on one campaign, with no labeled batches, relay modes, or drift-control states.\"}],\"rationale\":\"Keep the verified artifact intact while testing whether physically plausible missing terms improve inner-fold errors before consulting the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "320d48b25fd768812c6e39704eca3945cdc59fd97188e3c45e805b3af2ecb9e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41161.98,
+      "usage_known": true,
+      "prompt_tokens": 34370,
+      "cached_tokens": 12672,
+      "completion_tokens": 1627
+    }
+  ]
+}

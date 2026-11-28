@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2c618a223bb431a8377c5a157ae759e",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:15:59.058920+00:00",
+  "ended_at_utc": "2026-11-28T16:16:20.698571+00:00",
+  "request_sha256": "1902b146f03d16daef1cfbc82eed21c19aaedf26780538b55d86fe498e235b12",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57524,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34422,
+    "cached_tokens": 12672,
+    "completion_tokens": 847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\nns = {'__file__': str(p), '__name__': '__main__'}\\nexec(compile(p.read_text().split('\\\\nst = pickle.load', 1)[0], str(p), 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; n = len(t['x']); ids = np.arange(n)\\norder = np.argsort(np.linalg.norm(t['x'], axis=1))\\nslices = {f'block_{i}': ids[i:i+20] for i in (0, 20, 40, n-20)}\\nslices.update(low_input_norm=order[:20], high_input_norm=order[-20:])\\nfor name, va in slices.items():\\n    tr = np.setdiff1d(ids, va)\\n    q = copy.deepcopy(s)\\n    y, z = t['y'][tr], t['traj'][tr]\\n    q['train'] = dict(x=t['x'][tr], y=y, traj=z, summary=np.array([y.mean(), y.std(), z[:,-1].mean(), z[:,-1].std()]))\\n    q['test'] = dict(x=t['x'][va])\\n    out, counts = ns['run_dag'](q)\\n    assert all(v == 1 for v in counts.values())\\n    ey = abs(out['y_hat'] - t['y'][va]); et = abs(out['state_pred'] - t['traj'][va]); assert np.isfinite(ey).all() and np.isfinite(et).all()\\n    print(name, 'scalar_mae', round(ey.mean(), 6), 'trajectory_mae', round(et.mean(), 6), 'worst_time_mae', round(et.mean(axis=0).max(), 6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: linear-plus-tanh C → H2: sine-plus-tanh C with paired-sine A and cosine B; official held-out scalar and trajectory MAEs are 0.029419 and 0.009360.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the calibration maps on readout targets\",\n      \"rejected_reason\": \"Both official MAEs pass, and the panel-only fits preserve the separation between calibration and readout.\"\n    }\n  ],\n  \"rationale\": \"Leave the accepted artifact unchanged and check both readouts on additional contiguous and extreme input-norm holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "eb508aa6fdf635349f1270b8374886a7b42fe16e4c9c3d76929db235110ec37a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21638.38,
+      "usage_known": true,
+      "prompt_tokens": 34422,
+      "cached_tokens": 12672,
+      "completion_tokens": 847
+    }
+  ]
+}

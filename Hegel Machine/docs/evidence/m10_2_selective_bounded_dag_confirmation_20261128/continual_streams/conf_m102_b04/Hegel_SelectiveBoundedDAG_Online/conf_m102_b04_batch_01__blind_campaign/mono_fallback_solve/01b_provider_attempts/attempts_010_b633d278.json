@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b633d2780fd84a4fa7f103b9718e2f7c",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:21.846781+00:00",
+  "ended_at_utc": "2026-11-28T15:03:53.360029+00:00",
+  "request_sha256": "b722fb0dc7423ed9ea330b99705e24f2e4b647c1a628243a431e3e0ae7b92c1f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57635,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35526,
+    "cached_tokens": 12672,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/rational_probe.py <<'PY'\\nfrom operators import *\\nimport importlib.util\\nfrom scipy.optimize import least_squares\\nm=importlib.util.module_from_spec(sp:=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'));sp.loader.exec_module(m)\\nx=s['train']['x'];z=s['train']['traj'];y=s['train']['y']; c,b,v,w=m.coordinates(s,x)\\np=s['panel_c'];u=p['u'];vfun=lambda q: basis(np.arctan(2.12*q),1)@fit(basis(np.arctan(2.12*u),1),p['v1']); bfun=lambda q:basis(q,1)@fit(basis(s['panel_b']['u'],1),s['panel_b']['v']); wbase=lambda q:np.c_[basis(q,1),q*q/(1+.1616*q*q)];wfun=lambda q:wbase(q)@fit(wbase(u),p['v2']);\\nqs={'x':x,'c':c,'b':b,'bc':bfun(c),'v':v,'w':w,'wb':bfun(wfun(c)),'cbv':vfun(bfun(c)),'cbw':wfun(bfun(c))}\\nholds=[np.arange(52,72), np.arange(20),np.argsort(np.linalg.norm(x,axis=1))[-20:],np.argsort(x[:,0])[:20],np.argsort(x[:,3])[-20:]]\\nY=[y,z@np.linalg.svd(z,full_matrices=False)[2][0]]\\nfuncs={'raw':lambda q,a:q,'rsq':lambda q,a:q/np.sqrt(1+a*q*q),'rat':lambda q,a:q/(1+a*q*q),'atan':lambda q,a:np.arctan(a*q)/a,'tanh':lambda q,a:np.tanh(a*q)/a,'sin':lambda q,a:np.sin(a*q)/a}\\nfor name,A in qs.items():qs[name]=A\\nfor j,T in enumerate(Y):\\n R=[]\\n tr=np.arange(52)\\n for name,A in qs.items():\\n  for fn,f in funcs.items():\\n   for alpha in ([0.] if fn=='raw' else [.16,.22,.5,1.,1.25,2.12]):\\n    q=f(A,alpha)\\n    for d in (2,3):\\n     D=basis(q,d)\\n     for den in [np.ones(len(x)),1+.22*(q*q).sum(1),1+.22*(A*A).sum(1),1+.22*(q.sum(1))**2]:\\n      P=D/den[:,None]\\n      for ridge in (.0001,.02):\\n       P0=P[tr];beta=np.linalg.solve(P0.T@P0+ridge*np.eye(P.shape[1]),P0.T@T[tr]); e=np.mean(abs(P@beta-T)[52:]); train=np.mean(abs(P@beta-T)[tr]); R.append((e,train,name,fn,alpha,d,den,ridge,P))\\n print('target',j)\\n for criteria in [lambda a:a[0],lambda a:a[1]]:\\n  for e,train,name,fn,alpha,d,den,ridge,P in sorted(R,key=criteria)[:8]:\\n   E=[]\\n   for h in holds:\\n    k=np.setdiff1d(np.arange(len(x)),h);P0=P[k];beta=np.linalg.solve(P0.T@P0+ridge*np.eye(P.shape[1]),P0.T@T[k]);E.append(np.mean(abs(P[h]@beta-T[h])))\\n   print(name,fn,alpha,d,ridge,'den range',round(den.max(),3),'train',round(train,5),'hold',np.round(E,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: panel-conditioned Gaussian regression -> H2: compact rational laws for better boundary extrapolation; public response/trajectory MAE is 0.02659/0.01317, but worst stress-slice MAE is 0.08415/0.04633.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified baseline immediately\",\n      \"rejected_reason\": \"The public split passes, but coordinate-tail holdouts reveal a material extrapolation deficit in both outputs.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified baseline unchanged while testing whether saturating coordinates and rational quotients reduce extrapolation errors without sacrificing the public margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4088ad9254eff1450eae031c7738e2935d233cc08a90ad77dd82fc72a4efe3ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31511.85,
+      "usage_known": true,
+      "prompt_tokens": 35526,
+      "cached_tokens": 12672,
+      "completion_tokens": 1298
+    }
+  ]
+}

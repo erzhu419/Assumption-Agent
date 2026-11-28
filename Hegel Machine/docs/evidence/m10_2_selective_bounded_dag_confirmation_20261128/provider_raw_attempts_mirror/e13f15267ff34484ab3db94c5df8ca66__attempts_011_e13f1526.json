@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e13f15267ff34484ab3db94c5df8ca66",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:48.437969+00:00",
+  "ended_at_utc": "2026-11-28T15:21:16.497665+00:00",
+  "request_sha256": "baeb51cb3899296e0218b48c77a0d5e6dfd9ba4ca411be1f50a5674eb410d5b0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35098,
+    "cached_tokens": 12672,
+    "completion_tokens": 1112
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task'); s=pickle.load((p/'public_batch.pkl').open('rb'))[0]['study']\\na,b,c=[runpy.run_path(str(p/'_frozen_nodes'/f'node_{i:02}.py')) for i in range(3)]; sink=runpy.run_path(str(p/'node_03.py'))['run_node']\\nu,v=(s['panel_a'][k] for k in ('u','v')); j=np.roll(np.arange(u.shape[1]),-1)\\ndef forward(z,k):\\n return np.column_stack([np.ones(len(z)),z[:,k],z[:,j[k]],z[:,k]*z[:,j[k]],z[:,k]**3])\\ndp=np.linalg.norm(v-u,axis=1); keep=dp<=np.median(dp)+max(.5,5*np.median(abs(dp-np.median(dp))))\\nfor _ in range(3):\\n coef=[np.linalg.lstsq(forward(u,k)[keep],v[keep,k],rcond=1e-9)[0] for k in range(u.shape[1])]\\n r=np.linalg.norm(np.column_stack([forward(u,k)@coef[k] for k in range(u.shape[1])])-v,axis=1); sel=r<=max(.003,6*np.median(r))\\n if np.array_equal(sel,keep) or sel.sum()<8: break\\n keep=sel\\nz0=np.array([[.81,-.43,.66,.35],[-.62,-.21,.33,.78]]); z=np.vstack([z0,-z0]); x=np.column_stack([forward(z,k)@coef[k] for k in range(u.shape[1])]); st=dict(s,test={'x':x})\\np0=a['run_node']({'__input__':st}); p1=b['run_node']({'__input__':st}); p2=c['run_node']({'node_00':p0,'node_01':p1}); out=sink({'node_00':p0,'node_01':p1,'node_02':p2})\\nfor k,v in [('calibrated',p0['calibrated'][-4:]),('kernel',p2['fit']),('y_hat',out['y_hat']),('state_pred',out['state_pred'])]:\\n delta=np.max(np.abs(v[:2]-v[2:])); print(f'antipodal {k} max difference: {delta:.3g}'); assert delta<1e-7\\nz=a['_align'](s['panel_a'],s['train']['x']); d=np.linalg.norm(z[:,None]+z[None,:],axis=-1); ij=np.triu_indices(len(z),1); i,j=(v[np.argmin(d[ij])] for v in ij); y=s['train']['y']; tr=s['train']['traj']; print(f'closest distinct observed antipodes: rows {i},{j}; latent distance={d[i,j]:.6f}; scalar difference={abs(y[i]-y[j]):.6f}; trajectory mean difference={np.mean(abs(tr[i]-tr[j])):.6f}')\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 more interactions can close the gap → H2 the frozen representation merges opposite latent inputs; the saved sink’s worst MAEs across 20 nested outer folds were 0.948258 scalar and 0.619062 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the verified candidate with a broader model\",\n      \"rejected_reason\": \"No held-out evidence supports another expansion, and a downstream model cannot distinguish inputs with identical frozen payloads.\"\n    }\n  ],\n  \"rationale\": \"Keep the stress-tested candidate unchanged. Verify the suspected payload collision end to end on exact latent antipodes, compare it with the closest observed antipodal pair, and rerun the official test in isolation without treating structural verification as acceptance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b10fe7966ee3f99d1229d32d621d06b1f5a4b97a69b1ba997ad74035620441b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28474.28,
+      "usage_known": true,
+      "prompt_tokens": 35098,
+      "cached_tokens": 12672,
+      "completion_tokens": 1112
+    }
+  ]
+}

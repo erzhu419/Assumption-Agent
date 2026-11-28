@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "160bdaecbcad43a38b19a0d0b0a9a5c3",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:16.013578+00:00",
+  "ended_at_utc": "2026-11-28T15:07:53.962725+00:00",
+  "request_sha256": "ad5d9e4842bc35db0ed1cc2bc85bebc64923177a757f8483d9a5262f56f21d6e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72463,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42270,
+    "cached_tokens": 12672,
+    "completion_tokens": 1653
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/shared.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m,pickle,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; Y=np.c_[t['y'],t['traj']]; n=52; z,l,q,r,p,c=m.features(s,t['x']); N=len(z)\\nF=m._ones(np.c_[p,c,(p[:,:,None]*c[:,None,:]).reshape(N,-1)]); U=np.linalg.qr(F[:n])[0]; resid=Y[:n]-U@(U.T@Y[:n]); _,ss,V=np.linalg.svd(resid,full_matrices=False); v=V[0]; g=Y@v; B=Y-g[:,None]*v; coef=m._ls(F[:n],B[:n]); print('rank',ss,'load',v,'orth MAE',abs(F[n:]@coef-B[n:]).mean(0),flush=True)\\nres=[]; G={}; I=np.eye(n)\\ndef check(name,K):\\n if not np.isfinite(K).all():return\\n for lam in [1e-7,1e-4,.003,.03]:\\n  f=cho_factor(K[:n,:n]+lam*I,check_finite=False); a=cho_solve(f,g[:n],check_finite=False); d=cho_solve(f,I,check_finite=False).diagonal(); cv=np.mean(abs(a/d)); pred=K[n:,:n]@a; err=np.mean(abs(pred-g[n:])); res.append((cv,err,name,lam))\\nfor j,K in enumerate(m._models((z,l,q,r,p,c))):check(('old',j),K)\\nbase=F@F.T/F.shape[1]\\nsets={'z':z,'l':l,'q':q,'r':r,'p':p,'c':c,'q+r':q+r,'q-r':q-r,'q*r':q*r,'delta':q-r,'dot':(q*r).sum(1)[:,None]}\\nfor name,w in sets.items():\\n G[name]=w;G[name+'norm']=(w*w).sum(1)[:,None];G[name+'normroot']=np.linalg.norm(w,axis=1)[:,None];G[name+'sum']=w.sum(1)[:,None];G[name+'square']=w*w\\n if w.shape[1]==4:\\n  ii,jj=np.triu_indices(4,1);G[name+'pair+']=w[:,ii]+w[:,jj];G[name+'pair-']=w[:,ii]-w[:,jj];G[name+'pair*']=w[:,ii]*w[:,jj]\\nfor name,w in G.items():\\n for k in [.22,.5,1.25,2.4,4.]:\\n  for nm,G0 in [('rat',1/(1+k*w*w)),('ratn',1/(1+k*abs(w))),('tanh',np.tanh(k*w)),('sin',np.sin(k*w)),('cos',np.cos(k*w)),('exp',np.exp(-k*w*w))]:\\n   for d in range(w.shape[1]):\\n    a=G0[:,d]; ker=a[:,None]*a\\n    for j,X in enumerate([F[:,:1],F[:,:9],F]):check(('gate',name,k,nm,d,j),base+ker*(X@X.T/X.shape[1]))\\nfor name,w in {'z':z,'l':l,'qr':np.c_[q,r],'p,c':np.c_[p,c],'z,qr':np.c_[z,q,r],'p,c,prod':F[:,1:]}.items():\\n D=m._dist(w)\\n for h in np.geomspace(.5,15,9):\\n  for j,K in enumerate([np.exp(-D/h**2),(1+D/h**2)**-2]):\\n   for k in [.05,1,20,400]:check(('new',name,h,j,k),K+k*base); check(('prod',name,h,j,k),K*base+k*base)\\nprint('CV',*sorted(res)[:20],sep='\\\\n');print('HOLD',*sorted(res,key=lambda x:x[1])[:20],sep='\\\\n');\\n# Algebraic signature of the missing common factor, with branch controls removed.\\nrr=g[:n]-U@(U.T@g[:n]); out=[]\\nfor nam,w in G.items():\\n for k in range(w.shape[1]):\\n  a=w[:,k]; w0=a[:n]; w0=w0-U@(U.T@w0);out.append((abs(rr@w0)/max(np.linalg.norm(w0),1e-10),nam,k))\\nprint('residual features',sorted(out,reverse=True)[:30]);print('g',np.c_[z,g,F@m._ls(F[:n],g[:n])][:12].round(4));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/shared.py; cat /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace independently fitted outputs with one shared latent correction to the bilinear branches; current 52/20 y MAE is 0.03071 and trajectory MAE is 0.04793.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Continue separate nonlinear fits for all outputs\",\n      \"rejected_reason\": \"After subtracting the bilinear branch fit, the dominant residual singular value is 5.508 versus 0.0283 for the next, so one shared correction is better supported.\"\n    }\n  ],\n  \"rationale\": \"Estimate the shared correction on the first 52 rows, compare candidate kernels and algebraic gains by training-only leave-one-out error, and measure the remaining error on the 20 held-out rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ac06ff78382b33ebb96aa90e99c63068f154a3dc50c389ee74ee4e0400f58cb2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38351.24,
+      "usage_known": true,
+      "prompt_tokens": 42270,
+      "cached_tokens": 12672,
+      "completion_tokens": 1653
+    }
+  ]
+}

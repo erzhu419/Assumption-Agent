@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3db2fd30da934009bf5a362676a86bd7",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:59.225557+00:00",
+  "ended_at_utc": "2026-11-28T15:17:22.867238+00:00",
+  "request_sha256": "a2a187485ea756711125563c3989283d1f8ec9391f4eebcefeb1855f7d9e0ef6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58324,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35886,
+    "cached_tokens": 12672,
+    "completion_tokens": 908
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nfrozen = load('encoder', '/holdout_task/_frozen_nodes/node_00.py')\\nsink = load('sink', '/holdout_task/node_01.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nrows = s['train']; ix = np.arange(len(rows['y']))\\nz = frozen({'__input__':s})['z']; z = (z-z.mean(0))/z.std(0)\\nfolds = [('public',ix[-20:])]\\nfor seed in (5, 29):\\n    folds += [(f'random-{seed}-{k}', j) for k,j in enumerate(np.array_split(np.random.default_rng(seed).permutation(ix),4))]\\nfolds += [('large-radius', np.argsort(np.linalg.norm(z,axis=1))[-12:])]\\nmetrics = []\\nfor name,j in folds:\\n    i = np.setdiff1d(ix,j); work = copy.deepcopy(s)\\n    work['train'] = {k:rows[k][i] for k in ('x','y','traj')}\\n    y, last = rows['y'][i], rows['traj'][i,-1]\\n    work['train']['summary'] = np.array([y.mean(),y.std(),last.mean(),last.std()])\\n    work['test'] = {'x':rows['x'][j]}\\n    out = sink({'__input__':work,'node_00':frozen({'__input__':work})})\\n    p,q = out['y_hat'],out['state_pred']\\n    assert p.shape == rows['y'][j].shape and q.shape == rows['traj'][j].shape\\n    assert np.isfinite(p).all() and np.isfinite(q).all()\\n    np.testing.assert_allclose(out['diagnostics_vec'],[p.mean(),p.std(),q[:,-1].mean(),q[:,-1].std()])\\n    e = np.array([np.mean(abs(p-rows['y'][j])), np.mean(abs(q-rows['traj'][j])),np.mean(abs(q-rows['traj'][j]),axis=0).max()])\\n    metrics.append(e)\\n    print(name, 'scalar/trajectory/worst horizon',np.round(e,6))\\n    if name == 'public': assert np.all(e[:2] <= .038)\\nprint('worst across all slices',np.max(metrics,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense polynomials → bounded scalar readout and separate alignment-aware trajectory model; the exact artifact passed public CV at 0.021016 scalar MAE and 0.009308 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Create batch_solver.py for the separate schema validator\",\n      \"rejected_reason\": \"That validator targets a different entry point; the DAG evaluator passed, and only node_01.py is editable.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged and stress-test it across unseen row splits, extreme coordinates, and individual trajectory horizons before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2966020d297b2815c9ca0c92592b1932a7949a7d1fd562dbcdfc784b8ced6ed7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23640.37,
+      "usage_known": true,
+      "prompt_tokens": 35886,
+      "cached_tokens": 12672,
+      "completion_tokens": 908
+    }
+  ]
+}

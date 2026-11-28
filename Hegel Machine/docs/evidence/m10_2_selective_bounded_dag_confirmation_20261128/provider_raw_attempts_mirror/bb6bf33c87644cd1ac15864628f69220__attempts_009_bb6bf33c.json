@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb6bf33c87644cd1ac15864628f69220",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:56.913476+00:00",
+  "ended_at_utc": "2026-11-28T15:35:40.455614+00:00",
+  "request_sha256": "5bb1bd0f8de604045388d8a6633d5a2f748ff9821e3137b87463c6af062894cf",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34290,
+    "cached_tokens": 0,
+    "completion_tokens": 1909
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _one(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _pairs(x):\\n    return np.column_stack([x[:, i]*x[:, j] for i, j in combinations(range(x.shape[1]), 2)])\\n\\n\\ndef _coordinates(study):\\n    a = study['panel_a']\\n    u, v = np.asarray(a['u'], float), np.asarray(a['v'], float)\\n    x = np.vstack((study['train']['x'], study['test']['x'])).astype(float)\\n    d = u.shape[1]\\n    coef = np.empty((5, d))\\n    for j in range(d):\\n        k = (j+1) % d\\n        f = np.column_stack((np.ones(len(u)), u[:, j], u[:, k], u[:, j]*u[:, k], u[:, j]**3))\\n        b = _fit(f, v[:, j])\\n        for _ in range(10):\\n            r = abs(f@b-v[:, j]); w = 1/np.sqrt(np.maximum(r, 2e-4))\\n            b = _fit(f*w[:, None], v[:, j]*w)\\n        r = abs(f@b-v[:, j]); keep = r <= max(8*np.median(r), .001)\\n        coef[:, j] = _fit(f[keep], v[keep, j]) if keep.sum() >= 5 else b\\n    o, a, b, c, e = coef\\n    z = (x-o)/a\\n    idx = np.arange(d)\\n    for _ in range(20):\\n        q = np.roll(z, -1, axis=1)\\n        r = o + a*z + b*q + c*z*q + e*z**3 - x\\n        if np.max(abs(r)) < 1e-10: break\\n        jac = np.zeros((len(z), d, d))\\n        jac[:, idx, idx] = a+c*q+3*e*z*z\\n        jac[:, idx, (idx+1)%d] = b+c*z\\n        z -= np.clip(np.linalg.solve(jac, r[...,None])[...,0], -.4, .4)\\n    p = study['panel_b']; rot = _fit(_one(p['u']), p['v'])\\n    return z, _one(z)@rot, (z-rot[0])@np.linalg.inv(rot[1:])\\n\\n\\ndef _maps(study, xs):\\n    p = study['panel_c']; u = p['u']; n = u.shape[1]\\n    coeff = _fit(_one(_pairs(u)), p['v1'])\\n    def f(x, q):\\n        x2 = x*x\\n        return np.column_stack((_one(x), x2, x2/(1+q*x2)))\\n    v = p['v2']\\n    def residual(q):\\n        a = f(u, q)\\n        return (a@_fit(a,v)-v).ravel()\\n    q = least_squares(residual, np.full(n,.25), bounds=(.02,2), gtol=1e-12).x\\n    c = _fit(f(u,q),v)\\n    return [(_one(_pairs(w))@coeff, f(w,q)@c) for w in xs]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    n = len(study['train']['x'])\\n    coords = _coordinates(study)\\n    c, d = _maps(study, coords)[1]\\n    w = np.column_stack((c,d))\\n    return {'features': (w-w[:n].mean(0))/np.maximum(w[:n].std(0), .1), 'n_train': n}\\nPY\\nsed -n '153,177p' /holdout_task/test_dag_candidate.py; sed -n '34,92p' /tmp/hegel_continual_archive/*solver.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; cat > /tmp/rank.py <<'PY'\\nimport pickle,numpy as np,runpy,itertools\\nm=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=m['_coordinates'](s); M=m['_maps'](s,X); P=m['_pairs']; fit=m['_fit']; t=s['train']; nn=len(t['x']); y=np.c_[t['y'],t['traj']]; rng=np.random.default_rng(23); splits=[np.arange(nn*3//4,nn),np.arange(52,nn),*np.array_split(rng.permutation(nn),4)]; print('extents',[(w[:nn].min(0),w[:nn].max(0)) for w in X]);\\ndef score(w, norm=True):\\n out=[]\\n for te in splits:\\n  tr=np.setdiff1d(np.arange(nn),te); W=w[:nn]-w[tr].mean(0); W=W/np.maximum(w[tr].std(0),.1) if norm else W; g=W@W.T/W.shape[1]; D=np.maximum(g.diagonal()[:,None]+g.diagonal()-2*g,0); Q=(1+.25*g)**2; E=np.eye(len(tr)); pred=sum(K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+r*E,y[tr]) for K,r in [(Q,3e-5),(Q+np.exp(-.06*D),3e-4)])/2; e=abs(pred-y[te]); out.append([e[:,0].mean(),e[:,1:].mean()]);\\n return np.array(out)\\nres=[]\\nfor i,(z,(c,d)) in enumerate(zip(X,M)):\\n lib={'z':z,'C':c,'D':d,'p':P(z),'q':z*z,'R':P(c),'S':P(d),'h':z*z/(1+.25*z*z)}\\n for j in range(1,4):\\n  for keys in itertools.combinations(lib,j):\\n   w=np.column_stack([lib[k] for k in keys]); a=score(w); res.append((a.max(),i,''.join(keys),np.round(a,4).tolist()))\\nprint(*sorted(res)[:24],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rank.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration → H2: cyclic cubic calibration with pairwise panel features; forward panel leave-one-out MAE is 0.000106, with end-to-end MAE pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or quadratic map suffices to recover the physical coordinates.\",\n    \"empirical_witness\": \"Forward leave-one-out MAE falls from 0.12764 for affine and 0.04838 for full quadratic to 0.000106 after adding diagonal cubics.\",\n    \"causal_blanket_diagnosis\": \"Each sensor reading depends on its own coordinate cubed and on a product with its cyclic neighbor.\",\n    \"sublated_pivot\": \"Fit and invert the sparse cyclic sensor law, then test the panel features in each supported coordinate frame.\",\n    \"risk_kind\": \"missing_cyclic_cubic_calibration\",\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Save the calibrated node now, then rank feature constructions across multiple training splits before choosing the final map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5f04a42b4a6f3a9ed1c0aefc805b4528b3dabc4481c60f1e845fdb5a041d106b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43541.1,
+      "usage_known": true,
+      "prompt_tokens": 34290,
+      "cached_tokens": 0,
+      "completion_tokens": 1909
+    }
+  ]
+}

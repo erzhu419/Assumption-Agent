@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "630e46588e6b4efbb3cb6b3caacd663a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:22:07.463050+00:00",
+  "ended_at_utc": "2026-11-28T15:22:48.151508+00:00",
+  "request_sha256": "e50349fe52813511ff0f59fd7d5f7afd4ee68b161323978886d8f62121f12c22",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48728,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32073,
+    "cached_tokens": 12672,
+    "completion_tokens": 1640
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Invert the reference-panel calibration and apply the panel-B operator.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _design(x, powers):\\n    return np.prod(x[:, None, :] ** powers[None, :, :], axis=2)\\n\\n\\ndef _invert(x, coef, powers):\\n    d = x.shape[1]\\n    linear = coef[1:d+1]\\n    z = np.linalg.solve(linear.T, (x-coef[0]).T).T\\n    derivative_powers = [np.maximum(powers - np.eye(d, dtype=int)[j], 0) for j in range(d)]\\n    derivative_coefs = [powers[:, j, None] * coef for j in range(d)]\\n    for _ in range(30):\\n        residual = _design(z, powers) @ coef - x\\n        err = np.linalg.norm(residual, axis=1)\\n        if err.max(initial=0) < 1e-11:\\n            break\\n        jac = np.stack([_design(z, p) @ c for p, c in zip(derivative_powers, derivative_coefs)], axis=2)\\n        delta = np.linalg.solve(jac, residual[..., None])[..., 0]\\n        for j in range(14):\\n            trial = z - delta * (0.5 ** j)\\n            e = np.linalg.norm(_design(trial, powers) @ coef - x, axis=1)\\n            take = e < err\\n            if np.any(take):\\n                z[take] = trial[take]\\n                delta[take] = 0\\n                err[take] = e[take]\\n            if not np.any(delta):\\n                break\\n    return z\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    u, v = (np.asarray(study['panel_a'][k], float) for k in ('u', 'v'))\\n    d = u.shape[1]\\n    powers = np.array([np.bincount(term, minlength=d) for degree in range(4)\\n                       for term in combinations_with_replacement(range(d), degree)])\\n    displacement = np.linalg.norm(v-u, axis=1)\\n    keep = displacement <= max(4.0, 5.0 * np.median(displacement))\\n    design = _design(u[keep], powers)\\n    coef = np.linalg.lstsq(design, v[keep], rcond=None)[0]\\n    # Compact to the shared polynomial support when omitted terms are at noise scale.\\n    active = np.max(np.abs(coef), axis=1) >= 0.005\\n    active[:d+1] = True\\n    compact = np.linalg.lstsq(design[:, active], v[keep], rcond=None)[0]\\n    if np.max(np.abs(design[:, active] @ compact - v[keep])) < 0.001:\\n        coef, powers = compact, powers[active]\\n    x, xt = (np.asarray(study[k]['x'], float) for k in ('train', 'test'))\\n    z = _invert(np.vstack((x, xt)), coef, powers)\\n    ub, vb = (np.asarray(study['panel_b'][k], float) for k in ('u', 'v'))\\n    b = np.linalg.lstsq(np.c_[np.ones(len(ub)), ub], vb, rcond=None)[0]\\n    z = z @ b[1:] + b[0]\\n    return {'z': z[:len(x)].copy(), 'zt': z[len(x):].copy()}\\nPY\\np=/holdout_task/node_00.py; d=/tmp/.hegel_candidate_archive/v01_$(sha256sum \\\"$p\\\" | cut -c1-8); mkdir -p \\\"$d\\\"; cp \\\"$p\\\" \\\"$d/\\\"; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); from node_00 import _design,_invert\\nfrom itertools import combinations_with_replacement as cwr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=[s['panel_a'][k] for k in ('u','v')]; k=np.linalg.norm(u-v,axis=1)<4; u,v=u[k],v[k]; terms=[t for j in range(4) for t in cwr(range(4),j)]; p=np.array([np.bincount(t,minlength=4) for t in terms]); F=_design(u,p); b=np.linalg.lstsq(F,v,rcond=None)[0]; np.set_printoptions(precision=5,suppress=True); active=(abs(b).max(1)>=.005); active[:5]=True; p=p[active]; F=F[:,active]; b=np.linalg.lstsq(F,v,rcond=None)[0]; print('compact terms',list(zip([t for t,a in zip(terms,active) if a],b))); r=F@b-v; h=np.sum(F*np.linalg.pinv(F).T,axis=1); print('max absolute inlier fit and LOO residual',np.max(abs(r)),np.max(abs(r/(1-h[:,None])))); x=np.vstack((s['train']['x'],s['test']['x'])); z=_invert(x,b,p); print('inversion max residual and coordinate ranges',abs(_design(z,p)@b-x).max(),z.min(0),z.max(0)); print('panel inverse accuracy',np.max(abs(_invert(v,b,p)-u)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic quadratic calibration -> H2 compact cubic calibration; inlier panel leave-one-out RMSE falls from 0.07639 for a full quadratic to 0.000390 for a full cubic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the adjacent product alone\",\n      \"rejected_reason\": \"Its held-out panel errors remain about 0.06–0.07 per coordinate, over two orders of magnitude above those of the cubic calibration.\"\n    }\n  ],\n  \"rationale\": \"Fit the forward calibration on uncontaminated reference rows, retain a compact support only if it preserves the noise-scale fit, then verify the numerical inverse and both downstream prediction errors with the frozen nodes unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6dd2073bc8571516ab07295c5c07ebf8c197a835f676ce25db22aadcb675fc21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41260.86,
+      "usage_known": true,
+      "prompt_tokens": 32073,
+      "cached_tokens": 12672,
+      "completion_tokens": 1640
+    }
+  ]
+}

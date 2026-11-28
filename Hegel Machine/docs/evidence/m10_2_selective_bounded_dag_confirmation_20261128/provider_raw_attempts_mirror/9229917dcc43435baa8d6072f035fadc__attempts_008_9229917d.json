@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9229917dcc43435baa8d6072f035fadc",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:08.274516+00:00",
+  "ended_at_utc": "2026-11-28T15:07:31.673350+00:00",
+  "request_sha256": "0b6097230a84ecce7b045ea9003d595bd7ae97175e0a0934b2931d1490606143",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51307,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35270,
+    "cached_tokens": 12672,
+    "completion_tokens": 939
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*01_solver.py; cat /holdout_task/validate_public_schema.py; cat > /tmp/exact_readout.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"print('times'\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nz=(x-a[0])/a[1]; L=A(z); Q=P(z,2); rng=np.random.default_rng(98)\\nfolds=[(np.arange(52),np.arange(52,72))]+[(v[:52],v[52:]) for v in (rng.permutation(72) for _ in range(5))]\\nfuncs={'tanh':np.tanh,'rat':lambda g:g/(1+g*g),'sin':np.sin,'atan':np.arctan,'erf':None,'softsign':lambda g:g/np.sqrt(1+g*g),'sig-aff':expit,'rat-aff':lambda g:1/(1+g*g)}\\nfrom scipy.special import erf\\nfuncs['erf']=erf\\nfor mode,f in funcs.items():\\n vals=[]\\n for i,j in folds:\\n  def design(h,idx):\\n   v=f(L[idx]@h)[:,None]; return np.c_[Q[idx],v*L[idx] if mode.endswith('aff') else v]\\n  q,r=np.linalg.qr(Q[i]); R=np.eye(len(i))-q@q.T; ztar=R@y[i]\\n  def err(h):\\n   v=f(L[i]@h)[:,None]; v=R@(v*L[i] if mode.endswith('aff') else v); return v@fit(v,ztar)-ztar\\n  init=np.array([0.,.09,.26,-.02,1.]); starts=[k*init for k in (.4,.8,1.5,2.5,4,6)]+[np.r_[0.,h] for h in rng.normal(0,1,(5,4))]; sols=[least_squares(err,h,bounds=(-12,12),max_nfev=120) for h in starts]; h=min(sols,key=lambda o:o.cost).x; coef=fit(design(h,i),y[i]); vals.append((np.mean(abs(design(h,i)@coef-y[i])),np.mean(abs(design(h,j)@coef-y[j]))));\\n  if i[0]==0 and i[1]==1: print(mode,'h',h,'coef',coef,flush=True)\\n print(mode,'folds',np.array(vals),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/exact_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic plus gated affine readout → H2 quadratic plus a compact scalar nonlinearity; the rational-gated model reaches 0.013766 MAE on the prescribed 52/20 split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Affine background plus nonlinear gate\",\n      \"rejected_reason\": \"The same gate families without quadratic background terms miss the gate by a wide margin.\"\n    }\n  ],\n  \"rationale\": \"The quadratic background with a gated branch clears the required threshold. Profile out its linear coefficients and test whether a simpler nonlinear term matches or improves it across independently fitted splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d1c85eaff98770b0a05ff9b6825a56fae7713ee7bf7ed3b98f664377d83d1f5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23397.39,
+      "usage_known": true,
+      "prompt_tokens": 35270,
+      "cached_tokens": 12672,
+      "completion_tokens": 939
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36c1074969f547ae80af4f8bc0c86ef3",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:40.291584+00:00",
+  "ended_at_utc": "2026-11-28T15:44:16.134704+00:00",
+  "request_sha256": "968cc33aad55bbf24ba4a24c3c08c01d005da304d356c7d2e8b99275cd699774",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44562,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30885,
+    "cached_tokens": 12672,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_00_solver.py; cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\ndef _ones(x):\\n    return np.c_[np.ones(len(x)), x]\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\ndef _cal(a, x):\\n    u, v = a['u'], a['v']; i, j = np.triu_indices(len(u), 1)\\n    pars = []\\n    for k in range(u.shape[1]):\\n        d = u[i,k] - u[j,k]; good = abs(d) > 1e-8\\n        m = np.median((v[i[good],k] - v[j[good],k])/d[good])\\n        r = v[:,k] - m*u[:,k]; r -= np.median(r)\\n        g = abs(r) < max(.001, 6*np.median(abs(r)))\\n        pars.append(_ls(_ones(u[g,k:k+1]),v[g,k]))\\n    off, scale = np.array(pars).T\\n    return (x-off)/scale\\n\\ndef _features(s, mode=0, variant=0):\\n    z = _cal(s['panel_a'], np.vstack([s['train']['x'], s['test']['x']]))\\n    b, c = s['panel_b'], s['panel_c']; u = c['u']; v = c['v2']\\n    L = _ones(z) @ _ls(_ones(b['u']), b['v'])\\n    def sat(x, k): return x/(1+k*abs(x))\\n    def f(x, k): return _ones(np.c_[x,sat(x,k)])\\n    def objective(k):\\n        a = f(u,k); return np.sum((a@_ls(a,c['v1'])-c['v1'])**2)\\n    k = minimize_scalar(objective,bounds=(.15,3.),method='bounded').x\\n    S = sat(z,k); Q = f(z,k) @ _ls(f(u,k), c['v1'])\\n    i,j = np.triu_indices(z.shape[1],1)\\n    def pp(x): return x[:,i]*x[:,j]\\n    def g(x):\\n        P = pp(x)\\n        if mode==0: return np.c_[x,P]\\n        if mode==1: return np.c_[x,P,x*x]\\n        if mode==2: return np.c_[x,P,P*x[:,i],P*x[:,j]]\\n        if mode==3: return np.c_[x,sat(x,k),P]\\n        if mode==4: return np.c_[x,np.cos(2.4*x),np.sin(2.4*x),P]\\n        return np.c_[x,np.sin(.28*x),P*np.cos(.28*x[:,j])]\\n    R = _ones(g(z)) @ _ls(_ones(g(u)),v)\\n    D = np.sum(Q*R,axis=1)\\n    p, a = [(S,R),(Q,R),(np.c_[z,S],np.c_[R,D]),(np.c_[z,S,Q,D],np.c_[R,pp(z)]),(np.c_[z,S],pp(z)),(np.c_[Q,D],z),(L,np.c_[Q,R,D])][variant]\\n    return dict(z=z,L=L,Q=Q,R=R,product=p,cosine=a)\\n\\ndef run_node(inputs: dict) -> dict:\\n    return _features(inputs['__input__'])\\nPY\\ncat > /tmp/cv13.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path[:0]=['/holdout_task','/holdout_task/_frozen_nodes']\\nfrom node_00 import _features\\nfrom node_01 import run_node as predict\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); print({k:v.shape for k,v in s['panel_c'].items()},flush=True)\\ndef bench(m,v):\\n results=[]\\n for a in [np.arange(n), np.random.default_rng(42).permutation(n),np.random.default_rng(120).permutation(n)]:\\n    tr,te=a[:-20],a[-20:]; st=dict(s,train={k:t[k][tr] for k in ('x','y','traj')},test={'x':t['x'][te]})\\n    p=predict({'__input__':st,'node_00':_features(st,m,v)}); results.append([np.mean(abs(p['y_hat']-t['y'][te])),np.mean(abs(p['state_pred']-t['traj'][te]))])\\n return np.array(results)\\nif __name__=='__main__':\\n out=[]\\n for m in range(6):\\n  for v in range(7):\\n   A=bench(m,v); out.append((A.max(),m,v,np.round(A,5).tolist()))\\n print(*sorted(out)[:20],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv13.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared nonlinear pair law -> H2 compare calibrated mixed bases through the frozen sink; best panel v2 fit MAE was 0.01708 in-sample, with no downstream CV yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Build the six-field node and measure whether calibrated branch features generalize through the frozen sink across the official split and two additional row splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a2343d60924847867a6e6cddc7d138869880d4c55abb5912922d5632861356a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35841.18,
+      "usage_known": true,
+      "prompt_tokens": 30885,
+      "cached_tokens": 12672,
+      "completion_tokens": 1521
+    }
+  ]
+}

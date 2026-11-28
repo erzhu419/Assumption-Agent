@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3fca5dbdb0d4c05b5498f015da8e065",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:09:00.584866+00:00",
+  "ended_at_utc": "2026-11-28T17:10:10.213810+00:00",
+  "request_sha256": "da52ccb48ded0a1f279e945809be3b0fa084bc431e80a215862a75e985b7d4a3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49091,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33160,
+    "cached_tokens": 12672,
+    "completion_tokens": 2281
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/lab21.py <<'PY'\\nfrom probe21 import *\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.spatial.distance import cdist\\nA=s['panel_a'];B=s['panel_b'];C=s['panel_c'];tr=s['train']; Y=np.c_[tr['y'],tr['traj']]; n=len(Y)\\ndef rms(a):return np.sqrt(np.mean(a*a))\\ndef fit_a():\\n u,v=A['u'],A['v']; good=np.linalg.norm(v,axis=1)<4; print('A excluded',np.where(~good)[0]);\\n def fw(a,j,x):return D(x[:,j],np.sin(a*x[:,j]),np.sin(a*x[:,(j+2)%4]))\\n def err(a):return np.column_stack([f@reg(f[good],v[good,j])-v[:,j] for j in range(4) for f in [fw(a,j,u)]])[good].ravel()\\n o=minimize_scalar(lambda a:rms(err(a)),bounds=(1.5,3.3),method='bounded'); print('A fit',o.x,o.fun,rms(err(2.4))); a=o.x; w=np.column_stack([reg(fw(a,j,u)[good],v[good,j]) for j in range(4)]); print(w.round(4)); return a,w\\n\\ndef invert(x,a,w):\\n z=(x-w[0])/w[1];\\n for _ in range(25):\\n  pred=(z*w[1]+np.sin(a*z)*w[2]+np.sin(a*np.roll(z,2,axis=1))*w[3]+w[0]); J=np.zeros((len(z),4,4)); j=np.arange(4); J[:,j,j]=w[1]+a*np.cos(a*z)*w[2]; J[:,j,(j+2)%4]=a*np.cos(a*np.roll(z,2,axis=1))*w[3]; z-=np.clip(np.linalg.solve(J,(pred-x)[...,None])[...,0],-.35,.35)\\n return z\\n\\ndef fit_b():\\n u,v=B['u'],B['v']; score=[]\\n funcs=[('cos',lambda x,a:np.cos(a*x)),('sincos',lambda x,a:np.c_[np.cos(a*x),np.sin(a*x)]),('coscyc',lambda x,a:np.c_[np.cos(a*x),cyc(x)]),('cosu',lambda x,a:np.c_[np.cos(a*x),x]),('phase',lambda x,a:np.c_[np.cos(a*x),np.sin(a*x),cyc(np.cos(a*x)),cyc(np.sin(a*x))])];\\n for name,f in funcs:\\n  def e(a):\\n   h=D(f(u,a));return rms(h@reg(h,v)-v)\\n  o=minimize_scalar(e,bounds=(1.8,3.4),method='bounded'); score.append((o.fun,name,f,o.x));print('B',name,o.x,o.fun, e(2.55));\\n _,name,f,a=min(score,key=lambda p:p[0]); return f,a,reg(D(f(u,a)),v)\\n\\ndef fit_c():\\n u,v=C['u'],C['v2']; funcs=[('trig',lambda x,a:np.c_[np.sin(a*x),np.cos(a*x)]),('quad',lambda x,a:np.c_[x,x*x,a*x**3]),('rational',lambda x,a:np.c_[x/(1+a*x*x),x*x/(1+a*x*x)]),('tanh',lambda x,a:np.c_[np.tanh(a*x),np.tanh(a*x)**2]),('squash',lambda x,a:np.c_[x/(1+a*x*x)**.5,x*x/(1+a*x*x)**.5]),('exp',lambda x,a:np.c_[x,np.exp(a*x)]),('ratmix',lambda x,a:np.c_[x/(1+a*x*x),x*x])];L=[]\\n for name,f in funcs:\\n  def e(a):\\n   h=D(f(u,a)); q=np.linalg.qr(h)[0];return rms((h@reg(h,v)-v)/(1-(q*q).sum(1))[:,None]);\\n  o=minimize_scalar(e,bounds=(.001,3.4),method='bounded');print('C2',name,o.x,o.fun);L.append((o.fun,f,o.x));\\n _,f,a=min(L,key=lambda p:p[0]);return f,a,reg(D(f(u,a)),v)\\n\\ndef get():\\n a,w=fit_a();x=np.r_[tr['x'],s['test']['x']];z=invert(x,a,w); print('range Z',z.min(),z.max());f,a,w=fit_b(); b=D(f(z,a))@w; f,a,w=fit_c(); c=D(f(z,a))@w; p=cyc(z);v=D(p)@reg(D(cyc(C['u'])),C['v1']);return x,z,b,c,p,v\\n\\ndef polys(x,d):\\n from itertools import combinations_with_replacement\\n return np.column_stack([np.prod(x[:,ix],1) for j in range(1,d+1) for ix in combinations_with_replacement(range(x.shape[1]),j)])\\n\\ndef scores(K,regu):\\n vals=[]\\n for i,j in [(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(52),j),j) for j in np.array_split(np.random.default_rng(2).permutation(52),4)]:\\n  p=K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+regu*np.eye(len(i)),Y[i]);err=np.abs(p-Y[j]);vals.append([err[:,0].mean(),err[:,1:].mean()]);\\n return np.array(vals)\\nif __name__=='__main__':\\n import sys\\n sys.path.insert(0,'/holdout_task/_frozen_nodes');from node_01 import _kernel\\n x,z,b,c,p,v=get();np.savez('/tmp/data21.npz',x=x,z=z,b=b,c=c,p=p,v=v,Y=Y)\\n combos={'x':x,'z':z,'b':b,'c':c,'v':v,'zb':np.c_[z,b],'bc':np.c_[b,c],'zbcv':np.c_[z,b,c,v],'zbc':np.c_[z,b,c],'bv':np.c_[b,v],'cv':np.c_[c,v],'zcv':np.c_[z,c,v],'cosz':np.cos(2.55*z),'cosz+p+c':np.c_[np.cos(2.55*z),p,c]}; best=[]\\n for name,f in combos.items():\\n  f=(f-f[:52].mean(0))/np.maximum(f[:52].std(0),1e-5)\\n  for scale in [.35,.65,1,1.7,3]:\\n   G=_kernel(scale*f,scale*f);q=scores(G,.004);best.append((max(q[0]),q[0],q[1:].mean(0),name,scale,'frozen'))\\n  g=f@f.T/f.shape[1]; dd=cdist(f,f,'sqeuclidean')/f.shape[1];\\n  for deg in [1,2,3]:\\n   for l in [0,.1,.5,2]:\\n    G=(1+g)**deg+(np.exp(-l*dd) if l else 0)\\n    for ridge in [.0001,.005,.05]:\\n     q=scores(G,ridge);best.append((max(q[0]),q[0],q[1:].mean(0),name,deg,(l,ridge)))\\n for z0 in sorted(best,key=lambda k:k[0])[:12]:print('joint',z0)\\n for ix in [0,1]:\\n  for z0 in sorted(best,key=lambda k:k[1][ix])[:6]:print('head',ix,z0)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/lab21.py\\nfor f in /tmp/hegel_continual_archive/*batch_0[15]*py; do grep -En 'sin|cos|mix|telemetry|panel|basis|design' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense panel approximations → H2 sparse sinusoidal calibration with panel-derived feature groups; panel A residual RMS is 0.0034, with downstream MAE pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Exploit coefficient sparsity to invert panel A, then quantify which panel-derived coordinates actually improve both outputs through the frozen kernel on disjoint validation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1849f56a2e10fe35591ad3813546efbbe57bbf46edc2079b6deebcf7c9ecedc9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 70146.43,
+      "usage_known": true,
+      "prompt_tokens": 33160,
+      "cached_tokens": 12672,
+      "completion_tokens": 2281
+    }
+  ]
+}

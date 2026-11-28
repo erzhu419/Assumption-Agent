@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3274029da95845f3ad2f376e6757cde1",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:41.725338+00:00",
+  "ended_at_utc": "2026-11-28T15:53:23.984467+00:00",
+  "request_sha256": "faa5fd3e0c9c74001e5d84dc109bea5fec908fdd5095d7b42bdc73167ac19b32",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 67935,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38966,
+    "cached_tokens": 12672,
+    "completion_tokens": 1854
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat _frozen_nodes/node_01.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat >/tmp/moment.py <<'PY'\\nexec(open('/tmp/compose.py').read().split('features={};')[0])\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.linalg import qr\\nimport importlib.util\\nsp=importlib.util.spec_from_file_location('target','/holdout_task/_frozen_nodes/node_01.py'); t=importlib.util.module_from_spec(sp); sp.loader.exec_module(t)\\nprint('Y singular',np.linalg.svd(y,compute_uv=False).round(5))\\na=z; bb=bp(z); bi0=coords['Ic']; bc=coords['Bc']; P=prod(z); C=cos(z)\\npoly=lambda a,d:np.column_stack([np.prod(a[:,i],axis=1) for i in cr(range(a.shape[1]),d)])\\nQ=poly(a,2); mono=poly(a,4); rat=lambda a,k:a*a/(1+k*a*a)\\nblocks={'x':a,'B':bb,'I':bi0,'i':coords['I'],'b':bc,'P':P,'C':C,'Q':Q,'M':mono,'R':rat(a,.25),'RI':rat(bi0,.25),'RB':rat(bc,.25),'c':np.cos(q*a),'s':np.sin(q*a),'F':np.cos(2.15*a),'FB':np.cos(2.15*bb),'fi':np.cos(q*bi0),'fB':np.cos(q*bc),'t':np.tanh(a),'A':np.abs(a),'v':np.c_[np.cos(q*a),np.sin(q*a)],'E':np.c_[a*a,np.cos(q*a),np.cos(q*bi0),np.cos(q*bc)],'H':np.column_stack([np.cos(q*(a[:,i]+s*a[:,j])) for i,j in I.combinations(range(4),2) for s in (1,-1)]),'QC':np.einsum('ni,nj->nij',Q,C).reshape(n,-1),'PC':np.einsum('ni,nj->nij',P,C).reshape(n,-1)}\\nblocks['V']=np.c_[P,C]; blocks['J']=np.c_[P,C,Q]; blocks['O']=np.c_[a,P,C]; blocks['U']=np.c_[Q,blocks['E']]\\n\\ndef lin_score(w,ridge):\\n out=[]\\n for tr,te in pairs:\\n  W=(w-w[tr].mean(0))/np.maximum(w[tr].std(0),1e-7); mu=y[tr].mean(0); A=W[tr]; b=y[tr]-mu\\n  yp=W[te]@A.T@np.linalg.solve(A@A.T+ridge*np.eye(len(tr)),b)+mu\\n  e=abs(yp-y[te]); out.append((e[:,0].mean(),e[:,1:].mean()))\\n return np.array(out)\\nres=[]; klist=list(blocks); basek=['V','Q','J','U','O','E','P','C',''];\\nfor k in basek:\\n for g in ['']+klist:\\n  if k==g:continue\\n  v=np.column_stack([blocks[i] for i in [k,g] if i]);\\n  configs=[('linear',v),('quad',np.c_[v,poly(v,2)])] if v.shape[1]<=21 else [('linear',v)]\\n  for label,V in configs:\\n   for r in [1e-6,.001,.03,.4]:\\n    R=lin_score(V,r); res.append((R.max(),R[0].max(),k,g,label,r,R))\\n  if v.shape[1]<=30:\\n   for fac in [.25,.5,1,2,4]:\\n    # Rescale the metric, keeping the two frozen kernel formulas unchanged.\\n    # score() normally normalizes, so apply scaling after normalization here.\\n    out=[]\\n    for tr,te in pairs:\\n     Z=fac*(v-v[tr].mean(0))/np.maximum(v[tr].std(0),.1); G=Z@Z.T/Z.shape[1]; d=np.diag(G); DD=np.maximum(d[:,None]+d-2*G,0); K=(1+.25*G)**2; L=K+np.exp(-.06*DD); eye=np.eye(len(tr)); ii=np.ix_(tr,tr); jj=np.ix_(te,tr); yp=(K[jj]@np.linalg.solve(K[ii]+3e-5*eye,y[tr])+L[jj]@np.linalg.solve(L[ii]+3e-4*eye,y[tr]))/2; e=abs(yp-y[te]); out.append((e[:,0].mean(),e[:,1:].mean()))\\n    R=np.asarray(out); res.append((R.max(),R[0].max(),k,g,'kernel',fac,R))\\nfor mode in [0,1]:\\n print('TOP',mode)\\n for rr in sorted(res,key=lambda z:z[mode])[:16]:print(*rr[:6],rr[6].round(4).tolist())\\n# Single-coordinate power and harmonic coefficient diagnostics on the even subspace.\\nfor name,w in [('quad',Q),('quad+cos',np.c_[Q,C]),('quad+quartic',np.c_[Q,mono]),('quad+cos+products',np.c_[Q,C,blocks['PC']])]:\\n A=np.c_[np.ones(n),w]; c=np.linalg.lstsq(A,y,rcond=1e-9)[0]; err=A@c-y; print(name,'fit MAE',np.mean(abs(err[:,0])),np.mean(abs(err[:,1:])),'linear CV',lin_score(w, .001).round(4).tolist());\\n if name=='quad+cos':print('coeffs',c[:,[0,-1]].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/moment.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 two panel maps alone → H2 complete the even-moment basis and test kernel scaling; the best five-fold worst MAE so far is 0.138686.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Completing the second-order basis more than halved worst-fold error. Compare quartic, rational, and Fourier extensions, and use linear fits to distinguish missing basis terms from conditioning in the frozen kernel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2c305871830d60ed1d807297c8f74fb4798f9a85bc4c30f81b276adf3b792327",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42257.77,
+      "usage_known": true,
+      "prompt_tokens": 38966,
+      "cached_tokens": 12672,
+      "completion_tokens": 1854
+    }
+  ]
+}

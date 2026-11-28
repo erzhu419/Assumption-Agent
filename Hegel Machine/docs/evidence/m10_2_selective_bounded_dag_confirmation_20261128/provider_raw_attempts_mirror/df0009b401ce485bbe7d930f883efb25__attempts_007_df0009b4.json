@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df0009b401ce485bbe7d930f883efb25",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:59.805371+00:00",
+  "ended_at_utc": "2026-11-28T15:08:41.387741+00:00",
+  "request_sha256": "b14c15b7b535e393dfcebb1fe360a5d22e69ad458690b3ee6a6c701e4623c0df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46373,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33566,
+    "cached_tokens": 12672,
+    "completion_tokens": 1646
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated rational readout and affine state forecasts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibrate(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    a, b = np.triu_indices(len(u), 1)\\n    du = u[a] - u[b]\\n    slopes = np.nanmedian(np.divide(v[a] - v[b], du, out=np.full_like(du, np.nan), where=abs(du) > 1e-10), axis=0)\\n    shifts = np.median(v - u * slopes, axis=0)\\n    for k in range(u.shape[1]):\\n        r = v[:, k] - shifts[k] - slopes[k] * u[:, k]\\n        ok = abs(r) <= max(1e-7, 6 * np.median(abs(r)))\\n        if ok.sum() >= 3:\\n            shifts[k], slopes[k] = np.linalg.lstsq(np.c_[np.ones(ok.sum()), u[ok, k]], v[ok, k], rcond=None)[0]\\n    return shifts, slopes\\n\\n\\ndef _aff(z):\\n    return np.c_[np.ones(len(z)), z]\\n\\n\\ndef _quad(z):\\n    i, j = np.triu_indices(z.shape[1])\\n    return np.c_[_aff(z), z[:, i] * z[:, j]]\\n\\n\\ndef _rational_readout(z, q, y):\\n    P, Q = _quad(z), _quad(q)\\n    # Since D=1+alpha*w^2, an unmodulated constant and D/D\\n    # would be duplicates. Omit z2^2 from the rational correction.\\n    keep = np.ones(P.shape[1], dtype=bool)\\n    keep[12] = False\\n    def design(x, base, p):\\n        alpha, k, delta, b, d = p\\n        w = x[:, 2] - k*x[:, 0] + delta + b*x[:, 1] + d*x[:, 3]\\n        t = alpha * w**2\\n        return np.c_[base, -base[:, keep] * (t/(1+t))[:, None]]\\n    def fit(p):\\n        F = design(z, P, p)\\n        c = np.linalg.lstsq(F, y, rcond=1e-11)[0]\\n        return F @ c - y, c\\n    bounds = ([.015, .05, -.8, -.8, -.8], [5., 2., .8, .8, .8])\\n    candidates = [least_squares(lambda p: fit(p)[0], p, bounds=bounds, max_nfev=100)\\n                  for p in [(1., .42, .03, -.1, -.08), (.6, .8, .18, 0., 0.), (1., .42, -.24, -.1, -.08)]]\\n    p = min(candidates, key=lambda result: result.cost).x\\n    return design(q, Q, p) @ fit(p)[1]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    shift, scale = _calibrate(study['panel_a'])\\n    z = (np.asarray(tr['x']) - shift) / scale\\n    q = (np.asarray(study['test']['x']) - shift) / scale\\n    y = _rational_readout(z, q, np.asarray(tr['y']))\\n    S = _aff(q) @ np.linalg.lstsq(_aff(z), np.asarray(tr['traj']), rcond=None)[0]\\n    return {'y_hat': y, 'state_pred': S,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), S[:, -1].mean(), S[:, -1].std()])}\\nPY\\ncat > /tmp/cv_verify.py <<'PY'\\nimport numpy as np, pickle, importlib.util\\nsp=importlib.util.spec_from_file_location('bs','/holdout_task/batch_solver.py'); bs=importlib.util.module_from_spec(sp); sp.loader.exec_module(bs)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['y']); ids=np.arange(N)\\nsh,sc=bs._calibrate(s['panel_a']); z=(tr['x']-sh)/sc\\nrng=np.random.default_rng(45)\\nsplits=[('gate',ids[:52],ids[52:])]+[(f'rand{k}',p[:52],p[52:]) for k in range(8) for p in [rng.permutation(ids)]]\\nfor u in [abs(z[:,2]-.42*z[:,0]),np.linalg.norm(z,axis=1),z[:,2]]:\\n order=np.argsort(u); splits.append(('extreme',order[:-12],order[-12:]))\\nfor name,i,j in splits:\\n ss=dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]}); o=bs.solve_batch(ss)\\n e=abs(o['y_hat']-tr['y'][j]); r=abs(o['state_pred']-tr['traj'][j]); print(name, 'y MAE/max',round(e.mean(),6),round(e.max(),6),'state MAE/worst time',round(r.mean(),6),round(r.mean(axis=0).max(),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cv_verify.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense cubic readout -> H2 profiled rational interaction along a calibrated contrast; prototype 52/20 scalar MAE is 0.009716 and affine trajectory MAE is 0.004164.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Fit two exponential modes for the trajectory\",\"rejected_reason\":\"Temporal constraints raise trajectory MAE from 0.004164 to 0.006459 on the prescribed split.\"}],\"rationale\":\"Install the rational candidate and verify the exact artifact on the prescribed split, random resplits, and extrapolation slices. Keep the trajectory fit independent of scalar model selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f82b3f289e38f5e62c87de30c2ab8f95ab14fbbfb5987a466544ac708094d701",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41581.23,
+      "usage_known": true,
+      "prompt_tokens": 33566,
+      "cached_tokens": 12672,
+      "completion_tokens": 1646
+    }
+  ]
+}

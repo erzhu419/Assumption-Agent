@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ebf044540adb4283a1229431dd8e6b23",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:02.197476+00:00",
+  "ended_at_utc": "2026-11-28T15:35:32.489157+00:00",
+  "request_sha256": "d13a1f6985580067344dd9d3eb4e6810018722094b58bb1727fbb7683d59b9f3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43980,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31109,
+    "cached_tokens": 12672,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*py; cat /holdout_task/public_asset_index.json; cat > /tmp/hegel_response_probe.py <<'PY'\\nexec(open('/tmp/hegel_panel_structure_probe.py').read().split('for name,x,v in')[0])\\nfrom scipy.optimize import least_squares\\nX=b['u']; V=b['v']; cs=c['u']; n=len(s['train']['y']); Y=s['train']['y']; T=s['train']['traj']; t=np.arange(n); splits=[(t[:52],t[52:])]+[(np.delete(t,i),i) for i in np.array_split(np.random.default_rng(57).permutation(t),4)]\\ndef fb(x,g): return np.c_[pol(x,1), x**3/(1+g*x*x)]\\nfor typ in ['rational','tanh']:\\n def mk(x,g):return np.c_[pol(x,1), x**3/(1+g*x*x) if typ=='rational' else np.tanh(x*g)]\\n def fun(g):\\n  d=mk(X,g);return (d@ls(d,V)-V).ravel()\\n opt=least_squares(fun,[1.]*4,bounds=(.01,4)); print('B multi',typ,opt.x,np.sqrt(np.mean(opt.fun**2)),np.round(ls(mk(X,opt.x),V),4));\\n if typ=='rational':W=mk(u,opt.x)@ls(mk(X,opt.x),V)\\ndef c1(x):return np.c_[np.ones(len(x)),x[:,0]*x[:,1],x[:,0]*x[:,3],x[:,1]*x[:,2],x[:,2]*x[:,3]]\\nC1=c1(u)@ls(c1(cs),c['v1']);C2=pol(u,2)@ls(pol(cs,2),c['v2']); print('trajectory svd',np.linalg.svd(T,compute_uv=False),'time',s['eval_times']);\\ndef ev(F,Y):\\n vals=[]\\n for i,j in splits:\\n  f=F/np.where(F[i].std(0)>1e-10,F[i].std(0),1);g=f[i].T@f[i];h=f[i].T@Y[i];vals.append([np.mean(abs(f[j]@np.linalg.solve(g+np.eye(len(g))*l,h)-Y[j])) for l in [.001,.05,.3,2,5]])\\n vals=np.array(vals);k=vals[1:].mean(0).argmin();return vals[1:,k].mean(),vals[:,k].round(4),k\\nfor y in [Y,T]:\\n ans=[]\\n for name,Z in [('B',W),('C1',C1),('C2',C2),('B+C1',np.c_[W,C1]),('B+C2',np.c_[W,C2]),('C1+C2',np.c_[C1,C2]),('u+B',np.c_[u,W]),('all',np.c_[W,C1,C2])]:\\n  for trans,f in [('id',lambda x:x),('sin',np.sin),('tanh',np.tanh),('atan',np.arctan),('rat',lambda x:x/(1+x*x))]:\\n   for g in ([1] if trans=='id' else [.5,1,2,4,6]):\\n    H=f(g*Z)\\n    for d in (1,2,3) if Z.shape[1]==4 else (1,2):\\n     for add in ['','other','base','full']:\\n      F=pol(H,d)\\n      if add=='other':F=np.c_[F,C1,C2]\\n      if add=='base':F=np.c_[F,Z]\\n      if add=='full':F=np.c_[F,W,C1,C2,u]\\n      e=ev(F,y);ans.append((e[0],e[1],name,trans,g,d,add,e[2]))\\n print('best response',y.shape);print(*sorted(ans,key=lambda q:q[0])[:14],sep='\\\\n')\\nnp.savez('/tmp/hegel_calibrated.npz',u=u,W=W,C1=C1,C2=C2)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/hegel_response_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace affine panel B with nonlinear channel mixing; the shared rational model cuts calibration leave-one-out RMSE from 0.1774 to 0.0076, with response validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Nonlinearity after panel-B mixing\",\"rejected_reason\":\"Fitted post-mixing nonlinearities leave channel training RMSE above 0.05, versus 0.0047 for pre-mixing rational terms.\"}],\"rationale\":\"Fit channel-specific calibration gains, then test the corrected panel-B coordinates alongside the sparse panel-C interactions for both required outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2f5df3df3b1a00bcf0e282836423e83077e4c8ba56eac107436b87eaad6af29a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30290.78,
+      "usage_known": true,
+      "prompt_tokens": 31109,
+      "cached_tokens": 12672,
+      "completion_tokens": 1267
+    }
+  ]
+}

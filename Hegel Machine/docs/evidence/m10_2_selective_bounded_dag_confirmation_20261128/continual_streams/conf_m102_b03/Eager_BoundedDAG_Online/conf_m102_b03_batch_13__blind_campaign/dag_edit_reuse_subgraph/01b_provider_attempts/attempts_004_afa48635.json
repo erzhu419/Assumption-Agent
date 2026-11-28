@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afa48635d6da4cefa9788b5b56a1a2af",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:14.905111+00:00",
+  "ended_at_utc": "2026-11-28T15:35:34.725856+00:00",
+  "request_sha256": "9d0a8b5efd0d54b49699ff58d09e541691471cace1c7990fa154b9c963c6eb4d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29230,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23752,
+    "cached_tokens": 12672,
+    "completion_tokens": 649
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/tmp/hegel_continual_archive/conf_m102_b03_batch_11_solver.py\\nsed '/^def _trajectory/,$d' \\\"$p\\\" > /holdout_task/node_00.py\\ncat >> /holdout_task/node_00.py <<'PY'\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    n = len(train['x'])\\n    fy, ft = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    return {'y_hat': fy[n:] @ _ols(fy[:n], np.asarray(train['y']).reshape(n)),\\n            'unprojected': ft[n:] @ _ols(ft[:n], np.asarray(train['traj']))}\\nPY\\npython3 -I /holdout_task/test_dag_candidate.py || true\\npython3 - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom node_00 import _calibration,_branches,_soft,_design,_ols\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\np=s['panel_c']; u=p['u']; fs=_branches(p)\\nfor j,f in enumerate(fs,1):\\n e=f(u)-p['v'+str(j)];print('branch',j,'RMSE',np.sqrt(np.mean(e**2)),'max',np.max(np.abs(e)))\\np=s['panel_a']; err=np.linalg.norm(_calibration(p)(p['v'])-p['u'],axis=1);print('calibration inverse quantiles',np.quantile(err,[0,.5,.8,.9,1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test the archived rational branch as a transfer baseline, with trajectory regression left unprojected for the frozen sink; public CV is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the time basis in node_00\",\n      \"rejected_reason\": \"The frozen sink already projects onto the fitted basis, and linear trajectory regression commutes with that projection.\"\n    }\n  ],\n  \"rationale\": \"Establish a transfer baseline and measure paired-panel residuals independently of downstream CV so any failure can be localized before changing the branch grammar.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6154b677977af99bb7e0c2617d6fade2c728983c5ef20d845326664bc3087535",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19819.52,
+      "usage_known": true,
+      "prompt_tokens": 23752,
+      "cached_tokens": 12672,
+      "completion_tokens": 649
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b87755f5c344a9b9e6ba7b0e3ba314a",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_11__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:18.275309+00:00",
+  "ended_at_utc": "2026-11-28T15:41:53.782783+00:00",
+  "request_sha256": "3d0bcba7f436a096a232f86336e5a6c4e2c938467ba0342cfb60bd4233cfddbb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36781,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27376,
+    "cached_tokens": 12672,
+    "completion_tokens": 1551
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,42p' /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/graph.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef poly(x,d=2):return np.c_[np.ones(len(x)),*[np.prod(x[:,ii],1) for j in range(1,d+1) for ii in itertools.combinations_with_replacement(range(x.shape[1]),j)]]\\ndef prof(x,y,make,p,b=(-np.inf,np.inf)):\\n def fun(p):\\n  f=make(x,p);return (f@ls(f,y)-y).ravel()\\n pp=least_squares(fun,p,bounds=b,max_nfev=120).x;w=ls(make(x,pp),y);return pp,w,np.linalg.norm(fun(pp))/np.sqrt(y.size)\\na=s['panel_a'];keep=np.linalg.norm(a['v']-a['u'],axis=1)<4; aw=ls(aff(a['u'][keep]),a['v'][keep]); cal=lambda x:(x-aw[0])/aw[1:].diagonal()\\nc=s['panel_c']; c1=lambda x,p:aff(np.arctan(p[0]*x+p[1:])); pc,wc,e=prof(c['u'],c['v1'],c1,[2.15,0,0,0,0]);print('c1',pc,e,wc)\\nfor panel,key in [('b','v'),('c','v2')]:\\n x,y=s['panel_'+panel]['u'],s['panel_'+panel][key]; print(panel,key,'poly2 coeff',ls(poly(x),y));\\n tests={'poly2':(lambda x,p:poly(x),[1]),'poly2_atan':(lambda x,p:poly(np.arctan(p[0]*x)),[2.15]),'poly2_sin':(lambda x,p:poly(np.sin(p[0]*x)),[1.5]),'poly2_tanh':(lambda x,p:poly(np.tanh(p[0]*x)),[1.]),'poly2_ratsquash':(lambda x,p:poly(x/np.sqrt(1+p[0]**2*x*x)),[.6]),'poly2_via_c1':(lambda x,p:poly(c1(x,pc)@wc),[1]),'poly2_via_c1input':(lambda x,p:poly(np.arctan(pc[0]*x+pc[1:])),[1]),'radial':(lambda x,p:poly(x)/(1+p[0]**2*np.sum(x*x,1,keepdims=True)),[.4])}\\n for k,(f,p) in tests.items():\\n  pp,w,e=prof(x,y,f,p); X=f(x,pp);lev=np.sum(np.linalg.svd(X,full_matrices=False)[0]**2,axis=1);print(k,pp,e,np.sqrt(np.mean(((X@w-y)/(1-lev[:,None]))**2)))\\nt=s['eval_times']; tr=s['train'];z=tr['traj']; y=tr['y']; x=tr['x']; q=cal(x)\\nfor label,fn in [('exp+t',lambda p:np.c_[1-np.exp(-p[0]*t),t]),('exp+exp',lambda p:np.c_[1-np.exp(-p[0]*t),1-np.exp(-p[1]*t)]),('exp+log',lambda p:np.c_[1-np.exp(-p[0]*t),np.log1p(p[1]*t)]),('exp+sin',lambda p:np.c_[1-np.exp(-p[0]*t),np.sin(p[1]*t)]),('exp+rat',lambda p:np.c_[1-np.exp(-p[0]*t),t/(1+p[1]*t)])]:\\n p,w,e=prof(t,z.T,lambda _,p:fn(p),[1.4,.4]);print('time',label,p,e)\\nu,d,v=np.linalg.svd(z,full_matrices=False); out=np.c_[y,z@v[:2].T];n=52\\nfor label,h in [('x',x),('q',q),('atanq',np.arctan(pc[0]*q+pc[1:])),('c1q',c1(q,pc)@wc),('c1raw',c1(x,pc)@wc),('c2q',poly(q)@ls(poly(c['u']),c['v2'])),('c2raw',poly(x)@ls(poly(c['u']),c['v2']))]:\\n for d in (1,2,3):\\n  F=poly(h,d);w=ls(F[:n],out[:n]);print(label,d,np.mean(abs(F[n:]@w-out[n:]),0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration and rank-two trajectories → identify the nonlinear panel and readout bases; panel A leave-one-row-out RMSE is 0.000112, while the prior solver’s worst 52/20 MAE is 0.388214.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit all eight timestamps independently\",\n      \"rejected_reason\": \"The third singular value is only 0.055 versus 1.666 for the second, supporting a shared two-mode model.\"\n    }\n  ],\n  \"rationale\": \"Profile the panel and temporal nonlinearities separately, then use the prescribed split to test which panel coordinates predict the scalar and the two trajectory amplitudes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9eea5386a674fc7b0821f12ddb7dd51a09cea248bdedb1887df670024ae562f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36062.27,
+      "usage_known": true,
+      "prompt_tokens": 27376,
+      "cached_tokens": 12672,
+      "completion_tokens": 1551
+    }
+  ]
+}

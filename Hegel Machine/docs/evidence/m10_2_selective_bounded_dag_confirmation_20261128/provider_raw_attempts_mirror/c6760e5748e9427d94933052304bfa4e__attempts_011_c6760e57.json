@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6760e5748e9427d94933052304bfa4e",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:21.828389+00:00",
+  "ended_at_utc": "2026-11-28T15:50:56.165372+00:00",
+  "request_sha256": "3ceb7454dd2e17658a01b1822ad899ea595061f8b4f62d1a7cc736ed53889216",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35550,
+    "cached_tokens": 12672,
+    "completion_tokens": 1448
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\ns=s[:s.index('def _design(study):')]+'''def _design(study):\\n    train = study['train']\\n    z = _calibration(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    g, h = _operators(study['panel_c'], z)\\n    dot = np.einsum('ij,ij->i', g, h)\\n    scalar = _bias(np.c_[g, h, dot])\\n    fast = np.c_[g, dot]\\n    slow = np.c_[h, g[:, 0]*h[:, 1]]\\n    return scalar, fast, slow\\n\\n\\ndef _trajectory(t, fast, slow, observed):\\n    n = len(observed)\\n    target = observed.ravel()\\n\\n    def basis(rates):\\n        return -np.expm1(-t[:, None]*rates)\\n\\n    def design(f, s, rates):\\n        b = basis(rates)\\n        # The second branch has both a slow component and a fast transient.\\n        return np.concatenate((f[:, None, :]*b[None, :, 1:2],\\n                               s[:, None, :]*b[None, :, :1],\\n                               s[:, None, :]*b[None, :, 1:2]), axis=2).reshape(-1, 15)\\n\\n    def residual(rates):\\n        a = design(fast[:n], slow[:n], rates)\\n        return a@_ls(a, target)-target\\n\\n    rates = least_squares(residual, [.4, 1.8], bounds=([.03, .9], [.89, 4.]),\\n                          gtol=1e-11).x\\n    coef = _ls(design(fast[:n], slow[:n], rates), target)\\n    return (design(fast[n:], slow[n:], rates)@coef).reshape(len(fast)-n, len(t))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    scalar, fast, slow = _design(study)\\n    y = scalar[n:]@_ls(scalar[:n], train['y'])\\n    state = _trajectory(np.asarray(study['eval_times']), fast, slow, train['traj'])\\n    end = state[:, -1]\\n    return dict(y_hat=y, state_pred=state,\\n                diagnostics_vec=np.array([y.mean(), y.std(), end.mean(), end.std()]))\\n'''\\np.write_text(s)\\nPY\\ncat >/tmp/verify14final.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\na=s['train']; z=m._calibration(s['panel_a'],a['x']); n=len(z); times=len(s['eval_times'])\\nids=[np.arange(52,72),np.argsort(abs(a['y']))[-20:],*[np.argsort(d)[k] for d in z.T for k in (slice(0,20),slice(-20,None))],*[np.random.default_rng(i).permutation(n)[:20] for i in range(16)]]\\ndef verify(o,n):\\n y,p,d=(o[k] for k in ('y_hat','state_pred','diagnostics_vec')); assert y.shape==(n,) and p.shape==(n,times) and d.shape==(4,); assert all(np.isfinite(v).all() for v in (y,p,d)); np.testing.assert_allclose(d,[y.mean(),y.std(),p[:,-1].mean(),p[:,-1].std()]);return y,p\\nmetrics=[]\\nfor va in ids:\\n tr=np.setdiff1d(np.arange(n),va)\\n y,p=verify(m.solve_batch(dict(s,train={k:v[tr] if k!='summary' else v for k,v in a.items()},test={'x':a['x'][va]})),len(va))\\n e=np.abs(p-a['traj'][va]); metrics.append([np.mean(abs(y-a['y'][va])),e.mean(),e.mean(0).max(),e.max()])\\nprint('52/20 [scalar MAE, state MAE, worst horizon MAE, max state point error]:',metrics[0]); print('Worst across',len(ids),'slices:',np.max(metrics,axis=0)); assert np.max(np.asarray(metrics)[:,:3])<.038\\nverify(m.solve_batch(s),len(s['test']['x'])); print('Public test shapes, finiteness and diagnostics verified in isolated process')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify14final.py\\npython3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted compact two-mode response → H2 fast readout plus a slow branch with a fast transient; the challenger reached worst-slice trajectory MAE 0.00481 and worst-horizon MAE 0.00738.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Give each branch only one response mode\",\"rejected_reason\":\"Removing the fast transient from the slow branch raised the fixed-split trajectory MAE from 0.00449 to 0.00632.\"}],\"rationale\":\"Promote the compact response model with the lowest worst-slice error. It retains the off-diagonal interaction needed for trajectory prediction and leaves the scalar readout unchanged. Verify both outputs and diagnostics on the exact final artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "771c0798ea8a24083057206f22d844d6e70c3a645a585e1996888d12f5351551",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34883.09,
+      "usage_known": true,
+      "prompt_tokens": 35550,
+      "cached_tokens": 12672,
+      "completion_tokens": 1448
+    }
+  ]
+}

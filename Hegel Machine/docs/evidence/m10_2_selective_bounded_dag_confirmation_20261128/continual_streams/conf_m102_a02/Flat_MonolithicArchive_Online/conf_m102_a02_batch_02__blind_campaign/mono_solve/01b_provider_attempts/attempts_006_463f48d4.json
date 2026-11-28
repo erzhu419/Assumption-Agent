@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "463f48d4eaa84b54b23b36ce27b34678",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:31.167572+00:00",
+  "ended_at_utc": "2026-11-28T15:07:58.057392+00:00",
+  "request_sha256": "240070d21ac969fe1aab991493124253d8338aa33280905d85d5f9f93fa04b56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44081,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31760,
+    "cached_tokens": 12672,
+    "completion_tokens": 1110
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/profile.py <<'PY'\\nexec(open('/tmp/grammar.py').read().split('for k,z in Z.items():')[0].replace(\\\"print('A',A,'B',B)\\\",''))\\nfrom scipy.optimize import least_squares\\nz=Z['cal']; l=aff(z); q=terms(z,p2); P=np.c_[l,q]; i=np.arange(52); j=np.arange(52,72)\\n\\ndef fit(fun,p0,bounds=(-np.inf,np.inf)):\\n def calc(p):\\n  F=fun(p); c=np.linalg.lstsq(F[i],y[i],rcond=None)[0]; return y-F@c,c\\n m=least_squares(lambda p:calc(p)[0][i],p0,bounds=bounds,max_nfev=150)\\n r,c=calc(m.x); return np.sqrt(np.mean(r[i]**2)),np.mean(abs(r[j])),m.x,c\\nfor deg in [1,2]:\\n for free in [0,1,2]:\\n  for form in ['combined','pure','affine_pure']:\\n   R=l if deg==1 else P\\n   def f(p):\\n    w=z[:,2]-p[1]*z[:,0]+p[2]\\n    if free==2: w=w+z[:,[1,3]]@p[3:]\\n    g=1/(1+p[0]*w*w)\\n    return {'combined':lambda:np.c_[P,R*(g[:,None]-1)],'pure':lambda:R*g[:,None],'affine_pure':lambda:np.c_[l,R*g[:,None]]}[form]()\\n   p0=[.5,1.,0.]+([0.,0.] if free==2 else [])\\n   if free==0:\\n    fn=lambda a:f([a[0],1,0]); bounds=([.005],[4]);p0=p0[:1]\\n   else:\\n    fn=f; bounds=([.005,.1,-1]+([-1,-1] if free==2 else []),[4,2,1]+([1,1] if free==2 else []))\\n   a,b,p,c=fit(fn,p0,bounds); print(deg,free,form,round(a,6),round(b,6),p.round(4),c.round(3))\\n# Recover the smooth trajectory within the exact affine spatial family.\\nM=np.linalg.lstsq(l[i],T[i],rcond=None)[0]\\nprint('times',t)\\nfor name,init,fn,bounds in [('exp2',[2.,.35],lambda p:-np.expm1(-t[:,None]*p),([.05,.02],[15,15])),('exp+linear',[2.],lambda p:np.c_[-np.expm1(-t*p[0]),t],([.02],[15])),('exp1',[2.],lambda p:-np.expm1(-t[:,None]*p),([.02],[15]))]:\\n def res(p, full=False):\\n  H=fn(p); V=np.linalg.lstsq(H,M.T,rcond=None)[0].T@H.T\\n  return V if full else (l[i]@(M-V)).ravel()\\n m=least_squares(res,init,bounds=bounds); r=l@res(m.x,True)-T; print(name,m.x,np.mean(abs(r[i])),np.mean(abs(r[j])),np.mean(abs(r[j]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/profile.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense cubic -> H2 calibrated contrast with rational saturation; restricted rational readout reaches 0.022613 scalar MAE and affine trajectory reaches 0.004164 on the 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the archived coordinatewise saturation basis\",\"rejected_reason\":\"Coordinatewise saturation misses the dominant calibrated interaction and leaves scalar MAE near 0.06.\"}],\"rationale\":\"The strongest cubic terms and the rational scan both point to a contrast between calibrated coordinates 0 and 2. Profile its direction and numerator before choosing a model, and test temporal smoothing independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "eb417e40f80525c1e0880e2944dedbeb2bb8e1e544c846e5353e8f2967d0f6b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27292.4,
+      "usage_known": true,
+      "prompt_tokens": 31760,
+      "cached_tokens": 12672,
+      "completion_tokens": 1110
+    }
+  ]
+}

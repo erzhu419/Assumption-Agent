@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "202637f5bf4b486f8e335d2c7f143547",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:07.183683+00:00",
+  "ended_at_utc": "2026-11-28T15:32:41.825762+00:00",
+  "request_sha256": "4ebada38c7fb16fbd75db0c911b73ff4190b98726d17bd82dbe62544e4cc7b63",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38664,
+    "cached_tokens": 12672,
+    "completion_tokens": 1480
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated multi-output regression for the blind campaign.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _alignment(panel, x):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    i, j = np.triu_indices(len(u), 1)\\n    z = np.empty_like(x, dtype=float)\\n    for k in range(u.shape[1]):\\n        dx = u[i,k]-u[j,k]\\n        good = abs(dx)>1e-9\\n        slope = np.median((v[i[good],k]-v[j[good],k])/dx[good])\\n        r = v[:,k]-slope*u[:,k]\\n        dev = abs(r-np.median(r))\\n        good = dev <= max(.001, 6*np.median(dev))\\n        fit = np.linalg.lstsq(np.c_[np.ones(sum(good)),u[good,k]],v[good,k],rcond=None)[0]\\n        z[:,k] = (x[:,k]-fit[0])/fit[1]\\n    return z\\n\\n\\ndef _predict(study):\\n    tr = study['train']\\n    Y = np.c_[tr['y'],tr['traj']]\\n    n, d = Y.shape\\n    Z = _alignment(study['panel_a'],np.r_[tr['x'], study['test']['x']]); Z -= Z[:n].mean(0)\\n    B = study['panel_b']; bu,bv = B['u'], B['v']\\n    b = np.linalg.lstsq(np.c_[np.ones(len(bu)),bu],bv,rcond=None)[0][1:]\\n    ids = np.eye(n)\\n    groups=[Z, Z@b, Z@b.T, np.tanh(1.25*Z), Z/(1+.22*Z**2)]\\n    models=[]\\n    scale = np.maximum(Y.std(0), 1e-8)\\n    for i,W in enumerate(groups):\\n        W=W/np.sqrt(np.mean(np.sum(W[:n]**2,axis=1)))\\n        G=W@W.T; R=cdist(W,W,'sqeuclidean'); diag=[]\\n        if i<3:\\n            diag=[sum((cdist(W[:,j:j+1],W[:,j:j+1],'sqeuclidean') for j in []), start=np.zeros_like(R))] if False else [sum(np.exp(-a*cdist(W[:,j:j+1],W[:,j:j+1],'sqeuclidean')) for j in range(W.shape[1]))/W.shape[1] for a in (1.,3.)]\\n        kernels=[1+np.exp(-g*R) for g in (.08,.16,.28,.42,.65,1.)]\\n        kernels += [(1+g*G)**k for k in (2,3,4,5,7) for g in (.12,.45,1.)]\\n        kernels += [1+np.exp(-g*R)+w*A for A in diag for g in (.22,.42,.65) for w in (.5,2.,8.)]\\n        for K in kernels:\\n            for r in (1e-5,.0002,.001,.005,.02):\\n                a=solve(K[:n,:n]+r*ids,np.c_[Y,ids],assume_a='pos'); H=a[:,:d]; loo=abs(H/np.diag(a[:,d:])[:,None])/scale\\n                models.append((np.array([loo[:,0].mean(),loo[:,1:].mean()]),K[n:,:n]@H))\\n    out=np.empty((len(Z)-n,d))\\n    for j,cols in enumerate((slice(0,1),slice(1,None))):\\n        best=sorted(models,key=lambda v:v[0][j])[:16]; es=np.array([e[j] for e,_ in best]); w=np.exp(-(es/es[0]-1)*32); out[:,cols]=np.average([p[:,cols] for _,p in best],axis=0,weights=w)\\n    return out\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    out=_predict(study); y=out[:,0]; state=out[:,1:]; last=state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),last.mean(),last.std()])}\\nPY\\nsed -i 's/diag=\\\\[sum((cdist.* if False else \\\\[/diag=[/' /holdout_task/batch_solver.py\\nsed -i \\\"s/^ops=.*/ops={'B':lambda x,b=b:D(x)@b,'P':lambda x,p=p:D(adj(x))@p,'Q':lambda x,q=q:D(cs(x))@q}/\\\" /tmp/graph.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/discover.py > /tmp/discover.log; cut -c1-300 /tmp/discover.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single-kernel interpolation -> H2 calibrated kernel ensemble and corrected branch search; the prior 52/20 MAEs were 0.25237 for response and 0.17075 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a runnable, train-only fallback and bind the panel coefficients before rerunning the structural search, so intermediate branch arrays cannot overwrite the fitted operators.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "bd6f738eef69dbfd6810ba38424d6eb2d1995d374bb9f8ba104a8136ba785595",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34640.39,
+      "usage_known": true,
+      "prompt_tokens": 38664,
+      "cached_tokens": 12672,
+      "completion_tokens": 1480
+    }
+  ]
+}

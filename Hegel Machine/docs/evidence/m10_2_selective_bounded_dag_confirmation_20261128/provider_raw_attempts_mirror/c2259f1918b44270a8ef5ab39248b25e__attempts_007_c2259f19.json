@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2259f1918b44270a8ef5ab39248b25e",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:07:55.465441+00:00",
+  "ended_at_utc": "2026-11-28T16:08:22.345646+00:00",
+  "request_sha256": "53710eca071ee57f8ff1d6414ab46519cfe028e4db32a0b45ba2867953550605",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50569,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31913,
+    "cached_tokens": 12672,
+    "completion_tokens": 1104
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe14.py <<'PY'\\nimport sys,pickle,itertools,importlib.util\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0,'/holdout_task')\\nimport node_00 as cal\\ns0=importlib.util.spec_from_file_location('head','/holdout_task/_frozen_nodes/node_01.py'); h=importlib.util.module_from_spec(s0);s0.loader.exec_module(h)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; X=t['x']; y=t['y']; traj=t['traj']; n=len(X); w=cal.run_node({'__input__':s})['w'][:n]\\nprint('n',n,'w min max mean std',w.min(0),w.max(0),w.mean(0),w.std(0)); print('panel-B V',s['panel_b']['v'].min(0),s['panel_b']['v'].max(0),s['panel_b']['v'].mean(0))\\nrng=np.random.default_rng(78414); folds=[(np.arange(n-20),np.arange(n-20,n))];\\nfor b in np.array_split(rng.permutation(n),5): folds.append((np.setdiff1d(np.arange(n),b),b))\\ndef one(W, aa, bb, v, interaction, kind, bounds=(.8,7)):\\n wa=W[aa]; vb=v[aa]; scale=np.maximum(np.std(vb,axis=0),1e-8)\\n def err(g):\\n  f=h._features(wa,g,interaction,kind); return np.mean(((f@h._ls(f,vb)-vb)/scale)**2)\\n g=minimize_scalar(err,bounds=bounds,method='bounded').x\\n return h._features(W[bb],g,interaction,kind)@h._ls(h._features(wa,g,interaction,kind),vb),g,err(g)**.5\\n\\ndef check(W, verbose=False):\\n stats=[]\\n for a,b in folds:\\n  ya,ga,ea=one(W,a,b,y,True,'asinh'); yt,gt,et=one(W,a,b,y,True,'atan'); p,gp,ep=one(W,a,b,traj,False,'inv3'); m=lambda z:np.mean(abs(z-y[b])); stats.append([m(.35*ya+.65*yt),np.mean(abs(p-traj[b])),m(ya),m(yt),ga,gt,gp,ea,et,ep]);\\n st=np.array(stats)\\n if verbose: print(st)\\n return np.round(np.r_[st[0,:2],st[1:,:2].max(0),st[1:,:2].mean(0)],6)\\nnp.set_printoptions(precision=5,suppress=True)\\nprint('baseline',check(w,True))\\nfor fac in [.125,.25,.5,.75,1,1.5,2,3,5,8]: print('scale',fac,check(w*fac, fac in [.25,.5,2]))\\nfor mix in [-1.,-.5,-.25,-.125,.125,.25,.5,1.]: print('center',mix,check(w+mix*w.mean(0)))\\nfor p in [.25,.5,.75,1.25,1.5,2.,3.]: print('power',p,check(np.sign(w)*abs(w)**p))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reference-accurate calibration → test whether the frozen head’s bounded gains create a handoff mismatch; public CV MAE is 0.041482 for y and 0.019389 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Modify the frozen prediction head\",\"rejected_reason\":\"It is out of scope; isolate the response of its existing basis and gain bounds to the w handoff.\"}],\"rationale\":\"Compare y and trajectory independently across the public split and five disjoint holdout folds. Inspect optimized gains and individual y components to distinguish calibration error from frozen-head approximation error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7f45fd82708bce7488e4c1b7bb774d5c55a98efdf2c42e4b5cb73d0fd46c257a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27507.82,
+      "usage_known": true,
+      "prompt_tokens": 31913,
+      "cached_tokens": 12672,
+      "completion_tokens": 1104
+    }
+  ]
+}

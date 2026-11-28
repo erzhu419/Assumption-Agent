@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "186522776a9e4e5fa7a3e6d3eea5f64e",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:26:26.870291+00:00",
+  "ended_at_utc": "2026-11-28T16:26:48.055196+00:00",
+  "request_sha256": "c7d8271138182f9d5dea3cb9d8e1bdbdc4895867dac94a0ddf5f2d18a44279d2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38792,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28487,
+    "cached_tokens": 12672,
+    "completion_tokens": 704
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_14_solver.py; cat /tmp/hegel_continual_archive/*_12_solver.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np,glob\\nfrom scipy.optimize import least_squares\\nf=glob.glob('/tmp/hegel_continual_archive/*_14_solver.py')[0]; sp=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];p=s['panel_a']; cal=m._calibrate(p); print('cal',cal); u=p['u'];z=m._inverse(p['v'],cal);print('cal inverse errors',np.sort(np.linalg.norm(u-z,axis=1))); print('B output range',s['panel_b']['v'].min(0),s['panel_b']['v'].max(0));\\nt=s['eval_times'];tr=s['train'];Z=tr['traj']; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; basis=lambda p:-np.expm1(-t[:,None]*p); fit=least_squares(lambda p:(Z-Z@np.linalg.pinv(basis(p).T)@basis(p).T).ravel(),[.4,1.8]); print('rates',fit.x,'fit',np.mean(abs(fit.fun))); amp=ls(basis(fit.x),Z.T).T; print('amp stats',amp.mean(0),amp.std(0),amp.min(0),amp.max(0)); x=m._inverse(tr['x'],cal); np.savez('/tmp/modeldata.npz',x=x,amp=amp,y=tr['y'],rates=fit.x); print(np.round(np.c_[x,amp,tr['y']][:20],3)); print('corrs',np.round(np.corrcoef(np.c_[x,x*x,amp,tr['y']].T)[-3:,:],2))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 whole-solver transfer → H2 reuse calibration and identify new readout operators; the closest archived trajectory MAE is 0.088034, and the best archived scalar MAE is 0.162531.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use archived solver 14 directly\",\"rejected_reason\":\"Its trajectory error is promising, but neither output passes the 52/20 gate.\"}],\"rationale\":\"Test whether the archived calibration inverts the reference panel to its noise floor, then extract trajectory amplitudes independently of any candidate feature map.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "68e28c9d6731b6c1f065d34180fc8c13bc9befb62a1200f9e931d8d54778b473",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21699.37,
+      "usage_known": true,
+      "prompt_tokens": 28487,
+      "cached_tokens": 12672,
+      "completion_tokens": 704
+    }
+  ]
+}

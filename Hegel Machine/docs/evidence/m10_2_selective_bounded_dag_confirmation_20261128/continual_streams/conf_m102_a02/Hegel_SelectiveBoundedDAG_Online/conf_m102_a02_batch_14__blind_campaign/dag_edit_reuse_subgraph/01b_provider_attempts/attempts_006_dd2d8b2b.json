@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dd2d8b2b191b4c1b90c8c317b6ebbb6f",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:16:27.548112+00:00",
+  "ended_at_utc": "2026-11-28T16:16:51.417073+00:00",
+  "request_sha256": "90beac49e17cc1d9f2522631610205d3fd5abdbe54b66afe59164b67e9f91259",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30343,
+    "cached_tokens": 0,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/node_00.py; cat /holdout_task/public_asset_index.json; cd /tmp/hegel_continual_archive; ls; sed -n '64,140p' conf_m102_a02_batch_08_solver.py; cat > /tmp/maps14.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe14 import *\\nfrom scipy.optimize import root\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\nA=s['panel_a']; C=s['panel_c']; u=A['u']; v=A['v']; good=np.max(abs(v-(u*f['gain']+f['offset'])),axis=1)<1\\nprint('sizes',u.shape,C['u'].shape, 'times',s['eval_times'])\\ndef profile(u,v,tag):\\n best=[]\\n for bas,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('atan',np.arctan),('rational',lambda a:a/(1+a*a)),('soft',lambda a:a/np.sqrt(1+a*a)),('erf',__import__('scipy').special.erf)]:\\n  def d(q,p):return np.c_[poly(q,1),fn(q*p)]\\n  def res(p):a=d(u,p);return (a@ls(a,v)-v).ravel()\\n  opt=min((least_squares(res,[w],bounds=(.07,12)) for w in (.25,.6,1.25,2.15,3.5,6,9)),key=lambda o:o.cost)\\n  c=ls(d(u,opt.x),v); err=np.mean(abs(opt.fun)); print(tag,bas,opt.x,err); best.append((err,lambda q,d=d,p=opt.x,c=c:d(q,p)@c,bas,c,opt.x))\\n _,fn,bas,c,p=min(best,key=lambda t:t[0]); print(tag,bas,np.round(c,4)); return fn,c\\nfa,ca=profile(u[good],v[good],'A'); fc1,_=profile(C['u'],C['v1'],'C1'); fc2,_=profile(C['u'],C['v2'],'C2')\\ndef inverse(row):\\n p=root(lambda q:fa(q[None])[0]-row,(row-f['offset'])/f['gain']); return p.x\\nq=np.array([inverse(row) for row in tr['x']]); b=F._b_features(q,f['p'])@f['w']; print('q bounds',q.min(0),q.max(0)); print('a inversion',np.max(abs(fa(q)-tr['x'])))\\nfeatures={'q':q,'b':b,'1q':fc1(q),'2q':fc2(q),'1b':fc1(b),'2b':fc2(b),'21q':fc2(fc1(q)),'12q':fc1(fc2(q)),'21b':fc2(fc1(b)),'12b':fc1(fc2(b))}\\nfor name,a in features.items():\\n for j in (1,2):\\n  aa=poly(a,j); report('y '+name+str(j),aa,y); report('z '+name+str(j),aa,z)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/maps14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel-A inverse -> H2 robust nonlinear inverse and calibrated panel-C compositions; prior held-out scalar and trajectory MAEs were 0.259 and 0.236.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use independent calibration measurements to distinguish candidate nonlinear maps, then test which compositions explain scalar and trajectory responses on held-out rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "64f7a0d7b25f947cd062813edc72935366f27470a03f3e70e12b5b6a644cdc5c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23866.58,
+      "usage_known": true,
+      "prompt_tokens": 30343,
+      "cached_tokens": 0,
+      "completion_tokens": 1021
+    }
+  ]
+}

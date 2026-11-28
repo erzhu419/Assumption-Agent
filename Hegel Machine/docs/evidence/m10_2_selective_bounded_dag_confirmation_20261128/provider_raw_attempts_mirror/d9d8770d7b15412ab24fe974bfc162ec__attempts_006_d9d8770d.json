@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9d8770d7b15412ab24fe974bfc162ec",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:18:29.353414+00:00",
+  "ended_at_utc": "2026-11-28T16:19:00.232240+00:00",
+  "request_sha256": "ddaa806c7329244c21cf4daec07ba7f86f3138e4c295a6eda06d6d1dd0c77109",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33358,
+    "cached_tokens": 12672,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/*.py; cat > /tmp/map14.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=np.c_[s['train']['y'],s['train']['traj']]; xt=np.r_[x,s['test']['x']]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-11)[0]\\nfun={'tanh':np.tanh,'erf':erf,'rat':lambda x:x/(1+x*x),'sat':lambda x:x/np.hypot(1,x),'atan':np.arctan,'sin':np.sin,'logcosh':lambda x:np.logaddexp(x,-x),'softplus':lambda x:np.logaddexp(0,x)}\\np=s['panel_a'];m=np.max(abs(p['v']),1)<4;u=p['u'][m];v=p['v'][m]\\ndef ades(a,i,f,w,mode):\\n p,q=a[:,i],a[:,(i+2)%4]; base=[np.ones(len(a)),p,p**3];return np.column_stack(base+([q] if mode&1 else [])+[f(w*q)]+([p*q] if mode&2 else []))\\nresults=[]\\nfor name,f in fun.items():\\n for mode in (0,1,2,3):\\n  def obj(w):\\n   return np.mean([np.mean((a@ls(a,v[:,i])-v[:,i])**2) for i in range(4) for a in [ades(u,i,f,w,mode)]])\\n  opt=minimize_scalar(obj,bounds=(.2,5),method='bounded');results.append((opt.fun**.5,name,mode,opt.x))\\nprint('A',sorted(results)[:15]); _,nm,mo,w= min(results); f=fun[nm]; c=[ls(ades(u,i,f,w,mo),v[:,i]) for i in range(4)]; print('A coeff',np.array(c));\\ndef fw(z):return np.column_stack([ades(z,i,f,w,mo)@c[i] for i in range(4)])\\ndef inv(x):return np.array([least_squares(lambda z: (fw(z[None])-b).ravel(),np.clip(b,-1.28,1.28),bounds=(-1.3,1.3),gtol=1e-12).x for b in x])\\nz=inv(xt);print('A roundtrip',np.quantile(abs(inv(v)-u),[.5,.9,1]), 'data inverse residual',np.quantile(abs(fw(z)-xt),[.5,.9,1]),'z range',z.min(),z.max())\\ndef panels(p,key):\\n u,v=p['u'],p[key]; res=[]\\n for name,f in fun.items():\\n  for mode in (0,1):\\n   def des(z,w):return np.c_[np.ones(len(z)),z,f(z*w)] if mode else np.c_[np.ones(len(z)),f(z*w)]\\n   def loss(w):\\n    a=des(u,w);return np.mean((a@ls(a,v)-v)**2)\\n   opt=minimize_scalar(loss,bounds=(.15,4.5),method='bounded');a=des(u,opt.x);coef=ls(a,v);loo=np.sqrt(np.mean(((a@coef-v)/(1-np.sum(a*np.linalg.pinv(a).T,axis=1)[:,None]))**2));res.append((loo,name,mode,opt.x,opt.fun**.5,des(z,opt.x)@coef))\\n res.sort(key=lambda a:a[0]);print(key,[a[:5] for a in res[:8]]);return res[0][-1]\\ng=panels(s['panel_b'],'v');j=panels(s['panel_c'],'v1');k=panels(s['panel_c'],'v2');np.savez('/tmp/train14.npz',z=z,g=g,j=j,k=k,y=y)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/map14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse polynomial calibration → opposite-coordinate saturating calibration; the archived readouts remain at 0.23543 endpoint and 0.26780 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full quartic panel fit\",\"rejected_reason\":\"It interpolates the reference rows but does not identify a stable inverse.\"}],\"rationale\":\"The paired linear and cubic coefficients indicate an opposite-coordinate saturating function. Compare compact forward models on the reference data and check inversion separately before fitting outcomes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "61053982ffdc26df369e367d0e8da60b5740f459b9272d8437282db699c63254",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31357.71,
+      "usage_known": true,
+      "prompt_tokens": 33358,
+      "cached_tokens": 12672,
+      "completion_tokens": 1300
+    }
+  ]
+}

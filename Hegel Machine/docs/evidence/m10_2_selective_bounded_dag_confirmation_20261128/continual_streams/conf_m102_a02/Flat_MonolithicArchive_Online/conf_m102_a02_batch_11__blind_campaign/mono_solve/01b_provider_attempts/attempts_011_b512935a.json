@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b512935ad98c4ea19e82e9ea3b4fc5d5",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:58:25.774667+00:00",
+  "ended_at_utc": "2026-11-28T15:58:58.316983+00:00",
+  "request_sha256": "751cb43e476c88b574f8708bd7b8be12abe7ba2faed6327f7790c6d95aa2a0b6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64863,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39910,
+    "cached_tokens": 12672,
+    "completion_tokens": 1363
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ridgecompact11.py <<'PY'\\nexec(open('/tmp/refine11.py').read().split('for base,gate,reg')[0])\\nfrom scipy.optimize import least_squares\\nu=s['panel_b']['u']; v=s['panel_b']['v']; h0=np.array([-.52,-.15,1,-.12]);\\nfor name,U in [('b',u),('c',s['panel_c']['u'])]:\\n for k,V in s['panel_'+name].items():\\n  if k=='u': continue\\n  W=m._ls(m._aff(U),V); print(name,k,'affine weights',W.round(4),'rms',np.std(m._aff(U)@W-V),flush=True)\\nfor model in ['free','tanh','cos','tanh_cos','tanh_aff_cos','sin_aff','tanh2','tanh2aff','gatequad','satraw']:\\n def fun(p):\\n  h=x[:,2]+L@p[:3]+p[3]; k=p[4]; t=np.tanh(k*h); c=np.cos(1.25*h); h2=x@p[5:9]+p[9]; sec=np.tanh(h2); G={ 'free': A*t[:,None], 'tanh': t[:,None], 'cos':np.c_[t,c], 'tanh_cos':np.c_[t,c,np.sin(1.25*h)],'tanh_aff_cos':np.c_[A*t[:,None],c], 'sin_aff':np.c_[A*np.sin(k*h)[:,None]],'tanh2':np.c_[t,sec], 'tanh2aff':np.c_[A*t[:,None],sec], 'gatequad':np.c_[t,h*t,t*t], 'satraw':np.c_[A*t[:,None],np.tanh(2.15*x)]}[model]; return np.c_[Q,G]\\n E=[]; pars=[]; d=fun(np.r_[h0[[0,1,3]],0,1.8,np.ones(5)]).shape[1]; R=np.diag(np.r_[np.zeros(5),np.full(10,.003),np.full(d-15,.008)])\\n for j,idx in enumerate([I]+splits):\\n  a,b=(idx,idx) if j==0 else (idx[:52],idx[52:]); Y=np.r_[y[a],np.zeros(d)];\\n  def calc(p):\\n   p=np.r_[p,np.zeros(10-len(p))]; D=fun(p); D0=np.r_[D[a],R]; w=m._ls(D0,Y); return D0@w-Y,D[b]@w,w\\n  lo=[-3]*4+[.2]; hi=[3]*4+[6]; starts=[[-.52,-.15,-.12,0,1.8],[-.5,-.15,-.12,-.5,2.15],[0,0,0,0,1.25]]\\n  if 'tanh2' in model: lo += [-5]*5; hi += [5]*5; starts=[p+h for p in starts[:2] for h in [[1,0,-1,0,0],[0,1,0,-1,0],[-.5,-.15,1,-.12,0]]]\\n  r=min([least_squares(lambda p:calc(p)[0],p,bounds=(lo,hi),max_nfev=100) for p in starts],key=lambda t:t.cost); _,pred,w=calc(r.x); E.append(np.mean(abs(pred-y[b]))); pars.append(r.x.round(3));\\n  if j==0: print(model,'full',pars[-1],w.round(3),flush=True)\\n E=np.array(E); print(model,'MAE',E[[0,1,-4,-3,-2,-1]].round(5),'rand',E[2:14].max().round(5),'tail pars',pars[-2:],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/ridgecompact11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (nonlinear calibration) → H2 (a compact saturating scalar readout); the verified candidate scores 0.00825 MAE on 52/20 and 0.09831 on the worst directional split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase uniform regularization on the current readout\",\"rejected_reason\":\"Tested penalties increased directional error, so compare different readout structures instead.\"}],\"rationale\":\"Keep the verified artifact unchanged while comparing compact saturating and symmetric gate variants. Only promote a challenger if it improves directional extrapolation while preserving the prescribed split and random-split margins.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "82563cda19f9b209382871a52bf970c7e82a888e4904567b15d467c94f46aee4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32540.95,
+      "usage_known": true,
+      "prompt_tokens": 39910,
+      "cached_tokens": 12672,
+      "completion_tokens": 1363
+    }
+  ]
+}

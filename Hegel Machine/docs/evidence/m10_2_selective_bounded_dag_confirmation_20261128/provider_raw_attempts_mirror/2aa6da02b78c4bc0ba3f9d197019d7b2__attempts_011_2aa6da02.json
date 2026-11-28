@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2aa6da02b78c4bc0ba3f9d197019d7b2",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:55.932234+00:00",
+  "ended_at_utc": "2026-11-28T15:46:24.741967+00:00",
+  "request_sha256": "55019e0b3d8fe0a7c2d6ee2cb9feb80df9ad7e02618d9a28ed569dd2bfb2c44b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61783,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36689,
+    "cached_tokens": 12672,
+    "completion_tokens": 1211
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; y,T=tr['y'],tr['traj']; t=s['eval_times']; z,h,c=m._features(s,tr['x']); trace=c[:,[0,5,10,15]].sum(1); A=np.c_[z,c[:,4]]; B=np.c_[h,trace]; D=np.c_[A,B]; f=m._intercept(D); n=len(y); o=m.solve_batch(s); assert np.allclose(o['diagnostics_vec'],[o['y_hat'].mean(),o['y_hat'].std(),o['state_pred'][:,-1].mean(),o['state_pred'][:,-1].std()]); assert all(np.isfinite(v).all() for v in o.values())\\nrng=np.random.default_rng(802); orders=[np.arange(n)]+[rng.permutation(n) for _ in range(24)]+[np.argsort(np.linalg.norm(z,axis=1))]; records=[]; rates=[]\\nfor ix in orders:\\n i,j=ix[:52],ix[52:]; ss=dict(s,train=dict(tr,x=tr['x'][i],y=y[i],traj=T[i]),test=dict(x=tr['x'][j])); b=m.solve_batch(ss)\\n def design(k):\\n  g=-np.expm1(-k[:,None]*t); return np.concatenate([np.ones((n,len(t),1)),A[:,None,:]*g[0][None,:,None],B[:,None,:]*g[1][None,:,None]],axis=2)\\n def fit(k):\\n  G=design(k); X=G[i].reshape(-1,11); return G,np.linalg.lstsq(X,T[i].ravel(),rcond=None)[0]\\n def residual(k):\\n  G,w=fit(k); return (G[i]@w-T[i]).ravel()\\n r=least_squares(residual,[.42,1.8],bounds=([.05,.5],[1.2,5])); G,w=fit(r.x); rates.append(r.x); models=[b['state_pred'],f[j]@m._ls(f[i],T[i]),G[j]@w]; e=np.abs(b['y_hat']-y[j]); rr=[e.mean(),e.max()];\\n for q in models:\\n  err=np.abs(q-T[j]); rr.extend([err.mean(),err.mean(0).max(),err[:,-1].mean()]);\\n records.append(rr)\\nR=np.array(records); print('columns: y MAE, y max sample error, then (overall, worst horizon, terminal) for full, compact, temporal'); print('52/20',R[0]); print('max over random and designated',R[:-1].max(0)); print('far-edge held out',R[-1]); print('projected rates first/min/max',rates[0],np.min(rates,axis=0),np.max(rates,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full bilinear readout → test a shared trace and one cross-channel term; the saved solver passes the public schema, and the earlier full-basis trajectory MAE was 0.0062 on the 52/20 split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t10\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the full interaction matrix immediately\",\n      \"rejected_reason\": \"Compact coefficient patterns are apparent in the fitted model, but their extrapolation benefit needs to be checked on held-out rows.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved solver in an isolated process and compare full, sparse, and temporally constrained readouts across random splits, each time horizon, and a high-norm extrapolation slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4b44b22728d1408ac2bf020d770ad27984058ae9002f53ac1294ed712ce1f4d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28808.44,
+      "usage_known": true,
+      "prompt_tokens": 36689,
+      "cached_tokens": 12672,
+      "completion_tokens": 1211
+    }
+  ]
+}

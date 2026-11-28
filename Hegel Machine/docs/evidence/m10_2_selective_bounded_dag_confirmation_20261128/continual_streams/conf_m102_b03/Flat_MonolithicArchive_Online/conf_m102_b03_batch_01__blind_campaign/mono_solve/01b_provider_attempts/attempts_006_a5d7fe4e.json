@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a5d7fe4ed9664aba92384f6115c79668",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:39.253083+00:00",
+  "ended_at_utc": "2026-11-28T15:01:15.191743+00:00",
+  "request_sha256": "0d36b496a6d09d9e8e988d32b0a979ddc5ee5e4da61c1e2afcd983611d45f56e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46184,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33056,
+    "cached_tokens": 12672,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"ls -l /tmp/hegel_continual_archive; cat /tmp/hegel_continual_archive/archive_manifest.json; cat > /tmp/grammar.py <<'PY'\\nfrom operators import *\\nfrom itertools import combinations_with_replacement,combinations\\nfrom scipy.optimize import minimize_scalar\\nc=s['panel_c']; u=c['u']; pairs=list(combinations(range(4),2)); cross=lambda t:np.c_[[t[:,i]*t[:,j] for i,j in pairs]].T\\nC1=fit(F(cross(u)),c['v1']); C1[abs(C1)<.0005]=0\\ncos=lambda t,g:F(np.cos(g*t)); cost=lambda g:np.linalg.norm(cos(u,g)@fit(cos(u,g),c['v2'])-c['v2']); g=minimize_scalar(cost,bounds=(1.5,3.3),method='bounded').x; C2=fit(cos(u,g),c['v2']); print('operators',C1,C2,g)\\ndef f(t):return F(cross(t))@C1\\ndef h(t):return cos(t,g)@C2\\nx=s['train']['x']; z=(x-a)/b; Y=np.c_[s['train']['y'],s['train']['traj']]; n=40\\nYred=np.c_[Y[:,0],Y[:,1:]@np.linalg.svd(Y[:n,1:],full_matrices=False)[2][:3].T]; Yred/=Yred[:n].std(axis=0)\\nones=np.ones((len(x),1)); results=[]\\ndef test(M,key):\\n if M.shape[1]>42:return\\n Sd=np.maximum(M[:n].std(0),.001); M=M/Sd; U,sv,V=np.linalg.svd(M[:n],full_matrices=False); k=sv>sv[0]*.00015\\n if k.sum()>36:return\\n R=abs(M@((V[k].T/sv[k])@(U[:,k].T@Y[:n]))-Y); r0=np.mean(R[:n],0);r1=np.mean(R[n:52],0);r2=np.mean(R[52:],0); results.append((r1[0],r1[1:].mean(),r2[0],r2[1:].mean(),r0[0],r0[1:].mean(),key))\\ndef out(A,D):return (A[:,:,None]*D[:,None,:]).reshape(len(x),-1)\\ndef powers(t,k):return np.stack([np.prod(t[:,inds],axis=1) for inds in combinations_with_replacement(range(t.shape[1]),k)],axis=1)\\nfor name,w in {'z':z,'Bz':Bf(z),'Binvz':Binv(z),'x':x,'Blinz':z@B[1:]}.items():\\n ca,cb=f(w),h(w); L={'w':w,'z':z,'ca':ca,'cb':cb,'hca':h(ca),'fcb':f(cb),'fa':f(ca),'hb':h(cb),'Bca':Bf(ca),'Bcb':Bf(cb),'fBca':f(Bf(ca)),'hBca':h(Bf(ca)),'fBcb':f(Bf(cb)),'hBcb':h(Bf(cb))}; P=np.c_[ones,w,powers(w,2)]; P3=np.c_[P,powers(w,3)]; tests=[('P0',ones),('P1',F(w)),('P2',P),('P3',P3)]\\n for k,v in L.items():\\n  for k2,v2 in tests:\\n   test(np.c_[v2,v],(name,k2,k));test(np.c_[v2,v,powers(v,2)],(name,k2,k,'quad'))\\n  for l,d in L.items():\\n   base=np.c_[ones,w,ca,cb,v,d]\\n   for m,p in [('dot',np.sum(v*d,axis=1)[:,None]),('outer',out(v,d)),('diag',v*d)]:test(np.c_[base,p],(name,k,l,m))\\n   for gain in [.22,1.25]:\\n    S=np.sum(d*d,axis=1,keepdims=True)\\n    for m,p in [('rat',v/(1+gain*d*d)),('nrat',v/(1+gain*S)),('exp',v*np.exp(-gain*d*d)),('tanh',v*np.tanh(gain*d)),('cos',v*np.cos(gain*d)),('sig',v/(1+np.exp(-gain*d))),('mix',(v+d)/(1+gain*(v-d)**2)),('sinc',v*np.sinc(gain*d/np.pi))]:\\n     test(np.c_[base,p],(name,k,l,m,gain));test(np.c_[P3,p],(name,'p3',k,l,m,gain))\\n print('done',name)\\nfor k in [0,1,4,5]:print('best',k,*sorted(results,key=lambda j:j[k])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (direct quadratic and cosine readouts) → H2 (composed or gated branch operators); direct readouts still give 52/20 MAEs of 0.230 for y and 0.199 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Higher-dimensional unconstrained branch regression\",\"rejected_reason\":\"Near-zero fitting error does not transfer to the held-out rows.\"}],\"rationale\":\"Both panel C laws are now known to panel precision. Test sparse branch compositions, cross-products, and rational gates on rows 40–51 before comparing finalists on the required 52/20 split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9970f08aa59abdf1fad4369231fa5603f2b2efa3c395e992247f6053928dfb9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35937.47,
+      "usage_known": true,
+      "prompt_tokens": 33056,
+      "cached_tokens": 12672,
+      "completion_tokens": 1511
+    }
+  ]
+}

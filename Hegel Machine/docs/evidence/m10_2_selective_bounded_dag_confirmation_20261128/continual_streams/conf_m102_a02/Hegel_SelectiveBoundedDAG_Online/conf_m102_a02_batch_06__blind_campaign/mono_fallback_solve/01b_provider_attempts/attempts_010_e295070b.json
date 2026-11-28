@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e295070b73cb4f8e9903687746bb6f71",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:43.077030+00:00",
+  "ended_at_utc": "2026-11-28T15:33:09.557579+00:00",
+  "request_sha256": "9edf3e11b67bcb8ada02fc7a218f1aa533d35b1857050892a435b80b6650dfeb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56901,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35811,
+    "cached_tokens": 12672,
+    "completion_tokens": 1008
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/sparse.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('np.set_printoptions')[0])\\nfrom scipy.linalg import lstsq\\nfrom sklearn.linear_model import Lasso,Ridge,OrthogonalMatchingPursuit\\nfrom sklearn.preprocessing import PolynomialFeatures\\nW=dict(np.load('/tmp/discover.npz')); np.set_printoptions(precision=4,suppress=True)\\nY=np.c_[y,z]; I=np.arange(52); J=np.arange(52,72)\\nfor n in ['q','b','c','d']:\\n print(n,W[n].min(0),W[n].max(0));print('corr',np.corrcoef(np.c_[W[n],y,z[:,-1]].T)[-2:,:4])\\nprint('y quant',np.quantile(y,[0,.1,.25,.5,.75,.9,1]),'resid extremes')\\nR=[]\\nfor nm in ['qb','bc','qbc','qbd','bd','b','q']:\\n A=np.column_stack([W[k] for k in nm]); names=[k+str(i) for k in nm for i in range(4)]\\n for deg in [2,3]:\\n  P=PolynomialFeatures(deg,include_bias=False); F=P.fit_transform(A); labels=P.get_feature_names_out(names); S=np.maximum(F[I].std(0),.03); F=F/S\\n  for j in [0,8]:\\n   u=Y[:,j]\\n   for alg,pars in [(Lasso,[.0003,.001,.003,.01,.02,.03,.05,.08]),(Ridge,[.001,.01,.03,.07,.15,.3,.6,1.2,2.4,4.8]),(OrthogonalMatchingPursuit,[3,4,5,6,8,10,12,15,20,25])]:\\n    for p in pars:\\n     kw={'alpha':p} if alg!=OrthogonalMatchingPursuit else {'n_nonzero_coefs':p};\\n     if alg==Lasso:kw.update(max_iter=4000,tol=1e-5)\\n     fit=alg(**kw).fit(F[I],u[I]); pr=fit.predict(F); e=abs(pr-u); co=fit.coef_; top=np.argsort(abs(co))[-9:][::-1]; R.append((e[J].mean(),e[I].mean(),j,nm,deg,alg.__name__,p,[(labels[i],round(co[i]/S[i],3)) for i in top if co[i]!=0]));\\nfor j in [0,8]:\\n print('BEST',j); print(*sorted(r for r in R if r[2]==j)[:18],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse.py 2>/tmp/sparse.warn; cat /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic panel readouts → H2 sparse calibrated-B interactions; best measured 52/20 MAEs are 0.05389 for scalar and 0.01834 for trajectory, using separate regularization.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel B's expansive transfer improves calibration fit. Compare sparse and shrunk interaction readouts to identify which terms carry predictive signal rather than extrapolating the full quadratic fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "3f07a3e81a1067c99d286491a83af91e62f4762bdfa0bc033635147a76db38a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26479.4,
+      "usage_known": true,
+      "prompt_tokens": 35811,
+      "cached_tokens": 12672,
+      "completion_tokens": 1008
+    }
+  ]
+}

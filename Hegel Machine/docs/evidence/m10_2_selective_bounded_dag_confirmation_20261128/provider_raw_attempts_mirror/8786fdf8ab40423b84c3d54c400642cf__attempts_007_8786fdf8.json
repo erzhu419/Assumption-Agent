@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8786fdf8ab40423b84c3d54c400642cf",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:19.991256+00:00",
+  "ended_at_utc": "2026-11-28T15:16:55.385411+00:00",
+  "request_sha256": "3b54eb5b67c4101e6f2601deeea1d185a4adb4bb2bd293e948974489b4d42ef8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55541,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35861,
+    "cached_tokens": 12672,
+    "completion_tokens": 1379
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrated scalar and trajectory readouts for the frozen sensor encoder.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _panel_map(panel):\\n    u, v = (np.asarray(panel[key], float) for key in ('u', 'v'))\\n    affine = _fit(_affine(u), v)\\n\\n    def basis(x, k):\\n        return np.column_stack((_affine(x), np.sin(k*x)))\\n\\n    def loss(k):\\n        a = basis(u, k)\\n        return np.mean((a @ _fit(a, v) - v)**2)\\n\\n    k = minimize_scalar(loss, bounds=(2., 4.), method='bounded').x\\n    coef = _fit(basis(u, k), v)\\n    return affine, lambda x: basis(x, k) @ coef\\n\\n\\ndef _scalar(x, z, xt, zt, y):\\n    i, j = np.triu_indices(x.shape[1], 1)\\n    level = max(float(np.max(np.abs(y))), 1e-12)\\n    result = []\\n    for form, initial, limits in [('rational', .34, (.03, 3.)), ('sine', 3., (1., 6.))]:\\n        for mixed in (False, True):\\n            def design(x, z, k):\\n                w = x**3/(1+k*x**4) if form == 'rational' else np.sin(k*x)\\n                cross = (x[:, i]*z[:, j], z[:, i]*x[:, j]) if mixed else (z[:, i]*z[:, j],)\\n                return np.column_stack((_affine(x), w, *cross))\\n\\n            def profile(p):\\n                k, ratio = p\\n                a = design(x, z, k)\\n                cap = level * ratio\\n                coef = _fit(a, np.arctanh(y/cap))\\n                return cap, a, coef\\n\\n            def error(p):\\n                cap, a, coef = profile(p)\\n                return cap*np.tanh(a@coef)-y\\n\\n            opt = least_squares(error, [initial, 1.35], bounds=([limits[0], 1.001], [limits[1], 8.]), max_nfev=75)\\n            cap, _, coef = profile(opt.x)\\n            result.append(cap*np.tanh(design(xt, zt, opt.x[0]) @ coef))\\n    return np.mean(result, axis=0)\\n\\n\\ndef _trajectory(x, z, xt, zt, traj):\\n    def features(x, k):\\n        return np.column_stack((_affine(x), np.sin(k*x)))\\n\\n    def loss(k):\\n        a = features(x, k)\\n        return np.mean((a @ _fit(a, traj) - traj)**2)\\n\\n    k = minimize_scalar(loss, bounds=(2., 4.), method='bounded').x\\n    adjusted = _affine(z)\\n    corrected = _affine(zt) @ _fit(adjusted, traj)\\n    flexible = features(xt, k) @ _fit(features(x, k), traj)\\n    return .5*(corrected + flexible)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, encoded = inputs['__input__'], inputs['node_00']\\n    b, correct = _panel_map(study['panel_b'])\\n    pre, pret = [np.linalg.solve(b[1:].T, (np.asarray(encoded[key], float)-b[0]).T).T for key in ('z', 'zt')]\\n    y = _scalar(pre, correct(pre), pret, correct(pret), np.asarray(study['train']['y'], float))\\n    state = _trajectory(pre, correct(pre), pret, correct(pret), np.asarray(study['train']['traj'], float))\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nls -l /tmp/hegel_continual_archive\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense polynomial readout → calibrated rational and sinusoidal scalar models with a bounded outer link; the rational model with corrected-coordinate interactions reached 0.02491 worst-fold scalar MAE, and end-to-end trajectory MAE is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the single model with the lowest public-split scalar error\",\n      \"rejected_reason\": \"Corrected-coordinate interactions were more stable across folds than the lowest-error public-split model.\"\n    }\n  ],\n  \"rationale\": \"Build the sink around the promising bounded scalar models, fit the trajectory separately with the nonlinear panel correction, and run the isolated public evaluator before promoting the candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "868321e3b8c5b662fb2d72294511e146d01e5b8546a428c4a20ec2278031b266",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35812.28,
+      "usage_known": true,
+      "prompt_tokens": 35861,
+      "cached_tokens": 12672,
+      "completion_tokens": 1379
+    }
+  ]
+}

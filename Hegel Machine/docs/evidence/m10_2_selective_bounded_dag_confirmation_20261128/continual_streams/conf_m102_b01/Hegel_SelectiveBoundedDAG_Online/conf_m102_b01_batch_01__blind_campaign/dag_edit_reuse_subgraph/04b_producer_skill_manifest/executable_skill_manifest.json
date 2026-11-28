@@ -1,0 +1,111 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_b01_batch_01_d9ac951f8326",
+    "source_hash": "d9ac951f83260955ee64f2967a36a9bb5ccccd541357fbd215ef3fe8c546cd0f",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_b01_batch_01__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1966,
+        "sha256": "fbf1637b0269d545a019c89aae5a9edb47c1ad0feea7dd37ef86551cb1b8adc2"
+      },
+      {
+        "container_path": "/tmp/profile_b.py",
+        "archived_relpath": "producers/tmp__profile_b.py",
+        "bytes": 1837,
+        "sha256": "414b81a86dcab4fc13a391859e6f3c5673ec2d9912030d572ec1936db022bbe8"
+      },
+      {
+        "container_path": "/tmp/sweep_b.py",
+        "archived_relpath": "producers/tmp__sweep_b.py",
+        "bytes": 2952,
+        "sha256": "336ef389c3d58ec91fdcf4090939dd9a127baa04357d9d3d28f62481e5853fc9"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_b01_batch_00_solver.py",
+        "bytes": 2081,
+        "sha256": "d2d152361ba947c0a7d55aed15852078cff3cbf6b5895f0f4234a72a668240b7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && cat _dag_spec.json && cat _frozen_nodes/node_01.py && cat test_dag_candidate.py && cat public_asset_index.json && du -ah /tmp/hegel_continual_archive | sort -h | tail -60; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment affine calibration imputation'",
+      "cd /holdout_task && cat /tmp/hegel_continual_archive/* && sed -n '1,240p' test_dag_candidate.py; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=4,suppress=True)\nfor k,d in s.items():\n for j,a in (d.items() if isinstance(d,dict) else [(k,d)]):\n  a=np.asarray(a); print(k,j,a.shape,'mean',np.mean(a,axis=0),'std',np.std(a,axis=0),'first',a[:2])\n if k.startswith('panel'):\n  u=d['u']; A=np.column_stack([np.ones(len(u)),u]);\n  for j,v in d.items():\n   if j=='u':continue\n   b=np.linalg.lstsq(A,v,rcon",
+      "cd /holdout_task && sed -n '90,240p' test_dag_candidate.py && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json && cat >/tmp/probe.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\nfor k,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\n u=s[k]['u']; v=s[k][j]; a=aff(u); lin=a@ls(a,v)",
+      "sed -n '138,240p' /holdout_task/test_dag_candidate.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | sed '/panel_c v1/q'; cat >/tmp/profile_b.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import minimize_scalar,least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['panel_b']['u']; y=s['panel_b']['v']; n,d=x.shape\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\naff=lambda x:np.c_[np.ones(len(x)),x]\nA=aff(x)\ndef score(F):\n r=F@ls(F,y)-",
+      "OPENBLAS_NUM_THREADS=1 python3 -u /tmp/profile_b.py | head -18; cat >/tmp/sweep_b.py <<'PY'\nimport numpy as np,pickle,sys,runpy\nfrom scipy.optimize import minimize_scalar\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; arc=runpy.run_path('/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py'); pred=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']; u,v=(S['panel_b'][k] for k in ('u','v')); n=len(S['train']['x']); X=arc['_operator'](dict(S,panel_b={'u':np.r_[np.zeros((1,4)),np.eye(4)],'v':np.r_[np.zeros((1,4)),np.eye(4)]}),S['train']['x']); af",
+      "cat > /holdout_task/node_00.py <<'PY'\n\"\"\"Estimate the shared latent coordinates from independent calibration panels.\"\"\"\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\n\n\ndef _lstsq(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\n\n\ndef _sensor_calibration(u, v):\n    offsets = np.empty(u.shape[1])\n    scales = np.empty_like(offsets)\n    for j, x in enumerate(u.T):\n        y = v[:, j]\n        design = np.column_stack((np.ones(len(x)), x))\n        beta = _lstsq(design, y)\n        retain = max(2, int(0.875 * len(x)))\n        for _ in range(8):\n            selected = np.argsort("
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__sweep_b.py",
+      "primary_producer_container_path": "/tmp/sweep_b.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 1833,
+        "sha256": "af77405dfa4f6c632e69ada7796ad67077f207afb347b1933aeb5c5173d858e5",
+        "content_addressed_ref": "content_addressed_blobs/af77405dfa4f6c632e69ada7796ad67077f207afb347b1933aeb5c5173d858e5.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d9ac951f83260955ee64f2967a36a9bb5ccccd541357fbd215ef3fe8c546cd0f",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cat > /holdout_task/node_00.py <<'PY'\n\"\"\"Estimate the shared latent coordinates from independent calibration panels.\"\"\"\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\n\n\ndef _lstsq(a, b):\n    return np.linalg.lstsq(a, b, rcond",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d9ac951f83260955ee64f2967a36a9bb5ccccd541357fbd215ef3fe8c546cd0f",
+        "expected_candidate_sha256": "d9ac951f83260955ee64f2967a36a9bb5ccccd541357fbd215ef3fe8c546cd0f",
+        "computed_candidate_sha256": "d9ac951f83260955ee64f2967a36a9bb5ccccd541357fbd215ef3fe8c546cd0f",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 1833
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d9ac951f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

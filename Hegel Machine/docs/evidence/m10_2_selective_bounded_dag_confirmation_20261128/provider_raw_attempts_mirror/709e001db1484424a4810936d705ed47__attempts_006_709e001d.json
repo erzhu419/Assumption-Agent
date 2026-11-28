@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "709e001db1484424a4810936d705ed47",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:52:38.885297+00:00",
+  "ended_at_utc": "2026-11-28T15:53:12.695072+00:00",
+  "request_sha256": "00795c03e07fd196037c32629c7aeb8b164dbe8259aa46b18f6718b3710cc935",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47905,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30219,
+    "cached_tokens": 12672,
+    "completion_tokens": 1417
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/_frozen_nodes/node_00.py; sed -n '20,43p' /tmp/hegel_continual_archive/conf_m102_b04_batch_09_solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nfor k,v in s.items():\\n print(k,[(j,np.shape(a)) for j,a in v.items()] if isinstance(v,dict) else v)\\nfor k,v in s['panel_c'].items(): print(k,v[:4])\\nPY\\ncat >/tmp/compose.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('for name,p in')[0])\\nfrom itertools import combinations_with_replacement\\nc=s['panel_c']; cu=c['u']; R=np.random.default_rng(42); folds=np.array_split(R.permutation(n),6); tar=np.c_[y,t]; raw=s['train']['x']; lat=np.cbrt(q)\\ndef basis(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],1) for h in range(1,d+1) for j in combinations_with_replacement(range(x.shape[1]),h)])\\ndef score(a,tar=tar):\\n errs=[]\\n for h in folds:\\n  i=np.setdiff1d(np.arange(n),h); e=np.abs(a[h]@np.linalg.lstsq(a[i],tar[i],rcond=1e-9)[0]-tar[h]); errs.append([e[:,0].mean(),e[:,1:].mean()])\\n return np.mean(errs,0),np.max(errs,0)\\ncfits={}\\nfor key in ['v1','v2']:\\n v=c[key]; print('PANEL C',key)\\n for name,fn in [('tanh',lambda x,f:np.tanh(f*x)),('aff+tanh',lambda x,f:np.c_[x,np.tanh(f*x)]),('aff+cos',lambda x,f:np.c_[x,np.cos(f*x)]),('aff+sin',lambda x,f:np.c_[x,np.sin(f*x)]),('aff+sin+cos',lambda x,f:np.c_[x,np.sin(f*x),np.cos(f*x)]),('poly3+cos',lambda x,f:np.c_[x,x**2,x**3,np.cos(f*x)]),('aff+squash',lambda x,f:np.c_[x,x/np.sqrt(1+f*x*x)]),('aff+atan',lambda x,f:np.c_[x,np.arctan(f*x)]),('aff+cbrt',lambda x,f:np.c_[x,np.cbrt(x)])]:\\n  def loss(f,ret=False):\\n   a=aff(fn(cu,f)); w=np.linalg.lstsq(a,v,rcond=None)[0]; return w if ret else np.mean((a@w-v)**2)**.5\\n  fs=np.linspace(.03,7,90); j=np.argmin([loss(f) for f in fs]); o=minimize_scalar(loss,bounds=(fs[max(j-1,0)],fs[min(j+1,89)]),method='bounded'); print(name,np.round([o.x,o.fun],7)); cfits[key+name]=(o.fun,fn,o.x,loss(o.x,True))\\nprint('READOUT shortlist')\\nops={'B':lambda x:aff(np.cos(f*x))@co,'cos':lambda x:np.cos(f*x),'invB':lambda x:(x-co[0])@np.linalg.pinv(co[1:])}\\nfor k,(e,fn,g,w) in cfits.items():\\n if e<.04: ops[k]=lambda x,fn=fn,g=g,w=w:aff(fn(x,g))@w\\nxs={'q':q,'lat':lat,'raw':raw,'lat2':lat**2,'asinhq':np.arcsinh(q)}\\nfor k,x in list(xs.items()):\\n for j,op in ops.items(): xs[k+':'+j]=op(x)\\nresults=[]\\nfor k,x in list(xs.items()):\\n for j,fn in {'id':lambda x:x,'cos':lambda x:np.cos(f*x),'sin':lambda x:np.sin(f*x),'tanh':np.tanh,'square':np.square}.items():\\n  a=fn(x)\\n  for d in (1,2,3):\\n   m=basis(a,d); avg,worst=score(m); results.append((sum(avg),k,j,d,avg,worst))\\n   if d<3:\\n    avg,worst=score(np.c_[m,lat,q,np.cos(f*lat),np.cos(f*q)]);results.append((sum(avg),k,j+'+orig',d,avg,worst))\\nfor r in sorted(results,key=lambda r:r[0])[:22]: print(r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compose.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test composed panel operators and expanded symmetric readouts; the best prior direct cosine models still have worst-fold MAEs of 0.502 for scalar and 0.678 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a more flexible single-frequency readout\",\n      \"rejected_reason\": \"The frequency sweep did not approach the noise floor. Panel C provides independent evidence for testing additional operators.\"\n    }\n  ],\n  \"rationale\": \"Recheck the exact frozen calibration and profile panel C independently of target labels. Use repeated held-out predictions to screen whether either panel-C operator completes the shared readout basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "91709a948dde1bf5ea79c5b5c49641cc2227d4fc828fd18a06ecfe89666e1368",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33808.52,
+      "usage_known": true,
+      "prompt_tokens": 30219,
+      "cached_tokens": 12672,
+      "completion_tokens": 1417
+    }
+  ]
+}

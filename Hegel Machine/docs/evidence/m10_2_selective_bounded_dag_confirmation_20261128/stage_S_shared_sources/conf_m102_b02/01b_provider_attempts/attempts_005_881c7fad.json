@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "881c7fad88a34098821e51196bd7291b",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:07.474653+00:00",
+  "ended_at_utc": "2026-11-28T14:53:44.185341+00:00",
+  "request_sha256": "0cabc22caa3c3c4ebb24980058b9a13ebee4c944d427865a8ff23789640d71bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40347,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31017,
+    "cached_tokens": 12672,
+    "completion_tokens": 1593
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stages.py <<'PY'\\nimport pickle,numpy as np,itertools as it\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef col(z):return np.c_[np.ones(len(z)),z]\\ndef fit(u,v):\\n a=col(u); m=np.ones(len(u),bool)\\n for _ in range(4):\\n  c=ls(a[m],v[m]); e=np.linalg.norm(a@c-v,axis=1);m=e<max(.001,np.median(e)*3)\\n return c\\nA=fit(**s['panel_a']); B=fit(**s['panel_b']); P=s['panel_c']; u=P['u']; v=P['v1']; w=P['v2']\\ndef vp(fun,p,y, verbose=True):\\n def err(p):\\n  d=fun(p,u); return (d@ls(d,y)-y).ravel()\\n q=least_squares(err,p,max_nfev=250,gtol=1e-12); d=fun(q.x,u); c=ls(d,y)\\n if verbose: print(fun.__name__,q.x,np.std(q.fun),np.std(q.fun.reshape(y.shape)/(1-np.diag(d@np.linalg.pinv(d)))[:,None]));print(c)\\n return lambda z:fun(q.x,z)@c\\n\\ndef tan(p,z):return col(np.tanh(p*z))\\ndef tanoff(p,z):return col(np.tanh(p[:4]*z+p[4:]))\\ndef lintan(p,z):return col(np.c_[z,np.tanh(p*z)])\\ndef rat(p,z):return col((z+p[0]*z*z)/(1+p[1]*z*z))\\ndef rat2(p,z):return col((z+p[0]*z*z)/(1+p[1]*z*z+p[2]*z**4))\\ndef quadcube(p,z):return col(z+p[0]*z*z+p[1]*z**3+p[2]*z**4)\\ndef qtanh(p,z):return col(np.tanh(p[1]*(z+p[0]*z*z)))\\nfor f,p in [(tan,[2]),(tan,[2]*4),(tanoff,[2]*4+[0]*4),(lintan,[2]),(lintan,[2]*4)]:\\n c=vp(f,p,v)\\n if f==tan and len(p)==1:C=c\\nfor f,p in [(rat,[.44,0]),(rat2,[.44,0,0]),(quadcube,[.44,0,0]),(qtanh,[.44,.3])]:\\n c=vp(f,p,w)\\n if f==rat:D=c\\nx=s['train']['x']; T=s['train']['traj']; y=s['train']['y']; time=s['eval_times']; t=np.c_[-np.expm1(-1.8*time),-np.expm1(-.4*time)]; Y=np.c_[y,T]; amp=T@np.linalg.pinv(t.T); print('amp correlation',np.corrcoef(np.c_[y,amp].T));\\na=(x-A[0])@np.linalg.inv(A[1:]); af=col(x)@A; b=col(a)@B; bf=col(af)@B; br=col(x)@B\\nsp=[(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20)),(np.r_[0:20,40:72],np.arange(20,40))]\\ncoords={}\\nfor n,z in [('x',x),('a',a),('af',af),('b',b),('bf',bf),('br',br)]:\\n for k,d in [('',z),('C',C(z)),('D',D(z)),('CD',np.c_[C(z),D(z)]),('zCD',np.c_[z,C(z),D(z)]),('CB',col(C(z))@B),('DB',col(D(z))@B)]:coords[n+k]=d\\n\\ndef errors(F):\\n E=[]\\n for i,j in sp:\\n  pred=F[j]@ls(F[i],Y[i]); e=np.abs(pred-Y[j]); E.append([e[:,0].mean(),e[:,1:].mean()])\\n E=np.array(E); return E.mean(),E.round(5).tolist()\\nR=[]\\nfor n,z in coords.items():\\n F=col(z); R.append((*errors(F),n,'lin'))\\n if z.shape[1]>4:continue\\n pol=PolynomialFeatures(2).fit_transform(z); R.append((*errors(pol),n,'quad'))\\n for r in [.7,1.2,1.8,2.4,3.2]:\\n  for k,f in [('tanh',np.tanh(r*z)),('sin',np.sin(r*z)),('sin2',np.c_[np.sin(r*z),np.cos(r*z)]),('rat',z/(1+r*z*z)),('cubic',z**3)]:\\n   for name,d in [('lin',F),('quad',pol)]:R.append((*errors(np.c_[d,f]),n,name+k+str(r)))\\nprint('best joint',*sorted(R)[:15],sep='\\\\n'); print('best by output',*[sorted(R,key=lambda r:np.mean(np.array(r[1])[:,j]))[:5] for j in (0,1)],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stages.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 forward panel B improves the fit after calibration → H2 recover panel C's separable nonlinear operators and test their compositions; the best panel-B feature model so far has worst-block y/trajectory MAE of 0.0756/0.0649.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel C's first output strongly favors a separable tanh basis, while its second has aligned linear and square coefficients. Profile the nonlinearities directly from the panel measurements, then compare operator order and readout features on held-out blocks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5c4b0ccb8922d8fa2123d952802a9c0f5455b59bab2d49f050e970c6415a4ae4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36709.62,
+      "usage_known": true,
+      "prompt_tokens": 31017,
+      "cached_tokens": 12672,
+      "completion_tokens": 1593
+    }
+  ]
+}

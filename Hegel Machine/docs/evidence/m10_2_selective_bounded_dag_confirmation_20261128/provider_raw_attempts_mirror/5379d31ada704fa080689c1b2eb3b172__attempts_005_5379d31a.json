@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5379d31ada704fa080689c1b2eb3b172",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:53.069939+00:00",
+  "ended_at_utc": "2026-11-28T15:08:21.848173+00:00",
+  "request_sha256": "5a761f40b3e02d93e5a4889b41f2768170daa043e814c26156c981de8bd17ed3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 33667,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26256,
+    "cached_tokens": 12672,
+    "completion_tokens": 936
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport pickle,numpy as np\\nR=pickle.load(open('/tmp/blend_m102_records.pkl','rb'))\\nfor name,idx,p,q,y,_,tr in R:\\n if name not in ('gate','block5','random3.1'): continue\\n d=p-q; e=y-q; o=np.argsort(abs(d)); print('\\\\n',name); print(np.round(np.column_stack((idx,p,q,d,e))[o],5))\\nprint('\\\\nFixed scalar corrections: gate, other pooled, worst, worst non-gate')\\ndef ev(label,fn):\\n a=[abs(fn(p,q)-y) for _,_,p,q,y,_,_ in R]; m=[x.mean() for x in a]; return m[0],np.concatenate(a[1:]).mean(),max(m),max(m[1:]),label\\nG=[]\\nfor w in np.arange(-1.,.251,.05):\\n G.append(ev(('linear',round(w,2)),lambda p,q:q+w*(p-q)))\\n for t in [.015,.025,.04,.06,.09,.14,.22]:\\n  G.append(ev(('clip',round(w,2),t),lambda p,q:q+w*np.clip(p-q,-t,t)))\\n  G.append(ev(('soft',round(w,2),t),lambda p,q:q+w*(p-q)/(1+((p-q)/t)**2)))\\n  G.append(ev(('threshold',round(w,2),t),lambda p,q:q+w*np.sign(p-q)*np.maximum(abs(p-q)-t,0)))\\nprint('linear',sorted((g for g in G if g[-1][0]=='linear'),key=lambda g:g[2])[:5]); print('best worst',sorted(G,key=lambda g:g[2])[:12]); print('best pooled under gate',sorted((g for g in G if g[0]<=.038),key=lambda g:g[1])[:12]);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed polynomial-heavy blend -> H2 smooth-centered scalar correction; the archived 0.65 weight gives 0.0496 gate MAE and 0.0528 worst-slice MAE on the current batch.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A fixed convex combination of the frozen predictions can meet the current public scalar tolerance.\",\n    \"empirical_witness\": \"The gate MAE rises from 0.039759 at zero polynomial weight to 0.041019 at weight 0.15. Convexity rules out weights at or above 0.15; the reverse triangle inequality rules out MAE at or below 0.038 in [0, 0.15] if the mean absolute branch difference is below 0.0117, so the exact interval minimum will be checked before selecting a correction.\",\n    \"causal_blanket_diagnosis\": \"The scalar branches disagree most consequentially on specific held-out rows; trajectory reconstruction remains within tolerance.\",\n    \"sublated_pivot\": \"Test signed and bounded disagreement corrections while retaining the archived trajectory blend.\",\n    \"risk_kind\": \"scalar_blend_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the smooth branch alone\",\n      \"rejected_reason\": \"It improves pooled out-of-fold scalar MAE but misses the public gate at 0.039759.\"\n    }\n  ],\n  \"rationale\": \"Inspect per-row residuals and compare signed, clipped, and rational corrections on the existing held-out predictions before testing transfer on additional splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "33abd34bac805486caf653e75bb49db5ea7b2702540fecc0e786c848662e2aa4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28776.25,
+      "usage_known": true,
+      "prompt_tokens": 26256,
+      "cached_tokens": 12672,
+      "completion_tokens": 936
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "435f8756da784c939e0fb29257bfe2c9",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:01:38.291248+00:00",
+  "ended_at_utc": "2026-11-28T16:02:10.042506+00:00",
+  "request_sha256": "f339a0faddada0a106e867244e007cde0d819ba13b15dd713366450e9625e9fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30096,
+    "cached_tokens": 12672,
+    "completion_tokens": 1299
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/nonlin_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split(\\\"print('mix'\\\")[0])\\nfrom itertools import combinations,combinations_with_replacement\\nA=aff(w); p=w[:,0]*w[:,2]+w[:,1]*w[:,3]; B=np.c_[A,p]; ii=np.arange(52); jj=np.arange(52,72)\\nlin=fit(B[ii],y[ii]); print('base coef',lin)\\ndef score(pr):return np.mean(abs(pr[ii]-y[ii])),np.mean(abs(pr[jj]-y[jj]))\\nmodels=[]\\ndef var(name,design,starts):\\n def pred(q):\\n  a=design(q);return a@fit(a[ii],y[ii])\\n for q in starts:\\n  with np.errstate(all='ignore'):\\n   r=least_squares(lambda q:(pred(q)-y)[ii],q,max_nfev=350)\\n  models.append((*score(pred(r.x)),name,r.x,fit(design(r.x)[ii],y[ii])))\\nfor name,x in [('w'+str(i),w[:,i]) for i in range(4)]+[('pair',p),('norm',np.linalg.norm(w,axis=1)),('index',A@lin[:5])]+[(f'w{i}{sg:+}w{j}',w[:,i]+sg*w[:,j]) for i,j in combinations(range(4),2) for sg in [-1,1]]:\\n for scope in [0,1,2]:\\n  def des(q):\\n   d=1+q[0]**2*x*x\\n   return [np.c_[A,p/d],np.c_[A/d[:,None],p], B/d[:,None]][scope]\\n  var(f'rat {scope} {name}',des,[[.45],[1.25]])\\n for label,f in [('sin',np.sin),('tanh',np.tanh),('atan',np.arctan)]:\\n  var(f'add {label} {name}',lambda q:np.c_[B,f(q[0]*x+q[1])],[[1.25,0],[2.15,0]])\\nfor label,f in [('sin',np.sin),('tanh',np.tanh),('atan',np.arctan),('cube',lambda x:x**3),('rational',lambda x:x/(1+x*x))]:\\n for prior in [0,1]:\\n  def des(q):return np.c_[B, f(A@q[:5]+prior*p*q[5])]\\n  var('ridge '+label+str(prior),des,[np.r_[0,k*lin[1:5],k*lin[5]] for k in [.4,1.25,2.15]])\\nfor label,f in [('sin',np.sin),('tanh',np.tanh),('atan',np.arctan),('cube',lambda x:x**3),('rational',lambda x:x/(1+x*x))]:\\n var('sep '+label,lambda q:np.c_[B,f(w*q[0]+q[1])],[[1.25,0],[2.15,0]])\\nfor a,b,n,q,c in sorted(models,key=lambda r:r[0])[:20]: print('fit',round(a,6),round(b,6),n,np.round(q,4),np.round(c,4))\\nfor a,b,n,q,c in sorted(models,key=lambda r:r[1])[:8]: print('cv',round(a,6),round(b,6),n,np.round(q,4))\\nR=tr['traj']-A@fit(A[ii],tr['traj'][ii]); print('traj singular residual',np.linalg.svd(R,compute_uv=False)); print('traj coefs',fit(A[ii],tr['traj'][ii]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/nonlin_probe.py | tail -40\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine cosine-panel output → H2 compact nonlinear scalar readout; the cubic baseline gives 0.02324 scalar MAE and the affine trajectory gives 0.00406 on the 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine readout or an affine readout plus the symmetric quadratic pair is sufficient for the scalar.\",\"empirical_witness\":\"The affine and symmetric-pair scalar MAEs are 0.07743 and 0.05709, whereas adding the full cubic basis reduces held-out MAE to 0.02324.\",\"causal_blanket_diagnosis\":\"The remaining error is specific to the scalar readout: an affine readout of the same cosine-panel features predicts the trajectory to 0.00406 MAE.\",\"sublated_pivot\":\"Retain the calibrated cosine operator and search for a compact rational or nonlinear correction to the scalar readout.\",\"risk_kind\":\"scalar_grammar_incompleteness\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the full cubic as the final scalar readout\",\"rejected_reason\":\"It passes the public split, but uses 35 coefficients for 52 observations; a compact law could improve extrapolation.\"}],\"rationale\":\"Compare symmetric rational terms and nonlinear projections using fits restricted to the first 52 rows. Keep the passing cubic as a benchmark.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4fbd00e43e1bd6f474cbe40a14805ba36ab6a312d8e66c8dbe23796d91aeb542",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31749.91,
+      "usage_known": true,
+      "prompt_tokens": 30096,
+      "cached_tokens": 12672,
+      "completion_tokens": 1299
+    }
+  ]
+}

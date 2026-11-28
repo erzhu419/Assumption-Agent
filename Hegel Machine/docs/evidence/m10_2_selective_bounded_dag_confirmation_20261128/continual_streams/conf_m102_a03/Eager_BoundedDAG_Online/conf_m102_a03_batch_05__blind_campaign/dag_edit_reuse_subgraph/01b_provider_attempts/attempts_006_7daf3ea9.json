@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7daf3ea9b1ee4e29b975f805eb876848",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:25.551360+00:00",
+  "ended_at_utc": "2026-11-28T15:16:01.004269+00:00",
+  "request_sha256": "e75b4d52ff255075918cf7e27a70848aedc6033f51e6a2fb2cc4fd7a66248f22",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49281,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33788,
+    "cached_tokens": 12672,
+    "completion_tokens": 1512
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/_frozen_nodes/node_00.py; cat /holdout_task/public_asset_index.json | tail -90; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe_warp.py | sed -n '/^scalar/,/^amp/p'; cat >/tmp/probe_mixed.py <<'PY'\\nexec(open('/tmp/probe_dag.py').read().split('for d in (1,2,3,4):')[0])\\nfrom scipy.optimize import least_squares, minimize_scalar\\nrng=np.random.default_rng(5); folds=[(np.arange(52),np.arange(52,72))]; folds += [(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(rng.permutation(72),4)]\\ncr=list(it.combinations(range(4),2)); dg=[(j,j) for j in range(4)];\\ndef cal(k):return n._fit(np.c_[n._affine(u),np.sin(k*u)],v)\\nk=minimize_scalar(lambda k: np.mean((np.c_[n._affine(u),np.sin(k*u)]@cal(k)-v)**2),bounds=(2,4),method='bounded').x; c=cal(k); z=np.c_[n._affine(x),np.sin(k*x)]@c; print('B sinusoid',k,np.round(c,4),np.sqrt(np.mean((np.c_[n._affine(u),np.sin(k*u)]@c-v)**2)))\\nwarps={'sin':lambda x,k:np.sin(k*x),'tanh3':lambda x,k:np.tanh(k*x**3),'rat4':lambda x,k:x**3/(1+k*x**4),'rat2':lambda x,k:x/(1+k*x**2),'tanh':lambda x,k:np.tanh(k*x),'atan3':lambda x,k:np.arctan(k*x**3),'cos':lambda x,k:np.cos(k*x)}\\nresults=[]\\nfor name,h in warps.items():\\n for cross in ('none','xx','zz','ww','xw','xxww','xz','xxx','xxsq','xwdiag'):\\n  for outer in ('lin','tanh','sin'):\\n   for share in (True,False):\\n    if not share and outer!='lin':continue\\n    def design(k):\\n     w=h(x,k); pair=lambda a,b:np.column_stack([a[:,i]*b[:,j] for i,j in cr]); d=[n._affine(x),w];\\n     if cross in ('xx','xxww','xxx','xxsq'):d.append(pair(x,x))\\n     if cross=='xxx':d.append(mat(x,list(it.combinations(range(4),3))))\\n     if cross=='xxsq':d.append(x*x)\\n     if cross in ('ww','xxww'):d.append(pair(w,w))\\n     if cross=='zz':d.append(pair(z,z))\\n     if cross in ('xw','xz'):\\n      b=w if cross=='xw' else z; d += [pair(x,b),pair(b,x)]\\n     if cross=='xwdiag':d += [pair(x,x),x*w]\\n     return np.column_stack(d)\\n    err=[]; tr=[]; params=[]\\n    for i,j in folds:\\n     def calc(g,ret=False):\\n      k=g[0] if share else g[:4]; A=design(k); yp=y[i]; f=lambda v:v\\n      if outer!='lin':\\n       cap=g[-1]*np.max(abs(yp)); inv,f0=(np.arctanh,np.tanh) if outer=='tanh' else (np.arcsin,np.sin); yp=inv(yp/cap); f=lambda v:cap*f0(v)\\n      coef=n._fit(A[i],yp); pred=f(A@coef); return (pred,coef) if ret else pred[i]-y[i]\\n     start={'sin':2.8,'tanh3':1.,'rat4':.3,'rat2':.7,'tanh':1.4,'atan3':.8,'cos':2.8}[name]; kk=min([least_squares(calc,[q]*(1 if share else 4)+([1.25] if outer!='lin' else []),bounds=([.03]*(1 if share else 4)+([1.001] if outer!='lin' else []),[7.]*(1 if share else 4)+([10.] if outer!='lin' else [])),max_nfev=60) for q in (start,1.6*start)],key=lambda o:o.cost); pred,coef=calc(kk.x,True); err.append(np.mean(abs(pred[j]-y[j]))); tr.append(np.mean(abs(pred[i]-y[i]))); params.append(kk.x)\\n    results.append((max(err),np.mean(err),name,cross,outer,share,np.round(err,4),np.round(tr,4),np.round(params[0],3)))\\nfor r in sorted(results,key=lambda r:r[0])[:26]:print(r)\\nfor r in sorted(results,key=lambda r:r[6][0])[:10]:print('public',r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_mixed.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separate coordinate warps → sparse mixed-feature scalar readout; the best reported outer-link scalar holdout MAE is 0.04946, above 0.038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select an outer link on the public split alone\",\n      \"rejected_reason\": \"The observed errors remain above tolerance, and a single split cannot establish stability.\"\n    }\n  ],\n  \"rationale\": \"Compare raw, warped, and alignment-based interactions across five splits; estimate the nonlinear parameters using only each split’s training rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9e7f323338f1f8352cb72ea86d5de70407ad1d8f438f874e37682533393a7b33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35450.97,
+      "usage_known": true,
+      "prompt_tokens": 33788,
+      "cached_tokens": 12672,
+      "completion_tokens": 1512
+    }
+  ]
+}

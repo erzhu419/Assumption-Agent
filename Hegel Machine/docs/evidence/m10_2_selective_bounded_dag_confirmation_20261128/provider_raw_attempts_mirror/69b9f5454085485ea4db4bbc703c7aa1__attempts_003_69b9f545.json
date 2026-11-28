@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69b9f5454085485ea4db4bbc703c7aa1",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:54.644583+00:00",
+  "ended_at_utc": "2026-11-28T14:59:25.053451+00:00",
+  "request_sha256": "95dfc686b69d98694e3d576424296d513a151b332dcba58e677aafb2d5200393",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21417,
+    "cached_tokens": 12672,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle, importlib.util, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nq=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/conf_m102_a04_batch_00_solver.py'); old=importlib.util.module_from_spec(q);q.loader.exec_module(old)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; print('t telemetry',t,s['telemetry_vec']); o,k=old._align(s['panel_a']); print('align',o,k); x=(tr['x']-o)/k\\nlin=np.linalg.lstsq\\ndef fit(f,y):return lin(f,y,rcond=1e-10)[0]\\ndef one(f):return np.c_[np.ones(len(f)),f]\\ndef time(r):return -np.expm1(-t[:,None]*r)\\ndef res(r):\\n f=time(r); return (f@fit(f,tr['traj'][:52].T)-tr['traj'][:52].T).ravel()\\nr=least_squares(res,[.45,1.8],bounds=([.01,.5],[1.6,8])).x; print('rates',r,'std',np.std(res(r))); T=time(r); a=fit(T,tr['traj'].T).T; Y=np.c_[tr['y'],a]\\nu=s['panel_b']['u']; B=fit(one(u),s['panel_b']['v']); b=one(x)@B; print('B ortho',B[1:]@B[1:].T)\\nc=s['panel_c']; u=c['u']; maps={}\\nfor key in ('v1','v2'):\\n y=c[key]; fs={ 'sin':(lambda x,q:one(np.sin(q[0]*x)),[2]),'cos':(lambda x,q:one(np.cos(q[0]*x)),[2]),'sincos':(lambda x,q:one(np.c_[np.sin(q[0]*x),np.cos(q[0]*x)]),[2]),'sinlin':(lambda x,q:one(np.c_[x,np.sin(q[0]*x)]),[2]),'coslin':(lambda x,q:one(np.c_[x,np.cos(q[0]*x)]),[2]),'rational':(lambda x,q:one(np.c_[x,x*x/(1+q[0]*x*x)]),[.3]),'archivev2':(lambda x,q:one(np.c_[x,x*x,x*x/(1+q[0]*x*x)]),[.3]),'archivev1':(lambda x,q:one(x/(1+q[0]*abs(x))+q[1]*x),[.8,.0])}\\n scores=[]\\n for name,(f,init) in fs.items():\\n  def fun(q):\\n   F=f(u,q);return (F@fit(F,y)-y).ravel()\\n  p=least_squares(fun,init,max_nfev=200).x; score=np.std(fun(p)); scores.append((score,name,p,f))\\n for err,name,p,_ in sorted(scores,key=lambda zz:zz[0]): print('C',key,name,p,err)\\n err,name,p,f=min(scores,key=lambda zz:zz[0]);maps[key]=f(x,p)@fit(f(u,p),y)\\ndef report(name,F):\\n p=F[52:]@fit(F[:52],Y[:52]); print(name,np.round(np.mean(abs(p-Y[52:]),0),5),round(np.mean(abs((p[:,1:]-Y[52:,1:])@T.T)),5))\\nfor name,z in [('x',x),('b',b),('b_center',b-B[0])]+list(maps.items()):\\n report(name,one(z)); report(name+' diag2',one(np.c_[z,z*z])); report(name+' full2',one(np.c_[z,*[z[:,i]*z[:,j] for i,j in combinations_with_replacement(range(4),2)]])); report(name+' rational/trig',one(np.c_[z,z*z,z*z/(1+.3*z*z),np.sin(2*z),np.cos(2*z),np.tanh(z)]));\\nprint('amplitude range',Y.min(0),Y.max(0)); print('correlation',np.corrcoef(np.c_[Y,x,b,*maps.values()].T)[:3]); print('x range',x.min(0),x.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace archive transfer with operator identification and a rank-two temporal factorization; baseline worst 52/20 MAE is 0.070834.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The clear rank-two trajectory spectrum supports separating time from input dependence, while panel residuals can distinguish exact operators from decoys.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c525cf1becf1e283cae92b7c77182effcbb28afb66297ca7cb17297354e21ee6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30914.69,
+      "usage_known": true,
+      "prompt_tokens": 21417,
+      "cached_tokens": 12672,
+      "completion_tokens": 1240
+    }
+  ]
+}

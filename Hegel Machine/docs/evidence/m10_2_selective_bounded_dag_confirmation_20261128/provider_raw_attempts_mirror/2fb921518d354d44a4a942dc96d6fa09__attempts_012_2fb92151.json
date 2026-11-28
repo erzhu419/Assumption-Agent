@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2fb921518d354d44a4a942dc96d6fa09",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:13:06.307574+00:00",
+  "ended_at_utc": "2026-11-28T16:13:32.239544+00:00",
+  "request_sha256": "686b881193e63f0c9145cb610519e71bc70a45711f098c65020e1205243118e9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76476,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43007,
+    "cached_tokens": 12672,
+    "completion_tokens": 1041
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = Path('/tmp/hegel_continual_archive/conf_m102_a02_batch_06_solver.py').read_text()\\nstart = a.index('def _inverse(')\\nend = a.index('\\\\n    return z', start) + len('\\\\n    return z')\\ns = s[:s.index('def _inverse(')] + a[start:end] + '\\\\n\\\\n\\\\n' + s[s.index('def _operator('):]\\ns = s.replace('np.array([0, 1]), np.array([3, 3])', 'np.array([0, 1]), np.array([2, 3])')\\np.write_text('\\\"\\\"\\\"Calibrated cosine operator with separate scalar and temporal readouts.\\\"\\\"\\\"\\\\n' + s)\\nPY\\npython3 /holdout_task/validate_public_schema.py; python3 -I /holdout_task/validate_public_schema.py; cat >/tmp/stress13.py <<'PY'\\nimport numpy as np, pickle, runpy\\nm = runpy.run_path('/holdout_task/batch_solver.py'); st = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr = st['train']; z = m['_operator'](st['panel_b'])(m['_inverse'](tr['x'], m['_calibration'](st['panel_a']))); a = m['_affine'](z); ls = m['_ls']; S = m['_scalar']; y = tr['y']; t = tr['traj']; ix = np.arange(len(y));\\nfolds = [('52/20',ix[:52],ix[52:])]\\nfor seed in [41,73,19]:\\n    for k,j in enumerate(np.array_split(np.random.default_rng(seed).permutation(len(y)),4)):\\n        folds.append((str(seed)+'/'+str(k),np.setdiff1d(ix,j),j))\\nfor k in range(4):\\n    order = np.argsort(z[:,k]);\\n    for tag,j in [('low',order[:14]),('high',order[-14:])]:\\n        folds.append((f'latent-{tag}-{k}',np.setdiff1d(ix,j),j))\\nfor name,i,j in folds:\\n    ps = [S(z[i],z[j],y[i],mode=k) for k in ('full','sparse','rational')]; ps += [(ps[0]+ps[1])/2,(ps[0]+ps[2])/2]; te = abs(a[j]@ls(a[i],t[i])-t[j]); print(name,np.round([np.mean(abs(p-y[j])) for p in ps],5),'state mean/max time',round(te.mean(),5),round(te.mean(0).max(),5),flush=True)\\nout = m['solve_batch'](st); assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in out.values()); yq=out['y_hat']; last=out['state_pred'][:,-1]; np.testing.assert_array_equal(out['diagnostics_vec'],[yq.mean(),yq.std(),last.mean(),last.std()]); print('All output types and diagnostics verified.')\\nPY\\npython3 -I /tmp/stress13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic-only readout → calibrated panel-B cosine with a single-index sine; exploratory scalar MAE was 0.0176 on 52/20 and 0.0209 on the worst shuffled fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Restore the complete Newton inverse without changing the selected model. Verify the exact saved artifact in a clean process, then measure scalar and trajectory errors on the prescribed split, shuffled folds, and both tails of each latent coordinate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "dfe1c299e03b2788bfbadc131d38b2adb4dd189aad33af051ce8d38aa1fd2246",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26560.31,
+      "usage_known": true,
+      "prompt_tokens": 43007,
+      "cached_tokens": 12672,
+      "completion_tokens": 1041
+    }
+  ]
+}

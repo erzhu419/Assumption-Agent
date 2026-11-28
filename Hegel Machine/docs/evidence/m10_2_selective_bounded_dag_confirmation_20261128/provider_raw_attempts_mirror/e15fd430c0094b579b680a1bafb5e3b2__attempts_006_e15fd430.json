@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e15fd430c0094b579b680a1bafb5e3b2",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:52.916523+00:00",
+  "ended_at_utc": "2026-11-28T15:06:37.053902+00:00",
+  "request_sha256": "9db1233a25e453338f0281d46d59417e6ef9d7f3d9f5720e7fd3b5325e26f5e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45554,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33055,
+    "cached_tokens": 12672,
+    "completion_tokens": 1723
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/struct.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"print('times'\\\")[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nz=(x-a[0])/a[1]; w=A(z)@b; p=s['panel_c']; u=p['u']\\ndef phi(q,mode):\\n d=q.shape[1]; pairs=list(combinations(range(d),2)); cross=np.column_stack([q[:,i]*q[:,j] for i,j in pairs]); cube21=np.column_stack([q[:,i]**2*q[:,j] for i in range(d) for j in range(d) if i!=j]); cube111=np.column_stack([np.prod(q[:,ij],axis=1) for ij in combinations(range(d),3)])\\n return {'l':A(q),'s':q*q,'p':cross,'c':q**3,'m':cube21,'t':cube111,'4':q**4,'5':q**5,'6':q**6}\\ndef basis(q,mode):\\n tab=phi(q,mode); return np.column_stack([tab[k] for k in mode])\\ndef loo(f,y):\\n m=np.linalg.pinv(f); e=y-f@m@y; l=np.maximum(1-np.sum(f*m.T,axis=1),1e-8); return np.mean(abs(e/l[:,None]),axis=0), np.sqrt(np.mean(e**2,axis=0)), m@y\\nfor k in ('v1','v2'):\\n v=p[k]; print('C',k)\\n for mode in ['l','ls','lsc','lsc4','lsc45','lsc456','lc','lp','lsp','lpc','lspc','lt','lst','lstm','lscm']:\\n  f=basis(u,mode)\\n  if f.shape[1]>=len(f): continue\\n  score,rm,c=loo(f,v); print(mode,np.round(score,5),np.round(rm,5));\\n  if mode in ('lsc','lspc','lsc45'): print(' coeff',np.round(c.T,4))\\n def smooth(kval,kind):\\n  if kind=='cos': return (np.cos(u*kval)-1)/kval**2\\n  if kind=='rational': return u*u/(1+kval*u*u)\\n  if kind=='sin': return (np.sin(u*kval)-u*kval)/kval**3\\n  return np.tanh(u*kval)\\n for kind in ['cos','rational','sin','tanh']:\\n  for add in ['l','ls','lc']:\\n   vals=[(.08,0)]\\n   vals=[(loo(np.c_[basis(u,add),smooth(h,kind)],v)[0].mean(),h) for h in np.geomspace(.04,4,50)]\\n   print(kind,add,min(vals))\\nprint('regularized y'); rng=np.random.default_rng(42); splits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(20))];\\ndef eval_kernel(k):\\n vals=[]\\n for i,j in splits:\\n  f=A(z); qi,ri=np.linalg.qr(f[i]); m=np.eye(len(i))-qi@qi.T\\n  ka=k[np.ix_(i,i)]; kb=k[np.ix_(j,i)]\\n  outs=[]\\n  for lam in (1e-5,.0001,.001,.01,.05,.2,1):\\n   al=solve(m@ka@m+np.eye(len(i))*lam,m@y[i],assume_a='pos'); pred=f[j]@fit(f[i],y[i]-ka@al)+kb@al; outs.append(np.mean(abs(pred-y[j])))\\n  vals.append(outs)\\n return np.array(vals)\\ncands={}\\nfor name,q in [('z',z),('w',w)]:\\n for mode in ('lspcmt','lspcmt45','lscmt','lpct','lspmt','lspc','lsmt','lstmt','lspmt45'):\\n  f=basis(q,mode); cands[name+mode]=f@f.T\\n for d in (.4,.8,1.2,1.8,3):\\n  R=cdist(q,q)/d; cands[name+str(d)+'rbf']=np.exp(-.5*R**2); cands[name+str(d)+'matern']=(1+R+R**2/3)*np.exp(-R)\\n for d in (3,4,5,6): cands[name+str(d)+'poly']=(1+q@q.T)**d\\nout=[]\\nfor name,k in cands.items():\\n val=eval_kernel(k); col=np.argmin(val[1:].mean(0)); out.append((val[0,col],val[1:,col].mean(),val[1:,col].max(),name,col,val[0].min()))\\nfor r in sorted(out,key=lambda r:r[1])[:20]: print(r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic cubic → H2 sparse auxiliary-panel structure plus a regularized residual; best reported 52/20 readout MAE is 0.058285.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Single-index saturation\",\n      \"rejected_reason\": \"The fitted rational, tanh, and sine variants all miss the 0.038 gate.\"\n    }\n  ],\n  \"rationale\": \"Panel C’s second output is nearly diagonal-quadratic, while its first output has a substantial nonquadratic residual. Test separable and mixed terms by panel leave-one-out, and benchmark regularized readouts across repeated splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "86452e97fbefc6d38d1d2f1edb49756a1ef4114ea143f9627abd71c49fc3e09a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44136.19,
+      "usage_known": true,
+      "prompt_tokens": 33055,
+      "cached_tokens": 12672,
+      "completion_tokens": 1723
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "859772bd67e14cc7b1cb20924cf72cc0",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:51.758345+00:00",
+  "ended_at_utc": "2026-11-28T15:22:30.148497+00:00",
+  "request_sha256": "f9ecf4d485c43e93bc34b36b13902ee49b6711998d36af02668012501dcbaecb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39879,
+    "cached_tokens": 5504,
+    "completion_tokens": 1562
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/joint10.py <<'PY'\\nexec(open('/tmp/panel_search.py').read().split('C={')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nfrom itertools import combinations\\nnp.set_printoptions(precision=4,suppress=True)\\nU,S,V=np.linalg.svd(t[:52],full_matrices=False); Y=np.c_[y,t@V[:2].T]; scale=Y[:52].std(0); Y=Y/scale; i=np.arange(52);j=np.arange(52,len(y)); d0=4\\nprint('ref',a,b, 'telemetry',s['telemetry_vec']); print('scalar-state corr',np.corrcoef(Y.T))\\ndef score(P):\\n r=(P-Y)*scale;return np.mean(abs(r[j,0])),np.mean(abs(r[j,1:]@V[:2])),np.mean(abs(r[i,0])),np.mean(abs(r[i,1:]@V[:2]))\\ndef gram(w,mode):\\n c,d=(f(w) for f in funcs); dp=(c*d).sum(1); cross=np.einsum('ni,nj->nij',c,d).reshape(len(c),-1)\\n F=ones(np.c_[c,d, dp if mode!='cross' else cross]); T=ones(np.c_[c,d,cross if mode!='diag' else c*d]);return F,T\\nfor w in (z,x):\\n F,T=gram(w,'dot'); A=np.c_[F@ls(F[i],Y[i,0]),T@ls(T[i],Y[i,1:])];print('res corrs',np.corrcoef((A-Y).T),score(A))\\nfor name,fn in [('affine',lambda w:w),('tanh',np.tanh),('sin',np.sin),('soft',lambda w:w/(1+abs(w))),('warp',lambda w:w/(1+w*w))]:\\n for base in [z,x]:\\n  for mode in ['dot','cross','diag']:\\n   for reg in [.01,.06,.25]:\\n    def pred(p):\\n     w=base+fn(z@p[:16].reshape(4,4)+p[16:20])\\n     F,T=gram(w,mode); return np.c_[F@ls(F[i],Y[i,0]),T@ls(T[i],Y[i,1:])]\\n    def loss(p):return np.r_[(pred(p)[i]-Y[i]).ravel(),reg*p]\\n    fit=least_squares(loss,np.zeros(20),max_nfev=65); print('joint',name,base is x,mode,reg,score(pred(fit.x)),flush=True)\\n# Fit the archive's elementary nonlinearities directly in a shared spatial basis;\\n# scan common frequency and sharpness, using ridge to stabilize products.\\nR=[]\\nfor nm,w in [('z',z),('x',x),('Bz',z@B+h)]:\\n F,T=gram(w,'dot');\\n for k in [.4,.84,1.27,2.15,3.5,5.]:\\n  q=k*w\\n  for gn,g in [('soft',q/(1+abs(q))),('cos',np.cos(q)),('sin',np.sin(q)),('rat',q/(1+q*q)),('tanh',np.tanh(q)),('mix',np.c_[np.sin(q),np.cos(q),q/(1+abs(q))])]:\\n   for order in [0,1,2]:\\n    E=[g];\\n    if order>=1:E.append(np.einsum('ni,nj->nij',g,w).reshape(len(w),-1))\\n    if order==2:E.append(np.einsum('ni,nj->nij',g,g).reshape(len(w),-1))\\n    G=np.column_stack(E); G-=G[i].mean(0);G/=np.maximum(G[i].std(0),.02)\\n    for ridge in [.003,.03,.15,1.]:\\n     def calc(H,target):\\n      A=np.c_[H,G]; sc=np.maximum(np.sqrt(np.mean(A[i]**2,axis=0)),.02);A=A/sc; D=np.r_[np.full(H.shape[1],ridge*.03),np.full(G.shape[1],ridge)]; return A@np.linalg.solve(A[i].T@A[i]+np.diag(D),A[i].T@target[i]);\\n     Q=np.c_[calc(F,Y[:,0]),calc(T,Y[:,1:])]; R.append((*score(Q),nm,k,gn,order,ridge))\\nprint('grid y',sorted(R)[:10]);print('grid t',sorted(R,key=lambda a:a[1])[:10]);print('grid joint',sorted(R,key=lambda a:max(a[:2]))[:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint10.py > /tmp/joint10.log; grep -E 'ref|corr|grid' /tmp/joint10.log; grep '^joint' /tmp/joint10.log | sort -t '(' -k2,2g | head -10; grep '^joint' /tmp/joint10.log | sort -t ',' -k2,2g | head -10\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed calibrated features -> H2 fit a shared coordinate correction; the saved node has official scalar and trajectory CV MAEs of 0.084991 and 0.060842.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best single trajectory gate\",\"rejected_reason\":\"It was selected on the same split and did not improve the scalar readout.\"}],\"rationale\":\"Test whether a shared coordinate correction explains both residuals, and compare it against regularized nonlinear basis expansions without editing the saved baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4a618d3b7683a1aa22a04e216a069a1b1f55d6f0844dbd205dfebae7e37114a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38388.89,
+      "usage_known": true,
+      "prompt_tokens": 39879,
+      "cached_tokens": 5504,
+      "completion_tokens": 1562
+    }
+  ]
+}

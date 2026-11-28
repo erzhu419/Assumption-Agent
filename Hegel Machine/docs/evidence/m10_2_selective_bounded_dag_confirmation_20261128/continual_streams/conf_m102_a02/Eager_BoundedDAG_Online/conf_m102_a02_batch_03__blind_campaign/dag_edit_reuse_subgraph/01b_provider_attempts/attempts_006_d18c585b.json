@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d18c585b4371490cbabb9fcdce2b9999",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:50.753855+00:00",
+  "ended_at_utc": "2026-11-28T15:15:22.417687+00:00",
+  "request_sha256": "ab58998b00e923dacab979805dfd998c3317184734f42e9b59efe2ac46de26d7",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 46728,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33652,
+    "cached_tokens": 5504,
+    "completion_tokens": 1330
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_cal.py <<'PY'\\nexec(open('/tmp/probe_dag.py').read().split('for k in (')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\np=s['panel_a']; a=p['u']; v=p['v']; keep=np.linalg.norm(v-a,axis=1)<2.5; a=a[keep]; v=v[keep]; print('kept',len(a),np.where(~keep)[0]); print('non-outlier delta',np.max(abs(v-a),axis=0))\\nh=-np.expm1(-np.array([.4,1.8])[:,None]*t); w=np.linalg.lstsq(h.T,tr.T,rcond=None)[0].T; Y=np.c_[y,w]; n=52\\nbs=[np.arange(n,len(x))]+list(np.array_split(np.arange(len(x)),5))\\ndef scores(F,reg=0):\\n out=[]\\n for j in bs:\\n  i=np.setdiff1d(np.arange(len(x)),j); b=np.linalg.solve(F[i].T@F[i]+reg*np.eye(F.shape[1]),F[i].T@Y[i]) if reg else np.linalg.lstsq(F[i],Y[i],rcond=None)[0]; e=F[j]@b-Y[j]; out.append([abs(e[:,0]).mean(),abs(e[:,1:]@h).mean()])\\n return np.round(np.r_[out[0],np.max(out[1:],axis=0)],5)\\nfor d in [1,2,3]:\\n F=D(a,d); b=np.linalg.lstsq(F,v,rcond=None)[0]; e=v-F@b; H=F@np.linalg.pinv(F); print('A degree',d,'rmse',np.sqrt((e**2).mean()),'loo mae',np.mean(abs(e/np.maximum(1e-8,1-np.diag(H))[:,None]))); print(b.round(4))\\n xi=np.array([least_squares(lambda z:D(z[None],d)[0]@b-row, row,max_nfev=60).x for row in x]); print('inverse ranges',xi.min(0).round(3),xi.max(0).round(3),'fwd err',np.max(abs(D(xi,d)@b-x))); print('xi moments',xi.std(0).round(3))\\n for k in [1,2,3,4]:\\n  for reg in ([0] if k<3 else [.001,.01,.1]): print('scores',d,k,reg,scores(D(xi,k),reg))\\n if d==2:\\n  print('calibrated coefficients y | slow | fast',np.linalg.lstsq(D(xi,2),Y,rcond=None)[0].round(4)); np.save('/tmp/inva2.npy',xi)\\n# Compact residual ridges in inverse coordinates; compare the untouched last block.\\nfor coord in [x,np.load('/tmp/inva2.npy')]:\\n for j,z in enumerate(Y.T):\\n  A=D(coord,1); Q=D(coord,2); rng=np.random.default_rng(124)\\n  for key,fun in [('tanh',np.tanh),('sin',np.sin),('rat',lambda q:q/(1+q*q)),('poly3',lambda q:q**3)]:\\n   def f(p,ret=False):\\n    F=np.column_stack([Q,fun(A@p)]); c=np.linalg.lstsq(F[:n],z[:n],rcond=1e-9)[0]; e=F@c-z; return (e,c) if ret else e[:n]\\n   dr=np.linalg.lstsq(A[:n],z[:n],rcond=None)[0][1:]; dr/=np.linalg.norm(dr); starts=[np.r_[0,dr],np.r_[0,2*dr]]+list(rng.normal(size=(7,5))); out=min((least_squares(f,p,bounds=(-6,6),max_nfev=100) for p in starts),key=lambda r:r.cost); e,c=f(out.x,True); print('ridge',int(coord is x),j,key,np.mean(abs(e[:n])).round(5),np.mean(abs(e[n:])).round(5),out.x.round(3),round(c[-1],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_cal.py\\nsed -n '1,200p' /holdout_task/_frozen_nodes/node_00.py; grep -nE 'import|study|52|cv_' /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 nonlinear readouts in raw coordinates → H2 robust inversion of the panel-A forward map followed by compact readouts; raw quadratic public trajectory MAE is 0.091825.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep tuning smooth kernels in raw coordinates\",\"rejected_reason\":\"The explored raw-coordinate kernels miss the trajectory tolerance, and panel A shows gross contamination that can mask a useful calibration map.\"}],\"rationale\":\"Fit calibration after excluding gross panel outliers, measure leave-one-panel-row-out error, and test whether inversion makes both readouts simpler on held-out training rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a44bdf3c3d07ac9f51d34eb6734ceaffc63ea2d2c92202f8111c9dd0acf894f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32068.25,
+      "usage_known": true,
+      "prompt_tokens": 33652,
+      "cached_tokens": 5504,
+      "completion_tokens": 1330
+    }
+  ]
+}

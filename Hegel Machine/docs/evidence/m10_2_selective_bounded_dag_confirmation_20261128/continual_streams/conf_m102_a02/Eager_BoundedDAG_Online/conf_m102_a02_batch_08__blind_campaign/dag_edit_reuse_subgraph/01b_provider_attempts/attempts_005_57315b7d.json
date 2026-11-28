@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "57315b7df0e1448e809f12c7e90566c4",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:52.226744+00:00",
+  "ended_at_utc": "2026-11-28T15:47:22.329343+00:00",
+  "request_sha256": "4ea33b92d9cd7e115ede6ef5f00383e76bb241cbbf184ff29ce2efc0c05bd578",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41863,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28954,
+    "cached_tokens": 5504,
+    "completion_tokens": 1278
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_02.py <<'PY'\\n\\\"\\\"\\\"Separate calibrated endpoint and low-rank trajectory readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom sklearn.linear_model import Lasso\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _structures(z, g):\\n    cyclic = z * np.roll(g, 1, axis=1)\\n    affine = np.column_stack((np.ones(len(z)), g, z, cyclic))\\n    core = np.column_stack((affine, g[:, :2] * g[:, 2:]))\\n    values = np.column_stack((z, g))\\n    terms = []\\n    for degree in (2, 3):\\n        for inds in combinations_with_replacement(range(values.shape[1]), degree):\\n            terms.append(np.prod(values[:, inds], axis=1))\\n    for i in range(values.shape[1]):\\n        for j in range(i):\\n            for sign in (-1, 1):\\n                h = values[:, i] + sign * values[:, j]\\n                for weight in (0.5, 1.0, 2.0):\\n                    x = weight * h\\n                    terms.extend((np.sin(x), np.cos(x), np.tanh(x), x / (1 + x*x)))\\n    for x in values.T:\\n        for t in values.T:\\n            for weight in (0.5, 1.0, 2.0):\\n                terms.append(x / (1 + weight * t*t))\\n    return affine, core, np.column_stack(terms)\\n\\n\\ndef _endpoint(core, terms, train_idx, test_idx, y):\\n    fit = _fit(core[train_idx], np.column_stack((y, terms[train_idx])))\\n    target = y - core[train_idx] @ fit[:, 0]\\n    residual = terms - core @ fit[:, 1:]\\n    scale = np.maximum(residual[train_idx].std(axis=0), 1e-6)\\n    model = Lasso(alpha=0.001, max_iter=6000, tol=0.0003, fit_intercept=False)\\n    model.fit(residual[train_idx] / scale, target)\\n    return core[test_idx] @ fit[:, 0] + model.predict(residual[test_idx] / scale)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    observed = inputs['__input__']['train']\\n    calibrated = inputs['node_00']\\n    z = np.asarray(calibrated['z'], float)\\n    i, j = calibrated['train_idx'], calibrated['test_idx']\\n    g = np.asarray(inputs['node_01']['g'], float)\\n    y = np.asarray(observed['y'], float).reshape(-1)\\n    traj = np.asarray(observed['traj'], float)\\n    affine, core, terms = _structures(z, g)\\n    yp = _endpoint(core, terms, i, j, y)\\n    _, _, vt = np.linalg.svd(traj, full_matrices=False)\\n    modes = vt[:3]\\n    tp = (affine[j] @ _fit(affine[i], traj @ modes.T)) @ modes\\n    diagnostic = np.array([yp.mean(), yp.std(), tp[:, -1].mean(), tp[:, -1].std()])\\n    return {'y_hat': yp, 'state_pred': tp, 'diagnostics_vec': diagnostic}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cyclic endpoint basis → H2 sparse nonlinear corrections around the same core: endpoint MAE is 0.02646 on the prescribed split and 0.03308 on the worst of five shuffled folds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived interaction grammar is sufficient for the endpoint tolerance.\",\n    \"empirical_witness\": \"The archived endpoint MAE was 0.049983; fitting the expanded grammar within each fold yielded 0.02646 on the prescribed split and 0.03308 on the worst shuffled fold.\",\n    \"causal_blanket_diagnosis\": \"Changing only the endpoint basis improved prediction while both calibrations and the trajectory basis remained fixed; no unique generating term is established yet.\",\n    \"sublated_pivot\": \"Preserve the frozen calibrations and low-rank trajectory fit; add regularized nonlinear endpoint features.\",\n    \"risk_kind\": \"endpoint basis misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add only the strongest cubic interaction\",\n      \"rejected_reason\": \"Its prescribed-split MAE was 0.04237, above the 0.038 limit.\"\n    }\n  ],\n  \"rationale\": \"Write the measured improvement into the editable sink, preserve the archived trajectory calculation, and run the official evaluator in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c5a42cacaca91b8f9e2bc891aa937db8871e9748c648fc189ee8240846a25e60",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30101.29,
+      "usage_known": true,
+      "prompt_tokens": 28954,
+      "cached_tokens": 5504,
+      "completion_tokens": 1278
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88378704662c483b9be74569d3b978bb",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:43.135527+00:00",
+  "ended_at_utc": "2026-11-28T15:15:17.209594+00:00",
+  "request_sha256": "59035e0136c3d6a55a51bd9df4f815bc4d90229db843730be9e90f93b4f39ca6",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 46503,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32147,
+    "cached_tokens": 5504,
+    "completion_tokens": 1378
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe04.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; p=s['panel_a']; k=np.linalg.norm(p['v']-p['u'],axis=1)<2\\nc=np.array([np.linalg.lstsq(np.c_[np.ones(sum(k)),p['u'][k,i]],p['v'][k,i],rcond=None)[0] for i in range(4)]).T\\nx=(tr['x']-c[0])/c[1]; a=lambda z:np.c_[np.ones(len(z)),z]; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; rng=np.random.default_rng(164)\\nfs={'sin':np.sin,'tanh':np.tanh,'cubic':lambda z:z**3,'square':lambda z:z**2,'rat':lambda z:z/(1+z*z),'sqrt':lambda z:z/np.sqrt(1+z*z),'abs':np.abs,'rational2':lambda z:1/(1+z*z),'relu':lambda z:np.maximum(0,z)}\\ndef ridge(x,y,xt,kind,base=True,ns=12):\\n f=fs[kind]; A=a(x); AT=a(xt); b=A if base else A[:,:1]; bt=AT if base else AT[:,:1]; q=np.linalg.qr(b)[0]; yy=y-q@(q.T@y); d=fit(A,y)[1:]; d/=max(np.linalg.norm(d),1e-12)\\n def mat(w):return f(A@w)\\n def res(w):\\n  z=mat(w);z=z-q@(q.T@z);return yy-z*(z@yy/max(z@z,1e-20))\\n starts=[np.r_[o,m*d] for o in (0,.55,-.55) for m in (.8,2.2)]+[rng.normal(size=5) for _ in range(ns)]\\n best=min((least_squares(res,w,bounds=(-12,12),max_nfev=120) for w in starts),key=lambda r:r.cost)\\n D=np.c_[b,mat(best.x)]; C=fit(D,y); return D@C,np.c_[bt,f(AT@best.x)]@C,best.x\\nfor pn,kn in [('panel_b','v'),('panel_c','v1')]:\\n p=s[pn]; u=p['u']; Y=p[kn];print(pn,flush=True)\\n for j,y in enumerate(Y.T):\\n  r=[]\\n  for kind in fs:\\n   for base in ([True,False] if kind not in ('abs','relu','square','cubic') else [True]):\\n    yp,_,w=ridge(u,y,u,kind,base,3);r.append((round(np.sqrt(np.mean((yp-y)**2)),6),kind,base,np.round(w,3)))\\n  print(j,sorted(r,key=lambda t:t[0])[:8],flush=True)\\n# Test direct readout and shared trajectory modes, without validation labels in fitting.\\nY=tr['traj']; _,_,V=np.linalg.svd(Y[:52],full_matrices=False); V=V[:2]; scores=Y@V.T\\nfor j,y in enumerate([tr['y'],*scores.T]):\\n rr=[]\\n for kind in fs:\\n  for base in [True,False]:\\n   yp,yt,w=ridge(x[:52],y[:52],x[52:],kind,base,6);rr.append((round(abs(yp-y[:52]).mean(),5),round(abs(yt-y[52:]).mean(),5),kind,base,np.round(w,3)))\\n print('target',j,sorted(rr,key=lambda t:t[0]),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe04.py; cat /tmp/hegel_continual_archive/archive_manifest.json | head -70; grep -nE 'def|sin|tanh|exp' /tmp/hegel_continual_archive/*batch_00_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear panel A sensor map -> H2 affine panel A with nonlinear downstream features; calibrated quadratic CV MAE is 0.1610 for readout and 0.2050 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain nonlinear panel A inversion\",\n      \"rejected_reason\": \"The inlier affine residual is about 0.0001 per channel, and the fitted cubic makes negligible difference to downstream errors.\"\n    }\n  ],\n  \"rationale\": \"Compare sparse ridge grammars against panel B and C observations and fit the same families separately to training-only scalar and trajectory targets to identify which nonlinearities transfer to held-out rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f9de15aa33d323908de207744e75a4460f6c64b1378ce6b16ef12efaf2fbc176",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34072.99,
+      "usage_known": true,
+      "prompt_tokens": 32147,
+      "cached_tokens": 5504,
+      "completion_tokens": 1378
+    }
+  ]
+}

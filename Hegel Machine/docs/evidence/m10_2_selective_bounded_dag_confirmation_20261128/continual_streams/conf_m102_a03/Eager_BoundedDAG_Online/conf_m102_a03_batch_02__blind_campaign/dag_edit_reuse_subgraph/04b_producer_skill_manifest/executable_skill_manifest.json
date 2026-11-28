@@ -1,0 +1,117 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a03_batch_02_c2807a5ed55c",
+    "source_hash": "c2807a5ed55c63e6ff31f8868f6fdfdf83781d072a775059a3588149b7dd646a",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_a03_batch_02__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/grammar.py",
+        "archived_relpath": "producers/tmp__grammar.py",
+        "bytes": 2429,
+        "sha256": "56bdcfa87d5ff1c0dc7f04af843053328a24b44d80a38268e1225537d7ab418c"
+      },
+      {
+        "container_path": "/tmp/index.py",
+        "archived_relpath": "producers/tmp__index.py",
+        "bytes": 1706,
+        "sha256": "2eecfd75b9a308a2ce244f5914b36408fcd55b22b3e2f64bdfb278b954ebfe3e"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1335,
+        "sha256": "525b1574915a612d8e7a3f25ad0ccc120657d56b86b97a2528b10771d620d41f"
+      },
+      {
+        "container_path": "/tmp/stress_dag.py",
+        "archived_relpath": "producers/tmp__stress_dag.py",
+        "bytes": 1012,
+        "sha256": "2c4689941145c97337ea04265c6a8dfcb12c99ee436382015c3c1c555cab0368"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a03_batch_00_solver.py",
+        "bytes": 2165,
+        "sha256": "1cbb261bff4025eba9291fa441be191940cf9aff1fb6560a8524c6db774d70ee"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && cat _dag_spec.json && cat _frozen_nodes/node_00.py && cat test_dag_candidate.py && cat public_asset_index.json && ls -la /tmp/hegel_continual_archive && find /tmp/hegel_continual_archive -maxdepth 4 -type f | head -100 && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: o=pickle.load(f)\ndef show(x,depth=0):\n p='  '*depth\n if isinstance(x,dict):\n  for k,v in x.items(): print(p,k);show(v,depth+1)\n elif isinstance(x,(list,tuple)):\n  print(p,type(x),len(x));\n  if x and depth<4: show(x[0],depth+1)\n elif isinstance(x,np.ndarray): print",
+      "cd /holdout_task && tail -20 _frozen_nodes/node_00.py && cat /tmp/hegel_continual_archive/* && cat test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment' 2>&1 | head -20",
+      "tail -38 /tmp/hegel_continual_archive/*solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/probe.py <<'PY'\nimport runpy,pickle,numpy as np,itertools as it\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['z']; y=s['train']['y']; a=lambda x:np.c_[np.ones(len(x)),x]; fit=lambda x,y:np.linalg.lstsq(x,y,rcond=None)[0]\nblocks={'Z':z,'X':s['train']['x']}\nfor k,v in [('B','v'),('C','v1'),('C','v2')]:\n p=s['panel_'+k.lower()]; b=fit(a(p['u']),p[v]); print(k,v,",
+      "cat > /tmp/grammar.py <<'PY'\nexec(open('/tmp/probe.py').read().split('for name,x in blocks.items():')[0])\nfor name in ['Z','U']:\n x=blocks[name]; P=list(it.combinations_with_replacement(range(4),2))+list(it.combinations_with_replacement(range(4),3)); D=np.c_[a(x),*[np.prod(x[:,p],axis=1) for p in P]]; c=fit(D,y); print(name,'poly',[(p,round(float(v),4)) for p,v in sorted(zip(P,c[5:]),key=lambda t:-abs(t[1]))[:18]])\n for K in (5,9,15,25):\n  def pred(i,j):\n   A=D[:,:5]; pool=list(range(5,D.shape[1])); cols=list(range(5)); r=y[i]-A[i]@fit(A[i],y[i]);\n   for _ in range(K-5):\n    Q=np.linalg.qr(D[i",
+      "cd /holdout_task; head -45 test_dag_candidate.py; cat > /tmp/index.py <<'PY'\nexec(open('/tmp/probe.py').read().split('for k,v in')[0])\nfrom scipy.optimize import least_squares\np=s['panel_b']; b=fit(a(p['u']),p['v']); u=np.linalg.solve(b[1:].T,(z-b[0]).T).T\nB=z[:,0]*z[:,2]+z[:,1]*z[:,3]; L=np.c_[a(z),B]; y=s['train']['y']; t=np.arange(len(y)); order=np.random.default_rng(42).permutation(len(y)); sp=[(t[:52],t[52:])]+[(np.setdiff1d(order,J),J) for J in np.array_split(order,6)];\nfunc={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'rational':lambda v:v/(1+v*v),'log cosh':lambda v:np.logaddexp(v,-v)",
+      "cat > /holdout_task/node_01.py <<'PY'\n\"\"\"Calibrated scalar readout and reduced-rank trajectory prediction.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _readout(z):\n    return np.column_stack((_affine(z), z[:, 0]*z[:, 2] + z[:, 1]*z[:, 3]))\n\n\ndef _scalar(z, zt, u, ut, y):\n    l, lt = _readout(z), _readout(zt)\n    x, xt = _affine(u), _affine(ut)\n    q = np.linalg.qr(l, mode='reduced')[0]\n    residual = y - q @ (q.T @ y)\n\n    def loss(h):\n  "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__grammar.py",
+      "primary_producer_container_path": "/tmp/grammar.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 1872,
+        "sha256": "fad0239f2a673b3f1ee4fad5e0c6da5f4c787f915961e2c1ec39d769641f7d39",
+        "content_addressed_ref": "content_addressed_blobs/fad0239f2a673b3f1ee4fad5e0c6da5f4c787f915961e2c1ec39d769641f7d39.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c2807a5ed55c63e6ff31f8868f6fdfdf83781d072a775059a3588149b7dd646a",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cat > /holdout_task/node_01.py <<'PY'\n\"\"\"Calibrated scalar readout and reduced-rank trajectory prediction.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\n\n\nde",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c2807a5ed55c63e6ff31f8868f6fdfdf83781d072a775059a3588149b7dd646a",
+        "expected_candidate_sha256": "c2807a5ed55c63e6ff31f8868f6fdfdf83781d072a775059a3588149b7dd646a",
+        "computed_candidate_sha256": "c2807a5ed55c63e6ff31f8868f6fdfdf83781d072a775059a3588149b7dd646a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 1872
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c2807a5e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": []
+  }
+}

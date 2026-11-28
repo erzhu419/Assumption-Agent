@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09dbb5f65ebd4937bf6aacaa45580cef",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:12:28.971849+00:00",
+  "ended_at_utc": "2026-11-28T16:13:04.428765+00:00",
+  "request_sha256": "0556f7de9e28cb072c20113b85a48d9ec7b80410b9d3259da1a7858c313ddddd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73264,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42483,
+    "cached_tokens": 12672,
+    "completion_tokens": 1535
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; sed -n '2,36p' /tmp/hegel_continual_archive/conf_m102_a02_batch_06_solver.py > /holdout_task/batch_solver.py; cat >> /holdout_task/batch_solver.py <<'PY'\\n\\n\\ndef _operator(panel):\\n    from scipy.optimize import minimize_scalar\\n    u, v = [np.asarray(panel[k], dtype=float) for k in ('u', 'v')]\\n    def design(z, p):\\n        return np.column_stack((_affine(z), np.cos(p*z)))\\n    def loss(p):\\n        a = design(u, p)\\n        return np.mean((a @ _ls(a, v) - v)**2)\\n    p0 = min(np.linspace(.15, 6., 120), key=loss)\\n    p = minimize_scalar(loss, bounds=(max(.03, p0-.1), p0+.1), method='bounded').x\\n    w = _ls(design(u, p), v)\\n    return lambda z: design(z, p) @ w\\n\\n\\ndef _scalar(h, q, y, mode='full'):\\n    a, aq = _affine(h), _affine(q)\\n    j, k = np.triu_indices(h.shape[1]) if mode != 'sparse' else (np.array([0, 1]), np.array([3, 3]))\\n    d, dq = np.c_[a, h[:, j]*h[:, k]], np.c_[aq, q[:, j]*q[:, k]]\\n    rng = np.random.default_rng(42)\\n    starts = np.r_[np.eye(5)*.45, np.c_[np.zeros(4), -.45*np.eye(4)], rng.normal(0,.45,(6,5))]\\n    def design(b, x, p):\\n        w = x @ p\\n        if mode == 'rational':\\n            g = -(w*w)/(1+w*w)\\n            return np.c_[b, g[:, None]*x]\\n        return np.c_[b, np.sin(w)]\\n    def residual(p):\\n        z = design(d, a, p)\\n        return z @ _ls(z, y) - y\\n    fit = min((least_squares(residual, p, bounds=(-4,4), max_nfev=130) for p in starts), key=lambda x:x.cost)\\n    return design(dq, aq, fit.x) @ _ls(design(d, a, fit.x), y)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    op = _operator(study['panel_b'])\\n    calibration = _calibration(study['panel_a'])\\n    z = op(_inverse(np.vstack((tr['x'], study['test']['x'])), calibration))\\n    h, q = np.split(z, [len(tr['x'])])\\n    y = _scalar(h, q, np.asarray(tr['y']))\\n    state = _affine(q) @ _ls(_affine(h), tr['traj'])\\n    last = state[:, -1]\\n    diag = np.array([y.mean(), y.std(), last.mean(), last.std()]) if len(y) else np.zeros(4)\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': diag}\\nPY\\nhead -40 /holdout_task/batch_solver.py; python3 /holdout_task/validate_public_schema.py; python3 -I /holdout_task/validate_public_schema.py; cat >/tmp/stress13.py <<'PY'\\nimport numpy as np, pickle, runpy\\nm=runpy.run_path('/holdout_task/batch_solver.py'); st=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=st['train']; z=m['_operator'](st['panel_b'])(m['_inverse'](tr['x'], m['_calibration'](st['panel_a']))); a=m['_affine'](z); ls=m['_ls']; S=m['_scalar']; y=tr['y']; t=tr['traj']; all_=np.arange(len(y));\\nfolds=[('52/20',all_[:52],all_[52:])]\\nfor seed in [41,73,19]:\\n for k,j in enumerate(np.array_split(np.random.default_rng(seed).permutation(len(y)),4)):folds.append((str(seed)+'/'+str(k),np.setdiff1d(all_,j),j))\\nfor k in range(4):\\n j=np.argsort(z[:,k])[-14:]; folds.append(('latent-high-'+str(k),np.setdiff1d(all_,j),j))\\nfor name,i,j in folds:\\n ps=[S(z[i],z[j],y[i],mode=k) for k in ('full','sparse','rational')]; ps += [(ps[0]+ps[1])/2,(ps[0]+ps[2])/2]; state=a[j]@ls(a[i],t[i]); te=abs(state-t[j]);print(name,np.round([np.mean(abs(p-y[j])) for p in ps],5), 'state mean/max time',round(te.mean(),5),round(te.mean(0).max(),5))\\nPY\\npython3 -I /tmp/stress13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Panel-C correction → calibrated panel-B cosine with a single-index sine readout; exploratory scalar MAE is 0.0176 on 52/20 and 0.0209 on the worst shuffled fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\"option\": \"Replace the full quadratic basis with two interactions\", \"rejected_reason\": \"Keep the verified exploratory basis as the initial deliverable until the sparse candidate has been compared on shuffled and latent-tail splits.\"}\n  ],\n  \"rationale\": \"Save the strongest validated structure first. Run the required validator, then compare the full, sparse, and rational scalar branches on independent folds and audit the trajectory error at every timestamp.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a57ae9de293f05d57d0e6d2e559b0c92f16c02627efed12fc62f1d8ab710703b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36083.0,
+      "usage_known": true,
+      "prompt_tokens": 42483,
+      "cached_tokens": 12672,
+      "completion_tokens": 1535
+    }
+  ]
+}

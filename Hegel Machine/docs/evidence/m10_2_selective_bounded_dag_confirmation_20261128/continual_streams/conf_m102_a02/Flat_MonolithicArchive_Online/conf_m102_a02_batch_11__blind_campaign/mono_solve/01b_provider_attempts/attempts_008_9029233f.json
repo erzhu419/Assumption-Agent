@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9029233f46f74307b8cd9e51efd664c5",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:48.542026+00:00",
+  "ended_at_utc": "2026-11-28T15:56:19.689409+00:00",
+  "request_sha256": "b4071e1e38616f83d89ed9c6663816b315ca0f264ea4ea9ba8f966e1cd248fe8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36052,
+    "cached_tokens": 12672,
+    "completion_tokens": 1332
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ridge11.py <<'PY'\\nexec(open('/tmp/composite11.py').read().split('D={')[0])\\nfrom scipy.optimize import least_squares\\nfor k in [1.25,2.15]:\\n f=np.c_[aff(u),u*u,1-np.cos(k*u)]; w=ls(f,v); print('panel decomposition',k,np.std(f@w-v),np.round(w,5))\\ndef fitmodel(a,b,f,kind,variant):\\n X=z[a]; Y=y[a]; F=f[a]; Q=f[b]; d=X.shape[1]; pp=np.r_[np.zeros(F.shape[1]),.02 if variant else 0.]; scale=np.ones(d); scale[2]=0\\n def op(x,p):\\n  h=x@p[:d]+p[d]; k=p[d+1];\\n  if kind=='rat': g=1/(1+k*h*h)-1\\n  elif kind=='gauss':g=np.expm1(-k*h*h)\\n  elif kind=='sqrt':g=1/np.sqrt(1+k*h*h)-1\\n  elif kind=='cos':g=np.cos(k*h)-1\\n  elif kind=='tanh':g=np.tanh(k*h)\\n  elif kind=='sin':g=np.sin(k*h)\\n  elif kind=='soft':g=np.sqrt(1+k*h*h)-1\\n  else:g=h*np.exp(-k*h*h)\\n  return aff(x)*g[:,None] if variant else g[:,None]\\n def lin(p):\\n  g=op(X,p); dsg=np.c_[F,g]; reg=np.r_[np.zeros(F.shape[1]),np.full(g.shape[1],.012 if variant else .002)]; return np.r_[dsg,np.diag(reg)],np.r_[Y,np.zeros(len(reg))]\\n def loss(p):\\n  M,t=lin(p); return M@ls(M,t)-t\\n lim=np.array([3,3,1.00001,3,2,12.]); lo=-lim; lo[2]=.99999; lo[-1]=.035\\n init=[[-.5,0,1,0,0,1],[.5,0,1,0,0,1],[0,1,1,-1,0,1],[0,-1,1,1,0,1],[0,0,1,0,.7,1],[0,0,1,0,-.7,1],[-1,0,1,0,0,3]]\\n opt=min((least_squares(loss,p,bounds=(lo,lim),max_nfev=75) for p in init), key=lambda o:o.cost)\\n M,t=lin(opt.x); pred=np.c_[Q,op(z[b],opt.x)]@ls(M,t); return np.mean(abs(pred-y[b])),np.sqrt(2*opt.cost/len(a)),opt.x\\nbases={'aff':aff(z),'quad':quad(z),'paneleven':np.c_[aff(z),C],'zA':np.c_[aff(z),A]}\\nfor name,f in bases.items():\\n for kind in ['rat','gauss','sqrt','cos','tanh','sin','soft','bump']:\\n  for var in [0,1]:\\n   r=[fitmodel(k[:52],k[52:],f,kind,var) for k in splits[:4]]; print(name,kind,var, 'mae',np.round([t[0] for t in r],5),'train',round(r[0][1],5),'p',r[0][2].round(3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridge11.py > /tmp/ridge11.log &\\nPID=$!; wait $PID; head -30 /tmp/ridge11.log; echo BEST; grep 'mae' /tmp/ridge11.log | awk '{print $5,$0}' | sort -g | head -24\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (calibrated latents and a panel-C even correction) → H2 (sparse nonlinear scalar readout); the exploratory 52/20 MAE is 0.03479, but alternate splits reach 0.07658.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the quadratic-plus-panel-product fit\",\"rejected_reason\":\"It passes the prescribed split but has more than twice the MAE on an alternate split.\"}],\"rationale\":\"Test compact nonlinear readouts with profiled coefficients on several splits, and check whether the panel's even correction has a more constrained form that improves extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "321a3234e062cacac3eee3fc58130e7b70fe705d3e6a2e3af37c32bde995dfb2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31678.82,
+      "usage_known": true,
+      "prompt_tokens": 36052,
+      "cached_tokens": 12672,
+      "completion_tokens": 1332
+    }
+  ]
+}

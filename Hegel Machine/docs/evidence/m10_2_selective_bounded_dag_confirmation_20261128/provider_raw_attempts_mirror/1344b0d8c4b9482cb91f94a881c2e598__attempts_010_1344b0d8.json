@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1344b0d8c4b9482cb91f94a881c2e598",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:53.829755+00:00",
+  "ended_at_utc": "2026-11-28T15:04:28.670080+00:00",
+  "request_sha256": "9b320a2015fed7dfc3d95e872ed01901271011f986246c93fcad082673781fde",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 70459,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40786,
+    "cached_tokens": 12672,
+    "completion_tokens": 1361
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_00.py')\\ns = p.read_text().split('def _branch')[0]\\ns = s.replace('Fit the calibrated two-branch response and two-mode trajectory.', 'Predict scalar and trajectory responses from fitted calibration panels.')\\ns += '''def _quadratic(z):\\n    # The reference panel uses the four edges between coordinates {0, 2} and {1, 3}.\\n    return _ones(z[:, [0, 0, 1, 2]] * z[:, [1, 3, 2, 3]])\\n\\n\\ndef _cosine(u, v, z):\\n    def design(x, p):\\n        return _ones(np.c_[x, np.cos(p[0] * x + p[1:])])\\n\\n    def residual(p):\\n        f = design(u, p)\\n        return (f @ _ls(f, v) - v).ravel()\\n\\n    p = least_squares(residual, [1.27, 0., 0., 0., 0.], max_nfev=150).x\\n    return design(z, p) @ _ls(design(u, p), v)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    n = len(train['x'])\\n    offset, scale = _align(study['panel_a'])\\n    z = (np.vstack((train['x'], study['test']['x'])) - offset) / scale\\n    panel = study['panel_c']\\n    u = panel['u']\\n    c = _quadratic(z) @ _ls(_quadratic(u), panel['v1'])\\n    d = _cosine(u, panel['v2'], z)\\n    coordinate_branch = (z[:, :, None] * c[:, None, :]).reshape(len(z), 16)\\n    base = _ones(np.c_[c, d, coordinate_branch])\\n    scalar = np.c_[base, c * d]\\n    response = (d[:, :, None] * c[:, None, :]).reshape(len(z), 16)\\n    trajectory = np.c_[base, response]\\n    return {\\n        'y_hat': scalar[n:] @ _ls(scalar[:n], train['y']),\\n        'unprojected': trajectory[n:] @ _ls(trajectory[:n], train['traj']),\\n    }\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pathlib, pickle, numpy as np\\nroot=pathlib.Path('/holdout_task')\\ndef load(path):\\n    ns={}; exec(compile(path.read_bytes(),str(path),'exec'),ns); return ns['run_node']\\na,b,c=[load(root/name) for name in ['node_00.py','_frozen_nodes/node_01.py','_frozen_nodes/node_02.py']]\\ns=pickle.loads((root/'public_batch.pkl').read_bytes())[0]['study']; tr=s['train']; n=len(tr['x']); ids=np.arange(n)\\nrng=np.random.default_rng(92)\\nfolds={'ordered':ids[-20:]}\\nfolds.update({f'random{i}':v for i,v in enumerate(np.array_split(rng.permutation(n),4))})\\nfor j in range(tr['x'].shape[1]):\\n    order=np.argsort(tr['x'][:,j]); folds[f'axis{j}_tails']=np.r_[order[:5],order[-5:]]\\nfull=a({'__input__':s}); assert set(full)=={'y_hat','unprojected'}; assert all(np.isfinite(x).all() for x in full.values()); assert full['y_hat'].shape==(len(s['test']['x']),); assert full['unprojected'].shape==(len(s['test']['x']),len(s['eval_times']))\\nresults=[]\\nfor name,v in folds.items():\\n    r=np.setdiff1d(ids,v); sub={**s,'train':{k:tr[k][r] for k in ['x','y','traj']},'test':{'x':tr['x'][v]}}\\n    o=c({'node_00':a({'__input__':sub}),'node_01':b({'__input__':sub})})\\n    er=np.abs(o['y_hat']-tr['y'][v]); et=np.abs(o['state_pred']-tr['traj'][v]); scores=(er.mean(),et.mean(),et.mean(0).max()); print(name, np.round(scores,6)); results.append(scores)\\nprint('worst scalar, trajectory, individual horizon:',np.round(np.max(results,axis=0),6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived branch grammar → H2 sparse quadratic calibration with coordinate–branch interactions, diagonal products for y, and full cross-products for trajectories; exploratory worst-fold MAEs were 0.0085 and 0.0149.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use diagonal products for both outputs\",\"rejected_reason\":\"The trajectory worst-fold MAE was 0.1619 with diagonal products versus 0.0149 with full cross-products.\"}],\"rationale\":\"Implement the smallest tested feature families that pass both metrics, then verify the exact artifact with the public checker and an isolated process across ordered, randomized, and coordinate-tail holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "77a726558c732d2a3721e745624ec18d2177b4e618e052d2ab38c5803e5c6de4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35334.21,
+      "usage_known": true,
+      "prompt_tokens": 40786,
+      "cached_tokens": 12672,
+      "completion_tokens": 1361
+    }
+  ]
+}

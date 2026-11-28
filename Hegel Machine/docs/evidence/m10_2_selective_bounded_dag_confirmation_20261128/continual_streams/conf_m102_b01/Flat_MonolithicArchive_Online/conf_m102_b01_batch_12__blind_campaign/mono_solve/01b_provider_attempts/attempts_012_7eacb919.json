@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7eacb919953845d0b0f9ab70684790e6",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:47.594539+00:00",
+  "ended_at_utc": "2026-11-28T15:52:14.867136+00:00",
+  "request_sha256": "e957620b233fbb1bb0022603337c3501ca2fae245f2e52efac6efea23939d38c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63541,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37173,
+    "cached_tokens": 12672,
+    "completion_tokens": 1110
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_v01.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\na=s.index('def _c_basis('); b=s.index('def _interactions(',a)\\ns=s[:a]+'''def _c_basis(x):\\n    return _aff(np.tanh(1.75*x) + .30*np.sin(2.10*np.roll(x, 1, axis=-1)))\\n\\n\\ndef _coords(study, x):\\n    z = _cal(study['panel_a'], x)\\n    b = study['panel_b']\\n    w = _dead(z) @ _ls(_dead(b['u']), b['v'])\\n    c = study['panel_c']\\n    return w, _c_basis(w) @ _ls(_c_basis(c['u']), c['v1'])\\n\\n\\n'''+s[b:]\\ns=s.replace('w, q = _coords(study,','_, q = _coords(study,').replace('dy = _aff(np.column_stack((q, w, _interactions(q))))','dy = _aff(np.column_stack((q, _interactions(q).sum(axis=1))))').replace('dp = _aff(np.column_stack((q, w)))','dp = _aff(q)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\npath='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('batch_solver',path); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];x=tr['x'];w,q=m._coords(s,x);n=len(x);rng=np.random.default_rng(98)\\norders=[np.arange(n)]+[rng.permutation(n) for _ in range(16)]+[np.argsort(a) for a in (np.linalg.norm(w,axis=1),np.linalg.norm(x,axis=1),np.max(abs(q),axis=1),abs(tr['y']),abs(tr['traj'][:,-1]))]\\nresults=[]\\nfor ix in orders:\\n a,b=ix[:52],ix[52:];ss=dict(s,train={k:v[a] if k in ('x','y','traj') else v for k,v in tr.items()},test={'x':x[b]});p=m.solve_batch(ss);ey=abs(p['y_hat']-tr['y'][b]);ep=abs(p['state_pred']-tr['traj'][b]);results.append([ey.mean(),ep.mean(),ep.mean(0).max(),ey.max(),ep.max()])\\nr=np.array(results);print('Columns: scalar MAE, trajectory MAE, worst time MAE, peak scalar error, peak trajectory error');print('Prescribed:',r[0]);print('Worst random:',r[1:17].max(0));print('Worst tails:',r[17:].max(0));assert np.isfinite(r).all() and r.max()<.038\\np=m.solve_batch(s); y=p['y_hat']; z=p['state_pred'];assert y.shape==(36,) and z.shape==(36,8); assert np.isfinite(y).all() and np.isfinite(z).all();np.testing.assert_array_equal(p['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted channel mixing and readout skips -> H2 reverse cyclic mixing and tied opposing-channel interactions; the tested compact prototype has worst amplitude-tail MAEs of 0.00634 scalar and 0.00454 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the unconstrained baseline\",\n      \"rejected_reason\": \"The reverse cyclic model fits the panel near measurement precision and reduces worst amplitude-tail MAE for both outputs.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact model: its panel leave-one-out RMSE is 0.000105 and it improves both tail metrics despite a negligible prescribed-split trajectory change. Verify the saved artifact in an isolated Python process and rerun the required schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "cb45e160a9edf6b6546b897ac65fdfc240eb96fc7c2b7fbe980ae6b0bdfce511",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27800.22,
+      "usage_known": true,
+      "prompt_tokens": 37173,
+      "cached_tokens": 12672,
+      "completion_tokens": 1110
+    }
+  ]
+}

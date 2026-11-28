@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2c3d524b31a4f21bc6223d782e54579",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:40.167915+00:00",
+  "ended_at_utc": "2026-11-28T15:13:06.996846+00:00",
+  "request_sha256": "4772ed7e0ec1bbe5f41e8be6b6f325b1c57e013c824f51472d707debe9bd223b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70228,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42047,
+    "cached_tokens": 12672,
+    "completion_tokens": 1103
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/baseline_batch.py; cat >/tmp/verify_challengers.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\np=importlib.util.spec_from_file_location('candidate','/tmp/baseline_batch.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];z,b=m._coordinates(s,tr['x']);u=s['panel_b']['u'];v=s['panel_b']['v']; ba=m._design(z)@m._fit(m._design(u),v); n=len(z);rng=np.random.default_rng(20531);folds=[np.arange(52,n)]+[rng.choice(n,20,replace=False) for _ in range(40)];\\n# Also hold out the largest calibrated radii, an extrapolation stress test.\\nfolds.append(np.argsort(np.linalg.norm(z,axis=1))[-20:]);\\ndef predict(i,j,bc,kind,ss,bb,w,reg):\\n def sat(h):return np.tanh(h) if kind=='tanh' else h/np.sqrt(1+h*h)\\n x=np.c_[z,bc,sat(ss*z),sat(bb*bc)];x/=np.maximum(x[i].std(0),1e-10);a=x[i];te=x[j];\\n def ker(x,q):\\n  S=(1+x@q.T/x.shape[1])**2;return S+w*(m._kernel(x,q)-S)\\n T=tr['traj'][i];modes=np.linalg.svd(T,full_matrices=False)[2][:2];Y=np.c_[tr['y'][i],T@modes.T];K=ker(a,a);pred=ker(te,a)@cho_solve(cho_factor(K+reg*np.eye(len(i))),Y);return np.c_[pred[:,0],pred[:,1:]@modes]\\nP={}; pars=[('baseline',b,'tanh',2,2,1,.001),('tanh',b,'tanh',1,2.5,.15,.004),('rat',b,'rat',1,2,1,.004),('rat25',b,'rat',1,2.5,.15,.004),('affine',ba,'tanh',1,2.5,.15,.004)];\\nfor name,*p in pars:P[name]=[predict(np.setdiff1d(np.arange(n),j),j,*p) for j in folds]\\nP['ensemble']=[(a+b+c)/3 for a,b,c in zip(P['tanh'],P['rat'],P['rat25'])]; P['balanced']=[.5*a+.25*b+.25*c for a,b,c in zip(P['tanh'],P['rat'],P['rat25'])]\\nfor name,p in P.items():\\n vals=[]\\n for pred,j in zip(p,folds):\\n  d=abs(pred-np.c_[tr['y'][j],tr['traj'][j]]);vals.append([d[:,0].mean(),d[:,1:].mean(),d[:,-1].mean(),d[:,1:].mean(0).max()]);\\n a=np.array(vals);print(name,'52/20',np.round(a[0],5),'fresh mean',np.round(a[1:-1].mean(0),5),'fresh max',np.round(a[1:-1].max(0),5),'large radius',np.round(a[-1],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_challengers.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 common saturation scale → H2 distinct scales for calibrated and Panel B coordinates; exploratory challenger 52/20 MAEs are 0.02933 for y and 0.02872 for trajectories, with worst shuffled endpoint MAE 0.05348.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the lowest 52/20 error from the exploratory grid\",\"rejected_reason\":\"Some grid winners worsened shuffled endpoint errors; fresh splits and an extrapolation slice will test whether the improvement generalizes.\"}],\"rationale\":\"Compare a fixed shortlist against the archived baseline on fresh splits with fold-local scaling and temporal modes. An otherwise matched affine Panel B ablation tests whether the nonlinear operator contributes downstream.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a78a696466c9012ca2523a6a946df5ebe9b3e096e732313466588ee5c79709ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26827.28,
+      "usage_known": true,
+      "prompt_tokens": 42047,
+      "cached_tokens": 12672,
+      "completion_tokens": 1103
+    }
+  ]
+}

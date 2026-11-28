@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99ffe799ede24db6b4831fc8e43e5b27",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:06.286218+00:00",
+  "ended_at_utc": "2026-11-28T15:11:26.067286+00:00",
+  "request_sha256": "c890da1b44e1c9cff0c6c41792aeec87163ac817daaabc458f7909fd40db2086",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50067,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33798,
+    "cached_tokens": 5504,
+    "completion_tokens": 757
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I test_dag_candidate.py; python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nencoder=runpy.run_path('_frozen_nodes/node_00.py')['run_node']; sink=runpy.run_path('node_01.py')['run_node']\\ntrain=s['train']; x=train['x']; n=len(x); index=np.arange(n)\\ndef errors(q,panel=None):\\n    p=np.setdiff1d(index,q)\\n    task={**s,'train':{**train,**{k:train[k][p] for k in ('x','y','traj')}},'test':{**s['test'],'x':x[q]}}\\n    if panel is not None: task['panel_b']=panel\\n    r=sink({'__input__':task,'node_00':encoder({'__input__':task})})\\n    assert set(r)=={'y_hat','state_pred','diagnostics_vec'} and r['y_hat'].shape==train['y'][q].shape and r['state_pred'].shape==train['traj'][q].shape and r['diagnostics_vec'].shape==(4,)\\n    assert all(np.isfinite(a).all() for a in r.values())\\n    dy=np.abs(r['y_hat']-train['y'][q]); dt=np.abs(r['state_pred']-train['traj'][q]); return [dy.mean(),dt.mean(),dt.mean(0).max()]\\nfolds=np.array_split(np.random.default_rng(42).permutation(n),6)\\nedge=[np.argsort(sign*x[:,j])[-12:] for j in range(x.shape[1]) for sign in (-1,1)]\\npanel=s['panel_b']; q=np.arange(52,n)\\nchecks={'six_fold': np.max([errors(f) for f in folds],axis=0),'coordinate_tails': np.max([errors(f) for f in edge],axis=0),'panel_jackknife': np.max([errors(q,{k:np.delete(v,i,axis=0) for k,v in panel.items()}) for i in range(len(panel['u']))],axis=0)}\\nfor key,val in checks.items(): print(key,dict(zip(('readout_mae','trajectory_mae','worst_horizon_mae'),val))); assert np.max(val[:2])<0.038\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine alignment → frequency-profiled nonlinear panel alignment with bilinear readout and rank-two trajectories; official holdout MAEs are 0.008565 and 0.008972.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"The exact candidate passed the official gate with substantial margin. Verify it in an isolated process and stress-test coordinate tails, panel-row omissions, and each forecast horizon before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6288aed8d9a2fc3a5f19f5f9d96999dd4cbac55437ab5d1d87935ec2231d53ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19779.94,
+      "usage_known": true,
+      "prompt_tokens": 33798,
+      "cached_tokens": 5504,
+      "completion_tokens": 757
+    }
+  ]
+}

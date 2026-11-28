@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "72072090e9fe4eaba864ee2c4431f349",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:35.502083+00:00",
+  "ended_at_utc": "2026-11-28T15:45:23.354418+00:00",
+  "request_sha256": "5be6da39c0d5bee1ea552ca052787b86156644572604fb5a9ed7dc5b1ba0b603",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53092,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34321,
+    "cached_tokens": 12672,
+    "completion_tokens": 1494
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Reconstruct the calibrated branch features consumed by node_01.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    coefficients = []\\n    for k in range(u.shape[1]):\\n        d = u[i, k] - u[j, k]\\n        valid = np.abs(d) > 1e-8\\n        slope = np.median((v[i[valid], k] - v[j[valid], k]) / d[valid])\\n        residual = v[:, k] - slope * u[:, k]\\n        residual -= np.median(residual)\\n        good = np.abs(residual) < max(.001, 6 * np.median(np.abs(residual)))\\n        coefficients.append(_ls(_ones(u[good, k:k+1]), v[good, k]))\\n    offset, scale = np.array(coefficients).T\\n    return (x - offset) / scale\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.vstack((study['train']['x'], study['test']['x']))\\n    z = _calibrate(study['panel_a'], x)\\n    b, c = study['panel_b'], study['panel_c']\\n    linear = _ones(z) @ _ls(_ones(b['u']), b['v'])\\n    u, v1, v2 = c['u'], c['v1'], c['v2']\\n\\n    def first(w, k):\\n        return _ones(np.c_[w, w / (1 + k * np.abs(w))])\\n\\n    def residual(k):\\n        f = first(u, k)\\n        return np.sum((f @ _ls(f, v1) - v1)**2)\\n\\n    k = minimize_scalar(residual, bounds=(.15, 3.), method='bounded').x\\n    q = first(z, k) @ _ls(first(u, k), v1)\\n    i, j = np.triu_indices(z.shape[1], 1)\\n\\n    def second(w):\\n        return _ones(np.c_[w, np.cos(2.4 * w), np.sin(2.4 * w), w[:, i] * w[:, j]])\\n\\n    r = second(z) @ _ls(second(u), v2)\\n    return {'z': z, 'L': linear, 'Q': q, 'R': r, 'product': q, 'cosine': r}\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, sys, numpy as np\\nsys.path[:0] = ['/holdout_task', '/holdout_task/_frozen_nodes']\\nfrom node_00 import run_node\\nfrom node_01 import run_node as sink\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x=t['x']; n=len(x)\\nz=run_node({'__input__':s})['z'][:n]\\nslices={f'row_{i}': np.arange(n)[i:i+18] for i in range(0,n,18)}\\nslices.update({f'random_{seed}':np.random.default_rng(seed).permutation(n)[-20:] for seed in (19, 83, 107, 317, 445)})\\nslices['large_radius']=np.argsort((z*z).sum(axis=1))[-14:]\\nfor j in range(z.shape[1]):\\n    order=np.argsort(z[:,j]); slices[f'tail_{j}']=np.r_[order[:5],order[-5:]]\\nrows=[]\\nfor name, test in slices.items():\\n    train=np.setdiff1d(np.arange(n),test)\\n    fold=dict(s,train={key:t[key][train] for key in ('x','y','traj')},test={'x':x[test]})\\n    f=run_node({'__input__': fold})\\n    assert all(a.shape[0]==n and np.isfinite(a).all() for a in f.values())\\n    p=sink({'__input__':fold,'node_00':f})\\n    y=np.mean(abs(p['y_hat']-t['y'][test])); tr=np.mean(abs(p['state_pred']-t['traj'][test])); rows.append((y,tr,name))\\n    print(name, round(y,6), round(tr,6))\\nprint('worst_y',max(rows),'worst_traj',max(rows,key=lambda a:a[1]))\\nassert np.max(np.asarray([a[:2] for a in rows])) < .038\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration with polynomial v2 features → H2 affine calibration with mixed harmonic and pairwise v2 features; worst tested MAE is 0.006219 across three splits, versus 0.035677 on the baseline official response split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the accepted polynomial baseline\",\"rejected_reason\":\"Its official response MAE is close to the 0.038 cutoff, while the mixed basis improves both outputs across the three screening splits.\"}],\"rationale\":\"Promote the stronger six-field candidate without modifying the frozen sink. Verify the exact artifact in isolation and test it on additional random, contiguous, and covariate-tail splits not used to select the feature variant.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "adbf9250a6baccaf7dc45866b7c8f35aeb89cbf8fba571138be0e78c94d54db2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47850.53,
+      "usage_known": true,
+      "prompt_tokens": 34321,
+      "cached_tokens": 12672,
+      "completion_tokens": 1494
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca55d13fe3c14fd59ea09d7f25b4b11a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:43.565930+00:00",
+  "ended_at_utc": "2026-11-28T15:21:07.676399+00:00",
+  "request_sha256": "ef97eaec77f9492be5dbf873fa1efbe1c27e7bd86fe674373c105a5ed40531b0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44873,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30649,
+    "cached_tokens": 12672,
+    "completion_tokens": 932
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nstudy = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\na, b, c = [runpy.run_path(p) for p in ('node_00.py', '_frozen_nodes/node_01.py', '_frozen_nodes/node_02.py')]\\ntrain = study['train']\\nx, y, traj = [train[k] for k in ('x', 'y', 'traj')]\\nw = a['_calibrate'](study['panel_a']['u'], study['panel_a']['v'])\\nbp = study['panel_b']; ap = a['_powers'](x.shape[1])[:x.shape[1]+1]\\nwb = np.linalg.lstsq(a['_design'](bp['u'], ap), bp['v'], rcond=None)[0]\\ncal = a['run_node']({'__input__': copy.deepcopy(study)})\\nz = np.vstack((cal['z'], cal['zt'])); obs = np.vstack((x, study['test']['x']))\\nu = np.linalg.solve(wb[1:].T, (z - wb[0]).T).T\\nres = np.abs(a['_design'](u, w[0]) @ w[1] - obs)\\nprint('max inversion residual:', res.max(), 'finite:', np.isfinite(z).all())\\nassert np.isfinite(z).all() and res.max() < 1e-7\\nsplits = [(f'block_{lo}', np.arange(lo, min(lo+18, len(x)))) for lo in range(0,len(x),18)]\\nfor j in range(x.shape[1]):\\n    order = np.argsort(z[:len(x),j]); splits.append((f'axis_{j}_tails',np.r_[order[:8],order[-8:]]))\\nworst=np.zeros(2)\\nfor name, val in splits:\\n    ids=np.setdiff1d(np.arange(len(x)),val)\\n    s=copy.deepcopy(study); s['train']={k:train[k][ids] for k in ('x','y','traj')}; s['test']={'x':x[val]}\\n    s['train']['summary']=np.array([y[ids].mean(),y[ids].std(),traj[ids,-1].mean(),traj[ids,-1].std()])\\n    pred=c['run_node']({'node_00':a['run_node']({'__input__':s}), 'node_01':b['run_node']({'__input__':s})})\\n    err=np.array([np.mean(np.abs(pred['y_hat']-y[val])),np.mean(np.abs(pred['state_pred']-traj[val]))]); worst=np.maximum(worst,err)\\n    print(name, *err, 'worst horizon', np.max(np.mean(np.abs(pred['state_pred']-traj[val]),axis=0)))\\nprint('worst secondary slice:', *worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the coupled cubic replaces affine panel-A calibration; official holdout MAEs are 0.009032 for y and 0.006674 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The candidate passes the official gate. Stress-test the unchanged artifact on contiguous blocks and coordinate tails, and verify inversion accuracy on every supplied input.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "25b9dd0f86ae9b9888f4c49093f9af3a8b530f8d8d1aa12d18b0a2229f69fc37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24104.36,
+      "usage_known": true,
+      "prompt_tokens": 30649,
+      "cached_tokens": 12672,
+      "completion_tokens": 932
+    }
+  ]
+}

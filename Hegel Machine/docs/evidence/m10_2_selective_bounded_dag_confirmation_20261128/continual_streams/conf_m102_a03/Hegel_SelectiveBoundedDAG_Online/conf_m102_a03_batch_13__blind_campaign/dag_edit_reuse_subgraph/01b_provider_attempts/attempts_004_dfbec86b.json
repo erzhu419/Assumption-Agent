@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfbec86b355d41f6a315a5715b4f3828",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:20:15.705468+00:00",
+  "ended_at_utc": "2026-11-28T16:20:40.684255+00:00",
+  "request_sha256": "5df3d4e80a2a977c12740ad1570e2f477cf2fd3379516c449db17c4a1df0abb4",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 29215,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23645,
+    "cached_tokens": 5504,
+    "completion_tokens": 936
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '145,215p' /holdout_task/test_dag_candidate.py; sed -n '1,49p' /tmp/hegel_continual_archive/conf_m102_a03_batch_08_solver.py; sed -n '1,45p;65,74p' /tmp/hegel_continual_archive/conf_m102_a03_batch_06_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0; cat >/tmp/probe13.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; n=len(y)\\ndef fit(F,Y):return np.linalg.lstsq(F,Y,rcond=1e-10)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.c_[np.ones(len(x)),*[np.prod(x[:,p],axis=1) for k in range(1,d+1) for p in itertools.combinations_with_replacement(range(x.shape[1]),k)]]\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; print(p)\\n for k,v in s[p].items():\\n  if k=='u':continue\\n  print(k,'range',np.min(v,0),np.max(v,0))\\n  for d in (1,2,3):\\n   F=poly(u,d); R=F@fit(F,v)-v; print(d,np.percentile(np.abs(R),[25,50,90,100]))\\n  if p=='panel_a':\\n   for j in range(4):\\n    a=u[:,j]; b=np.roll(u,-1,axis=1)[:,j]; F=np.c_[np.ones(len(a)),a,b,a*b,a**3]; o=least_squares(lambda c:F@c-v[:,j],fit(F,v[:,j]),loss='soft_l1',f_scale=.003);print(j,o.x,np.percentile(abs(o.fun),[50,85,100]))\\nprint('state centered svd',np.linalg.svd(T-T.mean(0),compute_uv=False));print('trajectories minmax',T.min(0),T.max(0))\\nrng=np.random.default_rng(91); ids=rng.permutation(n); ii=ids[:54]; jj=ids[54:]\\nfor d in (1,2,3,4):\\n F=poly(x,d); scale=np.sqrt(np.mean(F[ii]**2,0)); F=F/scale; U,S,V=np.linalg.svd(F[ii],full_matrices=False); print('raw polynomial',d,[(a,np.mean(abs(F[jj]@(V.T@((S/(S*S+a))[:,None]*(U.T@np.c_[y,T][ii])))-np.c_[y,T][jj]),axis=0).round(4).tolist()) for a in (.0001,.01,.1,1.)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe13.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw affine state fit -> H2 panel-calibrated features and shared trajectory modes; public CV not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose a readout kernel immediately\",\"rejected_reason\":\"The calibration and state spectra may reveal an exact low-dimensional basis that generalizes better.\"}],\"rationale\":\"Measure panel fit residuals and the trajectory spectrum, and establish a held-out polynomial baseline against which to test recovered structure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "23ba199d9008a1f6e052fe0e6e65b9fe246babee8adae02821d2560650313d13",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25505.1,
+      "usage_known": true,
+      "prompt_tokens": 23645,
+      "cached_tokens": 5504,
+      "completion_tokens": 936
+    }
+  ]
+}

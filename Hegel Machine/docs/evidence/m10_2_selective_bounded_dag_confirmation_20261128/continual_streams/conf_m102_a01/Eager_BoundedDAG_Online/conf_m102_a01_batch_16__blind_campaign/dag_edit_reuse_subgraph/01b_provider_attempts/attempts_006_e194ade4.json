@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e194ade42616421e8112205d6b724595",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:41.681967+00:00",
+  "ended_at_utc": "2026-11-28T15:13:11.791432+00:00",
+  "request_sha256": "441fb7a6a1d85024621fd31377564c48d97dcec382414f867400643b77b1b797",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42978,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30036,
+    "cached_tokens": 5504,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/node03_models.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import minimize\\nR=pickle.load(open('/tmp/node03_nested.pkl','rb'))\\ndef design(row):\\n p,b,vt,y,tr=row;s=b[:,0];d=p[:,0]-s;S=b[:,1:]@vt;D=(p[:,1:]-b[:,1:])@vt; a=S[:,-1];k=S[:,0]-.2*a;f=D[:,-1];g=D[:,0]-.2*f\\n return y-s,dict(i=np.ones_like(s),d=d,s=s,s2=s*s,s3=s**3,a=a,k=k,f=f,g=g,sa=s*a,sk=s*k,a2=a*a,ak=a*k,k2=k*k,sd=s*d,ad=a*d,kd=k*d,sg=s*g,sf=s*f,ag=a*g,af=a*f,absd=abs(d),absf=abs(f),absg=abs(g),ds=d/(.035+abs(d)),df=d/(1+abs(f)/.025),dg=d/(1+abs(g)/.006),dsq=d/(1+(d/.05)**2),dp=np.maximum(d,0),dn=np.minimum(d,0),sn=np.minimum(s,0),sp=np.maximum(s,0))\\ngroups=['i','d','i d','i d s','i d sn sp','i d s s2 s3','i d s a k','i d s f g','i d f g','i d a k f g','i d s a k sa sk a2 ak k2','i d s a k f g sd ad kd sg sf ag af','i d ds df dg dsq','i d absd absf absg','i d absd s s2 s3 a k f g','i d dp dn f g','i d s s2 s3 a k f g sa sk a2 ak k2 sd ad kd sg sf ag af absd absf absg ds df dg dsq']\\nresults=[]\\nfor group in groups:\\n keys=group.split()\\n for lam in [1,10,30,80]:\\n  for robust in [False,True]:\\n   scores=[]\\n   for train,valid in R:\\n    data=[design(row) for row in train]; r=np.concatenate([x[0] for x in data]);F=np.column_stack([np.concatenate([x[1][k] for x in data]) for k in keys]);sc=np.maximum(np.sqrt(np.mean(F**2,axis=0)),1e-8);X=F/sc;w=np.linalg.solve(X.T@X+lam*np.eye(len(keys)),X.T@r)\\n    if robust:\\n     def obj(w):\\n      e=(X@w-r)/.025; q=np.sqrt(1+e*e); return .025**2*np.sum(q-1)+.5*lam*(w@w),.025*(X.T@(e/q))+lam*w\\n     w=minimize(obj,w,jac=True,method='BFGS',options={'gtol':1e-9}).x\\n    v,D=design(valid);scores.append(np.mean(abs(v-np.column_stack([D[k] for k in keys])@(w/sc))))\\n   results.append((scores,group,lam,robust,w/sc))\\nfor key in [lambda r:np.mean(r[0][:4])+.3*max(r[0][:4]),lambda r:r[0][-1]]:\\n print('RANK');\\n for scores,group,lam,robust,w in sorted(results,key=key)[:12]: print(np.round(scores,5),group,lam,robust,np.round(w,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/node03_models.py; cat /holdout_task/_frozen_nodes/node_00.py; find /tmp/hegel_continual_archive -maxdepth 2 -type f -printf '%f\\\\n' | sort\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 constant scalar blend → H2 compact, regularized residual correction; the smooth baseline has 0.042628 official MAE and 0.093472 worst development-fold MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit coefficients directly to official residuals\",\n      \"rejected_reason\": \"That would train on the evaluation labels rather than test whether calibration transfers.\"\n    }\n  ],\n  \"rationale\": \"Compare signed, rational, and state-conditioned corrections with coefficients fitted only on inner-fold predictions. Rank by development performance and report the official split separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "014b095ebcf7f4e2324ccd58f3e6c1150f032feae5e48bf61b940c9f3fdd2dd3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30107.45,
+      "usage_known": true,
+      "prompt_tokens": 30036,
+      "cached_tokens": 5504,
+      "completion_tokens": 1191
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a583433bd064df7b787f90cf58440ed",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:30.558398+00:00",
+  "ended_at_utc": "2026-11-28T15:30:02.075747+00:00",
+  "request_sha256": "e8edafb4f07bffe58d54d0e32b67833dd1a0fea781bdc509232b83203ef12497",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40597,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29329,
+    "cached_tokens": 12672,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/spatial.py <<'PY'\\nexec(open('/tmp/graph.py').read().split(\\\"print('B'\\\")[0])\\nfrom scipy.optimize import least_squares\\nT=s['eval_times']; tr=s['train']['traj']; y=s['train']['y']; n=52\\nprint('y vs observed state residual',np.std(y-D(tr)@ls(D(tr),y)))\\nprint('summary',s['train']['summary'],[y.mean(),y.std(),tr[:,-1].mean(),tr[:,-1].std()]); print('z ranges',z.min(0),z.max(0))\\nU,S,V=np.linalg.svd(tr,full_matrices=False)\\ndef basis(p, kind):\\n h=-np.expm1(-T[:,None]*p[:2]); k=p[2] if len(p)>2 else 1\\n f={'sin':np.sin(k*T),'exp':-np.expm1(-k*T),'lin':T,'const':np.ones(len(T)),'quad':h[:,0]*h[:,1],'dexp':T*np.exp(-k*T),'rat':T/(1+k*T)}\\n return np.c_[h,f[kind]]\\nfor kind in ['sin','exp','lin','const','quad','dexp','rat']:\\n def res(p):\\n  H=basis(p,kind); return (H@ls(H,tr[:52].T)-tr[:52].T).ravel()\\n ft=min([least_squares(res,np.array([a,b,c]),bounds=([.02,.02,.02],[8,8,8]),max_nfev=180) for a,b,c in [(1.8,.45,.2),(1.2,.25,2.8),(3,.9,1.7)]],key=lambda r:np.linalg.norm(r.fun));print(kind,np.round(ft.x,5),np.std(ft.fun))\\nprint('y vs time PC correlations',np.corrcoef(np.c_[y,U[:,:3]].T)[0]); print('first 12 y and scores',np.round(np.c_[y,U[:,:3]*S[:3]][:12],3))\\nops.update(I=lambda x:(x-b[0])@np.linalg.inv(b[1:]));\\nbase={'z':z,'x':x,'bz':ops['B'](z),'iz':ops['I'](z),'bx':ops['B'](x),'ix':ops['I'](x)}\\nfor key,v in list(base.items()):\\n for name,w in [('tanh',np.tanh(1.25*v)),('sine',np.sin(1.25*v)),('rat',v/(1+.22*v*v)),('softsign',v/(1+.22*abs(v))),('sq',v*v)]:base[key+name]=w\\nY=np.c_[y,U[:,:3]*S[:3]]; Y/=Y[:n].std(0)\\nr=[]\\nfor name,v in base.items():\\n P,Q=ops['P'](v),ops['Q'](v)\\n for groups in [(('P',P),('Q',Q)),(('v',v),('P',P),('Q',Q)),(('P',P),('Q',Q),('PQ',P*Q)),(('PQsum',np.sum(P*Q,1)[:,None]),('P',P),('Q',Q)),(('P',P),('Q',Q),('PQall',(P[:,:,None]*Q[:,None,:]).reshape(-1,16))]:\\n  mat=D(np.column_stack([val for _,val in groups])); coef=ls(mat[:n],Y[:n]); er=abs(mat@coef-Y);r.append((name,','.join(key for key,_ in groups),np.round(er[:n].mean(0),3),np.round(er[n:].mean(0),3)))\\nfor j in range(4):print('MODE',j,*sorted(r,key=lambda t:t[2][j]+t[3][j])[:7],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/spatial.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear readout of direct panel compositions -> H2 transformed panel inputs and a third temporal mode; the best tested direct composition has 52/20 MAE 0.40028 for the response and 0.26521 for the trajectory across separate candidates.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A linear or bilinear readout of the tested direct panel compositions suffices.\",\"empirical_witness\":\"Direct compositions miss the 0.038 gate by an order of magnitude, and the third trajectory singular value is 0.313 versus 0.046 for the fourth.\",\"causal_blanket_diagnosis\":\"The panel probes identify the operators but not any transformation at the intervening cut or the full temporal readout.\",\"sublated_pivot\":\"Keep the calibrated panel operators, test transformed inputs and inverse B, and separate the trajectory into observable temporal modes.\",\"risk_kind\":\"model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separating temporal modes gives more than one spatial target, making it easier to distinguish an upstream transformation from a missing downstream term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "8a1835340057c118c2a0266f43ac59d63521636ed787727adeaa5ea37e91055c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31515.69,
+      "usage_known": true,
+      "prompt_tokens": 29329,
+      "cached_tokens": 12672,
+      "completion_tokens": 1305
+    }
+  ]
+}

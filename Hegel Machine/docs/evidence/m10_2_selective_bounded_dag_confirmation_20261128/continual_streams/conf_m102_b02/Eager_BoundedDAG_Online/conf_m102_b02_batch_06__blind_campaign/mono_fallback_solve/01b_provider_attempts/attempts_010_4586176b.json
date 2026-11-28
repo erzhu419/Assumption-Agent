@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4586176b0f02422fb61285a815ebb835",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:31.042964+00:00",
+  "ended_at_utc": "2026-11-28T16:00:17.820567+00:00",
+  "request_sha256": "c2f5d4da7767ec5719fc5a9be9e00f64dc33a87250415f14845bb280df609958",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35682,
+    "cached_tokens": 12672,
+    "completion_tokens": 2125
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/sparse_heads.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations,product\\nimport importlib.util\\np='/tmp/hegel_continual_archive/conf_m102_b02_batch_05_solver.py'; q=importlib.util.spec_from_file_location('old',p); old=importlib.util.module_from_spec(q); q.loader.exec_module(old)\\ndef coords(s,x):\\n z=old.coords(s,x); p=s['panel_b']; h=lambda a:D(np.sign(a)*np.maximum(abs(a)-.35,0)**1.5); b=h(z)@fit(h(p['u']),p['v']); p=s['panel_c']; f=lambda a:D(a*np.roll(a,-1,axis=1)); c=f(z)@fit(f(p['u']),p['v1']); g=lambda a:D(np.c_[a,np.cos(1.25*a)]); d=g(z)@fit(g(p['u']),p['v2']);return z,b,c,d\\n\\ndef build(z,b,c,d):\\n F=[]; N=[]; G=[]\\n def add(a,n,g):\\n  a=np.asarray(a); a=a[:,None] if a.ndim==1 else a\\n  F.extend(a.T);N.extend([str(n)+':'+str(j) for j in range(a.shape[1])]);G.extend([g]*a.shape[1]);\\n def uni(a,n,g):\\n  add(a,n,g)\\n  for k in [.6,1.25,2.,3.,4.]:\\n   for fun,fn in [('s',np.sin),('c',np.cos),('h',np.tanh),('r',lambda u:u/(1+u*u)),('e',erf)]:add(fn(k*a),(n,fun,k),g)\\n  for k in [0,.15,.22,.35,.5,.7]:\\n   for pw in [1,1.5,2]:\\n    h=np.maximum(abs(a)-k,0)**pw;add(h,(n,'even',k,pw),g);add(h*np.sign(a),(n,'odd',k,pw),g)\\n for n,a in zip('zbcd',[z,b,c,d]):uni(a,n,0 if n in 'zb' else 3)\\n for k in [-2.,-1.25,-1.,-.7,-.3,.22,.3,.7,1.,1.25,2.]:\\n  uni(z+k*b,('zb',k),1)\\n  for i in range(4):uni(z[:,i,None]+k*b,('allzb',i,k),2)\\n for n,a in [('zz',z),('bb',b),('cc',c),('dd',d)]:\\n  for k in [-1.25,-1.,-.7,.7,1.,1.25]:\\n   Q=np.column_stack([a[:,i]+k*a[:,j] for i,j in combinations(range(4),2)]);uni(Q,(n,k),2 if n in ['zz','bb'] else 4)\\n for k in [-1.,-.22,.22,1.]:\\n  for n,a in [('c',c),('d',d)]:uni(z+k*a,('z'+n,k),4);uni(b+k*a,('b'+n,k),4)\\n for n,a,h in [('zz',z,z),('zb',z,b),('bb',b,b),('zc',z,c),('zd',z,d),('bc',b,c),('bd',b,d)]:\\n  for i,j in product(range(4),repeat=2):\\n   if n in ['zz','bb'] and i>j:continue\\n   v=a[:,i]*h[:,j];add(v,(n,i,j,'prod'),1 if n in ['zz','zb','bb'] else 4)\\n   for k in [.22,1.25]:\\n    for u,ln in [(a[:,i],'a'),(h[:,j],'b')]:\\n     add(v*u,(n,i,j,ln,'3prod'),2); add(v/(1+k*u*u),(n,i,j,ln,'rprod',k),2);add(a[:,i]/(1+k*h[:,j]**2),(n,i,j,'quot',k),2)\\n return np.array(F).T,np.array(N),np.array(G)\\n\\ndef run(F,N,G,base,Y,folds):\\n opts=[]\\n for gr in [0,1,2,3,4]:\\n  for bias in [0,.5]:\\n   for order in [0,1,2]:\\n    scores=[]\\n    for a,i in folds:\\n     ind=np.where(G<=gr)[0];Q=F[:,ind];A=base[:,:1] if order==0 else base[:,:5] if order==1 else base; A=A.copy(); P=np.linalg.pinv(A[a]); Q=Q-A@(P@Q[a]); norm=np.linalg.norm(Q[a],axis=0);good=norm>1e-5; Q=Q[:,good]/norm[good];ind=ind[good]; prior=(1+bias*G[ind]); pred=[];names=[];es=[]\\n     for yy in Y.T:\\n      init=A@(P@yy[a]);y=(yy-init)[a];t=Q[a];sel=[];r=y.copy();oo=[]\\n      for it in range(18):\\n       mag=abs(t.T@r)/prior;mag[sel]=-1; j=np.argmax(mag);sel.append(j);w=fit(t[:,sel],y);r=y-t[:,sel]@w;pp=init+Q[:,sel]@w;oo.append(pp[i]);\\n      pred.append(oo);names.append(N[ind[sel]]);es.append(np.sqrt(np.mean(r*r)))\\n     pred=np.array(pred); scores.append(abs(pred-Y[i].T[:,None,:]).mean(2));\\n    E=np.array(scores);opts.append((E,gr,bias,order,names))\\n for l in range(2):\\n  rows=[(E[:,l,j].mean(),E[0,l,j],E[:,l,j].max(),gr,b,o,j+1) for E,gr,b,o,_ in opts for j in range(E.shape[2])];print('sparse',l,'mean',sorted(rows)[:8]);print('gate',sorted(rows,key=lambda r:r[1])[:6]);\\n  best=min(rows);print('selected',next(n[l][:best[-1]] for _,g,b,o,n in opts if (g,b,o)==best[3:6]))\\nif __name__=='__main__':\\n tr=s['train']; z,b,c,d=coords(s,tr['x']);T=tr['traj'];y=tr['y']; U,S,V=np.linalg.svd(T,full_matrices=False); Y=np.c_[y,(T@V[0])*V[0,-1]]; rng=np.random.default_rng(777); folds=[(np.arange(52),np.arange(52,72))]+[(q[:52],q[52:]) for q in (rng.permutation(72) for _ in range(5))];\\n F,N,G=build(z,b,c,d); print(F.shape,flush=True); base=D(np.c_[z,b]); print('base coef',fit(base,Y)); run(F,N,G,base,Y,folds)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse_heads.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: dense kernel heads -> H2: sparse algebraic and nonlinear readouts on calibrated coordinates; best fixed-split MAEs remain 0.07466 for y and 0.04627 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the dense kernel search\",\n      \"rejected_reason\": \"Previous kernels improved one split without consistent gains; sparse terms can represent the proposed pairwise and rational mechanisms more directly.\"\n    }\n  ],\n  \"rationale\": \"Test sparse readouts with coordinate sums and differences, threshold powers, triple products, and rational terms. Fit and select terms separately inside each fold, and evaluate the scalar and dominant trajectory heads independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "04b94b877a138e4d8b5158bab5381df84c007229340c97640c719e3411b17c46",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47876.42,
+      "usage_known": true,
+      "prompt_tokens": 35682,
+      "cached_tokens": 12672,
+      "completion_tokens": 2125
+    }
+  ]
+}

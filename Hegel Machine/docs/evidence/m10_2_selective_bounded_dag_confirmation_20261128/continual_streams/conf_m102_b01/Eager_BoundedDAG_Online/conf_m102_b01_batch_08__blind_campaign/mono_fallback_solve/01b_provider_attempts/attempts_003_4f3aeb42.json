@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f3aeb42044047ce927cb9b711a69319",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:30.414251+00:00",
+  "ended_at_utc": "2026-11-28T15:42:48.860330+00:00",
+  "request_sha256": "71810fa4ee82fc72385019c9d857f0b73bff71d1acedd7ffc7d5432fd79b28b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21161,
+    "cached_tokens": 12672,
+    "completion_tokens": 581
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec']); tr=s['train']; print('summary',tr['summary'],'y quantiles',np.quantile(tr['y'],[0,.25,.5,.75,1])); print('traj centered sv',np.linalg.svd(tr['traj']-tr['traj'].mean(0),compute_uv=False)); print('traj means',tr['traj'].mean(0)); print('x quantiles',np.quantile(tr['x'],[0,.5,1],axis=0)); print('correlations x,y,traj0,last', np.corrcoef(np.c_[tr['x'],tr['y'],tr['traj'][:,[0,-1]]].T))\\nfor k in ('panel_a','panel_b','panel_c'):\\n u=s[k]['u']; U=np.c_[u,np.ones(len(u))]; print(k, 'u ranges',u.min(0),u.max(0));\\n for j,v in s[k].items():\\n  if j=='u':continue\\n  B=np.linalg.lstsq(U,v,rcond=None)[0]; e=np.linalg.norm(v-U@B,axis=1); print(j,B,'resid quantiles',np.quantile(e,[0,.25,.5,.75,.9,1])); print('first 3 u,v',np.c_[u[:3],v[:3]])\\nPY\\n tail -16 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (transferred baseline) -> H2 (identify active panel maps and low-dimensional trajectory dynamics); baseline 52/20 target MAE 0.057768.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a generic raw-input regressor immediately\",\"rejected_reason\":\"It would not distinguish active calibrated operators from inactive panels; compact panel and trajectory statistics were truncated in the previous response.\"}],\"rationale\":\"Recover the key statistics in a compact report to guide operator selection and separate the scalar target from the trajectory prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "cf623f1899a2374eafb9f0e5c2a08f9ee599453d1d835e6da76f00532350f686",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18995.59,
+      "usage_known": true,
+      "prompt_tokens": 21161,
+      "cached_tokens": 12672,
+      "completion_tokens": 581
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f2f556c51294845a8fce3e4b99c8489",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:22:35.714069+00:00",
+  "ended_at_utc": "2026-11-28T16:23:03.891342+00:00",
+  "request_sha256": "d1f4ae833c47e8c45da1c13dd27c8456466b48afdb4a9800aa6fd5bc2d3e2cab",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37810,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27891,
+    "cached_tokens": 12672,
+    "completion_tokens": 1193
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*batch_01_solver.py; cat /tmp/hegel_continual_archive/*batch_06_solver.py; cat > /tmp/dag15_probe.py <<'PY'\\nimport pickle,glob,runpy,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nm=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*batch_08_solver.py')[0]); ls=m['_ls']\\nc=m['_fit_calibration'](s['panel_a']); print('A terms:',[(t,np.round(w,5)) for t,w in zip(m['_TERMS'],c) if np.any(w)]); u,v=s['panel_a'].values(); r=np.linalg.norm(m['_design'](u,len(c))@c-v,axis=1); print('A residual quantiles',np.quantile(r,[0,.5,.9,.925,.95,1]));\\nx=s['train']['x']; q=m['_invert'](x,c); print('inverse residual max',np.max(abs(m['_design'](q,len(c))@c-x)), 'q max',abs(q).max()); u,v=s['panel_b'].values()\\ndef B(x,w):return np.c_[np.ones(len(x)),np.cos(w*x)]\\ndef cost(w):\\n f=B(u,w);return np.sum((f@ls(f,v)-v)**2)\\nw=minimize_scalar(cost,bounds=(2.3,2.9),method='bounded').x; b=B(q,w)@ls(B(u,w),v); print('B shared w, rmse',w,np.sqrt(cost(w)/v.size)); h=b*np.roll(q,-1,axis=1)\\ny=s['train']['y']; z=s['train']['traj']; n=len(q); one=np.ones(n); g=1/(1+s['telemetry_vec'][2]*q[:,2]**2)\\ndef poly(x,d): return np.column_stack([np.prod(x[:,t],axis=1) for j in range(d+1) for t in combinations_with_replacement(range(x.shape[1]),j)])\\ndef score(name,f):\\n if f.ndim==1:f=f[:,None]\\n d=[]\\n for yy in (y,z):\\n  full=np.mean(abs(f@ls(f,yy)-yy)); es=[]\\n  for ids in np.array_split(np.arange(n),4)+[np.arange(52,n)]:\\n   tr=np.setdiff1d(np.arange(n),ids); es.append(np.mean(abs(f[ids]@ls(f[tr],yy[tr])-yy[ids])))\\n  d.append((round(full,5),round(max(es),5),round(es[-1],5)))\\n print(name,f.shape[1],d)\\nfor name,f in {'q quad':poly(q,2),'b quad':poly(b,2),'b linear':np.c_[one,b],'q b':np.c_[one,q,b],'b cyclic':np.c_[one,b,h],'b sum cyclic':np.c_[one,b,h.sum(1)],'b gated cyclic':np.c_[one,b*g[:,None],h,b[:,3]*q[:,2]**3*g],'b all bq':np.c_[one,b,(b[:,:,None]*q[:,None,:]).reshape(n,-1)],'q b quad':poly(np.c_[q,b],2),'q cos':np.c_[one,q,np.cos(w*q)],'b pair and cyclic':np.c_[poly(b,2),h],'q quad + b quad + cyclic':np.c_[poly(q,2),poly(b,2)[:,1:],h]}.items():score(name,f)\\nnp.savez('/tmp/dag15_decoded.npz',q=q,b=b,w=w,y=y,z=z)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag15_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse nonlinear panel-A inversion -> H2 shared-frequency even panel-B calibration and separate readouts; panel-B per-output calibration RMSE is at most 8.72e-5, and readout CV is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the frozen odd panel-B basis\",\n      \"rejected_reason\": \"The measured panel is reconstructed by a common cosine frequency near 2.6 with nearly zero linear coefficients.\"\n    }\n  ],\n  \"rationale\": \"Check that the sparse calibration excludes the three gross outliers and inverts every training row, then compare low-order interaction and rational-gate readouts on blocked splits and the official final-20 split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fb27c06fc014d9d42025f53031357e3cbc0309aef52ae77bbc78135781432d0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28668.81,
+      "usage_known": true,
+      "prompt_tokens": 27891,
+      "cached_tokens": 12672,
+      "completion_tokens": 1193
+    }
+  ]
+}

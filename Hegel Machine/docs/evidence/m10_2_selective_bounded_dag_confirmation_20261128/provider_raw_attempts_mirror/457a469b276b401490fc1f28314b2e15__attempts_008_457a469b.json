@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "457a469b276b401490fc1f28314b2e15",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:43.568203+00:00",
+  "ended_at_utc": "2026-11-28T15:21:21.890403+00:00",
+  "request_sha256": "5070caa000aaf2ffeae1bf09c77c9358aebfe8cfeca6614d4274213c53f0f943",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53488,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36230,
+    "cached_tokens": 5504,
+    "completion_tokens": 1628
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _panel_fit(panel):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    n, d = u.shape\\n    a = np.column_stack((np.ones(n), u))\\n    design = [np.column_stack((a, u[:, j] * u[:, (j+1)%d], u[:, j]**3)) for j in range(d)]\\n    keep = np.arange(n)\\n    for _ in range(12):\\n        b = np.column_stack([np.linalg.lstsq(f[keep], v[keep, j], rcond=None)[0] for j, f in enumerate(design)])\\n        err = np.linalg.norm(np.column_stack([f @ b[:, j] for j, f in enumerate(design)]) - v, axis=1)\\n        order = np.argsort(err)\\n        med = np.median(err)\\n        clean = np.flatnonzero(err <= max(6*med, 1e-8))\\n        next_keep = clean if len(clean) >= max(8, int(.8*n)) else np.sort(order[:max(8, int(.85*n))])\\n        if np.array_equal(keep, next_keep):\\n            break\\n        keep = next_keep\\n    return b\\n\\n\\ndef _inverse(raw, b):\\n    n, d = raw.shape\\n    linear = b[1:d+1]\\n    nxt = np.roll(np.arange(d), -1)\\n    col = np.arange(d)\\n    u = (raw-b[0]) @ np.linalg.pinv(linear)\\n    def residual(p):\\n        return b[0]+p @ linear+b[-2]*p*p[:, nxt]+b[-1]*p**3-raw\\n    for _ in range(25):\\n        r = residual(u)\\n        if np.max(np.abs(r), initial=0.) < 1e-11:\\n            break\\n        jac = np.broadcast_to(linear.T, (n,d,d)).copy()\\n        jac[:, col, col] += b[-2]*u[:, nxt]+3*b[-1]*u*u\\n        jac[:, col, nxt] += b[-2]*u\\n        step = (np.linalg.pinv(jac) @ r[..., None])[..., 0]\\n        best = u.copy()\\n        err = np.linalg.norm(r,axis=1)\\n        for scale in (1., .5, .25, .125, .0625):\\n            trial = u-scale*step\\n            trial_err = np.linalg.norm(residual(trial),axis=1)\\n            take = trial_err < err\\n            best[take], err[take] = trial[take], trial_err[take]\\n        u = best\\n    return u, np.max(np.abs(residual(u)), axis=1)\\n\\n\\ndef _predict(u, y, z):\\n    n = len(y)\\n    one = np.ones(len(u))\\n    square = np.column_stack([u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(u.shape[1]),2)])\\n    base_y = np.column_stack((one,u,square))\\n    base_z = np.column_stack((one,u))\\n    cube = u**3\\n    def profile(target, base, power, bound):\\n        def fit(a):\\n            f = np.column_stack((base,cube/(1+a*np.abs(u)**power)))\\n            b = np.linalg.lstsq(f[:n], target, rcond=None)[0]\\n            return f @ b\\n        def loss(a):\\n            return np.mean((fit(a)[:n]-target)**2)\\n        a = minimize_scalar(loss, method='bounded', bounds=(.002,bound)).x\\n        return fit(a)[n:]\\n    return profile(y,base_y,3,2.), profile(z,base_z,2,3.)\\n\\n\\ndef _ridge_fallback(f, targets):\\n    n = len(targets)\\n    a = f[:n]\\n    return f[n:] @ np.linalg.solve(a.T @ a + .018*np.eye(a.shape[1]),a.T @ targets)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    frozen = inputs['node_00']\\n    train, test = study['train'], study['test']\\n    y, z = np.asarray(train['y']), np.asarray(train['traj'])\\n    raw = np.vstack((train['x'], test['x']))\\n    u, err = _inverse(raw, _panel_fit(study['panel_a']))\\n    bad = (~np.isfinite(u).all(axis=1)) | (err > 1e-4)\\n    if np.any(bad[:len(y)]):\\n        yh, state = _ridge_fallback(frozen['hybrid'],y), _ridge_fallback(frozen['aligned'],z)\\n    else:\\n        yh, state = _predict(np.where(np.isfinite(u),u,0.), y,z)\\n        fail = bad[len(y):]\\n        if np.any(fail):\\n            yh[fail] = _ridge_fallback(frozen['hybrid'],y)[fail]\\n            state[fail] = _ridge_fallback(frozen['aligned'],z)[fail]\\n    end = state[:, -1]\\n    return {'y_hat':yh, 'state_pred':state, 'diagnostics_vec':np.array([yh.mean(),yh.std(),end.mean(),end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the dense cubic heads with profiled saturating cubic terms after robust cyclic calibration; the sparse-basis probe had worst observed fold MAE 0.0236.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use one dense response basis for both heads\",\n      \"rejected_reason\": \"The sparse probes found different useful terms for the scalar and trajectory heads and improved the observed worst-fold error.\"\n    }\n  ],\n  \"rationale\": \"Implement the measured cyclic interaction and pure-cubic calibration support, profile saturation separately for each head, and retain frozen features as a fallback for failed inversions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "59b90a837b3721aeeb1eb73418b6582aeb4f78c6de36ba0ff1d15451eb8b508b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38733.1,
+      "usage_known": true,
+      "prompt_tokens": 36230,
+      "cached_tokens": 5504,
+      "completion_tokens": 1628
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d7efd9536f74f62a5cfc0bcf5539973",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:26.546225+00:00",
+  "ended_at_utc": "2026-11-28T15:21:56.248839+00:00",
+  "request_sha256": "f75e3e74777d5a732be539ac3fe8d1b94a017cb3140544263ff31da1c076e129",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34495,
+    "cached_tokens": 5504,
+    "completion_tokens": 1084
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress03.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path[:0]=['/holdout_task','/holdout_task/_frozen_nodes']\\nimport node_00 as a,node_01 as b,node_02 as c,node_03 as d\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nt=s['train']; y=np.c_[t['y'],t['traj']]; z=a._calibrate(s['panel_a'],t['x']); rng=np.random.default_rng(2026)\\nfor train,test in [(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(72) for _ in range(6)]]:\\n st=dict(s,train={k:t[k][train] for k in ('x','y','traj')},test={'x':t['x'][test]}); f=a.run_node({'__input__':st}); g=b.run_node({'__input__':st}); h=c.run_node({'node_00':f,'node_01':g}); j=d.run_node({'node_00':f,'node_01':g,'node_02':h}); err=np.abs(np.c_[j['y_hat'],j['state_pred']]-y[test]); print('candidate',*(round(v,5) for v in (err[:,0].mean(),err[:,1:].mean(),err[:,0].max(),err[:,1:].mean(1).max())))\\n # Diagnostic only: compare the same kernel with and without access to the sign.\\n D=cdist(z,z,'sqeuclidean'); A=cdist(z,-z,'sqeuclidean'); K=np.exp(-.6*D); V=np.exp(-.6*A); E=(K+V)/2; O=(K-V)/2\\n for name,M in [('even',E),('signed',E+O)]:\\n  M=M+1; u=solve(M[np.ix_(train,train)]+.07*np.eye(len(train)),y[train],assume_a='pos'); e=np.abs(M[np.ix_(test,train)]@u-y[test]); print(name,round(e[:,0].mean(),5),round(e[:,1:].mean(),5))\\nprint('exact sign-collision deltas',np.max(np.abs(a._interactions(z)-a._interactions(-z))),np.max(np.abs(a._curvature(z,.25)-a._curvature(-z,.25))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Regularized sign-invariant ensemble → controlled signed-versus-even ablation; official public CV MAEs are 0.746054 scalar and 0.599819 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The rewired edge adds enough information to distinguish latent inputs that differ only by global sign.\",\n    \"empirical_witness\": \"Both frozen feature blocks are exactly unchanged by global sign reversal. Training rows 3 and 18 are near antipodes at latent distance 0.27149, yet differ by 1.72175 in scalar target and 1.45462 in trajectory MAE.\",\n    \"causal_blanket_diagnosis\": \"Per-column standardization preserves the symmetry, node_01 exposes no test-row information, and node_02 derives its test predictions from the same invariant features.\",\n    \"sublated_pivot\": \"Stress-test the allowed predictor and use signed latent coordinates only in an offline diagnostic to measure the cost of the missing information.\",\n    \"risk_kind\": \"non-identifiability under frozen upstream symmetry\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Load raw test coordinates inside the sink\",\n      \"rejected_reason\": \"That would bypass the declared DAG inputs rather than solve the node synthesis task.\"\n    }\n  ],\n  \"rationale\": \"A paired kernel ablation on identical folds will measure whether signed information helps without conflating it with model choice. Exact feature symmetry does not by itself establish a numerical lower bound on this finite holdout, so report measured errors separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "053eda70dee6697a2ba4c79a2904baacc0d3bd8ea6c7908c7cafe8c6d942379e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30184.3,
+      "usage_known": true,
+      "prompt_tokens": 34495,
+      "cached_tokens": 5504,
+      "completion_tokens": 1084
+    }
+  ]
+}

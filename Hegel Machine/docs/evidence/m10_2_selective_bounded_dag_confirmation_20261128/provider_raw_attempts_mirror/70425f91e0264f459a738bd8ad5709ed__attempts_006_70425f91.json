@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70425f91e0264f459a738bd8ad5709ed",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:00:08.287559+00:00",
+  "ended_at_utc": "2026-11-28T15:00:42.028615+00:00",
+  "request_sha256": "5fe5ad43be9dfd61246802ce6078ba871d9c7580afb2c086cacccabaa1af83f5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36624,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28717,
+    "cached_tokens": 12672,
+    "completion_tokens": 1333
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; t=s['eval_times']; enc=np.load('/tmp/enc.npz'); q=enc['q']; z=enc['bq']; np.set_printoptions(precision=6,suppress=True,linewidth=140)\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\none=np.ones(len(z)); p=z[:,0]*z[:,2]; r=z[:,1]*z[:,3];\\nfolds=[(np.arange(52),np.arange(52,72))]\\nfor seed in range(12):\\n ix=np.random.default_rng(seed).permutation(72);folds.append((ix[:52],ix[52:]))\\nfor name,D in [('bilinear',np.c_[z,p+r]),('bilinear+const',np.c_[one,z,p+r]),('bilinear-separate',np.c_[z,p,r]),('quadratic',np.c_[one,z,*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]])]:\\n err=np.array([np.mean(abs(D[v]@ls(D[a],y[a])-y[v])) for a,v in folds]);print('readout',name,'coefficients',ls(D[:52],y[:52]),'cv first,mean,worst',err[0],err.mean(),err.max())\\nfor name,D in [('z',z),('const-z',np.c_[one,z]),('q',q),('const-q',np.c_[one,q]),('bilinear-z',np.c_[z,p+r])]:\\n for rank in [2,99]:\\n  errors=[]\\n  for a,v in folds:\\n   Q,R=np.linalg.qr(D[a],mode='reduced');U,S,V=np.linalg.svd(Q.T@T[a],full_matrices=False); C=ls(R,(U[:,:rank]*S[:rank])@V[:rank]);errors.append(abs(D[v]@C-T[v]));\\n  e=np.asarray(errors); print('traj',name,rank,'cv first,mean,worst,worst time',e[0].mean(),e.mean(),e.mean((1,2)).max(),e.mean(1).max()); print('coef first & last',ls(D[:52],T[:52])[:,[0,-1]].T if rank==2 else '')\\nD=z; C=ls(D[:52],T[:52]);print('trajectory coef matrix',C);print('resid singular',np.linalg.svd(T[:52]-D[:52]@C,compute_uv=False));\\nfor name,basis,starts in [\\n ('exponential pair',lambda h:np.array([-np.expm1(-np.exp(h[0])*t),-np.expm1(-np.exp(h[1])*t)]),[[-1,1],[-2,0],[0,1]]),\\n ('exponential plus linear',lambda h:np.array([-np.expm1(-np.exp(h[0])*t),t]),[[-1],[0],[1]]),\\n ('exponential plus time-weighted exponential',lambda h:np.array([-np.expm1(-np.exp(h[0])*t),t*np.exp(-np.exp(h[1])*t)]),[[-1,1],[1,0],[0,0]]),\\n ('exponential plus damped sine',lambda h:np.array([-np.expm1(-np.exp(h[0])*t),np.exp(-np.exp(h[1])*t)*np.sin(np.exp(h[2])*t)]),[[-1,-1,0],[1,-2,-1],[0,0,0]])]:\\n def calc(h):\\n  B=basis(h); W=ls(B.T,C.T).T; return W@B\\n def err(h):return (D[:52]@(calc(h)-C)).ravel()\\n f=min([least_squares(err,h,bounds=(-5,3)) for h in starts],key=lambda f:np.linalg.norm(f.fun));print(name,np.exp(f.x),np.sqrt(np.mean(f.fun**2)),np.mean(abs(D[52:]@calc(f.x)-T[52:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw-input polynomial → H2 sparse cubic calibration inverse, affine Panel B, and symmetric bilinear readout; 52/20 MAEs are 0.00350 for y and 0.00377 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include nonlinear Panel C in the forward chain\",\n      \"rejected_reason\": \"The calibrated Panel B chain already reaches the observed residual scale for both outputs; Panel C is not needed to explain the held-out data.\"\n    }\n  ],\n  \"rationale\": \"Test intercepts, the shared bilinear coefficient, and temporal rank on repeated 52/20 splits before fixing the smallest model that predicts both outputs reliably.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "82a3cfd061406e58a93da9cc0088fc6569b008b9ece973a392c30f6f79d181b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33739.77,
+      "usage_known": true,
+      "prompt_tokens": 28717,
+      "cached_tokens": 12672,
+      "completion_tokens": 1333
+    }
+  ]
+}

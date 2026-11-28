@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "547ac6c742734cf1a0caf1fd5d3401fb",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:50.452335+00:00",
+  "ended_at_utc": "2026-11-28T15:10:24.525435+00:00",
+  "request_sha256": "28223133a771a5dd31e98b528b0fc384866806138b707cb7fe53e79dc357e1f6",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63306,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38086,
+    "cached_tokens": 12672,
+    "completion_tokens": 1444
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/node_01.py /tmp/node01_dense_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/node_01.py')\\ns=p.read_text()\\nstart=s.index('def run_node')\\ns=s[:start]+'''def _predict_scalar(x, y):\\n    \\\"\\\"\\\"Profile saturation and prune weak terms using training data only.\\\"\\\"\\\"\\n    n = len(y)\\n    best = None\\n    for k in np.geomspace(0.02, 2.0, 60):\\n        w = np.sqrt(k)\\n        design = _cubic(np.tanh(w * x) / w)\\n        train = design[:n]\\n        coef = np.linalg.lstsq(train, y, rcond=None)[0]\\n        keep = np.ones(design.shape[1], dtype=bool)\\n        for _ in range(6):\\n            new_keep = keep & (np.abs(coef) > 0.035)\\n            new_keep[:x.shape[1] + 1] = True\\n            if np.array_equal(new_keep, keep):\\n                break\\n            keep = new_keep\\n            coef = np.zeros(design.shape[1])\\n            coef[keep] = np.linalg.lstsq(train[:, keep], y, rcond=None)[0]\\n        score = np.mean((train @ coef - y)**2) + 1e-5 * keep.sum()\\n        if best is None or score < best[0]:\\n            best = (score, design, coef)\\n    _, design, coef = best\\n    return design[n:] @ coef\\n\\n\\n'''+s[start:]\\np.write_text(s.replace(\\\"y = _predict(x, train['y'], 0.02)\\\",\\\"y = _predict_scalar(x, train['y'])\\\"))\\nPY\\nif ! OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; then cp /tmp/node01_dense_baseline.py /holdout_task/node_01.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; fi\\ncat >/tmp/stress_node01.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name,path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    mod=importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nfrozen=load('frozen','/holdout_task/_frozen_nodes/node_00.py')\\nmodels=[load('baseline','/tmp/node01_dense_baseline.py'),load('candidate','/holdout_task/node_01.py')]\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nt=s['train']; rows=np.arange(len(t['y']))\\nfolds=[]\\nfor seed in (11,23,41,73,111):\\n    folds.extend(np.array_split(np.random.default_rng(seed).permutation(rows),4))\\nfolds.extend(np.array_split(rows[np.argsort(t['x'][:,d])],6)[j] for d in range(t['x'].shape[1]) for j in (0,-1))\\nres=[]\\nfor j in folds:\\n    i=np.setdiff1d(rows,j)\\n    z=t['traj'][i]; y=t['y'][i]\\n    study=dict(s,train=dict(x=t['x'][i],y=y,traj=z,summary=np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])),test={'x':t['x'][j]})\\n    features=frozen({'__input__':study})\\n    scores=[]\\n    for run in models:\\n        out=run({'__input__':study,'node_00':features}); yp,zp=out['y_hat'],out['state_pred']\\n        assert yp.shape==t['y'][j].shape and zp.shape==t['traj'][j].shape\\n        assert np.isfinite(yp).all() and np.isfinite(zp).all()\\n        np.testing.assert_allclose(out['diagnostics_vec'],[yp.mean(),yp.std(),zp[:,-1].mean(),zp[:,-1].std()])\\n        scores.append([np.abs(yp-t['y'][j]).mean(),np.abs(zp-t['traj'][j]).mean()])\\n    res.append(scores)\\na=np.array(res)\\nfor name, b in [('original random',a[:4]),('additional random',a[4:20]),('coordinate tails',a[20:])]:\\n    print(name, 'mean [baseline,candidate]', b.mean(0).round(6).tolist(), 'worst [baseline,candidate]',b.max(0).round(6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_node01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense sinusoidal scalar head → H2 sparse saturated cubic scalar head: the probe reduces scalar worst-fold MAE from 0.04676 to 0.03219 while the verified rank-two trajectory head stays unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the dense passing baseline\",\n      \"rejected_reason\": \"Its public scalar MAE is close to the threshold, and the sparse probe materially improves both the public split and the measured worst fold.\"\n    }\n  ],\n  \"rationale\": \"Promote the scalar challenger without changing the verified trajectory head. Run the isolated public gate and compare the exact files on additional random folds and coordinate-tail holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f0802fd1b46493b3916bf817c938d48f2f7710ca1fdc2c6f2def836ba92e730d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34071.95,
+      "usage_known": true,
+      "prompt_tokens": 38086,
+      "cached_tokens": 12672,
+      "completion_tokens": 1444
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3f4b7f2a90844533a800eeb863371ca4",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__init_decomp_conf_m102_a02_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:23.004414+00:00",
+  "ended_at_utc": "2026-11-28T14:58:48.420191+00:00",
+  "request_sha256": "6b19c0782a265121a20942c716ce9f71128b86c03c42bbb86e947229e2d44c0f",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 3603,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13669,
+    "cached_tokens": 0,
+    "completion_tokens": 1029
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The source separates cleanly into design-matrix construction, parameter estimation, and prediction. The affine and quadratic designs are computed once and shared by the fitting and prediction nodes. The split preserves the source's numerical operations and outputs, so it preserves verified-source accuracy by construction. It does not change the estimator or address the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"from itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _design(x):\\n    x = np.asarray(x, dtype=float)\\n    affine = np.column_stack((np.ones(len(x)), x))\\n    quadratic = [x[:, i] * x[:, j]\\n                 for i, j in combinations_with_replacement(range(x.shape[1]), 2)]\\n    return affine, np.column_stack((affine, *quadratic))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    a, q = _design(study['train']['x'])\\n    a_test, q_test = _design(study['test']['x'])\\n    return {'a': a, 'q': q, 'a_test': a_test, 'q_test': q_test}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    design = inputs['node_00']\\n    a, q = design['a'], design['q']\\n    readout = np.linalg.lstsq(q, train['y'], rcond=None)[0]\\n    state_coef = np.linalg.lstsq(a, train['traj'], rcond=None)[0]\\n    _, _, modes = np.linalg.svd(a @ state_coef, full_matrices=False)\\n    basis = modes[:2].T\\n    return {'readout': readout, 'state_coef': state_coef, 'basis': basis}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    design = inputs['node_00']\\n    fit = inputs['node_01']\\n    y = design['q_test'] @ fit['readout']\\n    basis = fit['basis']\\n    state = (design['a_test'] @ fit['state_coef'] @ basis) @ basis.T\\n    final = state[:, -1]\\n    diagnostics = np.array([y.mean(), y.std(), final.mean(), final.std()])\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': diagnostics}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "b383559e6203d4b5f725e4b2f8b729035a9f3b8b71c1243128026f666b4b3afd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25408.71,
+      "usage_known": true,
+      "prompt_tokens": 13669,
+      "cached_tokens": 0,
+      "completion_tokens": 1029
+    }
+  ]
+}

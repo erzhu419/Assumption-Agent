@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d6fb7aefc3a443afa5a7b420aa77706c",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:57.221263+00:00",
+  "ended_at_utc": "2026-11-28T15:04:43.132767+00:00",
+  "request_sha256": "d74c466a1f3b9d02995d917cb06ae36beb381aa622ae76923ccb10eedf19faf5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39633,
+    "cached_tokens": 12672,
+    "completion_tokens": 2047
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compose.py <<'PY'\\nimport sys\\nfrom gp import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('y min/max/std',y.min(),y.max(),y.std(),'summary',s['train']['summary']); print('B',B)\\nC=s['panel_c']; U=C['u']; funcs=[lambda w:w/(1+.84*abs(w)),lambda w:np.sqrt(1+1.1*w*w)]; Cs=[np.linalg.lstsq(np.c_[A(U),f(U)],C[k],rcond=None)[0] for f,k in zip(funcs,['v1','v2'])]; print('C',Cs)\\nI=np.array(list(comb(range(4),2))); quad=lambda w:np.c_[A(w),np.prod(w[:,I],axis=2)]\\nY=np.array([y[te] for tr,te in folds]); arch=np.load('/tmp/gpstudy.npz'); base=arch[str(('arch',0.))]; candidates={}\\ndef record(n,p):\\n p=np.array(p); e=np.mean(abs(p-Y),1); eb=np.mean(abs((p+base)*.5-Y),1);candidates[n]=(e,eb,p)\\ndef fitmake(fun,par=(),invert=None,name='',reg=0):\\n out=[]; costs=[]\\n for tr,te in folds:\\n  v=y[tr] if invert is None else invert[0](y[tr]);\\n  def solve(p):\\n   F=fun(p); G=F[tr]; c=np.linalg.lstsq(G,v,rcond=1e-8)[0]; return F,G@c-v,c\\n  p=np.array(par,float)\\n  if p.size:p=least_squares(lambda p:np.r_[solve(p)[1],reg*p],p,max_nfev=45).x\\n  F,r,c=solve(p); a=F[te]@c;out.append(a if invert is None else invert[1](a));costs.append((np.sqrt(np.mean(r*r)),p))\\n record(name,out)\\n return costs\\nfor i,w in enumerate(Ws[:5]):\\n q=quad(w); H=w[:,:,None]*w[:,None,:]; pairs=[w[:,a]+sgn*w[:,b] for a in range(4) for b in range(a+1,4) for sgn in [-1,1]]\\n for j,f in enumerate([lambda w:w,lambda w:np.tanh(1.25*w),lambda w:np.sin(1.25*w),lambda w:w/(1+.22*abs(w)),lambda w:w/(1+.22*w*w),lambda w:w/np.sqrt(1+.22*w*w),lambda w:np.arcsinh(w),lambda w:w+.22*w**2,lambda w:w/(1+.22*w),lambda w:w+.22*np.tanh(1.25*w),lambda w:w-.22*np.tanh(1.25*w)]):\\n  fw=f(w);\\n  if np.all(np.isfinite(fw)):fitmake(lambda _:quad(fw),name=('warp',i,j))\\n  fd=f(w[:,None,:]-w[:,:,None]); fd=fd[:,np.triu_indices(4,1)[0],np.triu_indices(4,1)[1]]\\n  fitmake(lambda _:np.c_[q,fd],name=('pairwarp',i,j))\\n for k,Cj in enumerate(Cs):\\n  f=funcs[k]; act=np.c_[A(w),f(w)]@Cj\\n  for a in [-1.,-.22,.22,1.]:fitmake(lambda _:quad(w+a*act),name=('cblend',i,k,a))\\n  fitmake(lambda p:quad(w+p[0]*act),[.22],name=('cfit',i,k),reg=.012)\\n  fitmake(lambda p:quad(w+act*p),[.22]*4,name=('cfitv',i,k),reg=.025)\\n for a in [.08,.22,.5,1.25]:\\n  for k in [0,1]:\\n   r=(w*w).sum(1) if k==0 else abs(w).sum(1)\\n   for typ in [0,1]:fitmake(lambda _:q/(1+a*r[:,None])**(1 if typ==0 else .5),name=('global',i,a,k,typ))\\n for fn in [lambda v:np.arcsinh(v),lambda v:v**3,lambda v:np.arctanh(np.clip(v,-.999,.999))]:pass\\n for a in [.22,.5,1.,2.]:\\n  fitmake(lambda _:q,invert=(lambda v:np.arcsinh(a*v),lambda v:np.sinh(np.clip(v,-4,4))/a),name=('arcsinh',a,i))\\n  if abs(y).max()*a<1:fitmake(lambda _:q,invert=(lambda v:np.arctanh(a*v),lambda v:np.tanh(v)/a),name=('atanh',a,i))\\n # common nonlinear transformation with train-fitted scale and shift; direct compositions\\n for j,f in enumerate([lambda w:w/(1+abs(w)),lambda w:np.tanh(w),lambda w:np.sin(w),lambda w:w/(1+w*w),lambda w:np.sqrt(1+w*w),lambda w:w*w]):\\n  for k in [-1,0,1]:\\n   if k==-1:fun=lambda p:quad(w+p[0]*f(p[1]*w+p[2]))\\n   else:\\n    c=Cs[k]; L=funcs[k]; fun=lambda p:quad(w+p[0]*f(p[1]*(np.c_[A(w),L(w)]@c)+p[2]))\\n   fitmake(fun,[.22,1.25,0],name=('profwarp',i,j,k),reg=.018)\\nfor name,(e,eb,p) in sorted(candidates.items(),key=lambda kv:kv[1][0].mean())[:12]:print('average',name,e.round(4),e.mean(),eb.round(4))\\nfor name,(e,eb,p) in sorted(candidates.items(),key=lambda kv:kv[1][0][0])[:12]:print('gate',name,e.round(4),e.mean(),eb.round(4))\\nkeys=[('arch',0.),('iso',0.),('ard',0.),('full',1.),('full',3.),('all',0.),('all',1.),('all',3.)];\\nfor ids in [[0,4,5],[0,1,4,5],[0,1,4,6,7],[0,1,3,4,5,6,7],[0,1,2,3,4,5,6,7]]:\\n e=np.mean(abs(np.mean([arch[str(keys[i])] for i in ids],axis=0)-Y),axis=1);print('gp avg',ids,e.round(5),e.mean(),max(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compose.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (separate fixed-basis regressions) -> H2 (compact panel compositions or an evidence-weighted ensemble); the broad panel GP reaches 0.0306 on the 52/20 split but 0.0608 on its worst repeated split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the standalone broad panel GP immediately\",\n      \"rejected_reason\": \"It passes the required split but is less stable than the archive across repeated splits.\"\n    }\n  ],\n  \"rationale\": \"Test whether compact panel compositions explain the readout better than the flexible kernel, and compare ensemble stability against the already measured single-model errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ff2b99d6607df23b90cc94285c514073dbe34d658a35ebae0021f169691d2cbf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46406.01,
+      "usage_known": true,
+      "prompt_tokens": 39633,
+      "cached_tokens": 12672,
+      "completion_tokens": 2047
+    }
+  ]
+}

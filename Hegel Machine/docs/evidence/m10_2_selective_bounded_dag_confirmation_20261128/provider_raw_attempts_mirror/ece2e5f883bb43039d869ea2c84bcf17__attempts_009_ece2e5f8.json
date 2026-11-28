@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ece2e5f883bb43039d869ea2c84bcf17",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:22:15.100800+00:00",
+  "ended_at_utc": "2026-11-28T15:22:56.135101+00:00",
+  "request_sha256": "dd0ae0ce1991ec5c5f384b6c1666df2d918c98974eeceee8bd8d490cfb045cf9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 57121,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37657,
+    "cached_tokens": 12672,
+    "completion_tokens": 1797
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^for pn /,$d' /tmp/probe.py >/tmp/p9.py; cat >>/tmp/p9.py <<'PY'\\nfrom scipy.optimize import minimize_scalar\\nfrom scipy.special import erf\\nfrom scipy.linalg import svd\\nprint('singular',svd(T,compute_uv=False).round(4)); print('t',t)\\nfun=[lambda x,h:np.sin(h*x),lambda x,h:np.tanh(h*x),lambda x,h:x*np.exp(-(h*x)**2),lambda x,h:x/(1+(h*x)**2),lambda x,h:np.sign(x)*abs(x)**h,lambda x,h:x**3/(1+(h*x)**2)]\\nfor i,F in enumerate(fun):\\n for k in range(3):\\n  def D(x,h):return np.c_[f._affine(x),F(x,h), *([x*np.roll(x,-1,1)] if k==1 else [x**2] if k==2 else [])]\\n  def opt(h):\\n   A=D(u,h);return np.linalg.norm(A@ls(A,v)-v)\\n  p=minimize_scalar(opt,bounds=(.15,4),method='bounded');print('panel',i,k,round(p.x,4),round(p.fun,5))\\nX=np.load('/tmp/aligned.npz')['X']; Q=poly(X,2)[0]; A=f._affine(X)\\nfor mode in range(4):\\n def fit_time(row):\\n  def M(k):\\n   e=-np.expm1(-k*t)/k\\n   return [e[:,None],np.c_[e,t],np.c_[e,t**2],np.c_[e,np.ones(len(t))]][mode]\\n  def obj(k):\\n   d=M(k);return np.linalg.norm(d@ls(d,row)-row)\\n  a=minimize_scalar(obj,bounds=(.005,5),method='bounded'); return np.r_[a.x,ls(M(a.x),row),a.fun]\\n W=np.array([fit_time(row) for row in T]);print('tempor',mode,np.quantile(W,[.1,.5,.9],axis=0).round(4)); print('aff/std', (np.std(W-A@ls(A,W),axis=0)/np.std(W,axis=0)).round(3),'quad/std',(np.std(W-Q@ls(Q,W),axis=0)/np.std(W,axis=0)).round(3))\\n if mode==0: print('coef',ls(Q,W).round(3))\\nnp.savez('/tmp/probe9.npz',X=X,raw=raw,t=t,T=T,y=y)\\n# Fit a saturating or rational single-index component in addition to a quadratic.\\nfor nm, F in [('sin',np.sin),('tanh',np.tanh),('rat',lambda a:1/(1+a*a)),('odd',lambda a:a/(1+a*a)),('cube',lambda a:a**3),('even',lambda a:np.log1p(a*a))]:\\n for lab,Y in [('y',y),('traj',T)]:\\n  def D(p):return np.c_[Q,F(A@p)]\\n  def res(p):\\n   G=D(p)[:52];return (G@ls(G,Y[:52])-Y[:52]).ravel()\\n  rng=np.random.default_rng(21);starts=np.r_[np.eye(5),rng.normal(size=(22,5))]; sol=min([least_squares(res,p,max_nfev=100) for p in starts],key=lambda q:q.cost); G=D(sol.x); E=abs(G@ls(G[:52],Y[:52])-Y); print(nm,lab,sol.x.round(3),E[:52].mean().round(5),E[52:].mean().round(5))\\nPY\\ncat >/holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrate the frozen coordinates and predict the two downstream readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _coords(study, encoded):\\n    panel = study['panel_b']\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    b = _ls(_affine(u), v)\\n    def features(x, h):\\n        return np.column_stack((_affine(x), x*np.exp(-(h*x)**2)))\\n    def objective(h):\\n        a = features(u, h)\\n        return np.linalg.norm(a @ _ls(a, v) - v)\\n    h = minimize_scalar(objective, bounds=(.3, 2), method='bounded').x\\n    b1 = _ls(features(u, h), v)\\n    return tuple(features(np.linalg.solve(b[1:].T, (encoded[k]-b[0]).T).T, h) @ b1 for k in ('z','zt'))\\n\\n\\ndef _quadratic(x):\\n    p = [x[:,i]*x[:,j] for i in range(x.shape[1]) for j in range(i,x.shape[1])]\\n    return np.column_stack((_affine(x), *p))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, encoded = inputs['__input__'], inputs['node_00']\\n    z, zt = _coords(study, encoded)\\n    train = study['train']\\n    D, Dt = _quadratic(z), _quadratic(zt)\\n    yh = Dt @ _ls(D, train['y'])\\n    tr = Dt @ _ls(D, train['traj'])\\n    diag = np.array([yh.mean(), yh.std(), tr[:, -1].mean(), tr[:, -1].std()])\\n    return {'y_hat': yh, 'state_pred': tr, 'diagnostics_vec': diag}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/p9.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Nonlinear panel calibration → test a saturating scalar readout and time-dependent trajectory law; preceding holdout MAEs were 0.095 and 0.069.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save the calibrated baseline now, then profile temporal dynamics and nonlinear single-index readouts on the training partition to identify improvements for both targets.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cefb36e66292ba5bb01290b5457b8bed1abe8c4e343571cc52bbb37d6f29ff35",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41607.58,
+      "usage_known": true,
+      "prompt_tokens": 37657,
+      "cached_tokens": 12672,
+      "completion_tokens": 1797
+    }
+  ]
+}

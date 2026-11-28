@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25294b1cc5f34b4fac6b225ac16bef01",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:16.681536+00:00",
+  "ended_at_utc": "2026-11-28T15:10:41.070946+00:00",
+  "request_sha256": "5f8e2a1489806e090f769908f8129cbec87e1aa09269da78cf3153b8e03bdee7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45060,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30032,
+    "cached_tokens": 12672,
+    "completion_tokens": 958
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\na,b,c=(s[k] for k in ('panel_a','panel_b','panel_c')); tr=s['train']; x=tr['x']; T=tr['traj']; Y=c['v1']\\nF0=m._aff(c['u']); F1=m._aff(m._products(c['u'])); z=m._calibrate(a,x); w=m._aff(z)@m._fit(m._aff(b['u']),b['v']); ix=np.arange(len(x))\\ndef loo(F):\\n    return np.mean([np.mean(abs(F[i] @ m._fit(F[np.arange(len(F))!=i],Y[np.arange(len(F))!=i])-Y[i])) for i in range(len(F))])\\nlo0,lo1=loo(F0),loo(F1); print('panel_c_v1_loo_mae affine=%.9f sparse_quadratic=%.9f'%(lo0,lo1)); assert lo1 < lo0/100\\nfor name,j in [('public',ix[52:]),('high_panel_b_radius',np.argsort(np.linalg.norm(w,axis=1))[-20:]),('high_scalar',np.argsort(tr['y'])[-20:])]:\\n    i=np.setdiff1d(ix,j); q=dict(s,train={k:v[i] for k,v in tr.items() if k in ('x','y','traj')},test={'x':x[j]}); out=m.solve_batch(q)\\n    F=m._aff(m._aff(w)@m._fit(F0,Y)); pred=F[j]@m._fit(F[i],T[i]); base=np.mean(abs(pred-T[j])); err=abs(out['state_pred']-T[j]); sy=np.mean(abs(out['y_hat']-tr['y'][j])); th=err.mean(axis=0).max(); print('%s omitted_quadratic_trajectory_mae=%.9f solver_trajectory_mae=%.9f solver_scalar_mae=%.9f solver_worst_horizon_mae=%.9f'%(name,base,err.mean(),sy,th)); assert max(sy,th)<.038 and err.mean()<base/10\\nPY\\nstatus=$?; if [ \\\"$status\\\" -ne 0 ]; then exit \\\"$status\\\"; fi\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine panel C) -> H2 (sparse pairwise-product panel C); the verified solver’s worst stress-slice MAEs were 0.004674 for the scalar, 0.004470 for the trajectory, and 0.006321 for any horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the verified solver to add rational or cubic terms\",\n      \"rejected_reason\": \"Those terms worsened worst-slice scalar MAE in the audit.\"\n    }\n  ],\n  \"rationale\": \"The schema receipt does not test the omitted-quadratic finding. Compare affine and sparse-quadratic panel C fits on the same held-out panel rows, then ablate the quadratic terms downstream while keeping the rest of the operator chain fixed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ee11be25d1950458818b2e52f058269300f421698a9f11726585864b3bb33f5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24945.97,
+      "usage_known": true,
+      "prompt_tokens": 30032,
+      "cached_tokens": 12672,
+      "completion_tokens": 958
+    }
+  ]
+}

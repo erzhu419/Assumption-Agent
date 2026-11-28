@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c176df462dc405ab133e2bb48299871",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:01.554934+00:00",
+  "ended_at_utc": "2026-11-28T14:53:38.241596+00:00",
+  "request_sha256": "4cab77660ad25c67ad697c8572d60b4ab27403e71d8f87e7a903722d00375648",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40305,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30879,
+    "cached_tokens": 12672,
+    "completion_tokens": 1589
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/paths.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import Ridge\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; tr=np.arange(52); va=np.arange(52,72)\\nca,cb,cm=np.load('/tmp/panels.npy',allow_pickle=True); np.set_printoptions(precision=4,suppress=True,linewidth=160)\\ndef one(x):return np.c_[np.ones(len(x)),x]\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef capply(z,k):\\n _,name,_,p,C=cm[k]; w=np.exp(p[0])*z+p[1:]; f=w/(1+abs(w)) if name=='softsign' else (np.cos(w) if name=='cos' else np.sin(w)); return one(np.c_[z,f])@C\\nops={'A':lambda z:z*ca[1]+ca[0],'a':lambda z:(z-ca[0])/ca[1],'B':lambda z:one(z)@cb,'b':lambda z:(z-cb[0])@np.linalg.inv(cb[1:]),'C':lambda z:capply(z,0),'D':lambda z:capply(z,1)}\\nz={'x':x}\\nfor dep in range(3):\\n for name,v in list(z.items()):\\n  if len(name)!=dep+1:continue\\n  for op,f in ops.items():\\n   if op.swapcase()==name[-1] or op==name[-1]:continue\\n   z[name+op]=f(v)\\nH=-np.expm1(-t[:,None]*np.array([1.8,.4])); lat=ls(H,T.T).T; Y=np.c_[y,lat]; products=list(itertools.combinations(range(4),2)); Ysd=Y[tr].std(0)\\ndef feats(v,mode):\\n a=[v]\\n if mode in ('p2','p3','all'):a += [v*v,np.stack([v[:,i]*v[:,j] for i,j in products],axis=1)]\\n if mode in ('p3',):a += [v**3,np.stack([v[:,i]**2*v[:,j] for i in range(4) for j in range(4) if i!=j],axis=1),np.stack([np.prod(v[:,idx],axis=1) for idx in itertools.combinations(range(4),3)],axis=1)]\\n if mode in ('sep','all'):a += [np.sin(v),np.cos(v),np.sin(2*v),np.cos(2*v),v/(1+abs(v)),np.tanh(v)]\\n if mode=='all':\\n  w=np.stack([v[:,i]+j*v[:,k] for i,k in products for j in (-1,1)],axis=1); a += [np.sin(w),np.cos(w),np.tanh(w)]\\n return np.column_stack(a)\\ndef evaluate(F,alpha):\\n m=F[tr].mean(0); sd=np.maximum(F[tr].std(0),1e-10); F=(F-m)/sd\\n reg=Ridge(alpha=alpha).fit(F[tr],Y[tr]); P=reg.predict(F[va]); E=P-Y[va]; return np.r_[abs(E).mean(0),abs(E[:,1:]@H.T).mean()],np.sqrt(np.mean((reg.predict(F[tr])-Y[tr])**2,axis=0))\\nfor mode in ('linear','p2','p3','sep','all'):\\n results=[]\\n for k,v in z.items():\\n  F=feats(v,mode)\\n  for alpha in ([.005] if mode in ('linear','p2') else [.01,.1,1]):\\n   er,fit=evaluate(F,alpha); results.append((k,alpha,er,fit))\\n for j in (0,1,2,3):print(mode,j,sorted(results,key=lambda a:a[2][j])[:4])\\nfor names in [('x','xaC','xaD'),('x','xAC','xAD'),('x','xaBC','xaBD'),('x','xaCB','xaDB'),('x','xC','xD'),('x','xaB','xaC','xaD'),('x','xaB','xaBC','xaBD'),('x','xAB','xABC','xABD'),('x','xB','xBC','xBD')]:\\n for mode in ('linear','p2','sep'):\\n  e,f=evaluate(np.column_stack([feats(z[k],mode) for k in names]),.1); print(names,mode,e,f)\\nfor n in ['x','xa','xA','xB','xaB','xAB','xC','xD','xaC','xaD','xaBC','xaBD','xABC','xABD']:\\n a=z[n]; print('corr',n,np.corrcoef(np.c_[a,Y].T)[:4,4:].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/paths.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw cubic regression → H2 compositions of calibrated affine and nonlinear operators; raw cubic y holdout MAE is 0.11371.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume both auxiliary panels are active\",\n      \"rejected_reason\": \"Panel measurements identify their operators, not their role in the forward graph.\"\n    }\n  ],\n  \"rationale\": \"Compare operator orderings, bypasses, and pairwise nonlinearities on the same first-52/last-20 split. Score the scalar response and both trajectory modes separately to distinguish useful graph edges from incidental panel fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5108a4d18e42e9df3a39f074f333b68597f998d438ceb608ac3b0adbee02495c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36685.63,
+      "usage_known": true,
+      "prompt_tokens": 30879,
+      "cached_tokens": 12672,
+      "completion_tokens": 1589
+    }
+  ]
+}

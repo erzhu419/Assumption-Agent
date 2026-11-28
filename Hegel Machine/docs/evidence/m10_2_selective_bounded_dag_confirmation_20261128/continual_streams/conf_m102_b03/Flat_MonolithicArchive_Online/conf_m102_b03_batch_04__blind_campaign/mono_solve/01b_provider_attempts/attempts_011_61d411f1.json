@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61d411f1bbba427784758e03390d3530",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:20:47.924383+00:00",
+  "ended_at_utc": "2026-11-28T15:21:27.197637+00:00",
+  "request_sha256": "61e6534f71522c819ae025709d00c6483e7bbcde033d6da5a7cc38a35b60fcb2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62108,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36185,
+    "cached_tokens": 12672,
+    "completion_tokens": 1638
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().split('def _features(study, x):')[0]\\np.write_text(s + '''def _features(study, x):\\n    p, q = _operators(study['panel_c'], _calibrate(study['panel_a'], x))\\n    diagonal = np.sum(p * q, axis=1)\\n    endpoint = _design(np.column_stack((p, q, diagonal)))\\n    fast = np.column_stack((p, diagonal))\\n    slow = np.column_stack((q, p[:, 0] * q[:, 1]))\\n    return endpoint, (fast, slow)\\n\\n\\ndef _trajectory(times, traj, blocks, n):\\n    # Profile out the linear amplitudes for each pair of relaxation rates.\\n    def design(rates, groups):\\n        h = -np.expm1(-times[:, None] * rates)\\n        terms = [g[:, None, :] * h[None, :, j, None] for j, g in enumerate(groups)]\\n        return np.concatenate(terms, axis=2).reshape(len(groups[0]) * len(times), -1 if len(groups[0]) else sum(g.shape[1] for g in groups))\\n\\n    fit_blocks = tuple(g[:n] for g in blocks)\\n    obs = traj.ravel()\\n\\n    def residual(rates):\\n        d = design(rates, fit_blocks)\\n        return d @ _ls(d, obs) - obs\\n\\n    rates = least_squares(residual, [1.82, .56], bounds=([.8, .04], [5., .75])).x\\n    d = design(rates, fit_blocks)\\n    pred = design(rates, tuple(g[n:] for g in blocks)) @ _ls(d, obs)\\n    return pred.reshape(len(blocks[0]) - n, len(times))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    scalar, blocks = _features(study, np.concatenate((train['x'], test['x'])))\\n    y = scalar[n:] @ _ls(scalar[:n], train['y'])\\n    state = _trajectory(np.asarray(study['eval_times']), np.asarray(train['traj']), blocks, n)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\n'''.replace('-1 if len(groups[0]) else sum(g.shape[1] for g in groups)', 'sum(g.shape[1] for g in groups)'))\\nPY\\ncd /holdout_task\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/verify_final04.py <<'PY'\\nexec(open('/tmp/validate_batch04.py').read().split('records=[]')[0])\\nrecords=[]\\nfor name,i,j in splits:\\n    q={**s,'train':{**train,**{k:train[k][i] for k in ('x','y','traj')}},'test':{'x':x[j]}}\\n    out=m.solve_batch(q); yy=out['y_hat']; state=out['state_pred']; last=state[:,-1]\\n    assert yy.shape == (len(j),) and state.shape == (len(j),t.shape[1])\\n    np.testing.assert_allclose(out['diagnostics_vec'],[yy.mean(),yy.std(),last.mean(),last.std()]); assert all(np.isfinite(v).all() for v in out.values())\\n    ey=abs(yy-y[j]); et=abs(state-t[j]); records.append((name,ey.mean(),et.mean(),et.mean(0).max(),ey.max(),et.max()))\\nprint('official:',records[0]);print('worst across',len(records),'splits:',*[max(records,key=lambda r:r[k]) for k in range(1,6)],sep='\\\\n');assert max(max(r[1:4]) for r in records)<.038\\nout=m.solve_batch(s); yy=out['y_hat']; state=out['state_pred']; last=state[:,-1]\\nassert yy.shape==(36,) and state.shape==(36,8) and all(np.isfinite(v).all() for v in out.values())\\nnp.testing.assert_allclose(out['diagnostics_vec'],[yy.mean(),yy.std(),last.mean(),last.std()]); print('diagnostics:',out['diagnostics_vec'])\\np=s['panel_c']; u=p['u']; v=p['v1']; n=len(u)\\nfor name,f in [('coordinatewise',np.c_[u,u*u]),('cyclic',u*np.roll(u,-1,axis=1))]:\\n    d=m._design(f); err=[]\\n    for j in range(n):\\n        i=np.arange(n)!=j; err.extend(d[j] @ m._ls(d[i],v[i])-v[j])\\n    print('panel_c.v1 held-out MAE:',name,np.mean(np.abs(err)))\\n    if name=='cyclic': assert np.mean(np.abs(err)) < .001\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_final04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted bilinear amplitudes -> H2 a fast diagonal sum and one slow cross-product; the tied challenger lowers worst per-timestamp MAE from 0.01994 to 0.00678 across 50 splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate rates for the interaction terms\",\n      \"rejected_reason\": \"Separate rates did not improve worst per-timestamp MAE over the tied two-rate model.\"\n    },\n    {\n      \"option\": \"Keep separate weights for all four diagonal products\",\n      \"rejected_reason\": \"The slight improvement on the required split came with worse extrapolation and worst per-timestamp MAE.\"\n    }\n  ],\n  \"rationale\": \"Promote the tied model because it improves the worst trajectory slices without changing the endpoint estimator. Recheck the saved artifact in an isolated process and directly measure the panel cross-term witness.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3c7ba6775bfbc9bd316804d5bc4fd0d5e604473e8bfdc9f3747a59f92ecb961e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39687.96,
+      "usage_known": true,
+      "prompt_tokens": 36185,
+      "cached_tokens": 12672,
+      "completion_tokens": 1638
+    }
+  ]
+}

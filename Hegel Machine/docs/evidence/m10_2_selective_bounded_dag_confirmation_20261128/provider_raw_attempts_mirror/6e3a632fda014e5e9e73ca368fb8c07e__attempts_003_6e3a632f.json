@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e3a632fda014e5e9e73ca368fb8c07e",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:42.368347+00:00",
+  "ended_at_utc": "2026-11-28T15:47:10.021822+00:00",
+  "request_sha256": "f519b6ffad6c6167ae01d4c3ae966fb3a6d98c9b3bf94206628ec4b977c7bc77",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20560,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20839,
+    "cached_tokens": 12672,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/explore.py <<'PY'\\nimport numpy as np,pickle,glob,importlib.util,copy\\nnp.set_printoptions(precision=5,suppress=True,linewidth=120)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; print('times',s['eval_times'],'telemetry',s['telemetry_vec'],'summary',tr['summary']);\\nfor k in ['x','y','traj']:\\n a=tr[k]; print(k,'min',a.min(0),'max',a.max(0),'std',a.std(0),'first',a[:5]);\\nprint('traj sv',np.linalg.svd(tr['traj'],compute_uv=False))\\nfor k in 'abc':\\n a=s['panel_'+k]; u=a['u']; print(k,'u',u[:3],u.min(0),u.max(0));\\n def aff(x):return np.c_[np.ones(len(x)),x]\\n for name,v in a.items():\\n  if name=='u':continue\\n  print(name,'first',v[:2],'sv',np.linalg.svd(v-v.mean(0),compute_uv=False))\\n  for desc,d in [('linear',aff(u)),('dead',aff(np.sign(u)*np.maximum(abs(u)-.35,0)**1.5)),('tanh',aff(np.tanh(1.8*u))),('pairs',aff(np.c_[*[u[:,i]*u[:,j] for i in range(4) for j in range(i+1,4)]])),('poly2',aff(np.c_[u,*[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]]))]:\\n   m=np.arange(len(v))\\n   for _ in range(6):\\n    r=v-d@np.linalg.lstsq(d[m],v[m],rcond=None)[0]; m=np.argsort(np.linalg.norm(r,axis=1))[:len(v)-max(3,len(v)//8)]\\n   print(desc,np.median(abs(r)),np.mean(abs(r)),end='; ')\\n  print()\\ncv=copy.copy(s); cv['train']={k:(v[:52] if k in ('x','y','traj') else v) for k,v in tr.items()}; cv['test']={'x':tr['x'][52:]}\\nfor f in glob.glob('/tmp/hegel_continual_archive/*solver.py'):\\n try:\\n  spec=importlib.util.spec_from_file_location('solver',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m); p=m.solve_batch(cv); print(f.split('/')[-1],np.mean(abs(p['y_hat']-tr['y'][52:])),np.mean(abs(p['state_pred']-tr['traj'][52:])))\\n except Exception as e:print(f,e)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -E '^def |tanh|arcsinh|exp\\\\(|sin\\\\(|\\\\.35|roll|pairs' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived operator transfer -> H2 screen panel fits and trajectory rank; the pre-LLM gate reports scalar MAE 0.545900 and trajectory MAE 0.950968.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the pre-LLM candidate unchanged\",\"rejected_reason\":\"Both held-out errors exceed the 0.038 target.\"}],\"rationale\":\"Quantify each archived solver on the specified split and diagnose panel algebra and trajectory rank directly from the current public measurements.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6604bac0d0bf449b743a7242d936728ec21599e8dc0a1917f63cfc874a91d2f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27652.48,
+      "usage_known": true,
+      "prompt_tokens": 20839,
+      "cached_tokens": 12672,
+      "completion_tokens": 915
+    }
+  ]
+}

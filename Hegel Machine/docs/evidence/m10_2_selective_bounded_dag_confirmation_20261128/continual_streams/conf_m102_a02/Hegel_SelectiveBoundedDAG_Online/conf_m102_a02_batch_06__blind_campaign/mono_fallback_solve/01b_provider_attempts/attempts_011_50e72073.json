@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50e72073fa034fb0805e8cf386e523db",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:12.490682+00:00",
+  "ended_at_utc": "2026-11-28T15:33:35.600109+00:00",
+  "request_sha256": "c667d2335036719015c64f566f9e4d3a560a718ec631eb1e43dde179fed730e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64421,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38485,
+    "cached_tokens": 12672,
+    "completion_tokens": 941
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/hegel_continual_archive/conf_m102_a02_batch_03_solver.py /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\n\\ndef _panel_b(panel, q):\\n    from scipy.optimize import least_squares\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v'])\\n    def design(a, p):\\n        logabs = np.log(np.maximum(abs(a)*p[0], 1e-50))\\n        h = a*np.expm1(p[2]*np.logaddexp(0, p[1]*logabs))\\n        return np.c_[np.ones(len(a)),a,h]\\n    def residual(p):\\n        f=design(u,p)\\n        return (f@_ls(f,v)-v).ravel()\\n    p=least_squares(residual,[2.5,12,.036],bounds=([.1,1,.001],[10,40,2]),max_nfev=350).x\\n    f=design(u,p)\\n    return design(q,p)@_ls(f,v)\\n\\n\\ndef _quad(a):\\n    return np.column_stack([a]+[a[:,i]*a[:,j] for i in range(a.shape[1]) for j in range(i,a.shape[1])])\\n\\n\\ndef _ridge(a,b,new,alpha):\\n    mu=a.mean(0); scale=np.maximum(a.std(0),.1)\\n    f=(a-mu)/scale; v=b.mean(0)\\n    w=np.linalg.solve(f.T@f+alpha*np.eye(f.shape[1]),f.T@(b-v))\\n    return (new-mu)/scale@w+v\\n\\n\\ndef solve_batch(study):\\n    tr=study['train']; n=len(tr['x']); a=_fit_calibration(study['panel_a'])\\n    q=_invert(np.vstack([tr['x'],study['test']['x']]),a)\\n    b=_panel_b(study['panel_b'],q)\\n    f=_quad(np.c_[q,b]); y=_ridge(f[:n],tr['y'],f[n:],.2)\\n    z=_ridge(f[:n],tr['traj'],f[n:],.001)\\n    return {'y_hat':y,'state_pred':z,'diagnostics_vec':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py || true\\ntail -12 /tmp/sparse.warn\\nsed -e \\\"s/'qb','bc','qbc','qbd','bd','b','q'/'qb','bc','b','q'/\\\" -e 's/print(\\\\*sorted(r for r in R if r\\\\[2\\\\]==j)\\\\[:18\\\\]/print(*sorted(r for r in R if r[2]==j)[:8]/' /tmp/sparse.py >/tmp/sparse2.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse2.py 2>/tmp/sparse2.warn\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full calibrated-B quadratic → H2 compact interaction readout; separate 52/20 baseline MAEs are 0.05389 for y and 0.01834 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Save the calibrated baseline now, verify its exact public-gate errors in isolation, and recover sparse coefficients to target the remaining scalar error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "143e70577ef10214788429bc9f77d874afdcf43ab8e72d3cdfec6cff15a43a7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23108.06,
+      "usage_known": true,
+      "prompt_tokens": 38485,
+      "cached_tokens": 12672,
+      "completion_tokens": 941
+    }
+  ]
+}

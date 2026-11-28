@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4fb8daf49544e899b19d65a9ad00e9d",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:48.297460+00:00",
+  "ended_at_utc": "2026-11-28T15:40:18.332736+00:00",
+  "request_sha256": "5f54c589e77a7ecd700e82596a2d7e4246f104dc61f32eae53a2929b1d5d5213",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30372,
+    "cached_tokens": 12672,
+    "completion_tokens": 1210
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^res=\\\\[\\\\]/,$d' /tmp/structure.py >/tmp/base.py; cat > /tmp/readout.py <<'PY'\\nfrom base import *\\nfrom scipy.linalg import svd\\nC=m._pairmap(bs['sin+cbrt'])@C0; B=bs['sin+cbrt']; N=len(Y)\\nQ,S,V=np.linalg.svd(Y[:,1:]-Y[:,1:].mean(0),full_matrices=False); print('temporal',S,V[:3]); print('y correlation PC',np.corrcoef(np.c_[Y[:,0],Q[:,:6]].T)[0]); print('y projection',np.linalg.lstsq(aff(Q[:,:3]),Y[:,0],rcond=None)[0]);\\nsplits=[]\\nfor a in (52,0,20,40):splits.append(np.arange(a,a+20))\\nfor seed in range(8):splits.append(np.random.default_rng(seed).permutation(72)[:20]);\\n\\ndef status(P):\\n return np.round([P[0],P[:4].mean(0),P[:4].max(0),P[4:].mean(0),P[4:].max(0)],4).tolist()\\ndef kscore(K,reg):\\n vals=[]\\n for te in splits:\\n  tr=np.setdiff1d(np.arange(N),te); mu=Y[tr].mean(0)\\n  e=abs(K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+reg*np.eye(len(tr)),Y[tr]-mu)+mu-Y[te]);vals.append([e[:,0].mean(),e[:,1:].mean()]);\\n return np.array(vals)\\ndef gram(*a):\\n F=np.column_stack(a); F=(F-F.mean(0))/np.maximum(F.std(0),1e-6); return F@F.T/F.shape[1]\\ndef cross(c,d):return (c[:,:,None]*d[:,None,:]).reshape(N,-1)\\ndef cen(k):return k-k.mean(0)[None,:]-k.mean(1)[:,None]+k.mean()\\nresults=[]\\nfor an,fun in [('atan',np.arctan),('asinh',np.arcsinh),('tanh',np.tanh),('linear',lambda a:a)]:\\n for gain in (.6,1.25,2.0):\\n  c=fun(gain*C); d=np.tanh(1.25*D); main=gram(c,d); products=gram(cross(c,d)); diag=gram(c*d); b=gram(B); sq=gram(c**2,d**2); cp=gram(cross(c,c)); dp=gram(cross(d,d));\\n  for kind,k in {'cross':main+products,'diag':main+diag,'mix':main+diag+products,'b01':main+products+.1*b,'b03':main+products+.3*b,'b1':main+products+b,'diagb':main+diag+.3*b,'hybrid':main+products+.12*sq+.12*b,'extended':main+products+.2*cp+.2*dp+.3*b,'poly3':main+products+.1*cen(main**2)+.07*cen(main**3)+.3*b,'resid':main+products+.2*cen(products*main)+.3*b}.items():\\n   for reg in (.001,.008,.025,.07):\\n    p=kscore(k+10,reg); results.append((p[:4].mean(0)+.25*p[:4].max(0)+.5*p[4:].mean(0),an,gain,kind,reg,p))\\nfor j in [0,1]:\\n print('RANK',j)\\n for r in sorted(results,key=lambda r:r[0][j])[:15]:print(r[1:-1],status(r[-1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted bilinear readout -> H2 structured residual and temporal subspace; current best 52/20 pair is 0.0357 y MAE and 0.0362 trajectory MAE, with worst y slice at 0.0524.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The scalar and trajectory favor different feature sets. Examine trajectory modes and compare structured priors across both blocked and randomized holdouts before choosing their readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a17f9576d9c395508327e107e2c88949b6659527e655f0d9e75bc1a1a4b6a332",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30033.96,
+      "usage_known": true,
+      "prompt_tokens": 30372,
+      "cached_tokens": 12672,
+      "completion_tokens": 1210
+    }
+  ]
+}

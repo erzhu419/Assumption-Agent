@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff374c41d34e421e94ec15cfcbbbca40",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:35.007589+00:00",
+  "ended_at_utc": "2026-11-28T15:44:06.753358+00:00",
+  "request_sha256": "3445703c07472cba6067d5f6d6eabd4cfab7df8729ca865916adb09792fbb03f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66549,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38431,
+    "cached_tokens": 5504,
+    "completion_tokens": 1201
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text()\\ns=s.replace('def _trajectory(a, b, t, observations):','def _scalar(z, q, y):\\\\n    # Identify the two dominant interactions using training observations only.\\\\n    a, b = _quadratic(z), _quadratic(q)\\\\n    support = 5 + np.argsort(np.abs(_fit(a, y)[5:]))[-2:]\\\\n    d = np.column_stack((a[:, :5], a[:, support].sum(axis=1)))\\\\n    e = np.column_stack((b[:, :5], b[:, support].sum(axis=1)))\\\\n    return e @ _fit(d, y)\\\\n\\\\n\\\\ndef _trajectory(a, b, t, observations):')\\ns=s.replace('y_hat = _quadratic(q)@_fit(_quadratic(z), np.asarray(train[\\\\'y\\\\'], float))','y_hat = _scalar(z, q, np.asarray(train[\\\\'y\\\\'], float))')\\nassert 'y_hat = _scalar(' in s\\np.write_text(s)\\nPY\\npython3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch, _operator\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s=pickle.load(f)[0]['study']\\ntr=s['train']; n=len(tr['y']); z=_operator(s)(tr['x']); orders=[np.arange(n)] + [np.random.default_rng(j).permutation(n) for j in range(16)] + [np.argsort(sign*z[:,j]) for j in range(4) for sign in (1,-1)] + [np.argsort(np.linalg.norm(z-z.mean(0),axis=1))]\\nmetrics=[]\\nfor o in orders:\\n    i,j=o[:52],o[52:]\\n    ss={**s, 'train':{k:(v[i] if len(v)==n else v) for k,v in tr.items()}, 'test':{'x':tr['x'][j]}}\\n    out=solve_batch(ss); et=np.abs(out['state_pred']-tr['traj'][j]); ey=np.abs(out['y_hat']-tr['y'][j]); metrics.append([ey.mean(),et.mean(),et[:,-1].mean(),et.mean(0).max()]); assert np.isfinite(metrics[-1]).all()\\nu,v=(s['panel_a'][k] for k in ('u','v')); clean=np.max(np.abs(u-v),axis=1)<1; design=lambda x: np.c_[np.ones(len(x)),x]; a=design(u); naive=a[clean]@np.linalg.lstsq(a,v,rcond=None)[0]; robust=np.column_stack([design(u[clean,k])@np.linalg.lstsq(design(u[clean,k]),v[clean,k],rcond=None)[0] for k in range(4)]); print('calibration clean RMSE, naive vs robust',np.sqrt(np.mean((naive-v[clean])**2)),np.sqrt(np.mean((robust-v[clean])**2)))\\nprint('columns: scalar MAE, trajectory MAE, last-horizon MAE, worst-horizon MAE'); print('required',metrics[0]); print('worst across',len(metrics),'splits',np.max(metrics,axis=0)); assert np.max(metrics,axis=0)[0]<=0.038\\nout=solve_batch(s); y,t=out['y_hat'],out['state_pred']; assert y.shape==(36,) and t.shape==(36,8) and np.isfinite(y).all() and np.isfinite(t).all(); np.testing.assert_allclose(out['diagnostics_vec'],[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full quadratic scalar readout) -> H2 (two pair interactions with a shared coefficient); across 26 splits the prototype lowered worst-slice scalar MAE from 0.00836 to 0.00501, with unchanged worst-horizon trajectory MAE of 0.00657.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the full quadratic readout\",\n      \"rejected_reason\": \"The same two interactions were selected in every split, and the tied readout improved both the required split and the worst stress slice.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact scalar readout without changing calibration or trajectory prediction, then rerun the required split, stress tests, and schema validation on the saved artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "87ef691c145907105e32664b685b650c2254fe17d3cb69c24c5f03aac1130bd9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31744.58,
+      "usage_known": true,
+      "prompt_tokens": 38431,
+      "cached_tokens": 5504,
+      "completion_tokens": 1201
+    }
+  ]
+}

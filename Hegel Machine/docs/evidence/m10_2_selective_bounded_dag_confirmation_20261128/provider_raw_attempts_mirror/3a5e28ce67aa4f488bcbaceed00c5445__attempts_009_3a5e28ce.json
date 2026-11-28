@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a5e28ce67aa4f488bcbaceed00c5445",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:34.292827+00:00",
+  "ended_at_utc": "2026-11-28T16:11:18.263099+00:00",
+  "request_sha256": "85edb97c1c5ebbfc375c30fb4be16450f9c55931484eb31c696c2d2922e0eb78",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61617,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37451,
+    "cached_tokens": 12672,
+    "completion_tokens": 1955
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/next.py <<'PY'\\nexec(open('/tmp/graph_probe.py').read().split('B=panel(')[0]); np.set_printoptions(precision=5,suppress=True)\\nu=s['panel_b']['u']; v=s['panel_b']['v']; S=np.load('/tmp/spaces.npz'); models=[]\\nfor name,fun,lo,hi,starts in [\\n ('warp',lambda x,p:x*(1+p[0]*abs(x)**p[1])**p[2],[.0001,.3,-5],[100,6,3],[[1,2,-1],[3,1,-.5],[10,3,-1],[1,2,.5]]),\\n ('satplus',lambda x,p:x+p[0]*np.tanh(p[1]*x)+p[2]*np.arcsinh(p[3]*x),[-8,.1,-8,.1],[8,20,8,50],[[1,5,-1,5],[-1,5,1,5],[1,2,-1,10]]),\\n ('threshold',lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1],[0,.1],[1,6],[[.35,1.5],[.1,.5],[.5,2]]),\\n ('poly5',lambda x,p:x+p[0]*x**3+p[1]*x**5,[-10,-10],[10,10],[[0,0]]),\\n ('powerblend',lambda x,p:x+p[0]*np.sign(x)*abs(x)**p[1]+p[2]*np.sign(x)*abs(x)**p[3],[-30,.1,-30,.1],[30,8,30,8],[[-1,.8,1,3],[1,.4,1,2],[-1,2,1,4]])]:\\n for aug in [False,True]:\\n  if aug: f=lambda x,p: af(np.c_[x,fun(x,p)])\\n  else: f=lambda x,p: af(fun(x,p))\\n  def res(p):\\n   D=f(u,p); return (D@fit(D,v)-v).ravel()\\n  q=min([least_squares(res,p,bounds=(lo,hi),max_nfev=250) for p in starts],key=lambda q:q.cost); a=f(u,q.x); c=fit(a,v); b=f(z,q.x)@c; models.append((np.std(q.fun),name+str(aug),b)); print(name,aug,q.x,np.std(q.fun),flush=True)\\nmodels.sort(key=lambda x:x[0]); np.savez('/tmp/newspaces.npz',**{k:b for _,k,b in models});\\nfrom sklearn.linear_model import Ridge,OrthogonalMatchingPursuit,Lasso\\nbest=[]; n=52; vfn=lambda x:np.column_stack(x)\\ndef score(a):return np.mean(abs(a[:52]-y[:52])),np.mean(abs(a[52:72]-y[52:]));\\nfor name,b in [('B0',S['B0']),('B3',S['B3'])]+[(k,b) for _,k,b in models[:4]]:\\n pair=z*np.roll(b,1,axis=1); P=pair.sum(1); Z=np.c_[z,b]; L=np.c_[af(b),P]; L2=np.c_[L,z]; U=np.c_[b,z,P]; idx=np.arange(4); e=y-L[:72]@fit(L[:52],y[:52]); tests=[]\\n base={'b':b,'z':z,'P':P[:,None],'pair':pair,'b+':b+np.roll(b,1,axis=1),'b-':b-np.roll(b,1,axis=1),'bo+':b+np.roll(b,2,axis=1),'bo-':b-np.roll(b,2,axis=1),'z+':z+np.roll(z,1,axis=1),'z-':z-np.roll(z,1,axis=1),'bhat':(L@fit(L[:52],y[:52]))[:,None]}\\n funcs={'sq':lambda x:x*x,'cub':lambda x:x**3,'ab':np.abs,'sinslow':lambda x:np.sin(1.3*x),'sinfast':lambda x:np.sin(2.6*x),'tanh':lambda x:np.tanh(2*x),'soft':lambda x:x/(1+abs(x)),'rat':lambda x:x/(1+x*x),'cos':lambda x:np.cos(1.4*x)}\\n for k,q in base.items():\\n  for f,fn in funcs.items():tests.append((k+' '+f,fn(q)))\\n for i in range(U.shape[1]):\\n  for j in range(i,U.shape[1]):\\n   tests.append(('prod'+str((i,j)),(U[:,i]*U[:,j])[:,None]))\\n   for d in range(j,U.shape[1]):tests.append(('cub'+str((i,j,d)),(U[:,i]*U[:,j]*U[:,d])[:,None]))\\n for l,A in [('L',L),('L2',L2)]:\\n  R=[]\\n  for k,h in tests:\\n   D=np.c_[A,h]; pred=D@fit(D[:52],y[:52]); R.append((*score(pred),k))\\n  print('single',name,l,sorted(R)[:9]);\\n  h=b@fit(L[:52],y[:52])[1:5];\\n  for style in [0,1,2,3,4]:\\n   for f,fn in funcs.items():\\n    def rough(p):\\n     if style==0: return np.c_[A,fn(b@p[:-1]+p[-1])]\\n     if style==1: return np.c_[A,fn(np.c_[b,P]@p[:-1]+p[-1])]\\n     if style==2: return np.c_[A,fn(np.c_[z,b]@p[:-1]+p[-1])]\\n     if style==3: return np.c_[A,fn(z@p[:-1]+p[-1])]\\n     return np.c_[A,fn(np.c_[z,b,P]@p[:-1]+p[-1])]\\n    dim=[4,5,8,4,9][style]; rg=np.random.default_rng(4); starts=[rg.normal(0,.7,dim+1) for _ in range(4)];\\n    if style<2:starts.append(np.r_[fit(L[:52],y[:52])[1:1+dim],0.]);\\n    def rr(p):\\n     D=rough(p)[:52]; return D@fit(D,y[:52])-y[:52]\\n    q=min((least_squares(rr,p,max_nfev=100,bounds=(-8.,8.)) for p in starts),key=lambda q:q.cost); D=rough(q.x); best.append((*score(D@fit(D[:52],y[:52])),name,l,style,f,q.x));\\nprint('links training',sorted(best,key=lambda x:x[0])[:12]); print('links val',sorted(best,key=lambda x:x[1])[:12]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/next.py > /tmp/next.log; head -16 /tmp/next.log; tail -20 /tmp/next.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic interaction alone → H2 cyclic interaction plus a compact nonlinear scalar term; the best fixed-split scalar MAE is 0.04449 and compact trajectory MAE is 0.00645.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a larger unrestricted interaction basis\",\"rejected_reason\":\"The shared cyclic term already explains the trajectory well, and unrestricted crosses worsened scalar validation.\"}],\"rationale\":\"Identify panel B's common input warp and test residual scalar features, including pair sums, differences, cubic products, rational terms, and nonlinear projections.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7f70abb27fb7bbbdfdcc389f52ff4321d2ab6ff587700a56bf9bd93398ce6aa6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44651.64,
+      "usage_known": true,
+      "prompt_tokens": 37451,
+      "cached_tokens": 12672,
+      "completion_tokens": 1955
+    }
+  ]
+}

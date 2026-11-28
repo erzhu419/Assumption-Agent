@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7aaca6fab784f6d9a90f5f68e43b802",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:53.904723+00:00",
+  "ended_at_utc": "2026-11-28T15:34:37.895644+00:00",
+  "request_sha256": "e07513def5035e39bba322f18e72b3f1dda7c4814973ac571323eee8705f231b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66020,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41662,
+    "cached_tokens": 12672,
+    "completion_tokens": 1857
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nfrom graph import *\\nfrom sklearn.linear_model import lars_path\\nfrom scipy.special import erf\\nfrom scipy.optimize import minimize_scalar\\n\\ndef operators(s,x):\\n z,A,B,C,D=ops(s,x)\\n c=s['panel_c']; u=c['u']; v=c['v2']; f=lambda u:aff(u+.35*u*u+.065*(1-np.cos(2.5*u))); q=ls(f(u),v); D=lambda u:f(u)@q\\n b=s['panel_b'];u=b['u'];v=b['v']; cand={}\\n for typ in ['sinfit','odd5','odd7','odd9','cubicminus','inverse3','softplus','tanhcub','polyfull','sinplus','gauss']:\\n  def f(w,p):\\n   if typ.startswith('odd'):return aff(np.stack([w**i for i in range(1,int(typ[3:])+1,2)],2).reshape(len(w),-1))\\n   if typ=='polyfull':return np.c_[aff(w),w*w,w**3,w**5]\\n   if typ=='sinfit':return aff(w+p[1]*np.sin(p[0]*w))\\n   if typ=='cubicminus':return aff(w**3+p[0]*w)\\n   if typ=='inverse3':return aff(w+p[1]*np.sinh(np.arcsinh(p[0]*w)/3))\\n   if typ=='softplus':return aff(w*np.logaddexp(0,p[0]*(w*w-p[1])))\\n   if typ=='tanhcub':return aff(w+p[0]*np.tanh(p[1]*w)+p[2]*w**3)\\n   if typ=='sinplus':return aff(w+p[1]*np.sin(p[0]*w)+p[2]*w**3)\\n   return aff(w+p[1]*w*np.exp(-p[0]*w*w))\\n  p={'sinfit':[2.88,-.4],'cubicminus':[.15],'inverse3':[2,-1.5],'softplus':[2,.25],'tanhcub':[-1,1,-.08],'sinplus':[3.58,-.373,.735],'gauss':[1,-1.1]}.get(typ,[])\\n  if p:p=least_squares(lambda p:(f(u,p)@ls(f(u,p),v)-v).ravel(),p,max_nfev=100).x\\n  F=f(u,p); q=ls(F,v); Bz=f(z,p)@q; cand[typ]=Bz\\n  if __name__=='__main__':print('B',typ,p,np.std(F@q-v),np.max(abs(F@q-v)))\\n cand['original']=B(z)\\n return z,cand,C,D\\n\\ndef features(z,b,c,d,gain=.22):\\n e=np.c_[c,d]\\n yield 'plain',poly(e,2)\\n yield 'eraw',np.c_[poly(e,2),b,z]\\n for name,fn in [('id',lambda a:a),('tanh',lambda a:np.tanh(1.25*a)),('sin',lambda a:np.sin(1.25*a)),('asinh',lambda a:np.arcsinh(1.25*a)),('atan',lambda a:np.arctan(1.25*a)),('rat',lambda a:a/(1+gain*a*a)),('cubr',lambda a:np.sinh(np.arcsinh(1.25*a)/3)),('ex',lambda a:np.expm1(np.clip(a,-4,4)))]:\\n  p=fn(c); q=fn(d)\\n  yield name+'both',poly(np.c_[p,q],2)\\n  yield name+'c',poly(np.c_[p,d],2)\\n  yield name+'d',poly(np.c_[c,q],2)\\n  yield name+'sum',np.c_[poly(c+gain*d,2),d]\\n  yield name+'full',np.c_[poly(np.c_[p,q],2),c,d]\\n  for op,f in [('add',c+q),('mult',c*(1+gain*q)),('gate',c/(1+gain*d*d)),('shiftgate',(c+d)/(1+gain*d*d)),('cross',c*np.roll(d,1,axis=1))]:\\n   yield name+op,np.c_[poly(f,2),d,c]\\n yield 'inter',np.c_[poly(e,2),np.column_stack([c[:,i]*d[:,j]**2 for i in range(4) for j in range(4)])]\\n yield 'restricted',np.c_[poly(c,2),poly(d,2)[:,1:],c*d,c*np.roll(d,1,axis=1),c*np.roll(d,-1,axis=1)]\\n\\ndef fit(F,Y,ix,jx,regs):\\n a=F[ix,1:]; h=a.mean(0); sd=np.maximum(a.std(0),1e-5); a=(a-h)/sd;b=(F[jx,1:]-h)/sd; yy=Y[ix]; m=yy.mean(0); U,S,V=np.linalg.svd(a,full_matrices=False);R=U.T@(yy-m);G=b@V.T\\n for reg in regs:\\n  wt=S/(S*S+reg); P=G@(wt[:,None]*R)+m; ht=(U**2)@(S*wt)+1/len(ix); L=(yy-m-U@((S*wt)[:,None]*R))/(1-ht[:,None]);yield reg,P,np.mean(abs(L),0)\\n\\nif __name__=='__main__':\\n tr=s['train'];Y=np.c_[tr['y'],tr['traj']];z,bs,C,D=operators(s,tr['x']); ix=np.arange(52);jx=np.arange(52,72);rows=[]\\n for typ,b in bs.items():\\n  for dc,d in [('z',D(z)),('b',D(b)),('z+b',D(z)+D(b)),('z-b',D(z)-D(b))]:\\n   for key,F in features(z,b,C(b),d):\\n    for reg,P,L in fit(F,Y,ix,jx,[.001,.01,.05,.2,1.]):\\n     v=abs(P-Y[jx]).mean(0);rows.append((L[0]+L[1:].mean(),v[0],v[1:].mean(),typ,dc,key,reg))\\n for col in (0,1,2):print('BEST',col,*sorted(rows,key=lambda r:r[col])[:14],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense quadratic readout -> H2 structured interactions of C1(B(z)) and C2(z); current 52/20 MAE is 0.04820 for y and 0.03304 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare compact operator fits and candidate interaction bases using leave-one-out errors on the fitting subset, then measure both targets on the prescribed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d84480d74a0a37152e4807a10a36f71d2e30eb1f45846cea68c7e4159e166f9e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44409.57,
+      "usage_known": true,
+      "prompt_tokens": 41662,
+      "cached_tokens": 12672,
+      "completion_tokens": 1857
+    }
+  ]
+}

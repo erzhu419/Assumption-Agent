@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a42da335ed34d2bb4be2191f3cb3115",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:24:25.924255+00:00",
+  "ended_at_utc": "2026-11-28T15:24:57.660046+00:00",
+  "request_sha256": "052609e5dc61756c6f57f549126490dc9c05b42c8a7c7df0cd4bc681edb9b81c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26688,
+    "cached_tokens": 12672,
+    "completion_tokens": 1271
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/explore.py <<'PY'\\nimport importlib.util,glob,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nm=importlib.util.module_from_spec(sp:=importlib.util.spec_from_file_location('arch',glob.glob('/tmp/hegel_continual_archive/*batch_03_solver.py')[0]));sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=m._calibrate(s['panel_a'],tr['x']); ls=m.lin; one=m.one\\nu=s['panel_c']['u']; unique=[('tanh',lambda w,q:np.tanh(q[0]*w)),('tanh+lin',lambda w,q:np.c_[w,np.tanh(q[0]*w)]),('cos',lambda w,q:np.cos(q[0]*w)),('cos+lin',lambda w,q:np.c_[w,np.cos(q[0]*w)]),('shiftcos',lambda w,q:np.cos(q[0]*w+q[1])),('shifttanh',lambda w,q:np.tanh(q[0]*w+q[1])),('sin',lambda w,q:np.sin(q[0]*w)),('softsign',lambda w,q: w/(1+q[0]*abs(w))+q[1]*w),('curvature',lambda w,q:np.c_[w,w*w,w*w/(1+q[0]*w*w)])]\\nops=[]\\nfor key in ['v1','v2']:\\n Y=s['panel_c'][key]; best=[]\\n for name,f in unique:\\n  q=[2] if name not in ['shiftcos','shifttanh','softsign'] else [2,0]\\n  def fun(p):\\n   d=one(f(u,p)); return (d@ls(d,Y)-Y).ravel()\\n  r=least_squares(fun,q,max_nfev=1000,gtol=1e-12); d=one(f(u,r.x)); err=np.std(r.fun);best.append((err,name,one(f(z,r.x))@ls(d,Y))); print(key,name,r.x,err)\\n ops.append(min(best,key=lambda a:a[0])[2])\\na=s['panel_a']; au=a['u']; av=a['v']; d=np.stack((np.ones_like(au),au,np.roll(au,-1,axis=1),au*np.roll(au,-1,axis=1),au**3),axis=-1);keep=np.linalg.norm(av,axis=1)<4\\nfor j in range(4):\\n w=np.stack([ls(d[keep,i],av[keep,i]) for i in range(4)]); r=np.linalg.norm(np.einsum('nik,ik->ni',d,w)-av,axis=1);keep=r<=max(.002,5*np.median(r))\\nprint('calib',w,'resid',np.sort(r));print('z ranges',z.min(0),z.max(0));\\nb=s['panel_b']; b=one(z)@ls(one(b['u']),b['v']); g,h=ops; ag,ah=np.split(m._panel_maps(s['panel_c'],z),2,axis=1)\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef score(F):\\n F=one(F);Y=np.c_[tr['y'],tr['traj']]; pred=F[52:]@ls(F[:52],Y[:52]); er=np.abs(pred-Y[52:]); fit=np.abs(F[:52]@ls(F[:52],Y[:52])-Y[:52]); return (np.linalg.matrix_rank(F),*np.round([er[:,0].mean(),er[:,1:].mean(),fit[:,0].mean(),fit[:,1:].mean()],6))\\nfor name,G,H in [('archive',ag,ah),('best',g,h)]:\\n base=np.c_[G,H]; p=G*H; print(name)\\n for nm,d in [('lin',base),('dot',np.c_[base,p.sum(1)]),('diag',np.c_[base,p]),('cross',np.c_[base,cross(G,H)]),('pair',np.c_[base,cross(G,H),G**2,H**2]),('z',np.c_[base,z,p.sum(1)]),('zx',np.c_[base,z,cross(z,G),p.sum(1)]),('all',np.c_[base,cross(G,H),cross(G,G),cross(H,H)])]: print(nm,score(d))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived calibration and approximate panel maps -> H2: exact shared operator maps and complete readout; archived held-out y MAE is 0.039582.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune readout regularization first\",\"rejected_reason\":\"Operator misspecification can create readout residuals that regularization cannot fix.\"}],\"rationale\":\"Fit candidate nonlinearities on independent calibration panels, then compare contraction, diagonal, and full bilinear readouts on the prescribed holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2d70ab6e609537f8db6ad09f45342ee0e484f960ccfe38d52eb87a33fb272cd8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31734.92,
+      "usage_known": true,
+      "prompt_tokens": 26688,
+      "cached_tokens": 12672,
+      "completion_tokens": 1271
+    }
+  ]
+}

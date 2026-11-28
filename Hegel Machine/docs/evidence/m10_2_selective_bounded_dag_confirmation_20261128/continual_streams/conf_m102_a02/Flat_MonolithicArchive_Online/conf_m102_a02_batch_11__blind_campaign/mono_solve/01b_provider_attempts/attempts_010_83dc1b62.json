@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83dc1b62b67e4c7ba1bcb6917a5d0d59",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:40.233181+00:00",
+  "ended_at_utc": "2026-11-28T15:58:13.062993+00:00",
+  "request_sha256": "6aec54d737ee4629d864e96e60b021f709b2b4c14590dc6b1c356f8240455e0d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61610,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39222,
+    "cached_tokens": 12672,
+    "completion_tokens": 1410
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/refine11.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\nsp=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; cal=m._calibrate(s['panel_a']); x=m._inverse(tr['x'],cal); xt=m._inverse(s['test']['x'],cal)\\nprint('range',x.min(0),x.max(0),xt.min(0),xt.max(0)); I=np.arange(len(y)); a0=np.array([-.52,-.15,1.,-.12]); splits=[I]+[np.random.default_rng(k).permutation(I) for k in range(12)]+[np.argsort(g)[::h] for g in [np.linalg.norm(x,axis=1),x@a0] for h in [1,-1]]; print('gate range',np.sort(x@a0)[[0,19,20,51,52,71]],(xt@a0).min(),(xt@a0).max())\\nA=m._aff(x); Q=m._quadratic(x); L=x[:,[0,1,3]]\\nfor base,gate,reg in [('quad','aff',.012),('quad','aff',.05),('quad','aff',.15),('quad','aff',.4),('quad','fixed',.012),('quad','fixed',.08),('quad','scalar',.002),('diag','aff',.025),('diag','fixed',.025),('tcos','aff',.025),('qsincos','aff',.025),('qsin','aff',.025),('quad','blend',.025),('quad','same',.025)]:\\n F={'quad':Q,'diag':np.c_[A,x*x],'tcos':np.c_[A,np.cos(1.25*x),np.cos(2.15*x)],'qsincos':np.c_[Q,np.sin(1.25*x),np.cos(1.25*x)],'qsin':np.c_[Q,np.sin(1.25*x)]}[base]\\n def mat(p):\\n  h=x[:,2]+L@p[:3]+p[3]; k=2.15 if gate=='fixed' else p[4]; v=np.tanh(k*h)\\n  G=v[:,None]*(1 if gate=='scalar' else A)\\n  if gate=='blend':G=np.c_[G,np.sin(1.25*h)]\\n  if gate=='same':G=np.c_[G,np.cos(1.25*h)]\\n  return np.c_[F,G]\\n d=mat([0,0,0,0,2.15]).shape[1]; regularize=np.r_[np.zeros(5),np.full(F.shape[1]-5,reg/2),np.full(d-F.shape[1],reg)]; R=np.diag(regularize); E=[]; delta=[]\\n for j,idx in enumerate([I]+splits):\\n  a,b=(idx,idx) if j==0 else (idx[:52],idx[52:]); Y=np.r_[y[a],np.zeros(d)]\\n  def calc(p):\\n   D=np.r_[mat(p)[a],R]; return D,Y,m._ls(D,Y)\\n  def res(p):\\n   D,Y,w=calc(p);return D@w-Y\\n  opts=[least_squares(res,p,bounds=([-3,-3,-3,-2,.035],[3,3,3,2,12]),max_nfev=100) for p in [[-.52,-.15,-.12,0,1.85],[0,0,0,0,2.15],[-.5,0,0,-.5,1.5]]]; r=min(opts,key=lambda r:r.cost); D,_,w=calc(r.x); e=mat(r.x)[b]@w-y[b]; E.append(np.mean(abs(e)))\\n  if j==0: full=(r.x.round(4),w.round(4),np.std(e)); err=e\\n E=np.array(E); print(base,gate,reg,'all',np.round(E[[0,1,-4,-3,-2,-1]],5),'random avg/max',np.round([E[2:14].mean(),E[2:14].max()],5), 'full',full if (base,gate,reg) in [('quad','aff',.012),('quad','fixed',.012),('qsin','aff',.025),('quad','scalar',.002)] else '',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/refine11.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear calibration) → H2 (quadratic readout plus one gated affine term); scalar MAE is 0.00825 on the prescribed split, 0.02028 on the worst random split, and 0.09831 on the worst directional split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified baseline now\",\n      \"rejected_reason\": \"It passes the prescribed gate with margin, but the directional holdouts expose substantial extrapolation error.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified artifact unchanged while screening telemetry-anchored and regularized readouts for directional extrapolation gains without sacrificing random-split accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8a256e1b2dd339b59538b9f22f42fa8274c56dbcc447da5a5e016bd839fd523f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33338.11,
+      "usage_known": true,
+      "prompt_tokens": 39222,
+      "cached_tokens": 12672,
+      "completion_tokens": 1410
+    }
+  ]
+}

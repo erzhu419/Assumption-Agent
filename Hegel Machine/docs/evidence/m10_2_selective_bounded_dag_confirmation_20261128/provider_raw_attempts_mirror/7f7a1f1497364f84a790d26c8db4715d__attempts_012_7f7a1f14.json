@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f7a1f1497364f84a790d26c8db4715d",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:46.479087+00:00",
+  "ended_at_utc": "2026-11-28T15:35:32.508568+00:00",
+  "request_sha256": "1d47e529de8ab7d0b12b6a6900a9cd5696298f90cc17cf7b91bac70ea187fb48",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77514,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45998,
+    "cached_tokens": 12672,
+    "completion_tokens": 2028
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/fast.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom scipy.linalg import eigh\\nsys.path.insert(0,'/holdout_task');from batch_solver import *\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; h=s['train']; z=cal(s['panel_a'],h['x']); x=h['x']; b,p,q=ops(s,z); y=h['y']; t=h['traj']; n=52\\nu=s['panel_b']['u'];v=s['panel_b']['v'];\\nforms={'sin':lambda z,k:z-np.sin(k*z)/k,'tanh':lambda z,k:z-np.tanh(k*z)/k,'atan':lambda z,k:z-np.arctan(k*z)/k,'rat':lambda z,k:z**3/(1+k*z*z),'sqrt':lambda z,k:z-z/np.sqrt(1+k*z*z),'sinh':lambda z,k:z-np.arcsinh(k*z)/k,'erf':lambda z,k:z-np.sqrt(np.pi)/2*__import__('scipy').special.erf(k*z)/k,'cube':lambda z,k:z**3,'power':lambda z,k:z*abs(z)**k}\\ndef loo(a,v):\\n Q=np.linalg.qr(a)[0];return np.mean(((v-Q@(Q.T@v))/(1-(Q*Q).sum(1))[:,None])**2)\\nfor name,f in forms.items():\\n opt=minimize_scalar(lambda k:loo(aff(f(u,k)),v),bounds=(.002,4),method='bounded'); print('B',name,opt.x,opt.fun**.5,flush=True)\\n\\ndef std(a):\\n a=a-a[:n].mean(0);return a/np.maximum(a[:n].std(0),1e-9)\\ndef kernel(a):\\n a=std(a);return a@a.T/a.shape[1]\\n\\ndef run(z,b,p,q,label):\\n ks={}; lin=kernel(z); quad=kernel(poly(z)[:,1:]); ix,jx=np.triu_indices(4,1); products=z[:,ix]*z[:,jx]; cross=kernel(products); out=[]; allx=np.c_[z,b,p,q];\\n for coord,xx in [('z',z),('b',b),('zp',np.c_[z,p]),('zb',np.c_[z,b]),('zq',np.c_[z,q]),('all',allx)]:\\n  ks[coord+'quad']=kernel(poly(xx)[:,1:]); ks[coord+'cross']=kernel(pol if (pol:=xx[:,np.triu_indices(xx.shape[1],1)[0]]*xx[:,np.triu_indices(xx.shape[1],1)[1]]).shape[1] else xx)\\n  for k in [.25,.5,1,2,3,4,6,9]:\\n   ks[coord+'sep'+str(k)]=kernel(np.c_[xx,xx*xx,xx**3,np.tanh(k*xx),np.sqrt(.05+xx*xx),np.sin(k*xx),np.cos(k*xx)])\\n   r=((xx[:,None,:]-xx[None,:,:])**2).sum(2)/xx.shape[1]; ks[coord+'rbf'+str(k)]=np.exp(-k*r)\\n   ks[coord+'add'+str(k)]=np.exp(-k*(xx[:,None,:]-xx[None,:,:])**2).mean(2)\\n growth=np.c_[z,z*z,z**3,z**4,z**5,np.sin(2.5*z),np.sqrt(.08+z*z),np.maximum(z[:,[1,3]],0)]; smooth=kernel(growth); alphas=np.logspace(-8,-.7,23); target=y[:n]-y[:n].mean()\\n for nm,K in ks.items():\\n  for fac in [0,.003,.03,.3,3]:\\n   if fac==0 and 'cross' in nm:continue\\n   M=K+fac*smooth+.05*cross; ev,U=eigh(M[:n,:n]); E=1/np.maximum(ev[:,None]+alphas,1e-12); coef=U@((U.T@target)[:,None]*E); looerr=np.mean(abs(coef/(U**2@E)),axis=0); preds=y[:n].mean()+M[n:,:n]@coef; err=np.mean(abs(preds-y[n:,None]),axis=0)\\n   for i in np.argsort(looerr)[:2]:out.append((looerr[i],err[i],nm,fac,alphas[i],preds[:,i]))\\n print(label,'LOO',[(a,b,c,d,e) for a,b,c,d,e,_ in sorted(out,key=lambda a:a[0])[:12]],flush=True);print(label,'CV',[(a,b,c,d,e) for a,b,c,d,e,_ in sorted(out,key=lambda a:a[1])[:12]],flush=True)\\n # Low-dimensional generalized additive variable projection, multi-start.\\n A=poly(z);o=[]; rng=np.random.default_rng(32)\\n for typ in ['tanh','soft','sin','rat','mix','one']:\\n  def F(w):\\n   k=np.exp(w[:4]); v=(z-w[4:])*k\\n   H={'tanh':lambda:np.tanh(v),'soft':lambda:np.sqrt(1+v*v),'sin':lambda:np.sin(v),'rat':lambda:v/(1+v*v),'mix':lambda:np.c_[np.sin(v[:,[0,2]]),np.sqrt(1+v[:,[1,3]]**2),z[:,3]**3], 'one':lambda:np.c_[np.sqrt(1+v[:,[1,3]]**2),np.tanh(v[:,[0,2]]),z[:,3]**3]}[typ]()\\n   return np.c_[A,H]\\n  def res(w,ret=False):\\n   d=F(w); Q,R=np.linalg.qr(d[:n]);fit=ls(d[:n],y[:n]);e=d[:n]@fit-y[:n]; lever=(Q**2).sum(1);return (np.mean(abs(e/(1-lever))), np.mean(abs(d[n:]@fit-y[n:])),w) if ret else np.r_[e/np.sqrt(np.maximum(.01,1-lever)),.002*w]\\n  opts=[]\\n  for r in range(15):\\n   init=np.r_[rng.uniform(-.3,1.2,4),rng.normal(0,.24,4)]; w=least_squares(res,init,bounds=([-1.4]*4+[-1]*4,[2.15]*4+[1]*4),max_nfev=160).x;opts.append(res(w,True))\\n  opts.sort(key=lambda a:a[0]); print('add',label,typ,opts[0], 'minCV',min(o[1] for o in opts),flush=True)\\nrun(z,b,p,q,'refined');\\nexec(open('/tmp/latent.py').read().split(\\\"print('cal'\\\")[0]);b,p,q=ops(s,z);run(z,b,p,q,'bilinear')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fast.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 refined calibration with generic readouts → H2 distinct sparse scalar and panel-B trajectory readouts; panel-B trajectory holdout MAE is 0.0192, while the strongest scalar candidate is 0.0720.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep panel C1 as the main trajectory input\",\"rejected_reason\":\"With refined calibration, panel B plus a quadratic basis reduces held-out trajectory MAE from 0.0562 to 0.0192.\"}],\"rationale\":\"Use first-52 jackknife error to compare scalar models, keeping the final 20 for measurement. The trajectory already has a candidate below tolerance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "431e5c5db74ec68292a8a6721ca67dd80965ff96cd673b47e46150b7011e9c55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46028.08,
+      "usage_known": true,
+      "prompt_tokens": 45998,
+      "cached_tokens": 12672,
+      "completion_tokens": 2028
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96f3690262ca4171ba6f50485300952a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:17:16.184423+00:00",
+  "ended_at_utc": "2026-11-28T16:17:45.385365+00:00",
+  "request_sha256": "c7fa712c3b7d81add3b3957feb084dbd5d3a7a74099f2266c0332ea63808e76b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49282,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34137,
+    "cached_tokens": 12672,
+    "completion_tokens": 1239
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/ops14.py | sed -n '/c v2/,$p'; sed -n '1,120p' /tmp/hegel_continual_archive/*_09_solver.py; cat > /tmp/dag14.py <<'PY'\\nfrom ops14 import *\\nfrom itertools import combinations_with_replacement\\nfrom scipy.linalg import solve\\ntr=s['train']; x=np.r_[tr['x'],s['test']['x']]; y=tr['y']; T=tr['traj']; Y=np.c_[y,T]; U,S,V=np.linalg.svd(T,full_matrices=False);print('traj sv',S,'range',np.std(Y,axis=0),'summary',tr['summary']);print('modes',V[:4]);\\nz=cal(s['panel_a'])(x)\\na=s['panel_a'];u,v=a['u'],a['v'];k=np.max(abs(u-v),1)<3; h=.18*np.tanh(1.8*u)-.32*np.sin(2.4*np.roll(u,2,axis=1));print('archive cal09',np.std((D(u)@ls(D(u[k]),(v-h)[k])+h-v)[k]))\\nbp=s['panel_b'];cp=s['panel_c']; B=op(bp['u'],bp['v'],'cos',False)[3]; C=op(cp['u'],cp['v1'],'tanh_sin',False)[3]; E=op(cp['u'],cp['v2'],'exp',True)[3]\\nF={'z':z,'x':x}; seq=[('z',z)]\\nfor d in range(3):\\n seq=[(n+t,fn(a)) for n,a in seq for t,fn in [('B',B),('C',C),('E',E)] if not (d==2 and n[-1]==t)];F.update(seq)\\nprint('z range',np.min(z,axis=0),np.max(z,axis=0))\\nrows=[]\\ndef sq(a):return np.column_stack([a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(a.shape[1]),2)])\\ndef errors(a,lam=0):\\n a=a/(1e-7+a[:52].std(0)); a=np.column_stack([np.ones(len(a)),a]); X=a[:52];c=ls(X,Y[:52]) if not lam else solve(X.T@X+lam*np.eye(X.shape[1]),X.T@Y[:52],assume_a='pos');e=abs(a[52:72]@c-Y[52:]); return np.mean(e[:,0]),np.mean(e[:,1:]),np.max(np.mean(e[:,1:],axis=0))\\nfor n,h in F.items():\\n for spec,a in [('direct',h),('linear',np.c_[z,h]),('diag',np.c_[z,h,z*h,np.sum(z*h,axis=1)]),('within',np.c_[z,h,z*z,h*h,z*h]),('quad',np.c_[z,h,sq(z),sq(h),(z[:,:,None]*h[:,None,:]).reshape(len(z),16)]),('smooth',np.c_[z,h,z*h,np.tanh(2.15*h),np.arcsinh(2.15*h),h/(1+.22*h*h)])]:\\n  rows.append((*errors(a,.01),n,spec))\\nfor n,h in F.items():\\n if len(n)>3:continue\\n for m,g in F.items():\\n  if len(m)>3 or m<=n:continue\\n  for spec,a in [('dual',np.c_[z,h,g]),('dualdiag',np.c_[z,h,g,z*h,z*g,h*g]),('dualplus',np.c_[z,h,g,z*h,z*g,h*g,z*z,h*h,g*g])]:rows.append((*errors(a,.03),n+'-'+m,spec))\\nfor f in [lambda r:r[0],lambda r:r[1],lambda r:max(r[:2])]:\\n print('ranking');print(*[(np.round(r[:3],5),*r[3:]) for r in sorted(rows,key=f)[:15]],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag14.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"Recovered reference operators -> competing serial and parallel paths with low-order readouts; panel B and panel C v1 leverage-adjusted RMSEs are 0.000108 and 0.000129, while the best archived response MAE is 0.4137.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[],\n  \"rationale\":\"Compare serial and parallel compositions on both readouts, and check whether the archived robust calibration correction recovers the reference map more accurately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "a6b5cea933ab0ee42353a7b460c2c6cea92379724d0609dcd4e6bfa5d8c6c21e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29199.69,
+      "usage_known": true,
+      "prompt_tokens": 34137,
+      "cached_tokens": 12672,
+      "completion_tokens": 1239
+    }
+  ]
+}

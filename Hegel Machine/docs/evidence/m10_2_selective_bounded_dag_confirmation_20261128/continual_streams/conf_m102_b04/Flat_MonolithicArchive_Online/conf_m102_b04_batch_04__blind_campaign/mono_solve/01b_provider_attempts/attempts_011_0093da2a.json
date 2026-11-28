@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0093da2aa6c64d1baca1b1d2dc987e1a",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:46.099488+00:00",
+  "ended_at_utc": "2026-11-28T15:14:12.819606+00:00",
+  "request_sha256": "3cd8d90f84834804545c032cdf0ec2f4131344b312da6f1cb3fd35c42567e561",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41363,
+    "cached_tokens": 12672,
+    "completion_tokens": 1054
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/final_probe.py <<'PY'\\nexec(open('/tmp/stress_batch.py').read().split('for mode in')[0])\\nfrom itertools import combinations\\nfrom scipy.linalg import solve\\nD={}\\nfor name,i,j in folds:\\n T=m._time_basis(s['eval_times'],z[i]); p=m._profile(u[i],np.c_[y[i],z[i]@T]); q=m._quadratic(u); g=m._design(u,q,p); h=g[:,15:]; h=h/np.max(abs(h[i]),axis=0); g=np.c_[q,h]\\n shapes={'cube':u**3,'fifth':u**5,'shapeSquare':h*h,'shapeDiff':(h-u)**2,'uTimesShape':u*h,'stateSq':np.c_[g@np.linalg.lstsq(g[i],z[i]@T,rcond=None)[0]]**2,'mixedCubes':np.column_stack([u[:,k]**2*u[:,l] for k in range(4) for l in range(4) if k!=l]),'triples':np.column_stack([np.prod(u[:,k],axis=1) for k in combinations(range(4),3)]),'shapeProducts':np.column_stack([h[:,k]*h[:,l] for k,l in combinations(range(4),2)])}\\n for key,extra in [('base',q[:,:0]), *shapes.items(),('cube-shapeSquare',np.c_[shapes['cube'],shapes['shapeSquare']]),('cube-uTimesShape',np.c_[shapes['cube'],shapes['uTimesShape']])]:\\n  a=np.c_[g,extra];\\n  for lq in [0,.3,1,2]:\\n   for le in ([0] if key=='base' else [0,.05,.2,.8,3]):\\n    reg=np.r_[np.zeros(5),np.full(10,lq),np.zeros(4),np.full(extra.shape[1],le)]; d=np.diag(np.sqrt(reg)); co=np.linalg.lstsq(np.r_[a[i],d],np.r_[y[i],np.zeros(len(d))],rcond=None)[0]; D.setdefault((key,lq,le),[]).append(a[j]@co)\\nfor key1,key2 in [(('base',0,0),('cube',0,0)),(('base',.3,0),('cube',0,0)),(('base',1,0),('cube',0,0))]:\\n for w in [.25,.5,.75]: D[(key1,key2,w)]=[(1-w)*a+w*b for a,b in zip(D[key1],D[key2])]\\nR=[]\\nfor tag,pp in D.items():\\n e=np.array([abs(y[j]-p).mean() for (_,_,j),p in zip(folds,pp)]); R.append((e.max(),e.mean(),e[:9].mean(),e[0],str(tag),e.round(5)))\\nfor r in sorted(R)[:16]:print(r)\\nfor r in R:\\n if r[4] in [str(('base',0,0)),str(('cube',0,0))]: print('ref',r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test regularized cubic and transformed-coordinate corrections to the scalar readout; the unregularized cubic lowered worst-tail MAE from 0.05259 to 0.04453 while leaving the trajectory model unchanged.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the scalar readout with trajectory amplitude products\",\"rejected_reason\":\"The tested products worsened the hardest scalar tails, and trajectory amplitudes alone discarded useful axis-specific information.\"}],\"rationale\":\"Test small corrections on top of the verified calibration and trajectory fit. Compare worst-tail and ordinary-split errors before choosing the final scalar readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9d639e01498e87aff45967e698baa5b2ac8befe4a6ce3e24d67495c3522396d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26718.15,
+      "usage_known": true,
+      "prompt_tokens": 41363,
+      "cached_tokens": 12672,
+      "completion_tokens": 1054
+    }
+  ]
+}

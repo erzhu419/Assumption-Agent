@@ -1,0 +1,14 @@
+import pickle,numpy as np
+from scipy.optimize import least_squares
+from itertools import combinations_with_replacement as cw, combinations
+s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; g=np.load('/tmp/feat06.npz'); z,w,Y=[g[k] for k in ('z','w','Y')]; u=s['panel_c']['u']; V=s['panel_c']['v2']; ix=list(cw(range(4),2)); ls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]; one=lambda x:np.c_[np.ones(len(x)),x]; P=lambda x:np.column_stack([one(x)]+[x[:,i]*x[:,j] for i,j in ix]); c=P(z)@g['c'];
+models={'rat':(lambda x,a:x*x/(1+a[0]*x*x),[.22]),'rat2':(lambda x,a:x*x/(1+a[0]*x*x)**2,[.22]),'mixed':(lambda x,a:x*x*(1-a[1]*x*x)/(1+a[0]*x*x),[.22,.22]),'cos':(lambda x,a:np.cos(a[0]*x),[1.25]),'sin2':(lambda x,a:np.sin(a[0]*x*x),[1.25]),'sinc':(lambda x,a:np.sinc(a[0]*x/np.pi),[1.25]),'tanh2':(lambda x,a:np.tanh(a[0]*x)**2,[1.25]),'soft':(lambda x,a:(1+a[0]*x*x)**a[1],[.22,-2]),'exp':(lambda x,a:x*x*np.exp(-a[0]*x*x),[.22]),'log':(lambda x,a:np.log1p(a[0]*x*x),[.22]),'rat4':(lambda x,a:x*x/(1+a[0]*x**4),[.22]),'rational2':(lambda x,a:x*x/(1+a[0]*x*x+a[1]*x**4),[.22,.06])}
+Ds=[]
+for n,(f,a) in models.items():
+ def r(p):
+  X=one(f(u,p)); return (X@ls(X,V)-V).ravel()
+ fit=least_squares(r,a,max_nfev=1000,gtol=1e-12); X=one(f(u,fit.x)); d=one(f(z,fit.x))@ls(X,V); print(n,fit.x,abs(fit.fun).mean(),abs(X[-6:]@ls(X[:-6],V[:-6])-V[-6:]).mean(),flush=True); Ds.append((abs(fit.fun).mean(),n,d,fit.x,ls(X,V)))
+Ds.sort(key=lambda item:item[0]); np.savez('/tmp/d06.npz',d=Ds[0][2],q=Ds[0][3],coef=Ds[0][4],c=c)
+d=Ds[0][2]; print('best',Ds[0][1]);
+for kind,A in {'base':np.c_[z,c,d], 'base+z2':np.c_[P(z)[:,1:],c,d],'base+cyclic':np.c_[z,c,d,z*c,z*d,c*d], 'z-c':np.c_[z,c], 'z-d':np.c_[z,d]}.items():
+  f=one(A); er=abs(f@ls(f[:52],Y[:52])-Y); print(kind,er[:52].mean(0).round(4),er[52:].mean(0).round(4))

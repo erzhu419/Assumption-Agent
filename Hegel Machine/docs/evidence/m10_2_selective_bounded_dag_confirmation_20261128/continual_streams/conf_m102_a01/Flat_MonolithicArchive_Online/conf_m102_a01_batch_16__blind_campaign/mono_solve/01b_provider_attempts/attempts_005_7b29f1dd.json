@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b29f1dd216c4446b95b8dfbe3054329",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_16__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:19.799863+00:00",
+  "ended_at_utc": "2026-11-28T15:16:09.232000+00:00",
+  "request_sha256": "d648d8155c357f947d2c506c00b540ddbd7a13e50e09528df7e31cd524bec0ac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38201,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28721,
+    "cached_tokens": 12672,
+    "completion_tokens": 1216
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/grammar.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"for p in ['panel_a'\\\")[0])\\nfrom itertools import combinations_with_replacement\\nfrom scipy.linalg import cho_solve,cho_factor\\nfrom scipy.optimize import minimize\\nA=lambda a: np.c_[np.ones(len(a)),a]\\ndef soft(a,j):return a/(1+j*abs(a))\\ndef rad(a,j):return np.sqrt(1+j*a*a)-1\\np=s['panel_c']; u=p['u']; pc=[]\\nfor key,fun in [('v1',soft),('v2',rad)]:\\n def fit(j):\\n  b=np.c_[A(u),fun(u,j)]; c=ls(b,p[key]); return b@c-p[key],c\\n j=minimize_scalar(lambda j:np.sum(fit(j)[0]**2),bounds=(.01,3),method='bounded').x\\n print(key,j,fit(j)[1]); pc.append((fun,j,fit(j)[1]))\\np=s['panel_b']; B=ls(A(p['u']),p['v']); print('A decontam',ls(A(x),z)); print('B sv',np.linalg.svd(B[1:])[1]);\\nW={'x':x,'z':z,'h':h,'bz':A(z)@B,'bx':A(x)@B}\\nfor k,w in list(W.items()):\\n for i,(f,j,c) in enumerate(pc):W[f'{k}c{i}']=np.c_[A(w),f(w,j)]@c\\n_,_,V=np.linalg.svd(t[:n],full_matrices=False); a=t@V[0]; Z=np.c_[y,a];\\nfor k,w in W.items():\\n groups={'quad':np.stack([w[:,i]*w[:,j] for i,j in combinations_with_replacement(range(4),2)],1),'cubic':np.stack([w[:,i]*w[:,j]*w[:,l] for i,j,l in combinations_with_replacement(range(4),3)],1)}\\n for j in [.22,1.25]:\\n  tag=str(j); ii,jj=np.triu_indices(4,1); d=np.c_[w,w[:,ii]+w[:,jj],w[:,ii]-w[:,jj]]\\n  for f,g in [('soft',soft(d,j)),('rad',rad(d,j)),('rat',d/(1+j*d*d)),('tanh',np.tanh(j*d)),('sin',np.sin(j*d))]:\\n   groups[f+tag]=g; groups['x'+f+tag]=(g[:,:,None]*w[:,None,:]).reshape(len(w),-1)\\n  groups['div'+tag]=(groups['quad'][:,:,None]/(1+j*d[:,None,:]**2)).reshape(len(w),-1)\\n base=A(x); Q=np.linalg.qr(base[:n])[0]; H0=Q@Q.T; resid=Z[:n]-H0@Z[:n]; scores=[]\\n for tag,F in groups.items():\\n  F=F-base@ls(base[:n],F[:n]); F=F/np.maximum(np.linalg.norm(F[:n],axis=0),1e-10); G=F[:n]@F[:n].T\\n  for reg in [.0001,.003,.03,.3,3.]:\\n   fac=cho_factor(G+reg*np.eye(n)); hi=cho_solve(fac,G); al=cho_solve(fac,resid); rr=(reg*al)/(1-np.diag(H0+hi))[:,None]\\n   pred=base[n:]@ls(base[:n],Z[:n])+F[n:]@F[:n].T@al\\n   scores.append((np.mean(abs(rr),0),np.mean(abs(pred-Z[n:]),0),tag,reg))\\n print(k,'scalar',[(e[2],e[3],round(e[0][0],4),round(e[1][0],4)) for e in sorted(scores,key=lambda e:e[0][0])[:4]],'traj amp',[(e[2],e[3],round(e[0][1],4),round(e[1][1],4)) for e in sorted(scores,key=lambda e:e[0][1])[:4]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared trajectory mode and nonlinear scalar readout -> H2 identify their coordinate frames and algebraic bases; archived 52/20 MAEs are 0.039954 and 0.014911.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use leave-one-out error within the first 52 rows to compare coordinate frames and nonlinear basis families before checking the final 20 rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1b190cb6d028f4d07ce003108f3e43154da88b5deca4e81a39b265e6318be95b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49836.64,
+      "usage_known": true,
+      "prompt_tokens": 28721,
+      "cached_tokens": 12672,
+      "completion_tokens": 1216
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "414eb67fb0f744309ed17155c5d7e589",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:31.902041+00:00",
+  "ended_at_utc": "2026-11-28T14:54:00.977306+00:00",
+  "request_sha256": "b897ebf9eca053265da1f97f3df468c6a44d3df70d521c75ad2e6c9b1c7e8d1a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37597,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25785,
+    "cached_tokens": 12672,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_endpoint.py <<'PY'\\nimport pickle,itertools\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nx=s['train']['x']; y=s['train']['y']; h=s['train']['traj']; t=s['eval_times']; n=len(x)\\na=np.c_[np.ones(n),x]; pairs=list(itertools.combinations_with_replacement(range(4),2)); p=np.column_stack([a]+[x[:,i]*x[:,j] for i,j in pairs]); ix=np.arange(n)\\nsplits=[ix[52:],*np.array_split(np.random.default_rng(555).permutation(ix),4),*[np.argsort(abs(x[:,k]-x[:,k].mean()))[-15:] for k in range(4)],np.argsort(np.linalg.norm(x,axis=1))[-15:]]\\nfor f,j in enumerate(splits):\\n i=np.setdiff1d(ix,j); w=np.linalg.lstsq(p[i],y[i],rcond=None)[0]; Q=np.zeros((4,4))\\n for c,(u,v) in zip(w[5:],pairs): Q[u,v]=Q[v,u]=c/(1+(u!=v))\\n ev,V=np.linalg.eigh(Q); order=np.argsort(-abs(ev)); ev=ev[order]; V=V[:,order]; er=[np.mean(abs(a[j]@np.linalg.lstsq(a[i],y[i],rcond=None)[0]-y[j])),np.mean(abs(p[j]@w-y[j]))]\\n for rank in (2,3):\\n  sig=np.sign(ev[:rank]); L=(V[:,:rank]*np.sqrt(abs(ev[:rank]))).ravel();\\n  def features(z): return ((x@z.reshape(4,rank))**2)@sig\\n  def profile(z):\\n   q=features(z); c=np.linalg.lstsq(a[i],y[i]-q[i],rcond=None)[0]; return a@c+q\\n  r=least_squares(lambda z:profile(z)[i]-y[i],L,max_nfev=100)\\n  er.append(np.mean(abs(profile(r.x)[j]-y[j])))\\n W=np.linalg.lstsq(a[i],h[i],rcond=None)[0]; vt=np.linalg.svd(a[i]@W,full_matrices=False)[2][:2]; base=a[j]@W@vt.T@vt\\n def time_fit(log_rate):\\n  B=-np.expm1(-t[None,:]*np.exp(log_rate)[:,None]); C=np.linalg.lstsq(B.T,W.T,rcond=None)[0].T; return C@B\\n r=least_squares(lambda k:(a[i]@time_fit(k)-h[i]).ravel(),np.log([.3,2]),bounds=(-5,4))\\n phys=a[j]@time_fit(r.x); e0=abs(base-h[j]); e1=abs(phys-h[j]); print(f, 'eigenvalues',np.round(ev,5), 'endpoint MAE affine/full/rank2/rank3',np.round(er,6),'trajectory mean',np.round([e0.mean(),e1.mean()],6),'final',np.round([e0[:,-1].mean(),e1[:,-1].mean()],6),'worst horizon',np.round([e0.mean(0).max(),e1.mean(0).max()],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_endpoint.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether endpoint curvature has a reproducible low-rank structure and whether the two-rate trajectory improves final-state accuracy; current worst endpoint MAE is 0.006561 and worst-horizon MAE is 0.006353 versus 0.006256 for the two-rate challenger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the rational endpoint\",\n      \"rejected_reason\": \"Worst boundary MAE rose from 0.006561 to 0.011754.\"\n    }\n  ],\n  \"rationale\": \"Compare the affine and quadratic endpoints directly on identical held-out rows, test whether the quadratic can be compressed, and check trajectory mean and final-state errors before promoting the stable two-rate fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7276407553b2c7175496dc4c081929f837c95fb33e1bce099fb3d88803a2011a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29074.1,
+      "usage_known": true,
+      "prompt_tokens": 25785,
+      "cached_tokens": 12672,
+      "completion_tokens": 1202
+    }
+  ]
+}

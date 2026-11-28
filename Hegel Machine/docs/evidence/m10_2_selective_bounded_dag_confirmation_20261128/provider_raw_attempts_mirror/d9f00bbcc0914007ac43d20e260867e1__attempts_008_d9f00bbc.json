@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9f00bbcc0914007ac43d20e260867e1",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:17:47.574917+00:00",
+  "ended_at_utc": "2026-11-28T16:18:11.025117+00:00",
+  "request_sha256": "f2bf96d968d6d9d80537898a563656d0fa62d087ad9d4f9add01b400a9d8beaf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54617,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36076,
+    "cached_tokens": 14720,
+    "completion_tokens": 956
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/head14.py <<'PY'\\nfrom ops14 import *\\nimport glob,importlib.util\\nfrom itertools import combinations_with_replacement\\nf=glob.glob('/tmp/hegel_continual_archive/*_09_solver.py')[0]; sp=importlib.util.spec_from_file_location('arch',f); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ntr=s['train'];x=np.r_[tr['x'],s['test']['x']]; z=m._latent(s['panel_a'],x); b=s['panel_b']; c=s['panel_c']; B=op(b['u'],b['v'],'cos',False)[3]; C=op(c['u'],c['v1'],'tanh_sin',False)[3]; h=C(B(z)); Y=np.c_[tr['y'],tr['traj']]; n=72\\nv=np.c_[z,h]; names=[f'{a}{i}' for a in 'zh' for i in range(4)]; ix=list(combinations_with_replacement(range(8),2)); Q=D(v,np.column_stack([v[:,i]*v[:,j] for i,j in ix])); names=['1',*names,*[names[i]+'*'+names[j] for i,j in ix]]\\nW=ls(Q[:52],Y[:52]); print('condition',np.linalg.cond(Q[:52]),'fit',np.mean(abs(Q[:52]@W-Y[:52]),0),'hold',np.mean(abs(Q[52:n]@W-Y[52:]),0));print('temporal sv',np.linalg.svd(Y[:,1:],compute_uv=False));print('coefficients:');\\nfor nm,w,p in zip(names,W,np.std(Q[:52],0)):print(nm,np.round(w[[0,1,3,5,8]],4),'impact',np.round(w[[0,8]]*p,4))\\nL=D(v,np.sum(z*h,1)); W0=ls(L[:52],Y[:52]);print('linear plus trace y/end',W0[:,[0,-1]]); print('first trajectory rows',np.round(tr['traj'][:5],4));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/head14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Recovered calibration–B–C1 path -> separate scalar and trajectory readouts; prescribed-split MAE is 0.00620 for the scalar head and 0.01472 for the full quadratic trajectory head, with worst timestamp MAE 0.01952.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The diagonal-interaction basis that explains the scalar response also suffices for the trajectory.\",\n    \"empirical_witness\": \"On the prescribed split, adding general quadratic terms on the same path reduced trajectory MAE from 0.15472 to 0.01472.\",\n    \"causal_blanket_diagnosis\": \"The trajectory readout requires interactions absent from the scalar readout basis; changing the upstream panels is not necessary to explain the large improvement.\",\n    \"sublated_pivot\": \"Keep the shared panel composition and test separate readout bases, including off-diagonal interactions for the trajectory.\",\n    \"risk_kind\": \"readout_basis_incompleteness\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the same full quadratic basis for both outputs\",\n      \"rejected_reason\": \"It raised scalar MAE from 0.00620 to 0.02529; the two readouts should be fitted separately.\"\n    }\n  ],\n  \"rationale\": \"With both heads below the gate on the first split, inspect quadratic coefficient patterns under the more accurate calibration to find a smaller trajectory basis that can be stress-tested on independent splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "25dc89e85df7721b0503acc599116892f018dce2e4b58a725fd3b5ee9b946606",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23448.81,
+      "usage_known": true,
+      "prompt_tokens": 36076,
+      "cached_tokens": 14720,
+      "completion_tokens": 956
+    }
+  ]
+}

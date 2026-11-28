@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9fe493e27ab3427e9f386ce3201fe186",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:37.958570+00:00",
+  "ended_at_utc": "2026-11-28T15:06:11.341899+00:00",
+  "request_sha256": "aa2425efa6d594c221aa879f08d90aca1a439bde1dca04ca8e06fc48ad9144f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42037,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30827,
+    "cached_tokens": 12672,
+    "completion_tokens": 1396
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/p=s\\\\[.panel_c.\\\\]/,$d' /tmp/probe.py >/tmp/rational.py; cat >>/tmp/rational.py <<'PY'\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nfrom scipy.linalg import qr\\nT=s['telemetry_vec']; print('telemetry',T)\\nsplits=[(np.arange(52),np.arange(52,72)),*KFold(4,shuffle=True,random_state=12).split(x)]\\ndef score(F):\\n e=[np.mean(abs(F[b]@ls(F[a],y[a])-y[b])) for a,b in splits]; return tuple(np.round([e[0],np.mean(e[1:]),max(e[1:])],5))\\ncoords={'raw':x,'invA':ai(x),'A':af(x),'BA':bf(af(x)),'BinvA':bf(ai(x)),'Braw':bf(x)}\\nresults=[]\\nfor nm,q in coords.items():\\n Q=poly(q,2); L=Q[:,:5]\\n for i in range(4):\\n  for g in [.11,.22,.44,1.25]:\\n   d=1+g*q[:,i]**2\\n   for name,F in [('ratL',np.c_[Q,L[:,1:]/d[:,None]]),('ratQ',np.c_[Q,Q[:,1:]/d[:,None]]),('ratNum',Q/d[:,None]),('sqL',np.c_[Q,L[:,1:]*q[:,i,None]**2]),('sinL',np.c_[Q,L*np.sin(g*q[:,i,None])]),('tanOne',np.c_[Q,np.tanh(g*q[:,i])]),('cosL',np.c_[Q,L*np.cos(g*q[:,i,None])])]:\\n    results.append((score(F),nm,i,g,name,np.std(y-F@ls(F,y))))\\nprint('rational worst'); print(*sorted(results,key=lambda r:max(r[0][0],r[0][2]))[:22],sep='\\\\n')\\nprint('rational split'); print(*sorted(results)[:15],sep='\\\\n')\\np=s['panel_c']; u=p['u']; csplit=list(KFold(6,shuffle=True,random_state=11).split(u)); fit=[]\\nfor nm,fun in {'tanh':lambda q,k:np.tanh(k*q),'sin':lambda q,k:np.sin(k*q),'cos':lambda q,k:np.cos(k*q),'soft':lambda q,k:q/np.sqrt(1+k*q*q),'rat':lambda q,k:q/(1+k*q*q),'rat2':lambda q,k:q*q/(1+k*q*q),'sinabs':lambda q,k:np.sin(k*np.abs(q)),'abs':lambda q,k:np.abs(q),'expsq':lambda q,k:np.exp(-k*q*q),'logcosh':lambda q,k:np.logaddexp(k*q,-k*q),'tanh2':lambda q,k:np.tanh(k*q*q),'sign':lambda q,k:np.sign(q),'cubic':lambda q,k:q**3,'square':lambda q,k:q**2}.items():\\n for k in [.22,.44,.75,1,1.25,1.5,2,2.5,3,4,5]:\\n  G=fun(u,k); F=np.c_[np.ones(len(u)),u,G]; F2=np.c_[F,u**2] if nm not in ('square',) else F\\n  for fname,H in [('base',F),('plusSquare',F2)]:\\n   beta=ls(H,np.c_[p['v1'],p['v2']]); tr=np.mean(abs(H@beta-np.c_[p['v1'],p['v2']]),axis=0).reshape(2,4).mean(1)\\n   V=np.c_[p['v1'],p['v2']]; cv=np.mean(np.concatenate([abs(H[b]@ls(H[a],V[a])-V[b]) for a,b in csplit]),axis=0).reshape(2,4).mean(1)\\n   fit.append((cv,tr,nm,k,fname))\\nfor i in range(2):\\n print('C',i,*sorted(fit,key=lambda r:r[0][i])[:15],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (generic cubic scalar) -> H2 (coordinate-specific modulation or nonlinear panel composition); the best tested structured cubic reaches 0.03206 on 52/20 and 0.05084 on the worst shuffled fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Stop at the structured cubic\",\n      \"rejected_reason\": \"It passes the prescribed split but misses the tolerance on shuffled folds, and the fitted cubic has a dominant squared-coordinate interaction that warrants a more compact test.\"\n    }\n  ],\n  \"rationale\": \"Test rational and trigonometric modulation of the dominant cubic interaction, and fit candidate nonlinear operators on the C panel independently of the scalar labels.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "31a4a67e2f4882d5197b418fa91d526ea6781cc22fef5dc7268833d1316dcfcd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33381.88,
+      "usage_known": true,
+      "prompt_tokens": 30827,
+      "cached_tokens": 12672,
+      "completion_tokens": 1396
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2a18d19964104bbe8479ffee14a63fbe",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:58.520820+00:00",
+  "ended_at_utc": "2026-11-28T15:50:19.520570+00:00",
+  "request_sha256": "df4cb838dfa8025ed83d09fe01cd403c39feab294df03bdd2511204ed9a733d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58761,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36332,
+    "cached_tokens": 12672,
+    "completion_tokens": 826
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/branches14.py <<'PY'\\nexec(open('/tmp/compact14.py').read().split('for mode in range(4)')[0])\\nfast=[1,2,3,4,9]; slow=[5,6,7,8,10]\\nfor mode in range(3):\\n metrics=[]; rates=[]\\n for va in idxs:\\n  tr=np.setdiff1d(np.arange(72),va)\\n  def design(ids,r):\\n   b=basis(r); cols=[(D[ids,i,None]*b[None,:,1 if i in fast else 0]).ravel() for i in fast+slow];\\n   if mode==1: cols.extend(np.broadcast_to(b[None,:,j],(len(ids),len(t))).ravel() for j in range(2))\\n   if mode==2: cols.extend((D[ids,i,None]*b[None,:,1]).ravel() for i in slow)\\n   return np.column_stack(cols)\\n  target=tt[tr].ravel()\\n  def res(r):\\n   F=design(tr,r);return F@m._ls(F,target)-target\\n  r=least_squares(res,[.4,1.8],bounds=([.03,.9],[.89,4.]),gtol=1e-11).x\\n  st=(design(va,r)@m._ls(design(tr,r),target)).reshape(-1,len(t));e=abs(st-tt[va]);metrics.append([e.mean(),e.mean(0).max(),e.max()]);rates.append(r)\\n print(mode,'rates',rates[0],'fixed',metrics[0],'worst',np.max(metrics,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/branches14.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full bilinear trajectory basis → H2 diagonal plus one off-diagonal term with two response modes; the compact model reduced worst-slice trajectory MAE from 0.01679 to 0.00506.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the compact basis with both modes available to every feature\",\n      \"rejected_reason\": \"Keep it as the validated fallback while testing whether the observed slow and fast feature groups improve extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Fit response rates and coefficients inside each training slice. Compare the mode-separated trajectory against the compact two-mode fallback on the same holdouts before editing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ba211cec71b8ef835e085a17f83146fbdf043078cf894d8d5ca37b272e5e8af9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21512.26,
+      "usage_known": true,
+      "prompt_tokens": 36332,
+      "cached_tokens": 12672,
+      "completion_tokens": 826
+    }
+  ]
+}

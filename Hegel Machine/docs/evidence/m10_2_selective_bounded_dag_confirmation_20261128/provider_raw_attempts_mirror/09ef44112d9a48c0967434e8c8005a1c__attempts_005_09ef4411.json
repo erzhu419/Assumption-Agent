@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09ef44112d9a48c0967434e8c8005a1c",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:56:48.017202+00:00",
+  "ended_at_utc": "2026-11-28T15:57:13.805797+00:00",
+  "request_sha256": "f8a202326ae3f1590d16e09546d000e94fa7d80d232bd3c8c930ac4d35156e8e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34425,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26287,
+    "cached_tokens": 12672,
+    "completion_tokens": 1082
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; grep -nE 'np\\\\.(roll|sin|cos|tanh|arctan|abs|einsum)|\\\\*\\\\*|telemetry' *solver.py | cut -c1-200; cat >/tmp/cal14.py <<'PY'\\nexec(open('/tmp/probe14.py').read().split(\\\"print('T singular\\\")[0])\\nfrom itertools import combinations_with_replacement\\nu,v=(s['panel_a'][k] for k in ('u','v')); A=D(u); b=ls(A,v)\\nfor _ in range(8):\\n r=np.linalg.norm(A@b-v,axis=1); mask=r<4*np.median(r);b=ls(A[mask],v[mask])\\nprint('excluded',np.where(~mask)[0],r[~mask]); print('baseline',np.round(b,5))\\nblocks={str(ii):np.prod(u[:,ii],axis=1) for d in (2,3) for ii in combinations_with_replacement(range(4),d)}\\nfor j in range(4):\\n w=u[:,j];opp=u[:,(j+2)%4]; p=u[:,(j+1)%4];m=u[:,(j-1)%4];\\n def fit(Z):\\n  c=ls(Z[mask],v[mask,j]); H=Z[mask]@np.linalg.pinv(Z[mask]);return np.std((Z[mask]@c-v[mask,j])/(1-np.diag(H))),c\\n for name,terms in [('square',[w*w,opp*opp,w*opp,p*m,w**3]),('full2',list(blocks.values())[:10]),('full3',list(blocks.values())),('trig',[np.sin(2.15*w),np.cos(2.15*w),np.tanh(2.15*w),np.sin(2.15*opp),np.cos(2.15*opp),np.tanh(2.15*opp)]),('rat',[w/(1+2.15*w*w),opp/(1+2.15*opp*opp),p/(1+2.15*p*p),m/(1+2.15*m*m)])]:\\n  sc,c=fit(np.c_[A,*terms]);print(j,name,round(sc,6),np.round(c,3))\\n feats=dict(blocks)\\n for i in range(4):\\n  x=u[:,i]\\n  for k in (.22,1,2.15):\\n   for nm,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('atan',np.arctan),('sat',lambda a:a/(1+a*a)),('abs',lambda a:a/(1+abs(a)))]:feats[f'{nm}{i}:{k}']=fn(k*x)\\n Z=A.copy(); sel=[]\\n for i in range(6):\\n  key=min(feats,key=lambda key:fit(np.c_[Z,feats[key]])[0]);Z=np.c_[Z,feats.pop(key)];sel.append(key);print('greedy',j,sel,round(fit(Z)[0],7), np.round(fit(Z)[1],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived calibration graphs -> H2 robust opposite-channel nonlinear calibration with two-rate relaxation; best archive 52/20 MAEs were 0.11906 for y and 0.14281 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived own/adjacent-channel cubic calibration is sufficient for panel A.\",\"empirical_witness\":\"Its inlier residual standard deviations are 0.199–0.226, while the unrestricted affine fit gives 0.126–0.140 and reveals a consistent opposite-channel coefficient.\",\"causal_blanket_diagnosis\":\"Ignoring the opposite channel conflates apparatus distortion with downstream nonlinearity.\",\"sublated_pivot\":\"Retain robust inversion and test opposite-channel nonlinear terms before tuning the downstream graph.\",\"risk_kind\":\"calibration_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Predict each time point independently\",\"rejected_reason\":\"Two relaxation modes reconstruct the observed trajectories at MAE 0.00358, making separate time fits unnecessary.\"}],\"rationale\":\"Identify panel A on its own inlier measurements so downstream model selection does not compensate for a bad inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9af7263457004d7caee3d3fee4e6775921b6fca8bd5cac0ed6445aeed29b86ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26588.04,
+      "usage_known": true,
+      "prompt_tokens": 26287,
+      "cached_tokens": 12672,
+      "completion_tokens": 1082
+    }
+  ]
+}

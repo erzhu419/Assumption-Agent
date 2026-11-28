@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8731271adda04b27812fdad7093fa41a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:27.590802+00:00",
+  "ended_at_utc": "2026-11-28T15:48:56.238997+00:00",
+  "request_sha256": "84f5c823767b30d3993dd97aebcc53a6d102b3b1214091807fa29834027974d6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47526,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31443,
+    "cached_tokens": 12672,
+    "completion_tokens": 1234
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/features={}/,$d' /tmp/graph.py >/tmp/refine.py; cat >>/tmp/refine.py <<'PY'\\nfrom scipy.special import erf\\nu=c['u']; v=c['v1']; t=s['eval_times']; n=52\\n\\ndef score(q):\\n y=tr['y']; p=tr['traj']; opp=np.c_[q[:,0]*q[:,2],q[:,1]*q[:,3]]\\n ds=[aff(q),aff(np.c_[q,opp]),aff(np.c_[q,pairs(q)]),aff(np.c_[q,w]),aff(np.c_[q,w,opp])]\\n return np.round([[np.mean(abs(d[n:72]@ls(d[:n],a[:n])-a[n:72])) for d in ds] for a in (y,p)],6)\\nfor name,f in {'tanh':lambda x,k:np.tanh(k*x),'asinh':lambda x,k:np.arcsinh(k*x),'atan':lambda x,k:np.arctan(k*x),'erf':lambda x,k:erf(k*x),'sqrt':lambda x,k:x/np.sqrt(1+k*x*x)}.items():\\n for k in [1.25,1.8,2.15]:\\n  d=aff(np.c_[u,f(u,k)]); co=ls(d,v); print(name,k,'C1 free rmse',np.std(d@co-v),'linear coeff', np.round(co[1:5],4) if k==2.15 else ''); q=aff(np.c_[w,f(w,k)])@co; print('score free',score(q).tolist());\\n  if k==2.15:\\n   for kind in range(4):\\n    if kind==0:\\n     rhs=v-.22*u; des=lambda x:aff(f(x,k)); off=lambda x:.22*x\\n    elif kind==1:\\n     rhs=v; des=lambda x:aff(f(x,k)+.22*x); off=lambda x:0\\n    elif kind==2:\\n     rhs=v-.22*f(u,k); des=aff; off=lambda x:.22*f(x,k)\\n    else:\\n     rhs=v; des=lambda x:aff(f(x,k)+.22*np.roll(x,-1,axis=1)); off=lambda x:0\\n    b1=ls(des(u),rhs); q=des(w)@b1+off(w); print('structured',kind,np.std(des(u)@b1-rhs),score(q).tolist())\\nprint('C2')\\nfor name,f in {'square':lambda x,k:x+k*x*x,'cube':lambda x,k:x+k*x*x+k*x**3,'abs':lambda x,k:x+k*abs(x)*x,'tanhmix':lambda x,k:x+k*np.tanh(1.25*x)**2}.items():\\n opt=minimize_scalar(lambda k:np.std(aff(f(u,k))@ls(aff(f(u,k)),c['v2'])-c['v2']),bounds=(-1,1),method='bounded');print(name,opt.x,opt.fun)\\nprint('temporal')\\np=tr['traj'][:52];\\nfor mode in ['two_exp','exp_lin','exp_slow','exp_quad','exp_log']:\\n def d(r):\\n  a=-np.expm1(-r[0]*t); v={'two_exp':-np.expm1(-r[-1]*t),'exp_lin':t,'exp_slow':-np.expm1(-.22*t),'exp_quad':t*t,'exp_log':np.log1p(t)}[mode];return np.c_[a,v]\\n opt=least_squares(lambda r:(d(r)@ls(d(r),p.T)-p.T).ravel(),[1.25,.22] if mode=='two_exp' else [1.25],bounds=(.001,10)); print(mode,opt.x,np.std(opt.fun))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unconstrained C1 approximation -> H2 compact C1 operator with separate scalar and temporal readouts; current 52/20 MAEs are 0.01414 scalar and 0.00641 trajectory for the best respective candidates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the first passing models\",\n      \"rejected_reason\": \"C1 residuals remain far above panel measurement noise, so its formula and extrapolation warrant checking.\"\n    }\n  ],\n  \"rationale\": \"Test whether telemetry values explain the linear and saturating terms in C1 and whether the trajectory admits a shared two-mode time basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "34d3632e88fc599a06dd261ac169a22ac111e1f145a1ba388198ee410553ab62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29210.29,
+      "usage_known": true,
+      "prompt_tokens": 31443,
+      "cached_tokens": 12672,
+      "completion_tokens": 1234
+    }
+  ]
+}

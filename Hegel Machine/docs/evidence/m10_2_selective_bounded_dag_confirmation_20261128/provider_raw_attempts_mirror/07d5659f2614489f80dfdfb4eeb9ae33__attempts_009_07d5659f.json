@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "07d5659f2614489f80dfdfb4eeb9ae33",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_09__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:38:00.058665+00:00",
+  "ended_at_utc": "2026-11-28T15:38:39.677893+00:00",
+  "request_sha256": "693b85cb14bc623dd4527a5f9c3ff730275abe88115c6bcadcbcd86a95feabac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50042,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33351,
+    "cached_tokens": 12672,
+    "completion_tokens": 1749
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nimport ast\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/conf_m102_b04_batch_01_solver.py').read_text()\\ntree=ast.parse(src)\\nprint('Archive definitions:',[(n.name,n.lineno) for n in tree.body if isinstance(n,ast.FunctionDef)])\\nfn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='gp')\\ngp=ast.get_source_segment(src,fn)\\nprint(gp)\\nPath('/holdout_task/batch_solver.py').write_text('''\\\"\\\"\\\"Nonlinear panel calibration and panel-conditioned trajectory regression.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import least_squares, minimize, minimize_scalar\\n\\n\\ndef aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef ls(d, y):\\n    return np.linalg.lstsq(d, y, rcond=None)[0]\\n\\n\\ndef _profile(u, v, design, init, bounds):\\n    def residual(k):\\n        f = design(u, k)\\n        return (f @ ls(f, v) - v).ravel()\\n    k = least_squares(residual, init, bounds=bounds, max_nfev=120).x\\n    return k, ls(design(u, k), v)\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    keep = np.linalg.norm(v-u, axis=1) < 4\\n    u, v = u[keep], v[keep]\\n    a_design = lambda p, k: np.c_[aff(p), np.sin(k[0]*p)]\\n    ka, wa = _profile(u, v, a_design, [2.4], ([1.5], [3.2]))\\n    w0 = ls(aff(u), v)\\n    q = (x-w0[0]) @ np.linalg.inv(w0[1:])\\n    inv = np.linalg.inv(wa[1:5])\\n    for _ in range(30):\\n        q = (x-wa[0]-np.sin(ka[0]*q) @ wa[5:]) @ inv\\n    c = study['panel_c']\\n    c_design = lambda p, k: aff(np.arctan(k[0]*p+k[1:]))\\n    kc, wc = _profile(c['u'], c['v1'], c_design, [2.15, 0, 0, 0, 0],\\n                      ([.5, -1, -1, -1, -1], [5, 1, 1, 1, 1]))\\n    return np.c_[q, c_design(q, kc) @ wc]\\n\\n\\n'''+gp+'''\\n\\n\\ndef solve_batch(study):\\n    train, test = study['train'], study['test']\\n    n = len(train['x'])\\n    features = _coordinates(study, np.vstack((train['x'], test['x'])))\\n    features = (features-features[:n].mean(axis=0))/np.maximum(features[:n].std(axis=0), 1e-12)\\n    x, x_test = features[:n], features[n:]\\n    z = train['traj']\\n    modes = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amplitudes = z @ modes.T\\n    y_hat = gp(x, x_test, train['y'], True)\\n    state_pred = np.column_stack([gp(x, x_test, a, True) for a in amplitudes.T]) @ modes\\n    diagnostics_vec = np.array([y_hat.mean(), y_hat.std(), state_pred[:, -1].mean(), state_pred[:, -1].std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics_vec}\\n''')\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/check09.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; z=tr['traj']; rng=np.random.default_rng(905)\\nq=mod._coordinates(s,x); d=np.linalg.norm(q[:,:4]-np.median(q[:,:4],0),axis=1)\\nsplits={'52/20':np.arange(52,72),'reverse20':np.arange(20),'outer radial':np.argsort(d)[-20:]}\\nfor i in range(8):splits[f'random{i}']=rng.permutation(72)[52:]\\nworst=np.zeros(2)\\nfor name,te in splits.items():\\n ti=np.setdiff1d(np.arange(72),te); o=mod.solve_batch({**s,'train':{**tr,'x':x[ti],'y':y[ti],'traj':z[ti]},'test':{'x':x[te]}})\\n a,b=abs(o['y_hat']-y[te]),abs(o['state_pred']-z[te]); print(name,'mae',a.mean(),b.mean(),'state by time',b.mean(0).round(5),'max sample',a.max(),b.mean(1).max()); worst=np.maximum(worst,[a.mean(),b.mean()]);\\n if name=='52/20':assert max(a.mean(),b.mean())<=.038\\nprint('worst split:',worst)\\no=mod.solve_batch(s); assert all(np.all(np.isfinite(v)) for v in o.values()); yy=o['y_hat']; zz=o['state_pred']; assert yy.shape==(36,) and zz.shape==(36,8); np.testing.assert_array_equal(o['diagnostics_vec'],[yy.mean(),yy.std(),zz[:,-1].mean(),zz[:,-1].std()]); print('clean process: full prediction finite, exact diagnostics')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check09.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: invert the measured nonlinear calibration, then regress from calibrated inputs and panel C coordinates; pilot 52/20 MAEs are 0.00880 for readout and 0.00636 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Include all auxiliary panel outputs\",\"rejected_reason\":\"This added features without improving either MAE on the designated split.\"}],\"rationale\":\"Package the pilot model without archive dependencies, then test the exact artifact on the prescribed split, fixed random splits, and an outer radial slice to check extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3be81cd8463434a674d8127eb2a201a5718ee76fcbbf3a298b197e4c811481ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39618.17,
+      "usage_known": true,
+      "prompt_tokens": 33351,
+      "cached_tokens": 12672,
+      "completion_tokens": 1749
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "85033557f8204f09b0db615c093a1b1a",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:05.493055+00:00",
+  "ended_at_utc": "2026-11-28T15:09:48.800003+00:00",
+  "request_sha256": "65572498da3be6834df64be680ee9fef51bce8c0a083b615a1ea679dba501e78",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49613,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29333,
+    "cached_tokens": 5504,
+    "completion_tokens": 1891
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit panel operators and separate polynomial response and trajectory readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _with_intercept(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    d = _with_intercept(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(10):\\n        coef = _ls(d[keep], v[keep])\\n        residual = np.linalg.norm(d @ coef - v, axis=1)\\n        take = residual <= max(.001, 3 * np.median(residual))\\n        if take.sum() < d.shape[1] or np.array_equal(keep, take):\\n            break\\n        keep = take\\n    coef = _ls(d[keep], v[keep])\\n    scale = np.linalg.norm(coef[1:])\\n    if np.linalg.norm(coef[1:] - np.diag(np.diag(coef[1:]))) < .001 * scale:\\n        for j in range(u.shape[1]):\\n            coef[[0, j + 1], j] = _ls(d[keep][:, [0, j + 1]], v[keep, j])\\n        coef[1:] = np.diag(np.diag(coef[1:]))\\n    return coef\\n\\n\\ndef _features(study, x):\\n    a = _calibration(study['panel_a'])\\n    z = np.linalg.solve(a[1:].T, (x - a[0]).T).T\\n    b = study['panel_b']\\n    w = _with_intercept(z) @ _ls(_with_intercept(b['u']), b['v'])\\n    c = study['panel_c']\\n    i, j = np.array(list(combinations_with_replacement(range(w.shape[1]), 2))).T\\n    p = c['u'][:, i] * c['u'][:, j]\\n    coef = _ls(_with_intercept(p), c['v1'])\\n    norms = np.linalg.norm(coef[1:], axis=1)\\n    active = norms > .001 * norms.max()\\n    if not np.any(active):\\n        active[:] = True\\n    coef = _ls(_with_intercept(p[:, active]), c['v1'])\\n    q = (w[:, i[active]] * w[:, j[active]]) @ coef[1:]\\n    base = _with_intercept(np.column_stack((w, q)))\\n    response = np.column_stack((base, z * q))\\n    interaction = (z[:, :, None] * q[:, None, :]).reshape(len(z), -1)\\n    state = np.column_stack((base, interaction))\\n    return response, state\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    dy, ds = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    y = dy[n:] @ _ls(dy[:n], train['y'])\\n    traj = np.asarray(train['traj'])\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    state = (ds[n:] @ _ls(ds[:n], traj @ modes.T)) @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/verify_graph.py <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ids=np.arange(len(tr['x'])); rng=np.random.default_rng(492)\\ndy, ds=m._features(s,tr['x']); y,T=tr['y'],tr['traj']; modes=np.linalg.svd(T,full_matrices=False)[2][:2]\\nprint('rank',*[np.linalg.matrix_rank(d) for d in (dy,ds)])\\nprint('coeff response',m._ls(dy,y)); print('coef T cubic mode 1 and 2',m._ls(ds,T@modes.T)[-16:].reshape(4,4,2)); print('T coefficient temporal singular values',np.linalg.svd(m._ls(ds,T),compute_uv=False));print('telemetry',s['telemetry_vec'])\\ndef check(a,b):\\n d=dict(s, test={'x':tr['x'][b]}, train=dict(tr,**{k:tr[k][a] for k in ('x','y','traj')})); p=m.solve_batch(d)\\n e=np.abs(p['y_hat']-y[b]); et=np.abs(p['state_pred']-T[b]);\\n return np.array([e.mean(),et.mean(),et.mean(0).max(),e.max(),et.max()])\\nfixed=check(ids[:52],ids[52:]); print('fixed',fixed); assert max(fixed[:3])<.038\\nE=[]\\nfor _ in range(200):\\n k=rng.permutation(ids); E.append(check(k[:52],k[52:]));\\nfor f in (np.median,np.max):print('random',f.__name__,f(E,axis=0))\\nfor name,x in [('radius',np.linalg.norm(tr['x']-tr['x'].mean(0),axis=1)),('leverage',np.sum(np.linalg.qr(ds)[0]**2,axis=1)), *[(f'coordinate {i} {sign:+}',sign*tr['x'][:,i]) for i in range(tr['x'].shape[1]) for sign in (-1,1)]]:\\n k=np.argsort(x); print('extrapolation',name,check(k[:52],k[52:]));\\nprint('test maximum leverage',max(np.sum((m._features(s,s['test']['x'])[1]@np.linalg.pinv(ds))**2,axis=1)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_graph.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: fit sparse C1 products with diagonal calibrated-input interactions for response and full interactions for trajectory; prior repeated holdouts reached worst MAEs of 0.00816 and 0.00543, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Include panel C2 in the final design\",\"rejected_reason\":\"The measured C1 interactions already explain both outputs; C2 approximations have not shown a consistent validation gain.\"}],\"rationale\":\"Correct the hand-transcribed pair list by selecting supported products directly from the panel fit. Verify the exact artifact on the prescribed split, repeated splits, coordinate extremes, and high-leverage rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "eb0181a4c20444139ede64ee48d5da50d35f85057320cfa4605c774b847d3c88",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43880.86,
+      "usage_known": true,
+      "prompt_tokens": 29333,
+      "cached_tokens": 5504,
+      "completion_tokens": 1891
+    }
+  ]
+}

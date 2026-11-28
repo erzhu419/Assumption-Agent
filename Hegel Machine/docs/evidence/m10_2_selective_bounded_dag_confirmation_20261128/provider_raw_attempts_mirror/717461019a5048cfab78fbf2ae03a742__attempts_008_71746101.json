@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "717461019a5048cfab78fbf2ae03a742",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:14.208982+00:00",
+  "ended_at_utc": "2026-11-28T15:23:49.712472+00:00",
+  "request_sha256": "8c252cdc6adecd92382f63a4ebb7c3532decccfecb925adebb7da969052d7440",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 54462,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36857,
+    "cached_tokens": 5504,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; grep -n -E 'diagnostics|sp_idx|import|allowed' test_dag_candidate.py validate_public_schema.py; tail -30 /tmp/hegel_continual_archive/*01_solver.py; cat > node_00.py <<'PY'\\n\\\"\\\"\\\"Recover the shared latent coordinates from the reference calibration.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    panel = study['panel_a']\\n    u, v = np.asarray(panel['u'], float), np.asarray(panel['v'], float)\\n    d = u.shape[1]\\n    nxt = (np.arange(d) + 1) % d\\n\\n    def terms(q, k):\\n        return np.column_stack((np.ones(len(q)), q, q[:, k]**3, q[:, k]*q[:, nxt[k]]))\\n\\n    # Gross reference corruptions affect whole rows. Refine the joint inlier\\n    # mask after fitting the sparse cyclic model to the uncorrupted majority.\\n    delta = np.linalg.norm(v-u, axis=1)\\n    keep = delta <= max(3., 4.*np.median(delta))\\n    coef = np.stack([np.linalg.lstsq(terms(u[keep], k), v[keep,k], rcond=None)[0] for k in range(d)], axis=1)\\n\\n    def forward(q):\\n        return coef[0] + q @ coef[1:d+1] + coef[-2]*q**3 + coef[-1]*q*q[nxt]\\n\\n    errors = np.linalg.norm(np.array([forward(q) for q in u])-v, axis=1)\\n    good = errors <= max(0.003, 6.*np.median(errors))\\n    if np.count_nonzero(good) >= d+3:\\n        coef = np.stack([np.linalg.lstsq(terms(u[good], k), v[good,k], rcond=None)[0] for k in range(d)], axis=1)\\n\\n    def jac(q):\\n        out = coef[1:d+1].T.copy()\\n        k = np.arange(d)\\n        out[k,k] += 3.*coef[-2]*q*q + coef[-1]*q[nxt]\\n        out[k,nxt] += coef[-1]*q\\n        return out\\n\\n    train = np.asarray(study['train']['x'], float)\\n    test = np.asarray(study['test']['x'], float)\\n    x = np.concatenate((train, test), axis=0)\\n    init = np.linalg.lstsq(coef[1:d+1].T, (x-coef[0]).T, rcond=None)[0].T\\n    latent = np.empty_like(x)\\n    for i, (target, q) in enumerate(zip(x, init)):\\n        latent[i] = least_squares(lambda z: forward(z)-target, q, jac=jac, max_nfev=50,\\n                                  ftol=1e-11, xtol=1e-11, gtol=1e-11).x\\n    return {'cubic_train': latent[:len(train)]**3, 'cubic_test': latent[len(train):]**3}\\nPY\\ncat > node_01.py <<'PY'\\n\\\"\\\"\\\"Predict scalar and time-series labels in the calibrated cubic coordinates.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\n\\n\\ndef _kernel(x, q):\\n    delta = -.02*(x[:, None, :] - q[None, :, :])**2\\n    return .5*(np.exp(delta.mean(axis=2)) + np.exp(delta).mean(axis=2))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    features = inputs['node_00']\\n    x = features['cubic_train']\\n    q = features['cubic_test']\\n    mean = x.mean(axis=0)\\n    scale = np.maximum(x.std(axis=0), 1e-12)\\n    x, q = (x-mean)/scale, (q-mean)/scale\\n    y = np.asarray(study['train']['y'], float).reshape(-1)\\n    z = np.asarray(study['train']['traj'], float)\\n    values = np.column_stack((y,z))\\n    center = values.mean(axis=0)\\n    k = _kernel(x,x)\\n    k.flat[::len(k)+1] += 3e-5\\n    coeff = cho_solve(cho_factor(k, check_finite=False), values-center, check_finite=False)\\n    pred = center + _kernel(q,x) @ coeff\\n    yh, zh = pred[:,0], pred[:,1:]\\n    return {'y_hat': yh, 'state_pred': zh,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), zh[:,-1].mean(), zh[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic spatial regression -> H2 sparse cyclic calibration followed by additive-plus-joint regression on cubic coordinates; screening gave public MAEs of 0.0221 scalar and 0.0298 trajectory, with worst random-split MAEs of 0.0245 and 0.0381.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Apply the same kernel to untransformed latent coordinates\",\"rejected_reason\":\"That model had higher public and worst-random-split errors for both heads.\"}],\"rationale\":\"Implement the screened model across the declared edges and verify the exact artifacts with the isolated public harness before deciding whether a structural refinement is needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ed7d0d5989fd290a8f097c662bfa93f1c987eb8c5a69e680986ad8730cb3f1de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36067.31,
+      "usage_known": true,
+      "prompt_tokens": 36857,
+      "cached_tokens": 5504,
+      "completion_tokens": 1462
+    }
+  ]
+}

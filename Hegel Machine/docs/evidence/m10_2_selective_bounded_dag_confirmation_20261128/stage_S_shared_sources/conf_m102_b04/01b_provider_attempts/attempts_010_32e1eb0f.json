@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32e1eb0f28734e2e8fc23ab6f2d1873b",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:51.862795+00:00",
+  "ended_at_utc": "2026-11-28T14:56:28.673029+00:00",
+  "request_sha256": "3f92e9b14fa4eaf76010b93102a3b94b0aa41dab9041b115db72415991b371e0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65953,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41089,
+    "cached_tokens": 12672,
+    "completion_tokens": 1558
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cp batch_solver.py /tmp/cubic_baseline.py && cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-informed scalar and state prediction for the public campaign.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _basis(x):\\n    return np.column_stack([np.ones(len(x))] + [np.prod(x[:, j], axis=1) for d in (1, 2, 3) for j in combinations_with_replacement(range(x.shape[1]), d)])\\n\\n\\ndef _panel_features(study, x):\\n    a, c = study['panel_a'], study['panel_c']\\n    u, v = a['u'], a['v']\\n    f = _affine(u)\\n    fit = np.linalg.lstsq(f, v, rcond=None)[0]\\n    for _ in range(10):\\n        err = np.linalg.norm(f @ fit - v, axis=1)\\n        keep = np.argsort(err)[:int(.82 * len(u))]\\n        fit = np.linalg.lstsq(f[keep], v[keep], rcond=None)[0]\\n    maps = np.linalg.lstsq(_affine(c['u']), c['v1'], rcond=None)[0]\\n    raw = _affine(x) @ maps\\n    aligned = _affine((x - fit[0]) / fit[1:].diagonal()) @ maps\\n    squash = lambda q: q / np.sqrt(1 + .09 * q*q)\\n    return _basis(squash(raw)), _basis(squash(aligned))\\n\\n\\ndef _ridge(x, y, q, penalty):\\n    return q @ np.linalg.solve(x.T @ x + penalty * np.eye(x.shape[1]), x.T @ y)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    raw, aligned = _panel_features(study, np.vstack((train['x'], study['test']['x'])))\\n    y = _ridge(raw[:n], train['y'], raw[n:], .012)\\n    z = train['traj']\\n    time_basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amps = z @ time_basis.T\\n    state = (.5 * _ridge(raw[:n], amps, raw[n:], .014) + .5 * _ridge(aligned[:n], amps, aligned[n:], .014)) @ time_basis\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/final_cv.py <<'PY'\\nimport copy, importlib.util, pickle, sys\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.solve_batch\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx = s['train']['x']; ii = np.arange(len(x))\\nfolds = [('prescribed',ii[52:]), ('high-norm',np.argsort(np.linalg.norm(x,axis=1))[-20:]), ('coordinate-edge',np.argsort(abs(x).max(1))[-20:]), ('first-20',ii[:20])]\\nfolds += [(f'random{i}',np.random.default_rng(i).choice(len(x),20,False)) for i in range(8)]\\nfolds += [(f'axis{j}{sign:+}', np.argsort(sign*x[:,j])[-20:]) for j in range(4) for sign in [1,-1]]\\nfor path in sys.argv[1:]:\\n    solve = load(path); m=[]; print(path)\\n    for label,te in folds:\\n        tr=np.setdiff1d(ii,te); st=copy.deepcopy(s)\\n        st['train']={k:s['train'][k][tr] for k in ('x','y','traj')}; st['test']={'x':x[te]}\\n        out=solve(st); y=out['y_hat']; z=out['state_pred']; e=abs(z-s['train']['traj'][te]); a=[abs(y-s['train']['y'][te]).mean(),e.mean(),e.mean(0).max()]; m.append(a)\\n        assert np.allclose(out['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); print(label, np.round(a,5))\\n    print('max',np.max(m,0),'mean',np.mean(m,0))\\n    assert m[0][0] <= .038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_cv.py /tmp/cubic_baseline.py /holdout_task/batch_solver.py && python3 /holdout_task/validate_public_schema.py && python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw cubic → H2 panel-C-aligned cubic with rank-two state dynamics; the raw-coordinate panel proxy scored 0.00796 prescribed scalar MAE and 0.02394 worst-slice scalar MAE before final verification.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Use the recovered nonlinear panel maps directly\",\"rejected_reason\":\"Better fit on the auxiliary measurements did not translate into better downstream validation; adding the v2 features slightly worsened the worst horizon in the raw-coordinate comparison.\"}],\"rationale\":\"Promote the panel-C proxy that improved both targets, retain shared time structure, and compare the exact saved solver with the archived baseline on the prescribed split and additional directional extrapolation slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7b25ad53b41fdc41d4dd343ec8eb94cfc545d439f1b9eb763b3db10d61487dd0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36808.92,
+      "usage_known": true,
+      "prompt_tokens": 41089,
+      "cached_tokens": 12672,
+      "completion_tokens": 1558
+    }
+  ]
+}

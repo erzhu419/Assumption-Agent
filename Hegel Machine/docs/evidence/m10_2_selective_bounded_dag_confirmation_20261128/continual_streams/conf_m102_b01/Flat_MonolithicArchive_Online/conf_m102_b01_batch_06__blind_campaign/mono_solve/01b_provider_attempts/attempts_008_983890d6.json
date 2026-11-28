@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "983890d6b30b4a579e0a9c038ead5433",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:30:04.302344+00:00",
+  "ended_at_utc": "2026-11-28T15:30:44.562192+00:00",
+  "request_sha256": "cb67d8818bf8670f65bc2c0d8dc3ae0296006cd8314c5535c34fdc19f6e8a1f4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40175,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30136,
+    "cached_tokens": 12672,
+    "completion_tokens": 1787
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/sparse6.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from branch6 import *\\nfrom scipy.special import expit\\nF=lambda u,a,b:u+a*np.logaddexp(b*u,-b*u)-a*np.log(2)\\npp=least_squares(residual,[.9,1.1],args=(F,)).x\\nr=A(F(w,*pp))@L(A(F(cu,*pp)),V)\\n_,_,vt=np.linalg.svd(Y[:52,1:],full_matrices=False)\\nT=np.c_[Y[:,0],Y[:,1:]@vt[0]]; T=(T-T[:52].mean(0))/T[:52].std(0)\\nbase={'z':z,'w':w,'q':q,'r':r,'d':dead(z,*fit.x),'s':q+r,'f':q-r,'r0':A(F(z,*pp))@L(A(F(cu,*pp)),V),'qr':A(F(q,*pp))@L(A(F(cu,*pp)),V)}\\ndef report(d): return score(d)\\nfor k,b0 in [('wqr',np.c_[w,q,r]),('zqr',np.c_[z,q,r]),('zwqr',np.c_[z,w,q,r]),('qd',np.c_[q,dead(z,*fit.x)]),('qzr',np.c_[q,z,r])]:\\n for alpha in [0,.0001,.001,.01,.04,.1,.3,1]:\\n  D=poly(b0,2); mu=D[:52,1:].mean(0); sd=D[:52,1:].std(0); D=A((D[:,1:]-mu)/np.maximum(sd,1e-8));\\n  p=D[52:]@np.linalg.solve(D[:52].T@D[:52]+alpha*52*np.diag([0]+[1]*(D.shape[1]-1))+1e-10*np.eye(D.shape[1]),D[:52].T@Y[:52]); e=abs(p-Y[52:]); print('ridge',k,alpha,np.round([e[:,0].mean(),e[:,1:].mean()],5))\\nfeatures={k+str(i):b[:,i] for k,b in base.items() for i in range(4)}\\nfor k,a in list(features.items()):\\n for n,ff in [('sq',lambda a:a*a),('abs',abs),('cube',lambda a:a**3),('tanh',lambda a:np.tanh(1.25*a)),('clip',lambda a:np.clip(a,-.22,.22)),('hinge',lambda a:np.maximum(0,a-.22))]: features[n+'('+k+')']=ff(a)\\nfor k,h in itertools.combinations_with_replacement(list(base)[:8],2):\\n for i,j in itertools.product(range(4),repeat=2):\\n  if k==h and i>j:continue\\n  a,b=base[k][:,i],base[h][:,j]\\n  features[f'{k}{i}*{h}{j}']=a*b\\n  if (k,h) in [('q','r'),('w','r'),('w','q'),('q','q'),('w','w')]:\\n   for n,ff in [('sig',lambda a,b:a*expit(1.25*b)),('rat',lambda a,b:a/(1+1.25*b*b)),('ar',lambda a,b:a*abs(b)),('magnitude',lambda a,b:np.maximum(a,b)),('min',lambda a,b:np.minimum(a,b)),('plusRat',lambda a,b:(a+b)/(1+1.25*(a-b)**2)),('diffRat',lambda a,b:(a-b)/(1+1.25*(a+b)**2)),('sign',lambda a,b:a*np.sign(b)),('blend',lambda a,b:a*expit(1.25*(a-b))+b*expit(1.25*(b-a)))]: features[f'{k}{i}{n}{h}{j}']=ff(a,b)\\nnames=np.array(list(features)); H=np.column_stack(list(features.values())); H-=H[:52].mean(0); H/=np.maximum(H[:52].std(0),1e-9)\\nfor kn in ['', 'q','w','r','qr','wq','zq','zqr','wqr']:\\n D0=A(np.c_[*[base[k] for k in kn]]) if kn else A(np.empty((len(Y),0)))\\n for yy in [T,T[:,[0]],T[:,[1]]]:\\n  fitd=D0.copy(); used=[]\\n  for i in range(12):\\n   Q=np.linalg.qr(fitd[:52])[0]; S=H[:52]-Q@(Q.T@H[:52]); E=yy[:52]-Q@(Q.T@yy[:52]); val=np.linalg.norm(S.T@E,axis=1)/np.maximum(np.linalg.norm(S,axis=0),.025); val[used]=-1\\n   j=np.argmax(val); used.append(j);fitd=np.c_[fitd,H[:,j]]\\n   if i in [0,2,4,7,11]: print('sparse',kn,yy.shape[1],i+1,report(fitd),'terms',','.join(names[used]))\\nprint('time',s['eval_times'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse6.py > /tmp/sparse6.log; sort -g -k8 /tmp/sparse6.log | head -10; python3 - <<'PY'\\nimport re\\ns=open('/tmp/sparse6.log').readlines(); a=[]\\nfor l in s:\\n m=re.search(r'\\\\(([^)]+)\\\\)',l)\\n if m:\\n  v=list(map(float,m[1].split(','))); a.append((max(v[2:]),l))\\nprint(''.join(l for _,l in sorted(a)[:26]));print(''.join(l for l in s if l.startswith(('ridge','time'))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared scalar gate → H2 sparse coordinate-level interactions with upstream skip terms; the best shared-gate 52/20 MAEs were 0.05276 for y and 0.03816 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best scalar gate as the final solver\",\n      \"rejected_reason\": \"Its y error remains above the 0.038 threshold.\"\n    }\n  ],\n  \"rationale\": \"Compare sparse coordinate-level interactions with regularized polynomial readouts, fitting all feature selections on the 52 training rows and using the held-out errors to prioritize the next structural test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f5845ae46183f1773078d356c132a28b0533b8e07d3c1dbc6bd0fba23f680439",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40257.66,
+      "usage_known": true,
+      "prompt_tokens": 30136,
+      "cached_tokens": 12672,
+      "completion_tokens": 1787
+    }
+  ]
+}

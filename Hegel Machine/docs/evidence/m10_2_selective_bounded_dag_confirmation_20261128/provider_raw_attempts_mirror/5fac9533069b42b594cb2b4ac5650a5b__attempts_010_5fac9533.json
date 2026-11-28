@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5fac9533069b42b594cb2b4ac5650a5b",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:31.138370+00:00",
+  "ended_at_utc": "2026-11-28T15:04:05.146961+00:00",
+  "request_sha256": "4e832cc044eeabdd32a4fc47427ab576f894fada7a5a410a8fe3947b86ce4fc0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51247,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33334,
+    "cached_tokens": 12672,
+    "completion_tokens": 1420
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/node_01.py /tmp/node_01_verified_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_01.py')\\ns = p.read_text()\\ns = s.replace('def run_node(inputs: dict) -> dict:\\\\n', '''def _scalar(x, calibrated, y, n):\\n    # Shared quadratic trend plus a smooth residual in two coordinate systems.\\n    trend = _basis(calibrated, 2)\\n    kernel = trend @ trend[:n].T\\n    for coords in (x, calibrated):\\n        delta = coords[:, None, :] - coords[None, :n, :]\\n        kernel += 0.5 * np.exp(-np.sum(delta * delta, axis=2) / (2 * 1.3**2))\\n    weights = np.linalg.solve(kernel[:n] + 0.001 * np.eye(n), y)\\n    return kernel[n:] @ weights\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n''')\\nstart = s.index(\\\"    panel = study['panel_b']\\\")\\nend = s.index('    time_basis', start)\\ns = s[:start] + \\\"    calibrated = _calibrated(x, study['panel_a'])\\\\n    y_hat = _scalar(x, calibrated, y, n)\\\\n\\\" + s[end:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /holdout_task/test_dag_candidate.py | tee /tmp/node_01_final_verification.json\\npython3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/node_01_final_verification.json'))\\nassert p['accepted'] and set(p['exec_counts'].values())=={1}, p\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ndef load(name,path):\\n spec=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m.run_node\\nroot='/holdout_task/'\\nf=load('f',root+'_frozen_nodes/node_00.py'); new=load('new',root+'node_01.py'); old=load('old','/tmp/node_01_verified_baseline.py')\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; X=s['train']['x']; y=s['train']['y']; z=s['train']['traj']\\nrng=np.random.default_rng(821); random=[(p[:52],p[52:]) for p in (rng.permutation(len(y)) for _ in range(60))]\\ndef affine(x): return np.c_[np.ones(len(x)),x]\\na=s['panel_a']; A=affine(a['u']); w=np.linalg.lstsq(A,a['v'],rcond=None)[0]\\nfor _ in range(10):\\n k=np.argsort(np.linalg.norm(A@w-a['v'],axis=1))[:int(.82*len(A))];w=np.linalg.lstsq(A[k],a['v'][k],rcond=None)[0]\\nc=(X-w[0])/w[1:].diagonal(); b=s['panel_b']; r=affine(c)@np.linalg.lstsq(affine(b['u']),b['v'],rcond=None)[0]; tails=[]\\nfor coord in np.c_[X,c,r].T:\\n p=np.argsort(coord); tails.extend([(p[:58],p[58:]),(p[14:],p[:14])])\\nfor name,splits in [('random',random),('coordinate tails',tails)]:\\n scores=[]\\n for tr,te in splits:\\n  d=dict(s,train={'x':X[tr],'y':y[tr],'traj':z[tr]},test={'x':X[te]}); inputs={'__input__':d,'node_00':f({'__input__':d})}; p=new(inputs); q=old(inputs)\\n  assert p['y_hat'].shape==y[te].shape and p['state_pred'].shape==z[te].shape and all(np.isfinite(v).all() for v in p.values())\\n  assert np.array_equal(p['state_pred'],q['state_pred'])\\n  scores.append([np.mean(abs(v-y[te])) for v in (q['y_hat'],p['y_hat'])]+[np.mean(abs(p['state_pred']-z[te]))])\\n scores=np.array(scores); print(name,'mean and max MAE [old scalar, new scalar, unchanged trajectory]',scores.mean(0),scores.max(0)); assert scores.max(0)[1]<scores.max(0)[0]\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated panel-B cubic → H2 quadratic trend plus a two-coordinate residual kernel; the probe reduced worst fresh random MAE from 0.0656 to 0.0497 and worst coordinate-tail MAE from 0.1829 to 0.0835.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Blend the kernel with the accepted cubic\",\n      \"rejected_reason\": \"The blend slightly improves fresh random splits but raises worst coordinate-tail MAE from 0.0835 to 0.1084.\"\n    }\n  ],\n  \"rationale\": \"Promote the scalar model that most improves the worst coordinate-tail slice while staying below the official threshold in the probe. Verify the exact artifact in an isolated process and confirm trajectory outputs are unchanged on every stress split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "585d0b7c99b488c6207ecb78dba16fa448ee541bf96f47255f6039c8f0a70faa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34006.35,
+      "usage_known": true,
+      "prompt_tokens": 33334,
+      "cached_tokens": 12672,
+      "completion_tokens": 1420
+    }
+  ]
+}

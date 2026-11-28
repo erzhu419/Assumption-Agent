@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22293fcfe87340ca99a2422a49f6b878",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:37.476855+00:00",
+  "ended_at_utc": "2026-11-28T15:13:58.327916+00:00",
+  "request_sha256": "804d4845f8adb519d6de44f3b9b00da1a98f8e449f2eadb0e221e690f9ff0624",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 29800,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23926,
+    "cached_tokens": 5504,
+    "completion_tokens": 786
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; tail -29 test_dag_candidate.py; cat /tmp/hegel_continual_archive/*batch_01_solver.py; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; d=s['train']; x=d['x']; a=np.c_[np.ones(len(x)),x]; q=np.linalg.qr(a)[0]; Y=np.c_[d['y'],d['traj']]; np.set_printoptions(precision=5,suppress=True); print('times',s['eval_times']);\\nfor m in (Y,Y-q@(q.T@Y),d['traj'],d['traj']-q@(q.T@d['traj'])):\\n u,v,w=np.linalg.svd(m,full_matrices=False); print('sv',v,'right',w[:4]); print('coeff',np.linalg.lstsq(a,u[:,:4]*v[:4],rcond=None)[0]);\\nfor key in ('panel_a','panel_b','panel_c'):\\n p=s[key]; x=p['u']; a=np.c_[np.ones(len(x)),x]; i,j=np.triu_indices(4); Q=np.c_[a,x[:,i]*x[:,j]]\\n for name,V in p.items():\\n  if name=='u':continue\\n  for A in (a,Q):\\n   e=V-A@np.linalg.lstsq(A,V,rcond=None)[0]; print(key,name,A.shape[1],'mae',abs(e).mean(),'sv',np.linalg.svd(e,compute_uv=False))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine trajectory and quadratic readout -> H2 low-rank nonlinear spatial response; affine training MAE reaches 0.2332 at the last horizon and quadratic scalar training MAE is 0.1368.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Affine spatial trajectory features and a quadratic scalar readout suffice after affine panel recalibration.\",\n    \"empirical_witness\": \"Affine trajectory MAE grows to 0.2332 at the final horizon; a full quadratic basis still leaves 0.2221 trajectory MAE at that horizon and 0.1368 scalar MAE on training rows.\",\n    \"causal_blanket_diagnosis\": \"A fixed invertible affine calibration does not enlarge the affine or full quadratic function classes, so recalibration alone cannot remove these residuals.\",\n    \"sublated_pivot\": \"Use the residual temporal spectrum and archived feature grammars to isolate the missing nonlinear spatial components.\",\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit only the panel affine transform\",\n      \"rejected_reason\": \"An affine coordinate change cannot improve the best attainable fit of the same full polynomial basis.\"\n    }\n  ],\n  \"rationale\": \"Inspect the exact evaluator split and residual singular vectors to distinguish one shared nonlinear trajectory component from independently varying horizons before fitting candidate models.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d4956dc05d753b85419cb076a4e2b0ff3ba71188e6bde8ae3489f962a6482eb7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20850.08,
+      "usage_known": true,
+      "prompt_tokens": 23926,
+      "cached_tokens": 5504,
+      "completion_tokens": 786
+    }
+  ]
+}

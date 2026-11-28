@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e66ced129aad43bfbd797eb9e90ff02c",
+  "call_seq": 2,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:14:16.560726+00:00",
+  "ended_at_utc": "2026-11-28T16:14:35.266498+00:00",
+  "request_sha256": "e1da345c6a964cea5ddb96f4569021f6c6da572b72d3e5856ccdd121879d0bcb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12215,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17586,
+    "cached_tokens": 14720,
+    "completion_tokens": 686
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== \\\"$f\\\"; grep -E '^def |solve_ivp|lstsq|least_squares|panel_|return ' \\\"$f\\\"; done; cat > /tmp/probe14.py <<'PY'\\nimport glob,importlib.util,pickle,numpy as np,copy\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=np.concatenate([s['train']['y'][:,None],s['train']['traj']],1)\\nfor k in ('eval_times','telemetry_vec'):print(k,s[k])\\nprint('train x quantiles',np.quantile(s['train']['x'],[0,.1,.5,.9,1],axis=0));print('outputs',np.round(p[:8],5)); print('outputs sv',np.linalg.svd(p-p.mean(0),compute_uv=False))\\nfor k in ('panel_a','panel_b','panel_c'):\\n d=s[k];u=d['u'];print(k,'u range',u.min(),u.max());\\n for n,v in d.items():\\n  if n=='u':continue\\n  A=np.c_[np.ones(len(u)),u]; C=np.linalg.lstsq(A,v,rcond=None)[0]; r=np.linalg.norm(v-A@C,axis=1);print(n,'range',v.min(),v.max(),'linear res',np.quantile(r,[0,.25,.5,.75,.9,1]),'coeff',np.round(C,3));print('sample',np.round(np.c_[u,v][:3],4))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\n  q=copy.deepcopy(s);q['train']={k:v[:52] for k,v in q['train'].items()};q['test']={'x':s['train']['x'][52:]};o=m.solve_batch(q); yh=np.c_[o['y_hat'],o['state_pred']];print(f.split('/')[-1],np.round(np.mean(abs(yh-p[52:]),axis=0),6))\\n except Exception as e:print(f,repr(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived operator families -> study-specific forward model; 52/20 MAE pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare archived operators on the prescribed split and inspect the calibration residuals and trajectory rank before fitting a new model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "ea1c82e091d8406e7d07197e48a0015aa4a2b64f8fa85184b12fbdeaf790e0cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18704.88,
+      "usage_known": true,
+      "prompt_tokens": 17586,
+      "cached_tokens": 14720,
+      "completion_tokens": 686
+    }
+  ]
+}

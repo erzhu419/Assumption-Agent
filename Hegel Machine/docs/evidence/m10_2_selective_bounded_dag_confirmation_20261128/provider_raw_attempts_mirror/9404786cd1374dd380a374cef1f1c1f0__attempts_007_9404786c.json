@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9404786cd1374dd380a374cef1f1c1f0",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:14.284119+00:00",
+  "ended_at_utc": "2026-11-28T15:13:38.940707+00:00",
+  "request_sha256": "38b9a10bcc40c783d4feb98e7add051d40066b7aec223e331adbea5bb9e07315",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 45331,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31350,
+    "cached_tokens": 5504,
+    "completion_tokens": 868
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"find /tmp/hegel_continual_archive -type f; grep -nE 'def |y_hat|state_pred|0\\\\.65|0\\\\.4' /tmp/hegel_continual_archive/*/*.py /tmp/hegel_continual_archive/*.py 2>/dev/null; cat /holdout_task/_frozen_nodes/node_02.py; cat > /tmp/node03_loo.py <<'PY'\\nfrom node03_calibration import *\\nfrom pathlib import Path\\np=Path('/tmp/node03_loo.pkl')\\nif not p.exists():\\n out=[]\\n for i,v in enumerate(np.array_split(np.random.default_rng(198).permutation(dev),4)+[official]):\\n  tr=np.setdiff1d(dev,v)\\n  out.append(([build(tr[tr!=j],[j]) for j in tr],build(tr,v)))\\n pickle.dump(out,p.open('wb'))\\nR=pickle.load(p.open('rb'))\\nfor fold,(tr,v) in enumerate(R):\\n print('fold',fold)\\n for rs in (tr,[v]):\\n  A=np.vstack([np.column_stack((p[:,0],b[:,0],b[:,1:]@vt,(p[:,1:]-b[:,1:])@vt,y)) for p,b,vt,y,_ in rs]);p,b,*_,y=A.T; d=p-b; r=y-b\\n  print('mae',np.mean(abs(r)),'corr',np.round(np.corrcoef(np.column_stack((A[:,:2],A[:,2],A[:,9],A[:,10],A[:,17],np.abs(d),np.sign(d)*np.sqrt(abs(d)),b*b,b**3,d,r)).T)[-1,:-1],3)); print('cond',[(int(m.sum()),round(np.mean(r[m]),4),round(np.mean(abs(r[m])),4)) for m in (d<-.02,abs(d)<=.02,d>.02,b<-.6,b>.6)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/node03_loo.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 broad residual correction → H2 calibration at nearly matching upstream training sizes; the prior compact ridge screen found no official MAE below 0.04263.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best previous ridge fit\",\n      \"rejected_reason\": \"It did not improve the official split enough, and its calibration predictions used smaller upstream training sets.\"\n    }\n  ],\n  \"rationale\": \"Generate leave-one-out branch predictions from development data only. This reduces the training-size mismatch and tests whether signed disagreement or response magnitude predicts a transferable scalar correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f447ea26f58e05d4ab027cf06603ce0f57ffc5bb60450b37a7c21f4f71873f4c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24655.34,
+      "usage_known": true,
+      "prompt_tokens": 31350,
+      "cached_tokens": 5504,
+      "completion_tokens": 868
+    }
+  ]
+}

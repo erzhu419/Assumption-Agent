@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e08767a05d494192999ae5b532518513",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:19:50.200687+00:00",
+  "ended_at_utc": "2026-11-28T15:20:21.840372+00:00",
+  "request_sha256": "5902688885b3cf4aab8d26f8663ad50e0fe120597921fe2a260347a8b008bc00",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61271,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37766,
+    "cached_tokens": 12672,
+    "completion_tokens": 1270
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().split('def _design(')[0]\\np.write_text(s + '''def _design(study, raw):\\n    z = _calibrate(study['panel_a'], raw)\\n    g, h = _operators(study['panel_c'], z)\\n    contraction = np.sum(g * h, axis=1)\\n    common = _with_bias(np.column_stack((g, h, _cross(z, g), contraction)))\\n    return common, np.column_stack((common, g[:, 0] * h[:, 1]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    fy, fs = _design(study, np.vstack((train['x'], study['test']['x'])))\\n    traj = np.asarray(train['traj'])\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:3]\\n    y = fy[n:] @ _ls(fy[:n], train['y'])\\n    state = (fs[n:] @ _ls(fs[:n], traj @ basis.T)) @ basis\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n''')\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']; ix = np.arange(len(tr['x'])); rng = np.random.default_rng(949)\\n\\ndef check(r, n):\\n    y, a, d = (r[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape == (n,) and a.shape == (n,len(s['eval_times'])) and d.shape == (4,)\\n    assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in (y,a,d))\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),a[:,-1].mean(),a[:,-1].std()])\\n    return y,a\\n\\ncheck(m['solve_batch'](s),len(s['test']['x']))\\nsets = {'required':[ix[52:]], 'blocked':[ix[i:i+20] for i in (0,13,26,39)],\\n        'random':[rng.choice(ix,20,replace=False) for _ in range(30)],\\n        'boundary':[np.argsort(np.linalg.norm(tr['x'],axis=1))[-20:]]}\\nfor name, folds in sets.items():\\n    metrics=[]\\n    for val in folds:\\n        fit=np.setdiff1d(ix,val)\\n        q=dict(s,train={k:(v if k=='summary' else v[fit]) for k,v in tr.items()},test={'x':tr['x'][val]})\\n        y,a=check(m['solve_batch'](q),len(val)); err=np.abs(a-tr['traj'][val])\\n        metrics.append([np.mean(np.abs(y-tr['y'][val])),err.mean(),err.mean(0).max()])\\n    worst=np.max(metrics,axis=0); print(name,'worst MAE [y, trajectory, timestamp]',worst); assert np.max(worst)<=.038\\nfit,val=ix[:52],ix[52:]; _,f=m['_design'](s,tr['x']); a=tr['traj']; v=np.linalg.svd(a[fit],full_matrices=False)[2]\\nfor k in (2,3,4):\\n    b=v[:k]; p=f[val]@m['_ls'](f[fit],a[fit]@b.T)@b\\n    print('rank',k,'52/20 trajectory MAE',np.mean(abs(p-a[val])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unrestricted product–cosine interactions → H2: a shared diagonal contraction plus one directed trajectory term; the compact model’s worst split MAEs are 0.01142 for y and 0.00651 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Keep the unrestricted interaction blocks\",\"rejected_reason\":\"The compact model reduces worst-split MAEs from 0.03018 and 0.01529 to 0.01142 and 0.00651.\"},{\"option\":\"Use a fitted three-exponential temporal basis\",\"rejected_reason\":\"The empirical three-mode basis had lower worst-split trajectory MAE.\"}],\"rationale\":\"Promote the compact model, then verify the exact saved artifact in isolated Python on the required split, boundary inputs, and additional blocked and random splits. Check each output and compare temporal ranks directly.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9ede9243c8089327b1d4bb11d28e602ca390fda2806a9bbd0102c5c19af84b80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32049.45,
+      "usage_known": true,
+      "prompt_tokens": 37766,
+      "cached_tokens": 12672,
+      "completion_tokens": 1270
+    }
+  ]
+}

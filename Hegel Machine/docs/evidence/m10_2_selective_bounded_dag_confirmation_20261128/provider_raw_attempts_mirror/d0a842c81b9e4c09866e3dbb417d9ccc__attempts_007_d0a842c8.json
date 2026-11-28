@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0a842c81b9e4c09866e3dbb417d9ccc",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:53:59.040092+00:00",
+  "ended_at_utc": "2026-11-28T14:54:46.446585+00:00",
+  "request_sha256": "7eccfe791e3cacbe95911d036dd4600b80fe3c9bfbfead439128597198e4fd03",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48565,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34193,
+    "cached_tokens": 12672,
+    "completion_tokens": 1878
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/composition_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom itertools import product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; t=s['eval_times']; Y=np.c_[s['train']['y'],s['train']['traj']]; c=s['panel_c']; u=c['u']; C=[]\\nfor nm,fun,ini in [('sqrt',lambda u,p:u+p[0]*(np.sqrt(1+p[1]*u*u)-1),[1.2,.92]),('tanh',lambda u,p:np.tanh(p[0]*u),[1.5]),('tanhwarp',lambda u,p:np.tanh(p[0]*u+p[1]*u**3)+p[2]*u,[1.5,0,0]),('tanhsin',lambda u,p:np.tanh(p[0]*u)+p[1]*np.sin(p[2]*u),[1.5,.1,2]),('smooth',lambda u,p:u/np.sqrt(1+p[0]*u*u),[1.5]),('asinh',lambda u,p:np.arcsinh(p[0]*u),[2]),('atan',lambda u,p:np.arctan(p[0]*u),[2]),('tanhshift',lambda u,p:np.tanh(p[0]*(u+np.array(p[1:]))),[1.5,0,0,0,0])]:\\n v=c['v2' if nm=='sqrt' else 'v1']; aug=lambda u:np.c_[np.ones(len(u)),u];\\n def ff(p):\\n  F=aug(fun(u,p)); return F,np.linalg.lstsq(F,v,rcond=None)[0]\\n def res(p):\\n  F,W=ff(p); return (F@W-v).ravel()\\n r=least_squares(res,ini,max_nfev=200); F,W=ff(r.x); print(nm,r.x,np.std(r.fun),np.linalg.svd(W[1:],compute_uv=False)); C.append((nm,lambda z,fun=fun,p=r.x,W=W:aug(fun(z,p))@W))\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('panel ranges',u.min(0),u.max(0))\\nfor name in ('a','b'):\\n panel=s['panel_'+name]; z=panel['u']; v=panel['v']; keep=np.ones(len(z),bool)\\n for k in range(4):\\n  W=np.linalg.lstsq(aug(z[keep]),v[keep],rcond=None)[0]; keep=np.linalg.norm(aug(z)@W-v,axis=1)<2\\n if name=='a': W[1:]=np.diag(np.diag(W[1:])); A=W\\n else: B=W\\ntrans=[('x',lambda z:z),('a',lambda z:aug(z)@A),('ai',lambda z:(z-A[0])@np.linalg.inv(A[1:])),('b',lambda z:aug(z)@B),('bi',lambda z:(z-B[0])@np.linalg.inv(B[1:]))]; trans += [(p+q,lambda z,f=f,g=g:g(f(z))) for p,f in trans[1:3] for q,g in trans[3:]]\\nrng=np.random.default_rng(497); order=[np.arange(72)]+[rng.permutation(72) for _ in range(7)]; I=np.array([r[:52] for r in order]); J=np.array([r[52:] for r in order]);\\ndef cv(F,l):\\n D=F[I]; P=F[J]; w=np.linalg.solve(D.transpose(0,2,1)@D+l*np.eye(D.shape[-1]),D.transpose(0,2,1)@Y[I]); e=abs(P@w-Y[J]); return np.r_[e[0,:,0].mean(),e[0,:,1:].mean(),e[:,:,0].mean(),e[:,:,1:].mean()]\\nr=[]\\nfor nm,g in trans:\\n z=g(x)\\n for spec,f in [('raw',lambda z:z)]+C:\\n  h=f(z)\\n  for d in (1,2,3):\\n   for typ,F in [('poly',PolynomialFeatures(d).fit_transform(h))]+([('mix',np.c_[PolynomialFeatures(2).fit_transform(h),z]),('bothlinear',np.c_[aug(h),x]),('mixquad',np.c_[PolynomialFeatures(2).fit_transform(h),PolynomialFeatures(2).fit_transform(z)[:,1:]])] if d==2 and spec!='raw' else []):\\n    for l in ([.002,.025,.12] if typ=='mixquad' or d==3 else [.0002,.02]):\\n     e=cv(F,l); r.append((nm,spec,d,typ,l,e))\\nfor nm,g in trans:\\n z=g(x)\\n for nm1,g1 in C[:1]:\\n  for nm2,g2 in C[1:]:\\n   h=g1(z); k=g2(z); F=np.c_[aug(h),k];\\n   for d in [1,2]:\\n    G=PolynomialFeatures(d).fit_transform(F[:,1:]);\\n    for l in [.002,.025,.12]:r.append((nm,nm1+'+'+nm2,d,'joint',l,cv(G,l)))\\nfor j in [2,3,0,1]:\\n print('rank',j)\\n for row in sorted(r,key=lambda row:row[-1][j])[:9]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/composition_probe.py\\ncat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Polynomial baseline for the public scientific prediction task.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _design(x):\\n    x = np.asarray(x, dtype=float)\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((np.ones(len(x)), x, x[:, i] * x[:, j]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    target = np.column_stack((train['y'], train['traj']))\\n    coeff = np.linalg.lstsq(_design(train['x']), target, rcond=None)[0]\\n    pred = _design(study['test']['x']) @ coeff\\n    y, state = pred[:, 0], pred[:, 1:]\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Raw quadratic mapping → panel-composed nonlinear features; the raw baseline gives fixed-split readout MAE 0.0221 and worst-timestamp MAE 0.0271.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Use Panel C directly without a composition check\",\"rejected_reason\":\"Accurate reconstruction of an auxiliary panel does not establish that it participates in the target mapping.\"}],\"rationale\":\"Save a schema-checkable baseline and compare nonlinear panel compositions across multiple splits before promoting one.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f2e456fbd515e993becd140ba1fd3afb7b125ac0e8a09ae0f20ec5834e87f5d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47405.45,
+      "usage_known": true,
+      "prompt_tokens": 34193,
+      "cached_tokens": 12672,
+      "completion_tokens": 1878
+    }
+  ]
+}

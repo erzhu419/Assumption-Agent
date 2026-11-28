@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d462fb92aff0478a8afa8ae52fa0b8d9",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:57.436257+00:00",
+  "ended_at_utc": "2026-11-28T15:44:26.584320+00:00",
+  "request_sha256": "08eb652f97cac6657ba7665abff52cb8d4d8388c4714a81efcd3fd2fd08b7d4f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36329,
+    "cached_tokens": 12672,
+    "completion_tokens": 1126
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readouts.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import minimize_scalar\\nm=runpy.run_path('/holdout_task/batch_solver.py');s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];q=m['_coordinates'](s,np.r_[tr['x'],s['test']['x']])[:72];d=m['_quadratic'](q);y=tr['y'];T=tr['traj'];LS=m['_fit'];t=s['eval_times'];ix=np.arange(len(y));rng=np.random.default_rng(574)\\nsplits=[np.arange(52,72)]+[rng.choice(ix,20,False) for _ in range(20)]+[np.argsort(a)[-k:] for a in (np.linalg.norm(q,axis=1),np.max(abs(tr['x']),axis=1),*abs(q.T)) for k in (8,12)]\\npair=d[:,7]+d[:,11]; base=np.c_[d[:,:5],pair]\\nfor name,a in [('tied pairs',base),('separate pairs',d[:,[0,1,2,3,4,7,11]]),('tied + interactions',np.c_[base,d[:,[8,14]]]),('tied + cubic',np.c_[base,q**3])]:\\n e=[]\\n for te in splits:\\n  ti=np.setdiff1d(ix,te);e.append(np.mean(abs(a[te]@LS(a[ti],y[ti])-y[te])))\\n print(name,e[0],max(e[1:21]),max(e[21:]),'full coeff',LS(a,y))\\nfor kind in ('tanh','sin','softsign','arctan'):\\n fn={'tanh':np.tanh,'sin':np.sin,'softsign':lambda u:u/(1+u*u),'arctan':np.arctan}[kind];e=[];weights=[]\\n for te in splits:\\n  ti=np.setdiff1d(ix,te);a=base[ti];yy=y[ti]; l=LS(a,yy)\\n  from scipy.optimize import least_squares\\n  def pred(a,p):\\n   v=a[:,1:5]@p[1:5]; z=p[6];return p[0]+(fn(v*z)/z if z else v)+a[:,-1]*p[5]\\n  p=least_squares(lambda p:pred(a,p)-yy,np.r_[l,.2],bounds=(np.r_[[-np.inf]*6,0],np.r_[[np.inf]*6,3])).x\\n  e.append(np.mean(abs(pred(base[te],p)-y[te])));weights.append(p[-1])\\n print(kind,e[0],max(e[1:21]),max(e[21:]),'nonlinearity',min(weights),max(weights))\\nD=m['_aff'](q); fit=D@LS(D,T);print('trajectory in-span sv',np.linalg.svd(fit,compute_uv=False));\\ndef exp(a):return -np.expm1(-a*t)\\nfor a in (2.15,1.25,.22):\\n for name,b in [('t',t),('t*exp(1.25)',t*np.exp(-1.25*t)),('exp(.22)',exp(.22)),('constant',np.ones_like(t))]:\\n  A=np.c_[exp(a),b];print(a,name,np.sqrt(np.mean((A@LS(A,fit.T)-fit.T)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/readouts.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted quadratic readout -> H2 test the symmetric q0*q2 + q1*q3 readout; the current solver’s worst boundary MAEs are 0.01657 for y and 0.00486 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the unrestricted quadratic\",\"rejected_reason\":\"It passes the thresholds, but nested sparse selection lowers worst boundary scalar MAE from 0.01657 to 0.00583, and the two dominant coefficients are nearly equal.\"}],\"rationale\":\"Test the paired symmetry and plausible scalar saturation separately, fitting each challenger within each split. Retain the verified trajectory readout unless a replacement improves its worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9f57216a04e24f2a17a916558a107ed40496e73d7516e71f11da8471e02e22d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29146.52,
+      "usage_known": true,
+      "prompt_tokens": 36329,
+      "cached_tokens": 12672,
+      "completion_tokens": 1126
+    }
+  ]
+}

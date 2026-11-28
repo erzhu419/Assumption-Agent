@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ba18c2d2fd104226a1eb7121d6431ff1",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:02.219017+00:00",
+  "ended_at_utc": "2026-11-28T15:46:34.175435+00:00",
+  "request_sha256": "43463c2e3dd3ee4a8671f5b0519f5755f1d12acef6e63b1448de2c9d03f3812a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29314,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24226,
+    "cached_tokens": 12672,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_b04_batch_{04,05,06,09}_solver.py; cat > /tmp/panel12.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr=s['train']; n=52\\n\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef score(d,y,ix=None):\\n if ix is None: ix=np.arange(len(d))\\n return np.mean(abs(d[ix[n:]]@ls(d[ix[:n]],y[ix[:n]])-y[ix[n:]]))\\nforms={'sin':(np.sin,.1,15),'cos':(np.cos,.1,15),'tanh':(np.tanh,.1,10),'asinh':(np.arcsinh,.1,10),'atan':(np.arctan,.1,10),'soft':(lambda z:z/np.sqrt(1+z*z),.05,8),'rat':(lambda z:z/(1+z*z),.05,8),'exp':(lambda z:np.expm1(-z*z),.05,8),'gaussodd':(lambda z:z*np.exp(-z*z),.05,8),'sig':(lambda z:np.logaddexp(0,z),.05,8),'sinh':(np.sinh,.05,4)}\\n\\ndef fitpanel(u,v,robust=False):\\n out=[]\\n for name in ['aff','quad','cube']+list(forms):\\n  for extra in ([0,1] if name in forms else [0]):\\n   if name in forms:\\n    fun,lo,hi=forms[name]\\n    def df(x,k,fun=fun,extra=extra): return aff(np.c_[x,fun(k*x)] if extra else fun(k*x))\\n   else:\\n    def df(x,k,d={'aff':1,'quad':2,'cube':3}[name]): return poly(x,d)\\n   def calc(k,ret=False):\\n    a=df(u,k); keep=np.arange(len(u)); w=ls(a,v)\\n    if robust:\\n     for _ in range(8):\\n      keep=np.argsort(np.linalg.norm(a@w-v,axis=1))[:41]; w=ls(a[keep],v[keep])\\n    a0=a[keep]; err=a0@w-v[keep]; lev=np.sum(a0*np.linalg.pinv(a0).T,axis=1)\\n    mse=np.mean((err/np.maximum(1-lev[:,None],.01))**2)+1e-7*np.sum(w*w)\\n    return (mse,np.sqrt(np.mean(err**2)),w) if ret else mse\\n   k=1.\\n   if name in forms:\\n    g=np.linspace(lo,hi,122); m=np.array([calc(i) for i in g]); j=m.argmin()\\n    k=minimize_scalar(calc,bounds=(g[max(0,j-1)],g[min(len(g)-1,j+1)]),method='bounded').x\\n   mse,rm,w=calc(k,True); out.append((np.sqrt(mse),rm,name+str(extra),k,lambda x,df=df,k=k,w=w:df(x,k)@w,w))\\n return sorted(out,key=lambda i:i[0])\\n\\nif __name__=='__main__':\\n for p,key in [('a','v'),('b','v'),('c','v1'),('c','v2')]:\\n  q=s['panel_'+p]; r=fitpanel(q['u'],q[key],p=='a'); print(p,key,[i[:4] for i in r[:10]]);print(np.round(r[0][-1],4))\\n print('raw',[(d,score(poly(tr['x'],d),tr['y']),score(poly(tr['x'],d),tr['traj'])) for d in (1,2,3)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel12.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reused archive maps → infer the operators from panel measurements; the best archived 52/20 MAEs are 0.23326 for y and 0.39008 for trajectory, both above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Copy the latest archive solver\",\"rejected_reason\":\"Its measured 52/20 MAEs are 0.44181 and 0.56536.\"}],\"rationale\":\"Profile affine, polynomial, and shared elementwise link families against panel measurements, using leverage-adjusted residuals to distinguish nonlinear operators from overfit panel interpolants.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b946dd8ed883cb1ce1fcb0e61574410383b15e97601015a555e54e104be87fdc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31955.27,
+      "usage_known": true,
+      "prompt_tokens": 24226,
+      "cached_tokens": 12672,
+      "completion_tokens": 1254
+    }
+  ]
+}

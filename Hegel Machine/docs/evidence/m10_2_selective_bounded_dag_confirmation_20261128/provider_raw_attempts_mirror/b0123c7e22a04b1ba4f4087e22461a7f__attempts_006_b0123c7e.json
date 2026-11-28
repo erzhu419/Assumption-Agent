@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0123c7e22a04b1ba4f4087e22461a7f",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:44:27.932695+00:00",
+  "ended_at_utc": "2026-11-28T16:45:39.239386+00:00",
+  "request_sha256": "a1ebddcefc2f37f66aa50f0fa978e8211ff7a3c577666be65027e2854db2f510",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43559,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30746,
+    "cached_tokens": 12672,
+    "completion_tokens": 1331
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/scalar12.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.special import erf\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport conf_m102_b02_batch_05_solver as old\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=len(s['train']['x']); z,b=old.parts(s); z=z[:n]; b=b[:n]; y=s['train']['y']; rng=np.random.default_rng(700)\\nids=rng.permutation(n); folds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(ids,j),j) for j in np.array_split(ids,4)]\\nprint('y',y.round(4),'range z,b',z.min(0),z.max(0),b.min(0),b.max(0))\\n\\ndef sc(k,r):\\n return np.array([np.mean(abs(y[j]-k[np.ix_(j,i)]@solve(k[np.ix_(i,i)]+r*np.eye(len(i)),y[i],assume_a='pos'))) for i,j in folds])\\ndef pair(x,w):return (x[:,:,None]*w[:,None,:]).reshape(n,-1)\\n\\ndef phi(x):return {'tanh':np.tanh(x),'erf':erf(x),'atan':np.arctan(x),'soft':x/np.sqrt(1+x*x),'rat':x/(1+x*x),'sin':np.sin(x),'asinh':np.arcsinh(x),'raw':x}\\nres=[]\\nfor scale in [1.,1.25,1.6,2.15,2.5,3.,3.5]:\\n for zk in [0,.15,.3,.5,1.]:\\n  for cname,c in [('sep',b),('plus',b+zk*z),('minus',b-zk*z),('sym',np.c_[b+zk*z,b-zk*z])]:\\n   for name,h in phi(scale*c).items():\\n    l=np.c_[z,h]; zz=z@z.T/4; hh=h@h.T/h.shape[1]; zh=zz*hh; ds=cdist(l,l,'sqeuclidean')/l.shape[1]; diagz=(z*z)@(z*z).T/4; diagh=(h*h)@(h*h).T/h.shape[1];\\n    for mode,q in enumerate([0,hh**2,zh,diagz+diagh,zh+diagh,zh+diagz+diagh,zh+hh**2,hh**2+zz**2+2*zh,.15*np.exp(-ds),.15*np.exp(-ds)+zh+hh**2]):\\n     k=1+zz+hh+q\\n     for ridge in [1e-5,3e-4,.003,.02]:\\n      v=sc(k,ridge);res.append((v.mean()+.4*v.max(),scale,zk,cname,name,mode,ridge,v,k))\\nres.sort(key=lambda t:t[0]); print('BEST');print(*[r[:-1] for r in res[:20]],sep='\\\\n');print('BEST PUBLIC');print(*[r[:-1] for r in sorted(res,key=lambda t:t[-2][0])[:12]],sep='\\\\n');print('ENSEMBLES');\\nfor count in (3,10,30,100):\\n k=sum(r[-1] for r in res[:count])/count; print(count,sc(k,.001))\\nfor label,h in [('z',z),('b',b),('tanh',np.tanh(2.15*b)),('erf',erf(2.15*b)),('atan',np.arctan(2.15*b)),('soft',2.15*b/np.sqrt(1+(2.15*b)**2))]:\\n f=np.c_[np.ones(n),z,h]; w=np.linalg.lstsq(f,y,rcond=None)[0]; print(label,w.round(4),np.mean(abs(f@w-y)),sc(f@f.T,.001))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scalar12.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 changed panel calibration → H2 unchanged calibration with missing scalar basis terms; the best previous scalar model had 0.0396 public MAE, and the best balanced model had 0.0474 worst-fold MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the inherited panel maps\",\n      \"rejected_reason\": \"The archived cyclic-cubic and dead-zone maps fit the current reference panels to approximately 0.0002 and 0.00009, respectively, excluding panel A outliers.\"\n    }\n  ],\n  \"rationale\": \"With panel calibration supported independently of scalar labels, compare targeted additive, diagonal, bilinear, and symmetric scalar basis terms before adopting a broader surrogate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f7b197614539be5c153b5cbdbc78e63c9386f89992baa3669ab207358b8e7a38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 72339.6,
+      "usage_known": true,
+      "prompt_tokens": 30746,
+      "cached_tokens": 12672,
+      "completion_tokens": 1331
+    }
+  ]
+}

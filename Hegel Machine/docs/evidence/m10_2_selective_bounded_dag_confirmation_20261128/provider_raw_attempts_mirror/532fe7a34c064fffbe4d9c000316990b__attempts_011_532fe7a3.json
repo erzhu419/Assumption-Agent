@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "532fe7a34c064fffbe4d9c000316990b",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:00:24.480737+00:00",
+  "ended_at_utc": "2026-11-28T16:01:01.567267+00:00",
+  "request_sha256": "36e1bbebb32625a334318a676cebfae3a7406c87f0a0b9eab3006160a7a74c4c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 66988,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37838,
+    "cached_tokens": 12672,
+    "completion_tokens": 1624
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\ncp /holdout_task/node_00.py /tmp/hegel_passing_v02.py\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_00.py')\\ns = p.read_text().split('def _branch')[0]\\ns += '''def _softsign_branch(panel, z):\\n    u, v = np.asarray(panel['u']), np.asarray(panel['v1'])\\n\\n    def design(x, p):\\n        w = x + p[1:]\\n        return _ones(np.c_[x, w / (1 + p[0] * abs(w))])\\n\\n    def residual(p):\\n        a = design(u, p)\\n        return (a @ _ls(a, v) - v).ravel()\\n\\n    p = least_squares(residual, [.85, 0, 0, 0, 0],\\n                      bounds=([.03, -.2, -.2, -.2, -.2], [3, .2, .2, .2, .2])).x\\n    return design(z, p) @ _ls(design(u, p), v)\\n\\n\\ndef _adjacent_branch(panel, z):\\n    def design(x):\\n        return _ones(np.c_[x, x * np.roll(x, -1, axis=1)])\\n\\n    return design(z) @ _ls(design(panel['u']), panel['v2'])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    x = np.vstack((s['train']['x'], s['test']['x']))\\n    z = _calibrate(s['panel_a'], x)\\n    b, c = s['panel_b'], s['panel_c']\\n    q = _softsign_branch(c, z)\\n    r = _adjacent_branch(c, z)\\n    return dict(z=z, L=_ones(z) @ _ls(_ones(b['u']), b['v']), Q=q, R=r,\\n                product=q.copy(), cosine=np.cos(2.4 * z))\\n'''\\np.write_text(s)\\nPY\\nif ! python3 -I /holdout_task/test_dag_candidate.py; then\\n  cp /tmp/hegel_passing_v02.py /holdout_task/node_00.py\\n  python3 -I /holdout_task/test_dag_candidate.py\\n  exit 0\\nfi\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nm = runpy.run_path('/holdout_task/node_00.py')\\nsink = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']\\nt = s['train']; rows = np.arange(len(t['x'])); metrics = []\\nfor h in [rows[-20:]] + list(np.array_split(np.random.default_rng(123).permutation(rows), 4)):\\n    a = np.setdiff1d(rows, h)\\n    sub = dict(s, train={k: t[k][a] for k in ('x','y','traj')}, test={'x':t['x'][h]})\\n    f = m['run_node']({'__input__':sub})\\n    assert set(f) == {'z','L','Q','R','product','cosine'}\\n    assert all(isinstance(v, np.ndarray) and len(v) == len(rows) and np.isfinite(v).all() for v in f.values())\\n    o = sink({'__input__':sub, 'node_00':f})\\n    metrics.append([np.mean(abs(o['y_hat']-t['y'][h])), np.mean(abs(o['state_pred']-t['traj'][h]))])\\nw = np.max(metrics, axis=0)\\nprint('Worst target-fold y/trajectory MAEs:', w.tolist())\\nassert np.all(w < .038)\\nc = s['panel_c']; rows = np.arange(len(c['u']))\\nfor key, f in [('v1', m['_softsign_branch']), ('v2', m['_adjacent_branch'])]:\\n    e = []\\n    for h in np.array_split(np.random.default_rng(23).permutation(rows), 4):\\n        a = np.setdiff1d(rows,h)\\n        e.append(np.mean(abs(f({k:v[a] for k,v in c.items()}, c['u'][h])-c[key][h])))\\n    print(key, 'worst panel-fold MAE:', max(e))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separable squared-rational H1 → cyclic adjacent-product H2 with a cosine feature channel; the probe measured official MAEs of 0.031855 and 0.017862 and a worst target-fold MAE of 0.031855.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the previous accepted candidate\",\n      \"rejected_reason\": \"Its worst target-fold MAE was 0.048938, and its second-branch panel error was more than twice that of the adjacent-product fit.\"\n    },\n    {\n      \"option\": \"Use neighbor products in the cosine channel\",\n      \"rejected_reason\": \"That variant improves worst-fold scalar MAE slightly but removes the cosine basis and increases worst-fold trajectory MAE.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler adjacent-product fit: it improves held-out panel reconstruction and both official metrics while retaining the cosine channel. Verify the saved artifact in an isolated process on the official evaluator and all five target splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "71edc6ad4b1cf62e0152fdac23249c9a98bc9399008ec78c8172fab5d176cdd5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37554.07,
+      "usage_known": true,
+      "prompt_tokens": 37838,
+      "cached_tokens": 12672,
+      "completion_tokens": 1624
+    }
+  ]
+}

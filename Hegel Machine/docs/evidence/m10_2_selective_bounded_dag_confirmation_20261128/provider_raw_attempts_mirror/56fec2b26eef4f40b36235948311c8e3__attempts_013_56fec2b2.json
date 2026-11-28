@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56fec2b26eef4f40b36235948311c8e3",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:22:54.789896+00:00",
+  "ended_at_utc": "2026-11-28T16:23:53.786628+00:00",
+  "request_sha256": "24e6acb5eb3162f81f145d57a530c1e52870d811482c62119b326cc0c653427c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82951,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 47536,
+    "cached_tokens": 12672,
+    "completion_tokens": 1702
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline14.py\\nsed '/^def solve_batch/,$d' /tmp/baseline14.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _dead_zone(panel, z):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def basis(x, p):\\n        h = np.sign(x) * np.maximum(np.abs(x) - p[0], 0)**p[1]\\n        return np.c_[_aff(x), h]\\n    def residual(p):\\n        a = basis(u, p)\\n        return (a @ _ls(a, v) - v).ravel()\\n    p = least_squares(residual, [.35, 1.5], bounds=([.1, .6], [.7, 2.5])).x\\n    return basis(z, p) @ _ls(basis(u, p), v)\\n\\n\\ndef _scalar_basis(z, b, mode):\\n    base = _quadratic(np.c_[z, b])\\n    zr, br = np.roll(z, -1, axis=1), np.roll(b, -1, axis=1)\\n    if mode == 'interaction':\\n        return np.c_[base, z*zr*b, z*b*br, z**3, b**3]\\n    return np.c_[base, z*z*b, z*b*b, z*z*br, b*b*zr]\\n\\n\\ndef _sparse_predict(a, q, y, penalty):\\n    scale = np.r_[1, np.maximum(a[:, 1:].std(0), .035)]\\n    a = a / scale\\n    p = np.r_[0, np.full(a.shape[1]-1, penalty)]\\n    h, rhs = a.T @ a, a.T @ y\\n    w = np.linalg.solve(h + np.diag(p + 1e-10), rhs)\\n    for _ in range(8):\\n        w = np.linalg.solve(h + np.diag(p * (.06/(abs(w) + .004))**1.45 + 1e-10), rhs)\\n    return (q / scale) @ w\\n\\n\\ndef solve_batch(study):\\n    tr = study['train']\\n    x = np.r_[tr['x'], study['test']['x']]\\n    n = len(tr['x'])\\n    z = _inverse(x, _calibrate(study['panel_a']))\\n    b = _dead_zone(study['panel_b'], z)\\n    smooth = _operator(study['panel_b'], z)\\n    y = np.zeros(len(x)-n)\\n    for weight, op, mode, penalty in (\\n        (.40, b, 'interaction', .012),\\n        (.30, b, 'raw', .16),\\n        (.30, smooth, 'raw', .16),\\n    ):\\n        a = _scalar_basis(z, op, mode)\\n        y += weight * _sparse_predict(a[:n], a[n:], tr['y'], penalty)\\n    a = _quadratic(np.c_[z, b])\\n    t = _predict(a[:n], a[n:], tr['traj'], .003)\\n    d = np.array([y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])\\n    return {'y_hat': y, 'state_pred': t, 'diagnostics_vec': d}\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\npath='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('batch_solver',path); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); all=np.arange(n)\\nfolds=[all[52:]]+list(np.array_split(np.random.default_rng(14).permutation(n),4))\\nfor i,f in enumerate(folds):\\n a=np.setdiff1d(all,f); y=t['y'][a]; z=t['traj'][a]; u={**s,'train':{'x':t['x'][a],'y':y,'traj':z,'summary':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])},'test':{'x':t['x'][f]}}; r=m.solve_batch(u); err=np.abs(r['state_pred']-t['traj'][f]); print(i,'MAEs',np.abs(r['y_hat']-t['y'][f]).mean(),err.mean(),'worst horizon',err.mean(0).max())\\nr=m.solve_batch(s); y=r['y_hat']; z=r['state_pred']; assert y.shape==(36,) and z.shape==(36,8) and np.isfinite(y).all() and np.isfinite(z).all(); np.testing.assert_allclose(r['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); print('Isolated test contract verified')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 smooth panel B with quadratic scalar readout -> H2 calibrated dead-zone panel B with sparse cubic interactions; comparable blends achieved 0.03319 scalar MAE on 52/20 and 0.03319 worst across five slices; the final blend awaits verification.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The smooth panel approximation and quadratic readout alone suffice for both outputs.\",\"empirical_witness\":\"The smooth quadratic scalar misses the gate at 0.048348. Panel B fits a signed dead zone near threshold 0.35 and exponent 1.5 with residual below 0.0001; sparse cubic readouts reach 0.02762 on the required scalar split.\",\"causal_blanket_diagnosis\":\"The panel response and the downstream scalar interaction were both approximated in the same quadratic predictor.\",\"sublated_pivot\":\"Fit the dead zone from independent panel measurements, keep a quadratic state readout, and blend sparse cubic scalar readouts for slice robustness.\",\"risk_kind\":\"operator and readout misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the scalar model with the lowest 52/20 MAE alone\",\"rejected_reason\":\"Its worst additional slice is about 0.055; complementary interaction bases reduce that risk.\"}],\"rationale\":\"Promote the structural correction that clears the scalar bottleneck while preserving an independently fitted trajectory. Verify the exact saved artifact with the public gate, auxiliary slices, and an isolated-process contract check.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "7085f68a40613bb4711705a95ea0428c2131506349d506fef648e00de8d9d93f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 59996.85,
+      "usage_known": true,
+      "prompt_tokens": 47536,
+      "cached_tokens": 12672,
+      "completion_tokens": 1702
+    }
+  ]
+}

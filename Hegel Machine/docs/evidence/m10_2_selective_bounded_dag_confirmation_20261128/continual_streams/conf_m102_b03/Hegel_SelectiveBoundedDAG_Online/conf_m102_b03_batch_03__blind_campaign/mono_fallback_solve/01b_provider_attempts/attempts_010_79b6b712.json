@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79b6b7123fd74393a3b7ff32ca9103c7",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:45.149516+00:00",
+  "ended_at_utc": "2026-11-28T15:14:07.014811+00:00",
+  "request_sha256": "163dfa4b73634dd16bb7ffa0b3eda2527e97aad9987586db37b07d25446888cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64832,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41435,
+    "cached_tokens": 12672,
+    "completion_tokens": 827
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py | grep -E '^branch|^GREEDY 0 CD' -A1; cat > /tmp/fusion.py <<'PY'\\nfrom studyfit import *\\nf=np.load('/tmp/refined.npz');z,L,C,D,T,Y,H=(f[k] for k in ('z','L','C','D','T','Y','H')); N=52\\nP=(C[:,:,None]*D[:,None,:]).reshape(len(C),16);dot=(C*D).sum(1);dotL=(C*L).sum(1)\\nF=one(np.c_[C,D]); np.set_printoptions(precision=4,suppress=True)\\nfor n,M in [('base',F),('dot',np.c_[F,dot]),('dot_cross',np.c_[F,dot,C[:,0]*D[:,1]]),('full',np.c_[F,P]),('slow',one(np.c_[z,pair(z),C[:,0]*D[:,1]]))]:\\n b=ls(M[:N],Y[:N]);e=abs(M@b-Y);print(n,e[:N].mean(0),e[N:].mean(0),abs((M@b-Y)[N:,1:]@H.T).mean(),b.T)\\nfor k in range(3):\\n y=Y[:,k]; A=np.c_[P,dot,dotL, z,C/(1+.22*D*D),D/(1+.22*C*C),C**2,D**2]; labels=[f'c{i}d{j}' for i in range(4) for j in range(4)]+['dot','dotL']+[f'{n}{i}' for n in ['z','Cr','Dr','C2','D2'] for i in range(4)]\\n for M in [F,one(np.c_[z,pair(z)])]:\\n  for step in range(6):\\n   R=A[:N]-M[:N]@ls(M[:N],A[:N]); r=y[:N]-M[:N]@ls(M[:N],y[:N]); j=np.argmax(abs(r@R)/np.maximum(np.linalg.norm(R,axis=0),1e-7));M=np.c_[M,A[:,j]]; b=ls(M[:N],y[:N]);e=abs(M@b-y);print(k,labels[j],b[-1],e[:N].mean(),e[N:].mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fusion.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic fusion → H2 compact fusion of phase-corrected panel C branches; the 52/20 check reached 0.00834 scalar MAE and 0.00741 fast-amplitude MAE for sparse candidates.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the residual-kernel model\",\"rejected_reason\":\"Refined panel C coordinates yield much lower held-out errors with sparse terms.\"}],\"rationale\":\"Compare compact cross-branch terms against full bilinear fusion in the corrected coordinates, then use the smallest stable model for each output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e4ed1eb931aeb0f41c28d58c4355e7c44b4f6184361bc0871ffd7cb29aabd963",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21862.24,
+      "usage_known": true,
+      "prompt_tokens": 41435,
+      "cached_tokens": 12672,
+      "completion_tokens": 827
+    }
+  ]
+}

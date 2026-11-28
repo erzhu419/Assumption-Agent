@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e16178056f474c699712b0400e83f4ba",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:40.797403+00:00",
+  "ended_at_utc": "2026-11-28T15:17:12.867854+00:00",
+  "request_sha256": "ba7dfd61614ef8bb332c1c93fefb0033eace05095b51603228d0ee144c2b2d76",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41627,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29001,
+    "cached_tokens": 5504,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_02.py <<'PY'\\n\\\"\\\"\\\"Fit a shared cubic regression to the calibrated coordinates and target modes.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    coordinates = inputs['node_00']\\n    projection = inputs['node_01']\\n    z = np.asarray(coordinates['z'], dtype=float)\\n    zt = np.asarray(coordinates['zt'], dtype=float)\\n    targets = np.asarray(projection['targets'], dtype=float)\\n    modes = np.asarray(projection['modes'], dtype=float)\\n\\n    # The homogeneous kernel expansion includes all monomials through degree 3.\\n    scale = np.maximum(z.std(axis=0), 1e-10)\\n    x, xt = z / scale, zt / scale\\n    d = x.shape[1]\\n    gram = (1.0 + (x @ x.T) / d) ** 3\\n    gram.flat[::len(x) + 1] += 1e-4\\n    pred = (1.0 + (xt @ x.T) / d) ** 3 @ np.linalg.solve(gram, targets)\\n\\n    y = pred[:, 0].copy()\\n    state = pred[:, 1:] @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1\\npython3 /holdout_task/test_dag_candidate.py && python3 -I /holdout_task/test_dag_candidate.py && python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\nf0, f1, f2 = [load(n, p + q + n + '.py') for n,q in [('node_00','_frozen_nodes/'),('node_01','_frozen_nodes/'),('node_02','')]]\\nstudy = pickle.load(open(p + 'public_batch.pkl','rb'))[0]['study']\\ntr = study['train']; ids = np.arange(len(tr['x'])); z = f0({'__input__':study})['z']\\nfolds = [(f'block_{a}', ids[a:b]) for a,b in [(52,72),(0,20),(20,40),(40,60)]]\\nfolds += [(f'random_{seed}', np.random.default_rng(seed).choice(ids,20,replace=False)) for seed in range(12)]\\nfolds += [(f'axis_{j}_{side}', np.argsort(z[:,j])[sl]) for j in range(z.shape[1]) for side,sl in [('low',slice(None,12)),('high',slice(-12,None))]]\\nmetrics=[]\\nfor name,va in folds:\\n    ti = np.setdiff1d(ids,va); st=copy.deepcopy(study)\\n    y, t = tr['y'][ti], tr['traj'][ti]\\n    st['train'] = dict(x=tr['x'][ti],y=y,traj=t,summary=np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]))\\n    st['test'] = {'x':tr['x'][va]}\\n    r = f2({'node_00':f0({'__input__':st}),'node_01':f1({'__input__':st})})\\n    ey = np.abs(r['y_hat']-tr['y'][va]); et = np.abs(r['state_pred']-tr['traj'][va]); e = np.array([ey.mean(),et.mean(),et[:,-1].mean()]); metrics.append(e)\\n    print(name, *np.round(e,6))\\nworst = np.max(metrics,axis=0)\\nprint('worst y / trajectory / final-time MAE:',worst)\\nassert np.all(worst[:2] < .038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived nonlinear kernel → H2 complete cubic kernel on frozen coordinates; the exploratory four-block worst MAE was 0.01210 for y and 0.01112 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the quadratic or saturating kernel\",\n      \"rejected_reason\": \"The quadratic basis misses substantial structure even in training, while the complete cubic basis clears both limits on all four exploratory blocks.\"\n    }\n  ],\n  \"rationale\": \"The cubic expansion supplies mixed and pure third-order terms without changing either frozen handoff. Verify the exact artifact with the official checker, then stress it on random splits and coordinate-tail extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "76a1ba58081c552692bc19d3c4af7427ea6bc53c567166c7a2aeddea0b2c9844",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32067.84,
+      "usage_known": true,
+      "prompt_tokens": 29001,
+      "cached_tokens": 5504,
+      "completion_tokens": 1305
+    }
+  ]
+}

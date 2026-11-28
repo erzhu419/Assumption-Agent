@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1988b21ef39940ff92048e9a0812175b",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:59.026133+00:00",
+  "ended_at_utc": "2026-11-28T15:32:33.776976+00:00",
+  "request_sha256": "c56c624bfe63edb3e3a9e34b76b4d750dc40b95350893aae30e085f56da1e4b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49124,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34256,
+    "cached_tokens": 12672,
+    "completion_tokens": 1365
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph11.py <<'PY'\\nfrom struct11 import *\\ndef calibration(raw):\\n a=s['panel_a']; keep=np.linalg.norm(a['v'],axis=1)<5; u,v=a['u'][keep],a['v'][keep]; j=[2,3,0,1]\\n def features(x,q):return np.stack([np.ones_like(x),x,np.sin(q[0]*x),np.sin(q[1]*x[:,j])],axis=2)\\n def get(q):\\n  f=features(u,q); w=np.array([ls(f[:,i],v[:,i]) for i in range(4)]);return w,(f*w).sum(2)-v\\n q=least_squares(lambda q:get(q)[1].ravel(),[2.4,2.4],bounds=([1,1],[4,4]),gtol=1e-13).x; w,e=get(q);print('CAL',q,np.mean(e**2)**.5,w.round(4)); return np.stack([least_squares(lambda x:(features(x[None,:],q)*w).sum(2)[0]-r,(r-w[:,0])/w[:,1],gtol=1e-12).x for r in raw])\\ndef maps():\\n p=s['panel_c']; u=p['u']; b=s['panel_b']; wb=ls(one(b['u']),b['v']); B=lambda w:one(w)@wb\\n ff=lambda w,q:one(w/(1+q[0]*abs(w))+q[1]*w); gg=lambda w,q:np.c_[one(w),w*w,w*w/(1+q[0]*w*w)]\\n q,w,*_=fit(ff,u,p['v1'],[.83,-.16],([.1,-.5],[4,.5])); r,h,*_=fit(gg,u,p['v2'],[.29],(.1,.5)); return B,lambda x:ff(x,q)@w,lambda x:gg(x,r)@h\\ndef work():\\n x=s['train']['x']; z=calibration(x); B,G,H=maps(); t=s['eval_times']; T=s['train']['traj']; ff=lambda t,q:-np.expm1(-t[:,None]*q); q,amp,*_=fit(ff,t,T.T,[.4,1.8],(.01,8)); F=ff(t,q); Y=np.c_[s['train']['y'],amp.T]; d={'x':x,'z':z,'b':B(z),'g':G(z),'h':H(z),'gb':G(B(z)),'hb':H(B(z)),'bg':B(G(z)),'bh':B(H(z))}; return d,Y,F\\nif __name__=='__main__':\\n from sklearn.linear_model import Ridge,OrthogonalMatchingPursuit\\n d,Y,T=work(); ids=list(d); S=s['train']; out=[]\\n def score(f):\\n  m=f[:52].mean(0); sd=f[:52].std(0); f=(f-m)/np.maximum(sd,1e-9); best=[]\\n  for a in [1e-6,.01,.1,1,5,15]:\\n   p=Ridge(alpha=a).fit(f[:52],Y[:52]).predict(f[52:]);best.append((np.mean(abs(p[:,0]-Y[52:,0])),np.mean(abs(p[:,1:]@T.T-S['traj'][52:])),a));\\n  return min(best),min(best,key=lambda p:p[1])\\n for nc in (1,2,3):\\n  for ii in it.combinations(ids,nc):\\n   a=[d[i] for i in ii]; P=np.column_stack(a); groups=[P];\\n   cross=[a[i]*a[j] for i,j in it.combinations(range(nc),2)]; allcross=[(a[i][:,:,None]*a[j][:,None,:]).reshape(-1,16) for i,j in it.combinations(range(nc),2)]; poly=np.column_stack([P[:,i]*P[:,j] for i,j in it.combinations_with_replacement(range(P.shape[1]),2)]); groups.extend([np.column_stack([P]+[v.sum(1) for v in []]+[c.sum(1) for c in cross]),np.column_stack([P,P**2]+cross),np.c_[P,poly],np.column_stack([P]+allcross)]);\\n   for k,g in enumerate(groups):\\n    a,b=score(g);out.append((a,b,ii,k))\\n for k in [0,1]:\\n  print('TOP',k); print(*sorted(out,key=lambda v:v[k][k])[:18],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 recovered panel transforms -> H2 sparse composition of calibrated coordinates and panel operators; best archived 52/20 MAEs are 0.1610 scalar and 0.1882 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit a bounded sinusoidal calibration suggested by its odd-order coefficients, then screen operator compositions and interaction bases independently for scalar and trajectory prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b72bfe684aed4d65d75a2df653f35dba582b4d55a2d02eb5f730d8178049c8d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34749.55,
+      "usage_known": true,
+      "prompt_tokens": 34256,
+      "cached_tokens": 12672,
+      "completion_tokens": 1365
+    }
+  ]
+}

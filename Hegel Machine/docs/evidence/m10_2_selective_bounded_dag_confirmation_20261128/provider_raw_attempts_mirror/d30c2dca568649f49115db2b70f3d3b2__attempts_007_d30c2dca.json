@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d30c2dca568649f49115db2b70f3d3b2",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:23.709691+00:00",
+  "ended_at_utc": "2026-11-28T15:09:47.678106+00:00",
+  "request_sha256": "5939e8e07742468102b362f2ef511988306497734274715ed87e877fe0372364",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46253,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33280,
+    "cached_tokens": 12672,
+    "completion_tokens": 954
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1; cat > /tmp/link05.py <<'PY'\\nexec(open('/tmp/probe05.py').read().split('for k,w in coords.items():')[0])\\nfrom scipy.optimize import least_squares\\nw=z; Q=np.column_stack([w[:,i]*w[:,j] for i,j in combinations_with_replacement(range(4),2)]); F=np.c_[A(w),Q]; time=s['eval_times']; g=1-np.exp(-.8044*time); amp=t@g/(g@g); L=A(w)\\nfor label,y0 in [('y',y),('amp',amp)]:\\n print(label, 'quadratic',np.linalg.lstsq(F,y0,rcond=None)[0].round(3));\\n for name,fun in [('tanh',np.tanh),('sin',np.sin),('atan',np.arctan),('rational',lambda q:q/(1+q*q)),('asinh',np.arcsinh)]:\\n  for add in (False,True):\\n   ev=[]\\n   for ix in splits[:5]:\\n    i,j=ix[:52],ix[52:]; f=F[i]; l=L[i]; q=np.linalg.lstsq(f,y0[i],rcond=None)[0]; best=None\\n    for a in (.25, .65, 1.2):\\n     def calc(p,jj):return p[-1]*fun(F[jj]@p[:F.shape[1]])+(L[jj]@p[F.shape[1]:-1] if add else 0.)\\n     p=np.r_[q*a,np.zeros(L.shape[1]) if add else [],1/a]; res=least_squares(lambda p:calc(p,i)-y0[i],p,max_nfev=170)\\n     if best is None or res.cost<best.cost:best=res\\n    ev.append([np.mean(abs(calc(best.x,i)-y0[i])),np.mean(abs(calc(best.x,j)-y0[j]))]);\\n   print(name,add,np.round(ev[0],4),'avg',np.mean(ev,0).round(4),'max',np.max(ev,0).round(4))\\n# Cross-check measurement residuals for dominant temporal mode against its derivative and smooth curvature.\\nr=t-amp[:,None]*g; print('resid time means',r.mean(0).round(5),'std',r.std(0).round(5)); print('resid corr amp',np.corrcoef(np.c_[amp,r].T)[0].round(3)); print('amp corr y',np.corrcoef(amp,y)[0,1]);\\nPY\\npython3 /tmp/link05.py | tail -25\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive calibrated features -> H2 nonlinear link on a multivariate quadratic with a separate relaxation amplitude; screened kernel 52/20 MAEs remain 0.0242 for y and 0.0150 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unlinked quadratic law\",\n      \"rejected_reason\": \"Its ordered response MAE is 0.0722, versus 0.0242 for the screened kernel.\"\n    }\n  ],\n  \"rationale\": \"A shared relaxation explains the bulk of the time dependence. Test bounded and rational links on the complete quadratic basis to see whether a compact model improves held-out prediction of either scalar output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2c49de8922f1e51ebbf44ca19ab878a8405226dc427452df6ccf8515db052087",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24542.49,
+      "usage_known": true,
+      "prompt_tokens": 33280,
+      "cached_tokens": 12672,
+      "completion_tokens": 954
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9f9e7aaaa7e4051b0930747917b88eb",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:31.693854+00:00",
+  "ended_at_utc": "2026-11-28T15:29:56.706121+00:00",
+  "request_sha256": "96c5eb9d7fa70f36f10d2729ab07227557dde9791eef6fa233958e9f91570dd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39507,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29475,
+    "cached_tokens": 12672,
+    "completion_tokens": 985
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/gate6.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from branch6 import *\\nfrom scipy.special import expit\\nfor name,F in {'sqrt':lambda u,a,b:u+a*(np.sqrt(1+b*u*u)-1),'cosh':lambda u,a,b:u+a*np.log(np.cosh(b*u)),'atan':lambda u,a,b:u+a*u*np.arctan(b*u),'rat':lambda u,a,b:u+a*u*u/(1+b*u*u),'abssoft':lambda u,a,b:u+a*np.log1p(b*u*u)}.items():\\n pp=least_squares(residual,[1.,1.],args=(F,)).x; print(name,pp,np.std(residual(pp,F)))\\nF=lambda u,a,b:u+a*(np.sqrt(1+b*u*u)-1); pp=least_squares(residual,[1.,1.],args=(F,)).x\\nr=A(F(w,*pp))@L(A(F(cu,*pp)),V)\\n# Profile low-dimensional multiplicative gates. Fit only to the first 52 rows.\\nU,S,VT=np.linalg.svd(Y[:52,1:],full_matrices=False); target=np.c_[Y[:,0],Y[:,1:]@VT[0]]; target/=target[:52].std(0)\\nfor kn,k in [('r',r),('w',w),('q',q),('zr',np.c_[z,r]),('qr',np.c_[q,r]),('wr',np.c_[w,r])]:\\n for gn,gf in [('sig',lambda a:2*expit(a)),('rat',lambda a:1/(1+a*a)),('tanh',lambda a:1+np.tanh(a)),('relu',lambda a:np.maximum(0,1+a)),('exp',lambda a:np.exp(np.clip(a,-12,12)))]:\\n  for mode in ('mod','offset','mix'):\\n   def des(p):\\n    g=gf(A(k)@p); h=q*g[:,None]; d=A(h)\\n    if mode=='offset':d=np.c_[d,q]\\n    if mode=='mix':d=np.c_[d,r*(1-g[:,None])]\\n    return d\\n   def res(p):\\n    d=des(p)[:52];return np.r_[((d@L(d,target[:52])-target[:52])).ravel(),.003*p]\\n   rng=np.random.default_rng(33); sols=[least_squares(res,p,max_nfev=100) for p in [np.zeros(k.shape[1]+1),rng.normal(0,.5,k.shape[1]+1),rng.normal(0,1,k.shape[1]+1)]]; sol=min(sols,key=lambda f:f.cost)\\n   a=score(des(sol.x));\\n   if min(a[2:])<.041 or kn in ('r','w') and mode=='mod': print(kn,gn,mode,a,sol.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gate6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unstructured C1–C2 interactions → H2 low-dimensional gate; the unrestricted cross-branch model gives 52/20 MAEs of 0.07024 for y and 0.04507 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy unrestricted cross-branch regression\",\"rejected_reason\":\"The fit-to-validation gap is large and both held-out errors exceed the target.\"}],\"rationale\":\"Test whether the cross-branch improvement comes from a shared nonlinear gate while keeping its parameter count small and fitting on the first 52 rows only.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "10f813056be5343235e0f9a698a1423cbf27aee7a684b5b5684b56353f169406",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25011.28,
+      "usage_known": true,
+      "prompt_tokens": 29475,
+      "cached_tokens": 12672,
+      "completion_tokens": 985
+    }
+  ]
+}

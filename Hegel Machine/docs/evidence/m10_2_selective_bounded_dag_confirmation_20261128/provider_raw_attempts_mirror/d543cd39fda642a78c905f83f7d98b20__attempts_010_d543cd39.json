@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d543cd39fda642a78c905f83f7d98b20",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:59:34.326805+00:00",
+  "ended_at_utc": "2026-11-28T16:00:06.321143+00:00",
+  "request_sha256": "bc20c8b94acf3b7199953d642ee3b501436e200d682f151ebbd2aaca5069015c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63963,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38830,
+    "cached_tokens": 12672,
+    "completion_tokens": 1364
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed '/^def panels/,$d' /tmp/hegel_continual_archive/*11_solver.py > batch_solver.py; cat >>batch_solver.py <<'PY'\\ndef _branches(panel, z):\\n    u=panel['u']\\n    def f1(a,k):\\n        return D(np.c_[np.tanh(k[0]*a), a+k[1]*a/(1+.22*a*a)])\\n    def f2(a,k):\\n        return D(np.c_[a,np.arctan(k[0]*a)+k[1]*a*np.roll(a,1,axis=1)])\\n    out=[]\\n    for key, design, init, bounds in [('v1',f1,[1.75,-1.4],([1.4,-2],[2.2,-.8])),('v2',f2,[1.08,.27],([.8,.1],[1.4,.5]))]:\\n        v=panel[key]\\n        def residual(k):\\n            a=design(u,k)\\n            return (a@ls(a,v)-v).ravel()\\n        k=least_squares(residual,init,bounds=bounds,ftol=1e-11).x\\n        out.append(design(z,k)@ls(design(u,k),v))\\n    return out\\n\\ndef _readouts(p,q):\\n    cross=(p[:,:,None]*q[:,None,:]).reshape(len(p),16)\\n    dot=np.sum(p*q,axis=1)\\n    return D(np.c_[p,q,dot]), D(np.c_[p,q,dot]), D(np.c_[q,cross])\\n\\ndef _forecast(t,obs,fast,slow):\\n    n=len(obs)\\n    def matrix(k,i):\\n        h=-np.expm1(-t[:,None]*k)\\n        return np.concatenate([fast[i,None,:]*h[None,:,:1],slow[i,None,:]*h[None,:,1:]],axis=2)\\n    def residual(k):\\n        a=matrix(k,slice(n)).reshape(obs.size,-1)\\n        return a@ls(a,obs.ravel())-obs.ravel()\\n    fit=least_squares(residual,[1.83,.42],bounds=([1.1,.1],[3,.9]),ftol=1e-11)\\n    a=matrix(fit.x,slice(n)).reshape(obs.size,-1)\\n    return matrix(fit.x,slice(n,None))@ls(a,obs.ravel())\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr=study['train']; n=len(tr['x'])\\n    z=calibrate(study['panel_a'],np.r_[tr['x'],study['test']['x']])\\n    p,q=_branches(study['panel_c'],z)\\n    scalar,fast,slow=_readouts(p,q)\\n    y=scalar[n:]@ls(scalar[:n],tr['y'])\\n    state=_forecast(np.asarray(study['eval_times']),tr['traj'],fast,slow)\\n    last=state[:,-1]\\n    return dict(y_hat=y,state_pred=state,diagnostics_vec=np.array([y.mean(),y.std(),last.mean(),last.std()]))\\nPY\\ncat >/tmp/check14.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; rng=np.random.default_rng(991); z=m.calibrate(s['panel_a'],tr['x']); radius=np.max(abs(z),axis=1)\\nfor name,ix in [('official',np.arange(52,72)),*[(f'block{i}',np.arange(i,i+20)) for i in (0,13,26,39)],*[(f'random{i}',rng.choice(72,20,False)) for i in range(6)],('extreme',np.argsort(radius)[-20:])]:\\n it=np.setdiff1d(np.arange(72),ix); q={**s,'train':{k:v[it] if len(v)==72 else v for k,v in tr.items()},'test':{'x':tr['x'][ix]}}\\n o=m.solve_batch(q); dy=abs(o['y_hat']-tr['y'][ix]); ds=abs(o['state_pred']-tr['traj'][ix]); print(name,dy.mean(),ds.mean(),ds.mean(0).max(),dy.max(),ds.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check14.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted readout blocks -> H2 symmetric scalar and fast readouts plus a bilinear slow readout; provisional scalar MAE is 0.00785 and slow-amplitude MAE is 0.02136.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use panel B directly in the scalar law\",\"rejected_reason\":\"The two panel C branches and their dot product predict y more accurately with fewer coefficients.\"}],\"rationale\":\"Build the standalone solver and evaluate joint time-domain fitting on the required split, additional blocks, and an extreme-input slice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "501ea75f9282d9096e188b55a743047f5f8414d6abc85b39f72888d0448707da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32523.55,
+      "usage_known": true,
+      "prompt_tokens": 38830,
+      "cached_tokens": 12672,
+      "completion_tokens": 1364
+    }
+  ]
+}

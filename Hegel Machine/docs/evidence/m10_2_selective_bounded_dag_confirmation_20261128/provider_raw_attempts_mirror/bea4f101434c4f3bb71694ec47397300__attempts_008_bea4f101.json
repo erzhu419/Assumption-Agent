@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bea4f101434c4f3bb71694ec47397300",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:25.922798+00:00",
+  "ended_at_utc": "2026-11-28T15:23:53.003437+00:00",
+  "request_sha256": "d3a97e54c64a73741f64eaf870d73e3b3c066673dd0423eed072729ca1d98490",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46167,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32308,
+    "cached_tokens": 12672,
+    "completion_tokens": 1031
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_a02_batch_02_solver.py; sed -n '90,225p' /holdout_task/test_dag_candidate.py; cat >/tmp/ridge06.py <<'PY'\\nexec(open('/tmp/fit06.py').read().split(\\\"for name,h in [('cal',q)\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import StandardScaler\\nZ=B; rng=np.random.default_rng(829); n=len(y); splits=[(np.arange(52),np.arange(52,n)),(np.arange(20,n),np.arange(20))]; S,V=np.linalg.svd(tr,full_matrices=False)[1:]; print('shapes',len(y),y.shape,tr.shape)\\nfor name,h in [('B',B),('q+B',np.c_[q,B])]:\\n for d in (1,2,3):\\n  f=design(h,d); f=np.c_[np.ones(len(f)),StandardScaler().fit_transform(f[:,1:])]; print('ridge',name,d,[(a,*[round(np.mean(abs(f[j]@np.linalg.solve(f[i].T@f[i]+a*np.eye(f.shape[1]),f[i].T@v[i])-v[j])),4) for i,j in splits for v in (y,tr)]) for a in (.001,.03,.15,1.)]);\\nfuncs={'tanh':np.tanh,'sin':np.sin,'softplus':lambda u:np.logaddexp(0,u),'exp':lambda u:np.exp(np.clip(u,-12,12)), 'rat':lambda u:1/(1+u*u),'cubic':lambda u:u**3}\\nfor name,phi in funcs.items():\\n for kind in ('ridge','gated','quad+ridge','twoquad'):\\n  A=design(B,1); Q=design(B,2); T=tr@V[0]; results=[]\\n  def f(p):\\n   gate=phi(A@p); gate=gate[:,None]\\n   return {'ridge':np.c_[A,gate],'gated':np.c_[A,A*gate],'quad+ridge':np.c_[Q,gate],'twoquad':np.c_[Q,Q*gate]}[kind]\\n  for target in (T,y):\\n   scores=[]\\n   for i,j in splits:\\n    def resid(p):\\n     a=f(p)[i]; return a@ls(a,target[i])-target[i]\\n    candidates=[least_squares(resid,ini,bounds=(-9,9),max_nfev=85) for ini in rng.normal(0,0.8,(9,5))]; o=min(candidates,key=lambda o:o.cost); a=f(o.x); pred=a[j]@ls(a[i],target[i]); scores.append((round(np.mean(abs(pred-target[j])),4),round(np.sqrt(np.mean(o.fun**2)),4),o.x.round(2).tolist()))\\n   results.append(scores)\\n  print('nonlinear',name,kind,results,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridge06.py | grep -E '^(shapes|ridge|nonlinear)'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic readout of the frozen operator -> H2 compact nonlinear ridge or a gate with branch-specific terms; quadratic worst-slice MAEs are 0.126178 for scalar and 0.078321 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Compose the panel-C maps with panel B\",\"rejected_reason\":\"Neither composition improved the two-slice errors over the quadratic readout of panel B alone.\"}],\"rationale\":\"Panel B already fits its reference data to 0.000600 RMSE. Test the missing nonlinearity in the readouts, using the dominant temporal mode to make the trajectory search better conditioned.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7e9ff2bf47655281efacf76c48d3fc70e3584314eb153e851532736d0dd8de5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27552.32,
+      "usage_known": true,
+      "prompt_tokens": 32308,
+      "cached_tokens": 12672,
+      "completion_tokens": 1031
+    }
+  ]
+}

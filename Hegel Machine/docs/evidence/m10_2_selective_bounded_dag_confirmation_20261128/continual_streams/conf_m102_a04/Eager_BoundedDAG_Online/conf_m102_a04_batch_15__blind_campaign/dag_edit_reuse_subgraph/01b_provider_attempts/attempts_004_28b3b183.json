@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28b3b183878f43168ff70d9d29f412a3",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:05:55.083669+00:00",
+  "ended_at_utc": "2026-11-28T16:06:20.219784+00:00",
+  "request_sha256": "0f427166787e8665370e4172c36126d350cba65de05da9e8057d4c07ca036500",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 28123,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23404,
+    "cached_tokens": 12672,
+    "completion_tokens": 1031
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/checkmaps.py <<'PY'\\nimport pickle,runpy,glob\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\na=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]);lin=a['lin'];one=a['one']\\nu,v=[s['panel_a'][k] for k in ('u','v')];o,h=a['_align'](s['panel_a']);print('align offset scale',o,h)\\nfor j in range(u.shape[1]):\\n x=u[:,j];e=v[:,j]-o[j]-x*h[j]; ix=np.argsort(x);print('alignment x,resid',j,np.round(np.c_[x,e][ix][::2],5).tolist());print('quantiles',np.quantile(abs(e),[.1,.5,.75,.9,1]))\\nu=s['panel_c']['u'];w=a['_panel_maps'](s['panel_c'],u);print('archived panel residual RMSE',np.sqrt(np.mean((w-np.c_[s['panel_c']['v1'],s['panel_c']['v2']])**2,0)));print('C range',u.min(0),u.max(0));print('z range',((np.r_[s['train']['x'],s['test']['x']]-o)/h).min(0),((np.r_[s['train']['x'],s['test']['x']]-o)/h).max(0))\\nfor key in ('v1','v2'):\\n Y=s['panel_c'][key];print(key)\\n for k in range(1,5):\\n  F=one(np.concatenate([u**i for i in range(1,k+1)],axis=1)); print('degree',k,'rmse',np.round(np.sqrt(np.mean((F@lin(F,Y)-Y)**2,0)),7))\\n models={'soft':(lambda x,q:one(x/(1+q[0]*abs(x))+q[1]*x),[.85,0],[.001,-2],[20,2]),'rational2':(lambda x,q:np.c_[one(x),x*x,x*x/(1+q[0]*x*x)],[.25],[.0001],[20]),'rationalodd':(lambda x,q:np.c_[one(x),x/(1+q[0]*x*x)],[.5],[.0001],[20]),'tanh':(lambda x,q:np.c_[one(x),np.tanh(q[0]*x)],[.8],[.001],[20]),'trig':(lambda x,q:np.c_[one(x),np.sin(q[0]*x),np.cos(q[0]*x)],[1.],[.001],[10]),'abs':(lambda x,q:np.c_[one(x),x*x,x*x/(1+q[0]*abs(x))],[.5],[.0001],[20]),'powers':(lambda x,q:np.c_[one(x),x*x,x*x/(1+q[0]*abs(x)**q[1])],[1.,2.],[.001,.1],[30.,8.])}\\n for name,(basis,q0,lo,hi) in models.items():\\n  def resid(q):\\n   F=basis(u,q);return (F@lin(F,Y)-Y).ravel()\\n  q=least_squares(resid,q0,bounds=(lo,hi),gtol=1e-13).x;print(name,q,np.sqrt(np.mean(resid(q)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/checkmaps.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Test whether the archived affine alignment and panel maps explain the calibration pairs before changing their functional forms; no downstream holdout score yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare calibration residuals with the archived formulas and plausible nonlinear alternatives. This uses paired measurements without tuning to the downstream holdout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6b7b32db5aebd3fd0b85cd657e0ec4f2ba043095a7613cdb26afb9cc305f8a25",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25135.24,
+      "usage_known": true,
+      "prompt_tokens": 23404,
+      "cached_tokens": 12672,
+      "completion_tokens": 1031
+    }
+  ]
+}

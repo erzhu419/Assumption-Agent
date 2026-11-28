@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "782a01e7e038493aa20cc13a37fa85c7",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:21.830525+00:00",
+  "ended_at_utc": "2026-11-28T15:29:42.414704+00:00",
+  "request_sha256": "64cd30a7a78906bf630716b190a7aa275495931c3f6607242373a6554b6af552",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 58396,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35308,
+    "cached_tokens": 12672,
+    "completion_tokens": 764
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\nsource = p.read_text().split('\\\\nst = pickle.load(', 1)[0]\\nns = {'__file__': str(p), '__name__': '__stress__'}\\nexec(compile(source, str(p), 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntrain = s['train']; x = train['x']; n = len(x)\\nfolds = [('block%d'%i, np.arange(i,i+20)) for i in (0,13,26,39,52)]\\nfolds += [(f'{side}{j}', np.argsort(x[:,j])[sl]) for j in range(x.shape[1]) for side,sl in [('low',slice(16)),('high',slice(-16,None))]]\\nworst = np.zeros(3)\\nfor name, te in folds:\\n    tr = np.setdiff1d(np.arange(n),te)\\n    st = copy.deepcopy(s)\\n    st['train'] = {k:train[k][tr] for k in ('x','y','traj')}\\n    st['test'] = {'x':x[te]}\\n    out, count = ns['run_dag'](st)\\n    h = np.abs(out['state_pred'] - train['traj'][te]).mean(0)\\n    m = np.array([np.abs(out['y_hat'] - train['y'][te]).mean(), h.mean(), h.max()])\\n    assert all(v == 1 for v in count.values()) if isinstance(count,dict) else count == 1\\n    assert np.all(np.isfinite(m))\\n    print(name, *np.round(m,7))\\n    worst = np.maximum(worst,m)\\nprint('Worst slice MAE (y, trajectory, individual horizon):', worst)\\nassert np.all(worst < 0.038)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel B and fixed polynomial → H2 robust calibration, nonlinear B, and x × C1(B(x)); the exact candidate passed public validation at y/trajectory MAE 0.007490/0.005344, but the exact-DAG stress results were not printed.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Submit on the official split alone\",\"rejected_reason\":\"The previous output confirms acceptance but does not show that the exact DAG completed the blocked and coordinate-tail stress checks.\"}],\"rationale\":\"Keep the accepted artifacts unchanged and load only the validator definitions so its top-level exit cannot interrupt the stress checks.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "6b28a48434f049615ac405fa43379f14adecbd43c352ee04f87df56f641c0f48",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20581.49,
+      "usage_known": true,
+      "prompt_tokens": 35308,
+      "cached_tokens": 12672,
+      "completion_tokens": 764
+    }
+  ]
+}

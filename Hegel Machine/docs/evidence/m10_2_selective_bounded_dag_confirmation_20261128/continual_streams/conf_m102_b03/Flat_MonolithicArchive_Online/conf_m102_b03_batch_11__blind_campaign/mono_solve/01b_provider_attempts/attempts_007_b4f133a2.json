@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4f133a2c7e44de0b177a25aa883acac",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:21.687510+00:00",
+  "ended_at_utc": "2026-11-28T15:43:08.961742+00:00",
+  "request_sha256": "8a693a4e5d8be4c26ad126b54b1db8ecf89592f505a77afe950cb2aa9f021672",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45927,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32231,
+    "cached_tokens": 12672,
+    "completion_tokens": 1958
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/model11.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom scipy.special import expit\\n\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\ndef D(x):return np.c_[np.ones(len(x)),x]\\ndef calibrate(panel,x):\\n u,v=panel['u'],panel['v']; rng=np.random.default_rng(45); w=np.roll(u,2,axis=1)\\n def gram(a,b,k):return D(np.c_[a,np.tanh(k[0]*a),np.sin(k[1]*b)])\\n def coeff(k,g):return np.array([ls(gram(u[g,j],w[g,j],k),v[g,j]) for j in range(4)])\\n def fore(z,k,c):return c[:,0]+z*c[:,1]+np.tanh(k[0]*z)*c[:,2]+np.sin(k[1]*np.roll(z,2,axis=1))*c[:,3]\\n k=np.array([1.8,2.4]); g=np.arange(len(u)); a=[gram(u[:,j],w[:,j],k) for j in range(4)]\\n c=min((coeff(k,i) for i in (rng.choice(len(u),9,False) for _ in range(100))),key=lambda c:np.median(np.max(abs(fore(u,k,c)-v),axis=1)))\\n err=np.max(abs(fore(u,k,c)-v),axis=1); g=err<max(.001,6*np.median(err)); k=least_squares(lambda k:(fore(u[g],k,coeff(k,g))-v[g]).ravel(),k,bounds=([1.4,2],[2.2,2.8])).x; c=coeff(k,g)\\n z=(x-c[:,0])/c[:,1]; j=np.arange(4)\\n for i in range(12):\\n  J=np.zeros((len(z),4,4)); J[:,j,j]=c[:,1]+k[0]*c[:,2]*(1-np.tanh(k[0]*z)**2);J[:,j,(j+2)%4]=k[1]*c[:,3]*np.cos(k[1]*np.roll(z,2,axis=1));z-=np.linalg.solve(J,(fore(z,k,c)-x)[...,None])[...,0]\\n return z\\n\\ndef panels(s,z):\\n pb=s['panel_b']; bc=ls(D(pb['u']),pb['v']); b=D(z)@bc\\n p=s['panel_c'];u=p['u']\\n def S(a,k):return a/(1+k*abs(a))\\n def L(a,k):return np.logaddexp(0,k*a)\\n def cfit(fn,key,linear):\\n  def dm(x,k):return D(np.c_[x,fn(x,k)] if linear else fn(x,k))\\n  y=p[key];obj=lambda k:np.mean((dm(u,k)@ls(dm(u,k),y)-y)**2)\\n  k=minimize_scalar(obj,bounds=(.3,3),method='bounded').x\\n  return dm(z,k)@ls(dm(u,k),y),k,obj(k)**.5\\n return b,cfit(S,'v1',True),cfit(L,'v2',False)\\n\\ndef trajectory(t,T):\\n def basis(p):return -np.expm1(-t[:,None]*p)\\n def err(p):\\n  H=basis(p);return (H@ls(H,T.T)-T.T).ravel()\\n r=least_squares(err,[2.15,.4],bounds=([.8,.03],[5,1.3]),ftol=1e-12).x\\n H=basis(r);return H,ls(H,T.T).T,r,np.mean(err(r)**2)**.5\\nPY\\ncat >/tmp/down11.py <<'PY'\\nimport pickle, numpy as np\\nfrom model11 import *\\nfrom itertools import combinations_with_replacement, combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train'];z=calibrate(s['panel_a'],tr['x']); b,(p,pk,pe),(q,qk,qe)=panels(s,z); h,amp,r,e=trajectory(s['eval_times'],tr['traj'][:52]); amp=ls(h,tr['traj'].T).T; y=np.c_[tr['y'],amp]; print('z range',z.min(0),z.max(0),'operators',pk,pe,qk,qe,'rates',r,e,'amp std',amp.std(0))\\nblocks={'z':z,'b':b,'p':p,'q':q}; funcs={'tanh':lambda a:np.tanh(a),'sin':lambda a:np.sin(2.15*a),'s1':np.sin,'cos':lambda a:np.cos(2.15*a),'rat':lambda a:a/(1+.22*a*a),'soft':lambda a:a/(1+.84*abs(a)),'sq':lambda a:a*a,'cub':lambda a:a**3,'log':lambda a:np.logaddexp(0,2.2*a)}\\nfor name,x in list(blocks.items()):\\n for fn,f in funcs.items():blocks[fn+name]=f(x)\\nfor (na,a),(nb,b) in combinations_with_replacement(list(blocks.items())[:4],2):\\n for k in range(4):\\n  if na==nb and k==0:continue\\n  ab=a*np.roll(b,k,axis=1);blocks[f'{na}*{nb}{k}']=ab;blocks[f'dot{na}{nb}{k}']=ab.sum(1)[:,None]\\n\\ndef score(names,ret=False):\\n x=D(np.column_stack([blocks[k] for k in names])); c=ls(x[:52],y[:52]); pred=x@c; e=abs(pred-y); return e[:52].mean(0),e[52:].mean(0),abs((pred[52:,1:]-y[52:,1:])@h.T).mean()\\nfor i in range(3):\\n pool=[(score([k])[0][i],k) for k in blocks]; print('best single',i,[(k,np.round(score([k])[1],4)) for _,k in sorted(pool)[:10]])\\nfor i in range(3):\\n stages=[(0,())]\\n for depth in range(1,6):\\n  cand={tuple(sorted((*a,k))) for _,a in stages for k in blocks if k not in a}; stages=sorted((score(a)[0][i]+.0007*sum(blocks[k].shape[1] for k in a),a) for a in cand)[:14]\\n  print(i,depth,[(a,np.round(score(a)[0][i],5),np.round(score(a)[1][i],5),round(score(a)[2],5)) for _,a in stages[:4]])\\nprint('linear combos');\\nfor a in [('z','b','p','q'),('b','p','q'),('p','q'),('z','p','q')]:print(a,score(a))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/down11.py; for f in /tmp/hegel_continual_archive/*{00,03,04,10}_solver.py; do echo ====; grep -A17 -E '^def (_predict\\\\(|_features\\\\(|_panel_features\\\\()' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: invert the opposite-channel tanh–sine calibration, then test sparse downstream operator combinations; best archived 52/20 MAEs are 0.112244 for y and 0.062035 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The tanh–sine calibration reaches the panel noise floor. Inverting it before separating the two time modes makes downstream feature tests interpretable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "40a8772ca3295c71b1b357ceeb08165f981bb3e145ee82b6bcc24787e8387a3d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47823.55,
+      "usage_known": true,
+      "prompt_tokens": 32231,
+      "cached_tokens": 12672,
+      "completion_tokens": 1958
+    }
+  ]
+}

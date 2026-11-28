@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f60ac3f62aa40bd80051eacf7feeadf",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:23.401550+00:00",
+  "ended_at_utc": "2026-11-28T15:42:14.516295+00:00",
+  "request_sha256": "d3d2e1f7be229f5d687750dea649c68c6d1fbaaa59e0e4a2485ad3cb65871f0f",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 53404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33113,
+    "cached_tokens": 5504,
+    "completion_tokens": 1287
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom pathlib import Path\\n\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location(Path(path).stem,path)\\n    mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod\\n\\nm0=load('/holdout_task/node_00.py'); m1=load('/holdout_task/_frozen_nodes/node_01.py'); m2=load('/holdout_task/_frozen_nodes/node_02.py'); m3=load('/holdout_task/node_03.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); rng=np.random.default_rng(2026)\\na=s['panel_a']; u,v=a['u'],a['v']; q,c=m0._calibrate(a); d=u.shape[1]\\ndef forward(z,q,c):\\n    return c[:d]+c[d:2*d]*z+c[-2]*np.tanh(q[0]*z)+c[-1]*np.sin(q[1]*np.roll(z,-2,axis=1))\\nratios=(abs(c[-1]*q[1])**2)/(c[d:d+2]*c[d+2:2*d]); print('pairwise contraction bounds:',ratios)\\nassert max(ratios)<1\\nis_inlier=np.linalg.norm(v-forward(u,q,c),axis=1)<.002\\nerrs=[]\\nfor i in range(len(u)):\\n    keep=np.arange(len(u))!=i; qp,cp=m0._calibrate({'u':u[keep],'v':v[keep]})\\n    if is_inlier[i]: errs.extend((forward(u[i:i+1],qp,cp)-v[i]).ravel())\\nprint('calibration leave-one-row-out inlier RMSE and max residual:',np.sqrt(np.mean(np.square(errs))),max(abs(np.array(errs))))\\nassert max(abs(np.array(errs)))<.002\\nx=np.vstack((t['x'],s['test']['x'])); z,roots=m0._inverse(x,q,c)\\nassert all(all(len(r)==1 for r in pair) for pair in roots)\\nmax_inverse=np.max(abs(forward(z,q,c)-x)); print('max calibration forward-after-inverse residual:',max_inverse); assert max_inverse<1e-6\\nfolds=[]\\nfor _ in range(4): folds.extend(np.array_split(rng.permutation(n),4))\\nfor key in (np.linalg.norm(z[:n],axis=1),t['y'],t['traj'][:,-1]):\\n    order=np.argsort(key); folds.extend((order[:n//4],order[-(n//4):]))\\nmetrics=[]\\nfor j,va in enumerate(folds):\\n    tr=np.setdiff1d(np.arange(n),va); train={k:t[k][tr] for k in ('x','y','traj')}; y=train['y']; end=train['traj'][:,-1]; train['summary']=np.array([y.mean(),y.std(),end.mean(),end.std()])\\n    st=dict(s,train=train,test={'x':t['x'][va]})\\n    p=m0.run_node({'__input__':st}); b=m1.run_node({'__input__':st}); k=m2.run_node({'node_00':p,'node_01':b}); o=m3.run_node({'node_00':p,'node_01':b,'node_02':k})\\n    yh,sp,dv=(o[k] for k in ('y_hat','state_pred','diagnostics_vec')); assert yh.shape==(len(va),) and sp.shape==t['traj'][va].shape and dv.shape==(4,)\\n    assert np.isfinite(yh).all() and np.isfinite(sp).all(); np.testing.assert_allclose(dv,[yh.mean(),yh.std(),sp[:,-1].mean(),sp[:,-1].std()])\\n    ye=abs(yh-t['y'][va]); se=abs(sp-t['traj'][va]); metrics.append((ye.mean(),se.mean(),se.mean(0).max()))\\na=np.array(metrics); print('stress slices:',len(a),'worst scalar MAE, trajectory MAE, individual horizon MAE:',a.max(0),'slice IDs:',a.argmax(0)); assert a.max()<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic calibration → H2 own-coordinate tanh plus opposite-coordinate sine; official held-out scalar and trajectory MAEs are 0.004202 and 0.004337.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official split passes with substantial margin. Verify the unchanged artifacts in isolated Python and test calibration stability, extreme-coordinate and extreme-response slices, and each prediction horizon before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5bb62cad3a4f98ed8e4347d7651a9494f41989b05481a7723e32d3bfd417b477",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52219.68,
+      "usage_known": true,
+      "prompt_tokens": 33113,
+      "cached_tokens": 5504,
+      "completion_tokens": 1287
+    }
+  ]
+}

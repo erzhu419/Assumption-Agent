@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f2b0bc0aeb8b482eac06a3c9979a5158",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:57:13.227057+00:00",
+  "ended_at_utc": "2026-11-28T14:57:31.005712+00:00",
+  "request_sha256": "a9158c81a1459b1866ad37522f592b12121b22d99a2d353d4bf1972041512df2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36052,
+    "cached_tokens": 12672,
+    "completion_tokens": 628
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/v02.py\\npython3 - <<'PY'\\ns=open('/tmp/v02.py').read(); s=s.replace('def _features(w, gain, interaction):\\\\n    z = np.arcsinh(gain * w)','def _features(w, gain, interaction, kind):\\\\n    u = gain * w\\\\n    if kind == \\\"atan\\\":\\\\n        z = np.arctan(u)\\\\n    elif kind == \\\"inv3\\\":\\\\n        z = np.sinh(np.arcsinh(u) / 3)\\\\n    else:\\\\n        z = np.arcsinh(u)').replace('def _predict(w, target, interaction):','def _predict(w, target, interaction, kind):').replace('gain, interaction)', 'gain, interaction, kind)'); s=s.replace(\\\"y = _predict(w, tr['y'], True)\\\",\\\"y = (0.35 * _predict(w, tr['y'], True, 'asinh')\\\\n         + 0.65 * _predict(w, tr['y'], True, 'atan'))\\\").replace(\\\"p = _predict(w, tr['traj'], False)\\\",\\\"p = _predict(w, tr['traj'], False, 'inv3')\\\")\\nopen('/tmp/challenger.py','w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py /tmp/v02.py /tmp/challenger.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /tmp/challenger.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared asinh basis → blend asinh and arctangent for scalar prediction and use inverse cubic for trajectories; component probes reached worst-slice MAEs of 0.01446 and 0.00717 respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use arctangent alone for the scalar\",\"rejected_reason\":\"It reduced worst-slice error but slightly increased prescribed-split MAE; a fixed blend can preserve complementary behavior without adding fitted mixture weights.\"}],\"rationale\":\"Test the combined challenger on the same 17 splits, refitting gains within each split and checking the terminal and worst trajectory horizons before promotion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b328334db54a5141b3d651221de981ade62b695e9c873a81c858dcd28b3a0d3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17777.51,
+      "usage_known": true,
+      "prompt_tokens": 36052,
+      "cached_tokens": 12672,
+      "completion_tokens": 628
+    }
+  ]
+}

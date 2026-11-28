@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9142f468c73842c095616fea323e8784",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:29.050507+00:00",
+  "ended_at_utc": "2026-11-28T15:07:51.123909+00:00",
+  "request_sha256": "ac7de3b2112d7024ec8a0a0f5d29c694a146fa2a221c495e672aa1cac20b4d14",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27370,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23313,
+    "cached_tokens": 12672,
+    "completion_tokens": 826
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/check_blend_m102.py <<'PY'\\nimport sys,pickle,importlib,numpy as np\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nf=[importlib.import_module(f'node_{i:02d}').run_node for i in range(3)]\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['y']); rows=np.arange(n)\\nweights=np.array([-.5,0,.15,.3,.45,.55,.65,.8,1,1.25,1.5]); records=[]\\nsplits=[('gate',rows[:n-20],rows[n-20:])]+[(f'block{i}',np.setdiff1d(rows,v),v) for i,v in enumerate(np.array_split(rows,6))]\\nfor seed in range(4):\\n for i,v in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),4)):\\n  splits.append((f'random{seed}.{i}',np.setdiff1d(rows,v),v))\\nfor name,tr,va in splits:\\n sh=f[0]({'__input__':{**s,'train':{k:t[k][tr] for k in ('x','y','traj')},'test':{'x':t['x'][va]}}}); p=f[1]({'node_00':sh})['poly']; res=f[2]({'node_00':sh}); q=res['smooth']; st=(.4*p[:,1:]+.6*q[:,1:])@res['vt']; y=t['y'][va]; a=np.abs(q[:,0,None]+(p[:,0]-q[:,0])[:,None]*weights-y[:,None]); b=np.abs(st-t['traj'][va]); records.append((name,va,p[:,0],q[:,0],y,a,b)); print(name,'n',len(va),'scalar',np.round(a.mean(0),4),'traj',round(b.mean(),5),flush=True)\\nprint('weights',weights); print('aggr',np.concatenate([r[-2] for r in records[1:]]).mean(0)); print('worst',np.max([r[-2].mean(0) for r in records],axis=0)); print('telemetry',s['telemetry_vec']); pickle.dump(records,open('/tmp/blend_m102_records.pkl','wb'))\\nPY\\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 /tmp/check_blend_m102.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived 0.65 polynomial weight -> H2 robust scalar reweighting with unchanged trajectory reconstruction; archived gate scalar MAE was 0.038932.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the scalar weight on the public gate alone\",\n      \"rejected_reason\": \"A weight chosen on one 20-row slice may not transfer; compare it against blocked and randomized held-out predictions.\"\n    }\n  ],\n  \"rationale\": \"Measure both branches on held-out rows using the frozen DAG, then compare scalar weights and independently validate the archived trajectory reconstruction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5ffda8fe43a69103714ef48874efc81a6e28f94c6dcfa0be353cad3f21008b70",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22476.04,
+      "usage_known": true,
+      "prompt_tokens": 23313,
+      "cached_tokens": 12672,
+      "completion_tokens": 826
+    }
+  ]
+}

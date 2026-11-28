@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60f3d4180cab4fe09b02b813d6e841f5",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:17:14.940817+00:00",
+  "ended_at_utc": "2026-11-28T15:17:57.548871+00:00",
+  "request_sha256": "d03454fa277b67713fa1ac53c6e2d794916965cb2c1b0ef2c97b1a3776ab9624",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55546,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35087,
+    "cached_tokens": 12672,
+    "completion_tokens": 1817
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp node_01.py /tmp/node_01_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('node_01.py'); old=p.read_text(); pair=Path('/tmp/kernel_challenge.py').read_text().split('def structured',1)[1].split(\\\"\\\\nif __name__\\\",1)[0]; frozen=Path('_frozen_nodes/node_00.py').read_text(); cal=frozen.split('def _affine',1)[1].split('\\\\ndef _dist',1)[0]; cal='def _affine'+cal; cal=cal[:cal.index('    # Panel C')]+'    return cx\\\\n\\\\n'; p.write_text(old.split('\\\\ndef run_node',1)[0].replace('Scalar kernel transfer and separate trajectory-mode regressions.', 'Frozen scalar head and independently fitted trajectory modes.').replace('from scipy.optimize import minimize','from scipy.optimize import minimize, minimize_scalar\\\\nfrom itertools import combinations')+'\\\\n\\\\ndef _structured'+pair+'\\\\n'+cal+'''\\ndef _panel_c(study, x):\\n    cx = _coordinates(study, x)\\n    u, v = study['panel_c']['u'], study['panel_c']['v1']\\n    def fit(k):\\n        a = _affine(np.arctan(k*u))\\n        c = np.linalg.lstsq(a, v, rcond=None)[0]\\n        return np.linalg.norm(a@c-v), c\\n    k = minimize_scalar(lambda k: fit(k)[0], bounds=(.1, 6.), method='bounded').x\\n    return np.column_stack((cx, _affine(np.arctan(k*cx))@fit(k)[1]))\\n\\n\\ndef _rank(x, z):\\n    # Compare rank one and two on inner folds with a training-only basis.\\n    if min(z.shape) < 2 or len(z) < 8:\\n        return min(2, *z.shape)\\n    totals = np.zeros(2)\\n    for va in np.array_split(np.random.default_rng(21).permutation(len(z)), 3):\\n        tr = np.setdiff1d(np.arange(len(z)), va)\\n        b = np.linalg.svd(z[tr], full_matrices=False)[2][:2]\\n        a = np.column_stack([_gp(x[np.r_[tr, va]], len(tr), y) for y in (z[tr]@b.T).T])\\n        for r in (1, 2):\\n            totals[r-1] += np.abs(a[:, :r]@b[:r]-z[va]).sum()\\n    return int(np.argmin(totals))+1\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, parent = inputs['__input__'], inputs['node_00']\\n    train = study['train']\\n    n = len(train['x'])\\n    y = .8*_ridge(parent['hybrid'],train['y'],.007)+.2*_ridge(parent['raw'],train['y'],.012)\\n    x = np.concatenate((train['x'],study['test']['x']))\\n    z = train['traj']\\n    rank = _rank(x[:n], z)\\n    basis = np.linalg.svd(z,full_matrices=False)[2][:rank]\\n    amps = z@basis.T\\n    q = _panel_c(study, x)\\n    raw = np.column_stack([_gp(x,n,a) for a in amps.T])\\n    cal = np.column_stack([_gp(q,n,a) for a in amps.T])\\n    pair = raw.copy()\\n    pair[:,0] = _structured(x,n,amps[:,0])\\n    state = ((raw+cal+pair)/3.)@basis\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\n''')\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/stress_node01.py <<'PY'\\nimport pickle, runpy, numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; f=runpy.run_path(p+'_frozen_nodes/node_00.py')['run_node']; m=runpy.run_path(p+'node_01.py'); g=m['run_node']; base=runpy.run_path('/tmp/node_01_baseline.py')['run_node']; tr=s['train']; ids=np.arange(len(tr['x'])); folds=[ids[-20:],ids[:20],ids[26:46],*[np.random.default_rng(j).permutation(len(ids))[:20] for j in (726,11,82,112,31,65,211)]]\\nerrs=[]\\nfor va in folds:\\n ti=np.setdiff1d(ids,va); q=dict(s,train={k:v[ti] for k,v in tr.items()},test={'x':tr['x'][va]}); d={'__input__':q,'node_00':f({'__input__':q})}; a=g(d); b=base(d); assert np.array_equal(a['y_hat'],b['y_hat']); assert a['state_pred'].shape==tr['traj'][va].shape and np.isfinite(a['state_pred']).all() and a['diagnostics_vec'].shape==(4,); errs.append([np.mean(abs(a['y_hat']-tr['y'][va])),np.mean(abs(a['state_pred']-tr['traj'][va])),np.mean(abs(b['state_pred']-tr['traj'][va]))]); print('scalar, trajectory, baseline',np.round(errs[-1],6),flush=True)\\nprint('worst',np.max(errs,axis=0),'mean',np.mean(errs,axis=0))\\nPY\\npython3 -I /tmp/stress_node01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw additive GP → H2 raw, pairwise, and panel-C GP ensemble; the prototype reduced worst-slice trajectory MAE from 0.058515 to 0.04666 and public-slice MAE from 0.035952 to 0.02971.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include panel B in the deployed ensemble\",\n      \"rejected_reason\": \"The tested ensemble that included panel B had slightly lower mean error but worse worst-slice error than the three-member ensemble.\"\n    }\n  ],\n  \"rationale\": \"Promote the ensemble that improves both public and worst-slice trajectory error, choose rank inside each training fold, and verify the exact artifact against the DAG contract and additional splits while checking that scalar predictions are unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2aeb409c46e53196b61a7f2c2af5a05b56a72654e097fa6a2e8a9b09609bad31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43008.4,
+      "usage_known": true,
+      "prompt_tokens": 35087,
+      "cached_tokens": 12672,
+      "completion_tokens": 1817
+    }
+  ]
+}

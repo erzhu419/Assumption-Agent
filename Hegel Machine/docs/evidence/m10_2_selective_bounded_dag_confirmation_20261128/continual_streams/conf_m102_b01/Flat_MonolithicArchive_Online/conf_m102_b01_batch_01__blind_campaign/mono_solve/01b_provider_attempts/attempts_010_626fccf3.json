@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "626fccf32e2f49b6920dd6dad8f84457",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:10.580793+00:00",
+  "ended_at_utc": "2026-11-28T15:04:42.814487+00:00",
+  "request_sha256": "f274b3d522e94a8a07c5871810e4330cad3187e26e4f114e290ba9bab37c6c9d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41555,
+    "cached_tokens": 12672,
+    "completion_tokens": 1356
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/deadzone.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task');import batch_solver as b\\nfrom structure import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import softplus\\nPY\\nsed -i '/from scipy.special import softplus/d' /tmp/deadzone.py\\ncat >> /tmp/deadzone.py <<'PY'\\ndef fit(d,k,fun,starts,bounds):\\n u,v=s[d]['u'],s[d][k]\\n def res(p):\\n  A=aff(fun(u,p)); return (A@ls(A,v)-v).ravel()\\n o=min((least_squares(res,p,bounds=bounds,max_nfev=200) for p in starts),key=lambda r:np.linalg.norm(r.fun));m=ls(aff(fun(u,o.x)),v);print(d,k,o.x,np.std(o.fun));return lambda x:aff(fun(x,o.x))@m\\nB=[]\\nfor fn,starts,bounds in [(lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**p[1],[[.35,1.5]],([0,.25],[.8,4])),(lambda x,p:np.sign(x)*np.maximum(abs(x)-p[0],0)**1.5,[[.35]],([0],[.8])),(lambda x,p:np.sign(x)*np.maximum(abs(x)-.35,0)**1.5,[[.35]],([0],[.8]))]:\\n B.append(fit('panel_b','v',fn,starts,bounds))\\nC=[]\\nfor fn,p,lo,hi in [(lambda x,p:x/(1+p[0]*abs(x))**p[1]+p[2]*x,[.65,1.,.1],[.01,.1,-2],[5,5,2]),(lambda x,p:x/(1+p[0]*abs(x))**p[1],[.65,1.],[.01,.1],[5,5]),(lambda x,p:x/(1+p[0]*abs(x)+p[1]*x*x+p[2]*abs(x)**3)+p[3]*x,[.98,.37,.05,.087],[0,0,0,-1],[20,20,20,1]),(lambda x,p:np.sign(x)*np.log1p(p[0]*abs(x))+p[1]*x,[1.,0.],[.01,-5],[10,5]),(lambda x,p:(np.sign(x)*np.log1p(p[0]*abs(x)))+p[1]*x*x*x+p[2]*x,[1,0,0],[.01,-5,-5],[10,5,5])]:\\n C.append(fit('panel_c','v1',fn,[p],(lo,hi)))\\nX=b._calibrate(s['panel_a'],s['train']['x']); Y=s['train']['y'];T=s['train']['traj']; A=np.arange(len(X)); folds=[(A[:52],A[52:])]; rng=np.random.default_rng(517)\\nfor i in range(16):\\n j=rng.permutation(A);folds.append((j[:52],j[52:]));\\nfor j in np.argsort(abs(X),axis=0).T:\\n folds.append((j[:-20],j[-20:]));\\nfor i,f in enumerate(B):\\n for j,g in enumerate(C):\\n  z=g(f(X)); D=b._scalar_design(z); E=aff(z); stats=[]\\n  for tr,te in folds:\\n   dy=np.abs(D[te]@ls(D[tr],Y[tr])-Y[te]); dt=np.abs(E[te]@ls(E[tr],T[tr])-T[te]); stats.append([dy.mean(),dt.mean(),dt.mean(0).max(),dy.max(),dt.max()]);\\n  print(i,j,'52/20',np.round(stats[0],6),'worst',np.round(np.max(stats,axis=0),6),'rank',np.linalg.svd(T-E@ls(E,T),compute_uv=False)[:2]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c 'import sys,runpy;sys.path.insert(0,\\\"/tmp\\\");runpy.run_path(\\\"/tmp/deadzone.py\\\",run_name=\\\"__main__\\\")'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (smooth rational B) → H2 (dead-zone power law for B); current candidate 52/20 MAE is 0.00450 for y and 0.00906 at the worst trajectory horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the passing rational model\",\"rejected_reason\":\"Panel B's recovered coordinate response is flat near zero and grows like a fractional power above a threshold, a structure not captured by the current approximation.\"}],\"rationale\":\"Fit the threshold law from panel B alone, then check whether it improves both outputs on the designated split, repeated splits, and upper-tail holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9ffed7ad3bef8d3c7db78058802fee0767aefa0b323be4c93837a5362f651fe8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32727.89,
+      "usage_known": true,
+      "prompt_tokens": 41555,
+      "cached_tokens": 12672,
+      "completion_tokens": 1356
+    }
+  ]
+}

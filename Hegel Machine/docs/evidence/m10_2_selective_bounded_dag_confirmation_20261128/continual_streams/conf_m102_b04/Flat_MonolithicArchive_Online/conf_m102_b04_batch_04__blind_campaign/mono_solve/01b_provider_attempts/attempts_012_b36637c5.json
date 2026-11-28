@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b36637c5ce2c41a79b131ef818d5b73c",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:16.349521+00:00",
+  "ended_at_utc": "2026-11-28T15:14:47.465179+00:00",
+  "request_sha256": "bf6f011a601663c781734d9501eed43c8a59dd09a06c0470e933cec277396e2e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74776,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43489,
+    "cached_tokens": 12672,
+    "completion_tokens": 1122
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nneedle = '    yp = gt @ np.linalg.lstsq(g, y, rcond=None)[0]\\\\n'\\nassert s.count(needle) == 1\\ns = s.replace(needle, '''    # Reuse the learned response coordinates in the scalar interaction terms.\\n    n_base = _quadratic(u).shape[1]\\n    h, ht = g[:, n_base:], gt[:, n_base:]\\n    scale = np.maximum(np.max(np.abs(h), axis=0), np.finfo(float).tiny)\\n    h, ht = h / scale, ht / scale\\n    pairs = list(combinations(range(u.shape[1]), 2))\\n    scalar_train = np.column_stack([g[:, :n_base], h] + [h[:, i] * h[:, j] for i, j in pairs])\\n    scalar_test = np.column_stack([gt[:, :n_base], ht] + [ht[:, i] * ht[:, j] for i, j in pairs])\\n    yp = scalar_test @ np.linalg.lstsq(scalar_train, y, rcond=None)[0]\\n''')\\ns = s.replace('    g, gt = _design(u, _quadratic(u), p), _design(ut, _quadratic(ut), p)\\\\n', '    base, base_test = _quadratic(u), _quadratic(ut)\\\\n    g, gt = _design(u, base, p), _design(ut, base_test, p)\\\\n').replace('    n_base = _quadratic(u).shape[1]', '    n_base = base.shape[1]')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nexec(open('/tmp/stress_batch.py').read().split('for mode in')[0])\\nerrors=[]\\nfor name,i,j in folds:\\n    st=dict(s,train={'x':x[i],'y':y[i],'traj':z[i]},test={'x':x[j]})\\n    out=m.solve_batch(st); a,b=out['y_hat'],out['state_pred']; e=abs(b-z[j]); scores=np.array([abs(a-y[j]).mean(),e.mean(),e[:,-1].mean(),e.mean(axis=0).max()]); errors.append(scores)\\n    np.testing.assert_allclose(out['diagnostics_vec'],[a.mean(),a.std(),b[:,-1].mean(),b[:,-1].std()]); print(name,scores.round(6))\\nworst=np.max(errors,axis=0); print('worst all',worst); assert np.all(worst <= .038)\\nout=m.solve_batch(s); assert out['y_hat'].shape==(36,) and out['state_pred'].shape==(36,8) and out['diagnostics_vec'].shape==(4,); assert all(np.isfinite(v).all() for v in out.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: add pairwise products of the learned response coordinates to the scalar readout; the probe reduced worst-slice scalar MAE from 0.05259 to 0.03626, with 52/20 scalar MAE 0.01648.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Raw-coordinate quadratic interactions suffice for the scalar readout across the tested slices.\",\n    \"empirical_witness\": \"Adding pairwise products of the learned response coordinates reduced worst-slice scalar MAE from 0.05259 to 0.03626 and mean ordinary-split scalar MAE from 0.01639 to 0.01343.\",\n    \"causal_blanket_diagnosis\": \"The scalar fit benefits from interactions in the transformed coordinates; the comparison does not establish a unique physical law.\",\n    \"sublated_pivot\": \"Add the six transformed-coordinate pairwise products to the scalar fit and leave the verified trajectory model unchanged.\",\n    \"risk_kind\": \"missing transformed-coordinate interactions\",\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Regularize the new interaction terms\",\n      \"rejected_reason\": \"The tested penalty improved the official split but left a smaller worst-slice margin; the unpenalized fit already clears the official gate.\"\n    }\n  ],\n  \"rationale\": \"Promote the scalar correction because it brings the hardest observed slice below 0.038 without changing the trajectory predictor. Verify the exact artifact in an isolated Python process and run the required schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "23f866f52fa330022f03e816a82e2e4db7d07a95d138d0ff1099b090d57f1d8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31114.49,
+      "usage_known": true,
+      "prompt_tokens": 43489,
+      "cached_tokens": 12672,
+      "completion_tokens": 1122
+    }
+  ]
+}

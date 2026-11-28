@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "882883d77e924ab1a4b3fe601f832d36",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:31.993018+00:00",
+  "ended_at_utc": "2026-11-28T15:44:30.037626+00:00",
+  "request_sha256": "c9244f7e31de98b73d4fb461d3eee87f2a2564c1b887ee4af79fe9f8586169ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40319,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28453,
+    "cached_tokens": 12672,
+    "completion_tokens": 1652
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/pan9.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as comb\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nL=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\nA=lambda x:np.c_[np.ones(len(x)),x]\\nQ=lambda x:np.c_[A(x),*[np.prod(x[:,i],axis=1) for i in comb(range(x.shape[1]),2)]]\\nu,v=(s['panel_a'][k] for k in ['u','v']); pars=[]\\ndef ac(x,j,k):\\n a,b=x[:,j],x[:,k]; return np.c_[np.ones(len(x)),a,b,a*b,a**3]\\nfor j in range(4):\\n report=[]\\n for k in set(range(4))-{j}:\\n  f=ac(u,j,k); c=least_squares(lambda c:f@c-v[:,j],[0,1,.2,.2,.2],loss='soft_l1',f_scale=.00015).x\\n  r=abs(f@c-v[:,j]); keep=r<max(.001,5*np.median(r)); c=L(f[keep],v[keep,j]); r=abs(f@c-v[:,j]); report.append((np.median(r),k,c));print('cal',j,k,c,np.quantile(r,[.5,.85,.93,.96,1]))\\n pars.append(min(report,key=lambda a:a[0])[1:])\\ndef inverse(x):\\n def f(z):\\n  z=z.reshape(x.shape);return (np.stack([ac(z,j,k)@c for j,(k,c) in enumerate(pars)],axis=1)-x).ravel()\\n # Vectorized independent Newton solves.\\n z=x.copy()\\n for _ in range(25):\\n  r=f(z).reshape(x.shape); jac=np.zeros((len(x),4,4))\\n  for j,(k,c) in enumerate(pars):\\n   jac[:,j,j]=c[1]+c[3]*z[:,k]+3*c[4]*z[:,j]**2; jac[:,j,k]=c[2]+c[3]*z[:,j]\\n  z-=np.clip(np.linalg.solve(jac,r[...,None])[...,0],-1,1)\\n print('inversion max',abs(f(z)).max());return z\\nx=inverse(s['train']['x']); y=s['train']['y']; traj=s['train']['traj']; target=np.c_[y,traj]; t=s['eval_times']; print('x range',x.min(0),x.max(0))\\ndef score(f,tag):\\n p=f@L(f[:52],target[:52]); err=abs(p-target); print(tag,f.shape[1],np.round([err[:52,0].mean(),err[52:,0].mean(),err[:52,1:].mean(),err[52:,1:].mean()],6))\\nbp=s['panel_b']; B=lambda x:A(x)@L(A(bp['u']),bp['v']); b=B(x)\\nfor f,tag in [(A(x),'lin'),(Q(x),'quad'),(np.c_[Q(x),x**3],'cubic direct'),(np.c_[Q(x),b**3],'cubic B'),(np.c_[Q(x),*[np.prod(x[:,i],axis=1) for i in comb(range(4),3)]],'cubic full'),(np.c_[A(x),np.tanh(b)],'lin+tanhB')]:score(f,tag)\\ncp=s['panel_c']; u=cp['u']; v1=cp['v1']; v2=cp['v2']; print('C extrema',v1.min(0),v1.max(0),v2.min(0),v2.max(0))\\nfuncs={'tanh':lambda z,p:np.tanh(p*z),'sin':lambda z,p:np.sin(p*z),'cube':lambda z,p:z**3,'square':lambda z,p:z**2,'gauss':lambda z,p:np.exp(-p*z*z),'rat':lambda z,p:z/(1+p*z*z),'soft':lambda z,p:z/np.sqrt(1+p*z*z)}\\nfor label,v in [('v1',v1),('v2',v2)]:\\n best=[]\\n for name,fun in funcs.items():\\n  for label0,W,Wx in [('u',u,x),('b',B(u),b)]+([('v1',v1,None)] if label=='v2' else []):\\n   for base,baseq,bname in [(np.ones((len(W),1)),np.ones((len(x),1)),'const'),(A(W),A(Wx) if Wx is not None else None,'aff'),(Q(W),Q(Wx) if Wx is not None else None,'quad')]:\\n    for p in [.3,.6,1.,1.5,2.]:\\n     f=np.c_[base,fun(W,p)]; pinv=np.linalg.pinv(f); rr=f@pinv@v-v; e=np.sqrt(np.mean((rr/np.maximum(1-np.sum(f*pinv.T,1),1e-8)[:,None])**2)); best.append((e,name,label0,bname,p, f, None if Wx is None else np.c_[baseq,fun(Wx,p)]))\\n for e,nm,src,bnm,p,f,fq in sorted(best,key=lambda a:a[0])[:8]:\\n  print(label,e,nm,src,bnm,p,np.std(f@L(f,v)-v));\\n  if fq is not None: h=fq@L(f,v); score(np.c_[Q(x),h],label+' +q');score(np.c_[A(h),h**2],'h + squares')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pan9.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test sparse cross-coordinate calibration and auxiliary nonlinear operators; the latest fixed-split scalar MAE is 0.09284.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived cyclic-neighbor calibration unchanged\",\n      \"rejected_reason\": \"The fitted affine cross-loadings point to opposite-index instead of adjacent-index coupling; test both before committing.\"\n    }\n  ],\n  \"rationale\": \"Select panel maps independently of prediction labels, then check how much calibrated coordinates and each operator improve scalar and trajectory prediction on the 52/20 split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b1fd7bc07bd338604e6fcaa12f908d3f549f1d6daea6da626af2ba4cd51f8c1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58043.26,
+      "usage_known": true,
+      "prompt_tokens": 28453,
+      "cached_tokens": 12672,
+      "completion_tokens": 1652
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec2d0be6e37c4e1a8b7e53aa266f236a",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:43:01.101733+00:00",
+  "ended_at_utc": "2026-11-28T15:43:22.203429+00:00",
+  "request_sha256": "236c140a6374d1b84ce663addb9e88abf3169ac2e7368cae36afd8344e9ca385",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 65665,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39318,
+    "cached_tokens": 12672,
+    "completion_tokens": 811
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\n\\ndef load(i):\\n    path=f'/holdout_task/{\\\"_frozen_nodes/\\\" if i else \\\"\\\"}node_0{i}.py'\\n    spec=importlib.util.spec_from_file_location(f'node_0{i}',path)\\n    mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod);return mod\\nmods=[load(i) for i in range(4)]\\nbatch=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nfor case in batch:\\n    s=case['study']; d=s['train']; x,y,ta=[d[k] for k in ('x','y','traj')]; ids=np.arange(len(x)); errs=[]\\n    def pred(t,v):\\n        yt,tt=y[t],ta[t]; st=dict(s,train={'x':x[t],'y':yt,'traj':tt,'summary':np.array([yt.mean(),yt.std(),tt[:,-1].mean(),tt[:,-1].std()])},test={'x':x[v]}); a,b=[m.run_node({'__input__':st}) for m in mods[:2]]\\n        assert a['features'].shape==(len(x),8) and int(a['n_train'])==len(t) and np.isfinite(a['features']).all()\\n        c=mods[2].run_node({'node_00':a,'node_01':b}); o=mods[3].run_node({'node_01':b,'node_02':c}); return np.mean(abs(o['y_hat']-y[v])),np.mean(abs(o['state_pred']-ta[v]))\\n    for v in list(np.array_split(ids,4))+list(np.array_split(np.random.default_rng(13).permutation(ids),4)):\\n        errs.append(pred(np.setdiff1d(ids,v),v));print('fold',len(v),errs[-1])\\n    z=mods[0]._invert_panel(s['panel_a'],x)\\n    for j in range(z.shape[1]):\\n        v=np.argsort(abs(z[:,j]))[-12:]; print('coordinate tail',j,pred(np.setdiff1d(ids,v),v))\\n    print('worst ordinary fold',np.max(errs,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 sparse cyclic cubic inverse and mixed saturating features; official public CV MAE is 0.017089 for y and 0.012100 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit on the official split alone\",\"rejected_reason\":\"One contiguous holdout does not test errors at the edges of the calibrated coordinate range.\"}],\"rationale\":\"Stress-test the accepted artifact on contiguous and shuffled folds and on latent-coordinate extremes, measuring scalar and trajectory errors separately without editing the candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "64587f8384eaaeefa34b71e69e0a37c8f7e5f3ac291fcaa53ebe494fee3ba3b2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21608.44,
+      "usage_known": true,
+      "prompt_tokens": 39318,
+      "cached_tokens": 12672,
+      "completion_tokens": 811
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed4192a5dc5c41629c8944534f58b3be",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:13.582820+00:00",
+  "ended_at_utc": "2026-11-28T15:29:30.651419+00:00",
+  "request_sha256": "3ead75fe85750f46335e85ec2168e0977a18e2f67d6a2fbec795665e219c5fc4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21668,
+    "cached_tokens": 12672,
+    "completion_tokens": 557
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for i in 00 04 06; do cat /tmp/hegel_continual_archive/conf_m102_a03_batch_${i}_solver.py; done; cat > /tmp/bench08.py <<'PY'\\nimport glob,importlib.util,pickle,copy,time\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; p=copy.deepcopy(s); p['train']={k:(v[:52] if k!='summary' else np.array([t['y'][:52].mean(),t['y'][:52].std(),t['traj'][:52,-1].mean(),t['traj'][:52,-1].std()])) for k,v in t.items()}; p['test']={'x':t['x'][52:]}\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('m',f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); now=time.monotonic(); r=m.solve_batch(p); print(f.split('/')[-1], 'MAEs', np.abs(r['y_hat']-t['y'][52:]).mean(),np.abs(r['state_pred']-t['traj'][52:]).mean(),'seconds',time.monotonic()-now)\\n except Exception as e: print(f,repr(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bench08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived readouts -> compare campaign-specific calibration and operator combinations; the archived pre-LLM 52/20 MAEs are 0.059035 for scalar output and 0.008055 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Benchmark each archived solver on the same leakage-free split and inspect the closest structural precedents. Score the scalar readout and trajectory separately to identify which components transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "d581ce2121b743b0aaa0001118c3a70f5a5f93c4adc11e90c353000bf2f2ffaa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17067.58,
+      "usage_known": true,
+      "prompt_tokens": 21668,
+      "cached_tokens": 12672,
+      "completion_tokens": 557
+    }
+  ]
+}

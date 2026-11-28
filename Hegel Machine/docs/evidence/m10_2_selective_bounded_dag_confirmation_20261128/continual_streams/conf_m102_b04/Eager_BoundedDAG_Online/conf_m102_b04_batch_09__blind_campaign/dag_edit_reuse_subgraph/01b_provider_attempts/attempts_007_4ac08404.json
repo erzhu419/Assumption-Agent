@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ac08404897144eb847064d20c6db72d",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:39.477290+00:00",
+  "ended_at_utc": "2026-11-28T15:32:03.502994+00:00",
+  "request_sha256": "c097dc15f0d530d6224aa31f54cacedd58f4cc3c54acfe8daa1e43cecd29a717",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 54899,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35551,
+    "cached_tokens": 12672,
+    "completion_tokens": 757
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, io, numpy as np, pickle, runpy\\nwith contextlib.redirect_stdout(io.StringIO()) as log:\\n    try:\\n        ctx = runpy.run_path('/holdout_task/test_dag_candidate.py')\\n    except SystemExit as e:\\n        if e.code != 0:\\n            raise RuntimeError(log.getvalue()) from e\\nprint(log.getvalue().strip())\\n# Use the exact same DAG runner on disjoint blocks and high-leverage rows.\\n# The public validator exits on success, so load the runner definitions separately.\\np='/holdout_task/test_dag_candidate.py'\\nns={'__file__':p}; exec(compile(open(p).read().split('\\\\nst = pickle.load',1)[0],p,'exec'),ns)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; ids=np.arange(len(x)); worst=np.zeros(2)\\nslices=[(f'block_{i}',b) for i,b in enumerate(np.array_split(ids,4))]\\nr=np.linalg.norm((x-x.mean(0))/x.std(0),axis=1); slices.append(('high_leverage',np.argsort(r)[-len(ids)//4:]))\\nfor name,b in slices:\\n    a=np.setdiff1d(ids,b); y=t['y'][a]; z=t['traj'][a]; sub=dict(s,train=dict(x=x[a],y=y,traj=z,summary=np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])),test={'x':x[b]}); pred,counts=ns['run_dag'](sub)\\n    dy=np.abs(pred['y_hat']-t['y'][b]); dz=np.abs(pred['state_pred']-t['traj'][b]); e=[dy.mean(),dz.mean()]; worst=np.maximum(worst,e)\\n    assert all(v==1 for v in counts.values()) and np.all(np.isfinite(e)) and max(e)<.038\\n    print(name,'scalar/trajectory MAE',np.round(e,6),'worst horizon',round(dz.mean(0).max(),6))\\nprint('worst slice scalar/trajectory MAE',np.round(worst,6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 paired-sinusoid inversion with quadratic scalar and affine trajectory fits; official public MAEs are 0.006199 and 0.004911.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Retune the accepted candidate\",\"rejected_reason\":\"Both official MAEs are well below tolerance; the remaining check is whether the exact artifact holds up on additional slices.\"}],\"rationale\":\"Keep the accepted artifact unchanged and run it through the official DAG runner on disjoint blocks and high-leverage inputs, checking both outcomes and execution counts independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2e5dec8349fd257a864b910b9bf95840173354b096fde5f49cc6bb37e834cd3e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24024.62,
+      "usage_known": true,
+      "prompt_tokens": 35551,
+      "cached_tokens": 12672,
+      "completion_tokens": 757
+    }
+  ]
+}

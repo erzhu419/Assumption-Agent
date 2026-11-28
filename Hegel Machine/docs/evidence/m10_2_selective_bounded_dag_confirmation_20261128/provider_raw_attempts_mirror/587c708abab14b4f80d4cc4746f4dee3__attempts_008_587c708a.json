@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "587c708abab14b4f80d4cc4746f4dee3",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:51.851660+00:00",
+  "ended_at_utc": "2026-11-28T15:51:23.982224+00:00",
+  "request_sha256": "1c959165118d93ac6e1c1f43cbc373516957cd01ea18705d2878906edb76f4bb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52405,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34705,
+    "cached_tokens": 0,
+    "completion_tokens": 1262
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe10.py <<'PY'\\nimport numpy as np,pickle,runpy\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/holdout_task/node_01.py'); up=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s}); U,V=s['panel_a']['u'],s['panel_a']['v']; good=np.linalg.norm(V-U,axis=1)<2.; U,V=U[good],V[good]; t=s['train']['traj']; y=s['train']['y']; xs=s['train']['x']; ls=m['_ls']; rot=lambda q:np.roll(q,-2,axis=1)\\ndef design(q,kind,p):\\n z=rot(q); k=float(s['telemetry_vec'][0]); hh={'sin':lambda a:np.sin(p*a),'sin2':lambda a:np.sin(p*a),'tanh':lambda a:np.tanh(p*a),'rat':lambda a:a/(1+p*a*a),'cubic':lambda a:a**3,'sinplus':lambda a:np.sin(k*a),'ratplus':lambda a:a/(1+p*a*a)}[kind]; ff=[np.ones_like(q),q,hh(z)];\\n if kind in ('sin2','sinplus','ratplus','cubic'): ff.append(z)\\n if kind in ('sinplus','ratplus'): ff.extend([q*q,q**3,z*z,q*z]);\\n return np.stack(ff,axis=-1)\\ndef fit(kind,p):\\n a=design(U,kind,p); w=np.array([ls(a[:,j],V[:,j]) for j in range(4)]); return w,(a*w).sum(-1)-V\\nsplits=[(np.arange(52),np.arange(52,len(t)))]+[(np.setdiff1d(np.arange(len(t)),i),i) for i in np.array_split(np.random.default_rng(12).permutation(len(t)),5)]\\ndef eval(q):\\n b=m['_panel_features'](q,up); inv=1/(1+s['telemetry_vec'][3]*q*q); u=s['panel_c']['u']; c=np.c_[m['_design'](q,15),b]@ls(np.c_[m['_design'](u,15),m['_panel_features'](u,up)],np.c_[s['panel_c']['v1'],s['panel_c']['v2']]); co=b*np.roll(q,-1,axis=1); result=[]\\n for X,Y,a in [(np.c_[b,c,inv],y,.025),(np.c_[b,inv,q**3],t,.25),(np.c_[b,co,c,inv],t,.025),(np.c_[b,co.sum(1)],t,1e-6)]:\\n  e=np.array([np.mean(abs(m['_ridge'](X[tr],Y[tr],X[te],a)-Y[te])) for tr,te in splits]); result.append(np.round([e[0],e[1:].mean(),e[1:].max()],5))\\n return result\\nq0=m['_invert'](xs,m['_fit_calibration'](s['panel_a'])); print('baseline',eval(q0));\\nfor kind in ['sin','sin2','tanh','rat','cubic','sinplus','ratplus']:\\n p=least_squares(lambda p:fit(kind,p[0])[1].ravel(),[2.15 if kind.startswith('sin') else 1.],bounds=(.1,6.)).x[0]; w,r=fit(kind,p); print(kind,p,'cal rmse',np.sqrt(np.mean(r*r)),'w',w.round(4).tolist()); print('resid corr',np.round(np.corrcoef(np.c_[r,U].T)[:4,4:],2).tolist()); q=np.array([least_squares(lambda a:(design(a[None,:],kind,p)[0]*w).sum(-1)-x,z,max_nfev=35).x for x,z in zip(xs,q0)]); print('pred',eval(q))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse cubic calibration → H2 a more exact paired-coordinate calibration law; verified public MAEs are 0.021109 scalar and 0.030883 trajectory, with exploratory worst trajectory MAE 0.04145.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Immediately submit the accepted artifact\",\"rejected_reason\":\"The file is safely archived, and the reference-panel residuals justify one targeted calibration check against the worst trajectory fold.\"}],\"rationale\":\"Compare calibration laws fitted without study targets and check whether they improve both public and alternate-fold metrics before changing the verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7b5cfe04e9fcf756273c8db04413c7db0af5a21740aa4f3d578ced931d169bb3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32669.07,
+      "usage_known": true,
+      "prompt_tokens": 34705,
+      "cached_tokens": 0,
+      "completion_tokens": 1262
+    }
+  ]
+}

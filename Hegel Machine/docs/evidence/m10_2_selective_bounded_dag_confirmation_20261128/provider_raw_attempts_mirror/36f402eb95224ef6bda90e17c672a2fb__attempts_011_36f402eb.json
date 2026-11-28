@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36f402eb95224ef6bda90e17c672a2fb",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:34.532482+00:00",
+  "ended_at_utc": "2026-11-28T15:06:10.669757+00:00",
+  "request_sha256": "33bc4bad23c870d50ef1cfb0e3b9221eff5dd183e3cb03115f5ad902bd7b5329",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45831,
+    "cached_tokens": 12672,
+    "completion_tokens": 1417
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/ard.py <<'PY'\\nfrom finalcv import *\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations_with_replacement\\nN=len(x); c=m._coordinates(s,x); g=m._panel_features(s,c)\\ndef dist(z):return (z[:,None,:]-z[None,:,:])**2\\ndef poly(z):return np.column_stack([np.ones(len(z)),z,*[z[:,i]*z[:,j] for i,j in combinations_with_replacement(range(4),2)]])\\ndef candidate(coords, features, target, i,j):\\n d=dist(coords); f=features@features.T; norm=np.mean(np.diag(f)); f=f/max(norm,1e-8); p=poly(coords); p=p@p.T/np.mean(np.sum(p*p,1)); ii=np.ix_(i,i); ji=np.ix_(j,i); di=d[ii]; fi=f[ii]; pi=p[ii]; y=target[i]; mu=y.mean(0); sig=y.std(0); y=(y-mu)/sig\\n def fun(theta):\\n  a=np.exp(theta); r=np.exp(-di@a[:4]); k=a[4]*r+a[5]*fi+a[6]*pi+a[7]*np.eye(len(i)); cf=cho_factor(k); al=cho_solve(cf,y); inv=cho_solve(cf,np.eye(len(i))); obj=.5*y@al+np.log(np.diag(cf[0])).sum(); w=.5*(inv-np.outer(al,al)); grad=np.r_[-a[:4]*np.einsum('ij,ijk->k',w*a[4]*r,di),np.sum(w*r)*a[4],np.sum(w*fi)*a[5],np.sum(w*pi)*a[6],np.trace(w)*a[7]]; base=np.array([-1.4]*4+[0.,0.,0.,-8.]); reg=np.array([.5]*4+[.05]*3+[.15]); return obj+np.sum(reg*(theta-base)**2),grad+2*reg*(theta-base)\\n opt=minimize(fun,[-1.4]*4+[0.,0.,0.,-8.],jac=True,method='L-BFGS-B',bounds=[(-5,1)]*4+[(-9,4)]*3+[(-12,-3)],options={'maxiter':110}); a=np.exp(opt.x); kernel=a[4]*np.exp(-d@a[:4])+a[5]*f+a[6]*p; yp=mu+sig*(kernel[ji]@np.linalg.solve(kernel[ii]+a[7]*np.eye(len(i)),y)); return yp,a\\nif __name__=='__main__':\\n base=run(sp); print('baseline',base[0,:2],base[1:,:2].mean(0),base[1:,:2].max(0)); Z=[]; B=[]\\n for i,j in sp:\\n  pr=m.solve_batch(dict(s,train={**tr,**{k:tr[k][i] for k in ['x','y','traj']}},test={'x':x[j]})); B.append(np.c_[pr['y_hat'],pr['state_pred']]); allp=[]\\n  for k,l in [(2,0),(2,2),(3,3),(3,1),(0,0),(1,3)]:\\n   q=np.linalg.svd(Y[i,1:],full_matrices=False)[2][0]; yp,a=candidate(c[k],g[l],Y[:,0],i,j); p1,b=candidate(c[k],g[l],Y[:,1:]@q,i,j); R=Y[i,1:]-np.outer(Y[i,1:]@q,q); qp=np.c_[np.ones(len(x)),c[1],g[3][:,:4]]; residual=qp[j]@np.linalg.solve(qp[i].T@qp[i]+.4*np.eye(qp.shape[1]),qp[i].T@R); allp.append(np.c_[yp,np.outer(p1,q)+residual]);\\n   if len(Z)==0: print(k,l,'parameters',a,b)\\n  Z.append(allp)\\n Z=np.array(Z); B=np.array(B); truth=np.array([Y[j] for i,j in sp]);\\n for name,p in [(str(i),Z[:,i]) for i in range(Z.shape[1])]+[('average',Z[:,:4].mean(1)),('blend',.5*B+.5*Z[:,:4].mean(1))]:\\n  e=np.abs(p-truth); e=np.c_[e[:,:,0].mean(1),e[:,:,1:].mean((1,2)),e[:,:,-1].mean(1)]; print(name,e[0],e[1:].mean(0),e[1:].max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ard.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test train-fold anisotropic smoothing and a separate trajectory-amplitude fit against the verified baseline; baseline 52/20 MAEs are 0.02727 scalar and 0.01505 trajectory, with worst random-split MAEs of 0.05241 and 0.02923.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified baseline immediately\",\n      \"rejected_reason\": \"The worst random split remains above the prescribed scalar gate, so test whether fold-local anisotropy improves that margin without changing the verified artifact.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified solver intact while testing a challenger whose smoothing parameters and temporal profile are fitted without holdout labels. Score the scalar, full trajectory, and final horizon independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "05b224658d0df8aaa39503e596f78e944376efb2a1b966861227b50930a9969e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36136.03,
+      "usage_known": true,
+      "prompt_tokens": 45831,
+      "cached_tokens": 12672,
+      "completion_tokens": 1417
+    }
+  ]
+}

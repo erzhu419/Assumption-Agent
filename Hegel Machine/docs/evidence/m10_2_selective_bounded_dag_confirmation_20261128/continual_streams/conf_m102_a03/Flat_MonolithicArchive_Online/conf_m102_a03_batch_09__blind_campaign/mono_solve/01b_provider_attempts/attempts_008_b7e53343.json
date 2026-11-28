@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b7e53343081a42b4874bad28fbfcf5e6",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:40:07.168215+00:00",
+  "ended_at_utc": "2026-11-28T15:40:28.847471+00:00",
+  "request_sha256": "6cc801fcea086fe9ba26349759cc7fd9efdc8efb5853821c8b6a7a8f17090d41",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53295,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34771,
+    "cached_tokens": 12672,
+    "completion_tokens": 769
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact09.py <<'PY'\\nimport runpy,numpy as np\\nq=runpy.run_path('/tmp/verify_batch09.py'); m,s,d,z=q['m'],q['s'],q['d'],q['z']; b=s['panel_b']; B=m._fit(m._affine(b['u']),b['v']); w=m._affine(z)@B\\nF=m._affine(w); G=np.c_[F,w[:,0]*w[:,2]+w[:,1]*w[:,3]]; H=m._quadratic(w); A=d['traj']; y=d['y']; print('B residual RMS',np.mean((m._affine(b['u'])@B-b['v'])**2)**.5); print('times',s['eval_times']); print('trajectory slopes by time\\\\n',m._fit(F,A).T)\\ndef compare(i,j):\\n out=[]\\n for f in [H,G]:out.append(np.mean(abs(f[j]@m._fit(f[i],y[i])-y[j])))\\n for r in [None,2]:\\n  coef=m._fit(F[i],A[i]); pred=F[j]@coef\\n  if r:\\n   _,_,v=np.linalg.svd(F[i]@coef,full_matrices=False); pred=(pred@v[:r].T)@v[:r]\\n  e=abs(pred-A[j]); out.extend([e.mean(),e.mean(0).max()])\\n return out\\nidx=np.arange(len(w)); print('holdout (quadratic y, symmetric y, affine trajectory mean/worst time, rank2 trajectory mean/worst time)',compare(idx[:52],idx[52:])); vals=[]\\nfor v in [*z.T,*w.T,np.linalg.norm(z,axis=1)]:\\n j=np.argsort(v); vals.extend([compare(j[20:],j[:20]),compare(j[:-20],j[-20:])])\\nprint('edge worst',np.max(vals,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compact09.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated quadratic and affine readouts → H2 test a symmetric panel-B interaction and rank-two trajectory denoising; verified 52/20 MAEs are 0.00402 for y and 0.00456 for trajectory, with worst stress-split MAEs of 0.00944 and 0.00506.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The verified artifact already passes the gate. Panel B exposes two nearly equal interaction coefficients, and the fitted trajectory has two dominant modes. Test whether these constraints improve edge holdouts before changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b34d9b96cf3a4222a9b21c9319a488693f6af29a2aa21ff5b29e390d0de993f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21677.68,
+      "usage_known": true,
+      "prompt_tokens": 34771,
+      "cached_tokens": 12672,
+      "completion_tokens": 769
+    }
+  ]
+}

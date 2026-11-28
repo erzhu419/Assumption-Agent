@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1680457bd9a04c54b3826632c8983d7d",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:42.723257+00:00",
+  "ended_at_utc": "2026-11-28T14:56:25.677589+00:00",
+  "request_sha256": "3b580d35905048e28838522b717364202519051fc704b86292524f1e5fb6f77b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61065,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38379,
+    "cached_tokens": 12672,
+    "completion_tokens": 1821
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -i 's/mult\\\\*\\\\*(deg-2)/float(mult)**(deg-2)/' /tmp/grammar_cv.py; export OPENBLAS_NUM_THREADS=1; python3 -I /tmp/grammar_cv.py | tail -20; cat >/tmp/kernel_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=s['train']['x']; T=s['train']['traj']; y=s['train']['y']; Y=np.c_[y,T]; n=len(X)\\nA=[]\\nfor u,v in zip(s['panel_a']['u'].T,s['panel_a']['v'].T):\\n i,j=np.triu_indices(len(u),1); q=abs(u[i]-u[j])>.08; i,j=i[q],j[q]; slope=np.median((v[i]-v[j])/(u[i]-u[j])); offset=np.median(v-slope*u); keep=abs(v-(offset+slope*u))<.001; A.append(np.linalg.lstsq(np.c_[np.ones(sum(keep)),u[keep]],v[keep],rcond=None)[0])\\nA=np.array(A); Z=(X-A[:,0])/A[:,1]; p=s['panel_b']; B=np.linalg.lstsq(np.c_[np.ones(len(p['u'])),p['u']],p['v'],rcond=None)[0]; H=(Z-B[0])@np.linalg.inv(B[1:]); G=Z@B[1:]+B[0];\\nR=np.random.default_rng(827); splits=[(np.arange(52),np.arange(52,72))]+[(r[:52],r[52:]) for r in [R.permutation(n) for _ in range(12)]]+[(r[:52],r[52:]) for r in [np.argsort(X[:,i]*sign) for i in range(4) for sign in [-1,1]]];\\ndef score(P):\\n e=abs(P-np.array([Y[j] for i,j in splits])); z=np.c_[e[:,:,0].mean(1),e[:,:,1:].mean((1,2)),e[:,:,1:].mean(1).max(1)]; return np.vstack((z[0],z[1:13].mean(0),z[1:13].max(0),z[13:].mean(0),z[13:].max(0)))\\ndef bases(z):\\n g=z@z.T; q=(z[:,None]-z[None,:])**2; d=q.sum(2);\\n return {'p2':g**2,'p3':g**3,'p4':g**4,'p5':g**5,'rb1':np.exp(-d/2),'rb2':np.exp(-d/8),'rb3':np.exp(-d/32),'mat':(1+np.sqrt(5*d)+5*d/3)*np.exp(-np.sqrt(5*d)),'add':np.exp(-q/2).sum(2),'sqadd':(np.exp(-q/2).sum(2))**2,'diag3':z**3@(z**3).T,'diag4':z**4@(z**4).T,'sqrt':(np.sqrt(1+.924*z*z)-1)@(np.sqrt(1+.924*z*z)-1).T}\\nbasesall={k:bases(z) for k,z in [('x',X),('a',Z),('b',G),('bi',H)]}\\nbase=2+4*(X@X.T); out=[]\\nfor v,D in basesall.items():\\n for keys in [('p2','p3'),('p2','p3','p4','p5'),('p2','rb1'),('p2','rb2'),('p2','rb3'),('p2','mat'),('p2','add','sqadd','rb2'),('p2','p3','diag3','diag4','sqrt','rb2')]:\\n  mats=np.array([D[key] for key in keys]+[np.eye(n)]); P=[]; scales=[]\\n  means=np.sqrt(np.mean(mats**2,axis=(1,2))); means[-1]=1; mats/=means[:,None,None];\\n  for i,j in splits:\\n   U,S,V=np.linalg.svd(T[i],full_matrices=False); reduced=np.c_[y[i],U[:,:2]*S[:2]]; co=[]\\n   C=mats[:,i][:,:,i]; Bij=base[i][:,i]; Cj=mats[:,j][:,:,i]; Bji=base[j][:,i];\\n   for col in range(3):\\n    t=reduced[:,col];\\n    def obj(th):\\n     w=np.exp(th); K=Bij+np.einsum('i,ijk->jk',w,C); L=cho_factor(K); a=cho_solve(L,t); inv=cho_solve(L,np.eye(len(i))); der=(inv-a[:,None]*a[None,:]); return .5*t@a+np.log(np.diag(L[0])).sum(),.5*np.einsum('jk,ijk,i->i',der,C,w)\\n    opt=minimize(obj,[-3]*(len(keys))+[-9],method='L-BFGS-B',jac=True,bounds=[(-17,3)]*len(keys)+[(-13,-3)],options={'maxiter':80}); w=np.exp(opt.x); K=Bij+np.einsum('i,ijk->jk',w,C); Kj=Bji+np.einsum('i,ijk->jk',w,Cj); co.append(Kj@cho_solve(cho_factor(K),t));\\n   P.append(np.c_[co[0],np.column_stack(co[1:])@V[:2]]);\\n  P=np.array(P); out.append((v,keys,score(P),P));\\ndef ranking(z): return (z*np.array([.3,1,.6,.9,.35])[:,None]).mean()\\nfor entry in sorted(out,key=lambda h:ranking(h[2]))[:16]:print(entry[0],entry[1],np.round(entry[2],4).tolist())\\nfor v in ['x','a','b','bi','all']:\\n entries=[p for name,k,e,p in out if (name==v or v=='all') and k[1] in ('p3','rb1','rb2','rb3','mat')];print('ensemble',v,np.round(score(np.mean(entries,axis=0)),4).tolist())\\nPY\\npython3 -I /tmp/kernel_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Raw quadratic → calibrated smooth interaction law with shared temporal modes; repeated-split cubic means reached 0.0166 readout MAE and 0.0161 trajectory MAE in separate candidates.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose cubic penalties on the required split alone\",\"rejected_reason\":\"That split does not establish that the regularization extrapolates to boundary inputs.\"}],\"rationale\":\"Complete the degree-weighted comparison, then fit kernel hyperparameters and trajectory modes inside each fold and compare fixed-split, random-split, and coordinate-tail errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ac4e44647336e40a8bccf8b6d3f717d4b42ce88ec620faca673b126eb417a6e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42952.85,
+      "usage_known": true,
+      "prompt_tokens": 38379,
+      "cached_tokens": 12672,
+      "completion_tokens": 1821
+    }
+  ]
+}

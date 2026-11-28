@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd8943d7da07489d89b54caec34c80ec",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:50.466494+00:00",
+  "ended_at_utc": "2026-11-28T15:26:13.737992+00:00",
+  "request_sha256": "c5c8a0c70121666831294fc9cfaff0165a4cb97c29e06c09a4f74c704d243f3f",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 52717,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33907,
+    "cached_tokens": 5504,
+    "completion_tokens": 830
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, os, pickle, numpy as np\\nos.chdir('/holdout_task')\\nsource = open('test_dag_candidate.py').read().split('\\\\nst = pickle.load(', 1)[0]\\nns = {'__file__': '/holdout_task/test_dag_candidate.py', '__name__': '__main__'}\\nexec(compile(source, ns['__file__'], 'exec'), ns)\\nrun = ns['run_dag']\\nstudy = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\ntr = study['train']; x, y, traj = (tr[k] for k in ('x', 'y', 'traj')); n = len(x)\\ndef evaluate(name, te):\\n    ii = np.setdiff1d(np.arange(n), te)\\n    s = copy.deepcopy(study)\\n    s['train'] = {'x': x[ii], 'y': y[ii], 'traj': traj[ii], 'summary': np.array([y[ii].mean(), y[ii].std(), traj[ii,-1].mean(), traj[ii,-1].std()])}\\n    s['test'] = {'x': x[te]}\\n    o, counts = run(s)\\n    assert all(v == 1 for v in counts.values())\\n    yh, sp, dv = (o[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert yh.shape == y[te].shape and sp.shape == traj[te].shape\\n    assert np.isfinite(yh).all() and np.isfinite(sp).all()\\n    np.testing.assert_allclose(dv, [yh.mean(), yh.std(), sp[:,-1].mean(), sp[:,-1].std()])\\n    e = np.array([np.abs(yh-y[te]).mean(), np.abs(sp-traj[te]).mean()])\\n    print(name, np.round(e,6).tolist())\\n    return e\\npublic = evaluate('public', np.arange(max(40,n-20),n))\\nassert (public <= .038).all()\\nfolds = np.array([evaluate(f'seed{seed}_fold{k}', te) for seed in (1234,735) for k,te in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),4))]);print('random mean/worst', folds.mean(0).round(6).tolist(), folds.max(0).round(6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel B and shared response basis → H2 nonlinear panel B and separate response terms; the exact DAG passed public validation at 0.034868 scalar MAE and 0.018385 trajectory MAE, and alternate-fold stress testing is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The archived candidate passes the public thresholds. Run the unchanged artifacts on alternate folds to measure the worst-slice errors with training-only normalization and the frozen trajectory projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "00f1f0740c49a5b1d4504e2f134e1380c4f7e903bae9a5e3b44b10ad1217c839",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23270.33,
+      "usage_known": true,
+      "prompt_tokens": 33907,
+      "cached_tokens": 5504,
+      "completion_tokens": 830
+    }
+  ]
+}

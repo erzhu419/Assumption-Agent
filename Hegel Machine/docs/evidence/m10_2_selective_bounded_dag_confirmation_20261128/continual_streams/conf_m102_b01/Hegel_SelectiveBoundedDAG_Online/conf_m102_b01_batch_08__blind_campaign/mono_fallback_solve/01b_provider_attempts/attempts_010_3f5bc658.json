@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3f5bc658394a46fbaed166d79a0828dc",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:53.552678+00:00",
+  "ended_at_utc": "2026-11-28T15:43:24.613584+00:00",
+  "request_sha256": "8d69185f933355c03e9a902373f986570ad362d375048f497234bcc1f0741bbb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64895,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41561,
+    "cached_tokens": 5504,
+    "completion_tokens": 1338
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*00_solver.py; cat > /tmp/merge.py <<'PY'\\nexec(open('/tmp/ablate.py').read().split('res=[]')[0]);from scipy.optimize import least_squares\\nfrom itertools import combinations\\nc=np.tanh(1.25*C); d=np.arctan(1.25*D)\\n\\ndef ridge(F,Y,tr,te,r):\\n a=F[tr].mean(0);std=np.maximum(F[tr].std(0),1e-6); f=(F[tr]-a)/std; g=(F[te]-a)/std; ym=Y[tr].mean(0); q=np.linalg.solve(f.T@f+r*np.eye(f.shape[1]),f.T@(Y[tr]-ym));return g@q+ym,q/std[:,None]\\n\\ndef cv(f,r, target=Y):\\n vals=[]\\n for tr,te in inds:\\n  pred,_=ridge(f,target,tr,te,r);e=abs(pred-Y[te]); vals.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()]);\\n return np.array(vals)\\n\\nsimple=np.c_[c,d,F(c,d)]; _,q=ridge(simple,Y,np.arange(N),np.arange(N),.5);print('linear matrices\\\\n',q[:,[0,1,-1]].round(3));print('C x D scalar',q[8:,0].reshape(4,4)); print('C x D state',q[8:,-1].reshape(4,4));print('C x D rank',np.linalg.svd(q[8:,0].reshape(4,4))[1]); print('obs y affine from states',np.std(Y[:,0]-m._aff(Y[:,1:])@m._ls(m._aff(Y[:,1:]),Y[:,0]))); print('smallest temporal singular values',np.linalg.svd(Y[:,1:],compute_uv=False))\\nres=[]\\nfor cname,cc in [('C',C),('tanhC',c),('C0',c1(B-B.mean(0))),('pre',c1(np.tanh(1.25*B)))]:\\n for dname,dd in [('D',D),('tanhD',np.tanh(1.25*D)),('atanD',d)]:\\n  prod=F(cc,dd); cs=np.repeat(cc,4,axis=1); ds=np.tile(dd,(1,4));\\n  ff={'bilinear':prod,'sumdiff':np.c_[np.tanh(cs+ds),np.tanh(cs-ds)],'square':np.c_[F(cc,cc),F(dd,dd),prod],'tanhprod':np.tanh(1.25*prod),'rat':prod/(1+.22*(cs+ds)**2),'satC':prod/(1+1.25*cs**2),'satD':prod/(1+1.25*ds**2),'trig':np.sin(prod*1.25),'triple':np.c_[prod,prod*cs,prod*ds],'ratdiag':np.c_[cc*dd,cc/(1+1.25*dd**2),dd/(1+1.25*cc**2)],'diag':np.c_[cc*dd,cc**2*dd,cc*dd**2], 'expdiag':np.c_[cc*np.exp(dd),dd*np.exp(cc),np.tanh(cc+dd)]}\\n  for name,f in ff.items():\\n   for base,g in [('core',np.c_[cc,dd]),('plusz',np.c_[cc,dd,z]),('plusb',np.c_[cc,dd,B]),('corecross',np.c_[cc,dd,prod])]:\\n    if base=='corecross' and name=='bilinear':continue\\n    for r in (.04,.25,1.,3.):\\n     e=cv(np.c_[g,f],r);res.append((e.mean(0)+.5*e.max(0),(cname,dname,name,base,r),e))\\nfor j in range(3):\\n print('algebraic results',j)\\n for l,desc,e in sorted(res,key=lambda a:a[0][j])[:8]:print(desc,'gate',e[0].round(4),'mean',e.mean(0).round(4),'worst',e.max(0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/merge.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent kernel readouts → H2 compact algebraic fusion; the best kernel challengers reached 0.0341 scalar and 0.0229 trajectory MAE on the designated 52/20 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Switch immediately to the best kernel variants\",\"rejected_reason\":\"One compact fusion test remains worthwhile because the variants still show noticeable errors on the hardest held-out slices.\"}],\"rationale\":\"Keep the verified artifact intact while testing explicit sums, differences, rational interactions, and triple products. Use held-out scalar, trajectory, and final-time MAE to decide which changes to promote.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d94ebef38bf4f2d247580005f35b54b672d1fd901f87f115a18f12604f2983ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31567.68,
+      "usage_known": true,
+      "prompt_tokens": 41561,
+      "cached_tokens": 5504,
+      "completion_tokens": 1338
+    }
+  ]
+}

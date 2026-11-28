@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d901c294da54909b68781f74eb734f6",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:51:45.726305+00:00",
+  "ended_at_utc": "2026-11-28T16:52:38.205075+00:00",
+  "request_sha256": "875fefc5d911894cd4b2d28152fd150079332cc5f5c3e6b24573ccaef2a4e9ee",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44863,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29531,
+    "cached_tokens": 12672,
+    "completion_tokens": 1349
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/_frozen_nodes/node_02.py; cat > /tmp/feature_probe.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom node_00 import _latent,_panel_b\\nfrom _frozen_nodes.node_01 import _kernel\\nfrom _frozen_nodes.node_02 import run_node as sink\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; traj=t['traj']; n=len(y)\\nz=_latent(s['panel_a'],t['x']); b=_panel_b(s['panel_b'],z); print('n',n,'z ranges',z.min(0),z.max(0),'b ranges',b.min(0),b.max(0))\\nrng=np.random.default_rng(214); folds=[(np.arange(max(40,n-20)),np.arange(max(40,n-20),n))]; folds += [(np.setdiff1d(np.arange(n),v),v) for v in np.array_split(rng.permutation(n),4)]\\ndef score(x):\\n out=[]\\n for i,j in folds:\\n  a=x[i]; c=x[j]; p=sink({'__input__':{'train':{'y':y[i],'traj':traj[i]}},'node_01':{'k':_kernel(a,a),'ktest':_kernel(c,a)}})\\n  out.append([np.abs(p['y_hat']-y[j]).mean(),np.abs(p['state_pred']-traj[j]).mean()])\\n return np.array(out)\\ndef rank(a):return max(a.max(0))+.2*a.mean()\\ngroups={'z':z,'b':b,'tz':np.tanh(z),'tb':np.tanh(2.5*b),'c':np.cos(2.6*z),'si':np.sin(2.6*z),'s':np.sin(z),'p':z**2,'q':b**2}\\nres=[]\\nfor names in [('z','b','tz','tb'),('z','b'),('z','b','tz'),('z','b','tb'),('z','b','c'),('z','b','si'),('z','c'),('z','b','s'),('tz','b'),('z','tb'),('z','b','p','q'),('z','b','tz','tb','c'),('z','b','p')]:\\n for std,center in itertools.product([False,True],repeat=2):\\n  xs=[(groups[k]-(groups[k].mean(0) if center else 0))/(groups[k].std(0) if std else 1) for k in names]\\n  for scale,rel in itertools.product([.7,1,1.5,2,3,5,8],[.5,1,2]):\\n   a=score(np.hstack([scale*x*(rel if k in ('b','tb','c','q') else 1) for x,k in zip(xs,names)]));res.append((rank(a),names,std,center,scale,rel,a))\\nfor r in sorted(res,key=lambda x:x[0])[:16]:print(r[:-1],r[-1].round(5).tolist())\\nprint('best official');\\nfor r in sorted(res,key=lambda x:max(x[-1][0]))[:6]: print(r[:-1],r[-1].round(5).tolist())\\nprint('linear fit diagnostics');\\nfor keys in [('z','b'),('z','b','tz','tb'),('z','c'),('z','c','si'),('z','b','p','q')]:\\n x=np.hstack([groups[k] for k in keys]);\\n for deg in [1,2]:\\n  a=np.column_stack([np.ones(n), x]+([x[:,i]*x[:,j] for i in range(x.shape[1]) for j in range(i,x.shape[1])] if deg==2 else [])); i,j=folds[0]; co=np.linalg.lstsq(a[i],np.c_[y,traj[:,-1]][i],rcond=1e-7)[0]; print(keys,deg,a.shape, np.abs(a@co-np.c_[y,traj[:,-1]])[i].mean(0),np.abs(a@co-np.c_[y,traj[:,-1]])[j].mean(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/feature_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 exact cosine calibration with archived feature scaling → H2 adapt the feature basis and scale to the calibrated coordinates; public scalar/trajectory MAE is 0.089043/0.031568.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add an odd term to panel B calibration\",\n      \"rejected_reason\": \"Its coefficient norm is near the calibration noise scale, and cosine alone gives lower leave-one-row-out RMSE.\"\n    }\n  ],\n  \"rationale\": \"Keep the independently verified cosine calibration and test whether the inherited feature geometry, rather than the calibration, accounts for the remaining scalar error. Compare both heads across the official split and additional folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e46f4c5731c6c75c9e1144555d88ca04fd06db28b53fdcb3537346bfc131417b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53018.75,
+      "usage_known": true,
+      "prompt_tokens": 29531,
+      "cached_tokens": 12672,
+      "completion_tokens": 1349
+    }
+  ]
+}

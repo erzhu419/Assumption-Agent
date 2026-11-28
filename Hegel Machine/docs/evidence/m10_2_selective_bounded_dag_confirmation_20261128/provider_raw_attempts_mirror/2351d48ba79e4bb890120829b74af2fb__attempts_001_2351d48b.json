@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2351d48ba79e4bb890120829b74af2fb",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__init_decomp_conf_m102_b01_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:24.073350+00:00",
+  "ended_at_utc": "2026-11-28T14:58:53.239640+00:00",
+  "request_sha256": "3e003d75f8fe2e409b6659bdf08686fe840318281034720ecf150b27beed05e4",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14061,
+    "cached_tokens": 11392,
+    "completion_tokens": 1225
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"The panel calibration is a reusable numerical transform that does not depend on the training targets. It computes the calibrated feature matrix once, and the sink uses that matrix for both prediction heads. The extraction preserves the original fitting, ensemble weights, and diagnostics, so it preserves source predictions by construction. The role-blind statistics do not identify which stage caused the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"]\n  ],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr, te = study['train'], study['test']\\n    x = np.concatenate((tr['x'], te['x']), axis=0)\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    offsets, scales = [], []\\n    for j in range(u.shape[1]):\\n        d = _aff(u[:, j:j+1]); q = _ls(d, v[:, j])\\n        for _ in range(8):\\n            keep = np.argsort(abs(d @ q - v[:, j]))[:int(len(u)*.875)]\\n            q = _ls(d[keep], v[keep, j])\\n        err = abs(d @ q - v[:, j]); keep = err <= max(10*np.median(err), 0.002)\\n        q = _ls(d[keep], v[keep, j])\\n        offsets.append(q[0]); scales.append(q[1])\\n    b = study['panel_b']\\n    w = _aff((x - offsets)/scales) @ _ls(_aff(b['u']), b['v'])\\n    return {'w': w}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import itertools\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _features(w, gain, interaction, kind):\\n    u = gain * w\\n    if kind == 'atan':\\n        z = np.arctan(u)\\n    elif kind == 'inv3':\\n        z = np.sinh(np.arcsinh(u) / 3)\\n    else:\\n        z = np.arcsinh(u)\\n    if not interaction:\\n        return np.column_stack((_aff(w), z))\\n    pairs = [z[:, i] * z[:, j] for i, j in itertools.combinations_with_replacement(range(w.shape[1]), 2)]\\n    return np.column_stack((_aff(w), z, *pairs))\\n\\n\\ndef _predict(w, target, interaction, kind):\\n    n = len(target)\\n    scale = np.maximum(np.std(target, axis=0), 1e-8)\\n    def loss(gain):\\n        f = _features(w[:n], gain, interaction, kind)\\n        r = (f @ _ls(f, target) - target) / scale\\n        return np.mean(r*r)\\n    gain = minimize_scalar(loss, bounds=(0.8, 7), method='bounded').x\\n    f = _features(w, gain, interaction, kind)\\n    return f[n:] @ _ls(f[:n], target)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    tr = inputs['__input__']['train']\\n    w = inputs['node_00']['w']\\n    y = (0.35 * _predict(w, tr['y'], True, 'asinh')\\n         + 0.65 * _predict(w, tr['y'], True, 'atan'))\\n    p = _predict(w, tr['traj'], False, 'inv3')\\n    tail = p[:, -1]\\n    return {'y_hat': y, 'state_pred': p, 'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "39666b7eff1bcdeba300ad3f299b76c3eca61d4115bdf354aff25d65aee3e8ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29147.36,
+      "usage_known": true,
+      "prompt_tokens": 14061,
+      "cached_tokens": 11392,
+      "completion_tokens": 1225
+    }
+  ]
+}

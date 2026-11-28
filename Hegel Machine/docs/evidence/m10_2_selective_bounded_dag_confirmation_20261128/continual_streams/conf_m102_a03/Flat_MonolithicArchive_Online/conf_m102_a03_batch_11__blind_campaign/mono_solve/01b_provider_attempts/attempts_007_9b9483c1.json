@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b9483c1236041ec8d239e34bce0fff0",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:02.395469+00:00",
+  "ended_at_utc": "2026-11-28T15:51:41.953514+00:00",
+  "request_sha256": "c26bf2551a1cf61ec8a8b34662bfa1a96ceb22e49bfca689bc86fd17277ef3fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51315,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34914,
+    "cached_tokens": 12672,
+    "completion_tokens": 1748
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/conf_m102_a03_batch_09_solver.py').read_text()\\nsrc = '\\\"\\\"\\\"Robust panel calibration with a nonlinear scalar readout and rank-two temporal prediction.\\\"\\\"\\\"\\\\n' + src[src.index('import numpy'):]\\nneedle = 'def solve_batch(study: dict) -> dict:'\\nhelper = '''def _scalar_readout(features, target, query):\\n    # The linear and saturating branches share the same affine-pair index.\\n    def predict(design, p):\\n        index = design @ p[:-2]\\n        return index + p[-2] * np.tanh(np.exp(p[-1]) * index)\\n\\n    def jacobian(p):\\n        index = features @ p[:-2]\\n        scale = np.exp(p[-1])\\n        link = np.tanh(scale * index)\\n        derivative = p[-2] * scale * (1 - link * link)\\n        return np.column_stack((features * (1 + derivative[:, None]),\\n                                link, derivative * index))\\n\\n    initial = np.r_[0.8 * _fit(features, target), 0.4, 0.3]\\n    low = np.r_[np.full(features.shape[1], -np.inf), 0., -3.]\\n    high = np.r_[np.full(features.shape[1], np.inf), np.inf, 3.]\\n    fit = least_squares(lambda p: predict(features, p) - target, initial,\\n                        jac=jacobian, bounds=(low, high), max_nfev=250)\\n    return predict(query, fit.x)\\n\\n\\n'''\\nassert src.count(needle) == 1\\nsrc = src.replace(needle, helper + needle)\\nold = \\\"y_hat = _readout(wt) @ _fit(_readout(w), train['y'])\\\"\\nassert src.count(old) == 1\\nsrc = src.replace(old, \\\"y_hat = _scalar_readout(_readout(w), np.asarray(train['y']), _readout(wt))\\\")\\nPath('batch_solver.py').write_text(src)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/stress_batch11.py <<'PY'\\nimport pickle, runpy, numpy as np\\npath = '/holdout_task/'\\ns = pickle.load(open(path+'public_batch.pkl', 'rb'))[0]['study']\\na = runpy.run_path(path+'batch_solver.py'); solve = a['solve_batch']\\ntr=s['train']; x=tr['x']; ids=np.arange(len(x)); times=s['eval_times'];\\ncal=a['_calibration'](s['panel_a']); z=a['_decode'](x,cal); aff=a['_affine']; b=s['panel_b']; w=aff(z)@a['_fit'](aff(b['u']),b['v']);\\nseq=np.random.default_rng(11).permutation(len(x))\\nsplits=[('public52/20',ids[:52],ids[52:]),('reverse52/20',ids[20:],ids[:20])]\\nfor k,j in enumerate(np.array_split(seq,4)):\\n    splits.append(('random'+str(k),np.setdiff1d(ids,j),j))\\nfor label, value in [('input-extreme',np.linalg.norm(w,axis=1)),('paired-extreme',abs(a['_readout'](w)[:,-1]))]+[(f'channel{k}{side:+d}',side*w[:,k]) for k in range(4) for side in (-1,1)]:\\n    i=np.argsort(value); splits.append((label,i[:-12],i[-12:]))\\n\\ndef check(out,n):\\n    y,t,d=[out[k] for k in ('y_hat','state_pred','diagnostics_vec')];\\n    assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in (y,t,d));\\n    assert y.shape==(n,) and t.shape==(n,len(times)) and d.shape==(4,)\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()],atol=1e-13,rtol=1e-13)\\n    return y,t\\n\\nworst=[]\\nfor label,i,j in splits:\\n    train={k: v[i] for k,v in tr.items() if k!='summary'}\\n    y, t=train['y'],train['traj']; train['summary']=np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]);\\n    yh, th=check(solve(dict(s,train=train,test={'x':x[j]})),len(j));\\n    em=abs(yh-tr['y'][j]); tm=abs(th-tr['traj'][j]); worst.append((em.mean(),tm.mean(),tm.mean(0).max()))\\n    print(label, 'y MAE', round(em.mean(),6), 'max y', round(em.max(),6), 'traj MAE',round(tm.mean(),6),'worst horizon',round(tm.mean(0).max(),6))\\nassert max(row[0] for row in worst)<=.038\\nfull=check(solve(s),len(s['test']['x'])); check(solve(dict(s,test={'x':s['test']['x'][:1]})),1)\\nprint('worst slice metrics: y, state, horizon =',np.max(worst,axis=0)); print('test y range:',full[0].min(),full[0].max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch11.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine-plus-pair readout → H2 shared linear-plus-tanh index with rank-two trajectories; preliminary public 52/20 MAEs are 0.00271 for y and 0.003871 for trajectories, with worst tested scalar slice MAE 0.00486.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the rational link with the lowest first-52 residual\",\n      \"rejected_reason\": \"Its extreme-index split MAE was 0.00571 versus 0.00450 for tanh with the same intercept convention.\"\n    },\n    {\n      \"option\": \"Replace rank-two temporal prediction with a fixed analytic time basis\",\n      \"rejected_reason\": \"The tested bases leave more coefficient residual than the empirical rank-two basis, without a demonstrated validation improvement.\"\n    }\n  ],\n  \"rationale\": \"Write the validated structural model as a standalone module, then run the official schema validator and an isolated check of the exact artifact on the prescribed split, channel tails, and each trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1fab2761b47b4ec734d5123a283b17e9eacb8151c12923a6862c1c727fcb5a3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40094.87,
+      "usage_known": true,
+      "prompt_tokens": 34914,
+      "cached_tokens": 12672,
+      "completion_tokens": 1748
+    }
+  ]
+}

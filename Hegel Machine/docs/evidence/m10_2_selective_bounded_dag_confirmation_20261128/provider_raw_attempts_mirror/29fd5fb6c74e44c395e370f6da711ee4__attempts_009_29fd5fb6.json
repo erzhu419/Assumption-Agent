@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "29fd5fb6c74e44c395e370f6da711ee4",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:56:59.351680+00:00",
+  "ended_at_utc": "2026-11-28T15:57:35.081250+00:00",
+  "request_sha256": "20421e6d3aa97d722c4ba374e0f2b96d209017a1317d3bac83971aef7de52abd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58159,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38252,
+    "cached_tokens": 12672,
+    "completion_tokens": 1364
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cd /holdout_task; sed '/^def _rational_panel/,$d' /tmp/hegel_continual_archive/conf_m102_a02_batch_09_solver.py > batch_solver.py; cat >> batch_solver.py <<'PY'\\ndef _quadratic(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return np.column_stack((_aff(x), x[:, i]*x[:, j]))\\n\\n\\ndef _response(x, y, q):\\n    f, fq = _quadratic(x), _quadratic(q)\\n    def gate(z, p):\\n        h = z[:, 2] + z[:, [0,1,3]] @ p[:3] + p[3]\\n        return _aff(z) * np.tanh(p[4]*h)[:, None]\\n    reg = np.diag(np.r_[np.zeros(f.shape[1]), np.full(5, .012)])\\n    target = np.r_[y, np.zeros(len(reg))]\\n    def design(p):\\n        return np.vstack((np.column_stack((f, gate(x,p))), reg))\\n    def residual(p):\\n        d = design(p)\\n        return d @ _ls(d, target) - target\\n    starts = [[-.5,-.15,-.12,0,1.8], [.5,0,0,0,1], [0,1,-1,0,1], [0,-1,1,0,1], [0,0,0,.7,1], [0,0,0,-.7,1], [-1,0,0,0,3]]\\n    fit = min((least_squares(residual, p, bounds=([-3,-3,-3,-2,.035],[3,3,3,2,12]), max_nfev=100) for p in starts), key=lambda p:p.cost)\\n    return np.column_stack((fq, gate(q,fit.x))) @ _ls(design(fit.x), target)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    c = _calibrate(study['panel_a'])\\n    x = _inverse(train['x'], c)\\n    q = _inverse(study['test']['x'], c)\\n    y = _response(x, np.asarray(train['y']), q)\\n    state = _aff(q) @ _ls(_aff(x), np.asarray(train['traj']))\\n    last = state[:, -1]\\n    diagnostics = np.array([y.mean(), y.std(), last.mean(), last.std()]) if len(y) else np.zeros(4)\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': diagnostics}\\nPY\\ncat > /tmp/verify11.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\np='/holdout_task/'\\nsp=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj'];\\nx=m._inverse(tr['x'],m._calibrate(s['panel_a']));print('state singular values',np.linalg.svd(T,compute_uv=False)); print('times',s['eval_times']); print('state affine coefficients',m._ls(m._aff(x),T).round(5));\\nI=np.arange(len(y)); splits=[('52/20',I)]+[(f'random_{k}',np.random.default_rng(k).permutation(I)) for k in range(12)]+[(f'{name}_extreme_{h}',np.argsort(z)[::h]) for name,z in [('norm',np.linalg.norm(x,axis=1)),('ridge',x@np.array([-.52,-.15,1.,-.12]))] for h in [1,-1]]\\nfor nm,i in splits:\\n a,b=i[:52],i[52:]; q=dict(s,train=dict(x=tr['x'][a],y=y[a],traj=T[a],summary=np.array([y[a].mean(),y[a].std(),T[a,-1].mean(),T[a,-1].std()])),test={'x':tr['x'][b]}); r=m.solve_batch(q); e=abs(r['y_hat']-y[b]); f=abs(r['state_pred']-T[b]); print(nm, 'scalar MAE/max',e.mean(),e.max(),'traj MAE/worst time',f.mean(),f.mean(0).max())\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 /holdout_task/validate_public_schema.py; python3 -I /tmp/verify11.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 (nonlinear calibration) → H2 (quadratic readout plus one tanh-gated affine term); exploratory scalar 52/20 MAE is 0.00825 and worst across four splits is 0.01184.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Use the panel-C product readout\",\"rejected_reason\":\"It passed the prescribed split narrowly but reached 0.07658 MAE on an alternate split.\"}],\n  \"rationale\":\"Save the simpler single-gate candidate and verify its scalar and trajectory predictions independently, including holdouts concentrated at extremes of the calibrated coordinates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e13d0ac224c61cc90f1cbf5ca0de08394c21c76767143ca4910b454dff79e36c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36528.37,
+      "usage_known": true,
+      "prompt_tokens": 38252,
+      "cached_tokens": 12672,
+      "completion_tokens": 1364
+    }
+  ]
+}

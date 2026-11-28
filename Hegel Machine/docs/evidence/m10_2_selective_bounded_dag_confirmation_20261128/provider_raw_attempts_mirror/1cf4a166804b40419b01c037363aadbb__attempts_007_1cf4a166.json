@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1cf4a166804b40419b01c037363aadbb",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:01:03.309052+00:00",
+  "ended_at_utc": "2026-11-28T15:01:34.949933+00:00",
+  "request_sha256": "bebf38e964519eea8112c1e245dd34c91a0028386840d520fc18ee50416c6fe5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47711,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34353,
+    "cached_tokens": 12672,
+    "completion_tokens": 1314
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/dict.py <<'PY'\\nexec(open('/tmp/dag.py').read().split('ops=')[0])\\nfrom itertools import combinations, product\\nfrom scipy.sparse.linalg import svds\\nN=52\\nW={'z':z,'L':L(z),'Q':Q(z),'R':R(z),'L0':z@B[1:]}\\nZ=np.c_[y,ts@np.linalg.pinv(H.T)]\\nDct={}\\ndef add(name,w):\\n w=np.asarray(w).reshape(len(z),-1)\\n for j,v in enumerate(w.T):\\n  if v.std()>1e-8:Dct[f'{name}[{j}]']=v\\nfor n,w in W.items():\\n add(n,w);add(n+'^2',w*w);add(n+'^3',w**3)\\n for p in [.625,1.25,1.8,2.4,3.6,4.8,6.0]:\\n  for name,fn in [('s',np.sin),('c',np.cos),('t',np.tanh),('r', lambda a:1/(1+a*a))]:add(f'{name}{p}({n})',fn(w*p))\\n for k,l in combinations(range(4),2):\\n  add(f'{n}{k}*{l}',w[:,k]*w[:,l])\\n  for a in [-1,1,-.5,.5,-2,2]:\\n   v=w[:,k]+a*w[:,l]\\n   for p in [1.25,2.4,3.6,4.8]:\\n    for name,fn in [('s',np.sin),('c',np.cos),('t',np.tanh),('r',lambda a:1/(1+a*a))]: add(f'{name}{p}({n}{k}+{a}*{l})',fn(p*v))\\n for ids in combinations(range(4),3):add(f'{n}prod{ids}',w[:,ids].prod(1))\\nfor n,m in combinations(W,2):\\n w,v=W[n],W[m]; prod=(w[:,:,None]*v[:,None,:]).reshape(len(w),-1);add(n+'*'+m,prod);add(n+'dot'+m,np.sum(w*v,1));\\n for a in [.22,.5,1.25,2.4]:\\n  add(f'{n}/(1+{a}{m}^2)',(w[:,:,None]/(1+a*v[:,None,:]**2)).reshape(len(w),-1));add(f'{n}*tanh({a}{m})',(w[:,:,None]*np.tanh(a*v[:,None,:])).reshape(len(w),-1))\\nfor n in ['z','L','Q','R']:\\n w=W[n]\\n for j in range(4):\\n  for th in [-.4,0,.4]:\\n   for a in [1.25,2.4,5,10,30]:\\n    g=np.tanh(a*(w[:,j]-th))\\n    for m in ['z','L','Q','R']:\\n     v=W[m];add(f'{m}*g({n}{j},{th},{a})',v*g[:,None]);\\nnames=list(Dct);F=np.array(list(Dct.values())).T; F=(F-F[:N].mean(0))/F[:N].std(0); F0=F[:N];\\nprint('dict',F.shape)\\nfor j in range(4):\\n Y=Z[:,j]; sel=[]; residual=Y[:N]-Y[:N].mean();basis=np.ones((N,1))/np.sqrt(N); best=[]\\n for k in range(13):\\n  P=F0-basis@(basis.T@F0); den=np.linalg.norm(P,axis=0);scores=abs(residual@P)/np.maximum(den,1e-8); ix=np.argmax(scores); sel.append(ix);basis=np.c_[basis,P[:,ix]/den[ix]]; X=ones(F[:,sel]); e=Y-X@ls(X[:N],Y[:N]); residual=e[:N]; best.append((names[ix],np.mean(abs(e[:N])),np.mean(abs(e[N:]))))\\n print(j,best)\\n# Group nonlinear fits: pairwise products, orthogonal branch interactions and saturated projections.\\nfor j in range(4):\\n Y=Z[:,j]; print('leading single',j,[(names[k],round((Y[:N]-Y[:N].mean())@F0[:,k]/N,4)) for k in np.argsort(abs((Y[:N]-Y[:N].mean())@F0))[-12:][::-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dict.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace linear branch fusion with sparse signed, gated, and rational interactions; the best y MAE so far is 0.160 from a kernel baseline.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Screen nonlinear interactions against each temporal amplitude and the scalar target to identify which missing terms explain both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "026f2236d0e59c6fb846785a0fc6dd94bd9edc7154a6d3f1d4869bda015415f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31639.04,
+      "usage_known": true,
+      "prompt_tokens": 34353,
+      "cached_tokens": 12672,
+      "completion_tokens": 1314
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6c7435ef073448e88bb8b37e7796b17",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:50.161259+00:00",
+  "ended_at_utc": "2026-11-28T15:22:24.290212+00:00",
+  "request_sha256": "a8726a72e9a54819db7e0d8fa32501e197f83248bc5a182107df56f52aa8791f",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 63731,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37625,
+    "cached_tokens": 5504,
+    "completion_tokens": 1332
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/node_01.py')\\ns=p.read_text(); start=s.index('def _design'); s=s[:start]+'''def _design(w):\\n    affine_sine = np.column_stack((np.ones(len(w)), w, np.sin(3.0*w)))\\n    products = [w[:, i]*w[:, j] for i, j in combinations_with_replacement(range(w.shape[1]), 2)]\\n    return np.column_stack((affine_sine, *products))\\n\\n\\ndef _ridge(z, y, penalty):\\n    return np.linalg.solve(z.T @ z + penalty*np.eye(z.shape[1]), z.T @ y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, raw = inputs['__input__'], inputs['node_00']\\n    b = _calibrate(study['panel_a'])\\n    x = _invert(raw['a'][:, 1:], b)\\n    z = _design(x)\\n    zt = _design(_invert(raw['a_test'][:, 1:], b))\\n    train = study['train']\\n    width = 1 + 2*x.shape[1]\\n    endpoint = _ridge(z, train['y'], .002)\\n    trajectory = _ridge(z[:, :width], train['traj'], .001)\\n    coef = np.zeros((z.shape[1], 1 + trajectory.shape[1]))\\n    coef[:, 0] = endpoint\\n    coef[:width, 1:] = trajectory\\n    return {'test_features': zt, 'coefficients': coef}\\n'''; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/final05.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nbase='/holdout_task/'\\nf=[runpy.run_path(base+p)['run_node'] for p in ('_frozen_nodes/node_00.py','node_01.py','node_02.py')]\\ns=pickle.load(open(base+'public_batch.pkl','rb'))[0]['study']; t=s['train']; n=len(t['x']); i=np.arange(n); r=np.random.default_rng(503)\\nm=runpy.run_path(base+'node_01.py'); w=m['_invert'](t['x'],m['_calibrate'](s['panel_a']))\\ncuts=[i[j::4] for j in range(4)]+[r.permutation(n)[:20] for _ in range(24)]+[i[-20:],np.argsort(np.linalg.norm(w,axis=1))[-14:]]\\nerrs=[]; per_time=[]\\nfor te in cuts:\\n tr=np.setdiff1d(i,te); a={**s,'train':{k:t[k][tr] for k in ('x','y','traj')},'test':{'x':t['x'][te]}}\\n raw=f[0]({'__input__':a}); fit=f[1]({'__input__':a,'node_00':raw}); out=f[2]({'node_00':raw,'node_01':fit}); yt=out['y_hat']; p=out['state_pred']; dt=abs(p-t['traj'][te]);\\n assert np.allclose(out['diagnostics_vec'], [yt.mean(),yt.std(),p[:,-1].mean(),p[:,-1].std()]); errs.append([abs(yt-t['y'][te]).mean(),dt.mean()]); per_time.append(dt.mean(0))\\nprint('Final artifact: 30 split maximum MAEs',np.max(errs,axis=0),'radial',errs[-1],'per-time maxima',np.max(per_time,axis=0)); assert np.max(errs) < .038; assert np.max(per_time) < .038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/final05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the shared quadratic sine/cosine basis with quadratic-plus-sine for the endpoint and affine-plus-sine for the trajectory; paired stress tests gave worst-split MAEs of 0.02328 and 0.01418, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the shared quadratic sine/cosine readout\",\n      \"rejected_reason\": \"The smaller target-specific bases improved both worst-split MAEs on the same 30 holdouts.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler readouts only after running the public evaluator and repeating the stress test end to end on the exact saved files.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a8fea40aa7b162d6c68b807214afb14606641a30ddc771e8b00768c5d9a1867d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34127.49,
+      "usage_known": true,
+      "prompt_tokens": 37625,
+      "cached_tokens": 5504,
+      "completion_tokens": 1332
+    }
+  ]
+}

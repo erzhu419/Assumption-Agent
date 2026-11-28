@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50e775ba59664ffe86983deb95cf7014",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:42.382534+00:00",
+  "ended_at_utc": "2026-11-28T15:36:02.690732+00:00",
+  "request_sha256": "062bad8c8ff06ca1f7df1642b8daa848c4b74e49191d7993b260617e3456721d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 47915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31915,
+    "cached_tokens": 12672,
+    "completion_tokens": 805
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1; python3 -I /holdout_task/test_dag_candidate.py; python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom copy import deepcopy\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\nf=runpy.run_path(root+'node_00.py')['run_node']; g=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']\\nt=s['train']; n=len(t['x']); ix=np.arange(n)\\nfolds=[(f'contiguous_{j}',v) for j,v in enumerate(np.array_split(ix,4))]\\nfolds += [(f'shuffled_{j}',v) for j,v in enumerate(np.array_split(np.random.default_rng(11).permutation(n),4))]\\nf0=f({'__input__':s}); radii=np.linalg.norm(f0['z'][:n],axis=1)\\nfolds += [('outer_radius',np.argsort(radii)[-18:])]\\nworst=np.zeros(2)\\nfor name,v in folds:\\n    a=np.setdiff1d(ix,v); st=deepcopy(s)\\n    y,tr=t['y'][a],t['traj'][a]\\n    st['train']={'x':t['x'][a],'y':y,'traj':tr,'summary':np.array([y.mean(),y.std(),tr[:,-1].mean(),tr[:,-1].std()])}\\n    st['test']={'x':t['x'][v]}; p=f({'__input__':st}); assert set(p)=={'z','L','Q','R','product','cosine'} and all(isinstance(x,np.ndarray) and x.shape[0]==n and np.isfinite(x).all() for x in p.values())\\n    out=g({'__input__':st,'node_00':p}); er=np.array([abs(out['y_hat']-t['y'][v]).mean(),abs(out['state_pred']-t['traj'][v]).mean()]); worst=np.maximum(worst,er)\\n    print(name, *(f'{e:.6f}' for e in er))\\nprint('Worst supplemental split MAE: y, trajectory:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic cubic calibration → H2 robust opposite-coordinate sinusoidal calibration with rational branches; official holdout MAE is 0.016274 for y and 0.019277 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add further calibration terms immediately\",\n      \"rejected_reason\": \"The revised model clears both official thresholds by a wide margin; test broader splits before adding complexity.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the accepted artifact on contiguous, shuffled, and large-radius holdouts, keeping each validation fold's labels out of the upstream and frozen-sink computations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "947a6bbb7d524ac09c05f84c3b1f1fc8558bf3d100c3d067917964eababdb5c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20847.07,
+      "usage_known": true,
+      "prompt_tokens": 31915,
+      "cached_tokens": 12672,
+      "completion_tokens": 805
+    }
+  ]
+}

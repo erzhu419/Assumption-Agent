@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d14bdddcdda5450eb7fa9eeb54b2ab04",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:47.978157+00:00",
+  "ended_at_utc": "2026-11-28T15:12:26.862264+00:00",
+  "request_sha256": "b7a1e4fd71ed1bec58d5c69471c4aff90149cfd0386472853d6a11ecd6cfdf49",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59360,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33324,
+    "cached_tokens": 5504,
+    "completion_tokens": 1572
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refcheck.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=m._calibrate(s['panel_a'],tr['x']); t=s['eval_times']; T=np.c_[-np.expm1(-1.813*t),t/(1+.405*t)]; Y=np.c_[tr['y'],tr['traj']]; Z=np.c_[tr['y'],tr['traj']@np.linalg.pinv(T.T)]\\ndef panel(p,key,g,starts):\\n u,v=s[p]['u'],s[p][key]\\n def calc(q):\\n  a=np.c_[np.ones(len(u)),g(u,*q)]; w=np.linalg.lstsq(a,v,rcond=None)[0]; return a@w-v,w,a\\n o=min((least_squares(lambda q:calc(q)[0].ravel(), q,max_nfev=300) for q in starts),key=lambda o:o.cost); r,w,a=calc(o.x); rm=np.sqrt(np.mean((r/(1-(a*np.linalg.pinv(a).T).sum(1))[:,None])**2));return (rm,o.x,lambda xx:np.c_[np.ones(len(xx)),g(xx,*o.x)]@w)\\ncs=panel('panel_c','v1',lambda z,k,a,b:z*abs(z)/(1+np.exp(k)*abs(z))+a*z**3+b*z,[[-.42,-.02,-1.08]]); print('C',cs[:2]); c=cs[2]\\nbf={\\n 'erf':(lambda z,k,a:erf(np.exp(k)*z)+a*z,[[.38,-1.54]]),\\n 'ratquad':(lambda z,k,a,b:z**3/(1+np.exp(k)*z**4)+a*z**3+b*z,[[-.1,.57,-.16]]),\\n 'tancubed':(lambda z,k,a,b:np.tanh(np.exp(k)*z**3)+a*z**3+b*z,[[.49,1.3,-.29]]),\\n 'soft':(lambda z,k,a,b:z*abs(z)/(1+np.exp(k)*abs(z))+a*z**3+b*z,[[0,0,-1],[-1,.2,-.2]]),\\n 'ratmix':(lambda z,k,l,a,b:z**3/(1+np.exp(k)*z*z+np.exp(l)*z**4)+a*z**3+b*z,[[0,0,.5,-.16],[-4,0,.5,-.16]]),\\n 'tanhmix':(lambda z,k,a,b,c:np.tanh(np.exp(k)*z+a*z**3)+b*z**3+c*z,[[0,0,0,-1],[0,1,0,-1],[-2,1,.4,-.3],[.4,-1,2,-1]]),\\n 'erfmix':(lambda z,k,a,b,c:erf(np.exp(k)*z+a*z**3)+b*z**3+c*z,[[0,0,0,-1],[0,1,0,-1],[-2,1,.4,-.3],[.4,-1,2,-1]]),\\n 'sinmix':(lambda z,k,a,b,c:np.sin(np.exp(k)*z+a*z**3)+b*z**3+c*z,[[0,0,0,-1],[0,1,0,-1],[-2,1,.4,-.3],[.4,-1,2,-1]]),\\n 'poly':(lambda z,*a:z+sum(k*z**(2*j+3) for j,k in enumerate(a)),[[-1,1,0,0,0],[-2,0,0,0,0]]),\\n 'tanhabs':(lambda z,k,a,b:z*np.tanh(np.exp(k)*abs(z))+a*z**3+b*z,[[0,0,-1]])}\\nrng=np.random.default_rng(417); splits=[np.arange(72)]+[rng.permutation(72) for j in range(24)]+[np.argsort(x[:,j]*sgn) for j in range(4) for sgn in [-1,1]]\\ndef scores(b):\\n for jc,ch in enumerate([c(b),c(b),c(b)]):\\n  E=[]\\n  for p in splits:\\n   i,j=p[:52],p[52:]; X=x/x[i].std(0); C=ch/ch[i].std(0); A=m._design(X,C)\\n   if jc==1:A=np.c_[A[:,:9],A[:,17:]]\\n   if jc==2:A=np.c_[A[:,:13],A[:,17:]]\\n   a=A[i]; w=np.linalg.solve(a.T@a+.003*np.eye(a.shape[1]),a.T@Z[i]); d=A[j]@w; e=np.abs(np.c_[d[:,0],d[:,1:]@T.T]-Y[j]); E.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n  e=np.array(E); print(jc,e[0].round(5),e[1:25].max(0).round(5),e[25:].max(0).round(5),end=' ')\\n print()\\nfor k,(g,starts) in bf.items():\\n r,q,b=panel('panel_b','v',g,starts); print(k,r,q,end=' ');scores(b(x))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refcheck.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cross-block quadratic with approximate panel maps → shared rational C₁ map and refined B; previous worst coordinate-tail MAE is about 0.073.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"C₁ panel error is near the measurement floor with a shared rational map. Compare B laws using panel measurements, then check whether improvements carry through to both readouts and the terminal state.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "41db81ca07a4585669cb20d0894341d696f8867d0db865cff3582944c6e99187",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39285.88,
+      "usage_known": true,
+      "prompt_tokens": 33324,
+      "cached_tokens": 5504,
+      "completion_tokens": 1572
+    }
+  ]
+}

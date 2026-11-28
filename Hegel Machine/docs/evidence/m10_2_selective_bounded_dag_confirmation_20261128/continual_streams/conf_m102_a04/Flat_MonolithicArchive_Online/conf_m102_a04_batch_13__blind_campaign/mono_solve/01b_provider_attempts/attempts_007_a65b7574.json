@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a65b75748f8343f391abe576e8f900a5",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:45.904161+00:00",
+  "ended_at_utc": "2026-11-28T15:43:16.344772+00:00",
+  "request_sha256": "768020cc4facb9c071602afba891c32a213b4fe90aa8f4cc313c39aa3b6e8ad8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47506,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31002,
+    "cached_tokens": 12672,
+    "completion_tokens": 1286
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout13.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nfrom conf_m102_a04_batch_00_solver import _align,lin,one,_time_basis\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; p=s['panel_c']; u=p['u']; a,b=_align(s['panel_a']); z=(tr['x']-a)/b; i,j=np.triu_indices(4,1)\\nnp.set_printoptions(precision=5,suppress=True)\\ndef profile(fn,v,q,bounds):\\n def r(q):\\n  f=fn(u,q);return (f@lin(f,v)-v).ravel()\\n q=least_squares(r,q,bounds=bounds,gtol=1e-12).x;w=lin(fn(u,q),v);print('panel',q,np.std(r(q)),w,sep='\\\\n');return fn(z,q)@w\\ng=profile(lambda u,q:one(u/(1+q[0]*abs(u))+q[1]*u),p['v1'],[.83,-.16],([.3,-.4],[2,.4]))\\nh=profile(lambda u,q:one(np.c_[np.tanh(q[0]*u),u[:,i]*u[:,j]]),p['v2'],[1.05],(.4,2.))\\np=s['panel_b']; wb=lin(one(p['u']),p['v']); B=one(z)@wb; print('B residual',np.std(one(p['u'])@wb-p['v']),wb)\\ncross=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nsq=lambda a:np.c_[a*a,a[:,i]*a[:,j]]\\nF={'gh':np.c_[g,h],'rawgh':np.c_[z,g,h],'ghdot':np.c_[g,h,(g*h).sum(1)],'ghdiag':np.c_[g,h,g*h],'ghall':np.c_[g,h,cross(g,h)],'ghsq':np.c_[g,h,sq(g),sq(h)],'ghpoly':np.c_[g,h,cross(g,h),sq(g),sq(h)],'rawghall':np.c_[z,g,h,cross(g,h)],'rawghpoly':np.c_[z,g,h,cross(g,h),sq(g),sq(h)],'rawgh+rawsq':np.c_[z,g,h,sq(z)],'rawgh+rawcross':np.c_[z,g,h,cross(z,g),cross(z,h)],'rawghB':np.c_[z,g,h,B],'ghBdot':np.c_[g,h,B,(g*h).sum(1),(g*B).sum(1),(h*B).sum(1)]}\\nrng=np.random.default_rng(7); splits=[np.arange(72)]+[rng.permutation(72) for _ in range(8)]; t=s['eval_times']; out=[]\\nfor nm,f in F.items():\\n for reg in (1e-7,.0001,.003,.03,.3):\\n  M=[]\\n  for perm in splits:\\n   a,b=perm[:52],perm[52:]; A=(f-f[a].mean(0))/np.maximum(f[a].std(0),1e-6); K=1+A@A.T; fb=_time_basis(t,tr['traj'][a]); Y=np.c_[tr['y'][a],lin(fb,tr['traj'][a].T).T]; pred=K[np.ix_(b,a)]@np.linalg.solve(K[np.ix_(a,a)]+reg*np.eye(len(a)),Y); e=abs(pred[:,1:]@fb.T-tr['traj'][b]); M.append([np.mean(abs(pred[:,0]-tr['y'][b])),e.mean(),e.mean(0).max()]);\\n  M=np.array(M);out.append((nm,reg,*M[0],*M.max(0),*M.mean(0)))\\nfor k in (2,3,8,9):\\n print('rank',k);print(*sorted(out,key=lambda x:x[k])[:13],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: replace the curvature surrogate with tanh plus pairwise products (panel leave-one-row-out proxy RMSE 0.00268) and test separate scalar and temporal readouts; the archived trajectory MAE remains 0.04098.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the corrected panel with the archived kernel unchanged\",\n      \"rejected_reason\": \"Comparing explicit interactions and testing multiple splits can show whether the readout itself is also missing terms.\"\n    }\n  ],\n  \"rationale\": \"The panel data strongly favor tanh plus pairwise products. Test whether the corrected operator improves both supervised outputs and the worst evaluation horizon before committing to a solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "816e5ab43d4c942f1cf3f354d8c0242a5b42e89139b30a095a2bdd0a35d8865f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30439.46,
+      "usage_known": true,
+      "prompt_tokens": 31002,
+      "cached_tokens": 12672,
+      "completion_tokens": 1286
+    }
+  ]
+}

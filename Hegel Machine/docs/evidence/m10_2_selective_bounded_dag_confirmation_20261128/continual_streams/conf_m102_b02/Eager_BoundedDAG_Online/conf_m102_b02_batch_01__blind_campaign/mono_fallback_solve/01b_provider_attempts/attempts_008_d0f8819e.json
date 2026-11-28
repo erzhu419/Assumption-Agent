@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0f8819ea3804fb3892a9ffdbd0e6614",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:34.399680+00:00",
+  "ended_at_utc": "2026-11-28T15:11:03.885906+00:00",
+  "request_sha256": "900d362061c149c2287cb58f66738daba9b603f632672055aeccdcac240c5c76",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58799,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39111,
+    "cached_tokens": 12672,
+    "completion_tokens": 1232
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | head -23; cat >/tmp/additive.py <<'PY'\\nimport numpy as np,pickle,itertools as it\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];d=np.load('/tmp/coords.npz');z=d['z'];b=d['erf0']; Y=np.c_[s['train']['y'],s['train']['traj']];F=[(np.arange(52),np.arange(52,72))]+list(KFold(5,shuffle=True,random_state=901).split(z));rows=[]\\ndef ker(v,h,style):\\n r=abs(v[:,None]-v)*h\\n if style==0:return np.exp(-r*r/2)\\n if style==1:return (1+r+r*r/3)*np.exp(-r)\\n if style==2:return 1/(1+r*r)\\ndef powers(a,h,style):return np.array([ker(v,h,style) for v in a.T])\\nfor use in ['z','b','zb','zzb','wz','aug','bb','bz','mix']:\\n if use=='z':a=z\\n if use=='b':a=b\\n if use=='zb':a=np.c_[z,b]\\n if use=='zzb':a=np.c_[z,z,b]\\n if use=='wz':a=np.c_[z,b*.5]\\n if use=='aug':a=np.c_[z,b,z+b,z-b]\\n if use=='bb':a=np.c_[b,b[:,0]+b[:,1],b[:,1]+b[:,3],b[:,2]-b[:,0],b[:,3]-b[:,1]]\\n if use=='bz':a=np.c_[z,d['gauss0']]\\n if use=='mix':a=np.c_[z,b,np.tanh(2*z),np.tanh(2*b)]\\n st=a[:52].std(0);v=a/st;L=v@v.T/v.shape[1]\\n for h,style in it.product([.25,.5,1,2,3,4,6],[0,1]):\\n  G=powers(v,h,style);k=G.mean(0);pair=k*k-(G*G).sum(0)/len(G)**2;R=np.prod(G,axis=0)**(1./len(G));\\n  for ix,K in enumerate([1+L+k,1+L+k+pair,1+.1*L+k+pair+k**3,1+.1*L+k+R,1+.1*L+k+.2*pair,1+.1*L+k+pair+R,(1+L)**2+2*k+2*pair]):\\n   for reg in [1e-6,1e-4,.001,.01]:\\n    e=[]\\n    for i,j in F:\\n     p=K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+reg*np.eye(len(i)),Y[i]);r=abs(p-Y[j]);e.append([r[:,0].mean(),r[:,1:].mean()]);\\n    e=np.array(e);rows.append((use,h,style,ix,reg,*e[0],*e[1:].mean(0),*e[1:].max(0)))\\nfor ind in [(5,6),(7,8),(5,),(6,)]:\\n print('RANK',ind);seen=set()\\n for v in sorted(rows,key=lambda q:sum(q[k] for k in ind)):\\n  if v[0] in seen:continue\\n  seen.add(v[0]);print(v[:5],np.round(v[5:],5))\\n  if len(seen)==6:break\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/additive.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse fixed-library regression → H2 additive and pairwise smooth laws on calibrated and Panel B coordinates; best prior 52/20 MAEs are 0.0501 for y and 0.0563 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote fixed-dictionary orthogonal matching pursuit\",\"rejected_reason\":\"The selected terms changed with the input representation and did not improve the held-out errors.\"}],\"rationale\":\"Test whether restricting nonlinear regression to low-order coordinate interactions improves both the prescribed split and shuffled folds, and inspect the archived formulas for reusable operator structure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c58756b8bba569f9325cbe002e27909ac53d04129b174a5c9558ef66c91a148d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29483.82,
+      "usage_known": true,
+      "prompt_tokens": 39111,
+      "cached_tokens": 12672,
+      "completion_tokens": 1232
+    }
+  ]
+}

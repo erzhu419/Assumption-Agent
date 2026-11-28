@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "812a24caa531469c83a532871e496adf",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:59.309132+00:00",
+  "ended_at_utc": "2026-11-28T15:04:37.215520+00:00",
+  "request_sha256": "11f2881080278062ebfc31dd898211302f114f41a7b3e82db63f2dbf8b6fe686",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69565,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42829,
+    "cached_tokens": 12672,
+    "completion_tokens": 1590
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().split('def _design')[0]\\np.write_text(s+'''def _design(x, kind):\\n    if kind == 'gaussian':\\n        sat = x * np.exp(-x*x)\\n    else:\\n        sat = x / (1 + .75*x*x)\\n    i, j = np.triu_indices(x.shape[1], 1)\\n    a, b = x[:, i]*sat[:, j], sat[:, i]*x[:, j]\\n    core = np.c_[np.ones(len(x)), x, sat]\\n    extra = np.c_[x*x, x[:, i]*x[:, j], (a+b)/2, (a-b)/2,\\n                  sat[:, i]*sat[:, j], x*sat]\\n    return core, extra\\n\\n\\ndef _ridge(train, test, response, penalty):\\n    core, extra = train\\n    a = np.c_[core, extra]\\n    q = np.c_[test[0], test[1]]\\n    reg = np.diag(np.r_[np.zeros(core.shape[1]),\\n                        np.full(extra.shape[1], np.sqrt(penalty))])\\n    coefs = np.linalg.lstsq(np.r_[a, reg],\\n                            np.r_[response, np.zeros((len(reg), response.shape[1]))],\\n                            rcond=None)[0]\\n    return q @ coefs\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    shift, slope = _calibration(study['panel_a'])\\n    x = (tr['x']-shift)/slope\\n    q = (study['test']['x']-shift)/slope\\n    B = _time_basis(np.asarray(study['eval_times']), np.asarray(tr['traj']))\\n    amp = np.linalg.lstsq(B, tr['traj'].T, rcond=None)[0].T\\n    y = np.zeros(len(q))\\n    z = np.zeros((len(q), len(B)))\\n    # Average two nearby response shapes because sparse panel measurements\\n    # distinguish the odd nonlinear response more reliably than its tails.\\n    for kind, weight in [('gaussian', .65), ('rational', .35)]:\\n        A, Q = _design(x, kind), _design(q, kind)\\n        y += weight * _ridge(A, Q, tr['y'][:, None], .1)[:, 0]\\n        z += weight * (_ridge(A, Q, amp, 1.) @ B.T)\\n    return {'y_hat':y, 'state_pred':z,\\n            'diagnostics_vec':np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()])}\\n''')\\nPY\\ncat >/tmp/verify_batch.py <<'PY'\\nimport sys, pickle, importlib.util\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch, _calibration\\nspec=importlib.util.spec_from_file_location('baseline','/tmp/baseline_solver.py')\\nbaseline=importlib.util.module_from_spec(spec); spec.loader.exec_module(baseline)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,z=[tr[k] for k in ('x','y','traj')]; b,d=_calibration(s['panel_a']); X=(x-b)/d\\nfolds=[np.arange(len(x))]+[np.random.default_rng(i).permutation(len(x)) for i in range(1,41)]\\nfor f in [baseline.solve_batch,solve_batch]:\\n    v=[]\\n    for q in folds:\\n        a,c=q[:52],q[52:]; r=f(dict(s,train=dict(x=x[a],y=y[a],traj=z[a]),test={'x':x[c]})); ey=abs(r['y_hat']-y[c]); ez=abs(r['state_pred']-z[c]); m=abs(X[c]).max(1)>=1\\n        v.append([ey.mean(),ez.mean(),ez.mean(0).max(),ey[m].mean(),ez[m].mean()])\\n    v=np.array(v)\\n    print(f.__module__,'columns y, traj, worst timestamp, edge y, edge traj');print('52/20',v[0]); print('resplit 1:12 max',v[:12].max(0));print('new resplits max',v[12:].max(0)); print('new resplits mean',v[12:].mean(0))\\n    if f is solve_batch:\\n        assert np.max(v[0,:3]) <= .038\\n        o=f(s); yy,zz=o['y_hat'],o['state_pred']; assert yy.shape==(36,) and zz.shape==(36,8)\\n        assert all(np.isfinite(k).all() for k in o.values()); np.testing.assert_array_equal(o['diagnostics_vec'],[yy.mean(),yy.std(),zz[:,-1].mean(),zz[:,-1].std()])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (additive saturation) -> H2 (regularized Gaussian and rational coordinate interactions); the Gaussian challenger scored 0.0162 scalar and 0.0106 trajectory MAE on 52/20, with worst high-coordinate scalar MAE of 0.0282 across resplits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer panel B output modes directly\",\n      \"rejected_reason\": \"Even with raw coordinate features, the Gaussian transfer gave 0.0250 scalar MAE and a worst high-coordinate scalar MAE of 0.0428.\"\n    }\n  ],\n  \"rationale\": \"Promote regularized interactions to reduce the baseline's high-coordinate error. Average the two well-supported response shapes, then compare the saved solver against the baseline on the prescribed split and 29 additional resplits, and verify the output contract in isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "63914d5f23527ba55c42bcb7e8847a89c44e8028013784ec902763f7c7f5c328",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38400.8,
+      "usage_known": true,
+      "prompt_tokens": 42829,
+      "cached_tokens": 12672,
+      "completion_tokens": 1590
+    }
+  ]
+}

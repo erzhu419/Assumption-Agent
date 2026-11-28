@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19922848a47549a19ccc5ef2a4773b86",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:13.567481+00:00",
+  "ended_at_utc": "2026-11-28T15:55:43.083510+00:00",
+  "request_sha256": "60531a994abed7239fda777501f2daaadfe46e3121042743764e8e52279078e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40651,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27882,
+    "cached_tokens": 12672,
+    "completion_tokens": 1265
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat > /tmp/discover13.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\nls=lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\naff=lambda x: np.c_[np.ones(len(x)),x]\\np=s['panel_a']; u,v=p['u'],p['v']; one=np.ones(len(u)); rng=np.random.default_rng(1)\\nfor j in range(4):\\n z=u[:,j]; q=u[:,(j+1)%4]; r=u[:,(j-1)%4]; h=u[:,(j+2)%4]\\n for name,d in [('diag',[one,z]),('aff',[one,*u.T]),('next',[one,z,q,z*q,z**3]),('prev',[one,z,r,z*r,z**3]),('sat',[one,z,np.tanh(1.8*z),np.sin(2.4*h)]),('full',[one,*u.T,*[u[:,i]*u[:,k] for i,k in combinations_with_replacement(range(4),2)],*u.T**3])]:\\n  d=np.array(d).T; best=None\\n  for rep in range(30):\\n   ix=rng.choice(len(u),max(d.shape[1]+2,28),replace=False)\\n   for _ in range(8): ix=np.argsort(abs(d@ls(d[ix],v[ix,j])-v[:,j]))[:40]\\n   w=ls(d[ix],v[ix,j]); e=abs(d@w-v[:,j]); score=np.mean(np.sort(e)[:40]**2)\\n   if best is None or score<best[0]: best=(score,e,w)\\n  _,e,w=best; print('A',j,name,np.quantile(e,[.5,.8,.9,1]),w if name!='full' else '')\\nfor key in ('panel_b','panel_c'):\\n p=s[key]; u=p['u']; print(key,np.column_stack(list(p.values()))[:8]);\\n for k,v in p.items():\\n  if k=='u':continue\\n  print(k,'norm',np.quantile(np.linalg.norm(v,axis=1),[0,.25,.5,.75,1]),'sv',np.linalg.svd(v-v.mean(0),compute_uv=False))\\n  for name,d in [('aff',u),('dead',np.sign(u)*np.maximum(abs(u)-.35,0)**1.5),('tanh',np.tanh(1.75*u)+.30*np.sin(2.10*np.roll(u,1,axis=1))),('cross',np.c_[u[:,0]*u[:,1],u[:,0]*u[:,3],u[:,1]*u[:,2],u[:,2]*u[:,3]]),('quad',np.c_[u,*[u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)]]),('square',u*u),('sin',np.sin(2.15*u)),('cos',np.cos(2.15*u)),('asinh',np.arcsinh(2.15*u)),('rat',u/(1+.22*u*u))]:\\n   d=aff(d); cf=ls(d,v); ri=np.sqrt(np.mean((d@cf-v)**2)); H=np.sum(np.linalg.pinv(d).T*d,1); loo=np.sqrt(np.mean(((d@cf-v)/(1-H[:,None]))**2)); print(name,round(ri,5),round(loo,5))\\nt=s['eval_times']; T=s['train']['traj'];\\nfor mode in [0,1]:\\n def basis(r):\\n  B=-np.expm1(-t[:,None]*r); return np.c_[np.ones(len(t)),B] if mode else B\\n def err(r):\\n  B=basis(r);return (B@ls(B,T.T)-T.T).ravel()\\n o=least_squares(err,[.4,2],bounds=(.002,10)); B=basis(o.x); W=ls(B,T.T).T; print('rates',o.x,'rmse',np.std(o.fun),'amplitudes',W[:6]);\\n if not mode: np.save('/tmp/amps.npy',W)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/discover13.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unchanged archived graphs → H2: identify calibration, auxiliary maps, and temporal modes separately; best archived 52/20 MAEs are 0.294151 for y and 0.562348 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fit competing calibration forms with outlier trimming, test auxiliary operators by leave-one-row-out error, and profile the temporal rates independently to distinguish operator mismatch from readout mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0da435499e6fc60b982848ae3d954e2ffae489cdbd334fd557bd7e063e0f3992",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30296.23,
+      "usage_known": true,
+      "prompt_tokens": 27882,
+      "cached_tokens": 12672,
+      "completion_tokens": 1265
+    }
+  ]
+}

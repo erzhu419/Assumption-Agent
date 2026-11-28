@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f37b0ddb42b34ada9d4401dd16ea7b23",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:57:09.614076+00:00",
+  "ended_at_utc": "2026-11-28T15:57:55.103039+00:00",
+  "request_sha256": "c8367a33dbf4c4bcf33e1dbf71ccb3eed975c111822b020fa24db6ec757981b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69682,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42026,
+    "cached_tokens": 12672,
+    "completion_tokens": 1915
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/fallback08.py\\nsed '/^def _kernel/,$d' /tmp/fallback08.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _panel_b_warp(panel):\\n    \\\"\\\"\\\"Profile out the affine mixing to estimate a shared odd coordinate warp.\\\"\\\"\\\"\\n    u, v = (np.asarray(panel[k], float) for k in ('u', 'v'))\\n\\n    def warp(x, h):\\n        a,b,c,d = h\\n        return x+a*np.arctan(b*x)+d*x**3/(1+c*x*x)\\n\\n    def residual(h):\\n        A = affine(warp(u,h))\\n        return (A@fit(A,v)-v).ravel()\\n\\n    starts = [(-.45,2.15,12.,-3.3),(-.5,2.,8.,-2.),(-1.,2.,1.,.2),(-.6,1.5,2.,0.)]\\n    opt = min((least_squares(residual, h, bounds=([-8,0,0,-8],[8,10,16,8]), max_nfev=200) for h in starts), key=lambda r:r.cost)\\n    return lambda x:warp(x,opt.x)\\n\\n\\ndef _standard(x,n):\\n    return (x-x[:n].mean(0))/np.maximum(x[:n].std(0),1e-8)\\n\\n\\ndef _components(z,b,n):\\n    a,x = _standard(z,n),_standard(b,n)\\n    A,G = (q@q.T/q.shape[1] for q in (a,x))\\n    R = ((x[:,None]-x[None,:])**2+.25*(a[:,None]-a[None,:])**2)/1.25\\n    K=[np.ones_like(A),A,A*A,G,G*G,G*A]\\n    for L in (1.5,6,24):\\n        S=np.exp(-R/L)\\n        M=S.sum(2)\\n        K.extend([M/4,(M*M-(S*S).sum(2))/12])\\n        K.extend(S[:,:,i] for i in range(4))\\n        K.extend(S[:,:,i]*S[:,:,j] for i in range(4) for j in range(i))\\n    return np.array(K)\\n\\n\\ndef _profile_kernel(B,Y,n,penalty=.02):\\n    Y=np.asarray(Y).reshape(n,-1)\\n    mu=Y.mean(0)\\n    sd=np.maximum(Y.std(0),1e-8)\\n    M=(Y-mu)/sd\\n    eye=np.eye(n)\\n    p=len(B)\\n    A=np.concatenate([B[:,:n,:n],eye[None]],axis=0).reshape(p+1,-1)\\n    ref=np.r_[np.full(p,-3.),-7.]\\n    ref[0]=-1\\n\\n    def objective(q):\\n        v=np.exp(q)\\n        F=cho_factor((v@A).reshape(n,n),check_finite=False)\\n        alpha=cho_solve(F,M,check_finite=False)\\n        D=(cho_solve(F,eye,check_finite=False)-alpha@alpha.T/M.shape[1]).ravel()\\n        d=q-ref\\n        val=np.log(F[0].diagonal()).sum()+np.sum(M*alpha)/(2*M.shape[1])+penalty*(d@d)/2\\n        return val,(A@D)*v/2+penalty*d\\n\\n    O=minimize(objective,ref,jac=True,method='L-BFGS-B',bounds=[(-14,5)]*p+[(-12,-2)],options={'maxiter':160,'ftol':1e-7})\\n    v=np.exp(O.x)\\n    F=cho_factor((v@A).reshape(n,n),check_finite=False)\\n    W=(v[:-1]@B[:,n:,:n].reshape(p,-1)).reshape(-1,n)\\n    return (W@cho_solve(F,M,check_finite=False))*sd+mu\\n\\n\\ndef solve_batch(study):\\n    tr=study['train']\\n    n=len(tr['x'])\\n    z=calibrate(study['panel_a'],np.r_[tr['x'],study['test']['x']])\\n    b=_panel_b_warp(study['panel_b'])(z)\\n    B=_components(z,b,n)\\n    yh=_profile_kernel(B,tr['y'],n)[:,0]\\n    a=_standard(z,n)\\n    w=_standard(z-.4*np.sin(2.9*z),n)\\n    K=(1+(w@w.T+.1*a@a.T)/4.4)**2\\n    T=np.asarray(tr['traj'],float)\\n    m=T.mean(0)\\n    baseline=K[n:,:n]@cho_solve(cho_factor(K[:n,:n]+.001*np.eye(n)),T-m)+m\\n    P=.5*baseline+.5*_profile_kernel(B,T,n)\\n    last=P[:,-1]\\n    return {'y_hat':yh,'state_pred':P,'diagnostics_vec':np.array([yh.mean(),yh.std(),last.mean(),last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; rng=np.random.default_rng(555); scores=[]\\nfor order in [np.arange(72)]+[rng.permutation(72) for _ in range(6)]+[np.argsort(np.linalg.norm(tr['x'],axis=1))]:\\n i,j=order[:52],order[52:]; q=m.solve_batch(dict(s,train=dict(tr,**{k:tr[k][i] for k in ('x','y','traj')}),test={'x':tr['x'][j]})); scores.append([np.mean(abs(q['y_hat']-tr['y'][j])),np.mean(abs(q['state_pred']-tr['traj'][j]))])\\nprint('endpoint/trajectory MAE per split (last is high-norm extrapolation):\\\\n',np.array(scores)); q=m.solve_batch(s); assert all(np.isfinite(v).all() for v in q.values()); assert q['y_hat'].shape==(36,) and q['state_pred'].shape==(36,8) and q['diagnostics_vec'].shape==(4,)\\ny,t=q['y_hat'],q['state_pred'][:,-1]; np.testing.assert_allclose(q['diagnostics_vec'],[y.mean(),y.std(),t.mean(),t.std()]); print('isolated full-batch contract verified')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed sine-warp ensemble, 52/20 endpoint MAE 0.04504) -> H2 (panel-derived arctan–rational warp with fold-local kernel weighting, prototype 52/20 MAE 0.02981 and seven-split worst 0.02981).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the fixed sine-warp ensemble\",\"rejected_reason\":\"Its measured 52/20 MAE exceeds the 0.038 gate, while the panel-derived prototype clears it.\"}],\"rationale\":\"Promote the panel-derived warp and coordinate-specific kernel weights, the first prototype below the gate. Verify the exact artifact on the mandated split, randomized splits, and a high-norm extrapolation slice, and check the trajectory and diagnostic outputs independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "fae347f46db1cab4b8e812eebc8919dc55275af189b86825a84af13555d5ce4c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46797.57,
+      "usage_known": true,
+      "prompt_tokens": 42026,
+      "cached_tokens": 12672,
+      "completion_tokens": 1915
+    }
+  ]
+}

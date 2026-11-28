@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "def2179680534c868c052d2d019bd6f9",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:17.774334+00:00",
+  "ended_at_utc": "2026-11-28T15:14:49.302740+00:00",
+  "request_sha256": "1f74eba2121fa7cb6cfa11d8a333fcad6f9425fadfc36298488b93b3ee376826",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 42327,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30739,
+    "cached_tokens": 0,
+    "completion_tokens": 1092
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_structure.py <<'PY'\\nexec(open('/tmp/probe_dag.py').read().split('for k in (')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\ndef temporal(p):\\n return -np.expm1(-np.exp(p)[:,None]*t)\\ndef resid(p, z):\\n h=temporal(p); return (np.linalg.lstsq(h.T,z.T,rcond=None)[0].T@h-z).ravel()\\np=least_squares(resid,np.log([.4,1.8]),args=(tr[:52],)).x; h=temporal(p); w=np.linalg.lstsq(h.T,tr.T,rcond=None)[0].T\\nprint('rates',np.exp(p),'MAE',np.mean(abs(resid(p,tr))),'amplitudes std',w.std(0));print('affine amplitude',np.linalg.lstsq(D(x,1),w,rcond=None)[0]);\\npa=s['panel_a']; print('panel A u | v-u:'); print(np.round(np.c_[pa['u'],pa['v']-pa['u']],3));\\npb=s['panel_b']; cb=np.linalg.lstsq(D(pb['u'],1),pb['v'],rcond=None)[0]; u=(x-cb[0])@np.linalg.inv(cb[1:]); print('inverse panel b ranges',u.min(0),u.max(0)); print('direct panel b ranges',(D(x,1)@cb).min(0),(D(x,1)@cb).max(0));\\nfor name,xx in [('raw',x),('invb',u),('b',D(x,1)@cb)]:\\n print(name,'quad coefficients y | amplitudes');print(np.linalg.lstsq(D(xx,2),np.c_[y,w],rcond=None)[0].round(3))\\nprint('public/kernel tests; compare mean over five test blocks and last block')\\nblocks=np.array_split(np.arange(len(x)),5); blocks.append(np.arange(52,72)); yy=np.c_[y,tr]\\ndef score(K,reg):\\n a=[]\\n for j in blocks:\\n  i=np.setdiff1d(np.arange(len(x)),j); p=K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+reg*np.eye(len(i)),yy[i]);e=abs(p-yy[j]); a.append([e[:,0].mean(),e[:,1:].mean()]);\\n return np.array(a)\\nfor gam in [.03,.08,.16,.32,.64,1.28]:\\n dist=cdist(x,x,'sqeuclidean'); dot=x@x.T; r=np.sqrt(dist*gam); q=D(x,2); q=q@q.T\\n for name,K in [('rbf',np.exp(-gam*dist)),('matern', (1+r+r*r/3)*np.exp(-r)),('poly',(1+gam*dot)**3),('rbf+quad',np.exp(-gam*dist)+q)]:\\n  for reg in [.000003,.0001,.001]:\\n   a=score(K,reg); print(gam,name,reg,'cv mean',a[:5].mean(0).round(4),'worst',a[:5].max(0).round(4),'official',a[-1].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 one nonlinear ridge per output → H2 two shared relaxation modes with separately identifiable spatial amplitudes; the best tested quadratic trajectory MAE remains 0.091825.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use one fitted ridge per SVD score\",\"rejected_reason\":\"The leading score still has substantial validation error, and empirical SVD scores can mix distinct physical modes.\"}],\"rationale\":\"Separate the two temporal modes before inspecting spatial coefficients, determine whether the calibration panel supplies a useful coordinate system, and benchmark smooth models on multiple held-out blocks.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5956e47d1f8acb148607d3141dd2318a7d1f6ff14f99f5a55012dcd1d84a776a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31527.14,
+      "usage_known": true,
+      "prompt_tokens": 30739,
+      "cached_tokens": 0,
+      "completion_tokens": 1092
+    }
+  ]
+}

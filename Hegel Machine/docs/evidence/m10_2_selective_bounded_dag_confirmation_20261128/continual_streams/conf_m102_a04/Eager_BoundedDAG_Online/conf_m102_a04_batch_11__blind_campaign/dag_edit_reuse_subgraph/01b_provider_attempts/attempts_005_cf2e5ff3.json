@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf2e5ff345b245a1bd3815fceb12ac18",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:45.793278+00:00",
+  "ended_at_utc": "2026-11-28T15:46:14.923369+00:00",
+  "request_sha256": "9dcbec2c3cd432b3512338cc384742064d3ae101bb4071169dd764fe9423b3a1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37012,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28088,
+    "cached_tokens": 12672,
+    "completion_tokens": 1247
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport pickle, runpy, glob\\nimport numpy as np\\nfrom itertools import combinations_with_replacement as cwr\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); lin=a['lin']; one=a['one']; p=s['panel_a']; U=p['u']; V=p['v']; mask=np.max(abs(V),axis=1)<4; u=U[mask]; v=V[mask]; x=s['train']['x']; y=np.column_stack([s['train']['y'],s['train']['traj']]); c=s['panel_c'];\\ndef score(z, split=52):\\n w=a['_panel_maps'](c,z); w=(w-w[:split].mean(0))/np.maximum(w[:split].std(0),.1); g=w@w.T/w.shape[1]; d=g.diagonal(); dist=np.maximum(d[:,None]+d-2*g,0); q=(1+.25*g)**2; m=np.arange(len(x))<split; p=np.mean([k[~m][:,m]@np.linalg.solve(k[m][:,m]+r*np.eye(m.sum()),y[m]) for k,r in [(q,3e-5),(q+np.exp(-.06*dist),3e-4)]],0); e=abs(p-y[~m]).mean(0); return np.round([e[0],e[1:].mean()],6)\\ndef fit(name,f,init=None):\\n if init is not None:\\n  q=least_squares(lambda q:(f(u,q)@lin(f(u,q),v)-v).ravel(),init,max_nfev=200).x; F=lambda z:f(z,q)\\n else:q=[]; F=f\\n A=F(u); C=lin(A,v); r=A@C-v; h=np.sum(np.linalg.qr(A)[0]**2,axis=1); rm=lambda e:np.sqrt(np.mean(e**2)); print(name,'q',np.round(q,5),'rms',rm(r),'loo',rm(r/np.maximum(1-h[:,None],1e-8)),'max',abs(r).max());\\n if name in ('poly2','add3','poly3','affine','trig','tanh','rational','soft','add23'): print('co',np.round(C,4).T)\\n base=lin(one(u),v); z0=(x-base[0])@np.linalg.inv(base[1:]); sol=least_squares(lambda z:(F(z.reshape(-1,4))@C-x).ravel(),z0.ravel(),max_nfev=35).x.reshape(-1,4); print('  CV',score(sol),'Fwd RMS',rm(F(sol)@C-x),'zmax',abs(sol).max()); return F,C\\nif __name__=='__main__':\\n print('row mask',np.where(~mask)[0]); print('raw',score(x)); o,t=a['_align'](p); print('diagonal',score((x-o)/t));\\n fit('affine',one)\\n for d in (2,3):fit('poly'+str(d),lambda z:np.column_stack([np.ones(len(z))]+[np.prod(z[:,j],axis=1) for k in range(1,d+1) for j in cwr(range(4),k)]))\\n fit('add3',lambda z:np.c_[one(z),z**3]); fit('add23',lambda z:np.c_[one(z),z**2,z**3]);\\n for name,g in [('trig',np.sin),('tanh',np.tanh),('rational',lambda z:z/(1+z*z)),('soft',lambda z:z/(1+abs(z)))]:fit(name,lambda z,q:np.c_[one(z),g(z*q[0])],[1.4]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: replace channelwise alignment with a contamination-resistant nonlinear multivariate inverse; archived public y/trajectory MAE is 0.211680/0.290252.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Panel A is adequately described by independent channelwise affine fits, with poor residuals attributable to gross outliers alone.\",\"empirical_witness\":\"Robust multivariate affine calibration still has median row residual 0.292, with residuals up to 0.823 outside three isolated rows above 12; the inherited panel C maps already fit at sub-milliscale RMS.\",\"causal_blanket_diagnosis\":\"The panel A calibration misses structured signal; downstream target fitting and the panel C maps need not be replaced to isolate it.\",\"sublated_pivot\":\"Reject the gross panel A outliers and compare nested multivariate polynomial and nonlinear response bases using held-out calibration residuals and frozen-kernel CV.\",\"risk_kind\":\"omitted_calibration_terms\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare forward-law residuals and inverse-map CV together; a flexible forward fit can interpolate calibration points while producing a poor inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "580ee5dacab328867f16faad53e24ab7d19a3d9fe3cfb58aa7e4a8fedbe812b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29128.39,
+      "usage_known": true,
+      "prompt_tokens": 28088,
+      "cached_tokens": 12672,
+      "completion_tokens": 1247
+    }
+  ]
+}

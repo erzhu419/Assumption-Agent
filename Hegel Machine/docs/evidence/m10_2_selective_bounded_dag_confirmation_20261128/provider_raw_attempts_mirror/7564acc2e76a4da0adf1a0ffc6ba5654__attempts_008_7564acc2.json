@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7564acc2e76a4da0adf1a0ffc6ba5654",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:54:51.857234+00:00",
+  "ended_at_utc": "2026-11-28T14:55:12.494891+00:00",
+  "request_sha256": "2b92e147f23e81c42d585d734478ae86940524619d401a4d3716cb9175c015e7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59146,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39871,
+    "cached_tokens": 12672,
+    "completion_tokens": 785
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/graphprobe.py | grep -A10 'time basis'; cat >/tmp/structure.py <<'PY'\\nfrom gp import *\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.linalg import svd\\nU,S,V=svd(T[tr],full_matrices=False); Y=np.c_[y,T@V[:2].T]\\nfor names in [('xaC',),('xaD',),('xaC','xaD'),('xaC','xaD','xaB')]:\\n for degrees in itertools.product([1,2,3],repeat=len(names)):\\n  D=[]\\n  for k,p in zip(names,degrees):\\n   D.append(PolynomialFeatures(p,include_bias=False).fit_transform(z[k]))\\n  D=np.column_stack(D); D=(D-D[tr].mean(0))/D[tr].std(0)\\n  A=np.c_[np.ones(len(D)),D]; uu,ss,vv=svd(A[tr],full_matrices=False)\\n  row=[]\\n  for lam in [1e-8,1e-5,.001,.03]:\\n   shrink=ss**2/(ss**2+lam); co=vv.T@((shrink/ss)[:,None]*(uu.T@Y[tr])); e=A@co-Y\\n   loo=np.mean(abs(e[tr]/np.maximum(1-(uu**2)@shrink,1e-9)[:,None]),0); mae=np.mean(abs(e[va]),0); maeT=np.mean(abs(e[va,1:]@V[:2]),0).max()\\n   row.append((lam,loo,mae,round(maeT,5),np.std(e[tr],0)))\\n  if min(r[2][0] for r in row)<.049 or min(r[3] for r in row)<.036:print(names,degrees,row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse fixed features -> H2 calibrated multiscale branch readouts; first-52 scalar MAE reached 0.02477 and a shared candidate's sampled state MAEs were 0.0169–0.0246.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the lowest scalar holdout score as sufficient\",\"rejected_reason\":\"The candidate's state accuracy and stability across independent coordinate slices still need verification.\"}],\"rationale\":\"Test whether the useful C/D kernels reduce to a smaller polynomial branch grammar, and inspect the trajectory basis independently before choosing the final estimator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "eb08caaea784979f286935a6ea4f9ac7b3a709a591ade783100164f36cbf3566",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20636.3,
+      "usage_known": true,
+      "prompt_tokens": 39871,
+      "cached_tokens": 12672,
+      "completion_tokens": 785
+    }
+  ]
+}

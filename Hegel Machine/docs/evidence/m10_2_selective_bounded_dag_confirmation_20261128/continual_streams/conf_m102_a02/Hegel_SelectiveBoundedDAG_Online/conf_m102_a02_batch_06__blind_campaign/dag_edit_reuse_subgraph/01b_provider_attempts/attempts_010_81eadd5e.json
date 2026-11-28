@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81eadd5e7b444f5398a6da1142917647",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:16.302504+00:00",
+  "ended_at_utc": "2026-11-28T15:25:52.393162+00:00",
+  "request_sha256": "fbdb3912133ec81aef7db1eee3c9f8f998cf4c8a759b4caafd7e70165f07ba12",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62222,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38090,
+    "cached_tokens": 12672,
+    "completion_tokens": 1574
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '115,230p' /holdout_task/test_dag_candidate.py; cat >/tmp/finalprobe06.py <<'PY'\\nexec(open('/tmp/chains06.py').read().split(\\\"trans={'B'\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as comb\\nn=len(y); print('n',n); rng=np.random.default_rng(6); splits=[(np.arange(52),np.arange(52,n)),(np.arange(20,n),np.arange(20))];\\nT=tr[:,-1]; Y=np.c_[y,tr]; V=np.c_[y,T];\\ndef score(f,alpha,i,j):\\n z=np.maximum(np.sqrt(np.mean(f[i]**2,axis=0)),1e-8); a=f/z; coef=np.linalg.solve(a[i].T@a[i]+alpha*np.eye(a.shape[1]),a[i].T@Y[i]); d=abs(a[j]@coef-Y[j]);return np.array([d[:,0].mean(),d[:,1:].mean()]);\\nQ=design(B,2); A=design(B,1); qa=design(q,1); D=C2(B); C=C1(B); H=q*np.exp(z['p'][2]*np.logaddexp(0,z['p'][1]*np.log(np.maximum(z['p'][0]*abs(q),1e-300)))); F=H-q\\nprint('corr res',np.corrcoef((V-Q@ls(Q,V)).T)); print('coef B',ls(Q,V).round(3));\\nbases={'Bquad':Q,'BqProd':np.c_[Q,*[B*q[:,i:i+1] for i in range(4)]],'Bq2':np.c_[Q,design(q,2)[:,1:]],'qH':design(np.c_[q,H],2),'qF':design(np.c_[q,F],2),'qBC':np.c_[Q,design(q,2)[:,1:],*[(q-.25*C)*np.sin(q[:,i:i+1]-.25*C[:,i:i+1]) for i in range(4)]],'BD':np.c_[Q,D],'c2sep':np.c_[Q,np.tanh(1.38*B**2)],'C1':np.c_[Q,C],'Btilde':design(B1(q),2)}\\nfor nm,L in [('q',q),('B',B),('qBC',q-.25*C),('qD',q-.25*C2(q))]:\\n for phi in (np.sin,np.tanh):\\n  for sc in (.5,1.,2.):\\n   G=phi(sc*L); bases[(nm,phi.__name__,sc)]=np.c_[Q,G,*[L[:,i:i+1]*G for i in range(4)]]\\ndef addgate(base,g,p,i,j,alpha):\\n ff=lambda pp:np.c_[base,g*np.tanh(qa@pp)[:,None]]\\n def residual(pp):\\n  a=ff(pp)[i]; z=np.maximum(np.sqrt(np.mean(a*a,axis=0)),1e-8);a=a/z; w=np.linalg.solve(a.T@a+alpha*np.eye(a.shape[1]),a.T@V[i]);return np.r_[(a@w-V[i]).ravel(),np.sqrt(alpha)*w.ravel()]\\n starts=[np.r_[0,k*np.eye(4)[l]] for l in range(4) for k in (2.,7.,14.)]; o=min((least_squares(residual,p0,bounds=(-24,24),max_nfev=65) for p0 in starts),key=lambda o:o.cost); return ff(o.x),o.x,np.sqrt(np.mean(o.fun**2))\\nout=[]\\nfor name,f in bases.items():\\n for al in (.0001,.002,.02,.2,1.):out.append((np.max([score(f,al,i,j) for i,j in splits],axis=0),name,al))\\nfor k in (0,1): print('LINEAR',k,sorted(out,key=lambda e:e[0][k])[:10],flush=True)\\nfor name in ('Bquad','BqProd','Bq2','qF',('qBC','sin',1.0),('q','tanh',1.0),'Btilde'):\\n for gname,g in [('const',A[:,:1]),('q',qa),('B',A),('qB',np.c_[qa,B])]:\\n  for al in (.002,.08):\\n   res=[]\\n   for i,j in splits:\\n    f,p,e=addgate(bases[name],g,None,i,j,al);res.append((score(f,al,i,j).round(5).tolist(),p.round(2).tolist(),round(e,5)))\\n   print('FIT',repr(name),gname,al,res,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/finalprobe06.py | grep -E '^(n |corr|coef|LINEAR|FIT)' > /tmp/finalprobe06.out; head -5 /tmp/finalprobe06.out; tail -56 /tmp/finalprobe06.out | sort -k1; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py | grep -E 'accepted|mae|error'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separate unconstrained gates -> H2 a gate shared by scalar and trajectory readouts with regularized mixed-coordinate features; baseline worst-slice MAEs are 0.126178 scalar and 0.078321 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent unrestricted gates\",\"rejected_reason\":\"The best training fits did not generalize reliably, and the independent fits pointed to similar gate directions.\"}],\"rationale\":\"Use both labels to constrain the gate, while testing direct mixed-coordinate interactions as a simpler alternative; verify the actual evaluator independently of the probe.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "02253de7b070cd152c909adee001ac7a156276d8bc58eb615d40e0ff945d5bd9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36089.46,
+      "usage_known": true,
+      "prompt_tokens": 38090,
+      "cached_tokens": 12672,
+      "completion_tokens": 1574
+    }
+  ]
+}

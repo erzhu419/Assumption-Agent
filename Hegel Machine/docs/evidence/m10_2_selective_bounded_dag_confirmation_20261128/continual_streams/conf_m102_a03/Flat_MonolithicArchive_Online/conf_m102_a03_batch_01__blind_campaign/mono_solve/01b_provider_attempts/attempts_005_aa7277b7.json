@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa7277b79e6b4083bc14914a4e7460b2",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:59:42.956973+00:00",
+  "ended_at_utc": "2026-11-28T15:00:15.322192+00:00",
+  "request_sha256": "40d5d0bc681659158b4354e0a73b31968254b89f7ec829c302fc6b0f0feef0c3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36315,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28504,
+    "cached_tokens": 12672,
+    "completion_tokens": 1370
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/cal.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x,d): return PolynomialFeatures(d).fit_transform(x)\\nu=s['panel_a']['u']; v=s['panel_a']['v']; good=np.linalg.norm(v-u,axis=1)<3; print('excluded',np.flatnonzero(~good))\\nu=u[good];v=v[good]; a=u.ravel();b=np.roll(u,-1,axis=1).ravel();ch=np.tile(np.eye(4),(len(u),1));\\nS=np.c_[ch,a*1.,b,a*b,a**3,b**3,a*a*b,a*b*b,a*a,b*b,a**5,b**5]\\nY=(v-u).ravel();\\nfor stop in (7,8,11,13,15):\\n C=fit(S[:,:stop],Y); print('shared',stop,C,'rmse',np.sqrt(np.mean((S[:,:stop]@C-Y)**2)))\\nfor j in range(4):\\n a,b=u[:,j],u[:,(j+1)%4]; w=v[:,j]; D=poly(np.c_[a,b],4)\\n for n in (10,15):\\n  C=fit(D[:,:n],w); print('per channel',j,n,C,'rmse',np.std(D[:,:n]@C-w))\\nfor d in (2,3,4):\\n for j in (0,):\\n  P=PolynomialFeatures(d);D=P.fit_transform(u);C=fit(D,v[:,j]); print('full',d,'rmse',np.std(D@C-v[:,j]),list(zip(P.get_feature_names_out()[np.argsort(abs(C))[-13:][::-1]],np.sort(abs(C))[-13:][::-1])))\\n# direct separable calibration; common candidate polynomials and elementary nonlinearities\\nforms={'cubic':lambda a,b:np.c_[np.ones(a.size),a.ravel(),b.ravel(),(a*b).ravel(),a.ravel()**3], 'septic':lambda a,b:np.c_[np.ones(a.size),a.ravel(),b.ravel(),(a*b).ravel(),a.ravel()**3,a.ravel()**5,a.ravel()**7], 'tanh':lambda a,b:np.c_[np.ones(a.size),a.ravel(),b.ravel(),(a*b).ravel(),np.tanh(a.ravel())]}\\ntr=s['train']; Y=np.c_[tr['y'],tr['traj']]\\nfor name,F in forms.items():\\n c=np.array([fit(F(u[:,j],u[:,(j+1)%4]),v[:,j]) for j in range(4)])\\n def forward(z):return np.column_stack([F(z[:,j],z[:,(j+1)%4])@c[j] for j in range(4)])\\n print(name,'coef',c,'cal rmse',np.std(forward(u)-v)); z=np.stack([least_squares(lambda z:forward(z[None])[0]-x,x).x for x in tr['x']]); print('z range',z.min(0),z.max(0),'inversion',np.max(abs(forward(z)-tr['x'])))\\n for d in (1,2,3):\\n  D=poly(z,d); r=D@fit(D[:52],Y[:52])-Y; print(name,d,np.mean(abs(r[:52]),axis=0)[[0,1,-1]],np.mean(abs(r[52:]),axis=0)[[0,1,-1]],np.mean(abs(r[52:,1:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: quadratic calibration → H2: cyclic calibration with higher-order self terms; the raw cubic baseline has final-time CV MAE 0.0743.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or quadratic basis fully describes the reference-panel map.\",\n    \"empirical_witness\": \"After trimming three gross outlier rows, the quadratic fit still leaves structured residuals, with the largest cubic residual correlation in each channel associated with that channel's own cube.\",\n    \"causal_blanket_diagnosis\": \"An omitted calibration nonlinearity can appear downstream as nonlinear dependence in both scientific outputs.\",\n    \"sublated_pivot\": \"Test sparse cyclic maps with self nonlinearities and compare the resulting inverse-calibrated readout on the prescribed split.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained quartic inverse\",\n      \"rejected_reason\": \"The panel has too few clean rows for a full quartic, whereas the coefficient pattern points to a sparse cyclic map.\"\n    }\n  ],\n  \"rationale\": \"Use the independent panel to estimate the warp, then check whether the recovered coordinates reduce held-out error without expanding the downstream regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bf3ab6ff6558a7aa287f7387b9d92fc38eac6183a1638c8382ca9802168f8e0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32364.11,
+      "usage_known": true,
+      "prompt_tokens": 28504,
+      "cached_tokens": 12672,
+      "completion_tokens": 1370
+    }
+  ]
+}

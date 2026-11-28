@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "207d51aa36af4e159f518e11846d5b23",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:23:53.283003+00:00",
+  "ended_at_utc": "2026-11-28T15:24:26.347667+00:00",
+  "request_sha256": "be06c60dbe113109c3f738ec189e1a3e69d5534a2385e754e920d53dfec16540",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 60463,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38052,
+    "cached_tokens": 12672,
+    "completion_tokens": 1256
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/stress05.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom itertools import combinations\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import least_squares\\n\\ndef load(i):\\n s=importlib.util.spec_from_file_location('node%d'%i,'/holdout_task/node_%02d.py'%i);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];x,y,z=[s['train'][k] for k in ('x','y','traj')];Y=np.c_[y,z]; f=load(0).run_node({'__input__':s})['cubic_train']; l=np.cbrt(f);n=len(f); rng=np.random.default_rng(3411); splits=[(np.arange(52),np.arange(52,n))]; splits.extend((p[20:],p[:20]) for p in [rng.permutation(n) for _ in range(12)]);splits.extend((np.argsort(v)[:-14],np.argsort(v)[-14:]) for v in abs(l).T)\\n\\ndef test(K,pen,train,test):\\n mu=Y[train].mean(0); A=K[np.ix_(train,train)]+pen*np.eye(len(train));return mu+K[np.ix_(test,train)]@cho_solve(cho_factor(A),Y[train]-mu)\\n\\ndef score(pred):\\n E=[abs(pred(i,j)-Y[j]) for i,j in splits];M=np.array([[v[:,0].mean(),v[:,1:].mean()] for v in E]);return np.r_[M[0],M[1:13].max(0),M[13:].max(0),np.max([v[:,1:].mean(0) for v in E[1:13]])]\\n\\nm=load(1); base=lambda i,j:m.run_node({'__input__':{'train':{'y':y[i],'traj':z[i]}},'node_00':{'cubic_train':f[i],'cubic_test':f[j]}});print('Exact current candidate public, random maxima, tail maxima, worst horizon:',score(lambda i,j:np.column_stack(tuple(base(i,j)[k] for k in ('y_hat','state_pred')))))\\nfor name,w in [('cub',f),('cube+lat',np.c_[f,l]),('cube+lat3',np.c_[f,.3*l]),('cube+quint',np.c_[f,.5*l**5])]:\\n w=w/(np.std(f,axis=0).mean()); sq=(w[:,None]-w[None,:])**2;g=w@w.T/w.shape[1];a=[]\\n for d in [1,2,3,4,5]:\\n  for mix in [0,.5,.9]:\\n   K=(1-mix)*(1+g)**d+mix*(1+w[:,None,:]*w[None,:,:]) .__pow__(d).mean(2)\\n   for p in [1e-6,1e-4,.001,.01,.05]:a.append((score(lambda i,j:test(K,p,i,j)),('poly',d,mix,p)))\\n for gamma in [.002,.007,.015,.03,.06,.12,.25]:\\n  for mix in [.2,.5,.8,.95]:\\n   K=(1-mix)*np.exp(-gamma*sq.mean(2))+mix*np.exp(-gamma*sq).mean(2)\\n   for p in [1e-6,1e-5,3e-5,1e-4,3e-4,.001]:a.append((score(lambda i,j:test(K,p,i,j)),('rbf',gamma,mix,p)))\\n print(name,'top random',[(v.round(4).tolist(),h) for v,h in sorted(a,key=lambda q:max(q[0][:4]))[:3]],'top combined',[(v.round(4).tolist(),h) for v,h in sorted(a,key=lambda q:max(q[0][:6]))[:3]])\\nprint('cubic affine betas',np.linalg.lstsq(np.c_[np.ones(n),f],Y,rcond=None)[0].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw-coordinate kernels → H2 sparse cyclic calibration and cubic-coordinate kernels; isolated public MAEs are 0.023984 scalar and 0.032282 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit immediately after the public pass\",\"rejected_reason\":\"The exact saved model has not yet been tested on coordinate-tail slices or audited by horizon.\"}],\"rationale\":\"Keep the accepted files untouched while stress-testing both heads and checking whether a simpler response basis improves the worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8d9e07305109999e1121e20db3bc5ef9a6f87257daa3c4150ed255d477ba18fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33063.36,
+      "usage_known": true,
+      "prompt_tokens": 38052,
+      "cached_tokens": 12672,
+      "completion_tokens": 1256
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abae88a3d4604a7d82293f7cacb23e90",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_16__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:14:29.186058+00:00",
+  "ended_at_utc": "2026-11-28T15:15:04.441035+00:00",
+  "request_sha256": "f18e8f9e0d910e7648cfe3f487b75b77ad3617c49d551140a195a593ac53cc0a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49320,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35051,
+    "cached_tokens": 12672,
+    "completion_tokens": 1495
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_a01_batch_03_solver.py; sed '/Folds=/,$d' /tmp/families.py | sed '/p=S\\\\[.panel_c.\\\\]; u=p\\\\[.u.\\\\]; V=/,/^z,h=/ { /^z,h=/!d; }' >/tmp/graph8.py; sed -i '/^z,h=/i p=S[\\\"panel_c\\\"]; u=p[\\\"u\\\"]; V=p[\\\"v1\\\"]; W=p[\\\"v2\\\"]' /tmp/graph8.py; cat >>/tmp/graph8.py <<'PY'\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfa=lambda g: np.arctan(2.15*g); fb=lambda g:g+.446*g*g\\nca=np.linalg.lstsq(A(fa(u)),V,rcond=None)[0]; cb=np.linalg.lstsq(A(fb(u)),W,rcond=None)[0]\\nbase={k:C[k] for k in ['x','z','h','bx','bz','ih']}\\nfor k,g in list(base.items()):\\n for kk,gg in [('c1',A(fa(g))@ca),('c2',A(fb(g))@cb)]:\\n  base[k+kk]=gg\\n  if k in ['x','z']: base[k+kk+'b']=A(gg)@B\\nF=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(28).permutation(72),4)]\\nt=S['eval_times']; s=-np.expm1(-.8*t); y=np.c_[Y,T@s/(s@s)]\\nstd=lambda a: a/np.maximum(np.sqrt(np.mean(a*a,axis=0)),1e-12)\\nquad=lambda g:np.column_stack([g[:,i]*g[:,j] for i,j in combinations_with_replacement(range(4),2)])\\nstack=lambda a,n:np.column_stack([np.prod(a[:,j],axis=1) for j in combinations_with_replacement(range(4),n)])\\nkern=lambda a:std(a)@std(a).T\\nD0=kern(A(X)); Dq=kern(quad(X)); Dc=kern(stack(X,3)); I=np.eye(len(X))\\ndef run(ks):\\n K=np.array(ks); out=[]; weights=[]\\n for a,b in F:\\n  P=K[:,a][:,:,a]; Q=K[:,b][:,:,a]; pp=[]; ww=[]\\n  for yg in y[a].T:\\n   def obj(p):\\n    w=np.exp(p); c=cho_factor(np.einsum('i,ijk->jk',w,P),check_finite=False); alpha=cho_solve(c,yg,check_finite=False); inv=cho_solve(c,np.eye(len(a)),check_finite=False); grad=.5*np.einsum('jk,ijk->i',inv-np.outer(alpha,alpha),P)*w; return .5*yg@alpha+np.log(np.diag(c[0])).sum(),grad\\n   opt=minimize(obj,np.full(len(P),-4.),jac=True,bounds=[(-14,4)]*len(P),method='L-BFGS-B',options={'maxiter':80}); w=np.exp(opt.x); ww.append(w); pp.append(np.einsum('i,ijk->jk',w,Q)@np.linalg.solve(np.einsum('i,ijk->jk',w,P),yg))\\n  out.append(np.mean(abs(np.array(pp).T-y[b]),axis=0)); weights.append(ww)\\n return np.array(out),np.array(weights)\\nrows=[]\\nfor name,g in base.items():\\n for fn,f in [('sin',np.sin(.7*g)),('tanh',np.tanh(1.25*g)),('rat',g/(1+.22*g*g)),('mixed',np.c_[np.sin(.7*g),np.tanh(1.25*g),g/(1+.22*g*g)])]:\\n  if fn=='mixed': ks=[D0,Dq,Dc,kern(f),kern(quad(g)),I]\\n  else: ks=[D0,Dq,Dc,kern(f),kern(quad(f)),kern(g*f),I]\\n  e,w=run(ks); rows.append((np.r_[e[0],e[1:].mean(0),e[1:].max(0)],name+':'+fn,w[0]))\\nfor idx in range(4):\\n print('RESULT',idx)\\n for e,k,w in sorted(rows,key=lambda z:z[0][idx])[:6]:print(k,e,w)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed nonlinear readout → fold-fitted mixtures of panel-conditioned operators; exploratory 52/20 y MAE is 0.03248, but mean shuffled-fold MAE for that candidate is 0.04115.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best fixed-split sinusoidal fit immediately\",\"rejected_reason\":\"It clears the gate, but shuffled-fold errors are higher and its trajectory error leaves room for improvement.\"}],\"rationale\":\"Estimate operator-block weights within each training fold and score scalar and trajectory predictions separately. This tests whether the panel-derived features improve generalization rather than just the designated split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "04fd62d00a04b00feb5e21250f15e3586ecc9e73472f57aaad31721bd1150b92",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35253.69,
+      "usage_known": true,
+      "prompt_tokens": 35051,
+      "cached_tokens": 12672,
+      "completion_tokens": 1495
+    }
+  ]
+}

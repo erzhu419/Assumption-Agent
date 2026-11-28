@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0f698966f2c4fd584ef8c8b09203a30",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:49.749057+00:00",
+  "ended_at_utc": "2026-11-28T14:56:30.006832+00:00",
+  "request_sha256": "7808458f38f926e7d43493ea87fa61393bc2343d7a58795bb57ffb63f8b66ab6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60609,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40728,
+    "cached_tokens": 12672,
+    "completion_tokens": 1769
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the campaign outputs from calibrated, mixed input coordinates.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _affine(panel, robust=False):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    design = np.column_stack((np.ones(len(u)), u))\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(6 if robust else 1):\\n        coef = np.linalg.lstsq(design[keep], v[keep], rcond=None)[0]\\n        residual = np.linalg.norm(design @ coef - v, axis=1)\\n        proposed = residual < max(0.001, 3 * np.median(residual))\\n        if not robust or np.array_equal(proposed, keep) or proposed.sum() < design.shape[1]:\\n            break\\n        keep = proposed\\n    return coef\\n\\n\\ndef _kernel(z, w):\\n    h, g = np.arcsinh(3.5 * z), np.arcsinh(3.5 * w)\\n    linear = z @ w.T\\n    compressed = h @ g.T\\n    return (1 + linear + compressed + (h*h) @ (g*g).T\\n            + (z*h) @ (w*g).T + 0.2 * (compressed + 0.25*linear)**2)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.asarray(train['x'], dtype=float)\\n    xt = np.asarray(study['test']['x'], dtype=float)\\n    a = _affine(study['panel_a'], robust=True)\\n    b = _affine(study['panel_b'])\\n    z = np.linalg.solve(a[1:].T, (np.vstack((x, xt)) - a[0]).T).T @ b[1:] + b[0]\\n    z, zt = z[:len(x)], z[len(x):]\\n    traj = np.asarray(train['traj'], dtype=float)\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    targets = np.column_stack((train['y'], traj @ modes.T))\\n    gram = _kernel(z, z)\\n    gram.flat[::len(z)+1] += 1e-6 * np.mean(np.diag(gram))\\n    pred = _kernel(zt, z) @ np.linalg.solve(gram, targets)\\n    y = pred[:, 0].copy()\\n    state = pred[:, 1:] @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/stress_batch.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); idx=np.arange(n)\\na=mod._affine(s['panel_a'],robust=True); b=mod._affine(s['panel_b']); z=np.linalg.solve(a[1:].T,(tr['x']-a[0]).T).T@b[1:]+b[0]\\ndef evaluate(te):\\n fit=np.setdiff1d(idx,te); subset=dict(s,train={**tr,**{k:tr[k][fit] for k in ('x','y','traj')}},test={'x':tr['x'][te]}); out=mod.solve_batch(subset)\\n e=np.abs(out['y_hat']-tr['y'][te]); et=np.abs(out['state_pred']-tr['traj'][te]); q=out['state_pred'][:,-1]; y=out['y_hat']; assert np.allclose(out['diagnostics_vec'],[y.mean(),y.std(),q.mean(),q.std()]); assert np.isfinite(et).all() and np.isfinite(e).all()\\n return np.r_[e.mean(),et.mean(),et[:,-1].mean(),et.mean(0).max(),e.max()]\\nfor name,te in [('prescribed',idx[52:]),('first',idx[:20]),('middle',idx[20:40])]: print(name,evaluate(te))\\nrng=np.random.default_rng(729); vals=np.array([evaluate(rng.choice(n,20,replace=False)) for _ in range(32)]); print('random worst',vals.max(0))\\nfor j in range(4):\\n order=np.argsort(z[:,j]); print('edge',j,'low',evaluate(order[:10]),'high',evaluate(order[-10:]))\\norder=np.argsort(np.linalg.norm(z,axis=1)); print('largest radius',evaluate(order[-12:])); print('test/prior range',np.min(z,0),np.max(z,0)); print('test latent range',np.min(np.linalg.solve(a[1:].T,(s['test']['x']-a[0]).T).T@b[1:]+b[0],0),np.max(np.linalg.solve(a[1:].T,(s['test']['x']-a[0]).T).T@b[1:]+b[0],0)); assert evaluate(idx[52:])[0]<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive nonlinear readouts → H2 products of asinh-compressed panel-B coordinates; the fixed-kernel probe achieved worst-block y, trajectory, and terminal MAEs of 0.01385, 0.01074, and 0.01208.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Additive nonlinear coordinate terms plus a quadratic in the untransformed coordinates suffice for the required accuracy.\",\"empirical_witness\":\"The additive panel-B basis missed 0.038 on the prescribed split, whereas the tested cross-product kernel achieved 0.01385 y MAE and 0.01074 trajectory MAE.\",\"causal_blanket_diagnosis\":\"Calibrated mixing coordinates are useful, but the tested additive bases do not capture their nonlinear interactions.\",\"sublated_pivot\":\"Retain panel-A inversion and panel-B mixing, then use a product basis built from original and asinh-compressed coordinates.\",\"risk_kind\":\"omitted nonlinear interactions\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Continue fitting free latent directions\",\"rejected_reason\":\"The additional flexibility lowered training error without reliably improving held-out error.\"}],\"rationale\":\"The product kernel clears the required tolerance on the prescribed split and improves both observables across held-out blocks. Implement it with two-mode trajectory denoising, then verify the exact artifact and stress-test extrapolation at the edges of the observed input range.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "71454b215765350de9bfe656c7761343a3de4d057ffbffea593ac6fd7b6006d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40256.59,
+      "usage_known": true,
+      "prompt_tokens": 40728,
+      "cached_tokens": 12672,
+      "completion_tokens": 1769
+    }
+  ]
+}

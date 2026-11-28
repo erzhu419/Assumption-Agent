@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c6afef76fd243caaf73bd0e046862d7",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:12:42.483494+00:00",
+  "ended_at_utc": "2026-11-28T15:13:15.709210+00:00",
+  "request_sha256": "8b1d6c103cb647ee2227eef0542a30808c9579f84fe385ba8d1b31dc3e482521",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 50818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34118,
+    "cached_tokens": 5504,
+    "completion_tokens": 1342
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '80,230p' /holdout_task/test_dag_candidate.py; cat > /tmp/decode_probe.py <<'PY'\\nimport itertools as it, numpy as np, pickle, runpy, glob\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=np.load('/tmp/latent.npy'); old=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); p=s['panel_c'];u=p['u']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(Y);N=len(z)\\ndef lin(x,y):return np.linalg.lstsq(x,y,rcond=1e-9)[0]\\ndef one(x):return np.c_[np.ones(len(x)),x]\\ndef cy(x):return x*x[:,[1,2,3,0]]\\ndef v2(x,r):return one(np.cos(r*x))\\nr=least_squares(lambda q:(v2(u,q)@lin(v2(u,q),p['v2'])-p['v2']).ravel(),[2.4]).x\\nc=one(cy(z))@lin(one(cy(u)),p['v1']); d=v2(z,r)@lin(v2(u,r),p['v2']); pb=s['panel_b']; b=one(z)@lin(one(pb['u']),pb['v']);\\nB=old['_time_basis'](s['eval_times'],Y[:,1:]); tar=np.c_[Y[:,0],lin(B,Y[:,1:].T).T];print('target corr',np.round(np.corrcoef(tar.T),3));\\nflds=[(np.arange(52),np.arange(52,72))]+[(np.delete(np.arange(n),j),j) for j in np.array_split(np.random.default_rng(1).permutation(n),4)]\\ndef pol(w,k):return np.array([w[:,c].prod(1) for a in range(1,k+1) for c in it.combinations_with_replacement(range(w.shape[1]),a)]).T\\ndef score(name,F,kernel=False):\\n F=(F-F[:n].mean(0))/np.maximum(.025,F[:n].std(0)); G=1+F@F.T\\n if kernel:\\n  G=G/(F.shape[1]+1); y=G.diagonal(); dist=np.maximum(y[:,None]+y-2*G,0); G=(1+G*.25)**2+np.exp(-.06*dist)\\n err=[]; best=None\\n for reg in [1e-7,1e-4,.003,.03,.3,3,30]:\\n  E=[]\\n  for i,j in flds:\\n   fit=G[np.ix_(j,i)]@np.linalg.solve(G[np.ix_(i,i)]+reg*np.eye(len(i)),tar[i]); E.append(np.mean(abs(np.c_[fit[:,0],fit[:,1:]@B.T]-Y[j]),axis=0))\\n  E=np.array(E); v=np.c_[E[:,0], E[:,1:].mean(1)]; key=v.max();\\n  if best is None or key<best[0]:best=(key,reg,v)\\n print(name,F.shape[1],np.round(best[2],4).tolist(),best[1])\\nfor name,w in [('z',z),('c',c),('d',d),('cd',np.c_[c,d]),('zcd',np.c_[z,c,d]),('bcd',np.c_[b,c,d]),('primitive',np.c_[cy(z),np.cos(2.4*z)])]:\\n for k in (1,2,3):score(name+str(k),pol(w,k))\\n score(name+'kernel',w,True)\\nfor name,w in [('concat',np.c_[z,c,d]),('cd',np.c_[c,d]),('bcd',np.c_[b,c,d])]:\\n for fun in [np.sin,np.tanh,np.cos]:\\n  for f in [.5,1,2]:score(name+fun.__name__+str(f),np.c_[w,fun(f*w),pol(fun(f*w),2)])\\nF=one(pol(np.c_[c,d],2)); co=lin(F[:n],tar); print('cd quad in sample',np.sqrt(np.mean((F[:n]@co-tar)**2,0))); nn=[()]+[a for i in (1,2) for a in it.combinations_with_replacement(range(8),i)];\\nfor k in range(3):print('top',k,[(nn[j],round(co[j,k],4)) for j in np.argsort(abs(co[:,k]))[-14:][::-1]])\\nprint('time basis',B[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/decode_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine observation and archived panel maps → H2 cyclic cubic observation and pair-product/cosine panels; panel A and v2 calibration RMSEs are both below 0.00010.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the archived rational v2 approximation\",\"rejected_reason\":\"A single shared cosine frequency fits the reference samples more accurately with fewer coefficients.\"}],\"rationale\":\"Evaluate coupled polynomial and nonlinear decoders on the inverted coordinates and both calibrated panels; inspect coefficient patterns to identify a compact predictor for the two editable nodes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ab80d6590d696ea9e5f625f0573d2809dcee16333a7da930c202c5ff7b9e6c76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33224.26,
+      "usage_known": true,
+      "prompt_tokens": 34118,
+      "cached_tokens": 5504,
+      "completion_tokens": 1342
+    }
+  ]
+}

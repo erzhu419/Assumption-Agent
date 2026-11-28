@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2df9da8bad974ce3937bf8ad3b418557",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:45.928071+00:00",
+  "ended_at_utc": "2026-11-28T15:27:30.380836+00:00",
+  "request_sha256": "dc5e49fcc434e4e2553e20efc0fcaa598090ea7e64045978705902b46b53f765",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51026,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28205,
+    "cached_tokens": 5504,
+    "completion_tokens": 946
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\nsed -n '/^def _time_basis/,$p' /holdout_task/batch_solver.py\\ncat >/tmp/separate10.py <<'PY'\\nexec(open('/tmp/audit10.py').read().split('for F,tar')[0])\\nfrom scipy.optimize import least_squares\\nT=s['eval_times']; diag=(g*h).sum(1); off=g[:,0]*h[:,1]; A=np.c_[g,diag]; B=np.c_[h,off]; FF=m.one(np.c_[A,B]);\\n\\ndef fit_modes(A,B,Y,t,style):\\n    n,p=A.shape; q=B.shape[1]\\n    def design(r,aa,bb):\\n        fast=-np.expm1(-r[0]*t)\\n        slow=-np.expm1(-r[1]*t)/r[1]\\n        if style==1: slow=slow+r[2]*t\\n        if style==2: slow=slow+r[2]*(t*t)\\n        return np.concatenate([aa[:,:,None]*fast,bb[:,:,None]*slow],axis=1).transpose(0,2,1).reshape(len(aa)*len(t),p+q)\\n    def loss(r):\\n        F=design(r,A,B);return F@m.lin(F,Y.ravel())-Y.ravel()\\n    fit=least_squares(loss,[1.8,.42]+([0.] if style else []), bounds=([.5,.025]+([-1.] if style else []),[3.,2]+([1.] if style else [])),gtol=1e-11)\\n    F=design(fit.x,A,B); coeff=m.lin(F,Y.ravel());return fit.x,lambda a,b:(design(fit.x,a,b)@coeff).reshape(len(a),len(t))\\n\\ngroups=[np.arange(52,72),np.argsort(np.linalg.norm(z,axis=1))[-20:],*(np.random.default_rng(i).permutation(n)[:20] for i in range(8))]\\nfor style in (0,1,2):\\n    scores=[]\\n    for test in groups:\\n        fit=np.setdiff1d(np.arange(n),test); q,pred=fit_modes(A[fit],B[fit],Y[fit,1:],T,style); error=np.abs(pred(A[test],B[test])-Y[test,1:]);scores.append([error.mean(),error.mean(0).max(),np.mean(error[:,-1])]);\\n        if len(scores)==1: print('rates',style,q)\\n    print('mix',style,'public',scores[0],'worst',np.max(scores,axis=0),'mean',np.mean(scores,axis=0))\\nPY\\npython3 -I /tmp/separate10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: compact bilinear trajectory readout with both temporal modes available to every feature -> H2: separate feature groups drive the fast and slow modes; the compact shared-mode baseline has worst horizon MAE 0.005308.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tie the first and third odd-channel coefficients\",\"rejected_reason\":\"The added equality worsened worst-horizon MAE from 0.005308 to 0.006003.\"}],\"rationale\":\"The coefficient curves suggest that odd channels and the diagonal contraction share the fast mode, while even channels and the single off-diagonal term share the slow mode. Fit the rates inside each split and promote the separation only if it improves the prescribed and worst-slice errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "995350e94c1d250f8a6eb24773380d926f3c559394714a49e44b7565b35b7de4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44451.25,
+      "usage_known": true,
+      "prompt_tokens": 28205,
+      "cached_tokens": 5504,
+      "completion_tokens": 946
+    }
+  ]
+}

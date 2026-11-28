@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "794104185430467fa0740085466984a9",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_11__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_11__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:06.453892+00:00",
+  "ended_at_utc": "2026-11-28T15:34:26.670095+00:00",
+  "request_sha256": "2fc8aeb5d69fd7b3262488b6dbd2c15e10d9c4929e10a5cf27bf2674cedafe63",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 36712,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26741,
+    "cached_tokens": 12672,
+    "completion_tokens": 645
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; sed -n '63,100p' /tmp/hegel_continual_archive/*03_solver.py; src=$(echo /tmp/hegel_continual_archive/*03_solver.py); { sed -n '1,/^def _predict/{ /^def _predict/!p; }' \\\"$src\\\"; cat <<'PY'\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    x = np.vstack((s['train']['x'], s['test']['x']))\\n    z = _calibrate(s['panel_a'], x)\\n    b = s['panel_b']\\n    l = _ones(z) @ _ls(_ones(b['u']), b['v'])\\n    q, r = (_branch(s['panel_c'], z, k) for k in (1,2))\\n    return dict(z=z, L=l, Q=q, R=r, product=q, cosine=r)\\nPY\\n} > /holdout_task/node_00.py\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py || true\\npython3 - <<'PY'\\nimport runpy,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; f=runpy.run_path('/holdout_task/node_00.py'); a=s['panel_a']; z=f['_calibrate'](a,a['v']); print('alignment errors',np.quantile(abs(z-a['u']),[.25,.5,.75,.9,.99])); c=s['panel_c'];\\nfor k in (1,2):\\n p=f['_branch'](c,c['u'],k); print('branch',k,np.quantile(abs(p-c['v'+str(k)]),[.25,.5,.9,1]));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived rational branches → H2 use robust nonlinear coordinate recovery and calibrated branch outputs; first downstream CV pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use affine alignment and a fixed cosine\",\"rejected_reason\":\"Panel A's untrimmed affine leave-one-out errors are large, and the closer reference supports a rational second branch.\"}],\"rationale\":\"Build the nearest-reference baseline, then measure alignment, both branch residuals, and the frozen sink's errors separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d92c97fcefd5d368e06aa267df9bae0ead125049303005ec4f9736e751e4d734",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20215.24,
+      "usage_known": true,
+      "prompt_tokens": 26741,
+      "cached_tokens": 12672,
+      "completion_tokens": 645
+    }
+  ]
+}

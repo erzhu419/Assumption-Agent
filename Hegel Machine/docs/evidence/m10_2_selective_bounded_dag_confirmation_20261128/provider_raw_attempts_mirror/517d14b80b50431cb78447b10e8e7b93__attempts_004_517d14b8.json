@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "517d14b80b50431cb78447b10e8e7b93",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:33.219543+00:00",
+  "ended_at_utc": "2026-11-28T15:22:08.061009+00:00",
+  "request_sha256": "a2f1acba106c80d703399b896cf8fad83bb78826d77de5aadece2f272c8e3ebf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24382,
+    "cached_tokens": 12672,
+    "completion_tokens": 1314
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=map(tr.get,('x','y','traj')); ts=s['eval_times']\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.column_stack([np.prod(x[:,j],axis=1) for k in range(d+1) for j in cr(range(4),k)])\\ndef caldesign(u,j,n):\\n a,b,c,d=np.roll(u,-j,axis=1).T\\n return [aff(u),np.c_[np.ones(len(u)),a,b,a*b,a**3],np.c_[aff(u),u**2,u**3,a*b,a*c,a*d],poly(u,2),np.c_[aff(u),poly(u,2)[:,5:],u**3],np.c_[aff(u),u**2,u**3]][n]\\ndef cal(n):\\n u,v=map(s['panel_a'].get,('u','v')); A=[caldesign(u,j,n) for j in range(4)]; keep=np.ones(len(u),bool)\\n for i in range(10):\\n  w=[ls(a[keep],v[keep,j]) for j,a in enumerate(A)]; r=np.linalg.norm(np.column_stack([a@b for a,b in zip(A,w)])-v,axis=1); keep=r<=np.sort(r)[36] if i<3 else r<max(.012,5*np.median(r))\\n return w,r,keep\\nif __name__=='__main__':\\n print('times telemetry spectrum',ts,s['telemetry_vec'],np.linalg.svd(T,compute_uv=False)); print('y/T corr',np.corrcoef(np.c_[y,T].T)[0]);print('raw extremes',x.min(0),x.max(0))\\n for n in range(6):\\n  w,r,k=cal(n); print('CAL',n,k.sum(),np.quantile(r,[0,.5,.75,.8,1]));print(np.array(w))\\n for p,k in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  u,v=s[p]['u'],s[p][k]; print(p,k)\\n  def f(u,j,mode):\\n   a,b,c,d=np.roll(u,-j,axis=1).T\\n   return [aff(u),poly(u,2),np.c_[aff(u),u*u],np.c_[aff(u),a*b,b*c,c*d,d*a,a*c,b*d],np.c_[aff(u),u**3],np.c_[aff(u),u**2,u**3]][mode]\\n  for mode in range(6):\\n   for name,g in [('id',lambda q:q),('sin',np.sin),('tanh',np.tanh),('soft',lambda q:q/np.sqrt(1+q*q)),('soft2',lambda q:q/np.sqrt(1+.1*q*q))]:\\n    vals=[]\\n    for j in range(4):\\n     A=f(u,j,mode); w=ls(A,v[:,j]); o=least_squares(lambda w:g(A@w)-v[:,j],w,max_nfev=100); Q=A*ls(A,A) .diagonal() if False else o.jac; h=np.sum(np.linalg.qr(Q,mode='reduced')[0]**2,axis=1); vals.append([np.sqrt(np.mean(o.fun**2)),np.mean(abs(o.fun/np.maximum(.02,1-h)))])\\n    print(mode,name,np.mean(vals,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the failed archive transfer with robust calibration and operator identification; the archive baseline's worst 52/20 MAE is 0.184002.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived coordinate and readout bases transfer to this campaign without modification.\",\n    \"empirical_witness\": \"All four archived solvers missed both 0.038 gates, and affine fits to panels B and C left median row residuals of 0.151 to 0.271.\",\n    \"causal_blanket_diagnosis\": \"The panel fits indicate missing nonlinear terms, although they do not yet establish which operators affect the readouts.\",\n    \"sublated_pivot\": \"Retain panel-based calibration, but test sparse cross-coordinate terms and nonlinear operator links separately before selecting the active graph.\",\n    \"risk_kind\": \"structural_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit unrestricted cubics to the auxiliary panels\",\n      \"rejected_reason\": \"With 35 coefficients and 24 observations, exact interpolation cannot distinguish candidate operators.\"\n    }\n  ],\n  \"rationale\": \"Use robust panel A residuals and leverage-adjusted auxiliary panel errors to test operator structure before fitting either readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "94a47612367bed352246701eb13146b3e7f64976efcd33843d0ec39a0c7bb29f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35323.6,
+      "usage_known": true,
+      "prompt_tokens": 24382,
+      "cached_tokens": 12672,
+      "completion_tokens": 1314
+    }
+  ]
+}

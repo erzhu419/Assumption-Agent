@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7cc6cd14b38c4c0e8d8552ef9d5ead9a",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:22.281474+00:00",
+  "ended_at_utc": "2026-11-28T15:55:52.735478+00:00",
+  "request_sha256": "bf30587b69f969af0258ba00c4b64a6d208c7cd220d8e92efaec9d37ca3ff60e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38490,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27935,
+    "cached_tokens": 12672,
+    "completion_tokens": 1274
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; for n in 03 04 06 08 09; do echo ==== $n; sed -n '/^def _warp/,/^def solve_batch/p' conf_m102_a03_batch_${n}_solver.py | head -64; done; cat > /tmp/probe12.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom scipy.linalg import lstsq\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; traj=tr['traj']; _,_,vt=np.linalg.svd(traj[:52],full_matrices=False); t=traj@vt[:2].T\\nA=lambda x:np.c_[np.ones(len(x)),x]; fit=lambda x,y:lstsq(x,y)[0]\\np=s['panel_a']; u=A(p['u']); v=p['v']; mask=np.ones(len(u),bool)\\nfor _ in range(5):\\n ca=fit(u[mask],v[mask]); err=np.linalg.norm(u@ca-v,axis=1);mask=err<3*np.median(err)\\nz=np.linalg.solve(ca[1:].T,(tr['x']-ca[0]).T).T\\n\\ndef check(label,f):\\n b=fit(f[:52],np.c_[y,t][:52]); pred=f@b; e=np.abs(pred[52:]-np.c_[y,t][52:]); print(label,np.round(e.mean(0),4), 'state',round(np.abs(pred[52:,1:]@vt[:2]-traj[52:]).mean(),4))\\n\\ndef funcs(name,x,k):\\n if name=='both': return np.c_[np.sin(k*x),np.cos(k*x)]\\n if name=='sin': return np.sin(k*x)\\n if name=='cos': return np.cos(k*x)\\n if name=='tanh': return np.tanh(k*x)\\n if name=='arctan': return np.arctan(k*x)\\n if name=='ring': return np.c_[np.sin(k*x[:,0]*x[:,2]),np.sin(k*x[:,1]*x[:,3])]\\n if name=='signed': return np.sign(x)*abs(x)**k\\n\\ndef panel_scan(p,j):\\n u,v=p['u'],p[j]; out=[]\\n for name in ['sin','cos','both','tanh','arctan','signed','ring']:\\n  for lin in [False,True]:\\n   def des(x,k):return A(np.c_[x,funcs(name,x,k)] if lin else funcs(name,x,k))\\n   def loss(k):\\n    d=des(u,k); return np.mean((d@fit(d,v)-v)**2)\\n   kg=np.linspace(.2,25,250); ll=np.array([loss(k) for k in kg]); i=ll.argmin(); k=minimize_scalar(loss,bounds=(kg[max(0,i-1)],kg[min(len(kg)-1,i+1)]),method='bounded').x\\n   b=fit(des(u,k),v); out.append((loss(k),name,lin,k,des(z,k)@b))\\n out.sort(key=lambda e:e[0]); print(j,[(round(a,8),b,c,round(d,4)) for a,b,c,d,_ in out[:6]])\\n return out\\n\\ndef main():\\n check('z',A(z));\\n for k,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  print(k); out=panel_scan(s[k],j)\\n  for _,name,lin,k,w in out[:3]:\\n   check((name,lin),A(w));check((name,lin,'quad'),A(np.c_[w,np.stack([w[:,i]*w[:,j] for i in range(4) for j in range(i,4)],1)]))\\n for yy in (y,t[:,0],t[:,1]):\\n  print('univariate',[(round(v,3),i,n,round(k,2)) for v,i,n,k in sorted([(abs(np.corrcoef(funcs(n,z[:52,i],k),yy[:52])[0,1]),i,n,k) for i in range(4) for n in ('sin','cos') for k in np.linspace(.2,25,250)],reverse=True)[:9]])\\nif __name__=='__main__':main()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe12.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel transfer → H2 nonlinear operator and rank-two trajectory readout; prior 52/20 MAEs are 0.764 for y and 0.956 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fit nonlinear operators to panel measurements independently of the response labels, then test whether their predictions explain either output on the fixed 52/20 split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fc5908df3c0d8a57ff248e7ce69073a8afa72674123289c81910df08b12c2c4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30985.7,
+      "usage_known": true,
+      "prompt_tokens": 27935,
+      "cached_tokens": 12672,
+      "completion_tokens": 1274
+    }
+  ]
+}

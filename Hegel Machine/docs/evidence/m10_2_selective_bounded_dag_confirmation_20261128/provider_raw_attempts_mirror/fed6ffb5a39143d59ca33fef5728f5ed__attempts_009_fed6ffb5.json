@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fed6ffb5a39143d59ca33fef5728f5ed",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:13:04.821870+00:00",
+  "ended_at_utc": "2026-11-28T15:13:43.045597+00:00",
+  "request_sha256": "cac79b9e0bec1fce3c236e21753e21fee6671d60366aac2209c46d654d96fd21",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57783,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38564,
+    "cached_tokens": 12672,
+    "completion_tokens": 1627
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '15,115p' /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/grammar.py <<'PY'\\nfrom studyfit import *\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True)\\nf=np.load('/tmp/features.npz');z,L,C,D,Y,H=(f[k] for k in ('z','L','C','D','Y','H')); T=Y[:,1:9];Y=Y[:,[0,9,10]]; N=52\\np=s['panel_c'];u=p['u']; obj=[]\\nfor k in [1,2]:\\n fn=(lambda w,a:w/(1+a*np.abs(w))) if k==1 else (lambda w,a:w*w/(1+a*w*w));\\n for j in range(3):\\n  def basis(U,P):\\n   a=P[0]; w=U+(P[1:] if len(P)>1 else 0); G=fn(w,a);return one(np.c_[U,G]) if j!=0 else one(G)\\n  def E(P):\\n   F=basis(u,P);return (F@ls(F,p['v'+str(k)])-p['v'+str(k)]).ravel()\\n  v=least_squares(E,[.85 if k==1 else .165]+[0.]*(4 if j==2 else 0),max_nfev=200);print('branch',k,j,v.x,np.std(v.fun))\\n  if j==2: obj.append(basis(z,v.x)@ls(basis(u,v.x),p['v'+str(k)]))\\nC,D=obj\\nX=[z,L,C,D]; names=['z','L','C','D']; d={}\\nfun={'id':lambda x:x,'sq':lambda x:x*x,'cube':lambda x:x**3,'tanh':np.tanh,'sin':np.sin,'soft':lambda x:x/(1+abs(x)), 'r':lambda x:x/(1+x*x),'r22':lambda x:x/(1+.22*x*x)}\\ndef add(n,a):\\n for i,v in enumerate(a.T):d[n+str(i)]=v\\nfor n,x in zip(names,X):\\n for fn,g in fun.items():add(fn+n,g(x))\\n for i,j in itertools.combinations(range(4),2):\\n  d[f'{n}{i}*{j}']=x[:,i]*x[:,j]\\n  for fn in ['sq','tanh','r22']:\\n   for sign in [-1,1]:d[f'{fn}({n}{i}{sign:+}{j})']=fun[fn](x[:,i]+sign*x[:,j])\\nfor i,j in itertools.combinations(range(4),2):\\n A,B=X[i],X[j];nm=names[i]+names[j]\\n for a,b in itertools.product(range(4),repeat=2):d[f'{names[i]}{a}*{names[j]}{b}']=A[:,a]*B[:,b]\\n for sign in [-1,1]:\\n  for p in [.22,.5,1,1.25,2]:\\n   for fn in ['sq','tanh','r22','cube','sin']:\\n    add(f'{fn}({nm}{sign*p:+})',fun[fn](A+sign*p*B))\\n for p in [.22,1,1.25]:\\n  add(f'{nm}/({p})',A/(1+p*B*B));add(f'{nm}inv/({p})',B/(1+p*A*A))\\n for sh in range(4):\\n  P=A*np.roll(B,sh,axis=1);d[f'dot{nm}{sh}']=P.sum(1)\\n  for p in [.22,1,1.25]:\\n   for fn in ['id','tanh','r22','sq','cube']:\\n    add(f'{fn}({nm}prod{sh},{p})',fun[fn](p*P))\\nB=np.array(list(d.values())).T; keys=list(d);print('bank',B.shape)\\nfor yid,y in enumerate(Y.T):\\n for base in ['ones','CD','polyZ']:\\n  F={'ones':one(z[:,:0]),'CD':one(np.c_[C,D]),'polyZ':one(np.c_[z,pair(z)])}[base]\\n  print('GREEDY',yid,base)\\n  for step in range(15):\\n   R=B[:N]-F[:N]@ls(F[:N],B[:N]);e=y[:N]-F[:N]@ls(F[:N],y[:N]); j=np.argmax(abs(e@R)/np.maximum(np.linalg.norm(R,axis=0),1e-7));F=np.c_[F,B[:,j]]; E=abs(F@ls(F[:N],y[:N])-y); print(keys[j],round(E[:N].mean(),5),round(E[N:].mean(),5),end='; ')\\n  print()\\n# Save refined operators for structured follow-up\\nnp.savez('/tmp/refined.npz',z=z,L=L,C=C,D=D,T=T,Y=Y,H=H,B=B,keys=keys)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic smooth fusion → H2 sparse sums, products, and rational gates with refined branch operators; prior inner-selected 52/20 scalar MAE is 0.049–0.054.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Search the fitting rows for algebraic terms that explain the residuals, including gates and cyclic products unavailable to the previous kernel models.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7ed78cf79e0af414768bd3b08d426e4184427c5c0a6acc5e4e58d7c9024d041b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38221.77,
+      "usage_known": true,
+      "prompt_tokens": 38564,
+      "cached_tokens": 12672,
+      "completion_tokens": 1627
+    }
+  ]
+}

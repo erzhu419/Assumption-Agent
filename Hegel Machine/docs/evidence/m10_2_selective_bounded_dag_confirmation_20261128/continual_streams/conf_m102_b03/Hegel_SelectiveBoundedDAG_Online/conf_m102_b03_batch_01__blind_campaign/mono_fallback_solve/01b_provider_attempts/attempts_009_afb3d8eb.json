@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afb3d8eb0962434e963c6877fa4ae0a6",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:15.049699+00:00",
+  "ended_at_utc": "2026-11-28T15:03:45.375114+00:00",
+  "request_sha256": "1566e7c9cce211f0aa83d7619cd3c24cea3edaad77c8263a0af3dae52dcafe90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57989,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38252,
+    "cached_tokens": 12672,
+    "completion_tokens": 1248
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine.py <<'PY'\\nexec(open('/tmp/dag.py').read().split('ops=')[0])\\nfrom itertools import combinations\\nn=52; a,b=Q(z),R(z); vv=np.c_[a,b]; U,V=np.triu_indices(8); uv=vv[:,U]*vv[:,V]; X=ones(vv)\\ndef check(f,t):\\n p=f@ls(f[:n],t[:n]);e=abs(p-t);return e[:n].mean(0),e[n:].mean(0)\\nfor name,w in [('plain',X),('diag',np.c_[X,a*b]),('dot',np.c_[X,(a*b).sum(1)]),('cross',np.c_[X,(a[:,:,None]*b[:,None,:]).reshape(-1,16)]),('quadratic',np.c_[X,uv])]:\\n for v in [np.zeros((len(y),0)),ts@S.T,ts]:print('read',name,v.shape[1],check(np.c_[w,v],y))\\n print('spat',name,check(w,ts)[1])\\nprint('times',T,'meta',s['telemetry_vec'],s['train']['summary']);print('svd',np.linalg.svd(ts,compute_uv=False)); \\ndef timefit(fun,start):\\n def e(p):\\n  h=fun(p);return (h@ls(h,ts[:n].T)-ts[:n].T).ravel()\\n r=least_squares(e,start,bounds=(0.001,30),max_nfev=160); h=fun(r.x);return np.mean(abs(r.fun)),np.mean(abs(h@ls(h,ts[n:].T)-ts[n:].T)),r.x,h\\nr=lambda p:-np.expm1(-p*T)\\nfuns=[('rise',lambda p:p),('sin',lambda p:np.sin(p*T)),('dampedsine',lambda p:np.sin(p[0]*T)*np.exp(-p[1]*T)),('cos',lambda p:1-np.cos(p*T)),('dexp',lambda p:T*np.exp(-p*T)),('dexp2',lambda p:T*T*np.exp(-p*T)),('square',lambda p:r(p)**2),('linear',lambda p:T),('expsin',lambda p:r(p[0])*np.sin(p[1]*T))];out=[]\\nfor name,f in funs:\\n for q0 in ([.35,1.7,1.2],[.35,1.7,3.5],[1.7,4.,1.5],[.35,1.7,6.]):\\n  p0=list(q0)+([.5] if name in ['dampedsine','expsin'] else []);fun=lambda p:np.c_[r(p[0]),r(p[1]),f(p[2:] if len(p)>3 else p[2]) if name!='rise' else r(p[2])];out.append((*timefit(fun,p0),name))\\nfor a0,b0,p,h0,nm in sorted(out,key=lambda v:v[0])[:10]:print('time',a0,b0,p,nm,'read',check(np.c_[X,ts@np.linalg.pinv(h0.T)],y))\\n# Determine which components of QR separately survive controlling the time modes.\\nF=np.c_[X,ts@S.T]; e=y-F@ls(F[:n],y[:n]); print('read residual and coeff',np.quantile(e,[0,.1,.5,.9,1]),ls(F[:n],y[:n]));\\nfor cat,w in [('quadratic',uv),('z',z),('threeprod',np.array([z[:,j].prod(1) for j in combinations(range(4),3)]).T),('dots',np.c_[np.sum(a*b,1),np.sum(a*z,1),np.sum(b*z,1)])]:\\n ww=w-F@ls(F[:n],w[:n]); score=abs(e[:n]@ww[:n])/np.linalg.norm(ww[:n],axis=0); print(cat,[(i,check(np.c_[F,w[:,i]],y)) for i in np.argsort(score)[-5:][::-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/indexfit.py >/tmp/index.out; grep -A12 '^1$\\\\|^2$' /tmp/index.out\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the readout nearly closes when conditioned on measured trajectory modes; isolate the missing interaction and recover a forecastable spatial law (conditional held-out y MAE 0.0475).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use conditional readout error to narrow the algebraic search, while treating state prediction and temporal basis recovery as separate validation problems.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1e9baea8cd69925f105c72ed13a7123adbb6eea9c00b7f7668b8b1de0cb98e29",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30323.53,
+      "usage_known": true,
+      "prompt_tokens": 38252,
+      "cached_tokens": 12672,
+      "completion_tokens": 1248
+    }
+  ]
+}

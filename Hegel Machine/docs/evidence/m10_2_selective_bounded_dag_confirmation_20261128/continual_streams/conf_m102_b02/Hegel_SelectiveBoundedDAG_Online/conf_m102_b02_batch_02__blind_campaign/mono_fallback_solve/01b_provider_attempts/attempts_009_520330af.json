@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "520330affda441a6bd2eb91d3f2b63ae",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:01.710554+00:00",
+  "ended_at_utc": "2026-11-28T15:18:22.838107+00:00",
+  "request_sha256": "4d9729f80b34de6f7261b1d2eee13552cb116b2079dc30cfef4d37ab549181d2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61413,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37799,
+    "cached_tokens": 12672,
+    "completion_tokens": 533
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '    y, state = pred[:, 0], pred[:, 1:]\\\\n'\\nnew = '''    y, state = pred[:, 0], pred[:, 1:]\\n    # Estimate the shared two-mode time subspace using only training trajectories.\\n    modes = np.linalg.svd(train['traj'], full_matrices=False)[2][:2]\\n    state = (state @ modes.T) @ modes\\n'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent horizon predictions) → H2 (training-only two-mode trajectory projection); worst tail-split trajectory MAE fell from 0.01160 to 0.00845 and the worst horizon from 0.02512 to 0.01230, with y unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Impose a specific two-rate physical time law\",\n      \"rejected_reason\": \"Two modes are well supported, but exponential and rational combinations have nearly indistinguishable held-out reconstruction errors.\"\n    }\n  ],\n  \"rationale\": \"Projection improved the fixed, random, and extrapolation-heavy trajectory slices without changing scalar predictions. Integrate it and rerun the isolated stress suite and public validator on the modified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7db37efa1b6aefaa4a7de70fd8849b79dbe45de7a2744de8325ae7f7eb479f0e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21125.74,
+      "usage_known": true,
+      "prompt_tokens": 37799,
+      "cached_tokens": 12672,
+      "completion_tokens": 533
+    }
+  ]
+}

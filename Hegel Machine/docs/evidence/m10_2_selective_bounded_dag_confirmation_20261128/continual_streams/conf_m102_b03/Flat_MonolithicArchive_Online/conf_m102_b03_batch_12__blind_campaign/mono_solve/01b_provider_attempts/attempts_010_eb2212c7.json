@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb2212c7fe3649399be84510ef51745c",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:09.395387+00:00",
+  "ended_at_utc": "2026-11-28T15:49:45.090774+00:00",
+  "request_sha256": "8772ac00bf2916e692d003c0443f5d0ae7d38b80ac2996d0e9b7205d8cc517de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68820,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39921,
+    "cached_tokens": 12672,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('def _state(')\\nend = s.index('\\\\ndef solve_batch', start)\\ns = s[:start] + '''def _state(times, trajectories, train_features, new_features):\\n    # The fast mode sees both branches; the slow mode sees the cosine\\n    # branch and the off-diagonal quadratic/cosine interaction.\\n    fast_cols = np.arange(11)\\n    slow_cols = [0, 5, 6, 7, 8, 10]\\n\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * rates)\\n\\n    def design(features, H):\\n        return np.column_stack([\\n            np.einsum('ij,k->ikj', features[:, cols], H[:, j]).reshape(\\n                len(features) * len(times), len(cols))\\n            for j, cols in enumerate((fast_cols, slow_cols))\\n        ])\\n\\n    observed = trajectories.ravel()\\n\\n    def residual(rates):\\n        A = design(train_features, basis(rates))\\n        return A @ ls(A, observed) - observed\\n\\n    rates = least_squares(residual, [1.83, .41], bounds=([.85, .03], [5., .84]),\\n                          ftol=1e-11).x\\n    H = basis(rates)\\n    weights = ls(design(train_features, H), observed)\\n    return (design(new_features, H) @ weights).reshape(len(new_features), len(times))\\n\\n''' + s[end:]\\ns = s.replace('design = np.c_[F[:,:9],diag]', 'design = np.c_[F[:, :9], diag]\\\\n    state_design = np.c_[design, F[:, 10]]').replace('train[\\\\'traj\\\\'], F[:n], F[n:])', 'train[\\\\'traj\\\\'], state_design[:n], state_design[n:])')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch12.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['panel_a']; u,v=p['u'],p['v']; t=s['train']\\ninlier=np.max(abs(m.calibrate(p,v)-u),axis=1)<0.001\\nerrors=[]\\nfor j in np.flatnonzero(inlier):\\n keep=np.arange(len(u))!=j; good=keep&inlier\\n aa=np.array([m.ls(m.D(u[good,k]),v[good,k]) for k in range(4)])\\n diagonal=(v[j]-aa[:,0])/aa[:,1]\\n a=m.ls(m.D(u[good]),v[good]); affine=np.linalg.solve(a[1:].T,v[j]-a[0]); nonlinear=m.calibrate({'u':u[keep],'v':v[keep]},v[[j]])[0]\\n errors.append(np.stack((diagonal,affine,nonlinear))-u[j])\\nerrors=np.array(errors); print('Reference jackknife, inliers:',inlier.sum(),'inverse RMSE (diagonal, affine, nonlinear):',np.mean(errors**2,axis=(0,2))**.5,'nonlinear worst coordinate:',abs(errors[:,2]).max()); assert inlier.sum()>=40 and abs(errors[:,2]).max()<.001\\nF=m._features(s,t['x']); G=np.c_[F[:,:9],F[:,[9,14,19,24]].sum(1),F[:,10]]; control=G.copy();control[:,-1]=0\\nmaes=[np.mean(abs(m._state(s['eval_times'],t['traj'][:52],g[:52],g[52:])-t['traj'][52:])) for g in [G,control]]\\nprint('52/20 trajectory MAE (with, without off-diagonal coupling):',maes);assert maes[0]<maes[1]\\npred=m.solve_batch(s); y=pred['y_hat']; z=pred['state_pred']; np.testing.assert_allclose(pred['diagnostics_vec'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]);print('Exact test diagnostics verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: promote a compact fast/slow trajectory model with the branch dot product and one off-diagonal interaction; the challenger reduced worst-slice trajectory MAE from 0.00801 to 0.00448, with the scalar model unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all 16 cross-products in both trajectory modes\",\n      \"rejected_reason\": \"The compact model reduced worst-slice and terminal trajectory errors on the same holdouts.\"\n    },\n    {\n      \"option\": \"Use disjoint branch inputs for the fast and slow modes\",\n      \"rejected_reason\": \"The disjoint model increased worst-slice trajectory MAE to about 0.00715.\"\n    }\n  ],\n  \"rationale\": \"Install the compact trajectory model and verify the exact deliverable in a clean Python process. Use reference-row jackknifing to test calibration independently and a held-out ablation to check the contribution of the retained cross-channel interaction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cacd839ec752675d7f65e283580be139fd5f13032284d08f3fb6c9a978dbb385",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36715.28,
+      "usage_known": true,
+      "prompt_tokens": 39921,
+      "cached_tokens": 12672,
+      "completion_tokens": 1550
+    }
+  ]
+}

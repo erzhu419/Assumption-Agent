@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d4ba010f5924073babe212efde80b8a",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:46.909915+00:00",
+  "ended_at_utc": "2026-11-28T15:09:17.784209+00:00",
+  "request_sha256": "501678449fdd379750b0c2eb2d29a2425ae6f9d3e09980d520487b4a68989ab8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20161,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20862,
+    "cached_tokens": 12672,
+    "completion_tokens": 1167
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m102_b04_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -30; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; z=tr['traj']; t=s['eval_times']; np.set_printoptions(precision=5,suppress=True,linewidth=120)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for k in range(1,d+1) for ix in combinations_with_replacement(range(x.shape[1]),k)])\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\nmaps={}\\nfor p in ['a','b','c']:\\n a=s['panel_'+p]; u=a['u']; f=aff(u)\\n for k,v in a.items():\\n  if k=='u':continue\\n  m=ls(f,v)\\n  if p=='a':\\n   for _ in range(15):\\n    ix=np.argsort(np.linalg.norm(f@m-v,axis=1))[:40];m=ls(f[ix],v[ix])\\n  print(p,k,'map',m,'row errors',np.sort(np.linalg.norm(f@m-v,axis=1)))\\n  if p!='a':print('quad RMS',np.sqrt(np.mean((poly(u,2)@ls(poly(u,2),v)-v)**2,axis=0)))\\n  maps[p+k]=m\\nu=(x-maps['av'][0])/maps['av'][1:].diagonal(); aa=ls(maps['av'][1:].T,(x-maps['av'][0]).T).T\\nprint('SVD', np.linalg.svd(z,full_matrices=0)[1]);print('temporal bases',np.linalg.svd(z,full_matrices=0)[2][:4]); print('linear coefficients on raw',ls(aff(x),np.c_[y,z]).T);print('mean temporal',z.mean(axis=0));print('cor y/z',np.corrcoef(y,z.T)[0,1:]);\\ndef report(n,a,b):\\n pred=a[52:]@ls(a[:52],b[:52]); print(n,np.mean(abs(pred-b[52:]),axis=0))\\nfor name,w in [('x',x),('u',u),('aa',aa)]+[(p+n,aff(h)@m) for p,h in [('x',x),('u',u),('a',aa)] for n,m in maps.items() if n!='av']:\\n for f,F in [('id',lambda a:a),('rat',lambda a:a/np.sqrt(1+.22*a*a)),('rat2',lambda a:a/(1+.22*a*a)),('tanh',lambda a:np.tanh(a)),('tanh125',lambda a:np.tanh(1.25*a)),('sin',lambda a:np.sin(a))]:\\n  for d in [1,2,3]:\\n   a=poly(F(w),d); b=np.c_[y,z]; pred=a[52:]@ls(a[:52],b[:52]); e=np.mean(abs(pred-b[52:]),axis=0);print('cv',name,f,d,e[0],e[1:].mean(),e[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py > /tmp/probe.out; sed '/^cv /d' /tmp/probe.out; grep '^cv' /tmp/probe.out | sort -g -k5 | head -18; grep '^cv' /tmp/probe.out | sort -g -k6 | head -18\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test calibrated panel coordinates and exact saturation bases against the inherited surrogate, whose 52/20 trajectory MAE was 0.105566.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Separate panel-map identification from the readout search and use temporal rank to determine whether the trajectory admits a smaller model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "35906a87ea40a951662075979914f44e63677ada52c0e86908679c9810b15673",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31445.48,
+      "usage_known": true,
+      "prompt_tokens": 20862,
+      "cached_tokens": 12672,
+      "completion_tokens": 1167
+    }
+  ]
+}

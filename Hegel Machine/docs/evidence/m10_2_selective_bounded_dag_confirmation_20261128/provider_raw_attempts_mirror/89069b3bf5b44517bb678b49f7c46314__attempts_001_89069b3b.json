@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89069b3bf5b44517bb678b49f7c46314",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__init_decomp_conf_m102_b02_batch_13",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:48:22.252524+00:00",
+  "ended_at_utc": "2026-11-28T16:49:17.769324+00:00",
+  "request_sha256": "7fd7c1f9cd03b6d26de9cf76fe1da9e66174719b4a39fa54fc7de0aee28af195",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 4515,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14140,
+    "cached_tokens": 0,
+    "completion_tokens": 1423
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The source has three distinct numerical stages: panel calibration and feature scaling, shared kernel construction, and multi-output prediction. The kernel matrices are computed once and reused for both predictions. The split preserves the source formulas and separate linear solves. The role-blind statistics do not identify which stage caused the shifted-batch failure, so no estimator changes are made.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"node_00\", \"node_01\"],\n    [\"node_01\", \"node_02\"],\n    [\"__input__\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _design(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    A, v = _design(a['u']), a['v']\\n    keep = np.ones(len(A), dtype=bool)\\n    for _ in range(6):\\n        w = _fit(A[keep], v[keep])\\n        e = np.linalg.norm(A @ w - v, axis=1)\\n        good = e < max(.001, 3 * np.median(e))\\n        if np.array_equal(keep, good) or good.sum() < A.shape[1]:\\n            break\\n        keep = good\\n    z = np.linalg.solve(w[1:].T, (x - w[0]).T).T\\n    p = study['panel_b']\\n    u, v = p['u'], p['v']\\n\\n    def phi(q, u):\\n        return _design(erf(q[0]*u) + q[1]*u)\\n\\n    def residual(q):\\n        F = phi(q, u)\\n        return (F @ _fit(F, v) - v).ravel()\\n\\n    sols = [least_squares(residual, [a, -.5*a], bounds=([.1,-8],[4,8]), max_nfev=80) for a in [.4,.8,1.4,2.2]]\\n    q = min(sols, key=lambda o: o.cost).x\\n    b = phi(q, z) @ _fit(phi(q, u), v)\\n    return z, b\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr = study['train']\\n    n = len(tr['x'])\\n    z, b = _coordinates(study, np.vstack((tr['x'], study['test']['x'])))\\n    x = np.c_[z, b, np.tanh(z), np.tanh(2.5*b)]\\n    x = x / np.maximum(x[:n].std(0), 1e-10)\\n    return {'train_features': x[:n], 'test_features': x[n:]}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _kernel(x, w):\\n    linear = x @ w.T / x.shape[1]\\n    r = .5 * np.abs(x[:, None, :] - w[None, :, :])\\n    g = (1 + r + r*r/3)*np.exp(-r)\\n    avg = g.mean(2)\\n    pair = avg*avg - (g*g).sum(2)/x.shape[1]**2\\n    return (1+linear)**2 + .30*avg + .30*pair\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    i, j = features['train_features'], features['test_features']\\n    k, ktest = _kernel(i, i), _kernel(j, i)\\n    return {'k': k, 'ktest': ktest}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    tr = inputs['__input__']['train']\\n    kernels = inputs['node_01']\\n    k, ktest = kernels['k'], kernels['ktest']\\n    n = k.shape[0]\\n    traj = np.asarray(tr['traj'])\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    y = ktest @ np.linalg.solve(k + .004*np.eye(n), tr['y'])\\n    state = (ktest @ np.linalg.solve(k + .004*np.eye(n), traj @ modes.T)) @ modes\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "94d745f689f7732d51b20cd9442e5619d26ceae6931451537d7c5605c7a0ec60",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56596.07,
+      "usage_known": true,
+      "prompt_tokens": 14140,
+      "cached_tokens": 0,
+      "completion_tokens": 1423
+    }
+  ]
+}

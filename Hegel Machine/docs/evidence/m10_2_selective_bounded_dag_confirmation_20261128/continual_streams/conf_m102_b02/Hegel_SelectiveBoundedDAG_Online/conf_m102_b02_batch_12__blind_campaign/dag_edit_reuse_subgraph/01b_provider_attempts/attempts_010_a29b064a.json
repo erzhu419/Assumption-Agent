@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a29b064a0d1341d6ab39b4c76f61f2ca",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:35.413191+00:00",
+  "ended_at_utc": "2026-11-28T16:03:04.272662+00:00",
+  "request_sha256": "c454ddb8ea64f88299eec7c5416f98bdaca9c859050c62f4aa745d1ba1db3aff",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 66705,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33924,
+    "cached_tokens": 5504,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I -B /holdout_task/test_dag_candidate.py\\npython3 -I -B - <<'PY'\\nimport copy\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/test_dag_candidate.py'\\nwith open(path) as f:\\n    harness = f.read().split('\\\\nst = pickle.load(', 1)[0]\\nns = {'__file__': path, '__name__': 'stress_harness'}\\nexec(compile(harness, path, 'exec'), ns)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nrows = np.arange(len(train['x']))\\nslices = [rows[max(40, len(rows)-20):], *np.array_split(np.random.default_rng(45).permutation(rows), 4)]\\nmetrics = []\\nfor hold in slices:\\n    fit = np.setdiff1d(rows, hold)\\n    case = copy.deepcopy(study)\\n    case['train'] = {k: train[k][fit].copy() for k in ('x', 'y', 'traj')}\\n    y, t = case['train']['y'], case['train']['traj'][:, -1]\\n    case['train']['summary'] = np.array([y.mean(), y.std(), t.mean(), t.std()])\\n    case['test'] = {'x': train['x'][hold].copy()}\\n    pred, counts = ns['run_dag'](case)\\n    assert all(v == 1 for v in counts.values())\\n    yy, tt = pred['y_hat'], pred['state_pred']\\n    assert yy.shape == train['y'][hold].shape and tt.shape == train['traj'][hold].shape\\n    assert np.all(np.isfinite(yy)) and np.all(np.isfinite(tt))\\n    np.testing.assert_allclose(pred['diagnostics_vec'], [yy.mean(), yy.std(), tt[:, -1].mean(), tt[:, -1].std()])\\n    metrics.append([np.mean(abs(yy-train['y'][hold])), np.mean(abs(tt-train['traj'][hold]))])\\nworst = np.max(metrics, axis=0)\\nprint('Five-slice worst MAEs (scalar, trajectory):', worst.tolist())\\nassert np.all(worst <= .038)\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/node_00.py')\\nnode = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(node)\\na = node.run_node({'__input__': study})\\ncase = copy.deepcopy(study)\\ncase['train'] = {'x': study['test']['x'][::-1].copy()}\\ncase['test'] = {'x': study['train']['x'][::-1].copy()}\\nb = node.run_node({'__input__': case})\\nfor key in ('x', 'c'):\\n    np.testing.assert_allclose(a[key+'_train'], b[key+'_test'][::-1], rtol=1e-10, atol=1e-10)\\n    np.testing.assert_allclose(a[key+'_test'], b[key+'_train'][::-1], rtol=1e-10, atol=1e-10)\\nprint('Coordinate outputs are label-independent and invariant to row order and train/test placement.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse cyclic-cubic A inversion → composed B/C maps with additive square and cube terms; the saved node passes official CV at 0.024516 scalar and 0.007719 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the first official pass\",\n      \"rejected_reason\": \"Isolated-process verification and shuffled-slice stress testing of the saved artifact remain.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact saved node without modifying it. Rerun the official contract, measure both readouts across five holdouts, and check that the calibration does not depend on labels or train/test placement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bddabddb2491f6a6ae91adf7cc7ee1ec74b8acebd7345e7269b8810939ad86ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29488.87,
+      "usage_known": true,
+      "prompt_tokens": 33924,
+      "cached_tokens": 5504,
+      "completion_tokens": 1151
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "98dcec9a0caa4c71ba953bd9aaebdb5c",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:07.867376+00:00",
+  "ended_at_utc": "2026-11-28T15:46:38.219930+00:00",
+  "request_sha256": "53c317c7424d0fafe647c002b0cb99abe96232f46a994ecac1c070f040fd682f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53084,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33874,
+    "cached_tokens": 12672,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nbase='/holdout_task/'\\nnode=runpy.run_path(base+'node_01.py')\\nfrozen=runpy.run_path(base+'_frozen_nodes/node_00.py')['run_node']\\nbatch=pickle.load(open(base+'public_batch.pkl','rb'))\\nworst=[(0.,None),(0.,None)]; worst_horizon=(0.,None); panel_mae=0.; inverse_max=0.\\nfor bi,entry in enumerate(batch):\\n    s=entry['study']; tr=s['train']; x=np.asarray(tr['x']); n=len(x)\\n    f=frozen({'__input__':s}); models=node['_calibration'](s['panel_a']); q=node['_invert'](x,models)\\n    all_x=np.vstack((x,s['test']['x'])); all_q=node['_invert'](all_x,models)\\n    for (i,j),(w,_) in zip(node['PAIRS'],models):\\n        idx=[i,j]; inverse_max=max(inverse_max,np.max(np.abs(node['_odd_design'](all_q[:,idx])@w-all_x[:,idx])))\\n    panel=s['panel_a']; u,v=panel['u'],panel['v']; d=np.max(abs(v-u),axis=1); med=np.median(d); good=np.flatnonzero(d<=med+max(1.,8*np.median(abs(d-med))))\\n    for j in good:\\n        keep=np.arange(len(u))!=j\\n        leave=node['_calibration']({'u':u[keep],'v':v[keep]})\\n        pred=np.empty(u.shape[1]);\\n        for idx,(w,_) in zip(node['PAIRS'],leave):\\n            idx=list(idx); pred[idx]=node['_odd_design'](u[j:j+1,idx])@w\\n        panel_mae=max(panel_mae,float(np.mean(abs(pred-v[j]))))\\n    splits={}\\n    for seed in (31,83,553):\\n        splits.update({f'random-{seed}-{i}':a for i,a in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),4))})\\n    for k in range(x.shape[1]):\\n        order=np.argsort(q[:,k]); splits[f'low-{k}']=order[:n//6]; splits[f'high-{k}']=order[-(n//6):]\\n    splits['outer-radius']=np.argsort(np.linalg.norm(q,axis=1))[-(n//6):]\\n    for name,te in splits.items():\\n        ti=np.setdiff1d(np.arange(n),te); study={**s,'train':{**tr,**{key:tr[key][ti] for key in ('x','y','traj')}},'test':{'x':x[te]}}\\n        out=node['run_node']({'__input__':study,'node_00':f}); y,state,diag=(out[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n        assert y.shape==tr['y'][te].shape and state.shape==tr['traj'][te].shape and diag.shape==(4,)\\n        assert all(np.isfinite(a).all() for a in (y,state,diag))\\n        assert np.allclose(diag,[y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])\\n        dy=np.abs(y-tr['y'][te]); ds=np.abs(state-tr['traj'][te]);\\n        for j,e in enumerate((dy.mean(),ds.mean())):\\n            if e>worst[j][0]: worst[j]=(float(e),(bi,name))\\n        hz=ds.mean(0); j=int(np.argmax(hz))\\n        if hz[j]>worst_horizon[0]: worst_horizon=(float(hz[j]),(bi,name,j))\\nprint('worst scalar / trajectory slice MAE:', worst)\\nprint('worst trajectory horizon MAE:',worst_horizon)\\nprint('max leave-one-row-out clean panel-A row MAE:',panel_mae,'max train/test forward-inverse defect:',inverse_max)\\nassert max(worst[0][0],worst[1][0],worst_horizon[0])<=.038\\nPY\\nstatus=$?; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; official=$?; test \\\"$status\\\" -eq 0 && test \\\"$official\\\" -eq 0\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the paired degree-seven inverse with frozen panel-B reuse passes the official public CV at scalar MAE 0.004375 and trajectory MAE 0.004382; exact-artifact tail-slice checks are next.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official test passes with substantial margin. Check the unchanged artifact on coordinate tails, outer-radius observations, individual trajectory horizons, and held-out clean calibration rows before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "41a40f53bffcbf46ec1f248705ee085890abf39842c9b675e6f603437eed6721",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30351.02,
+      "usage_known": true,
+      "prompt_tokens": 33874,
+      "cached_tokens": 12672,
+      "completion_tokens": 1276
+    }
+  ]
+}

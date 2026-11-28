@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcda903e6d4444068d23ba4726ddc635",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:47:46.582454+00:00",
+  "ended_at_utc": "2026-11-28T15:48:28.292203+00:00",
+  "request_sha256": "2e2ef35d91e64986e488c993e61aa54224e9926051a85aacb006fc2f2d577099",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57250,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36950,
+    "cached_tokens": 12672,
+    "completion_tokens": 1619
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\n{ echo '\\\"\\\"\\\"Recover the calibration, dual operator branches, and two relaxation modes.\\\"\\\"\\\"'; sed '/^def panels/,$d' /tmp/hegel_continual_archive/*11_solver.py | grep -v 'from scipy.special import expit'; } > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _features(study, x):\\n    z = calibrate(study['panel_a'], x)\\n    panel = study['panel_c']\\n    u = panel['u']\\n    def quadratic(x):\\n        return D(x * np.roll(x, -1, axis=1))\\n    def cosine(x, freq):\\n        return D(np.cos(freq*x))\\n    p = quadratic(z) @ ls(quadratic(u), panel['v1'])\\n    def loss(freq):\\n        design = cosine(u, freq)\\n        return np.mean((design @ ls(design, panel['v2']) - panel['v2'])**2)\\n    freq = minimize_scalar(loss, bounds=(1.7,3.2), method='bounded', options={'xatol':1e-10}).x\\n    q = cosine(z, freq) @ ls(cosine(u, freq), panel['v2'])\\n    return D(np.c_[p, q, np.einsum('ij,ik->ijk', p, q).reshape(len(z),16)])\\n\\n\\ndef _state(times, trajectories, train_features, new_features):\\n    def basis(rates):\\n        return -np.expm1(-times[:, None]*rates)\\n    coefficients = ls(train_features, trajectories)\\n    def residual(rates):\\n        H = basis(rates)\\n        projected = ls(H, coefficients.T).T @ H.T\\n        return (train_features @ (projected-coefficients)).ravel()\\n    rates = least_squares(residual, [1.8,.42], bounds=([.85,.03],[5.,.84]), ftol=1e-12).x\\n    H = basis(rates)\\n    return new_features @ ls(H, coefficients.T).T @ H.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    F = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    diag = F[:, [9,14,19,24]].sum(axis=1)\\n    design = np.c_[F[:,:9],diag]\\n    y = design[n:] @ ls(design[:n],train['y'])\\n    state = _state(np.asarray(study['eval_times']), train['traj'], F[:n], F[n:])\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\ncat > /tmp/check_batch12.py <<'PY'\\nimport importlib.util,numpy as np,pickle\\nq=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(q);q.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; np.set_printoptions(precision=4,suppress=True)\\nF=m._features(s,tr['x']); H=np.load('/tmp/features.npz')['H']; a=m.ls(H,tr['traj'].T).T; C=m.ls(F[:52],np.c_[tr['y'],a][:52]); print('intercept,p,q',C[:9]); print('cross',C[9:].T.reshape(3,4,4)); print('telemetry',s['telemetry_vec']);\\nfor label,te in [('fixed',np.arange(52,72))]+[(f'partition{i}',p[:20]) for i,p in enumerate([np.random.default_rng(i).permutation(72) for i in range(10)])]+[('edge'+str(j),np.argsort(abs(tr['x'][:,j]-np.median(tr['x'][:,j])))[-20:]) for j in range(4)]:\\n ix=np.setdiff1d(np.arange(72),te); pred=m.solve_batch(dict(s,train={k:(v if k=='summary' else v[ix]) for k,v in tr.items()},test={'x':tr['x'][te]})); yr=abs(pred['y_hat']-tr['y'][te]); sr=abs(pred['state_pred']-tr['traj'][te]);print(label,'y',yr.mean(),yr.max(),'state',sr.mean(),sr.mean(axis=0).max(),'terminal',sr[:,-1].mean());\\n if label=='fixed': assert yr.mean()<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch12.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use calibrated parallel quadratic and cosine branches with a dot product for the scalar and full bilinear coupling for trajectories; fixed-split target MAE is 0.00497 and projected-amplitude MAEs are 0.00820 and 0.01265.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The branch dot product alone captures the interactions needed for both trajectory amplitudes.\",\n    \"empirical_witness\": \"Expanding the dot product to all pairwise products lowered fixed-split slow-amplitude MAE from 0.08437 to 0.01265.\",\n    \"causal_blanket_diagnosis\": \"The trajectory can depend on bilinear directions that the dot product discards.\",\n    \"sublated_pivot\": \"Use the bilinear basis for trajectories while retaining the simpler dot product for the scalar response; inspect fitted coefficients for a smaller supported basis.\",\n    \"risk_kind\": \"missing bilinear coupling\",\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add panel B as a separate stage\",\n      \"rejected_reason\": \"Applying its affine map after either C branch did not improve the full bilinear model, and applying it before the branches materially increased prediction errors.\"\n    }\n  ],\n  \"rationale\": \"The recovered inverse matches clean reference rows within 0.00023 per coordinate, and both C operators fit near the panel noise floor. Implement the validated feature graph, fit trajectory rates in observation space, and check fixed, random, and input-edge holdouts before considering further compaction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "df6f964a2028f78eef070dbd403e2ac70bd761aacb20e0a183848a76cb92e856",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42145.25,
+      "usage_known": true,
+      "prompt_tokens": 36950,
+      "cached_tokens": 12672,
+      "completion_tokens": 1619
+    }
+  ]
+}

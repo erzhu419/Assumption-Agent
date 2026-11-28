@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df7186b262ee49a789b2c5db541874eb",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:03.131415+00:00",
+  "ended_at_utc": "2026-11-28T15:16:46.549553+00:00",
+  "request_sha256": "a793702874100cc145a87ac1320078f4c523fe7146545660fc59a837f33a3cc9",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 56322,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36324,
+    "cached_tokens": 5504,
+    "completion_tokens": 1940
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cd /holdout_task; cat > node_00.py <<'PY'\\n\\\"\\\"\\\"Robust sensor calibration and coordinatewise nonlinear features.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    p = s['panel_a']\\n    u, v = np.asarray(p['u'], float), np.asarray(p['v'], float)\\n    ok = np.linalg.norm(v-u, axis=1) < 2\\n    c = np.array([np.linalg.lstsq(np.c_[np.ones(ok.sum()), u[ok,i]], v[ok,i], rcond=None)[0] for i in range(u.shape[1])]).T\\n    x, xt = [(np.asarray(s[k]['x'], float)-c[0])/c[1] for k in ('train','test')]\\n    def features(z):\\n        a,b,c,d = z.T\\n        return np.c_[np.ones(len(z)), z, np.sin(3*a), np.tanh(1.8*a), np.sin(3.4*b), np.sin(3*d), np.tanh(1.35*d)]\\n    r, rt = features(x), features(xt)\\n    return {'z':r, 'zt':rt, 'readout_train':r.copy(), 'readout_test':rt.copy()}\\nPY\\ncat > node_01.py <<'PY'\\n\\\"\\\"\\\"Fit linear readout and trajectory coefficients on observed rows.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    f = inputs['node_00']\\n    return {'readout_coef':np.linalg.lstsq(f['readout_train'], train['y'], rcond=None)[0],\\n            'state_coef':np.linalg.lstsq(f['z'], train['traj'], rcond=None)[0]}\\nPY\\npython3 test_dag_candidate.py\\ncat > /tmp/fast04.py <<'PY'\\nexec(open('/tmp/probe04.py').read().split('for pn,kn')[0])\\nfrom scipy.linalg import solve\\nT=tr['traj'];U,S,V=np.linalg.svd(T[:52],full_matrices=False); Y=np.c_[tr['y'],T@V[:2].T]; scale=np.std(Y[:52],axis=0); A=a(x); e=Y-A@fit(A[:52],Y[:52]);\\nfor j in (0,1,2):\\n print('target',j,'affine',fit(A[:52],Y[:52,j]),flush=True)\\n for k in range(4):\\n  idx=np.argsort(x[:52,k]); print(k,'bins',np.round([e[g,j].mean() for g in np.array_split(idx,13)],3),'stdev',np.round([e[g,j].std() for g in np.array_split(idx,13)],3),flush=True)\\nF=[*A.T]; names=['1','x0','x1','x2','x3'];\\ndef add(v,n):F.append(v);names.append(n)\\nfor j,z in enumerate(x.T):\\n for k in range(j,4):add(z*x[:,k],f'x{j}x{k}')\\n for f in np.arange(.5,12.01,.25):\\n  for nm,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('rat',lambda t:t/(1+t*t))]:\\n   add(fn(f*z),f'{nm} {j} {f}')\\n for b in np.arange(-.8,.81,.1):\\n  for nm,fn in [('step',lambda t:t>0),('hinge',lambda t:np.maximum(t,0))]:\\n   add(fn(z-b),f'{nm} {j} {b:.1f}')\\n for k in range(4):\\n  if k!=j:\\n   for f in (1.,2.,3.,4.,5.,6.):\\n    for nm,fn in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh)]:add(x[:,k]*fn(f*z),f'x{k}*{nm} {j} {f}')\\nF=np.array(F,float).T; fn=np.linalg.norm(F[:52],axis=0); fn[fn<1e-10]=1; F/=fn\\nfor j in range(3):\\n y=Y[:,j]; ix=list(range(5));\\n for k in range(12):\\n  Q=np.linalg.qr(F[:52,ix])[0]; B=F[:52]-Q@(Q.T@F[:52]); err=y[:52]-Q@(Q.T@y[:52]); sc=abs(B.T@err)/np.maximum(np.linalg.norm(B,axis=0),1e-8);sc[ix]=-1; ix.append(np.argmax(sc)); yp=F[:,ix]@fit(F[:52,ix],y[:52]); print(j,k,names[ix[-1]],np.round([abs(yp[:52]-y[:52]).mean(),abs(yp[52:]-y[52:]).mean()],4),flush=True)\\n# Additive GP with coordinatewise smoothness selected by marginal likelihood; include interactions in second variant.\\nfrom scipy.optimize import minimize\\nfrom scipy.linalg import cho_factor,cho_solve\\nD=(x[:,None,:]-x[None,:,:])**2; lin=1+x@x.T\\nfor j in range(3):\\n for inter in (False,True):\\n  y=Y[:,j]; yy=y[:52]/scale[j]\\n  def cov(h):\\n   ell,amp,noi=np.exp(h[:4]),np.exp(h[4:8]),np.exp(h[8]); K=lin+np.sum(amp*np.exp(-.5*D/ell**2),axis=2)\\n   if inter: K+=np.exp(h[9])*np.exp(-.5*np.sum(D,axis=2)/np.exp(2*h[10]))\\n   return K,noi\\n  def obj(h):\\n   K,n=cov(h); C=cho_factor(K[:52,:52]+n*np.eye(52)); return .5*yy@cho_solve(C,yy)+np.log(np.diag(C[0])).sum()\\n  h=min((minimize(obj,np.r_[np.full(4,b),np.zeros(4),-5.,-2.,0.],bounds=[(-4,2)]*4+[(-10,4)]*4+[(-12,1),(-10,4),(-3,2)],method='L-BFGS-B') for b in (-2.,-1.,0.)),key=lambda r:r.fun).x\\n  K,n=cov(h); yp=K[52:,:52]@solve(K[:52,:52]+n*np.eye(52),yy,assume_a='pos')*scale[j]; print('GP',j,inter,np.round(h,2),abs(yp-y[52:]).mean(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fast04.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 single nonlinear ridge -> H2 additive and interaction features; the best measured single-ridge scalar CV MAE is 0.0516 and the dominant trajectory score MAE is 0.156.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Interpolate a cubic map from panel B\",\"rejected_reason\":\"There are more cubic coefficients than panel measurements, so exact interpolation cannot establish the map.\"}],\n  \"rationale\":\"Save both contract-compatible nodes now, then use residual profiles, sparse feature fits, and training-only covariance estimates to identify what the baseline misses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a12a22c628ef913da3fabfc6f7c3493d2736e05c1ad7a0980203589a390dbac6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43837.32,
+      "usage_known": true,
+      "prompt_tokens": 36324,
+      "cached_tokens": 5504,
+      "completion_tokens": 1940
+    }
+  ]
+}

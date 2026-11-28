@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "deb3fca4300d499b8820b4e8672aa209",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:33.649890+00:00",
+  "ended_at_utc": "2026-11-28T15:47:13.206046+00:00",
+  "request_sha256": "13b4211b6d55c0b043c6389cc4b910355d9e96f9c58e865283ea028cb61f5320",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68638,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42005,
+    "cached_tokens": 12672,
+    "completion_tokens": 1670
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/validate_public_schema.py; cat >/tmp/last.py <<'PY'\\nimport numpy as np,pickle,importlib.util,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=np.load('/tmp/operators.npz'); X,Z,Y=d['X'],d['Z'],d['Y']; ls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]; aff=lambda a:np.c_[np.ones(len(a)),a]; u,v=[s['panel_b'][j] for j in ('u','v')]; roll=lambda a:np.roll(a,-1,axis=1); Q=np.load('/tmp/newroutes.npz'); sp=importlib.util.spec_from_file_location('p','/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ndef odd(a,b):return np.sign(a)*abs(a)**b\\nR={k:w for k,w in np.load('/tmp/routes.npz').items()}; R.update(dict(Q)); R.update(X=X,Z=Z,C=d['C1'],Q=d['C22'])\\nfor label,fn in [('tanh3',lambda x,g:np.tanh(g*x**3)),('asinh3',lambda x,g:np.arcsinh(g*x**3)),('atan3',lambda x,g:np.arctan(g*x**3)),('rat3',lambda x,g:x**3/(1+g*x*x)),('rat6',lambda x,g:x**3/(1+g*x**6)),('pow',lambda x,g:odd(x,g)),('sinh3',lambda x,g:np.sinh(g*x**3))]:\\n for aug in ['0','u','r','rr','ucyc','rcyc','rrcyc']:\\n  def f(x,g):\\n   a=fn(x,g); b=odd(x,1/3); cols={'0':(), 'u':(x,), 'r':(b,), 'rr':(b,x**3), 'ucyc':(x,x*roll(x)), 'rcyc':(b,x*roll(x)), 'rrcyc':(b,x**3,x*roll(x))}[aug];return np.c_[aff(a),*cols]\\n  res=lambda g:(f(u,g)@ls(f(u,g),v)-v).ravel(); opt=least_squares(res,[1.25],bounds=(.005,5)); g=opt.x[0]; a=f(u,g); q=ls(a,v); h=(a*np.linalg.pinv(a).T).sum(1); print(label,aug,round(g,5),round(np.std(opt.fun),6),round(np.mean(abs(opt.fun.reshape(-1,4)/(1-h)[:,None])),6)) if np.std(opt.fun)<.005 else None\\n  for k,x in [('X',X),('Z',Z)]: R[label+aug+k]=f(x,g)@q\\n A=aff(fn(u,1.25)); mat=ls(A,v); inv=np.linalg.pinv(mat[1:]);\\n for k,x in [('X',X),('Z',Z)]:R[label+'inv'+k]=(x-mat[0])@inv\\nprint('prior standalone',np.mean(abs(m._predict(R['prior'][:72],Y[:52,0],1,'atan')-Y[52:,0])),np.mean(abs(m._predict(R['prior'][:72],Y[:52,1:],0,'inv3')-Y[52:,1:])))\\n# Search output links and directional rational terms; score every model on a second blocked split as well.\\nS=[]; rng=np.random.default_rng(623); splits=[(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20))];\\nfor k,w in R.items():\\n if np.max(abs(w))>30:continue\\n w=w/np.maximum(np.median(abs(w[:72]),axis=0),.06)\\n for g in [.3,.7,1.25,2.5,5.0]:\\n  for name,t in [('asinh',np.arcsinh(g*w)),('root',np.sinh(np.arcsinh(g*w)/3)),('atan',np.arctan(g*w)),('tanh',np.tanh(g*w)),('rational',w/(1+g*w*w)),('cubicroot',odd(w,1/3)),('sinc',np.sin(g*w))]:\\n   if name=='cubicroot' and g!=1.25:continue\\n   for typ in range(5):\\n    base=aff(t) if typ<=1 else np.c_[aff(w),t];\\n    if typ in (1,3):base=np.c_[base,*[t[:,i]*t[:,j] for i in range(4) for j in range(i,4)]]\\n    if typ==4:base=np.c_[base,t**3,t*np.roll(t,1,1)]\\n    for reg in (.0003,.02,.3):\\n     es=[]\\n     for tr,te in splits:\\n      F=base/np.maximum(np.linalg.norm(base[tr],axis=0),1e-9); a=F[tr];p=F[te]@np.linalg.solve(a.T@a+reg*np.eye(a.shape[1]),a.T@Y[tr]); e=np.mean(abs(p-Y[te]),axis=0);es.append((e[0],e[1:].mean()));\\n     S.append((es,(k,g,name,typ,reg)))\\nfor j in (0,1):\\n for st in (0,1):\\n  print('TOP',j,st, sorted(S,key=lambda e:e[0][0][j] if st==0 else max(e[0][0][j],e[0][1][j]))[:7])\\nnp.savez('/tmp/allroutes.npz',**R)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/last.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (separable panel links) -> H2 (test forward and inverse routes with structured heads); archived diagnostic reports 0.05777 scalar and 0.03664 trajectory MAE, but direct replay has not reproduced those values.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Read the exact validation split, then compare compact forward and inverse panel maps with structured heads on two blocked splits before committing to a deliverable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d2f53c22fddf818407646e711f688dcf25be4438b7a81f25b7c19ffe7f7197b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39554.8,
+      "usage_known": true,
+      "prompt_tokens": 42005,
+      "cached_tokens": 12672,
+      "completion_tokens": 1670
+    }
+  ]
+}

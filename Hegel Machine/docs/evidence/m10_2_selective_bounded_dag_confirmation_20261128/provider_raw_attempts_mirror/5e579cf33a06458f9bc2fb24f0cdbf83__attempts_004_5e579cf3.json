@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e579cf33a06458f9bc2fb24f0cdbf83",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:56:04.222134+00:00",
+  "ended_at_utc": "2026-11-28T15:56:46.254061+00:00",
+  "request_sha256": "c285425589b8c3198051f416ed81c0eed7cf64cd8ebaab6aa82d4582f0235c75",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28659,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23789,
+    "cached_tokens": 12672,
+    "completion_tokens": 873
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe14.py <<'PY'\\nimport numpy as np, pickle, glob, importlib.util\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; T=tr['traj']\\ndef D(x):return np.c_[np.ones(len(x)),x]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nprint('T singular values',np.linalg.svd(T,compute_uv=False)); print('T quantiles',np.quantile(T,[0,.5,1],axis=0))\\nfor k in range(1,4):\\n def res(p):\\n  H=-np.expm1(-t[:,None]*p);return (H@ls(H,T.T)-T.T).ravel()\\n z=least_squares(res,np.geomspace(2,.3,k),bounds=(.001,20),max_nfev=100);print('relax',z.x,np.mean(abs(z.fun)))\\nfor name in ('a','b','c'):\\n p=s['panel_'+name]; u=p['u']; w=np.roll(u,-1,axis=1)\\n for key,v in p.items():\\n  if key=='u':continue\\n  a=D(u); b=ls(a,v)\\n  if name=='a':\\n   for i in range(8):\\n    r=np.linalg.norm(a@b-v,axis=1); mask=r<4*np.median(r); b=ls(a[mask],v[mask]);\\n  else: mask=np.ones(len(u),bool)\\n  print('PANEL',name,key,'n',sum(mask),'affine',np.round(b,5),'column rmse',np.mean((a[mask]@b-v[mask])**2,axis=0)**.5)\\n  if name=='a':\\n   for j in range(4):\\n    m=D(np.c_[u[:,j],w[:,j],u[:,j]*w[:,j],u[:,j]**3]); q=ls(m[mask],v[mask,j]);print(j,np.round(q,8),np.std((m@q-v[:,j])[mask]))\\nq=dict(s);q['train']={k:v[:52] if len(v)==72 else v for k,v in tr.items()};q['test']={'x':tr['x'][52:]}\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);o=m.solve_batch(q);print(f.split('_')[-2], np.mean(abs(o['y_hat']-tr['y'][52:])),np.mean(abs(o['state_pred']-T[52:])))\\n except Exception as e:print(type(e),e)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic archive graph -> H2 campaign-specific calibration, operators, and time basis; pre-LLM 52/20 worst MAE was 0.939243.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure trajectory rank, panel fit residuals, and archive transfer errors to isolate which stages require a new model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0066581afb85eb3559f9052692329def9b24ff1d35f46aa2ff4f5fe31e7156fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42555.37,
+      "usage_known": true,
+      "prompt_tokens": 23789,
+      "cached_tokens": 12672,
+      "completion_tokens": 873
+    }
+  ]
+}

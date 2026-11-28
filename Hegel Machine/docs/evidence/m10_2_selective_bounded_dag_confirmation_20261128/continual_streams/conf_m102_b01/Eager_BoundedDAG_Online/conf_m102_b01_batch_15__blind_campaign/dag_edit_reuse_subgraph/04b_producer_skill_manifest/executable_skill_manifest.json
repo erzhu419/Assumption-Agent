@@ -1,0 +1,159 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_b01_batch_15_71b6dd339629",
+    "source_hash": "71b6dd339629e1826477c599307bbad9b245012f7c70142590f44d39a34776d7",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m102_b01_batch_15__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/explore15.py",
+        "archived_relpath": "producers/tmp__explore15.py",
+        "bytes": 1283,
+        "sha256": "3c5f4aa1d7406f64de0c9db40e7986c4289326e87b8a309b7a771211f738b4a6"
+      },
+      {
+        "container_path": "/tmp/head15.py",
+        "archived_relpath": "producers/tmp__head15.py",
+        "bytes": 2791,
+        "sha256": "cbeca0a8f9d05d129a8e673991dab808e82a2eb6f2874aae8b165ca193afe40e"
+      },
+      {
+        "container_path": "/tmp/pan15.py",
+        "archived_relpath": "producers/tmp__pan15.py",
+        "bytes": 1792,
+        "sha256": "684ff9653f1b1fb8930e9465de30019ca14e6a923af02c525324a97f1d451d74"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_b01_batch_00_solver.py",
+        "bytes": 2081,
+        "sha256": "d2d152361ba947c0a7d55aed15852078cff3cbf6b5895f0f4234a72a668240b7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_00.py test_dag_candidate.py validate_public_schema.py public_asset_index.json; ls -la /tmp/hegel_continual_archive; du -ah /tmp/hegel_continual_archive | sort -h | tail -50; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'panel alignment ridge nuisance profiling'",
+      "cd /holdout_task; cat /tmp/hegel_continual_archive/*.py /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; tail -25 _frozen_nodes/node_00.py; grep -nE 'def |fold|diagnostics|public_cv|accepted' test_dag_candidate.py; python3 - <<'PY'\nimport pickle,numpy as np\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\ns=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,p=''):\n if isinstance(x,list):\n  print(p,'list',len(x));show(x[0],p+'[0]')\n elif isinstance(x,dict):\n  for k,v in x.items():show(v,p+'/'+k)\n elif isinstance(x,np.ndarray):\n  print(p,x.shape,'min/max',np.min(x,axis=0",
+      "cd /holdout_task; tail -38 _frozen_nodes/node_00.py; sed -n '126,175p' test_dag_candidate.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -18; cat > /tmp/explore15.py <<'PY'\nimport os,sys,pickle,importlib.util,itertools as it,numpy as np\nos.chdir('/holdout_task'); s=pickle.load(open('public_batch.pkl','rb'))[0]['study']; tr=s['train'];\nsp=importlib.util.spec_from_file_location('f','_frozen_nodes/node_00.py');f=importlib.util.module_from_spec(sp);sp.lo",
+      "cd /holdout_task; sed -n '143,171p' test_dag_candidate.py; cat > /tmp/pan15.py <<'PY'\nexec(open('/tmp/explore15.py').read().split(\"for k in ['panel_b'\")[0])\nfrom scipy.optimize import minimize_scalar\nB=s['panel_b']; C=s['panel_c']; t=s['telemetry_vec'];\nfor p,key in [(B,'v'),(C,'v1'),(C,'v2')]:\n u,v=p['u'],p[key]; pairs=np.column_stack([u[:,i]*u[:,j] for i,j in [(0,1),(1,2),(2,3),(3,0)]]); print('\\n',key); print('even+ intercept, ring, square LOOCV',err(aff(u*u),v),err(aff(pairs),v),err(aff(np.c_[u*u,pairs]),v));\n funs={'cos':lambda x,g:np.cos(g*x),'sin':lambda x,g:np.sin(g*x),'tanh':lambda x,",
+      "cat > /tmp/head15.py <<'PY'\nexec(open('/tmp/explore15.py').read().split(\"for k in ['panel_b'\")[0])\nfrom scipy.optimize import minimize_scalar\nB=s['panel_b']; C=s['panel_c']; t=s['telemetry_vec']; w=o['w']; n=len(tr['y'])\ndef r(u):return u*np.roll(u,-1,axis=1)\ncoef=fit(aff(B['u']),B['v']); u=np.linalg.solve(coef[1:].T,(w-coef[0]).T).T\nprint('handoff condition',np.linalg.cond(coef[1:]))\ndef prof(x,y,fn,lo,hi):\n def cost(g):\n  a=aff(fn(x,g)); return np.mean((y-a@fit(a,y))**2)\n grid=np.linspace(lo,hi,25); j=np.argmin([cost(g) for g in grid]); return minimize_scalar(cost,bounds=(grid[max(j-1,0)],gr",
+      "cat > /holdout_task/node_01.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\n\n\ndef _cosine_panel(u, v):\n    def loss(freq):\n        design = _affine(np.cos(freq * u))\n        residual = design @ _fit(design, v) - v\n        return np.mean(residual ** 2)\n\n    grid = np.linspace(0.2, 6.0, 59)\n    k = int(np.argmin([loss(freq) for freq in grid]))\n    lo, hi = grid[max(0, k - 1)], grid[min(len(grid) - 1, k + 1)]\n    opt = minimize_scalar(loss, b",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pathlib, pickle\nimport numpy as np\np = pathlib.Path('/holdout_task')\ndef load(name, path):\n    spec = importlib.util.spec_from_file_location(name, p / path)\n    m = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(m)\n    return m.run_node\nup = load('frozen', '_frozen_nodes/node_00.py')\nrun = load('candidate', 'node_01.py')\ns = pickle.loads((p / 'public_batch.pkl').read_bytes())[0]['study']\ntr = s['train']\nn = len(tr['y'])\nindices = np.arange(n)\nfor mode, groups in [('contiguous', np.array_split(indices, 4)), ('i"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__head15.py",
+      "primary_producer_container_path": "/tmp/head15.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 1846,
+        "sha256": "14f074a89990b83d60abcfdccf5acc81c4d189a500bb3ec24d9676e7b5c1c277",
+        "content_addressed_ref": "content_addressed_blobs/14f074a89990b83d60abcfdccf5acc81c4d189a500bb3ec24d9676e7b5c1c277.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "err",
+      "r",
+      "_ls",
+      "_aff",
+      "_operator",
+      "_features",
+      "_predict",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "71b6dd339629e1826477c599307bbad9b245012f7c70142590f44d39a34776d7",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pathlib, pickle\nimport numpy as np\np = pathlib.Path('/holdout_task')\ndef load(name, path):\n    spec = importlib.util.spec_from_file_location(name, p / path)\n    m = importlib",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "71b6dd339629e1826477c599307bbad9b245012f7c70142590f44d39a34776d7",
+        "expected_candidate_sha256": "71b6dd339629e1826477c599307bbad9b245012f7c70142590f44d39a34776d7",
+        "computed_candidate_sha256": "71b6dd339629e1826477c599307bbad9b245012f7c70142590f44d39a34776d7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 1846
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_71b6dd33"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(x, y):\n    return np.linalg.lstsq(x, y, rcond=None)[0]"
+      },
+      {
+        "name": "err",
+        "code": "def err(x, y):\n    r = y - x @ fit(x, y)\n    h = np.sum(np.linalg.qr(x, mode='reduced')[0] ** 2, axis=1)\n    return (np.mean(abs(r)), np.mean(abs(r / np.maximum(1 - h[:, None] if y.ndim > 1 else 1 - h, 1e-08))))"
+      },
+      {
+        "name": "r",
+        "code": "def r(u):\n    return u * np.roll(u, -1, axis=1)"
+      },
+      {
+        "name": "_ls",
+        "code": "def _ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "_aff",
+        "code": "def _aff(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_operator",
+        "code": "def _operator(study, x):\n    a = study['panel_a']\n    (u, v) = (a['u'], a['v'])\n    (offsets, scales) = ([], [])\n    for j in range(u.shape[1]):\n        d = _aff(u[:, j:j + 1])\n        q = _ls(d, v[:, j])\n        for _ in range(8):\n            keep = np.argsort(abs(d @ q - v[:, j]))[:int(len(u) * 0.875)]\n            q = _ls(d[keep], v[keep, j])\n        err = abs(d @ q - v[:, j])\n        keep = err <= max(10 * np.median(err), 0.002)\n        q = _ls(d[keep], v[keep, j])\n        offsets.append(q[0])\n        scales.append(q[1])\n    b = study['panel_b']\n    return _aff((x - offsets) / scales) @ _ls(_aff(b['u']), b['v'])"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(w, gain, interaction, kind):\n    import itertools\n    u = gain * w\n    if kind == 'atan':\n        z = np.arctan(u)\n    elif kind == 'inv3':\n        z = np.sinh(np.arcsinh(u) / 3)\n    else:\n        z = np.arcsinh(u)\n    if not interaction:\n        return np.column_stack((_aff(w), z))\n    pairs = [z[:, i] * z[:, j] for (i, j) in itertools.combinations_with_replacement(range(w.shape[1]), 2)]\n    return np.column_stack((_aff(w), z, *pairs))"
+      },
+      {
+        "name": "_predict",
+        "code": "def _predict(w, target, interaction, kind):\n    from scipy.optimize import minimize_scalar\n    n = len(target)\n    scale = np.maximum(np.std(target, axis=0), 1e-08)\n\n    def loss(gain):\n        f = _features(w[:n], gain, interaction, kind)\n        r = (f @ _ls(f, target) - target) / scale\n        return np.mean(r * r)\n    gain = minimize_scalar(loss, bounds=(0.8, 7), method='bounded').x\n    f = _features(w, gain, interaction, kind)\n    return f[n:] @ _ls(f[:n], target)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study):\n    (tr, te) = (study['train'], study['test'])\n    w = _operator(study, np.concatenate((tr['x'], te['x']), axis=0))\n    y = 0.35 * _predict(w, tr['y'], True, 'asinh') + 0.65 * _predict(w, tr['y'], True, 'atan')\n    p = _predict(w, tr['traj'], False, 'inv3')\n    tail = p[:, -1]\n    return {'y_hat': y, 'state_pred': p, 'diagnostics_vec': np.array([y.mean(), y.std(), tail.mean(), tail.std()])}"
+      }
+    ]
+  }
+}

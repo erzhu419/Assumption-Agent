@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60cecbf54ec54f2b9a7071091a6eb660",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Hegel_SelectiveBoundedDAG_Online__conf_m102_a01_batch_16__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:09.635930+00:00",
+  "ended_at_utc": "2026-11-28T15:15:41.224140+00:00",
+  "request_sha256": "5bca2d4174f628a823c0936d70f87bf8aa1738caaea902a3f604c34dc470621f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55406,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36932,
+    "cached_tokens": 12672,
+    "completion_tokens": 1328
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/rows=\\\\[\\\\]/,$d' /tmp/graph8.py >/tmp/joint9.py; cat >> /tmp/joint9.py <<'PY'\\nprint('B',B,'C1',ca,'C2',cb); print('response corr',np.corrcoef(y.T));\\nfor l in ['x','z','h','bx','bz','ih']:\\n g=base[l]; print('pair slopes',l,np.linalg.lstsq(A(g),y,rcond=None)[0].T)\\nfrom itertools import combinations\\nF += [(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(71).permutation(72),4)]\\nI=np.eye(72)\\nL=A(X); L=L@L.T\\nQ=kern(quad(base['z'])); P=kern(stack(base['z'],3));\\nmodels={};\\nfor name,g in base.items():\\n for tag,op in [('sin',lambda a: np.sin(a)),('tanh',np.tanh),('rat',lambda a:a/(1+a*a)),('atan',np.arctan)]:\\n  for scale in [.45,.7,1.,1.25,1.55,2.15]:\\n   f=op(scale*g); G=kern(f); H=kern(quad(f)); R=kern(g*f); \\n   for pattern,K in [('fq',L*10000+G+H),('qfq',L*10000+Q+G+H),('mix',L*10000+.15*Q+G+.15*H+.15*R),('aug',L*10000+.2*Q+.02*P+G+.1*H)]:\\n    for lam in [.001,.015,.10,.4]: models[name,tag,scale,pattern,lam]=K+I*lam\\n for sg in [-1,1]:\\n  for sc in [.5,1.,1.5]:\\n   j,k=np.triu_indices(4,1); f=np.c_[g,g[:,j]+sg*g[:,k]]; f=np.tanh(sc*f); G=kern(f);H=kern(quad(f));\\n   for l in [.015,.1]:models[name,sg,sc,'pair',l]=1e4*L+G+.15*Q+.15*H+l*I\\nrows=[]\\nfor name,K in models.items():\\n errors=[]\\n for a,b in F:\\n  Ka=K[np.ix_(a,a)]; Kb=K[np.ix_(b,a)]; cf=cho_factor(Ka,check_finite=False); pred=Kb@cho_solve(cf,y[a],check_finite=False); errors.append(np.abs(pred-y[b]).mean(0))\\n e=np.array(errors); rows.append((name,np.r_[e[0],e[1:].mean(0),e[1:].max(0)]))\\nfor i in range(6):\\n print('BEST',i)\\n for name,e in sorted(rows,key=lambda pair:pair[1][i])[:6]:print(name,e)\\nfor kind in ['x','z','h','bx','bz','ih']:\\n for target in [0,1]:\\n  name,e=min((v for v in rows if v[0][0]==kind),key=lambda p:.25*p[1][target]+.75*p[1][2+target]);print('COORD',kind,target,name,e)\\nfor target in [0,1]:\\n chosen=sorted(rows,key=lambda p:.2*p[1][target]+.8*p[1][target+2]);\\n for depth in [5,20,70]:\\n  Ks=[models[k] for k,_ in chosen[:depth]]; K=np.mean(Ks,axis=0); ee=[]\\n  for a,b in F:\\n   ee.append(abs(K[np.ix_(b,a)]@np.linalg.solve(K[np.ix_(a,a)],y[a,target])-y[b,target]).mean());\\n  print('ensemble',target,depth,ee[0],np.mean(ee[1:]),max(ee[1:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint9.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single panel-conditioned basis → H2 regularized interactions with separate scalar and trajectory models; best exploratory 52/20 scalar MAE is 0.03248, with mean shuffled-fold MAE of 0.04115.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use marginal likelihood alone to select operator blocks\",\"rejected_reason\":\"The tested evidence-weighted models did not improve the scalar gate and often favored different blocks for the trajectory.\"}],\"rationale\":\"Compare structured regularization and pairwise interaction bases across additional splits, then check whether averaging nearby models reduces sensitivity to the calibration coordinates and feature scale.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d2d0caf989edae47722c76dd433b3f31938b180c0e71891049ec75fce9b6e937",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31991.18,
+      "usage_known": true,
+      "prompt_tokens": 36932,
+      "cached_tokens": 12672,
+      "completion_tokens": 1328
+    }
+  ]
+}

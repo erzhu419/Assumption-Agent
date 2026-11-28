@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b541aa7db7a647ea8819e84978fd8826",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_11__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_11__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:30:14.541328+00:00",
+  "ended_at_utc": "2026-11-28T15:30:33.000345+00:00",
+  "request_sha256": "4095cd8f09f92481c7a80fc396776429cd9e4350f651361fa44e81cb0c21b931",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20404,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20569,
+    "cached_tokens": 12672,
+    "completion_tokens": 645
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ====; grep -nE '^(def|    (z|g|h|f|k|d|common|features|rates|basis|return|scalar|a|b) ?=)' \\\"$f\\\"; done; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as n,pickle,glob,runpy,copy\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True); print('t,tele',s['eval_times'],s['telemetry_vec']); print('svd',n.linalg.svd(s['train']['traj'],compute_uv=False)); print('target rows',s['train']['traj'][:5],s['train']['y'][:5]); print('ranges',[(k,n.min(a),n.max(a)) for k,a in s['train'].items()]);\\nfor key in ('panel_a','panel_b','panel_c'):\\n a=s[key]; print(key,{k:(v[:3],v.std(0)) for k,v in a.items()});\\n for k,v in a.items():\\n  if k=='u':continue\\n  u=a['u']; f=n.c_[n.ones(len(u)),u]; r=v-f@n.linalg.lstsq(f,v,rcond=None)[0]; print(k,'affine residual sorted',n.sort(n.linalg.norm(r,axis=1)))\\nc=copy.deepcopy(s); c['test']['x']=c['train']['x'][52:]; c['train']={k:v[:52] if k!='summary' else v for k,v in c['train'].items()};\\nfor p in sorted(glob.glob('*solver.py')):\\n try:\\n  o=runpy.run_path(p)['solve_batch'](c); print(p,*[n.mean(abs(o[k]-s['train'][j][52:])) for k,j in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e:print(p,e)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived operator graph -> H2 identify campaign-specific calibration, operator and temporal rank; pre-LLM 52/20 MAEs were 0.1610 for y and 0.1882 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure panel structure and trajectory rank directly, and score each reusable archived solver on the same public holdout before expanding the operator grammar.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "131318a8ea44e35d2672e6fdb30e940125b938a8639757196551731fd90d95bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18458.08,
+      "usage_known": true,
+      "prompt_tokens": 20569,
+      "cached_tokens": 12672,
+      "completion_tokens": 645
+    }
+  ]
+}

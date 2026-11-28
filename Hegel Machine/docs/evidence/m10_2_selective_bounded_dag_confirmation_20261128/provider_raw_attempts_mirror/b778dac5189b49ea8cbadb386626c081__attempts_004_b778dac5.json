@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b778dac5189b49ea8cbadb386626c081",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:36.951095+00:00",
+  "ended_at_utc": "2026-11-28T15:17:05.433258+00:00",
+  "request_sha256": "994a6002d9d168a51793838a448f1351b8a807c71fc6ac65cb07e960cf3795b8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25428,
+    "cached_tokens": 12672,
+    "completion_tokens": 1159
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/fit.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"print('B'\\\")[0])\\nfrom scipy.optimize import minimize_scalar\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\npairs=list(itertools.combinations_with_replacement(range(4),2))\\ndef q(x):return np.column_stack([x[:,i]*x[:,j] for i,j in pairs])\\ndef p2(x):return np.c_[aff(x),q(x)]\\nprint('B linear',B, 'sv',np.linalg.svd(B[1:],compute_uv=False))\\nfor name,u,v in [('B',b['u'],b['v']),('C1',c['u'],c['v1']),('C2',c['u'],c['v2'])]:\\n z=p2(u); cf=ls(z,v); r=v-z@cf; print(name,cf,'MAE',np.mean(abs(r),0),'max',np.max(abs(r),0))\\nprint('traj sv',np.linalg.svd(tr['traj'],compute_uv=False)); print('traj samples',tr['traj'][:8]); print('corr',np.corrcoef(np.c_[tr['y'],tr['traj']].T)[0]);\\nbb=p2(x)@ls(p2(b['u']),b['v']); c1=p2(x)@ls(p2(c['u']),c['v1']); c2=p2(x)@ls(p2(c['u']),c['v2']);\\nY=np.c_[tr['y'],tr['traj']]; ids=np.arange(len(Y)); folds=[(ids[:52],ids[52:])]+[(a[:52],a[52:]) for a in [np.random.default_rng(j).permutation(ids) for j in range(8)]]\\ndef cv(f,lam=0):\\n f=f[:len(Y)]; f=f[:,np.std(f,axis=0)>1e-10]; rs=[]\\n for ti,vi in folds:\\n  z=aff((f-f[ti].mean(0))/np.maximum(f[ti].std(0),1e-8)); v=Y[vi]; t=z[ti]; pred=z[vi]@(np.linalg.solve(t.T@t+lam*np.eye(t.shape[1]),t.T@Y[ti]) if lam else ls(t,Y[ti])); r=abs(v-pred);rs.append([r[:,0].mean(),r[:,1:].mean()])\\n return np.round(np.r_[rs[0],np.max(rs,axis=0),np.mean(rs,axis=0)],4)\\nD={'x':x,'w':w,'B':bb,'C1':c1,'C2':c2,'BC':np.c_[bb,c1,c2],'XC':np.c_[x,c1,c2],'XBC':np.c_[x,bb,c1,c2]}\\nfor k,z in D.items():\\n for tag,f in [('linear',z),('tanh',np.tanh(1.25*z)),('atan',np.arctan(1.25*z)),('asinh',np.arcsinh(1.25*z)),('lin-tanh',np.c_[z,np.tanh(1.25*z)]),('lin-atan',np.c_[z,np.arctan(1.25*z)]),('lin-sin',np.c_[z,np.sin(1.25*z)]),('lin-cubic',np.c_[z,z**3]),('x2',np.c_[z,z**2])]: print(k,tag,cv(f,.02))\\nprint('x2full',cv(p2(x),.02))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace an affine panel-C map with calibrated quadratic features; panel C1 leave-one-out MAE is at most 0.00023 across channels in the tested quadratic basis.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine calibration adequately represents the first panel-C response.\",\"empirical_witness\":\"For panel C1, affine leave-one-out MAEs of 0.450–0.527 drop to 0.00015–0.00023 with quadratic terms.\",\"causal_blanket_diagnosis\":\"The affine basis omits even-degree terms in the panel-C calibration.\",\"sublated_pivot\":\"Recover quadratic calibration coefficients and compare nonlinear outcome features across repeated holdouts.\",\"risk_kind\":\"omitted algebraic terms\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Compose C2 from C1\",\"rejected_reason\":\"Direct quadratic calibration from the supplied inputs gives substantially lower leave-one-out error.\"}],\"rationale\":\"Inspect coefficient sparsity and compare downstream features on the prescribed split and repeated holdouts, scoring the scalar and trajectory separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5910c6d57d8868c9e34ba2ce7e8ac71e95133191fdf40e089fc3a8b7e512dfdc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28481.1,
+      "usage_known": true,
+      "prompt_tokens": 25428,
+      "cached_tokens": 12672,
+      "completion_tokens": 1159
+    }
+  ]
+}

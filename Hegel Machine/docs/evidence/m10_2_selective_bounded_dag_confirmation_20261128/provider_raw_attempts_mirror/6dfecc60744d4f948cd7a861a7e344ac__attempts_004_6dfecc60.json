@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6dfecc60744d4f948cd7a861a7e344ac",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:28.145874+00:00",
+  "ended_at_utc": "2026-11-28T15:06:56.916778+00:00",
+  "request_sha256": "255b382925767100eb333f5818edb2b472f746eac438494a148cde72177a9f14",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30452,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25238,
+    "cached_tokens": 12672,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/grammar.py <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; n=len(x)\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef op(p):\\n F=aff(p['u']); v=p['v']; c=np.linalg.lstsq(F,v,rcond=None)[0]\\n for i in range(4):\\n  r=np.linalg.norm(F@c-v,axis=1); m=r<max(.001,3*np.median(r)); c=np.linalg.lstsq(F[m],v[m],rcond=None)[0]\\n return c\\nA=op(s['panel_a']); B=op(s['panel_b']); print('A',A,'B',B)\\nZ={};Z['raw']=x;Z['cal']=(x-A[0])@np.linalg.inv(A[1:]);Z['rev']=aff(x)@A;Z['Braw']=aff(x)@B;Z['Bcal']=aff(Z['cal'])@B;Z['Bical']=(Z['cal']-B[0])@np.linalg.inv(B[1:]);Z['Brev']=aff(Z['rev'])@B\\nI=np.arange(52);J=np.arange(52,n)\\ndef score(F,target=y,reg=0):\\n if reg:\\n  P=np.diag(np.broadcast_to(reg,(F.shape[1],)).copy());P[:5,:5]=0;c=np.linalg.solve(F[I].T@F[I]+P,F[I].T@target[I]);\\n else:c=np.linalg.lstsq(F[I],target[I],rcond=None)[0]\\n r=F@c-target;return np.mean(abs(r[I])),np.mean(abs(r[J])),c\\np2=list(itertools.combinations_with_replacement(range(4),2));p3=list(itertools.combinations_with_replacement(range(4),3));pr=list(itertools.combinations(range(4),2))\\ndef terms(z,p):return np.column_stack([np.prod(z[:,i],axis=1) for i in p])\\ndef r(v):return tuple(round(a,6) for a in v[:2])\\nfor k,z in Z.items():\\n Q=terms(z,p2); C=terms(z,p3); f=np.c_[aff(z),Q,C]; out=score(f); print(k,'cubic',r(out),'Q',out[2][5:15].round(3),'C',out[2][15:].round(3)); print('  restricted',[(name,r(score(np.c_[aff(z),Q,h]))) for name,h in [('self',z**3),('triple',terms(z,list(itertools.combinations(range(4),3)))),('gauss',z*np.exp(-z*z)),('rational',z/(1+.75*z*z)),('tanh',np.tanh(z)),('sin',np.sin(z)),('no_self',C[:,[len(set(p))>1 for p in p3]])]])\\n print('  cubic ridge',[r(score(f,reg=q)) for q in [.001,.01,.05,.2]])\\nprint('trajectory coeff',np.linalg.lstsq(aff(Z['cal']),T,rcond=None)[0].round(5));print('train summary',s['train']['summary'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic readout -> H2 cubic or saturating operator readout; full cubic 52/20 scalar MAE 0.035686, affine trajectory MAE 0.004164.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived quadratic scalar basis is sufficient for this campaign.\",\"empirical_witness\":\"On the same 52/20 split, scalar MAE falls from 0.072683 to 0.035686 on adding cubic terms.\",\"causal_blanket_diagnosis\":\"The missing nonlinear terms affect the scalar readout; an affine trajectory already achieves MAE 0.004164.\",\"sublated_pivot\":\"Test constrained cubic interactions and saturation in calibrated and auxiliary-operator coordinates.\",\"risk_kind\":\"readout_extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze full cubic\",\"rejected_reason\":\"It barely passes the scalar gate and may extrapolate poorly; a structured basis could improve the margin.\"}],\"rationale\":\"Comparing sparse term patterns across operator coordinates can distinguish true interactions from flexible polynomial approximation before final validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "739af65480798ba05c3bca855f75e0497c1bc64e6c351bed841846632c5aced6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28769.54,
+      "usage_known": true,
+      "prompt_tokens": 25238,
+      "cached_tokens": 12672,
+      "completion_tokens": 1109
+    }
+  ]
+}

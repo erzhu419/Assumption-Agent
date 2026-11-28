@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8153903f2d0340a597a75c45dcb81aa8",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:49.704208+00:00",
+  "ended_at_utc": "2026-11-28T15:17:19.690916+00:00",
+  "request_sha256": "d0662d5c8d43d1e1dbbb424596860320d880955c99da1e701f754e19cf70d826",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60297,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36348,
+    "cached_tokens": 12672,
+    "completion_tokens": 1256
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_00.py')\\ns = p.read_text()\\ni = s.index('def _b(')\\nj = s.index('def run_node(', i)\\ns = s[:i] + '''def _b(u, v, x):\\n    # A shared odd response acts on each coordinate before affine mixing.\\n    # Profile out the mixing and offset using only the calibration pairs.\\n    def basis(z, p):\\n        curvature, linear, correction, width = p\\n        z2 = z*z\\n        response = (z - z/np.sqrt(1 + curvature*z2)\\n                    + linear*z + correction*z/(1 + width*z2))\\n        return np.column_stack([np.ones(len(z)), response])\\n\\n    def residual(p):\\n        f = basis(u, p)\\n        return (f @ _fit(f, v) - v).ravel()\\n\\n    p = least_squares(residual, [1., 0., .1, 15.],\\n                      bounds=([.02, -1., -1., 1.], [10., 1., 1., 100.]),\\n                      max_nfev=400).x\\n    return basis(x, p) @ _fit(basis(u, p), v)\\n\\n\\n''' + s[j:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path[:0] = ['/holdout_task', '/holdout_task/_frozen_nodes']\\nfrom node_00 import run_node, _a, _b\\nfrom node_01 import run_node as readout\\nbatch = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nfor entry in batch:\\n    s = entry['study']\\n    a,b = s['panel_a'],s['panel_b']\\n    x,y,traj = (s['train'][k] for k in ('x','y','traj'))\\n    i = np.arange(len(y))\\n    w = run_node({'__input__':s})['w']\\n    assert np.isfinite(w).all() and w.shape == (len(x)+len(s['test']['x']), x.shape[1])\\n    def score(w,k):\\n        out = readout({'__input__':{'train':{'y':y[k], 'traj':traj[k]}}, 'node_00':{'w':np.concatenate([w[k],w[~k]])}})\\n        return np.array([np.mean(abs(out['y_hat']-y[~k])), np.mean(abs(out['state_pred']-traj[~k]))])\\n    masks = [i < j for j in range(48,61,2)] + [i % 4 != j for j in range(4)]\\n    worst = np.max([score(w[:len(x)],k) for k in masks],axis=0)\\n    z = _a(a['u'], a['v'], x)\\n    cal, combined = [], []\\n    for fold in range(4):\\n        k = np.arange(len(b['u'])) % 4 != fold\\n        u,v = b['u'], b['v']\\n        pred = _b(u[k], v[k], np.concatenate([u[~k], z]))\\n        cal.append(np.mean(abs(pred[:sum(~k)]-v[~k])))\\n        combined.extend(score(pred[sum(~k):], m) for m in masks)\\n    combined_worst = np.max(combined,axis=0)\\n    print('panel-B worst held-out MAE:', max(cal), 'downstream worst (y, trajectory):', worst, 'combined calibration/readout worst:', combined_worst)\\n    assert max(cal) < .01 and np.max(worst) < .038 and np.max(combined_worst) < .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent sine terms → H2 shared odd panel-B response before affine mixing; the selected model reached 0.003937 worst calibration-fold MAE and 0.006844/0.005154 worst downstream scalar/trajectory MAE in the probe.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Shared arcsinh response\",\n      \"rejected_reason\": \"It had slightly lower average calibration error but higher worst-fold calibration and downstream errors.\"\n    }\n  ],\n  \"rationale\": \"Install the bounded shared response that improved both worst-slice metrics, retain the cyclic cubic inversion and frozen readout, and verify the exact artifact under the official gate and combined calibration/readout splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b998aae1988b67f1fe1491f907d2b5db7553bf9cd54c2c8a6bf8e95da6b81b73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29985.25,
+      "usage_known": true,
+      "prompt_tokens": 36348,
+      "cached_tokens": 12672,
+      "completion_tokens": 1256
+    }
+  ]
+}

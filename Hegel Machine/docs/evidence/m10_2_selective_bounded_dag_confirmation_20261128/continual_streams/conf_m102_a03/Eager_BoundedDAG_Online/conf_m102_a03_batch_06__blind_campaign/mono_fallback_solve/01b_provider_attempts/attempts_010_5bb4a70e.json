@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5bb4a70e2a7f44ac85494ed5425edddb",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:15.641950+00:00",
+  "ended_at_utc": "2026-11-28T15:33:55.031302+00:00",
+  "request_sha256": "5b14798500d19b7d571f766b6bc0b2f6c6544b62f5e4d29a87d2b0a471b0d95a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67612,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42960,
+    "cached_tokens": 12672,
+    "completion_tokens": 1640
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine.py <<'PY'\\nexec(open('/tmp/latent.py').read().split(\\\"print('cal'\\\")[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.linear_model import Ridge\\nfrom scipy.special import expit\\nfrom itertools import product\\n\\ndef LOO(A,Y):\\n Q=np.linalg.qr(A)[0];return np.mean(((Y-Q@(Q.T@Y))/(1-(Q*Q).sum(1))[:,None])**2)**.5\\n\\ndef activate(name,u,k):\\n if name=='rat':return u/(1+k*u*u)\\n if name=='ratio':return u/np.sqrt(1+k*u*u)\\n if name=='soft':return np.sqrt(1+k*u*u)\\n if name=='asinh':return np.arcsinh(k*u)\\n if name=='atan':return np.arctan(k*u)\\n if name=='tanh':return np.tanh(k*u)\\n if name=='sin':return np.sin(k*u)\\n if name=='cos':return np.cos(k*u)\\n if name=='exp':return np.exp(-k*u*u)\\n\\ndef op(p,key):\\n U=p['u'];V=p[key];out=[]\\n for kind,lin in product(['rat','ratio','soft','asinh','atan','tanh','sin','cos','exp'],[False,True]):\\n  def design(u,k):return np.c_[aff(u),activate(kind,u,k)] if lin else aff(activate(kind,u,k))\\n  def get(k):return LOO(design(U,k),V)\\n  opt=minimize_scalar(get,bounds=(.2,3.5),method='bounded');out.append((opt.fun,kind,lin,opt.x))\\n print(key,sorted(out)[:9]);_,kind,lin,k=min(out);fn=lambda u:np.c_[aff(u),activate(kind,u,k)] if lin else aff(activate(kind,u,k));coef=ls(fn(U),V);return lambda u:fn(u)@coef\\nops={n:op(s[p],k) for n,p,k in [('b','panel_b','v'),('p','panel_c','v1'),('q','panel_c','v2')]}\\n# Check cyclic calibration residual for a shared extra term and geometry.\\nA=np.stack([np.ones_like(u),u,np.roll(u,-1,1),u*np.roll(u,-1,1)],axis=-1);E=v[g]-np.einsum('ijk,kj->ij',A[g],c)\\nextra=[]\\nfor k,l in product(range(4),repeat=2):\\n a0,b0=np.roll(u,-k,1),np.roll(u,-l,1)\\n for nm,a in [('single',a0),('pair',a0*b0),('sum',a0+b0),('diff',a0-b0),('cubic',a0*a0*b0)]:\\n  for k0 in [.5,1,1.25,2,3]:\\n   for f0 in ['rat','ratio','soft','atan','tanh','sin','cos','exp']:\\n    D=activate(f0,a,k0)\\n    vv=np.array([LOO(np.c_[A[g,j],D[g,j]],v[g,j:j+1]) for j in range(4)])\\n    extra.append((np.mean(vv**2)**.5,k,l,nm,k0,f0))\\nprint('A extra',sorted(extra)[:12]);print('A residual SV',np.linalg.svd(E,compute_uv=False))\\nI=np.arange(52);J=np.arange(52,72);_,_,V=np.linalg.svd(t[I],full_matrices=False);Y=np.c_[y,t@V[0]]; Z={'z':z,'x':x}\\nfor n,f in ops.items():\\n for k in ['z','x']: Z[n if k=='z' else n+k]=f(Z[k])\\nfor n,f in ops.items():\\n for k in ['b','p','q']:Z[n+k]=f(Z[k])\\nprint('tomography')\\ndef score(A,Y,I,J,alpha):\\n m=A[I].mean(0);d=A[I].std(0)+1e-9;A=(A-m)/d; M=A[I]; yy=Y[I];B=np.linalg.solve(M@M.T+alpha*np.eye(len(I)),yy-yy.mean(0));return np.mean(abs(A[J]@M.T@B+yy.mean(0)-Y[J]),0)*[1,.325]\\nbest=[[],[]]\\nfor names in [(k,) for k in Z]+list(itertools.combinations(Z,2))+[('z','b','p'),('z','p','q'),('z','b','q'),('b','p','q'),('z','b','p','q')]:\\n U=np.concatenate([Z[k] for k in names],1)\\n for typ in ['linear','quadratic','separable','mixed']:\\n  if typ=='linear': D=U\\n  if typ=='quadratic': D=PolynomialFeatures(2,include_bias=False).fit_transform(U)\\n  if typ=='separable': D=np.c_[U,np.tanh(1.25*U),np.sqrt(1+U*U)]\\n  if typ=='mixed': D=PolynomialFeatures(2,include_bias=False).fit_transform(np.c_[U,np.tanh(1.25*U),np.sqrt(1+U*U)])\\n  for a in [1e-5,.0003,.003,.03,.3,3]:\\n   res=score(D,Y,I,J,a)\\n   for j in range(2):best[j].append((res[j],names,typ,a))\\nfor zbest in best: print(*sorted(zbest)[:15],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive auxiliary operators → H2 composed nonlinear operators; recent holdout candidates reach 0.0739 scalar MAE and about 0.05 for the dominant trajectory contribution.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether panel residuals identify exact operator families, then compare those operators in both orders to distinguish direct readouts from composed stages.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "dff42e941aa7adf48ebe6800f70eb25a42ec316abfcfc6e670c0c36bb50200fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39388.02,
+      "usage_known": true,
+      "prompt_tokens": 42960,
+      "cached_tokens": 12672,
+      "completion_tokens": 1640
+    }
+  ]
+}

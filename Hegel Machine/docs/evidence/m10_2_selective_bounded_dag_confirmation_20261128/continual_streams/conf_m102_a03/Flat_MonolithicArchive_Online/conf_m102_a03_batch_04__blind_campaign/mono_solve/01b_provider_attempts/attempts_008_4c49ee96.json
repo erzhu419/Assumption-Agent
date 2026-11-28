@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4c49ee9674c3404f93fe67d3283875ce",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:27.223831+00:00",
+  "ended_at_utc": "2026-11-28T15:19:25.073581+00:00",
+  "request_sha256": "5f48953922cc928f939318c67e3eedc0781a92b807b0b54106c711e5011f8fb8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42749,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24391,
+    "cached_tokens": 8576,
+    "completion_tokens": 1483
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\ncat >/tmp/m102_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('candidate', '/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']; x, y, T = (tr[k] for k in ('x', 'y', 'traj'))\\nz = m._decode(x, m._calibration(s['panel_a']))\\np, b = m._operator(s['panel_b'])\\nw = m._affine(m._warp(z, p)) @ b\\nD = m._readout(w)\\nfit = lambda X, Y: np.linalg.lstsq(X, Y, rcond=None)[0]\\nmae = lambda a, b: np.mean(np.abs(a-b))\\nids = np.arange(len(x))\\nprint('study fields:', sorted(s), 'train fields:', sorted(tr), 'telemetry shape:', s['telemetry_vec'].shape)\\n\\n# Explicitly compare individual stages to their composition with the same readout families.\\ni, j = ids[:52], ids[52:]\\nsub = dict(s, train={k: v[i] if k != 'summary' else v for k,v in tr.items()}, test={'x':x[j]})\\nout = m.solve_batch(sub)\\nfor name, X in [('raw', x), ('calibration_only', z), ('threshold_without_calibration', m._affine(m._warp(x,p)) @ b), ('composed', w)]:\\n    A = m._readout(X)\\n    print('stage_ablation',name,'scalar',mae(A[j] @ fit(A[i],y[i]), y[j]), 'linear_state',mae(X[j] @ fit(X[i],T[i]), T[j]))\\nprint('artifact_direct', mae(out['y_hat'],y[j]), mae(out['state_pred'],T[j]))\\n\\n# Equip the challenger with all independent pairwise products and squares of sums/differences.\\nP = np.column_stack([w[:,k]*w[:,l] for k in range(4) for l in range(k,4)])\\nQ = [w[:,k] for k in range(4)] + [w[:,k]+sign*c*w[:,l] for k,l in combinations(range(4),2) for sign in (-1,1) for c in (.5,1,2)]\\nR = [(f'q{k}:a{a}', D/(1+a*q[:,None]**2)) for k,q in enumerate(Q) for a in (.01,.05,.2,1.)]\\nfamilies = {'sparse':[('reference',D)], 'all_quadratic':[('affine-quadratic',np.column_stack([np.ones(len(x)),w,P]))], 'rational':R}\\nrng = np.random.default_rng(2407)\\nslices = {'prescribed':j,'high_operator_norm':np.argsort(np.linalg.norm(w,axis=1))[-20:], 'activation_boundary':np.argsort(np.min(np.abs(np.abs(z)-p[0]),axis=1))[:20]}\\nslices.update({f'random{k}':rng.permutation(ids)[-20:] for k in range(8)})\\nerrors = {key: [] for key in families}; signed = []\\nfor name, va in slices.items():\\n    ti = np.setdiff1d(ids,va)\\n    inner = np.array_split(rng.permutation(ti), 4)\\n    splits = [(np.setdiff1d(ti,k),k) for k in inner]\\n    for family, pool in families.items():\\n        label, A = min(pool, key=lambda pp: np.mean([mae(pp[1][v] @ fit(pp[1][t], y[t]),y[v]) for t,v in splits]))\\n        pred = A[va] @ fit(A[ti],y[ti]); err = mae(pred,y[va]); errors[family].append(err)\\n        if family == 'sparse': signed.append((name,float(np.mean(pred-y[va]))))\\n    print(name, *(f'{key}={errors[key][-1]:.6f}' for key in families))\\nfor key, seq in errors.items(): print('family',key,'mean',np.mean(seq),'worst',max(seq))\\nprint('largest_absolute_slice_bias',max(signed,key=lambda pair:abs(pair[1])))\\nassert mae(out['y_hat'],y[j]) < .038 and mae(out['state_pred'],T[j]) < .038\\nassert max(errors['sparse']) < .038\\nPY\\npython3 -I /tmp/m102_audit.py\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic calibration and panel B thresholding -> H2 symmetric bilinear readout and two-rate relaxation; prior worst held-out scalar MAE was 0.004834 and worst per-timestamp trajectory MAE was 0.005794.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB drift, or within-batch classification accuracy\",\n      \"rejected_reason\": \"The observed contract supplies continuous readouts and a single study, with no relay modes, drift-operator targets, cohort labels, or classification outcomes.\"\n    }\n  ],\n  \"rationale\": \"Use the real measurements to isolate the effect of composing the two panel stages, compare the selected scalar law with pairwise and rational challengers using inner-fold selection, and rerun the public validator without changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7684598c67caec0fca0bf054aae0d0b380a881bc36d7fedef7a895e9f2bc8739",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58266.05,
+      "usage_known": true,
+      "prompt_tokens": 24391,
+      "cached_tokens": 8576,
+      "completion_tokens": 1483
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36b0ca4cfb3e46b0837c60b2a235ffe9",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:39.097702+00:00",
+  "ended_at_utc": "2026-11-28T15:46:26.434451+00:00",
+  "request_sha256": "3f7b13ef0efecc5f87e5958f3d6c65fda3931f258e55785aef3e682b83f1278b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55538,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36515,
+    "cached_tokens": 12672,
+    "completion_tokens": 1973
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate latent inputs, then fit independent scalar and state readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(f, y):\\n    return np.linalg.lstsq(f, y, rcond=None)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    r = np.linalg.norm(v - _aff(u) @ _ls(_aff(u), v), axis=1)\\n    keep = r < max(5*np.median(r), 2*np.quantile(r, .85))\\n    u, v = u[keep], v[keep]\\n    opp = (np.arange(u.shape[1])+2) % u.shape[1]\\n\\n    def profile(p):\\n        h, k = np.tanh(p[0]*u), np.sin(p[1]*u[:, opp])\\n        a = np.stack((v-h*p[2]-k*p[3], u), axis=-1)\\n        a0, U = a[:, :, 0], a[:, :, 1]\\n        uc = U-U.mean(axis=0)\\n        slope = (uc*a0).sum(axis=0)/(uc**2).sum(axis=0)\\n        bias = np.mean(a0-U*slope, axis=0)\\n        return bias, slope, bias+U*slope+p[2]*h+p[3]*k-v\\n\\n    p = least_squares(lambda p: profile(p)[2].ravel(), [1.8,2.4,.18,.32],\\n                      bounds=([.5,1.,0.,0.],[4.,4.,.7,.7])).x\\n    bias, slope, _ = profile(p)\\n    return p, bias, slope\\n\\n\\ndef _inverse(x, calibration):\\n    p, bias, slope = calibration\\n    x = np.asarray(x, dtype=float)\\n    i = np.arange(x.shape[1]); j = (i+2) % len(i)\\n    z = (x-bias)/slope\\n    if len(x) == 0:\\n        return z\\n    jac = np.zeros((len(z),len(i),len(i)))\\n    for _ in range(35):\\n        h = np.tanh(p[0]*z)\\n        r = bias+slope*z+p[2]*h+p[3]*np.sin(p[1]*z[:,j])-x\\n        if np.max(abs(r)) < 1e-12:\\n            break\\n        jac[:,i,i] = slope+p[0]*p[2]*(1-h*h)\\n        jac[:,i,j] = p[1]*p[3]*np.cos(p[1]*z[:,j])\\n        z -= np.clip(np.linalg.solve(jac,r[...,None])[...,0], -.5, .5)\\n    return z\\n\\n\\ndef _rational_panel(panel):\\n    u, v = panel['u'], panel['v1']\\n    def primitive(x, p):\\n        return x/(1+p[0]*abs(x)**p[1])\\n    def design(x,p):\\n        return np.column_stack((_aff(x),primitive(x,p)))\\n    def residual(p):\\n        f=design(u,p)\\n        return (f@_ls(f,v)-v).ravel()\\n    p=least_squares(residual,[1.,1.1],bounds=([.01,.3],[10.,5.])).x\\n    c=_ls(design(u,p),v)\\n    return lambda x: design(x,p)@c\\n\\n\\ndef _features(x, op):\\n    i,j=np.triu_indices(x.shape[1])\\n    return np.column_stack((_aff(x),x[:,i]*x[:,j],op(x)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train=study['train']\\n    c=_calibrate(study['panel_a'])\\n    x=_inverse(train['x'],c)\\n    q=_inverse(study['test']['x'],c)\\n    op=_rational_panel(study['panel_c'])\\n    y=_features(q,op)@_ls(_features(x,op),train['y'])\\n    state=_aff(q)@_ls(_aff(x),train['traj'])\\n    end=state[:,-1]\\n    diagnostics=np.array([y.mean(),y.std(),end.mean(),end.std()]) if len(y) else np.zeros(4)\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':diagnostics}\\nPY\\ncat >/tmp/cv9.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']);rng=np.random.default_rng(910)\\ncal=m._calibrate(s['panel_a']); print('calibration',cal); x=m._inverse(tr['x'],cal); q=m._inverse(s['test']['x'],cal); print('x/query extrema',x.min(0),x.max(0),q.min(0),q.max(0));\\ny=tr['y']; z=tr['traj']; f=m._features(x,m._rational_panel(s['panel_c'])); print('scalar coef',m._ls(f,y));print('state sv',np.linalg.svd(m._ls(m._aff(x),z),compute_uv=False)); print('time',s['eval_times'],'telemetry',s['telemetry_vec']);\\nmaes=[]\\nfor split in [np.r_[np.arange(52),np.arange(52,n)]]+[rng.permutation(n) for i in range(24)]+[np.argsort(np.linalg.norm(x,axis=1))]+[np.argsort(sign*x[:,i]) for i in range(4) for sign in [-1,1]]:\\n a,b=split[:52],split[52:]; d={**s,'train':{**tr,**{k:tr[k][a] for k in ('x','y','traj')}},'test':{'x':tr['x'][b]}}; p=m.solve_batch(d); ey=abs(p['y_hat']-y[b]); es=abs(p['state_pred']-z[b]); maes.append([ey.mean(),es.mean(),es[:,-1].mean(),ey.max(),es.max()]);\\nprint('fixed (y/traj/end/max-y/max-traj)',maes[0]); print('worst random',np.max(maes[1:25],axis=0));print('worst extrapolation',np.max(maes[25:],axis=0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cv9.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: A tanh/sine panel inverse reduces calibration RMS to 0.0000904; the resulting quadratic-plus-rational scalar readout and affine state readout give fixed-split MAEs of 0.00350 and 0.00418.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Include panel C’s second output\",\"rejected_reason\":\"Its addition worsened held-out scalar MAE from 0.00350 to 0.00405 without improving trajectory prediction.\"}],\"rationale\":\"Implement the recovered calibration and separate readouts, then test the actual deliverable on fixed, random, and coordinate-tail splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a5a6f8a1b6f86ab62132c61b3708f89b9d4b96e713fba1878c2b032684cd175e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47335.28,
+      "usage_known": true,
+      "prompt_tokens": 36515,
+      "cached_tokens": 12672,
+      "completion_tokens": 1973
+    }
+  ]
+}

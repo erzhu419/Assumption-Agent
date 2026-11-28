@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0e37184d206f4b89918298929ef153e7",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:00.719732+00:00",
+  "ended_at_utc": "2026-11-28T15:29:36.313672+00:00",
+  "request_sha256": "7bb3589638cbfd03111f3bbee8fe68a9a5fe9245abf63680c653fba7981f767c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51242,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32367,
+    "cached_tokens": 12672,
+    "completion_tokens": 1528
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -76 /holdout_task/test_dag_candidate.py; cat /holdout_task/_frozen_nodes/node_01.py; python3 - <<'PY'\\nimport json\\nj=json.load(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json')); print(str(j)[-4500:])\\nPY\\ncat >/tmp/search06.py <<'PY'\\nexec(open('/tmp/explore06.py').read().split('for nm,F')[0]); from scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.special import erf\\nC=s['panel_c']; i,j=np.triu_indices(4,1)\\ndef af(x):return np.c_[np.ones(len(x)),x]\\ndef pair(x):return x[:,i]*x[:,j]\\ndef calib(U,V,D):\\n def basis(x,p,kind):\\n  k=np.exp(p[:4]); h=p[4:]; g=x*k+h\\n  if kind==0: return np.c_[af(np.tanh(g)),x*x]\\n  if kind==1: return np.c_[af(x),np.tanh(g)]\\n  if kind==2: return np.c_[af(np.tanh(g)),pair(x)]\\n  if kind==3: return np.c_[af(x),x*x,np.sin(g)]\\n  if kind==4: return af(np.tanh(g))\\n best=None\\n for kind in range(5):\\n  def resid(p):\\n   F=basis(U,p,kind); return (F@fit(F,V)-V).ravel()\\n  sol=min((least_squares(resid,np.r_[np.full(4,k),np.zeros(4)],bounds=(np.r_[np.full(4,-2),np.full(4,-2)],np.r_[np.full(4,2),np.full(4,2)]),max_nfev=90) for k in [-.3,.4,1]),key=lambda r:r.cost)\\n  F=basis(U,sol.x,kind); coef=fit(F,V); rms=np.sqrt(np.mean((F@coef-V)**2)); score=rms*(1+F.shape[1]/20); print('panel fit',kind,round(rms,7),np.round(sol.x,3),flush=True)\\n  if best is None or score<best[0]:best=score,basis(D,sol.x,kind)@coef\\n return best[1]\\nBv=calib(b['u'],b['v'],z); w1=calib(C['u'],C['v1'],z); w2=np.c_[af(z),z*z]@fit(np.c_[af(C['u']),C['u']**2],C['v2']);\\nnp.savez('/tmp/coord06.npz',z=z,B=Bv,C=w1,D=w2)\\nfold=[np.arange(52,72),*np.array_split(np.random.default_rng(101).permutation(n),4)]; targets=np.c_[y,T];\\ndef gram(F):return F@F.T\\nFs={'z':z,'B':Bv,'C':w1,'D':w2,'BC':np.c_[Bv,w1],'BCD':np.c_[Bv,w1,w2],'all':np.c_[z,Bv,w1,w2]}; Ks={}\\nfor name,F in Fs.items():\\n F=(F-F.mean(0))/F.std(0); G=gram(F)/F.shape[1]; d=cdist(F,F,'sqeuclidean')/F.shape[1];\\n for k,K in [('lin',1+G),('quad',(1+G)**2),('cube',(1+G)**3),*((f'rbf{l}',1+G+np.exp(-d*l)) for l in [.05,.2,.5,1.]),*((f'mat{l}',1+G+(1+np.sqrt(d*l))*np.exp(-np.sqrt(d*l))) for l in [.5,2.])]: Ks[name+k]=K\\nfor l in [.05,.2,.5]:Ks['add'+str(l)]=sum(Ks[nm+'rbf'+str(l)] for nm in ['z','B','C','D'])/4\\nfor name, F in [('z',z),('B',Bv),('C',w1),('D',w2)]:\\n for h in [.6,1.2,2.5,4.]:\\n  grid=F[:,None,:]-F[None,:,:]; Ks[name+'separable'+str(h)]=1+gram(F)+np.exp(-h*grid**2).mean(2)\\nrec=[]\\nfor nm,K in Ks.items():\\n for r in [1e-5,1e-3,.01,.1]:\\n  E=[]\\n  for j in fold:\\n   ii=np.setdiff1d(np.arange(n),j); err=abs(K[np.ix_(j,ii)]@solve(K[np.ix_(ii,ii)]+r*np.eye(len(ii)),targets[ii],assume_a='pos')-targets[j]); E.append([err[:,0].mean(),err[:,1:].mean()])\\n  E=np.array(E);rec.append((nm,r,E))\\nfor col in [0,1]:\\n print('BEST',col)\\n for name,r,E in sorted(rec,key=lambda a:.35*a[2][0,col]+.65*a[2][:,col].mean())[:18]:print(name,r,np.round(E[:,col],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse polynomial calibration → fitted saturating coordinate maps and separate scalar/trajectory kernels; the last official-split MAEs were 0.116140 and 0.162039.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit compact saturating maps to the independent panels, then compare scalar and trajectory kernels across public folds without using held-out labels to fit the maps.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5ab7a3410795bfebfd89c24241b1fae469903f082989a991f2c9c9083a55d8e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35592.42,
+      "usage_known": true,
+      "prompt_tokens": 32367,
+      "cached_tokens": 12672,
+      "completion_tokens": 1528
+    }
+  ]
+}

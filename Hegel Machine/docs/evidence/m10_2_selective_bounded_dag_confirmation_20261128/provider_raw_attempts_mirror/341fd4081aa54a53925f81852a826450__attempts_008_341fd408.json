@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "341fd4081aa54a53925f81852a826450",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:15.382717+00:00",
+  "ended_at_utc": "2026-11-28T15:32:42.179576+00:00",
+  "request_sha256": "86855a9d9d90ae6205097514a3d0a25caef3433b5e8910df708153d8ba85a73f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51386,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35007,
+    "cached_tokens": 12672,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"grep -A20 'def _features' /tmp/hegel_continual_archive/*solver.py; OPENBLAS_NUM_THREADS=1 python3 -u /tmp/ridge.py | sed -n '/PANEL/,/RIDGE x/p' | head -13; cat > /tmp/screen.py <<'PY'\\nfrom graph import *\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import minimize_scalar\\ns0=s; n=52; tr=s['train']; Y=np.c_[tr['y'],tr['traj']]; print('times',s['eval_times']); print('mean',Y.mean(0),'std',Y.std(0),'corr y',np.corrcoef(Y.T)[0]);\\nW=graphs(s,tr['x']); z,A,B,C,D=ops(s,tr['x']); b=B(z);c=C(z);d=D(z);e=C(b); f=D(b); g=B(c)\\nfor k,v in {'base':z,'b':b,'c':c,'d':d,'e':e,'f':f,'g':g}.items():\\n print(k,'corr',np.round(np.corrcoef(np.c_[v,Y[:,[0,1,-1]]].T)[:4,4:],3))\\nW.update({'eb':np.c_[e,b], 'ef':np.c_[e,f], 'ebf':np.c_[e,b,f], 'ebz':np.c_[e,b,z], 'Bf':np.c_[b,f], 'eD':np.c_[e,d]})\\nfor u in [z,b,c,d,e,f,g]:\\n pass\\nrows=[]\\ndef score(p): return np.mean(abs(p-Y),0)[[0,*range(1,9)]].reshape(-1)\\nfor k,w in W.items():\\n w=w/np.maximum(.05,np.sqrt(np.mean(w[:n]**2,0)))\\n for j,fn in enumerate([lambda v:v,np.tanh,np.arctan,np.sin,lambda v:v/(1+.22*v*v)]):\\n  v=fn(w); Vs=[('p2',poly(v,2)),('p3',poly(v,3))] if w.shape[1]<=8 else [('p2',poly(v,2))]\\n  Vs += [('p2+B',np.c_[poly(v,2),b]), ('p2+both',np.c_[poly(v,2),b,e])]\\n  for q,F in Vs:\\n   U,S,V=np.linalg.svd(F[:n],full_matrices=False); G=F@V.T; R=U.T@Y[:n]\\n   for reg in [.0001,.003,.03,.3,2.]:\\n    wt=S/(S*S+reg); P=G@(wt[:,None]*R); lev=(U**2)@(S*wt); loo=(Y[:n]-P[:n])/(1-lev[:,None]); er=np.mean(abs(P[n:]-Y[n:]),0); cv=np.mean(abs(loo),0); rows.append((cv[0]+cv[1:].mean(),er[0],er[1:].mean(),cv[0],cv[1:].mean(),k,j,q,reg))\\nfor j in [0,1,2]:print('best',j,*sorted(rows,key=lambda a:a[j])[:9],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/screen.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 one shared scalar projection -> H2 separate forcing and readout terms built from coupled branch features; best existing 52/20 MAE is 0.05973 for y and 0.05081 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The single-index fits did not close the validation gap. Test low-degree interactions and branch-specific readouts, ranking by leave-one-out residuals on the fitting subset.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "bfb16956c969c8d8222e2db6e1443fdd6732b08748ea0a7f4aa91c26e2a0c0a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26795.47,
+      "usage_known": true,
+      "prompt_tokens": 35007,
+      "cached_tokens": 12672,
+      "completion_tokens": 1071
+    }
+  ]
+}

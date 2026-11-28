@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc15623abf1441d79cb3dc0a6dada535",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:51:47.488498+00:00",
+  "ended_at_utc": "2026-11-28T14:52:29.995733+00:00",
+  "request_sha256": "8e005d92d55e6f113e3441e8aa6a92dc68b7b5798cb239e64faddec484f96218",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21857,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22105,
+    "cached_tokens": 12672,
+    "completion_tokens": 885
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -i 's/(c\\\\[0\\\\],c\\\\[1\\\\])/(c[0],c[1:])/' /tmp/probe.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | tail -20; cat > /tmp/timeprobe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; T=s['train']['traj']; np.set_printoptions(precision=5,suppress=True)\\nLs={'2exp':(lambda p:np.c_[-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)],[2,.4]),'exp+linear':(lambda p:np.c_[-np.expm1(-p[0]*t),t],[2]),'exp+log':(lambda p:np.c_[-np.expm1(-p[0]*t),np.log1p(p[1]*t)],[2,.5]),'exp+sin':(lambda p:np.c_[-np.expm1(-p[0]*t),np.sin(p[1]*t)],[2,.5]),'exp+const':(lambda p:np.c_[-np.expm1(-p[0]*t),np.ones_like(t)],[2]),'exp+t exp':(lambda p:np.c_[-np.expm1(-p[0]*t),t*np.exp(-p[1]*t)],[2,.4]),'rational2':(lambda p:np.c_[t/(1+p[0]*t),t/(1+p[1]*t)],[2,.4])}\\n_,_,V=np.linalg.svd(T,full_matrices=False); print('svd',V[:2]);\\nfor k,(fun,p) in Ls.items():\\n def err(p):\\n  b=fun(p); return (b@np.linalg.lstsq(b,T.T,rcond=None)[0]-T.T).ravel()\\n opt=least_squares(err,p,bounds=(1e-5,20)); print(k,opt.x,np.sqrt(np.mean(opt.fun**2)),fun(opt.x).T)\\nfor k,v in s['panel_c'].items():\\n if k=='u':continue\\n u=s['panel_c']['u']; A=np.c_[np.ones(len(u)),u]; print(k)\\n for f,inv,initial in [('tanh',np.tanh,np.ones(4)*1.4),('sin',np.sin,np.ones(4)*1.5),('identity',lambda v:v,np.ones(4))]:\\n  for j in range(4):\\n   q=least_squares(lambda p:p[0]*inv(A@p[1:])-v[:,j],np.r_[initial[j],np.linalg.lstsq(A,v[:,j],rcond=None)[0]]); print(f,j,np.std(q.fun),q.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/timeprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust diagonal calibration and rank-two trajectories -> H2 recover the two temporal modes and test calibrated-coordinate regressions; no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate temporal dynamics from input-side nonlinearities; compare candidate time bases against the empirical noise floor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "512d2559b47fe6fd2732068d5ef784aca5c746d588ee3a9fd2b967940dbe77bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43026.5,
+      "usage_known": true,
+      "prompt_tokens": 22105,
+      "cached_tokens": 12672,
+      "completion_tokens": 885
+    }
+  ]
+}

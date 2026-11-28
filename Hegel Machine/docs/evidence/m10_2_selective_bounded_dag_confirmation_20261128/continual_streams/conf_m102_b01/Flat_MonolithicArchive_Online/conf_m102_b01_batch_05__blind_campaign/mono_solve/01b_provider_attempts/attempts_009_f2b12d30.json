@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f2b12d306be5479a8096a7889697b35b",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:11.568407+00:00",
+  "ended_at_utc": "2026-11-28T15:25:51.017060+00:00",
+  "request_sha256": "fd7cce3517931272a37043ab82ccb5b0d36d22fc7a95c1f9392c2d2b61bf84c7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31658,
+    "cached_tokens": 12672,
+    "completion_tokens": 1712
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_batch05.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study'];t=s['train'];x,y,Y=t['x'],t['y'],t['traj']; ids=np.arange(len(y)); n=52\\na,b,c=[s['panel_'+k] for k in 'abc']; A=m._aff; ls=m._ls\\nz=m._inverse(m._calibration(a),x); w=A(m._dead(z))@ls(A(m._dead(b['u'])),b['v']); q=m._latent(s,x); wlin=A(z)@ls(A(b['u']),b['v'])\\nprint('Public field names:',sorted(s), 'training fields:',sorted(t))\\nfor name,panel,out,d0,d1 in [('B',b,b['v'],A(b['u']),A(m._dead(b['u']))),('C1',c,c['v1'],A(c['u']),m._cross(c['u']))]:\\n    def loo(d):\\n        return np.sqrt(np.mean([(d[k]@ls(d[np.arange(len(d))!=k],out[np.arange(len(d))!=k])-out[k])**2 for k in range(len(d))]))\\n    print(name,'panel LOO RMSE affine / structured',loo(d0),loo(d1))\\ndef softplus(z,k):return A(np.logaddexp(0,k*z))\\nk=least_squares(lambda b:(softplus(c['u'],b[0])@ls(softplus(c['u'],b[0]),c['v2'])-c['v2']).ravel(),[2.]).x[0]\\nsc=ls(softplus(c['u'],k),c['v2']); cb=ls(m._cross(c['u']),c['v1']); d=A(q)\\npair=lambda v: np.c_[A(v),v[:,0]*v[:,2],v[:,1]*v[:,3]]\\nquad=np.c_[d,*[q[:,j]*q[:,k] for j in range(4) for k in range(j,4)]]\\nbase=pair(q)\\nblocks=[('prescribed',ids[:n],ids[n:])]; rng=np.random.default_rng(12209)\\nfor j in range(12):\\n    ix=rng.permutation(ids);blocks.append(('random',ix[:n],ix[n:]))\\nfor col in [*x.T,*q.T,np.linalg.norm(q-q.mean(0),axis=1)]:\\n    ix=np.argsort(col);blocks.extend([('directional',ix[:n],ix[n:]),('directional',ix[20:],ix[:20])])\\ndef err(F,target,i,j): return np.mean(abs(F[j]@ls(F[i],target[i])-target[j]))\\nmods={'current':base,'linear readout':d,'full quadratic':quad,'affine B':pair(m._cross(wlin)@cb),'affine C1':pair(A(w)@ls(A(c['u']),c['v1'])),'insert C2':pair(softplus(q,k)@sc)}\\n# Screen quotient/pairwise grammars using only the training side of each outer split.\\ncands=[base]; names=['none']\\nfor j,l in combinations(range(4),2):\\n    for v in (0.5,1.,2.,-.5,-1.,-2.):\\n        delta=q[:,j]+v*q[:,l]; ds=delta**2\\n        cands.append(np.c_[base,ds]);names.append('pair square')\\n        for alpha in (0.25,1.,4.):\\n            r=1/(1+alpha*ds)\\n            cands.extend((base*r[:,None],np.c_[base,r],np.c_[base,delta*r]));names.extend(('global rational','rational residual','signed rational'))\\nfor j,l,h in combinations(range(4),3):\\n    cands.append(np.c_[base,q[:,j]*q[:,l]*q[:,h]]);names.append('triple')\\nfrom collections import Counter\\nsums=[]; chosen=Counter(); state=[]\\nfor _,i,j in blocks:\\n    fs=np.array_split(rng.permutation(i),4)\\n    score=[np.mean([err(F,y,np.setdiff1d(i,v),v) for v in fs]) for F in cands]; best=np.argmin(score);chosen[names[best]]+=1\\n    sums.append([*[err(F,y,i,j) for F in mods],err(cands[best],y,i,j)])\\n    ph=m.solve_batch(dict(s,train=dict(x=x[i],y=y[i],traj=Y[i]),test=dict(x=x[j])))['state_pred']; state.append(np.mean(abs(ph-Y[j]),axis=0))\\nprint('Scalar: prescribed / mean outer / worst outer MAE')\\nfor k,v in zip([*mods,'nested grammar challenger'],np.asarray(sums).T):print(k,np.round([v[0],v.mean(),v.max()],7))\\nprint('Nested grammar selections',chosen)\\nprint('Worst trajectory MAE per horizon',np.round(np.max(state,axis=0),7))\\nprint('Trajectory max mean horizon-aggregate MAE',np.mean(state,axis=1).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch05.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cascade transfer -> H2 cyclic calibration, dead-zone B, and sparse C1; verified worst directional or random MAE is 0.00829 for scalar predictions and 0.00471 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add signed pairwise, rational, or triple-product terms\",\n      \"rejected_reason\": \"Not yet rejected; compare with the current readout using inner-fold selection and untouched outer folds.\"\n    },\n    {\n      \"option\": \"Apply cohort centering or relay-mode corrections\",\n      \"rejected_reason\": \"The public schema describes one continuous regression study with no cohort labels, relay modes, or observed drift state; these corrections have no identified inputs.\"\n    }\n  ],\n  \"rationale\": \"Measure affine-versus-structured panel errors out of sample, ablate the nonlinear branches, and test readout expansions without tuning on the outer evaluation slices. Report each trajectory horizon independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "796b5117e06c599509a223ee1394f34afb04c7102f1b969c516b15261b60b8f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39447.4,
+      "usage_known": true,
+      "prompt_tokens": 31658,
+      "cached_tokens": 12672,
+      "completion_tokens": 1712
+    }
+  ]
+}

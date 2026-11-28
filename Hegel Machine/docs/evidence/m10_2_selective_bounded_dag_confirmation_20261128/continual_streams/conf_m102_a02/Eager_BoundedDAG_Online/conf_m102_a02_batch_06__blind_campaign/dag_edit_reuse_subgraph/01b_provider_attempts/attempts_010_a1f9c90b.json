@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a1f9c90b764c4dcf8fd1f9a21d07a3da",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:13.443155+00:00",
+  "ended_at_utc": "2026-11-28T15:34:58.787006+00:00",
+  "request_sha256": "1a299323cc25f34a2f8bc36cd58d5a8e60b6a11c82e537cb200e987cb5a0cf96",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41376,
+    "cached_tokens": 12672,
+    "completion_tokens": 2029
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/search.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom node_01 import calibrate,poly\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom itertools import combinations_with_replacement,product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=calibrate(s['panel_a'],s['train']['x']); y=np.c_[s['train']['y'],s['train']['traj']]; n=len(y)\\nfit=lambda X,Y:np.linalg.lstsq(X,Y,rcond=1e-10)[0]\\nbase=np.ones(n); rng=np.random.default_rng(893); splits=[(np.arange(52),np.arange(52,n))]+[(np.setdiff1d(np.arange(n),v),v) for v in np.array_split(rng.permutation(n),4)]\\nfun={'sin':np.sin,'tanh':np.tanh,'r':lambda x:x/(1+x*x),'r2':lambda x:x*x/(1+x*x),'cos':np.cos}\\nF={'z':z,'x':s['train']['x']}; maps={}\\nfor key,j in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[key]['u'],s[key][j]; L=[]\\n for name,f in fun.items():\\n  def get(p,x):return np.c_[np.ones(len(x)),x,f(p*x)]\\n  def cost(p):\\n   a=get(p,u); q=np.linalg.qr(a)[0];return np.mean(((v-a@fit(a,v))/(1-(q*q).sum(1))[:,None])**2)**.5\\n  res=min([minimize_scalar(cost,bounds=b,method='bounded') for b in ((.12,.6),(.6,1.4),(1.4,2.5),(2.5,4),(4,6))],key=lambda r:r.fun); L.append((res.fun,name,res.x))\\n e,name,p=min(L); a=get(p,u); B=fit(a,v); print(j,sorted(L), 'linear',B[1:5], 'nonlinear', B[5:],flush=True); maps[j]=(name,p,B); F[j]=get(p,z)@B\\n # Estimate the unmixed coordinate-wise perturbation using the parallel coefficients.\\n m=(B[1:5]*B[5:]).sum(1)/(B[1:5]**2).sum(1); F['u'+j]=z+fun[name](p*z)*m\\nnp.savez('/tmp/search_maps.npz',**F)\\nresults=[[],[]]\\ndef trial(name,A,regs=(0.,.001,.03,.2)):\\n for reg in regs:\\n  errors=[]\\n  for tr,va in splits:\\n   mu=A[tr].mean(0); sd=np.maximum(A[tr].std(0),1e-8); D=(A-mu)/sd; m=y[tr].mean(0); V=y[tr]-m\\n   if reg:\\n    K=D[tr]@D[tr].T; coef=D[tr].T@np.linalg.solve(K+reg*np.eye(len(K)),V)\\n   else:coef=fit(D[tr],V)\\n   e=abs(D[va]@coef+m-y[va]); errors.append((e[:,0].mean(),e[:,1:].mean()))\\n  E=np.array(errors)\\n  for j in range(2):results[j].append((E[:,j].mean()*.55+E[:,j].max()*.45,name,reg,np.round(E[:,j],4)))\\nfor key,w in F.items():\\n for key2,v in F.items():\\n  if key>=key2:continue\\n  trial('fused '+key+' '+key2,np.c_[poly(w,2),poly(v,2)])\\n  trial('full '+key+' '+key2,poly(np.c_[w,v],2))\\nfor name in ('sin','tanh','r'):\\n f=fun[name]\\n for g in (.4,.7,1.,1.2,1.5,1.8,2.1,2.3,2.5,2.7,2.8,3.,3.2,3.5,4.):\\n  w=f(g*z); tag=f'{name} {g}'; trial('full sep '+tag,poly(np.c_[z,w],2)); trial('diag sep '+tag,np.c_[poly(z,2),w,z*w,w*w]);\\n  for m in (-2,-1,-.4,.4,1,2):trial(f'warp {tag} {m}',poly(z+m*w,2),(0.,))\\n  trial('sum '+tag,np.c_[poly(z,2),poly(w,2)])\\n  trial('cross '+tag,np.c_[poly(z,2),w,(z[:,:,None]*w[:,None,:]).reshape(n,16)])\\nfor i in range(2):\\n print('BEST',i,*sorted(results[i],key=lambda x:x[0])[:18],sep='\\\\n',flush=True)\\n# Optimize a compact structured readout with the same shape library; fit shape parameters inside every split.\\nfor nm in ('sin','tanh','r'):\\n fn=fun[nm]\\n for form in ('warped','interaction'):\\n  for target in (0,1):\\n   V=y[:,0:1] if not target else y[:,1:]; er=[]; pars=[]\\n   for tr,va in splits:\\n    best=None\\n    for g0 in (.8,1.7,2.8,3.8):\\n     def design(g,x):\\n      w=fn(x*g[0]);\\n      if form=='warped':return poly(x+w*g[1:],2)\\n      return np.c_[poly(x,2),w,(x[:,:,None]*w[:,None,:]).reshape(len(x),16),w*w]\\n     def res(g):\\n      A=design(g,z[tr]); return (A@fit(A,V[tr])-V[tr]).ravel()\\n     init=np.r_[g0,np.repeat(-.4,4)] if form=='warped' else np.array([g0]); r=least_squares(res,init,bounds=(np.r_[.2,np.repeat(-8,len(init)-1)],np.r_[5.8,np.repeat(8,len(init)-1)]),max_nfev=45); score=np.mean(r.fun**2)\\n     if best is None or score<best[0]:best=(score,r.x)\\n    g=best[1]; er.append(np.mean(abs(design(g,z[va])@fit(design(g,z[tr]),V[tr])-V[va])));pars.append(g)\\n   print('OPT',nm,form,target,np.round(er,4),np.round(pars,4),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted panel-feature quadratics -> H2 compact coordinate-wise nonlinear interactions; best public candidate readouts so far are 0.0633 endpoint MAE and 0.0431 trajectory MAE, both above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The panel fits show nearly parallel linear and nonlinear coefficients, suggesting coordinate-wise warps followed by linear mixing. Test those warps and small interaction bases across held-out splits, fitting nonlinear parameters only on each split’s training rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "69671d3e3cadd3a53dde19f90d8a56a83f6277959cf7dc893ea1eeb1b1b5f786",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45762.48,
+      "usage_known": true,
+      "prompt_tokens": 41376,
+      "cached_tokens": 12672,
+      "completion_tokens": 2029
+    }
+  ]
+}

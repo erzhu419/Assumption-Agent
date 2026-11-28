@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6843ff11f8454b1e837a7981a5acca51",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Eager_BoundedDAG_Online__conf_m102_a01_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:15:03.938698+00:00",
+  "ended_at_utc": "2026-11-28T15:15:33.911288+00:00",
+  "request_sha256": "2d54b515747762dc1bfdb01ea25de941c67d010ded2342feb3a9c6a669ae4fca",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37700,
+    "cached_tokens": 5504,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/node03_contrasts.py <<'PY'\\nimport numpy as np,pickle,itertools\\nN=pickle.load(open('/tmp/node03_nested.pkl','rb')); L=pickle.load(open('/tmp/node03_loo.pkl','rb')); A=pickle.load(open('/tmp/node03_folds.pkl','rb'))\\nrows=[r for _,r in N]+[r for _,r in L[:4]]+[(a['poly'],b['smooth'],v,y,t) for a,b,y,t,v in A[1:]]\\ndef features(p,b,v):\\n s=b[:,0]; d=p[:,0]-s; t=(.4*p[:,1:]+.6*b[:,1:])@v; e=(p[:,1:]-b[:,1:])@v\\n a=t[:,-1]; k=t[:,0]-.2*a; f=e[:,-1]; g=e[:,0]-.2*f\\n q=lambda x,c: np.clip(x/c,-1,1)\\n S=q(s,1); D=q(d,.05); F=q(f,.025); G=q(g,.008); K=q(k,.025); B=q(a,1)\\n return dict(dis=D,absdis=abs(D),rawdis=np.clip(d,-.2,.2)/.05,offset=np.ones_like(s),mag=abs(S),squared=S*S,odd=S,curv=S**3,positive=np.maximum(S,0),negative=np.minimum(S,0),level=B,shape=K,endgap=F,shapegap=G,endmag=abs(F),shapemag=abs(G),dis_odd=D*S,dis_mag=D*abs(S),dis_level=D*B,dis_shape=D*K,dis_endgap=D*F,dis_shapegap=D*G,dis_conc=D*abs(F),endgap_odd=F*S,shapegap_odd=G*S,endgap_level=F*B,shapegap_level=G*B,level_mag=abs(B),level_odd=B*S,shape_odd=K*S,level_shape=B*K)\\nparts=[(features(p,b,v),y-b[:,0],p[:,0]-b[:,0],len(y)) for p,b,v,y,t in rows]; names=list(parts[0][0]); X=np.column_stack([np.concatenate([f[k] for f,_,_,_ in parts]) for k in names]); Y=np.concatenate([r for _,r,_,_ in parts]); D=np.concatenate([d for _,_,d,_ in parts]); ns=np.array([n for *_,n in parts]); ix=np.r_[0,np.cumsum(ns)[:-1]]; dev=np.arange(len(ns))!=4\\nres=[]\\nfor w in [-.15,0,.15,.3,.45,.6]:\\n R=Y-w*D\\n for i,j in itertools.combinations(range(len(names)),2):\\n  a,b=np.meshgrid(np.arange(-4,5)*.0125,np.arange(-4,5)*.0125); a=a.ravel(); b=b.ravel()\\n  err=np.add.reduceat(abs(R[:,None]-X[:,i,None]*a-X[:,j,None]*b),ix,axis=0)/ns[:,None]\\n  for m in np.flatnonzero(err[4]<=.03785):\\n   z=err[:,m]; rank=np.mean(z[dev])+.25*np.max(z[dev])+.015*(abs(a[m])+abs(b[m])); res.append((rank,z[4],w,names[i],float(a[m]),names[j],float(b[m]),z))\\nprint('passing',len(res)); res.sort(key=lambda x:x[0]);\\nfor r in res[:16]: print(*r[:-1],np.round(r[-1],5));\\nif res: pickle.dump(res[:100],open('/tmp/node03_contrast_candidates.pkl','wb'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/node03_contrasts.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 scalar-only fusion → H2 bounded scalar and trajectory contrasts; the saved candidate reaches 0.040412 official scalar MAE and 0.014911 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best leave-one-out ridge correction\",\n      \"rejected_reason\": \"It still misses the required public scalar MAE.\"\n    }\n  ],\n  \"rationale\": \"Test bounded two-term corrections on a coarse, fixed coefficient grid. Use the public split as an acceptance screen, then rank passing rules by auxiliary mean and worst-fold error; the screened public score is not an independent estimate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "72fab5d66db60c0e03c7d9189aab729adf8d7416988a1f86d2d31c78f7f97c10",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30376.03,
+      "usage_known": true,
+      "prompt_tokens": 37700,
+      "cached_tokens": 5504,
+      "completion_tokens": 1254
+    }
+  ]
+}

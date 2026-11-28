@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9ad56c3585684537b8988549777e9931",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:25:20.834715+00:00",
+  "ended_at_utc": "2026-11-28T16:26:02.321533+00:00",
+  "request_sha256": "63bbf14eac6e3965ff12db180bd7c01041f37f576cab314f234604ac6c29d4f8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39617,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28672,
+    "cached_tokens": 14720,
+    "completion_tokens": 1773
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/infer17.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef aff(a): return np.column_stack([np.ones(len(a)),a])\\nu,v=map(s['panel_a'].get,('u','v')); keep=np.max(abs(v),axis=1)<3\\nprint('A kept',keep.sum(),flush=True); u,v=u[keep],v[keep]; w=np.roll(u,2,axis=1)\\nF={'sin':np.sin,'tanh':np.tanh,'erf':erf,'rat':lambda z:z/(1+z*z),'asinh':np.arcsinh,'cube':lambda z:z**3,'atan':np.arctan}\\ndef block(x,z,f,g,k): return np.column_stack([x*0+1,x,z,f(k[0]*x),g(k[1]*z)])\\ndef evaluate(f,g,k,ret=False):\\n ds=[block(u[:,j],w[:,j],f,g,k) for j in range(4)]; c=np.array([fit(d,v[:,j]) for j,d in enumerate(ds)]); r=np.column_stack([d@c[j]-v[:,j] for j,d in enumerate(ds)]); return (r,c) if ret else r.ravel()\\nresults=[]\\nfor fn,f in F.items():\\n for gn,g in F.items():\\n  best=min([least_squares(lambda k:evaluate(f,g,k),k,bounds=(.15,6),max_nfev=50) for k in ([1,1],[2,2],[3.5,3.5])],key=lambda t:np.mean(t.fun**2)); results.append((np.mean(best.fun**2)**.5,fn,gn,best.x))\\nresults.sort(key=lambda a:a[0]); print('A top',results[:12]); rms,fn,gn,k=results[0]; f,g=F[fn],F[gn]; _,c=evaluate(f,g,k,True); print('A coef',c)\\ndef calibrate(x):\\n def forward(a): return np.sum(c*np.stack([a*0+1,a,np.roll(a,2),f(k[0]*a),g(k[1]*np.roll(a,2))],axis=1),axis=1)\\n return np.array([least_squares(lambda a:forward(a)-b,b/1.5,max_nfev=60).x for b in x])\\ndef panel(p,key,f,bounds):\\n u,v=p['u'],p[key]\\n def design(z,k):return np.column_stack([aff(z),f(k*z)])\\n def err(k):a=design(u,k);return np.mean((v-a@fit(a,v))**2)\\n k=minimize_scalar(err,bounds=bounds,method='bounded').x\\n print('panel',key,k,err(k)**.5)\\n return lambda z:design(z,k)@fit(design(u,k),v)\\nz=calibrate(s['train']['x']); g=panel(s['panel_b'],'v',np.cos,(2.3,2.9))(z); h=panel(s['panel_c'],'v1',np.tanh,(1.5,3))(z); l=panel(s['panel_c'],'v2',np.cos,(.4,2))(z)\\nys=np.column_stack([s['train']['y'],s['train']['traj']]); rng=np.random.default_rng(75); splits=[(np.arange(52),np.arange(52,72))]+[(a[:52],a[52:]) for a in [rng.permutation(72) for _ in range(12)]]\\ndef score(a):\\n e=np.array([np.abs(a[j]@fit(a[i],ys[i])-ys[j]).mean(0) for i,j in splits]); return np.round([e[0,0],e[0,1:].mean(),e[:,0].max(),e[:,1:].mean(1).max()],5)\\nfrom itertools import combinations_with_replacement\\nfor name,a in [('z',z),('g',g),('h',h),('l',l),('zg',np.column_stack([z,g])),('zghl',np.column_stack([z,g,h,l])),('cos',np.cos(2.6*z))]:\\n print(name,score(aff(a))); \\n if a.shape[1]<=8: print(name,'quad',score(np.column_stack([aff(a)]+[a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(a.shape[1]),2)])))\\nfor base,D in [('zg',aff(np.column_stack([z,g]))),('zghl',aff(np.column_stack([z,g,h,l])))]:\\n res=[]\\n for a,an in [(z,'z'),(g,'g'),(h,'h'),(l,'l')]:\\n  for b,bn in [(z,'z'),(g,'g'),(h,'h'),(l,'l')]:\\n   for j in range(4):\\n    B=np.column_stack([D,a*np.roll(b,j,axis=1)]); S=score(B); res.append((an+bn+str(j),S))\\n print(base,'top y',sorted(res,key=lambda x:x[1][2])[:8]);print(base,'top t',sorted(res,key=lambda x:x[1][3])[:8]);\\nnp.savez('/tmp/features17.npz',z=z,g=g,h=h,l=l,targets=ys)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/infer17.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse polynomial calibration → H2 shared nonlinear opposite-coordinate calibration with a cosine panel map; the raw quadratic baseline has public-split MAEs of 0.2720 for endpoint and 0.3838 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived basis with only a self-coordinate cubic is sufficient for the calibration panel.\",\n    \"empirical_witness\": \"Adding powers of the opposite coordinate reduced the median row residual norm from 0.23425 to 0.02653; the successor-coordinate model stayed above 0.37.\",\n    \"causal_blanket_diagnosis\": \"The opposite coordinate contributes a nonlinear response that a linear cross term and a self-coordinate cubic cannot capture.\",\n    \"sublated_pivot\": \"Keep the opposite-coordinate pairing and compare shared nonlinear response functions before fitting the readouts.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a raw quadratic readout\",\n      \"rejected_reason\": \"Both public-split errors substantially exceed the 0.038 limits.\"\n    },\n    {\n      \"option\": \"Reuse the archived erf panel map\",\n      \"rejected_reason\": \"Panel B's cosine fit has RMS 0.000084, compared with at least 0.503 among the tested erf variants.\"\n    }\n  ],\n  \"rationale\": \"Identify the calibration from independent reference measurements, then compare structured readout features across the public split and randomized splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "10a1522f435e8095eea74a2877976a8d410b430dc57d7e2c450554f48d2b48eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42537.88,
+      "usage_known": true,
+      "prompt_tokens": 28672,
+      "cached_tokens": 14720,
+      "completion_tokens": 1773
+    }
+  ]
+}

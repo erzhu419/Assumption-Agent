@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "239030d997664caaaf35519f8f3fc635",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_15__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T17:17:05.177798+00:00",
+  "ended_at_utc": "2026-11-28T17:17:37.753199+00:00",
+  "request_sha256": "cc0c0c36d9122fdff91b80d9f6111a34c893a26bee8be4bdea9b8f45ce752f90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42838,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25869,
+    "cached_tokens": 5504,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/heads.py <<'PY'\\nimport numpy as np,itertools\\nfrom scipy.linalg import qr\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\np=np.load('/tmp/design.npz'); z,b,c,h=[p[k] for k in 'zbch']; Y=np.c_[p['y'],p['m']]; T=p['T']; f=p['f']; n=len(Y)\\ndef features(coords):\\n N=[]; F=[]\\n def put(name,a):\\n  a=np.asarray(a); a=a[:,None] if a.ndim==1 else a\\n  for j,col in enumerate(a.T): N.append(name+str(j) if a.shape[1]>1 else name); F.append(col)\\n for name,a in coords.items():\\n  put(name,a); put(name+'sq',a*a);put(name+'cu',a**3)\\n  for q in [.5,1,1.25,1.7,2.15,2.6,3.5,5]:\\n   for op,fn in [('s',np.sin),('c',np.cos),('t',np.tanh),('e',lambda v:np.exp(-v*v)),('r',lambda v:v/(1+v*v)),('a',np.arctan),('d',lambda v:np.sign(v)*np.maximum(abs(v)-.35,0)**1.5)]: put(f'{op}{q}:{name}',fn(q*a))\\n  for i,j in itertools.combinations(range(4),2):\\n   put(f'{name}{i}*{name}{j}',a[:,i]*a[:,j]);\\n   for q in [1,1.25,2.15]:\\n    for sign in [-1,1]:\\n     u=q*(a[:,i]+sign*a[:,j]); put(f's{q}({name}{i}{sign:+d}{name}{j})',np.sin(u));put(f't{q}({name}{i}{sign:+d}{name}{j})',np.tanh(u));put(f'c{q}({name}{i}{sign:+d}{name}{j})',np.cos(u));put(f'r{q}({name}{i}{sign:+d}{name}{j})',u/(1+u*u))\\n for (k,a),(l,g) in itertools.combinations(coords.items(),2):\\n  for i,j in itertools.product(range(4),repeat=2):\\n   put(f'{k}{i}*{l}{j}',a[:,i]*g[:,j]);\\n return N,np.array(F).T\\nif __name__=='__main__':\\n for keys in ['z','zb','zc','zh','zbc','zbh','zch','zbch']:\\n  names,raw=features({k:p[k] for k in keys}); mu=raw[:52].mean(0); scale=np.maximum(raw[:52].std(0),1e-12); X=(raw-mu)/scale\\n  print(keys)\\n  for j in range(3):\\n   y=Y[:,j]; yc=y[:52]-y[:52].mean(); R=yc.copy(); active=[]; out=[]\\n   for k in range(12):\\n    idx=np.argmax(np.abs(X[:52].T@R));active.append(idx); v=np.linalg.lstsq(X[:52,active],yc,rcond=None)[0];R=yc-X[:52,active]@v\\n    pred=X[52:72,active]@v+y[:52].mean();out.append(round(np.mean(abs(pred-y[52:])),4))\\n   print(j,out,','.join(names[i] for i in active))\\n print('y correlations with time',np.corrcoef(np.c_[Y,T].T)[0]);print('mode ranges',Y.min(0),Y.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/heads.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'sparse symbolic nonlinear feature regression variable projection' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear heads on reconstructed coordinates -> H2 sparse nonlinear heads; best tested linear 52/20 MAEs are 0.3322 for y and 0.4339 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight unconstrained regressions\",\"rejected_reason\":\"The two-exponential basis reconstructs observed states at MAE 0.00328; downstream spatial amplitude prediction is the bottleneck.\"}],\"rationale\":\"Screen pairwise symmetries, rational transforms, and cross-panel products for the scalar and two temporal amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cebaf528e3922cc4cc55524df1dc30086eb64511b46a2a254b419d6561fc15e5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33126.02,
+      "usage_known": true,
+      "prompt_tokens": 25869,
+      "cached_tokens": 5504,
+      "completion_tokens": 1276
+    }
+  ]
+}

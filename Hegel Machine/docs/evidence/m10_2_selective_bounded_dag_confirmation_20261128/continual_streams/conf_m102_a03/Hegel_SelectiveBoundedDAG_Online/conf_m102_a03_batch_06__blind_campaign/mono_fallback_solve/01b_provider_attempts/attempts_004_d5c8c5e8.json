@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d5c8c5e8dbcf4f7285d905d3008d0ae8",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:41:04.867643+00:00",
+  "ended_at_utc": "2026-11-28T15:41:26.824419+00:00",
+  "request_sha256": "4b2d4e5a25c8e02b1571e334f905216b95cacef4709a1ea409faa18d855e3a53",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28158,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23856,
+    "cached_tokens": 12672,
+    "completion_tokens": 718
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_00_solver.py /tmp/hegel_continual_archive/*batch_01_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=150)\\ndef pol(x,d): return np.column_stack([np.prod(x[:,j],axis=1) for k in range(d+1) for j in combinations_with_replacement(range(x.shape[1]),k)])\\ndef fit(x,y):return np.linalg.lstsq(x,y,rcond=1e-11)[0]\\ndef panel(p,k):\\n u,v=p['u'],p[k]; a=pol(u,1); c=fit(a,v); r=np.linalg.norm(v-a@c,axis=1); keep=np.argsort(r)[:int(.85*len(r))] if len(r)==48 else np.arange(len(r)); c=fit(a[keep],v[keep]); print(k,'affine',c,'err',np.sort(np.linalg.norm(v-a@c,axis=1))); print('quad coef',fit(pol(u,2)[keep],v[keep]).T,'quad rms',np.std((v-pol(u,2)@fit(pol(u,2)[keep],v[keep]))[keep],axis=0))\\nif __name__=='__main__':\\n print('times',s['eval_times']); print('singular',np.linalg.svd(s['train']['traj'],compute_uv=False));\\n for n in 'abc':\\n  for k in s['panel_'+n]:\\n   if k!='u': panel(s['panel_'+n],k)\\n x,y,t=[s['train'][k] for k in ('x','y','traj')];\\n for d in (1,2,3,4):\\n  a=pol(x,d); p=a@fit(a[:52],np.column_stack((y,t))[:52]); print(d, np.mean(abs(p[:52]-np.column_stack((y,t))[:52]),axis=0),np.mean(abs(p[52:]-np.column_stack((y,t))[52:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct archive transfer fails → H2 identify each panel's operator and the trajectory rank separately; prior 52/20 MAEs were 0.104313 and 0.093919.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel residuals and the trajectory singular spectrum distinguish simple calibration, nonlinear branches, and time-basis structure before fitting the full graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "82c9376a5d57a4e867e8595beefbb4d9ca5241013439693b3e18256312732a3f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21955.78,
+      "usage_known": true,
+      "prompt_tokens": 23856,
+      "cached_tokens": 12672,
+      "completion_tokens": 718
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43e15d8077984ebd9d0265e275f47088",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:53.219885+00:00",
+  "ended_at_utc": "2026-11-28T15:36:26.532395+00:00",
+  "request_sha256": "edb8942b2febd903fbac4a51372e8821134c932758c6c374c1d73893db4105e5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42711,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31966,
+    "cached_tokens": 12672,
+    "completion_tokens": 1431
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/struct.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef aff(u):return np.c_[np.ones(len(u)),u]\\ndef ls(F,y):return np.linalg.lstsq(F,y,rcond=1e-10)[0]\\ndef spectrum(u,Y,steps=5):\\n F=aff(u); D=np.array([d for d in product((-1,0,1),repeat=4) if any(d) and next(i for i in d if i)>0]); W=(D[:,None]*np.arange(.75,6.1,.11)[None,:,None]).reshape(-1,4); ws=[]\\n for z in range(steps):\\n  Q=np.linalg.qr(F)[0]; R=Y-Q@(Q.T@Y); print('rms',np.sqrt(np.mean(R*R,axis=0)).round(4),end=' ')\\n  ang=u@W.T; B=np.stack([np.sin(ang),np.cos(ang)],axis=2); B-=np.einsum('ij,jkl->ikl',Q,np.einsum('ij,ikl->jkl',Q,B)); bs=B.transpose(1,0,2); p=bs.transpose(0,2,1)@R; cov=bs.transpose(0,2,1)@bs+1e-12*np.eye(2); gain=(p*np.linalg.solve(cov,p)).sum((1,2));\\n  def mat(w):\\n   t=u@w.reshape(-1,4).T;return np.c_[aff(u),np.sin(t),np.cos(t)]\\n  def loss(w):\\n   G=mat(w);return (G@ls(G,Y)-Y).ravel()\\n  w=min((least_squares(loss,np.r_[ws,W[i]],max_nfev=45) for i in np.argsort(gain)[-32:][::-1][::3]),key=lambda f:f.cost).x; ws=w;F=mat(w);print(w.reshape(-1,4).round(2).tolist(),flush=True)\\n print('final',np.sqrt(np.mean(loss(ws).reshape(Y.shape)**2,0)).round(5))\\ndef fitmap(u,v):\\n def M(u,w):return np.c_[aff(u),np.sin(u*w)]\\n def err(w):\\n  f=M(u,w);return (f@ls(f,v)-v).ravel()\\n a=min((least_squares(err,np.full(4,k),bounds=(.4,7),max_nfev=120) for k in (1.5,2.5,3.5,4.5,5.5)),key=lambda a:a.cost); w=a.x; B=ls(M(u,w),v); print('map',w.round(4),B.round(3),'rms',np.sqrt(np.mean(err(w).reshape(v.shape)**2,0)).round(4));return w,B\\n\\ndef predict(u,w,B):return np.c_[aff(u),np.sin(u*w)]@B\\nif __name__=='__main__':\\n for panel,key in [('panel_a','v'),('panel_b','v'),('panel_c','v1')]:\\n  p=s[panel]; u,v=p['u'],p[key]; keep=np.linalg.norm(v,axis=1)<4 if panel=='panel_a' else np.ones(len(u),bool); print(panel); w,B=fitmap(u[keep],v[keep]);\\n  if panel=='panel_a': wa,Ba=w,B\\n  if panel=='panel_c': wc,Bc=w,B\\n tr=s['train'];x=tr['x'];q=(x-Ba[0])@np.linalg.inv(Ba[1:5]);\\n a=least_squares(lambda q:(predict(q.reshape(x.shape),wa,Ba)-x).ravel(),q.ravel(),jac_sparsity=np.repeat(np.repeat(np.eye(len(q)),4,0),4,1),max_nfev=50);q=a.x.reshape(x.shape);print('inv rms',np.std(a.fun),'max',abs(q).max(0));\\n z=tr['traj']; U,S,V=np.linalg.svd(z,full_matrices=False); Y=np.c_[tr['y'],U[:,:2]*S[:2]/[3,.2]]\\n for label,r in [('raw',x),('Ainv',q),('C1raw',predict(x,wc,Bc)),('C1Ainv',predict(q,wc,Bc))]:\\n  print(label,flush=True); spectrum(r,Y,5)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py; cat /holdout_task/_frozen_nodes/node_00.py; sed -n '1,155p' /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether inverting a sparse sinusoidal calibration exposes simpler scalar and trajectory heads; the best kernel’s worst-slice MAEs are 0.1800 and 0.2502.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel A’s strongest residual frequency directions are nearly coordinate-aligned. Fit the four frequencies jointly, then compare nonlinear head structure before and after inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c4abfd3e2049d1dccca3705d092ec856f778fd3ffe88910285c22b3afee19a74",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33851.99,
+      "usage_known": true,
+      "prompt_tokens": 31966,
+      "cached_tokens": 12672,
+      "completion_tokens": 1431
+    }
+  ]
+}

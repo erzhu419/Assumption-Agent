@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eaef0d02fb76423d905e5c33a2e5fd91",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:14.297808+00:00",
+  "ended_at_utc": "2026-11-28T16:02:53.585904+00:00",
+  "request_sha256": "ccaefa0f3c24ee794fc42c0b8d12220383d5721deda15cfba81dae96a1212b68",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49035,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32391,
+    "cached_tokens": 12672,
+    "completion_tokens": 1748
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed '/^def _warp/,$d' /tmp/hegel_continual_archive/*06_solver.py > batch_solver.py; sed -i '1c\\\\\\\"\\\\\\\"\\\\\\\"Robust cyclic calibration, cosine-panel reconstruction, and two output readouts.\\\\\\\"\\\\\\\"\\\\\\\"' batch_solver.py; cat >>batch_solver.py <<'PY'\\n\\ndef _cosine_operator(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def design(frequency):\\n        return _affine(np.cos(frequency * u))\\n    def residual(p):\\n        a = design(p[0])\\n        return (a @ _fit(a, v) - v).ravel()\\n    grid = np.linspace(0.4, 6.0, 57)\\n    costs = [np.linalg.norm(residual([f])) for f in grid]\\n    f = least_squares(residual, [grid[np.argmin(costs)]], bounds=(0.1, 8.),\\n                      ftol=1e-12, xtol=1e-12, gtol=1e-12).x[0]\\n    return f, _fit(design(f), v)\\n\\n\\ndef _scalar_design(w):\\n    return np.column_stack((_affine(w), w[:, 0]*w[:, 2] + w[:, 1]*w[:, 3]))\\n\\n\\ndef _scalar_readout(a, at, y):\\n    initial = _fit(a, y)\\n    def design(matrix, p):\\n        return np.column_stack((matrix, np.tanh(matrix @ p)))\\n    def residual(p):\\n        d = design(a, p)\\n        return d @ _fit(d, y) - y\\n    fit = min((least_squares(residual, initial * scale, max_nfev=160)\\n               for scale in (0.55, 1.15, 1.8)), key=lambda r:r.cost)\\n    return design(at, fit.x) @ _fit(design(a, fit.x), y)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    calibration = _calibration(study['panel_a'])\\n    frequency, mixing = _cosine_operator(study['panel_b'])\\n    def features(x):\\n        z = _decode(np.asarray(x, dtype=float), calibration)\\n        return _affine(np.cos(frequency * z)) @ mixing\\n    w, wt = (features(x) for x in (train['x'], study['test']['x']))\\n    y_hat = _scalar_readout(_scalar_design(w), _scalar_design(wt), np.asarray(train['y']))\\n    state_pred = _affine(wt) @ _fit(_affine(w), np.asarray(train['traj']))\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; cat >/tmp/compact_probe.py <<'PY'\\nimport pickle,sys,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; t=s['eval_times']; f,b=m._cosine_operator(s['panel_b']);z=m._decode(tr['x'],m._calibration(s['panel_a']));w=m._affine(np.cos(f*z))@b;a=m._scalar_design(w);p=m._fit(a[:52],y[:52]);print(f,p)\\nfor name,g in [('tanh',np.tanh),('atan',np.arctan),('rational',lambda h:h/(1+h*h)),('sqrt',lambda h:h/np.sqrt(1+h*h))]:\\n for mode in [0,1,2]:\\n  def pred(q):\\n   h=a@q[:6]; k=np.exp(np.clip(q[6],-4,3)); return h+q[7]*g(k*h) if mode==0 else q[7]*g(k*h)+h+q[8] if mode==1 else h+.22*g(k*h)\\n  r=min((least_squares(lambda q:(pred(q)-y)[:52],np.r_[p*f,np.log(k),.22,0],max_nfev=500) for k in [.7,1.25,2.15] for f in [.6,1.1]),key=lambda r:r.cost);e=abs(pred(r.x)-y);print(name,mode,e[:52].mean(),e[52:].mean(),r.x)\\nfit=m._fit(m._affine(w[:52]),T[:52]);print('test cosine range',np.cos(f*m._decode(s['test']['x'],m._calibration(s['panel_a']))).min(axis=0),np.cos(f*m._decode(s['test']['x'],m._calibration(s['panel_a']))).max(axis=0)); print('temporal fit residual');\\nfor n,func in [('log',lambda t,p:np.log1p(p[0]*t)),('exp',lambda t,p:-np.expm1(-p[0]*t)),('sqrt',lambda t,p:np.sqrt(t+p[0])-np.sqrt(p[0]))]:\\n for use in [False,True]:\\n  def B(p):\\n   col=func(t,p);return np.c_[col,np.sin(p[1]*t)] if use else col[:,None]\\n  def r(p):\\n   a=B(p);return (a@m._fit(a,fit[1:].T)-fit[1:].T).ravel()\\n  res=least_squares(r,[1.25,2.15],bounds=(.001,8));print(n,use,res.x,np.sqrt(np.mean(res.fun**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full cubic scalar readout → H2 tanh correction of a projection that includes the symmetric pair; 52/20 MAEs are 0.00497 for the scalar and 0.00406 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic readout\",\n      \"rejected_reason\": \"It passes the gate but has nearly five times the held-out scalar error of the compact nonlinear readout.\"\n    }\n  ],\n  \"rationale\": \"Save and validate the passing model first. Then test whether the scalar can share a single projection and whether the trajectory admits a compact temporal basis without degrading either output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a007d92fdf4163eae7a5c6745f17a16b6f564e2dd1918cabf86920cd343b8e8d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39917.55,
+      "usage_known": true,
+      "prompt_tokens": 32391,
+      "cached_tokens": 12672,
+      "completion_tokens": 1748
+    }
+  ]
+}

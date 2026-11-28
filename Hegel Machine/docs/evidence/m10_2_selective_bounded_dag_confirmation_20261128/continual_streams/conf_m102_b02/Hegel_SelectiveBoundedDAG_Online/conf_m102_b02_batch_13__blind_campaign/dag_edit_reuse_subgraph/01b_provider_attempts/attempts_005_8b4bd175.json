@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b4bd17595084af6892f2ef8356f844f",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:07:11.961669+00:00",
+  "ended_at_utc": "2026-11-28T16:07:56.301368+00:00",
+  "request_sha256": "a9fb2ed6c1ec3b5a3d2248f897705c37889fc42e16cf7e83cb9d30cc0559e699",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38343,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28382,
+    "cached_tokens": 12672,
+    "completion_tokens": 2012
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,importlib.util,sys\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom itertools import combinations_with_replacement\\n\\ndef load(p):\\n s=importlib.util.spec_from_file_location('m',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];t=st['train'];old=load('/tmp/hegel_continual_archive/conf_m102_b02_batch_01_solver.py');tim=load('/holdout_task/_frozen_nodes/node_01.py'); z=tim.run_node({'__input__':st});x=old._calibrate(st['panel_a'],t['x']); print('A residual inliers',[(lambda r:(np.median(abs(r)),np.sum(abs(r)<.001),np.quantile(abs(r),[.7,.8,.9])))(st['panel_a']['v'][:,j]-np.column_stack((np.ones(48),st['panel_a']['u'][:,j]))@np.linalg.lstsq(np.column_stack((np.ones(48),st['panel_a']['u'][:,j]))[np.abs(st['panel_a']['v'][:,j]-st['panel_a']['u'][:,j])<.5],st['panel_a']['v'][:,j][np.abs(st['panel_a']['v'][:,j]-st['panel_a']['u'][:,j])<.5],rcond=None)[0]) for j in range(4)])\\n\\ndef poly(q,n): return np.column_stack([np.prod(q[:,i],axis=1) for k in range(1,n+1) for i in combinations_with_replacement(range(4),k)])\\ndef fit(p,k,f):\\n u,v=p['u'],p[k]; d=np.c_[np.ones(len(u)),f(u)];coef=np.linalg.lstsq(d,v,rcond=None)[0];hat=d@coef;r=v-hat; h=np.sum(np.linalg.svd(d,full_matrices=False)[0]**2,axis=1);return np.sqrt(np.mean(r*r)),np.sqrt(np.mean((r/np.maximum(.00001,1-h[:,None]))**2)),lambda q:np.c_[np.ones(len(q)),f(q)]@coef\\nfamilies={'quadratic':lambda q:poly(q,2),'diag2':lambda q:np.c_[q,q*q],'diag3':lambda q:np.c_[q,q*q,q**3]}\\neven={'exp':lambda q,k:-np.expm1(-k*q*q),'rat':lambda q,k:q*q/(1+k*q*q),'root':lambda q,k:np.sqrt(1+k*q*q)-1,'cos':lambda q,k:1-np.cos(np.sqrt(k)*q),'log':lambda q,k:np.log1p(k*q*q),'cosh':lambda q,k:np.cosh(np.sqrt(k)*q)-1,'tanh':lambda q,k:np.tanh(k*q*q),'siglog':lambda q,k:np.logaddexp(k*q,-k*q)-np.log(2)}\\nfn={}\\nfor name,key in [('b','v'),('c','v2')]:\\n p=st['panel_'+name]; res=[]\\n for lab,f in families.items():res.append((*fit(p,key,f),lab))\\n for lab,g in even.items():\\n  for mode in ('add','pure','tied','cube'):\\n   def f(q,k,g=g,mode=mode):\\n    h=g(q,k)\\n    return {'add':np.c_[q,h],'pure':h,'tied':h+.15*q,'cube':np.c_[q,q**3,h]}[mode]\\n   opt=minimize_scalar(lambda lk:fit(p,key,lambda q:f(q,np.exp(lk)))[0],bounds=(-6,2.5),method='bounded'); k=np.exp(opt.x)\\n   res.append((*fit(p,key,lambda q,f=f,k=k:f(q,k)),lab+':'+mode+':'+str(round(k,5))))\\n res.sort(key=lambda a:a[0]); print(name,'fits',[(round(e,7),round(l,7),lab) for e,l,_,lab in res][:19]);fn[name]={lab:f for e,l,f,lab in res if lab in families or (e<.13 and l<.2)}\\ndef scores(d):\\n ans=[]\\n for tr,te in splits:\\n  s=d[tr].std(0);s[s<1e-10]=1; a=d[tr]/s;b=d[te]/s;pr=b@np.linalg.solve(a.T@a+.003*np.eye(a.shape[1]),a.T@z['target'][tr]);ans.append([np.abs(pr[:,0]-t['y'][te]).mean(), np.abs(pr[:,1:]@z['time'].T-t['traj'][te]).mean()])\\n return np.array(ans)\\nsplits=[(np.arange(52),np.arange(52,72))];rng=np.random.default_rng(140);splits += [(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(5))]\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nr=[]\\nfn['b']['old']=lambda q:old._operator(st['panel_b'],'v',q,'b')\\nfor bl,bf in fn['b'].items():\\n b=bf(x);c1=old._operator(st['panel_c'],'v1',b,'c');\\n for cl,cf in fn['c'].items():\\n  c2=cf(b)\\n  for family,d in [('x*c1',np.c_[x,c1,cross(x,c1)]),('x*c2',np.c_[x,c2,cross(x,c2)]),('x*c12',np.c_[x,c1,c2,cross(x,c1),cross(x,c2)]),('x*c1+c2',np.c_[x,c1,c2,cross(x,c1)]),('x*c2+c1',np.c_[x,c1,c2,cross(x,c2)]),('x*b',np.c_[x,b,cross(x,b)]),('b*c2',np.c_[b,c2,cross(b,c2)]),('x*c1+diagc2',np.c_[x,c1,c2,cross(x,c1),x*c2]),('x*c2+diagc1',np.c_[x,c1,c2,cross(x,c2),x*c1])]:\\n   sc=scores(np.c_[np.ones(len(x)),d]); r.append((sc.max(),sc[0].tolist(),bl,cl,family))\\nfor row in sorted(r)[:30]:print(row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived single panel-C branch and archived panel-B fit -> H2 recover separate calibration response families; reproduced baseline MAEs are 0.671617 (scalar) and 0.714211 (trajectory).\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived coordinatewise response forms adequately describe all active panel responses in this batch.\",\"empirical_witness\":\"Panel-C v1 fits to RMSE 0.000114, but the same archived family gives v2 RMSE 0.087508 versus 0.003572 for an additive cubic; the archived panel-B fit gives RMSE 0.471136.\",\"causal_blanket_diagnosis\":\"The archived fit can describe one panel-C branch, but forcing that form onto the other branch and reusing the archived panel-B parameterization leaves structured calibration error upstream of the readouts.\",\"sublated_pivot\":\"Retain the verified v1 family and compare even, affine, and rational calibration terms for panel B and v2 before selecting the spatial interaction design.\",\"risk_kind\":\"misspecified spatial calibration\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit only panel-C v1\",\"rejected_reason\":\"Its existing fit already reaches the panel noise scale, while panel B and v2 have substantially larger structured residuals.\"}],\"rationale\":\"Compare the calibration families with leave-one-row-out linear residuals and propagate them through the frozen readout on the public split and additional splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "a0cbe20840608b5fe852e1736ac50a4be76be26ea3da069637bd08a07825f5eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45604.55,
+      "usage_known": true,
+      "prompt_tokens": 28382,
+      "cached_tokens": 12672,
+      "completion_tokens": 2012
+    }
+  ]
+}

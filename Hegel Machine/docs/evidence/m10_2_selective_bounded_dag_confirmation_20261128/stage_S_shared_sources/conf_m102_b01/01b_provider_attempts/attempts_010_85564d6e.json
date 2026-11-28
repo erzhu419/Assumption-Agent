@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "85564d6ef6544e0faeca561abdc1140c",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:56:19.357446+00:00",
+  "ended_at_utc": "2026-11-28T14:57:10.126614+00:00",
+  "request_sha256": "384f8b68c48531670037e77637d24e95e0cc634732e4a5041166282bd9e8b814",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57141,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29719,
+    "cached_tokens": 5504,
+    "completion_tokens": 1260
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/latent_audit.py <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nfrom scipy.optimize import minimize_scalar,least_squares\\nsys.path.insert(0,'/holdout_task');import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; w=m._operator(s,d['x']); y=d['y']; T=d['traj']; n=len(y); ids=np.arange(n); ls=m._ls; aff=m._aff\\nsplits=[(ids[:52],ids[52:])];\\nfor v in [*w.T,np.linalg.norm(w,axis=1)]:\\n for b in (np.argsort(v)[:12],np.argsort(v)[-12:]):splits.append((np.setdiff1d(ids,b),b))\\npairs=list(itertools.combinations_with_replacement(range(4),2))\\ndef F(w,g,kind,raw,pair):\\n v=w*g\\n if kind=='asinh':z=np.arcsinh(v)\\n if kind=='inv3':z=np.sinh(np.arcsinh(v)/3)\\n if kind=='inv5':\\n  z=np.arcsinh(v)\\n  for i in range(16):z-=(z+z**5-v)/(1+5*z**4)\\n if kind=='atanhlin':\\n  z=np.tanh(v)\\n  for i in range(20):z-=(z+np.tanh(z)-v)/(2-np.tanh(z)**2)\\n if kind=='tanh':z=np.tanh(v)\\n if kind=='atan':z=np.arctan(v)\\n if kind=='root':z=v/np.sqrt(1+v*v)\\n return np.c_[aff(z),*([w] if raw else []),*([z[:,i]*z[:,j] for i,j in pairs] if pair else [])]\\nrows=[]\\nfor k,target in enumerate((y,T)):\\n for kind,raw in itertools.product(('asinh','inv3','inv5','atanhlin','tanh','atan','root'),(False,True)):\\n  out=[]; gains=[]; inn=[]\\n  for a,b in splits:\\n   def err(g):\\n    H=F(w[a],g,kind,raw,k==0);return np.mean(((H@ls(H,target[a])-target[a])/np.std(target[a],axis=0))**2)\\n   g=minimize_scalar(err,bounds=(.1,12),method='bounded').x; H=F(w,g,kind,raw,k==0); out.append(np.mean(abs(H[b]@ls(H[a],target[a])-target[b])));gains.append(g);inn.append(err(g)**.5)\\n  rows.append((k,kind,raw,round(out[0],6),round(max(out),6),round(np.mean(out),6),round(gains[0],4),round(inn[0],6)))\\nprint(*sorted(rows,key=lambda r:(r[0],r[4])),sep='\\\\n')\\nB=m._features(w,3.43,False);print('state coefficient first/last',ls(B,T)[:,[0,-1]])\\nt=s['eval_times']; E=lambda p:-np.expm1(-t[:,None]*p); p=least_squares(lambda p:(E(p)@ls(E(p),T.T)-T.T).ravel(),[1.8,.4]).x; print('time rates',p,'telemetry',s['telemetry_vec']); print('state residual per time',np.std(E(p)@ls(E(p),T.T)-T.T,axis=1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/latent_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated asinh features → test inverse-cubic latent coordinates; the verified candidate’s worst scalar and trajectory slice MAEs are 0.01993 and 0.00770.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the two-exponential projection alone\",\"rejected_reason\":\"It modestly improves aggregate trajectory error but worsens the prescribed split’s terminal-horizon MAE and leaves the larger scalar error unchanged.\"}],\"rationale\":\"An inverse cubic has a closed-form asinh representation. Compare this and other latent maps against the verified model, fitting all gains within each split and assessing both outputs separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0bfe0273c07fcc0a163733b16f2aaa7ac60758e98101259bd2ce4998e35bae24",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50767.83,
+      "usage_known": true,
+      "prompt_tokens": 29719,
+      "cached_tokens": 5504,
+      "completion_tokens": 1260
+    }
+  ]
+}

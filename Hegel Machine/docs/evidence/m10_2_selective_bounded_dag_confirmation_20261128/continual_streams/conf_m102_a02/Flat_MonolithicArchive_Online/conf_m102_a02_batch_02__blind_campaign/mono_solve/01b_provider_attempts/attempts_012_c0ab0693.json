@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c0ab0693dbae49828009e1e2591c6461",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:10.541634+00:00",
+  "ended_at_utc": "2026-11-28T15:11:45.104267+00:00",
+  "request_sha256": "1201314e9c03714f5a178b6795147de4e9bf0b677e0c97ca4d84360758c7d7c2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62716,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36542,
+    "cached_tokens": 12672,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/select_exact.py <<'PY'\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/batch_solver.py')\\nsource = p.read_text()\\nsetup = Path('/tmp/final_verify.py').read_text().split('check(m.solve_batch(s),')[0]\\nctx = {}\\nexec(setup, ctx)\\ns, tr, splits = [ctx[k] for k in ('s','tr','splits')]\\nvariants = {}\\nfor arithmetic in ['alpha * w*w', 'alpha * w**2']:\\n for ridge in [.002,.003,.004,.005,.006,.008]:\\n  for extra in (False, True):\\n   text = source.replace('t = alpha * w**2', 't = '+arithmetic).replace('np.sqrt(.004 *',f'np.sqrt({ridge} *')\\n   if extra:\\n    text=text.replace('(1., .42, -.24, -.1, -.08)]','(1., .42, -.24, -.1, -.08), (.6, .8, .18, 0., 0.), (1.2, .4, .05, -.16, -.13)]')\\n   key=arithmetic,ridge,extra\\n   solutions=[]\\n   for root in (False,True):\\n    ns={}; exec(compile(text.replace('return .75 * branch(False) + .25 * branch(True)', f'return branch({root})'),str(p),'exec'),ns)\\n    solutions.append(ns['solve_batch'])\\n   es=[]\\n   for name,i,j in splits:\\n    ss=dict(s,train={k:(v[i] if k in ('x','y','traj') else v) for k,v in tr.items()},test={'x':tr['x'][j]})\\n    a,b=[fn(ss)['y_hat'] for fn in solutions]\\n    es.append([np.mean(np.abs((1-w)*a+w*b-tr['y'][j])) for w in (0.,.25,.5,.75,1.)])\\n   E=np.asarray(es)\\n   for col,w in enumerate((0.,.25,.5,.75,1.)):\\n    e=E[:,col]; variants[key+(w,)]=(e.max(),e[0],e[1:21].mean(),text.replace('return .75 * branch(False) + .25 * branch(True)', 'return branch(False)' if w==0 else 'return branch(True)' if w==1 else f'return {1-w} * branch(False) + {w} * branch(True)'))\\nranked=sorted(variants.items(),key=lambda item:(item[1][0],item[1][2]))\\nfor k,v in ranked[:12]: print(k,v[:3])\\nkey,best=ranked[0]; assert best[0]<=.038 and best[1]<=.038, 'No challenger satisfies the audited slice margin'\\nprint('Selected',key,flush=True); p.write_text(best[3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/select_exact.py; OPENBLAS_NUM_THREADS=1 python3 -I /tmp/final_verify.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 audited rational blend -> H2 exact-code validation of rational shrinkage and multistart; saved v02 passes the prescribed split at 0.007280 scalar MAE but misses the expanded stress margin at 0.041440.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit v02 based on its prescribed-split result\",\n      \"rejected_reason\": \"It passes the required split but fails the expanded positive-coordinate stress margin; the prototype audit was not sufficient to verify the saved implementation.\"\n    }\n  ],\n  \"rationale\": \"Evaluate the same solver code that will be saved, including the exact multiplication order and optimizer starts. Select by worst-slice MAE, then rerun isolated validation and the public schema check on the selected file.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "48e1d6d95c21e62b2b62d6cde4987325dde1b0533840bbb456054192751be1e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34560.96,
+      "usage_known": true,
+      "prompt_tokens": 36542,
+      "cached_tokens": 12672,
+      "completion_tokens": 1296
+    }
+  ]
+}

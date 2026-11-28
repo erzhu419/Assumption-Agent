@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "888ea1089da2422795abc9f38b60b758",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:31:16.559988+00:00",
+  "ended_at_utc": "2026-11-28T15:31:55.006796+00:00",
+  "request_sha256": "86be726a713b37a79464d487d16325a34859aaa155f7a79c39e31826c72bae34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34939,
+    "cached_tokens": 12672,
+    "completion_tokens": 1694
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_a03_batch_06_solver.py; cat > /tmp/grammar08.py <<'PY'\\nexec(open('/tmp/explore08.py').read().split('for name in')[0])\\nimport conf_m102_a03_batch_02_solver as c\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import minimize\\nF,G=c._panel_operators(s['panel_c']); h=m._warp(z,p); w=aff(h)@b; wc=w-b[0]; f=F(z); g=G(z)\\nsp=[(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20))]; rng=np.random.default_rng(42); r=rng.permutation(72); sp.append((r[:52],r[52:]))\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef run(groups,penalties=(.001,.01,.1,1.),ret=False):\\n out=[]\\n for lam in penalties:\\n  rr=[]\\n  for i,j in sp:\\n   K=sum(np.divide(a,np.sqrt(np.mean(a[i]**2,0)).clip(1e-9))@np.divide(a[i],np.sqrt(np.mean(a[i]**2,0)).clip(1e-9)).T*wt/a.shape[1] for a,wt in groups); yp=K@np.linalg.solve(K[i]+lam*np.eye(len(i)),y[i]); rr.append(np.mean(np.abs(yp[j]-y[j])))\\n  out.append((np.round(rr,5),lam))\\n return min(out,key=lambda p:np.mean(p[0]))\\nbase=[(aff(z),5),(h,1),(cross(z,h),1),(pol(h,2)[:,4:],1)]\\nprint('baseline',run(base)); print('w cross standardized',np.linalg.lstsq(np.c_[aff(z),wc,cross(z,wc),pol(wc,2)[:,4:]],y,rcond=None)[0].round(3));\\nfeatures={}\\nfor key,a in [('z',z),('h',h),('w',w),('wc',wc),('f',f),('g',g)]:\\n for nm,func in [('square',lambda a:a*a),('cube',lambda a:a**3),('sat',lambda a:np.tanh(2*a)),('sine',lambda a:np.sin(3*a)),('abs',np.abs),('tfrac',lambda a:a/(1+a*a)),('qfrac',lambda a:a*a/(1+a*a)),('logcosh',lambda a:np.log(np.cosh(2*a)))]:\\n  d=func(a); features[key+nm]=d;features['z*'+key+nm]=cross(z,d); features['h*'+key+nm]=cross(h,d)\\n for d in (2,3,4):\\n  P=np.column_stack([np.prod(a[:,js],axis=1) for js in cr(range(4),d)]);features[f'{key}poly{d}']=P;features[f'z*{key}poly{d}']=cross(z,P)\\nfor k,a in [('f',f),('g',g),('w',w)]:\\n for q,d in [('z',z),('h',h),('w',w),('f',f),('g',g)]:features[k+'*'+q]=cross(a,d)\\nrows=[]\\nfor key,D in features.items():\\n for wt in (.15,1,5):\\n  a,l=run(base+[(D,wt)],(.0001,.001,.01,.1));rows.append((np.mean(a),a,l,wt,key))\\nprint('grammar additions to baseline',*sorted(rows,key=lambda a:a[0])[:24],sep='\\\\n');print('by primary',*sorted(rows,key=lambda a:a[1][0])[:12],sep='\\\\n')\\n# Search short coordinate-wise functions of the measured B outputs while retaining unrestricted lower-order interactions.\\nbase2=np.c_[aff(z),w,cross(z,w),pol(w,2)[:,4:]]\\nfor key,D in [('w',w),('z',z),('h',h),('f',f),('g',g)]:\\n for kind in ('sin','tanh','frac','hinge'):\\n  def phi(D,q):\\n   if kind=='sin':return np.sin(q[0]*D+q[1]);\\n   if kind=='tanh':return np.tanh(q[0]*D+q[1]);\\n   if kind=='frac':return (D+q[1])/(1+q[0]*(D+q[1])**2)\\n   return np.maximum(D-q[1],0)**q[0]\\n  def fit(q,i,ret=False):\\n   P=phi(D,q); A=np.c_[base2,P]; A=A/np.sqrt(np.mean(A[i]**2,0)).clip(1e-9); t=A[i]; v=np.linalg.solve(t.T@t+.006*np.eye(t.shape[1]),t.T@y[i]); return A@v if ret else np.mean((t@v-y[i])**2)+.006*np.sum(v*v)/len(i)\\n  rr=[]\\n  for i,j in sp:\\n   opts=[minimize(fit,q,args=(i,),method='Nelder-Mead',bounds=[(.25,8),(-2,2)],options={'maxiter':100}) for q in [[1,0],[3,0],[5,.5]]]; best=min(opts,key=lambda a:a.fun); yy=fit(best.x,i,True);rr.append((round(np.abs(yy[j]-y[j]).mean(),5),best.x.round(3)))\\n  print('coord',key,kind,rr)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar08.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Low-rank bilinear readout → test missing higher-order, saturation, and quotient terms in calibrated coordinates; best scalar 52/20 MAE is 0.046890.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the low-rank bilinear restriction\",\"rejected_reason\":\"It failed to improve the prescribed split and reached 0.07367 MAE on another held-out slice.\"}],\"rationale\":\"The calibration and trajectory already transfer. Test whether identifiable higher-order or bounded readout terms reduce scalar error on multiple held-out splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "13b0d1efd952affcd03382c77263461515e09e9ede72382ed589b2990551464d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38445.35,
+      "usage_known": true,
+      "prompt_tokens": 34939,
+      "cached_tokens": 12672,
+      "completion_tokens": 1694
+    }
+  ]
+}

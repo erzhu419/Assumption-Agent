@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce1050e7c88d4073a93ca273a289c487",
+  "call_seq": 2,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:49.137419+00:00",
+  "ended_at_utc": "2026-11-28T15:08:06.929441+00:00",
+  "request_sha256": "08e417ebcec864d15ec699b5f923a2eb9e66cbbf1e1adf55d39b052d2deb2d29",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12579,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17756,
+    "cached_tokens": 12672,
+    "completion_tokens": 593
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*solver.py; cat /holdout_task/validate_public_schema.py; cd /holdout_task; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=140)\\nfor k,v in s.items():\\n for name,a in (v.items() if isinstance(v,dict) else [('',v)]):\\n  print(k,name,a.shape,'min',a.min(axis=0),'max',a.max(axis=0),'mean',a.mean(axis=0));print(a[:10] if a.ndim>1 else a[:10])\\nT=s['train']['traj'];print('traj SVD',np.linalg.svd(T,compute_uv=False)); print('diff SVD',np.linalg.svd(np.diff(T),compute_uv=False)); print('y~traj',np.linalg.lstsq(np.c_[np.ones(len(T)),T],s['train']['y'],rcond=None)[1]);\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u'];X=np.c_[np.ones(len(u)),u];\\n for key,y in p.items():\\n  if key=='u':continue\\n  b=np.linalg.lstsq(X,y,rcond=None)[0];print(k,key,'fit',b,'row residual',np.sort(np.linalg.norm(y-X@b,axis=1)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived graph → campaign-specific panel and temporal operators; archived 52/20 MAEs are 0.245615 for y and 0.233993 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The previously verified campaign solver transfers unchanged to this campaign.\",\"empirical_witness\":\"The public 52/20 gate reports y MAE 0.245615 and trajectory MAE 0.233993, both above 0.038.\",\"causal_blanket_diagnosis\":\"The active panel or temporal mapping may differ across campaigns; transfer failure alone does not identify which operator changed.\",\"sublated_pivot\":\"Retain reusable calibration methods but test each panel and the trajectory structure on the current study.\",\"risk_kind\":\"cross-campaign mechanism transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Inspect operator residuals and temporal rank to identify which parts of the archived solver are reusable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "b66b047c3f3a591283753a5e982f5e7fd94273fff5d9e37b4885ff556af80b67",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17790.94,
+      "usage_known": true,
+      "prompt_tokens": 17756,
+      "cached_tokens": 12672,
+      "completion_tokens": 593
+    }
+  ]
+}

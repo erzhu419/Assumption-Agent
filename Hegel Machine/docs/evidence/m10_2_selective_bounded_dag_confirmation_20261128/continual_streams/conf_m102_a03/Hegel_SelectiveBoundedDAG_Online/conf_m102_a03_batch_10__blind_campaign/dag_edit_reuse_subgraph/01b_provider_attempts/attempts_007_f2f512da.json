@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f2f512da84ff4fdfa5c278caf0ab8765",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:06:33.933071+00:00",
+  "ended_at_utc": "2026-11-28T16:07:13.221743+00:00",
+  "request_sha256": "879edd4e21c0ae74678a83b10296eb3c7cba1744226bc22a4e1aa24c2ee50327",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43737,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29905,
+    "cached_tokens": 12672,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Reference-panel calibration and spatial feature blocks for the frozen fitter.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _adesign(u, j):\\n    a, b = u[:, j], u[:, (j+1)%4]\\n    return np.c_[np.ones(len(u)), u, a*b, a**3]\\n\\n\\ndef _calibrate(panel, x, report=False):\\n    u, v = (np.asarray(panel[key], float) for key in ('u','v'))\\n    d = [_adesign(u,j) for j in range(4)]\\n    w = np.ones(len(u))\\n    for tau in (.3,.15,.07,.03,.015,.008,.005):\\n        for _ in range(5):\\n            c = np.column_stack([_fit(a*w[:,None],v[:,j]*w) for j,a in enumerate(d)])\\n            r = np.linalg.norm(np.column_stack([a@c[:,j] for j,a in enumerate(d)])-v,axis=1)\\n            w = 1/np.sqrt(1+(r/tau)**2)\\n    g = r < max(.02, 4*np.median(r))\\n    c = np.column_stack([_fit(a[g],v[g,j]) for j,a in enumerate(d)])\\n    if report:\\n        print('A residual quantiles',np.quantile(r,[0,.25,.5,.75,.85,.9,1]),'retained',g.sum(), 'coef',c.T)\\n    def forward(z):\\n        return np.array([_adesign(z[None],j)[0]@c[:,j] for j in range(4)])\\n    guess = _fit(c[1:5].T,(x-c[0]).T).T\\n    return np.array([least_squares(lambda z: forward(z)-r,q,gtol=1e-10).x for q,r in zip(guess,x)])\\n\\n\\ndef _bdesign(u, h, kind):\\n    a,b=h\\n    if kind=='sin': return np.c_[np.ones(len(u)),u,np.sin(a*u)]\\n    if kind=='sintanh': return np.c_[np.ones(len(u)),u,np.sin(a*u),np.tanh(b*u)]\\n    if kind=='sinatan': return np.c_[np.ones(len(u)),u,np.sin(a*u),np.arctan(b*u)]\\n    if kind=='sincos': return np.c_[np.ones(len(u)),u,np.sin(a*u),np.cos(b*u)-1]\\n    if kind=='warp': return np.c_[np.ones(len(u)),u+b*np.sin(a*u)]\\n    if kind=='rational': return np.c_[np.ones(len(u)),u+b*np.arctan(a*u)]\\n    return np.c_[np.ones(len(u)),u]\\n\\n\\ndef _branch(panel,z,kind='warp',report=False):\\n    u,v=(np.asarray(panel[key],float) for key in ('u','v'))\\n    def residual(h):\\n        a=_bdesign(u,h,kind); return (a@_fit(a,v)-v).ravel()\\n    bounds=([.3,-3],[9,3]) if kind in ('warp','rational') else ([.3,.3],[9,9])\\n    o=min((least_squares(residual,[a,b],bounds=bounds,max_nfev=100) for a in (1.,2.9,5.5,8.) for b in ((-.4,.4) if kind in ('warp','rational') else (1.,3.))),key=lambda o:o.cost)\\n    h=o.x\\n    if report: print('B',kind,h,np.sqrt(np.mean(o.fun**2)))\\n    return _bdesign(z,h,kind)@_fit(_bdesign(u,h,kind),v), h\\n\\n\\ndef _quad(x):\\n    i,j=np.triu_indices(x.shape[1]);return x[:,i]*x[:,j]\\n\\n\\ndef _blocks(z,b,h):\\n    o=np.ones(len(z))\\n    R=np.c_[z,_quad(z),o,_quad(b),_quad(np.c_[z,b])[:,10:26],b]\\n    S=np.c_[z,o,_quad(z),_quad(b),b]\\n    return R,S\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s=inputs['__input__']; x=s['train']['x']; n=len(x)\\n    z=_calibrate(s['panel_a'],np.r_[x,s['test']['x']]); b,h=_branch(s['panel_b'],z)\\n    r,t=_blocks(z,b,h)\\n    return {'readout_train':r[:n],'readout_test':r[n:],'z':t[:n],'zt':t[n:]}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import node_00 as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=m._calibrate(s['panel_a'],s['train']['x'],True)\\nfor kind in ('affine','sin','sintanh','sinatan','sincos','warp','rational'): m._branch(s['panel_b'],z,kind,True)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (norm-threshold panel-A fitting) -> H2 (residual-based robust calibration and separate feature blocks); retained panel-A RMS was 0.125646 before robust fitting, and DAG CV is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the archived panel-A row-norm cutoff as the only outlier rule\",\n      \"rejected_reason\": \"It leaves large residuals, so the first candidate tests residual-based trimming before adding calibration terms.\"\n    }\n  ],\n  \"rationale\": \"Establish an executable baseline under the exact frozen block boundaries and measure panel-B transfer residuals independently of prediction error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "26ad0c6a1ec4626379041301160b414d59ec19a225a39961ce3d839414fc1d65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39910.4,
+      "usage_known": true,
+      "prompt_tokens": 29905,
+      "cached_tokens": 12672,
+      "completion_tokens": 1592
+    }
+  ]
+}

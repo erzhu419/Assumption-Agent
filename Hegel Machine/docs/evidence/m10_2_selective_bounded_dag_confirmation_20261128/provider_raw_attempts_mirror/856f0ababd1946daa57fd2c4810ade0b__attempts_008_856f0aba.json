@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "856f0ababd1946daa57fd2c4810ade0b",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:34:43.798309+00:00",
+  "ended_at_utc": "2026-11-28T15:35:19.762106+00:00",
+  "request_sha256": "eb42ad9a75345eaaba8eb3a9cab681b4760b895c22a4d8a340ca47202a7229c7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48179,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31759,
+    "cached_tokens": 14720,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine10.py <<'PY'\\nexec(open('/tmp/search10.py').read().split('A=panel')[0])\\nfrom scipy.optimize import least_squares,root\\np=S['panel_a']; u,v=p['u'],p['v']; m=np.linalg.norm(v-u,axis=1)<4*np.median(np.linalg.norm(v-u,axis=1)); u,v=u[m],v[m];\\ndef ar(x,k,j):\\n o=(j+2)%4; return a(x[:,j],x[:,o],np.sin(k*x[:,j]),np.sin(k*x[:,o]))\\ndef ra(k,ret=False):\\n fs=[ar(u,k[0],j) for j in range(4)]; bs=[ls(f,v[:,j]) for j,f in enumerate(fs)]; return bs if ret else np.column_stack([f@b for f,b in zip(fs,bs)]).ravel()-v.ravel()\\nk=least_squares(ra,[2.4],bounds=(1.5,3.5)).x; bs=ra(k,True); A=lambda x:np.column_stack([ar(x,k[0],j)@b for j,b in enumerate(bs)]); Z=np.array([root(lambda p:A(p[None])[0]-x,x).x for x in X]); print('cal',k,np.sqrt(np.mean(ra(k)**2)),np.max(abs(A(Z)-X)))\\np=S['panel_b']; u,v=p['u'],p['v'];\\nfor name,g in forms.items():\\n if name=='sq': continue\\n def prof(p,ret=False):\\n  f=a(u,g(u,p[0])); b=ls(f,v); return b if ret else (f@b-v).ravel()\\n r=min((least_squares(prof,[x],bounds=(.02,5)) for x in [.25,1,2.8,4]),key=lambda r:r.cost); k=r.x[0]; b=prof(r.x,True); print('B',name,round(k,4),round(np.sqrt(np.mean(r.fun**2)),5));\\n if name in ('sin','rat'): print(np.round(b,4))\\nC=panel(S['panel_c'],'v1',forms)[0][-1]; D=panel(S['panel_c'],'v2',['sq'])[0][-1]; opts=panel(S['panel_b'],'v',forms); B=opts[0][-1]; R=next(p[-1] for p in opts if p[1]=='rat' and not p[2]); Q=B(Z)\\nT=S['eval_times']; basis=lambda p:-np.expm1(-T[:,None]*p); pair=lambda z:np.column_stack([z[:,i]*z[:,j] for i,j in combinations_with_replacement(range(4),2)])\\ndef pred(f,ii,jj,l):\\n w=f[ii]; c=ls(w,Y[ii]) if not l else np.linalg.solve(w.T@w+l*np.diag([0]+[1]*(w.shape[1]-1)),w.T@Y[ii]); o=f[jj]@c\\n def err(p):\\n  f=basis(p); return (f@ls(f,Y[ii,1:].T)-Y[ii,1:].T).ravel()\\n ft=basis(least_squares(err,[.4,1.8],bounds=(.01,10)).x); o[:,1:]=o[:,1:]@ft@np.linalg.pinv(ft); return abs(o-Y[jj])\\nfs={};\\nfor k0,x in [('z',Z),('x',X),('b',Q),('r',R(Z)),('bx',B(X))]:\\n fs[k0]=a(x); fs[k0+'2']=a(x,pair(x));\\nfor k,x in [('z',Z),('x',X),('c',C(Z)),('d',D(Z)),('cc',C(C(Z))),('dc',C(D(Z))),('dcd',D(C(D(Z))))]:\\n for kb,b in [('b',Q),('r',R(Z)),('bx',B(X))]:\\n  fs[kb+'+'+k]=a(b,x); fs[kb+'2+'+k]=a(b,pair(b),x); fs[kb+'+'+k+'2']=a(b,x,pair(x)); fs[kb+'*'+k]=a(b,x,pair(b),(b[:,:,None]*x[:,None,:]).reshape(-1,16))\\nidx=np.arange(72); splits=[(idx[:52],idx[52:])]; rng=np.random.default_rng(21)\\nfor _ in range(5):\\n i=rng.permutation(idx); splits.append((i[:52],i[52:]))\\nres=[]\\nfor k,f in fs.items():\\n for l in [0,1e-4,.002,.03]:\\n  if l==0 and np.linalg.cond(f)>1e7: continue\\n  E=[pred(f,i,j,l) for i,j in splits]; s=np.array([[e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean(),e[:,1:].mean(0).max()] for e in E]); res.append((k,l,s[0],s.mean(0),s.max(0)))\\nfor j in range(3):\\n print('leader',j); \\n for x in sorted(res,key=lambda x:x[4][j])[:8]: print(x[:2],*[np.round(z,4) for z in x[2:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (inherited composition) -> H2 (sine-calibrated panel-B readouts with two exponential modes); a candidate reaches 52/20 MAE 0.0160 for y, 0.0167 for trajectories, and 0.0226 at the terminal time.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the lowest-MAE chain from the single split\",\"rejected_reason\":\"Several unrelated chains perform similarly; repeated splits can expose unstable feature combinations.\"}],\"rationale\":\"The split supports a family of panel-B models, and the temporal reconstruction supports two exponential modes. Compare compact readouts under additional splits and inspect the B-panel coefficients for missing structure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "92bd6975a459958ed8234af65dbaf3348c8aa2306c4c5316b7c292a46c695df6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35962.8,
+      "usage_known": true,
+      "prompt_tokens": 31759,
+      "cached_tokens": 14720,
+      "completion_tokens": 1565
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e01092d48f44b319c507157abdb22a7",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_13__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_13__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:14.628826+00:00",
+  "ended_at_utc": "2026-11-28T15:51:39.569993+00:00",
+  "request_sha256": "07453057362e8cfe661ca0c37c77917a2efeb7233b451f0cb7adfe18a2345963",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28484,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24051,
+    "cached_tokens": 12672,
+    "completion_tokens": 1007
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport copy,glob,importlib.util,pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=52\\nD=lambda x:np.c_[np.ones(len(x)),x]\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nprint('time',s['eval_times'],'telemetry',s['telemetry_vec'])\\nu,v=s['panel_a']['u'],s['panel_a']['v']; print('A affine',ls(D(u),v));print('A abs resid',np.quantile(abs(D(u)@ls(D(u),v)-v),[0,.5,.8,.9,1],axis=0)); print('traj singular values',np.linalg.svd(tr['traj'][:52],compute_uv=False))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  sp=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\n  ss=copy.deepcopy(s);ss['train']={k:(v[:n] if k!='summary' else v) for k,v in tr.items()};ss['test']={'x':tr['x'][n:]};o=m.solve_batch(ss)\\n  print('archive',f.split('_')[-2], np.mean(abs(o['y_hat']-tr['y'][n:])),np.mean(abs(o['state_pred']-tr['traj'][n:])))\\n except Exception as e: print(f,e)\\nu=s['panel_c']['u']; quad=np.array([u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]).T\\nfs={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'softplus':lambda z:np.logaddexp(0,z),'sat':lambda z:z/(1+abs(z)),'exp':np.exp,'rational':lambda z:1/(1+z*z),'sq':np.square,'abs':abs,'cube':lambda z:z**3}\\nfor vk in ('v1','v2'):\\n v=s['panel_c'][vk]; fits=[]\\n def rms(a):return np.sqrt(np.mean((a@ls(a,v)-v)**2))\\n for nm,g in fs.items():\\n  for linear in (False,True):\\n   def design(k):return D(np.c_[u,g(k*u)] if linear else g(k*u))\\n   opt=minimize_scalar(lambda k:rms(design(k)),bounds=(.08,5),method='bounded'); fits.append((opt.fun,nm,linear,opt.x))\\n for j in range(1,4):\\n  p=u*np.roll(u,j,axis=1); fits.append((rms(D(np.c_[u,p])),'pair'+str(j),True,0));fits.append((rms(D(p)),'pair'+str(j),False,0))\\n fits.append((rms(D(np.c_[u,quad])),'fullquad',True,0))\\n print(vk,sorted(fits)[:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \\\"$f\\\"); grep -E 'tanh|cos\\\\(|sin\\\\(|logaddexp|roll\\\\(|abs\\\\(|panel_b|telemetry|expm1' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived forward graphs → panel-wise operator identification; the reference 52/20 MAEs are 0.181656 for y and 0.069496 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure direct archive transfer and fit candidate nonlinear operators against panel measurements before using them to predict either endpoint.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b997d5fd1e2765050d77f77da5a167677c82a6b9b5b8224d358854cd0d246094",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25478.59,
+      "usage_known": true,
+      "prompt_tokens": 24051,
+      "cached_tokens": 12672,
+      "completion_tokens": 1007
+    }
+  ]
+}

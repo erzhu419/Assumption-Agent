@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ada157ebc66f4c6786dac9f0b1ee80d5",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_09__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:14.371013+00:00",
+  "ended_at_utc": "2026-11-28T15:37:51.928615+00:00",
+  "request_sha256": "9d19adf9b7fe1a1fb708518af44b3b76c5719222a035567694fdb4e964307e7d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47983,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27441,
+    "cached_tokens": 7552,
+    "completion_tokens": 1623
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/coords09.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares,minimize_scalar\\n\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef ls(d,y):return np.linalg.lstsq(d,y,rcond=None)[0]\\ndef profile(u,v,d,init,lo,hi):\\n def res(k):\\n  f=d(u,k); return (f@ls(f,v)-v).ravel()\\n o=least_squares(res,init,bounds=(lo,hi),max_nfev=120); return o.x,ls(d(u,o.x),v),np.mean(o.fun**2)**.5\\n\\ndef coords(s,x,verbose=False):\\n a,b,c=(s['panel_'+k] for k in 'abc'); u=a['u'];v=a['v'];m=np.linalg.norm(v-u,axis=1)<4; u,v=u[m],v[m]\\n ca=lambda q,k:np.c_[aff(q),np.sin(k[0]*q)]\\n ka,wa,ea=profile(u,v,ca,[2.4],[1.5],[3.2]);\\n ka2,wa2,ea2=profile(u,v,lambda q,k:np.c_[aff(q),np.sin(k[0]*q+k[1:])],[2.4,0,0,0,0],[1.5,-1,-1,-1,-1],[3.2,1,1,1,1]);\\n wa0=ls(aff(u),v); q=(x-wa0[0])@np.linalg.inv(wa0[1:]);\\n for _ in range(30): q=(x-wa[0]-np.sin(ka[0]*q)@wa[5:])@np.linalg.inv(wa[1:5]);\\n d=lambda q,k:aff(np.arctan(k[0]*q+k[1:]));kc,wc,ec=profile(c['u'],c['v1'],d,[2.15,0,0,0,0],[.5,-1,-1,-1,-1],[5,1,1,1,1]);\\n d2=lambda q,k:aff(q+k[1]*np.log1p(k[0]*q*q));kd,wd,ed=profile(c['u'],c['v2'],d2,[.36,1.5],[.02,.2],[2,3]);\\n wb=ls(aff(b['u']),b['v']);\\n if verbose: print('panel A',ka,ea,ka2,ea2,wa.round(4),'C1',kc,ec,'C2',kd,ed, 'inv err',np.max(abs(ca(q,ka)@wa-x)),flush=True)\\n op={'b':lambda p:aff(p)@wb,'c':lambda p:d(p,kc)@wc,'d':lambda p:d2(p,kd)@wd,'a':lambda p:ca(p,ka)@wa}\\n out={'x':x,'q':q}\\n for k in 'abcd':\\n  for j in ('x','q'):\\n   if k=='a' and j=='q':continue\\n   out[k+j]=op[k](out[j]);\\n for k in 'bcd':\\n  for l in 'bcd':\\n   if k!=l:\\n    for j in ('x','q'):out[k+l+j]=op[k](out[l+j]);\\n return out\\nPY\\ncat > /tmp/gps09.py <<'PY'\\nimport sys,pickle,glob\\nimport numpy as np\\nfrom coords09 import coords,aff,ls\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nfrom conf_m102_b04_batch_01_solver import gp\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; X=tr['x']; Y=tr['y']; Z=tr['traj']; n=52\\nout=coords(s,X,True); _,_,vt=np.linalg.svd(Z[:n],full_matrices=False); U=Z@vt[:2].T\\nprint('y vs traj',ls(aff(U[:n]),Y[:n]),np.mean(abs(aff(U[n:])@ls(aff(U[:n]),Y[:n])-Y[n:])),flush=True)\\nsets=dict(out)\\nfor j in out:\\n if j in ('x','q'):continue\\n for l in ('x','q'):sets[l+'+'+j]=np.c_[out[l],out[j]]\\nfor l in ('x','q'):\\n sets[l+'all']=np.c_[out[l],out['b'+l],out['c'+l],out['d'+l]]\\nsets['all']=np.c_[out['x'],out['q'],out['bq'],out['cq'],out['dq'],out['bx'],out['cx'],out['dx']]\\nres=[]; preds=[]\\nfor key,q in sets.items():\\n q=(q-q[:n].mean(0))/q[:n].std(0)\\n for add in (True,False):\\n  y=gp(q[:n],q[n:],Y[:n],add); uu=np.column_stack([gp(q[:n],q[n:],U[:n,j],add) for j in range(2)]); z=uu@vt[:2]; py,pz=np.mean(abs(y-Y[n:])),np.mean(abs(z-Z[n:])); res.append((py,pz,key,add));preds.append(np.c_[y,z]);\\nfor j in (0,1):print('top',j,sorted(res,key=lambda r:r[j])[:12]);\\nnp.savez('/tmp/gps09.npz',preds=preds,names=[str(r[2:4]) for r in res]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gps09.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test nonlinear calibration inversion and panel-conditioned state regression; best earlier 52/20 MAEs were 0.05763 for readout and 0.09196 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit panel operators against their own measurements, invert the calibration explicitly, and test which composed coordinates generalize for each of the two trajectory modes and the scalar readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ae857f7b6342aa1ebd1f6423ea870398c5c824afeeec9fc224a0b8669492a844",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38070.65,
+      "usage_known": true,
+      "prompt_tokens": 27441,
+      "cached_tokens": 7552,
+      "completion_tokens": 1623
+    }
+  ]
+}

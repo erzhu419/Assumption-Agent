@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22ac565c6fb44de0ad2c7685b2d77f6b",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:26.079624+00:00",
+  "ended_at_utc": "2026-11-28T15:04:49.325650+00:00",
+  "request_sha256": "d5348218641c5ab7a625e5a4520efc49958642c053ce6d3182a0753fcab49b27",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21331,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21709,
+    "cached_tokens": 12672,
+    "completion_tokens": 910
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*01_solver.py; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np,sys\\nfrom itertools import combinations_with_replacement\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nfrom conf_m102_a03_batch_01_solver import _calibration\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,t=[tr[k] for k in ('x','y','traj')]; n=52\\nnp.set_printoptions(precision=5,suppress=True,linewidth=170)\\ndef A(x): return np.c_[np.ones(len(x)),x]\\ndef fit(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef P(x,d): return np.column_stack([np.prod(x[:,i],axis=1) for k in range(d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\na=_calibration(s['panel_a']); p=s['panel_b']; b=fit(A(p['u']),p['v']); z=np.linalg.solve(a[1:].T,(x-a[0]).T).T; w=A(z)@b\\nprint('times',s['eval_times'],'calib',a,'calib res',np.sort(np.linalg.norm(A(s['panel_a']['u'])@a-s['panel_a']['v'],axis=1))); print('B ortho',b[1:].T@b[1:]); print('singvals traj',np.linalg.svd(t,compute_uv=False))\\nfor j in ('v1','v2'):\\n p=s['panel_c']; u,v=p['u'],p[j]; print('C',j,'range',v.min(0),v.max(0)); print(np.c_[u,v][:12]);\\n for k in (1,2,3):\\n  f=P(u,k); M=np.linalg.pinv(f); err=v-f@M@v; lev=np.sum(f*M.T,axis=1); print(k,'fit/loo',np.std(err),np.mean(np.abs(err/np.maximum(1e-12,1-lev[:,None]))));\\nfor name,q in [('x',x),('z',z),('w',w)]:\\n for d in [1,2,3,4]:\\n  f=P(q,d); c=fit(f[:n],y[:n]); r=f@c-y; h=fit(f[:n],t[:n]); print(name,d,'train/hold',np.mean(abs(r[:n])),np.mean(abs(r[n:])), 'traj',np.mean(abs((f@h-t)[n:])))\\n  if d==2: print('quadratic coeff',c)\\nprint('y sorted',np.sort(y)); print('traj linear coefs in w',fit(A(w),t)); print('summary discrep',tr['summary']-np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel calibration and bilinear readout → H2 identify the missing readout terms or active auxiliary operator; archived 52/20 MAE is 0.100264 for y and 0.003942 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare polynomial orders across raw and calibrated coordinates, and use panel-C leave-one-out errors to distinguish genuine panel structure from interpolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3059156689d3bb3c97a7cd37757c0c1107c7ee42606c5d2870da3f8eab3389dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23245.09,
+      "usage_known": true,
+      "prompt_tokens": 21709,
+      "cached_tokens": 12672,
+      "completion_tokens": 910
+    }
+  ]
+}

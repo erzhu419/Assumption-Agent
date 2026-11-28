@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1128f999f094845bc33fb162812c696",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:04.588943+00:00",
+  "ended_at_utc": "2026-11-28T15:42:42.842280+00:00",
+  "request_sha256": "a658c06bbb8f82068617b896b4d5af121d5082c27afd07488ff4ec659ff58453",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58287,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38643,
+    "cached_tokens": 12672,
+    "completion_tokens": 1600
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ablate.py <<'PY'\\nimport numpy as np,pickle,sys,itertools\\nsys.path.insert(0,'/holdout_task');import batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; X=t['x'];Y=np.c_[t['y'],t['traj']]; N=len(X); z=m._calibrate(s['panel_a'],X); B,C,D=m._branches(s,X); p=s['panel_c']; U=p['u']; q=m._ls(m._pairmap(U),p['v1']); print('C1 error',np.std(m._pairmap(U)@q-p['v1'])); c1=lambda x:m._pairmap(x)@q; c2=lambda x:m._project(U,p['v2'],x,lambda u,q:u+q[0]*u*u+q[1]*(1-np.cos(q[2]*u)),[.35,.065,2.5]);\\nT=np.r_[X,s['test']['x']]; BB,CC,DD=m._branches(s,T);print('range train/test',[(np.max(abs(f[:72]),0).round(2),np.max(abs(f[72:]),0).round(2)) for f in [T,BB,CC,DD]]); print('C,D stats',C.mean(0),C.std(0),D.mean(0),D.std(0));\\nsplits=[np.arange(k,k+20) for k in (52,0,20,40)]+[np.random.default_rng(k).permutation(N)[:20] for k in range(8)]; inds=[(np.setdiff1d(np.arange(N),te),te) for te in splits]\\nF=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef gram(f,tr):\\n g=(f-f[tr].mean(0))/np.maximum(f[tr].std(0),.0001);return g@g.T/g.shape[1]\\ndef test(c,d,b,w,reg,kind):\\n E=[]\\n for tr,te in inds:\\n  l=gram(np.c_[c,d],tr); p=gram(F(c,d),tr); k=10+l+p+w*gram(b,tr)\\n  if kind=='poly':k+=.1*l*l+.07*l*l*l\\n  if kind=='prod':k+=.2*l*p\\n  if kind=='mix':k+=.05*l*l+.03*l*l*l+.10*l*p\\n  if kind=='more':k+=.2*l*l+.2*l*p+.05*p*p\\n  if kind=='rbf':\\n   v=np.diag(l); dist=v[:,None]+v[None,:]-2*l;k+=.5*np.exp(-dist*.25)\\n  if kind=='diag':k+=1.25*gram(c*d,tr)+.15*l*p\\n  if kind=='diag_only':k+=1.25*gram(c*d,tr)-.8*p+.15*l*p\\n  mu=Y[tr].mean(0);e=abs(mu+k[np.ix_(te,tr)]@np.linalg.solve(k[np.ix_(tr,tr)]+reg*np.eye(len(tr)),Y[tr]-mu)-Y[te]); E.append([e[:,0].mean(),e[:,1:].mean(), e[:,-1].mean()])\\n return np.array(E)\\nres=[]\\nfor (cn,Cx),(dn,Dx) in itertools.product([('B',C),('z',c1(z)),('B0',c1(B-B.mean(0)))],[('z',D),('B',c2(B)),('C',c2(C))]):\\n for (a,c),(b,d),(bn,bs),w,r,k in itertools.product([('atan',np.arctan(1.25*Cx)),('tanh',np.tanh(1.25*Cx)),('asinh',np.arcsinh(2*Cx)),('raw',Cx)],[('tanh',np.tanh(1.25*Dx)),('raw',Dx),('atan',np.arctan(1.25*Dx))],[('B',B),('z',z),('Bz',np.c_[B,z]),('z+B',np.c_[B,z,np.tanh(1.25*B),np.tanh(1.25*z)])],(.12,.4),(.003,.012,.035),('poly','prod','mix','more','rbf','diag','diag_only')):\\n  if (cn,dn)!=('B','z') and (bn!='B' or w!=.4 or r!=.012):continue\\n  e=test(c,d,bs,w,r,k); loss=e.mean(0)+.45*e.max(0);res.append((loss,(cn,dn,a,b,bn,w,r,k),e))\\nfor j in (0,1):\\n print('TARGET',j)\\n for l,name,e in sorted(res,key=lambda v:v[0][j])[:14]: print(name,'gate',e[0].round(4),'mean',e.mean(0).round(4),'worst',e.max(0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ablate.py; grep -A8 '^panel_c' <(OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py)\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent kernel readouts → H2 interaction-aware readouts with the correct panel wiring; verified 52/20 MAEs are 0.037964 and 0.025665, with worst-slice MAEs of 0.056010 and 0.048140.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the verified candidate now\",\"rejected_reason\":\"The scalar gate passes by only 0.000036 and several held-out slices are substantially worse.\"}],\"rationale\":\"Keep the verified artifact unchanged while comparing panel wiring, structured interactions, and residual feature groups with preprocessing fit separately inside each split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5a082cbc5ee2a63f34989e1253afa4f2ad8fe411f93727a257dfaec22027a1f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38802.37,
+      "usage_known": true,
+      "prompt_tokens": 38643,
+      "cached_tokens": 12672,
+      "completion_tokens": 1600
+    }
+  ]
+}

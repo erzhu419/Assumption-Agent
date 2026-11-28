@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9752868ab38b43498c0af332abc31bd9",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_10__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:40.215340+00:00",
+  "ended_at_utc": "2026-11-28T15:56:10.308715+00:00",
+  "request_sha256": "ab0fbd733b16edac0e4f694e4d7bb00ceb3a2384aef9909849219002b3a4135c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37684,
+    "cached_tokens": 12672,
+    "completion_tokens": 1256
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _panel_a_design(x, h):\\n    return _aff(np.column_stack((x, np.sin(h[0]*x), np.tanh(h[1]*x))))\\n\\n\\ndef _panel_b_design(x, h):\\n    phase = h[0]*x\\n    return _aff(x + h[1]*np.sin(phase) + h[2]*np.cbrt(x) + h[3]*(1-np.cos(phase)))\\n\\n\\ndef _calibrate(design, u, v, starts, budget):\\n    def residual(h):\\n        a = design(u, h)\\n        return (a @ _ls(a, v) - v).ravel()\\n\\n    fits = (least_squares(residual, start, max_nfev=budget) for start in starts)\\n    h = min(fits, key=lambda fit: fit.cost).x\\n    return h, _ls(design(u, h), v)\\n\\n\\ndef _invert_a(x, h, coef):\\n    linear, sine, sat = coef[1:5], coef[5:9], coef[9:13]\\n    z = (x-coef[0]) @ np.linalg.pinv(linear)\\n    for _ in range(35):\\n        t = np.tanh(h[1]*z)\\n        phase = h[0]*z\\n        err = coef[0] + z@linear + np.sin(phase)@sine + t@sat - x\\n        if np.max(np.abs(err), initial=0.) < 1e-12:\\n            break\\n        jac = linear + (h[0]*np.cos(phase))[:, :, None]*sine + (h[1]*(1-t*t))[:, :, None]*sat\\n        step = np.linalg.solve(jac.transpose(0, 2, 1)+1e-8*np.eye(4), err[..., None])[..., 0]\\n        z -= np.clip(step, -.2, .2)\\n    return z\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    source = inputs['__input__']\\n    study = source['study'] if 'study' in source else source\\n    a = study['panel_a']\\n    u, v = np.asarray(a['u']), np.asarray(a['v'])\\n    f = _aff(u)\\n    err = np.linalg.norm(f@_ls(f, v)-v, axis=1)\\n    good = err <= max(0.8, 6*np.median(err))\\n    if np.count_nonzero(good) < 14:\\n        good = np.ones(len(u), dtype=bool)\\n    ha, ca = _calibrate(_panel_a_design, u[good], v[good], [(2.4, 1.8)], 150)\\n    b = study['panel_b']\\n    starts = [(s, a, 0., 0.) for s in (1.25, 2.15, 2.9, 4., 5.5) for a in (-.4, .4)]\\n    hb, cb = _calibrate(_panel_b_design, np.asarray(b['u']), np.asarray(b['v']), starts, 90)\\n    x = np.concatenate((study['train']['x'], study['test']['x']), axis=0)\\n    return {'w': _panel_b_design(_invert_a(x, ha, ca), hb) @ cb}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed -n '90,185p' /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust sine–tanh panel-A inversion → nonlinear panel-B feature map; worst exploratory fold MAEs were 0.00895 for y and 0.00943 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the two-sine panel-A map\",\n      \"rejected_reason\": \"Its exploratory prediction advantage was negligible, while the sine–tanh map fit the inlier calibration data better.\"\n    }\n  ],\n  \"rationale\": \"Save a self-contained calibration-only node and run the official test in a clean Python process. The candidate estimates both maps without training targets and preserves the frozen head’s four-column w contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "61439e3cda04805206ae17720e0580b8cb4698b77504a849ff1cf256194a876b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30624.83,
+      "usage_known": true,
+      "prompt_tokens": 37684,
+      "cached_tokens": 12672,
+      "completion_tokens": 1256
+    }
+  ]
+}

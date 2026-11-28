@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cc53c22f56c4d4aa0ae5a405946104b",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:21:44.395672+00:00",
+  "ended_at_utc": "2026-11-28T16:22:35.012869+00:00",
+  "request_sha256": "08affa33e72b673053e2f7c35edb4b0f23406c485e894edab07803cbecaa1cd5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74026,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45170,
+    "cached_tokens": 12672,
+    "completion_tokens": 2198
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated composed operators with separate scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\n\\ndef D(x): return np.c_[np.ones(len(x)), x]\\ndef fit(x,y): return np.linalg.lstsq(x,y,rcond=1e-10)[0]\\ndef P(x): return x*np.roll(x,-1,axis=1)\\ndef AF(x): return D(np.c_[x,P(x),x**3])\\ndef B(x): return D(np.sign(x)*np.maximum(abs(x)-.35,0)**1.5)\\ndef E(x): return D(np.sqrt(1+.924227*x*x)+.831839*x)\\n\\ndef features(s,x):\\n    a=s['panel_a']; u,v=a['u'],a['v']; F=AF(u); k=np.ones(len(u),bool)\\n    for _ in range(8):\\n        w=fit(F[k],v[k]); r=np.linalg.norm(F@w-v,axis=1); h=r<max(.002,3*np.median(r))\\n        if h.sum()<F.shape[1] or np.array_equal(h,k): break\\n        k=h\\n    z=np.linalg.solve(w[1:5].T,(x-w[0]).T).T\\n    for _ in range(14):\\n        J=w[1:5]+np.roll(z,-1,axis=1)[:,:,None]*w[5:9]+np.roll(z[:,:,None]*w[5:9],1,axis=1)+3*z[:,:,None]**2*w[9:]\\n        dz=np.linalg.solve(J.transpose(0,2,1),(AF(z)@w-x)[...,None])[...,0]\\n        z-=np.clip(dz,-.4,.4)\\n    a=s['panel_b']; b=B(z)@fit(B(a['u']),a['v']); a=s['panel_c']; C=fit(D(P(a['u'])),a['v1']); W=fit(E(a['u']),a['v2']); e=E(z)@W\\n    return z,b,e,C,W\\n\\ndef kernel(x,n,degree,rbf,reg,y):\\n    x=x-x[:n].mean(0); x=x/max(.025,np.sqrt(np.mean(x[:n]**2))); L=x@x.T/x.shape[1]\\n    d=np.maximum(L.diagonal()[:,None]+L.diagonal()-2*L,0); K=(1+L)**degree\\n    if rbf: K+=np.exp(-rbf*d)\\n    return K[n:,:n]@np.linalg.solve(K[:n,:n]+reg*np.eye(n),y)\\n\\ndef solve_batch(study:dict)->dict:\\n    tr=study['train']; n=len(tr['x']); z,b,e,C,W=features(study,np.r_[tr['x'],study['test']['x']]);\\n    y=kernel(np.c_[D(P(b+.5*e))@C,.22*z,b],n,2,.7,1e-6,tr['y'])\\n    state=kernel(np.c_[D(P(.5*b))@C,.22*z],n,2,0,.0005,tr['traj'])\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/struct.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task')\\nfrom batch_solver import *\\nfrom scipy.optimize import least_squares, minimize\\nfrom scipy.linalg import cho_factor,cho_solve\\nimport pickle\\nfrom itertools import combinations_with_replacement as cr,product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; g=t['traj']; z,b,e,C,W=features(s,t['x']); n=len(z); p=P(b); c=D(p)@C; eb=E(b)@W\\nsplits=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(n),i),i) for i in np.array_split(np.random.default_rng(88).permutation(n),4)]\\n\\ndef mon(x,k):return np.column_stack([np.prod(x[:,j],axis=1) for j in cr(range(x.shape[1]),k)])\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef evaluate(A,reg=1e-5):\\n err=[]; Tr=[]\\n for i,j in splits:\\n  H=A/(np.maximum(.04,np.sqrt(np.mean(A[i]**2,axis=0)))); M=H[i]@H[i].T; R=H@H[i].T@np.linalg.solve(M+reg*np.eye(len(i)),y[i]); err.append(abs(R[j]-y[j]).mean()); Tr.append(np.std(R[i]-y[i]));\\n return np.round(err,5),np.round(Tr,5)\\nfor x in [z,b,p,np.c_[z,p],np.c_[z,b],np.c_[b,p],np.c_[z,b,p],np.c_[z,c,eb]]:\\n for k in (1,2,3):\\n  A=np.c_[D(x),*[mon(x,v) for v in range(2,k+1)]]; print('pol',x.shape[1],k,evaluate(A),flush=True)\\n\\n# Estimate physically grouped distances by marginal likelihood to avoid holdout tuning.\\ndef gp(parts,deg):\\n for i,j in splits:\\n  H=[h/max(.025,np.sqrt(np.mean((h[i]-h[i].mean(0))**2))) for h in parts]; H=[h-h[i].mean(0) for h in H]; G=np.array([h@h.T/h.shape[1] for h in H]); ds=np.maximum(G.diagonal(axis1=1,axis2=2)[:,:,None]+G.diagonal(axis1=1,axis2=2)[:,None,:]-2*G,0)\\n  nd=len(H); u=ds[:,i][:,:,i]; L=G[:,i][:,:,i]; eye=np.eye(len(i)); ym=y[i]-y[i].mean()\\n  def model(q,U,L,I):\\n   w=np.exp(q); A=np.einsum('i,ijk->jk',w[:nd],U); R=w[-3]*np.exp(-A); Q=1+np.einsum('i,ijk->jk',w[nd:2*nd],L); K=Q**deg+R+w[-2]*I\\n   return K,R,Q,w\\n  def objective(q):\\n   K,R,Q,w=model(q,u,L,eye); f=cho_factor(K); a=cho_solve(f,ym); J=.5*(cho_solve(f,eye)-np.outer(a,a)); d=np.r_[-w[:nd,None,None]*R*u, w[nd:2*nd,None,None]*L*deg*Q**(deg-1),(R)[None],(w[-2]*eye)[None]]; return .5*(ym@a)+np.log(f[0].diagonal()).sum(),np.einsum('ijk,jk->i',d,J)\\n  def obj(q):\\n   v,d=objective(np.r_[q,0.]);return v,d\\n  q=minimize(obj,np.r_[np.full(2*nd,-2.),-2.,-6.],jac=True,method='L-BFGS-B',bounds=[(-14,4)]*(2*nd+2)).x; K=model(np.r_[q,0.],ds,G,np.eye(n))[0]; pred=y[i].mean()+K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)],ym); print('gp',deg,round(abs(pred-y[j]).mean(),5),np.exp(q).round(4),flush=True)\\nfor parts in ([z,b,p],[z,b,p,eb,e,D(P(b+.5*e))@C],[*z.T[:, :,None],*b.T[:,:,None],*p.T[:,:,None]]):\\n gp(parts,2)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse scalar readout → H2 structured composition with separately regularized heads; the best verified 52/20 MAEs are 0.07266 for y and 0.00999 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the sparse covariance screen\",\"rejected_reason\":\"Its scalar 52/20 error exceeded the simpler composed kernel’s error.\"}],\"rationale\":\"Save the best cross-fold composed predictor now, then compare explicit interaction degrees and training-only covariance fits to improve the remaining scalar bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3957749b9143e2f7ad69563348d3449a5fdaf1225f4a653a6a826ec3985dc8b2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51118.17,
+      "usage_known": true,
+      "prompt_tokens": 45170,
+      "cached_tokens": 12672,
+      "completion_tokens": 2198
+    }
+  ]
+}

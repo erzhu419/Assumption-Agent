@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5203cff90a304e38bcf3b3bd31ea30c2",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:07:56.757962+00:00",
+  "ended_at_utc": "2026-11-28T15:08:29.723881+00:00",
+  "request_sha256": "a379cd627051dd31a75ea77c71c80b8e986c649ab0c3e01ebf989fd356d037be",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40648,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29156,
+    "cached_tokens": 12672,
+    "completion_tokens": 883
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\na=runpy.run_path(root+'node_00.py')\\ntrain=s['train']; x=train['x']\\nz=a['_calibrate'](s['panel_a'],x)\\norder=np.argsort(np.max(np.abs(z),axis=1)); n=len(x)\\nmaxerr=np.zeros(2)\\nfor name, order in [('contiguous',np.arange(n)),('shuffled',np.random.default_rng(5).permutation(n)),('calibrated-range',order)]:\\n for i,idx in enumerate(np.array_split(order,4)):\\n  keep=np.setdiff1d(np.arange(n),idx); st=copy.deepcopy(s)\\n  st['train']={k:train[k][keep] for k in ('x','y','traj')}; st['train']['summary']=np.array([st['train']['y'].mean(), st['train']['y'].std(), st['train']['traj'][:,-1].mean(), st['train']['traj'][:,-1].std()]); st['test']={'x':x[idx]}\\n  p=a['run_node']({'__input__':st}); b=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']({'__input__':st}); out=runpy.run_path(root+'_frozen_nodes/node_02.py')['run_node']({'node_00':p,'node_01':b}); e=[np.mean(np.abs(out[k]-train[t][idx])) for k,t in [('y_hat','y'),('state_pred','traj')]]; print(name,i,*e); maxerr=np.maximum(maxerr,e)\\np=s['panel_a']; u,v=p['u'],p['v']; D=a['_design'](u); err=np.linalg.norm(v-D@a['_ls'](D,v),axis=1); clean=err<=4*np.median(err); e=[]\\nfor i in np.flatnonzero(clean):\\n keep=np.arange(len(u))!=i; recovered=a['_calibrate']({'u':u[keep],'v':v[keep]},v[i:i+1]); e.append(np.max(np.abs(recovered-u[i])))\\nprint('worst CV y, traj',maxerr,'worst clean panel-A jackknife inversion',max(e)); assert np.all(maxerr < .038) and max(e)<.002\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration → H2 sparse cyclic bilinear-cubic calibration with unchanged readouts; public holdout MAEs are 0.004185 for y and 0.005276 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official holdout alone\",\n      \"rejected_reason\": \"The official split does not independently test calibration inversion or generalization to rows with the largest calibrated coordinates.\"\n    }\n  ],\n  \"rationale\": \"The unchanged response designs pass the official gate after correcting calibration. Stress the fixed candidate on contiguous, shuffled, and coordinate-range folds, and jackknife the calibration panel without editing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "57142217a8544d01c212e4987c6e8b2c464895b231f11208f2b785178caee8f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32964.4,
+      "usage_known": true,
+      "prompt_tokens": 29156,
+      "cached_tokens": 12672,
+      "completion_tokens": 883
+    }
+  ]
+}

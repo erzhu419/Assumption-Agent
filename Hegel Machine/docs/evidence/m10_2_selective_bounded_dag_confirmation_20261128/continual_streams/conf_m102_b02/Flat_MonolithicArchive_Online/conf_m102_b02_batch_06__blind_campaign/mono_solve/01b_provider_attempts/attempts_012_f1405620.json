@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f14056204c1e4ea09f0dc95a95fe1f1e",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:38:17.781753+00:00",
+  "ended_at_utc": "2026-11-28T15:39:14.200271+00:00",
+  "request_sha256": "3e1e161acac5a447ee4efa8611061165a34880e022b4843ea287ebf1bbce2f0b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76748,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38697,
+    "cached_tokens": 5504,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\ns = s.replace(\\\"    if cmode=='c4':\\\", \\\"    if cmode=='cos':\\\\n        cf=lambda x,p:_i(x+p[0]*(1-np.cos(p[1]*x)))\\\\n        cp=[.72,1.2]\\\\n    elif cmode=='c4':\\\")\\ns = s.replace('def _estimate(z,w,q,r,y,tr,ids,test,alpha=.03,fn=np.sin):\\\\n    base=np.c_[z,q,r]; d=_i(np.c_[base,*[_cross(a,b) for a,b in combinations((z,w,q,r),2)]])\\\\n    t=tr[ids]; mean=t.mean(0); modes=np.linalg.svd(t-mean,full_matrices=False)[2][:3]', '''def _estimate(z,w,q,r,y,tr,ids,test,alpha=.03,fn=np.tanh,basis='broad',rank=3):\\n    base=np.c_[z,q,r]\\n    if basis=='broad':\\n        blocks=[_cross(a,b) for a,b in combinations((z,w,q,r),2)]\\n    elif basis=='sparse':\\n        blocks=[_cross(z,q),_cross(q,r)]\\n    else:\\n        blocks=[(z[:,:,None]*q[:,None,:]).reshape(len(z),16)]\\n    d=_i(np.column_stack([base,*blocks]))\\n    t=tr[ids]; mean=t.mean(0); modes=np.linalg.svd(t-mean,full_matrices=False)[2][:rank]''')\\ns = s[:s.index('def solve_batch(')] + '''def _predict(coords, alternate, y, tr, ids, test):\\n    # Average across interaction bases to reduce sensitivity to training coverage.\\n    y0,t0=_estimate(*coords,y,tr,ids,test)\\n    y1,_=_estimate(*coords,y,tr,ids,test,basis='sparse')\\n    y2,t2=_estimate(*alternate,y,tr,ids,test,alpha=.005,basis='outer',rank=1)\\n    return .25*y0+.50*y1+.25*y2, .60*t0+.40*t2\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train=study['train']; test=study['test']['x']; n=len(train['x'])\\n    x=np.vstack((train['x'],test))\\n    y,tr=_predict(_coords(study,x),_coords(study,x,'sine','cos'),\\n                  train['y'],train['traj'],np.arange(n),np.arange(n,n+len(test)))\\n    diag=np.array([y.mean(),y.std(),tr[:,-1].mean(),tr[:,-1].std()])\\n    return dict(y_hat=y,state_pred=tr,diagnostics_vec=diag)\\n'''\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _coords,_predict,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['train']; y=a['y']; tr=a['traj']\\ncoords=_coords(s,a['x']); alt=_coords(s,a['x'],'sine','cos')\\ndef metrics(yh,th,j):\\n    d=np.abs(th-tr[j]); return np.r_[np.abs(yh-y[j]).mean(),d.mean(),d.mean(axis=0).max()]\\ntest=np.arange(52,len(y)); split=dict(s,train={**a,'x':a['x'][:52],'y':y[:52],'traj':tr[:52]}, test={'x':a['x'][test]}); out=solve_batch(split); official=metrics(out['y_hat'],out['state_pred'],test)\\nprint('Prescribed 52/20 via solve_batch (response, trajectory, worst timestamp):',official)\\nassert official[0]<=.038 and official[1]<=.038\\nout=solve_batch(s); p=out['y_hat']; t=out['state_pred']; assert p.shape==(36,) and t.shape==(36,len(s['eval_times'])) and np.isfinite(p).all() and np.isfinite(t).all(); np.testing.assert_array_equal(out['diagnostics_vec'],[p.mean(),p.std(),t[:,-1].mean(),t[:,-1].std()])\\nfor seed in [229,10127,65537]:\\n    rng=np.random.default_rng(seed); errors=[]\\n    for _ in range(8):\\n        ids,j=np.split(rng.permutation(len(y)),[52]); p,t=_predict(coords,alt,y,tr,ids,j); errors.append(metrics(p,t,j))\\n    print('Random seed',seed,'mean',np.mean(errors,axis=0),'worst',np.max(errors,axis=0))\\nfor key,x in zip(('z','w','q'),coords):\\n    ids,j=np.split(np.argsort(np.linalg.norm(x,axis=1)),[52]); p,t=_predict(coords,alt,y,tr,ids,j); print('High norm',key,metrics(p,t,j))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: broad cyclic readout alone -> H2: fixed blend of broad, sparse, and outer-product readouts; prior blend tests gave 0.02860 prescribed response MAE, 0.04351 worst random-split response MAE, and 0.07016 on the auxiliary-norm tail.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Keep the broad model alone\",\"rejected_reason\":\"It scores better on the prescribed response split but has substantially larger random-split and auxiliary-norm tail errors.\"}],\"rationale\":\"Promote the validated response blend and the trajectory weights that reduced worst-timestamp errors. Verify the exact artifact through its public entry point and quantify the remaining tail errors separately from the prescribed gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "7660910f1a535aabb81d1c0da674a7ef02bb3ea8e29e5de13a3cc5ac4185a4d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56417.25,
+      "usage_known": true,
+      "prompt_tokens": 38697,
+      "cached_tokens": 5504,
+      "completion_tokens": 1575
+    }
+  ]
+}

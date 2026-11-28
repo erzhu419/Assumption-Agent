@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e55f72946d994cafae749fe2b0446844",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:22:36.856595+00:00",
+  "ended_at_utc": "2026-11-28T16:23:09.439272+00:00",
+  "request_sha256": "5ad244bbd9ba967b7a0c5209b02c70967bba6259803df604f4e77908228efa80",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79485,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46076,
+    "cached_tokens": 12672,
+    "completion_tokens": 1363
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"mv /tmp/struct.py /tmp/struct_probe.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/struct_probe.py | head -42; cat >/tmp/rational_probe.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task')\\nfrom batch_solver import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cr\\nimport pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=s['train']; y=T['y']; g=T['traj']; z,b,e,C,W=features(s,T['x']); p=P(b); c=D(p)@C; eb=E(b)@W; ce=D(P(b+.5*e))@C; n=len(z)\\nsp=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(np.random.default_rng(88).permutation(n),4)]\\nprint('telemetry',s['telemetry_vec'],'summary',T['summary']); print('yq',np.quantile(y,[0,.1,.5,.9,1])); print('c moments',c.mean(0),c.std(0)); print('z coef y',fit(D(z),y)); print('p coef y',fit(D(np.c_[z,p]),y));\\ndef quad(x):return np.c_[D(x),*[x[:,a]*x[:,b] for a,b in cr(range(x.shape[1]),2)]]\\nx=np.c_[.22*z,p]; X=quad(x); coef=fit(X,g); print('state coef last',coef[:,-1].round(4)); print('state temporal rank',np.linalg.svd(coef,compute_uv=False)); print('y/amplitude',np.c_[y,g[:,-1],y-D(z)@fit(D(z),y)][:20].round(3));\\nff={'z':z,'b':b,'p':p,'c':c,'e':e,'eb':eb,'ce':ce,'zp':np.c_[z,p],'zb':np.c_[z,b],'zbc':np.c_[z,b,c],'zc':np.c_[z,c],'zce':np.c_[z,ce]}; out=[]\\nfor key in ['p','c','b','eb','ce','zp','zb','zce']:\\n v=ff[key];\\n for nk in ['z','zc','zbc','zce']:\\n  A=D(ff[nk]);\\n  for mode in [0,1,2]:\\n   er=[]; params=[]; train=[]\\n   for i,j in sp:\\n    U=D(v)/(np.sqrt(np.mean(D(v)[i]**2,axis=0))+.03); H=A/(np.sqrt(np.mean(A[i]**2,axis=0))+.03); L=D(z); m=U.shape[1]; I=np.eye(H.shape[1]+(L.shape[1] if mode else 0));\\n    def design(q):\\n     den=1+(U@q)**2\\n     if mode==2: den=np.sqrt(den)\\n     F=H/den[:,None]; return np.c_[L,F] if mode else F\\n    def fun(q,ret=False):\\n     F=design(q); X=F[i]; coef=np.linalg.solve(X.T@X+.004*I,X.T@y[i]); pred=F@coef\\n     return pred if ret else np.r_[pred[i]-y[i],.02*q,.04*coef]\\n    rng=np.random.default_rng(12); starts=[np.eye(m)[k]*.6 for k in range(m)]+list(rng.normal(0,.45,(4,m))); r=min((least_squares(fun,st,max_nfev=95) for st in starts),key=lambda r:r.cost); yh=fun(r.x,True); er.append(np.mean(abs(yh[j]-y[j])));train.append(np.std(yh[i]-y[i]));params.append(r.x)\\n   out.append((np.mean(er),max(er),er[0],key,nk,mode,np.mean(train),params[0].round(3)))\\nfor a in sorted(out)[:12]:print('R mean/worst/gate',a)\\nfor a in sorted(out,key=lambda x:x[2])[:5]:print('R gate',a)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 composed polynomial kernel → H2 structured rational scalar correction; the saved solver has 52/20 scalar MAE 0.080692 and trajectory MAE 0.00999.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the saved solver unchanged\",\"rejected_reason\":\"It fails the public scalar gate.\"}],\"rationale\":\"Repair the probe’s standard-library name collision, then compare training-only polynomial and rational readouts across five folds while preserving the validated trajectory head.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "51445623077f880e8ee3dfc076eef415c593d29874954c14080a0abcd41516f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33074.06,
+      "usage_known": true,
+      "prompt_tokens": 46076,
+      "cached_tokens": 12672,
+      "completion_tokens": 1363
+    }
+  ]
+}

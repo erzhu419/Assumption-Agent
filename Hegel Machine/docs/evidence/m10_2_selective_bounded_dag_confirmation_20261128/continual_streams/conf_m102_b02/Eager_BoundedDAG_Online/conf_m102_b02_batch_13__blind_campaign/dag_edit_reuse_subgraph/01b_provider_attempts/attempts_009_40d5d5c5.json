@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "40d5d5c5bece4dea8da6181e41cc5d56",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:53:47.252824+00:00",
+  "ended_at_utc": "2026-11-28T16:54:17.105871+00:00",
+  "request_sha256": "05445b91023f3c90f9641cc6838ae5e6e59a020fed55d2b51c1cf47de93c95fb",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 55702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34929,
+    "cached_tokens": 12672,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat /tmp/hegel_continual_archive/conf_m102_b02_batch_01_solver.py; sed '/res=\\\\[\\\\]/,$d' /tmp/feature_probe.py > /tmp/probe_sparse.py; cat >> /tmp/probe_sparse.py <<'PY'\\nfrom scipy.linalg import qr\\nfrom scipy.special import erf\\nY=np.c_[y,traj@np.linalg.svd(traj,full_matrices=False)[2][:2].T]; Y/=Y.std(0)\\nfrom collections import OrderedDict\\nd=OrderedDict()\\ndef put(a,k):\\n for i,c in enumerate(a.T): d[f'{k}{i}']=c\\nput(z,'z');put(b,'b');put(np.cos(2.6*z),'c');\\nfor k,x in [('z',z),('b',b),('c',np.cos(2.6*z))]:\\n for q in [.5,1,1.5,2,2.5,3,4,5]:\\n  put(np.sin(q*x),f'sin{q}{k}');put(np.cos(q*x),f'cos{q}{k}');put(np.tanh(q*x),f'tanh{q}{k}');put(x/(1+q*x*x),f'rat{q}{k}');put(np.exp(-q*x*x),f'gauss{q}{k}')\\n for q in [2,3,4]:put(x**q,f'{k}^{q}:')\\n for i,j in itertools.combinations(range(4),2):\\n  d[f'{k}{i}*{k}{j}']=x[:,i]*x[:,j]\\n  for a,g in [(1,x[:,i]+x[:,j]),(-1,x[:,i]-x[:,j])]:\\n   for q in [1,2,3]:\\n    for fn in [np.sin,np.cos,np.tanh]:d[f'{fn.__name__}{q}({k}{i}{a:+}{k}{j})']=fn(q*g)\\nfor i,j in itertools.product(range(4),repeat=2):\\n d[f'z{i}b{j}']=z[:,i]*b[:,j];d[f'z{i}c{j}']=z[:,i]*np.cos(2.6*z[:,j]);d[f'z{i}tb{j}']=z[:,i]*np.tanh(2.5*b[:,j]);d[f'tz{i}b{j}']=np.tanh(z[:,i])*b[:,j]\\nD=np.column_stack(list(d.values())); names=np.array(list(d));\\nfrom sklearn.linear_model import lars_path, ElasticNet\\nfor j in range(3):\\n for sel in [folds[0],folds[1]]:\\n  i,v=sel; mu=D[i].mean(0); sd=D[i].std(0); A=(D-mu)/np.maximum(sd,1e-8); m=Y[i,j].mean(); _,inds,co=lars_path(A[i],Y[i,j]-m,method='lasso',max_iter=160); err=np.mean(abs(A[v]@co+m-Y[v,j,None]),axis=0); k=np.argmin(err); print('LARS',j,k,err[k],[(names[h],round(co[h,k],4)) for h in np.argsort(-abs(co[:,k]))[:12]]); print('corr',[(names[h],round(np.mean(A[i,h]*(Y[i,j]-m)),3)) for h in np.argsort(-abs(A[i].T@(Y[i,j]-m)))[:12]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_sparse.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 generic calibrated-coordinate kernels → H2 sparse nonlinear response structure; best screened official scalar/trajectory MAE remains 0.07113/0.03648.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[{\"option\":\"Add all panel C coordinates to the kernel\",\"rejected_reason\":\"That did not improve the main scalar bottleneck across the tested folds.\"}],\n  \"rationale\":\"Screen candidate products and nonlinear coordinates for repeatable signal across training folds before changing the feature map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "671eb82bc785b55ef47ab9e93d5f2fbb63b5ae20857f086d3bb3acf77bda39b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30400.51,
+      "usage_known": true,
+      "prompt_tokens": 34929,
+      "cached_tokens": 12672,
+      "completion_tokens": 1100
+    }
+  ]
+}

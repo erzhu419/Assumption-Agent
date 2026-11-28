@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc4d0a7668954dbabf29e87e07f290e2",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Eager_BoundedDAG_Online__conf_m102_b03_batch_12__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_12__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:32:36.094022+00:00",
+  "ended_at_utc": "2026-11-28T15:33:01.700374+00:00",
+  "request_sha256": "05cea2a98113eb48891d27cf3ca8cb9977539a5aacd1a6de80a38714f7e4a70d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42712,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29807,
+    "cached_tokens": 12672,
+    "completion_tokens": 1034
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nroot = '/holdout_task/'\\nm = load('node_00', root + 'node_00.py')\\nsink = load('node_02', root + '_frozen_nodes/node_02.py')\\nfor index, case in enumerate(pickle.load(open(root + 'public_batch.pkl', 'rb'))):\\n    study = case['study']\\n    t = study['train']\\n    n = len(t['x'])\\n    idx = np.arange(n)\\n    z = m._calibration(study['panel_a'])(t['x'])\\n    splits = [(f'random_{i}', np.random.default_rng(i).permutation(n)[:20]) for i in range(8)]\\n    splits += [('outer_latent_radius', np.argsort(np.linalg.norm(z, axis=1))[-20:]), ('largest_branch_product', np.argsort(np.max(np.abs(z * np.roll(z, -1, axis=1)), axis=1))[-20:])]\\n    errs = []\\n    for name, val in splits:\\n        fit = np.setdiff1d(idx, val)\\n        pred = m.run_node({'__input__': {**study, 'train': {k: np.asarray(v)[fit] if k in ('x', 'y', 'traj') else v for k, v in t.items()}, 'test': {'x': t['x'][val]}}})\\n        assert pred['y_hat'].shape == (len(val),) and pred['unprojected'].shape == t['traj'][val].shape\\n        assert all(np.isfinite(a).all() for a in pred.values())\\n        errs.append((name, np.mean(np.abs(pred['y_hat'] - np.asarray(t['y']).reshape(n)[val])), np.mean(np.abs(pred['unprojected'] - t['traj'][val]))))\\n    panel = study['panel_c']\\n    u, v = panel['u'], panel['v1']\\n    a = m._cyclic(u)\\n    residual = np.vstack([a[i] @ m._ols(a[idx != i], v[idx != i]) - v[i] for i in range(len(a)) for idx in [np.arange(len(a))]])\\n    print('case', index, 'first-branch leave-one-panel-pair-out RMSE', np.sqrt(np.mean(residual**2)), 'max absolute error', np.max(np.abs(residual)))\\n    print('worst scalar slice', max(errs, key=lambda a: a[1]), 'worst unprojected trajectory slice', max(errs, key=lambda a: a[2]))\\n    assert max(e[1] for e in errs) <= .038 and max(e[2] for e in errs) <= .038\\nPY\\nprobe_status=$?\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nvalidator_status=$?\\nexit $((probe_status || validator_status))\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Cyclic adjacent-coordinate products replace the archived first branch; verified public CV is 0.006471 scalar MAE and 0.005989 trajectory MAE, and this probe checks extrapolation at the edge of the observed latent range.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the unchanged artifact on random and high-interaction holdouts and verify the compact branch basis on omitted panel pairs. The official validator independently checks the projected trajectory and frozen DAG contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e6c1d8f63017f0893ebbe1598cc6915e032a8a950e9eaba2012aa23f96c38e8f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25604.72,
+      "usage_known": true,
+      "prompt_tokens": 29807,
+      "cached_tokens": 12672,
+      "completion_tokens": 1034
+    }
+  ]
+}

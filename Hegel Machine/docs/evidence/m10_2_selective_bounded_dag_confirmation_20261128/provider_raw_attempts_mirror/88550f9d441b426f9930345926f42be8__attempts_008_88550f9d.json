@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88550f9d441b426f9930345926f42be8",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:51:17.536549+00:00",
+  "ended_at_utc": "2026-11-28T15:51:53.107532+00:00",
+  "request_sha256": "e9ec0a54d6f3ee4b6d5e19539b98643e8b33eaabe34546117580e6e5b42827dc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33874,
+    "cached_tokens": 12672,
+    "completion_tokens": 1544
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; sed '/^def _rational_panel/,$d' /tmp/hegel_continual_archive/*batch_09_solver.py > /holdout_task/batch_solver.py; cat >> /holdout_task/batch_solver.py <<'PY'\\ndef _operator(panel):\\n    \\\"\\\"\\\"Profile linear mixing weights out of the componentwise panel fit.\\\"\\\"\\\"\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n\\n    def design(x, p):\\n        return np.column_stack((_aff(x), x*np.exp(-(p[0]*x)**2),\\n                                x/(1+p[1]*np.abs(x))))\\n\\n    def residual(p):\\n        f = design(u, p)\\n        return (f @ _ls(f, v) - v).ravel()\\n\\n    fits = [least_squares(residual, [p, .65], bounds=([.3,.07],[7.,5.]))\\n            for p in (1.5, 3., 4.5)]\\n    p = min(fits, key=lambda fit: fit.cost).x\\n    weights = _ls(design(u, p), v)\\n    return lambda x: design(x, p) @ weights\\n\\n\\ndef _quadratic(h):\\n    i, j = np.triu_indices(h.shape[1])\\n    return np.column_stack((_aff(h), h[:,i]*h[:,j]))\\n\\n\\ndef _state(h, q, t, z):\\n    # Shared two-rate relaxation; the mode amplitudes are affine in panel B.\\n    f, g = _aff(h), _aff(q)\\n    def basis(p):\\n        return -np.expm1(-t[:,None]*p)\\n    def weights(b):\\n        return _ls(f, _ls(b, z.T).T)\\n    def residual(p):\\n        b = basis(p)\\n        return (f @ weights(b) @ b.T-z).ravel()\\n    p = least_squares(residual, [1.8,.42], bounds=([.85,.03],[6.,.84])).x\\n    b = basis(p)\\n    return g @ weights(b) @ b.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    calibration = _calibrate(study['panel_a'])\\n    op = _operator(study['panel_b'])\\n    h = op(_inverse(train['x'], calibration))\\n    q = op(_inverse(study['test']['x'], calibration))\\n    y = _quadratic(q) @ _ls(_quadratic(h), train['y'])\\n    state = _state(h, q, np.asarray(study['eval_times']), np.asarray(train['traj']))\\n    last = state[:, -1]\\n    diagnostics = np.array([y.mean(), y.std(), last.mean(), last.std()]) if len(y) else np.zeros(4)\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': diagnostics}\\nPY\\ncat > /tmp/verify_batch.py <<'PY'\\nimport pickle, importlib.util, numpy as np\\npath='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',path); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx,y,z=[s['train'][k] for k in ('x','y','traj')]; n=len(y)\\ncal=m._calibrate(s['panel_a']); u,v=[s['panel_a'][k] for k in ('u','v')]; p,b,d=cal\\nprint('calibration',p, 'residual norm quantiles',np.quantile(np.linalg.norm(b+d*u+p[2]*np.tanh(p[0]*u)+p[3]*np.sin(p[1]*np.roll(u,2,1))-v,axis=1),[0,.5,.8,.9,1]));\\nh=m._operator(s['panel_b'])(m._inverse(x,cal)); idx=np.argsort(np.linalg.norm(h,axis=1)); rng=np.random.default_rng(193)\\nfolds=[('public',np.arange(52,n)),('operator tail',idx[-20:]),('raw tail',np.argsort(np.linalg.norm(x,axis=1))[-20:])]+[(f'random {i}',rng.permutation(n)[:20]) for i in range(8)]\\nfor name,j in folds:\\n i=np.setdiff1d(np.arange(n),j); zz=z[i,-1]; ss={**s,'train':{'x':x[i],'y':y[i],'traj':z[i],'summary':np.array([y[i].mean(),y[i].std(),zz.mean(),zz.std()])},'test':{'x':x[j]}}\\n out=m.solve_batch(ss); e=np.abs(out['state_pred']-z[j]); print(name, 'scalar',round(np.mean(np.abs(out['y_hat']-y[j])),6),'state',round(e.mean(),6),'worst time',round(e.mean(0).max(),6))\\nprint('scalar coefficients',m._ls(m._quadratic(h),y).round(5));\\nPY\\npython3 -I /tmp/verify_batch.py; python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: robust calibration feeds panel B, then separate quadratic scalar and two-mode state readouts; provisional 52/20 MAEs are about 0.006 and 0.004.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit quadratic trajectory amplitudes\",\n      \"rejected_reason\": \"The exploratory split favored affine amplitudes in panel-B coordinates; quadratic terms helped only the scalar readout.\"\n    }\n  ],\n  \"rationale\": \"Build the standalone solver and refit the temporal rates within every fold. Check the prescribed split, randomized splits, and high-norm extrapolation slices before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d5e956dad363ddb74e3081f498e312409dd5edb16ea64a76ca9442e9bdf73b02",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36638.65,
+      "usage_known": true,
+      "prompt_tokens": 33874,
+      "cached_tokens": 12672,
+      "completion_tokens": 1544
+    }
+  ]
+}

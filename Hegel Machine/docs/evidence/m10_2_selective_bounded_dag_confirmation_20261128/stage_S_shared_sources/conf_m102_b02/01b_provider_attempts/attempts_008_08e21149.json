@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08e211490e16452db6ac924ab1864ed6",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:11.204345+00:00",
+  "ended_at_utc": "2026-11-28T14:55:42.045347+00:00",
+  "request_sha256": "52e01af8a59ff5fd32a92233de12c4021a011c62d78375c4b79ba9ff625fd9e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54461,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37905,
+    "cached_tokens": 12672,
+    "completion_tokens": 1022
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/timeprobe.py | head -18; cat >/tmp/products.py <<'PY'\\nexec(open('/tmp/routes.py').read().split('# Rank')[0])\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nx=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; a=(x-A[0])@np.linalg.inv(A[1:]); b=col(a)@B\\nsp=[(np.arange(52),np.arange(52,72)),(np.arange(20,72),np.arange(20)),(np.r_[0:20,40:72],np.arange(20,40))]\\ndef gram(z):return z@z.T\\ndef scores(K,alpha):\\n E=[]\\n for tr,te in sp:\\n  e=K[np.ix_(te,tr)]@solve(K[np.ix_(tr,tr)]+alpha*np.eye(len(tr)),Y[tr],assume_a='pos')-Y[te]; E.append([np.mean(abs(e[:,0])),np.mean(abs(e[:,1:])),np.mean(abs(e[:,-1]))])\\n return np.array(E)\\nR=[]\\nfor name,z in [('B',b),('Bx',col(x)@B),('raw',a),('Bt',(a@B[1:].T+B[0])),('BC',C(b)),('BD',D(b)),('CB',col(C(a))@B),('DB',col(D(a))@B)]:\\n for w in [.65,1,1.4,1.8,2.2,2.8,3.5]:\\n  for fn,h in [('tan',np.tanh(w*z)),('sin',np.sin(w*z)),('asinh',np.arcsinh(w*z)),('rat',w*z/(1+(w*z)**2)),('atan',np.arctan(w*z))]:\\n   for lmix in [0,.25,1,4]:\\n    F=gram(h)+lmix*gram(z); G=1+F\\n    for desc,K in [('q',G**2),('c',G**3),('qc',G**2+.1*G**3),('qz',G**2+gram(z)),('sep',1+gram(z)+gram(h)+gram(h*h)+gram(z*h)+.2*F**2),('qzp',G**2+(1+gram(z))**2)]:\\n     K=K/np.mean(np.diag(K))\\n     for al in [1e-6,.0001,.002]:\\n      E=scores(K,al); R.append((E.mean(0)[0],E.mean(0)[1],name,fn,w,lmix,desc,al,E.round(5).tolist()))\\nfor k in [lambda z:z[0],lambda z:z[1],lambda z:z[0]+z[1], lambda z:z[-1][0][0]]:\\n print(*sorted(R,key=k)[:8],sep='\\\\n');print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/products.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear combinations of fixed panel-B nonlinearities → H2 test cross-coordinate products, squares, and cubic readouts; the previous best joint feature fit had worst-block y/trajectory MAE of 0.0756/0.0649.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase the number of learned nonlinear directions\",\"rejected_reason\":\"Lower training objectives did not reliably improve held-out errors.\"}],\"rationale\":\"The earlier searches mostly appended nonlinear features to polynomials in the original coordinates. Test products in the transformed coordinates directly and score readout, full trajectory, and terminal state separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7d64ef521df8fe647f2f5907633576f63b0b606c32851e645bd9e9bca6f02ba0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30839.84,
+      "usage_known": true,
+      "prompt_tokens": 37905,
+      "cached_tokens": 12672,
+      "completion_tokens": 1022
+    }
+  ]
+}

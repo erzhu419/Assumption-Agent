@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c346c881c764d2fb5651ed5b61f93cb",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:25:04.442676+00:00",
+  "ended_at_utc": "2026-11-28T15:25:27.881284+00:00",
+  "request_sha256": "d6d475c38cd2ac41be2a9d87da0fbdc4e9828ff16079d2e44872610beb43e499",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45171,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31183,
+    "cached_tokens": 12672,
+    "completion_tokens": 812
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/compact05.py <<'PY'\\nexec(open('/tmp/graph05.py').read().split('for xn,U')[0])\\np,q=C(z)@c,D(z)@d\\ndot=np.sum(p*q,axis=1); cross=(p[:,:,None]*q[:,None,:]).reshape(len(p),16)\\nF=one(np.c_[p,q,dot]); G=one(np.c_[p,q,cross]); print('scalar',ls(F[:52],Y[:52,0]));print('amplitudes',np.round(ls(G[:52],A[:52]),4));\\nblocks=[('p',one(p)),('q',one(q)),('p_dot',one(np.c_[p,dot])),('q_dot',one(np.c_[q,dot])),('both_dot',F),('all',G)]\\nfor k in range(16): blocks.append((f'q_{k//4}{k%4}',one(np.c_[q,cross[:,k]])))\\ndef fit(F,G,idx,out):\\n def mat(r,j):\\n  h=H(r); return np.concatenate([F[j,None,:]*h[None,:,0,None],G[j,None,:]*h[None,:,1,None]],axis=2).reshape(len(j)*len(t),-1)\\n obs=T[idx].ravel()\\n def res(r):\\n  m=mat(r,idx);return m@ls(m,obs)-obs\\n r=least_squares(res,[1.81,.42],bounds=([.8,.05],[4,.78]),ftol=1e-10).x\\n m=mat(r,idx); b=ls(m,obs); e=abs((mat(r,out)@b).reshape(len(out),-1)-T[out]);return np.mean(res(r)**2)**.5,e.mean(),e.mean(0).max(),r,b\\nidx=np.arange(52);out=np.arange(52,72); rows=[]\\nfor a,f in blocks[:6]:\\n for b,g in blocks:\\n  v=fit(f,g,idx,out); rows.append((v[0],v[1],v[2],a,b,v[3],v[4]))\\nfor v in sorted(rows,key=lambda x:x[0])[:12]: print(v[:6],np.round(v[6],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: panel B may feed either branch → H2: both branches act directly on calibrated inputs; 52/20 MAEs are 0.00414 for scalar with a dot product and 0.00440 for trajectories with all cross products.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Route panel B upstream of panel C\",\"rejected_reason\":\"All routings through the affine panel B operator produced trajectory MAE above 0.15, even with expanded features.\"}],\"rationale\":\"Fit rates and amplitudes jointly after projecting out the linear coefficients. Compare compact mode-specific interaction bases by training residual before checking held-out and per-horizon errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f04a34e93c16a1ec2dbb1ebaa687463f63c63591681e68c587506bad97092c50",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23437.42,
+      "usage_known": true,
+      "prompt_tokens": 31183,
+      "cached_tokens": 12672,
+      "completion_tokens": 812
+    }
+  ]
+}

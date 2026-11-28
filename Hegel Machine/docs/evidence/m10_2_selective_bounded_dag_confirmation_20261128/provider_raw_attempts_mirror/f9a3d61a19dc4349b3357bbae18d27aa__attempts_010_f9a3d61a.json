@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9a3d61a19dc4349b3357bbae18d27aa",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a01__Flat_MonolithicArchive_Online__conf_m102_a01_batch_16__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a01_batch_16__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:34.541325+00:00",
+  "ended_at_utc": "2026-11-28T15:22:06.107466+00:00",
+  "request_sha256": "7cf8c3275d0c587aabdcc883bf4bc768b8f4c46136db8b8399995b4b48e6df36",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65275,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40397,
+    "cached_tokens": 12672,
+    "completion_tokens": 1141
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nold=next(Path('/tmp/hegel_continual_archive').glob('*03_solver.py')).read_text().replace('def solve_batch(', 'def _archive_prediction(')\\nextra=Path('/tmp/ardfit.py').read_text().split('def pred(',1)[1].split(\\\"if __name__\\\",1)[0]\\nnew='''\\\\n\\\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    y = np.asarray(train['y'], dtype=float)\\n    n = len(y)\\n    tr, va = np.arange(n), np.arange(n, len(x))\\n    z, h = _coordinates(study, x)\\n    archive = _archive_prediction(study)\\n    ys = [archive['y_hat']]\\n    for mode in ('rbf', 'mat', 'add'):\\n        for w in (x, z, h):\\n            ys.append(_anisotropic(w, y, tr, va, mode))\\n    y_hat = np.mean(ys, axis=0)\\n    traj = np.asarray(train['traj'], dtype=float)\\n    v = np.linalg.svd(traj, full_matrices=False)[2][0]\\n    amps = [_anisotropic(w, traj @ v, tr, va, 'rbf') for w in (x,z,h)]\\n    state = .25 * archive['state_pred'] + .75 * np.mean(amps,axis=0)[:,None] * v\\n    last = state[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state,\\n            'diagnostics_vec': np.array([y_hat.mean(),y_hat.std(),last.mean(),last.std()])}\\n'''\\nPath('batch_solver.py').write_text(old+'\\\\n\\\\ndef _anisotropic('+extra+new)\\nPY\\ncat validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/checkbatch.py <<'PY'\\nimport importlib.util,pickle,sys,numpy as np\\np=sys.argv[1] if len(sys.argv)>1 else '/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; r=s['train']; x=r['x']; y=r['y']; t=r['traj']; rng=np.random.default_rng(801)\\nfor j,p in enumerate([np.arange(len(x))]+[rng.permutation(len(x)) for _ in range(8)]+[np.argsort(np.linalg.norm(x,axis=1)),np.argsort(y)]):\\n tr,va=p[:52],p[52:]; out=m.solve_batch({**s,'train':{**r,**{k:r[k][tr] for k in ('x','y','traj')}},'test':{'x':x[va]}}); a,b=out['y_hat'],out['state_pred']; e=abs(a-y[va]); d=abs(b-t[va]); print(j,*(round(q,6) for q in [e.mean(),d.mean(),d[:,-1].mean(),e.max()]),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/checkbatch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single covariance model -> H2 blend calibrated anisotropic kernels and an archived predictor; exploratory scalar MAE is 0.03686 on the 52/20 split and 0.05081 on the worst of nine splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the best single anisotropic kernel\",\"rejected_reason\":\"No single tested anisotropic kernel met the prescribed scalar gate.\"}],\"rationale\":\"Write a self-contained candidate that reproduces the passing scalar ensemble, then verify its schema and measure trajectory and terminal-state errors separately in a clean process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0218fde9f55c1c5ecf6e7f61b3bd337bcdceffcd6e87c6df4c76c57956509813",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32048.02,
+      "usage_known": true,
+      "prompt_tokens": 40397,
+      "cached_tokens": 12672,
+      "completion_tokens": 1141
+    }
+  ]
+}

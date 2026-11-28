@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58dc127f2cd94907aa5a4d797eb41766",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:02:41.341681+00:00",
+  "ended_at_utc": "2026-11-28T15:03:12.229614+00:00",
+  "request_sha256": "3540f6feb19d50d8e3f0509a8c48b14ecae033517c3973172cc1dcecdb601948",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56274,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37092,
+    "cached_tokens": 12672,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rational.py <<'PY'\\nfrom refine import *\\n\\ndef candidates(x,y):\\n out=[]\\n for pwr in [1,2,3,4,(1,2),(1,3),(2,3),(2,4),(1,2,3),(1,2,3,4)]:\\n  pw=(pwr,) if isinstance(pwr,int) else pwr\\n  for num in [1,3,5]:\\n   for lin in [0,1,2]:\\n    if len(pw)==1 and len(pw)+lin+num//2>4:continue\\n    def D(z,p,pw=pw,num=num,lin=lin):\\n     n=z**num\\n     if lin==2:n=n+p[-1]*z\\n     d=1+sum(a*abs(z)**b for a,b in zip(p,pw));w=n/d\\n     if lin:w=w+p[len(pw)]*z\\n     return aff(w)\\n    def err(p):\\n     d=D(x,p);return (d@ls(d,y)-y).ravel()\\n    opts=[]\\n    for a in [.15,.6,2,5]:\\n     o=least_squares(err,np.r_[np.repeat(a,len(pw)),np.zeros(lin)],bounds=(np.r_[np.zeros(len(pw)),np.full(lin,-100.)],np.r_[np.full(len(pw),20.),np.full(lin,100.)]),max_nfev=120);opts.append(o)\\n    o=min(opts,key=lambda o:np.linalg.norm(o.fun));d=D(x,o.x);m=ls(d,y);J=np.c_[np.kron(d,np.eye(4)),o.jac];h=np.sum(J*np.linalg.pinv(J).T,axis=1);out.append((np.std(o.fun/np.maximum(.05,1-h)),np.std(o.fun),pw,num,lin,o.x,lambda z,D=D,p=o.x,m=m:D(z,p)@m))\\n return sorted(out,key=lambda v:v[0])\\nif __name__=='__main__':\\n tr=s['train'];X=calibrate(s['panel_a'],tr['x']);Y=np.c_[tr['y'],tr['traj']];ops=[]\\n for k,j in [('panel_b','v'),('panel_c','v1')]:\\n  rr=candidates(s[k]['u'],s[k][j]);print(k,*[v[:-1] for v in rr[:12]],sep='\\\\n',flush=True);ops.append(rr)\\n for b,c in itertools.product(ops[0][:3],ops[1][:3]):\\n  q=c[-1](b[-1](X));A=aff(q); q2=poly(q,2);line=A@ls(A[:52],Y[:52]);quad=q2@ls(q2[:52],Y[:52]);print('endpoint',b[2:5],c[2:5], 'line',np.mean(abs(line[52:]-Y[52:]),axis=0),'quad',np.mean(abs(quad[52:]-Y[52:]),axis=0));print('quad coeff y',ls(q2[:52],Y[:52,0]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared activation with polynomial corrections) → H2 (shared rational response followed by mixing); preliminary 52/20 MAEs remain 0.01793 for y and 0.01299 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the quintic corrections as the forward law\",\n      \"rejected_reason\": \"They fit the panels more closely but can grow rapidly outside the panel range.\"\n    }\n  ],\n  \"rationale\": \"Rank compact rational operators by panel deletion error, then check whether more accurate operators reduce endpoint errors and reveal a sparse readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "075d7f0a1f788659aa289b4f8a011df639bf5e718a1e78d49ac7027e6f6545ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30886.3,
+      "usage_known": true,
+      "prompt_tokens": 37092,
+      "cached_tokens": 12672,
+      "completion_tokens": 1100
+    }
+  ]
+}

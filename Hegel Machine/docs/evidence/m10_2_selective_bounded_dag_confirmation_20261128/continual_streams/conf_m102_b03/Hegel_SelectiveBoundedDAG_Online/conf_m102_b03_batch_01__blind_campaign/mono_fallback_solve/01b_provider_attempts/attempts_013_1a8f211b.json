@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a8f211b795640c38ef5f38605ce88d3",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:08:03.795818+00:00",
+  "ended_at_utc": "2026-11-28T15:08:31.434529+00:00",
+  "request_sha256": "44320b6487a117f9046d5da2b62ef06ed43de63fdac3d00f5f89f9e3c94802b2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44547,
+    "cached_tokens": 12672,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/independent_baseline.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'\\ns=open(p).read().replace('    return pred[:,0],pred[:,1:]@H','''    # The residual after branch fusion is almost rank one. Use the better\\n    # validated scalar forecast to anchor this shared trajectory component.\\n    _, _, _, _, product, cosine = blocks\\n    bilinear = (product[:, :, None] * cosine[:, None, :]).reshape(len(product), -1)\\n    F = _ones(np.c_[product, cosine, bilinear])\\n    Y = np.c_[t['y'][rows], traj]\\n    E = Y - F[:n] @ _ls(F[:n], Y)\\n    _, sig, unit = np.linalg.svd(E, full_matrices=False)\\n    load = unit[0]\\n    if abs(load[0]) > .15 and sig[0] > 5 * sig[1]:\\n        ratio = load[1:] / load[0]\\n        orthogonal = traj - t['y'][rows, None] * ratio\\n        state = F[n:] @ _ls(F[:n], orthogonal) + pred[:, 0, None] * ratio\\n    else:\\n        state = pred[:, 1:] @ H\\n    return pred[:, 0], state''').replace(\\\"t['y'][rows, None]\\\", \\\"t['y'][rows][:, None]\\\")\\nopen(p,'w').write(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; N=len(t['x']); rng=np.random.default_rng(32)\\nfor k,ix in enumerate([np.arange(N),np.r_[np.arange(20,N),np.arange(20)],rng.permutation(N),rng.permutation(N)]):\\n a,b=ix[:52],ix[52:]; y,h=m._predict(s,a,t['x'][b]); e=np.abs(h-t['traj'][b]); print(k,'y MAE',np.mean(abs(y-t['y'][b])),'trajectory MAE',e.mean(),'worst time MAE',e.mean(0).max()); assert np.isfinite(e).all()\\n assert m._predict(s,a,t['x'][b[:1]])[1].shape==(1,len(s['eval_times']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: anchor the shared trajectory correction to the better-predicted scalar response; baseline 52/20 y and trajectory MAE are 0.03071 and 0.04793.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Forecast the shared latent correction with a separate kernel\",\n      \"rejected_reason\": \"The latent kernel's held-out error is larger than the error implied by the scalar forecast and the fitted loading ratio.\"\n    }\n  ],\n  \"rationale\": \"The bilinear residual has a dominant singular value of 5.508 versus 0.0389 for the second. Fit the trajectory component orthogonal to that shared correction on training rows, then reconstruct the correction from predicted—not measured—scalar responses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "cb640610662b365c38a400cab3b48e799d60d5c8020ed9e7c3faf4dc99f2a1a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27637.35,
+      "usage_known": true,
+      "prompt_tokens": 44547,
+      "cached_tokens": 12672,
+      "completion_tokens": 1069
+    }
+  ]
+}

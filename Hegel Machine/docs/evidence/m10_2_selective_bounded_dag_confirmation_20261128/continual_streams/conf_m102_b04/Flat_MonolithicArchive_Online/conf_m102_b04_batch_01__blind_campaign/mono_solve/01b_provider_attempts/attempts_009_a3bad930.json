@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3bad9309cd74512b2e2815844c047cc",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:44.808863+00:00",
+  "ended_at_utc": "2026-11-28T15:04:40.678935+00:00",
+  "request_sha256": "470c0d0356609756bf8f1d950c36551b238545c74ac94b9e3d90531c40de5d26",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62652,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37464,
+    "cached_tokens": 5504,
+    "completion_tokens": 1546
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/skip.py <<'PY'\\nfrom graph import *\\nfrom scipy.optimize import least_squares\\nW={k:Z[k] for k in ('r','a','f','rb','ab','fb')}; W.update({k+'sb':af(soft(W[k],.22))@B for k in ('r','a','f')})\\nK={}\\nfor n,w in W.items():\\n v=soft(w,.35); p=basis(v,3); q=basis(w,3); d=(w*w).sum(1); K[n+'poly']=p@p.T; g=q/(1+.12*d[:,None]); K[n+'rad']=g@g.T\\n g=p/(1+.1*(v[:,0]+v[:,1])[:,None]**2); K[n+'sum']=g@g.T\\n for k in ['v1','v2']:\\n  for b0,z in [('pre',Z[n[0]]),('post',w),('posts',soft(w,.22))]:\\n   c=panel(z,k); F=np.c_[af(c),c*c]; K[n+k+b0]=F@F.T\\n d=((w[:,None]-w[None,:])**2).sum(2)\\n for h in [1,2,4]:K[n+'rbf'+str(h)]=np.exp(-d/h**2)\\n v=soft(w,.22); p=basis(v,3); g=p/(1+.22*(v[:,1]+v[:,2])[:,None]**2); K[n+'tsum']=g@g.T\\n for a,g in [('traw',np.tanh(w)),('tsm',np.tanh(.5*w))]:\\n  F=basis(g,4); K[n+a]=F@F.T\\n\\ndef evalk(K,pen,sp=splits):\\n E=[]\\n for i,j in sp:\\n  m=Y[i].mean(0); P=K[np.ix_(i,i)]+pen*np.eye(len(i)); yp=K[np.ix_(j,i)]@np.linalg.solve(P,Y[i]-m)+m; e=np.abs(yp-Y[j]); E.append([e[:,0].mean(),e[:,1:].mean()]);\\n E=np.array(E); return np.r_[E[0],E[1:].mean(0),E[1:].max(0)]\\nbase={k:v for k,v in K.items() if k.endswith(('poly','rad','sum','traw','tsm','rbf1','rbf2','rbf4'))}; R=[]\\nfor k,v in base.items():\\n n=k.split('poly')[0] if k.endswith('poly') else next(z for z in sorted(W,key=len,reverse=True) if k.startswith(z));\\n extra={k2:v2 for k2,v2 in K.items() if k2.startswith(n+'v')}; extra.update({n+'both'+d:K[n+'v1'+d]+K[n+'v2'+d] for d in ('pre','post','posts')});\\n for l,u0 in [('',0.),*extra.items()]:\\n  for w in ([0.] if not l else [.03,.25,2.]):\\n   for p in [.0003,.003,.025,.12]:R.append((evalk(v+w*u0,p),(k,l,w,p)))\\nfor i,j in [(0,2),(2,4),(4,2),(1,3),(3,5),(5,3)]:\\n print('KERNEL',i,flush=True)\\n for a,k in sorted(R,key=lambda z:z[0][i]+.35*z[0][j])[:10]: print(k,np.round(a,5))\\n_,_,V=np.linalg.svd(T[:52],full_matrices=False)\\nprint('time levels',np.round(V[:3],4)); print('projections',np.std(T@V.T,0));print('mean',T.mean(0));print('corrs PC2',np.corrcoef(np.c_[T@V[:2].T, y, x].T)[1]);\\n# Compare whether rational decline or offset exponential explains the time dependence.\\nfor f in (lambda t,p:1-p[0]*np.exp(-p[1]*t),lambda t,p:1-p[0]/(1+p[1]*t)**p[2],lambda t,p:1-p[0]*np.exp(-p[1]*t)-p[2]*np.exp(-p[3]*t)):\\n q=V[0]/V[0,-1]; r=least_squares(lambda p:f(t,p)/f(t[-1],p)-q,[.95,.8,.5,2]);print('time error',r.x,np.round(r.fun,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/skip.py >/tmp/skip.log; sed -n '/^KERNEL/,$p' /tmp/skip.log\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test parallel panel contributions alongside the B-coordinate rational readout; the denominator grid reached 0.0249 prescribed scalar MAE and 0.0430 best worst-random-split scalar MAE, on different candidates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained denominator direction\",\n      \"rejected_reason\": \"The fitted directions vary across splits and generally predict worse than the simple pairwise-square denominators.\"\n    },\n    {\n      \"option\": \"Treat poor serial panel C predictions as proof that C is inactive\",\n      \"rejected_reason\": \"A parallel contribution could retain information lost when C replaces the upstream coordinates.\"\n    }\n  ],\n  \"rationale\": \"Compare skip-connected panel features with B-only readouts under identical splits and regularization. Check the secondary temporal component separately before finalizing the trajectory estimator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "145822360acfddba8b25624070a6cd6ad144236023ff41ef6314d9d9f77d2425",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56364.56,
+      "usage_known": true,
+      "prompt_tokens": 37464,
+      "cached_tokens": 5504,
+      "completion_tokens": 1546
+    }
+  ]
+}

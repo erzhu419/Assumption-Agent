@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2668a6d35404d9aa253d12446e298a9",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:00:23.712507+00:00",
+  "ended_at_utc": "2026-11-28T16:00:50.142032+00:00",
+  "request_sha256": "cc0da30dd777f3d287203f2386ace6fa73a88398a206f1b3ff1fb8f9e8b778e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63511,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37278,
+    "cached_tokens": 12672,
+    "completion_tokens": 1087
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/conf_m102_b02_batch_05_solver.py /holdout_task/batch_solver.py; export OPENBLAS_NUM_THREADS=1; python3 /holdout_task/validate_public_schema.py; python3 /tmp/probe.py | sed -n '/panel_b/,$p'; cat > /tmp/links.py <<'PY'\\nfrom sparse_heads import *\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\ntr=s['train']; z,b,c,d=coords(s,tr['x']); z,b=old.parts(s); z=z[:72]; b=b[:72]; f=old.times(s); T=tr['traj']; y=tr['y']; shape=np.linalg.svd(T,full_matrices=False)[2][0]; target=np.c_[y,(T@shape)*shape[-1]]; rng=np.random.default_rng(31); splits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(3))];\\nfor a,i in splits:\\n X=np.c_[z,b]; R=np.column_stack([z[:,j]*z[:,(j+1)%4] for j in range(4)]); S=np.column_stack([b[:,j]*b[:,(j+1)%4] for j in range(4)]); Y=target; grades=[]\\n for name,H in [('zb',X),('zbc',np.c_[X,c]),('zbd',np.c_[X,d]),('zbRS',np.c_[X,R,S])]:\\n  H=H/np.maximum(H[a].std(0),.05); P=D(H); Pi=np.linalg.pinv(P[a]); res=Y[a]-P[a]@(Pi@Y[a]);\\n  for typ,fun in [('tanh',np.tanh),('sin',np.sin),('rat',lambda v:v/(1+v*v))]:\\n   for m in [1,2,3,4]:\\n    outs=[]\\n    for k in range(2):\\n     best=None; yy=Y[:,k]; ini=Pi@yy[a];\\n     def make(p,ii):\\n      w=p.reshape(m,-1); return P[ii]@ini+fun(P[ii]@w[:,:-1].T)@w[:,-1]\\n     for j in range(5):\\n      init=rng.normal(0,.3,(m,P.shape[1]+1)); init[:,-1]=.5\\n      if j==0:init[0,:-1]=ini*.7\\n      def err(p):\\n       raw=make(p,a)-yy[a]; return np.r_[raw,.045*p]\\n      sol=least_squares(err,init.ravel(),max_nfev=100,ftol=.0001)\\n      if best is None or sol.cost<best.cost:best=sol\\n     outs.append((np.mean(abs(make(best.x,i)-yy[i])),np.sqrt(2*best.cost/52)))\\n    grades.append((name,typ,m,np.round(outs,4)))\\n print('FIT/VAL',[(n,t,m,g.tolist()) for n,t,m,g in sorted(grades,key=lambda q:q[3][:,1].sum())[:8]],flush=True);print('VAL',[(n,t,m,g.tolist()) for n,t,m,g in sorted(grades,key=lambda q:q[3][:,0].sum())[:8]],flush=True)\\nPY\\npython3 /tmp/links.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: sparse coordinate-level features -> H2: nonlinear functions of learned mixed coordinates; best fixed-split MAEs remain 0.07466 for y and 0.04627 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a complete fallback solver now, then test whether a small number of learned projections account for the nonlinear residuals across several splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b9f26602de95f0d6fb990a58937ba012f49b4e70384ac78d39b3aa24c1932d9e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26896.81,
+      "usage_known": true,
+      "prompt_tokens": 37278,
+      "cached_tokens": 12672,
+      "completion_tokens": 1087
+    }
+  ]
+}

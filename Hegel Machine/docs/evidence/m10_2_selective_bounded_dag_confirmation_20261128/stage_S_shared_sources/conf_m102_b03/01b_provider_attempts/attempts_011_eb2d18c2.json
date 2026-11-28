@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb2d18c29c424e3a925457ffd6a9ca6c",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:56:28.772602+00:00",
+  "ended_at_utc": "2026-11-28T14:57:11.068506+00:00",
+  "request_sha256": "2691530b5ce56875c2039e9566f49a04ff7236ba0ffb0a00b9f8eb491de4f323",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45004,
+    "cached_tokens": 12672,
+    "completion_tokens": 1803
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit the calibrated two-branch response and two-mode trajectory.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ones(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _align(panel):\\n    u, v = panel['u'], panel['v']\\n    # Median of pairwise slopes, followed by inlier least squares.\\n    i, j = np.triu_indices(len(u), 1)\\n    dx, dy = u[i] - u[j], v[i] - v[j]\\n    result = []\\n    for k in range(u.shape[1]):\\n        valid = abs(dx[:, k]) > 1e-8\\n        slope = np.median(dy[valid, k] / dx[valid, k])\\n        r = v[:, k] - u[:, k] * slope\\n        r -= np.median(r)\\n        good = abs(r) <= max(.001, 5 * np.median(abs(r)))\\n        result.append(_ls(_ones(u[good, k:k+1]), v[good, k]))\\n    return np.asarray(result).T\\n\\n\\ndef _branch(panel, x, k):\\n    u, v = panel['u'], panel['v'+str(k)]\\n    if k == 1:\\n        def features(z, p):\\n            w = p[0]*z + p[1:]\\n            return _ones(np.c_[z, w/(1+abs(w))])\\n        start = [.84, 0., 0., 0., 0.]\\n    else:\\n        def features(z, p):\\n            return _ones(np.c_[z, np.cos(p[0]*z+p[1:])])\\n        start = [1.27, 0., 0., 0., 0.]\\n    def residual(p):\\n        d = features(u, p)\\n        return (d @ _ls(d, v) - v).ravel()\\n    p = least_squares(residual, start, max_nfev=150).x\\n    return features(x, p) @ _ls(features(u, p), v)\\n\\n\\ndef _predict(study, rows, xnew):\\n    train = study['train']\\n    xold = train['x'][rows]\\n    n = len(xold)\\n    a, b = _align(study['panel_a'])\\n    z = (np.vstack((xold, xnew)) - a) / b\\n    c, d = (_branch(study['panel_c'], z, k) for k in (1,2))\\n    dot = np.sum(c*d, axis=1)\\n    sy = _ones(np.c_[d, c, dot])\\n    syhat = sy[n:] @ _ls(sy[:n], train['y'][rows])\\n    ts = np.asarray(study['eval_times'])\\n    trajectories = train['traj'][rows]\\n    def basis(p):\\n        return -np.expm1(-ts[:, None]*p)\\n    def time_residual(p):\\n        h = basis(p)\\n        return (h @ _ls(h, trajectories.T) - trajectories.T).ravel()\\n    h = basis(least_squares(time_residual, [1.8,.4], bounds=([1.,.1],[3.,.95])).x)\\n    cross = (d[:,:,None]*c[:,None,:]).reshape(len(z), -1)\\n    st = _ones(np.c_[d,c,cross])\\n    return syhat, st[n:] @ _ls(st[:n], trajectories) @ np.linalg.pinv(h.T) @ h.T\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    y, state = _predict(study, slice(None), study['test']['x'])\\n    terminal = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), terminal.mean(), terminal.std()])}\\nPY\\ncat >/tmp/verify_batch.py <<'PY'\\nimport sys,pickle\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _predict,solve_batch,_align,_branch,_ones,_ls\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']\\na,b=_align(s['panel_a']); z=(x-a)/b; c,d=(_branch(s['panel_c'],z,k) for k in (1,2)); h=-np.expm1(-s['eval_times'][:,None]*[1.8,.4]); L=_ls(h,t.T).T; G=_ones(np.c_[d,c,(d[:,:,None]*c[:,None,:]).reshape(len(z),-1)]); coeff=_ls(G,L); print('mode linear',np.round(coeff[:9],4),'cross',np.round(coeff[9:].T.reshape(2,4,4),4));\\nfor label,ids in [('required',np.arange(52,72))]+[(f'fold{k}',a) for k,a in enumerate(np.array_split(np.random.default_rng(7).permutation(len(x)),4))]+[(f'axis{k}{q}',v) for k in range(4) for q,v in [('low',np.argsort(x[:,k])[:12]),('high',np.argsort(x[:,k])[-12:])]]:\\n tr=np.setdiff1d(np.arange(len(x)),ids); p,h=_predict(s,tr,x[ids]); ey=np.abs(p-y[ids]); et=np.abs(h-t[ids]); print(label,'y',ey.mean(),'state',np.round(et.mean(0),5));\\n if label=='required': assert ey.mean()<=.038\\nout=solve_batch(s); assert all(np.isfinite(v).all() for v in out.values()); print({k:v.shape for k,v in out.items()},out['diagnostics_vec'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py && python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent branch readouts → H2 shared bilinear scalar fusion and two bilinear state modes; previous holdout MAEs were 0.0053 for the scalar and 0.00494 at the worst state timestamp.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\",\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Use matched products for both state modes\",\"rejected_reason\":\"The restricted state readout missed a cross-coordinate interaction and produced a worst-time holdout MAE near 0.10.\"}],\"rationale\":\"Save a standalone solver with calibrated C branches, symmetric scalar fusion, and a separately fitted trajectory readout. Verify the exact artifact on the required holdout, random folds, and coordinate tails.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cfa3b3da811cecd7a7e0fec8c4718d025978999bc5ac9ff165eebcac392bbe7e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42294.73,
+      "usage_known": true,
+      "prompt_tokens": 45004,
+      "cached_tokens": 12672,
+      "completion_tokens": 1803
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0240c1ffc004cd2b38d4f43fc59a885",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:42:32.486760+00:00",
+  "ended_at_utc": "2026-11-28T15:43:06.644699+00:00",
+  "request_sha256": "0947e6427ab628f6495f9d34d8f010d41b6fb7662925ef8cd75ffe3be9ca150f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31956,
+    "cached_tokens": 12672,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/stages.py <<'PY'\\nimport numpy as np,pickle,itertools as it\\nfrom scipy.optimize import root,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; A,B,C=[s['panel_'+k] for k in 'abc']; tr=s['train']; x=tr['x']; Y=np.c_[tr['y'],tr['traj']]; t=s['eval_times']; LS=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(u,d):return np.column_stack([np.prod(u[:,k],axis=1) for i in range(1,d+1) for k in it.combinations_with_replacement(range(u.shape[1]),i)])\\ndef dead(u,p=(.35,1.5)):return np.sign(u)*np.maximum(abs(u)-p[0],0)**p[1]\\ndef cp(u):return np.column_stack([u[:,i]*u[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]])\\ndef ab(u):return np.stack([np.ones_like(u),u,np.tanh(1.8*u),np.sin(2.4*np.roll(u,2,axis=-1))],-1)\\nm=np.linalg.norm(A['v'],axis=1)<7; d=ab(A['u']); ka=np.array([LS(d[m,j],A['v'][m,j]) for j in range(4)])\\ndef inv(x):return np.array([root(lambda u:(ab(u)*ka).sum(-1)-r,r,tol=1e-10).x for r in x])\\nkb=LS(aff(dead(B['u'])),B['v']); kc=LS(aff(cp(C['u'])),C['v1']); k2=LS(aff(poly(C['u'],2)),C['v2'])\\ndef b(z):return aff(dead(z))@kb\\ndef c(w):return aff(cp(w))@kc\\ndef c2(w):return aff(poly(w,2))@k2\\nz=inv(x);w=b(z);q=c(w);r=c2(w)\\ndef err(d):\\n pred=d[52:]@LS(d[:52],Y[:52]); e=np.abs(pred-Y[52:]); E=np.sqrt(np.mean((d[:52]@LS(d[:52],Y[:52])-Y[:52])**2,axis=0));return np.round([e[:,0].mean(),e[:,1:].mean(),E[0],E[1:].mean()],4)\\nif __name__=='__main__':\\n np.set_printoptions(precision=4,suppress=True);print('t',t,'k2',k2,'w/q/r range',np.max(abs(w),axis=0),np.max(abs(q),axis=0),np.max(abs(r),axis=0));\\n for k,h in [('z',z),('w',w),('q',q),('r',r),('qc',np.c_[q,r]),('bh',dead(z)),('cross',cp(w)),('zq',np.c_[z,q]),('qboth',np.c_[q,c(w*1.25),c(w/1.25)])]:\\n  print(k,err(aff(h)),err(aff(poly(h,2))) if h.shape[1]<7 else '')\\n for k,d in [('w',w),('r',r),('z',z),('q',q)]:\\n  for fun in [lambda d:d,lambda d:np.tanh(2.15*d),lambda d:np.arcsinh(2.15*d),lambda d:d/(1+.22*d*d),lambda d:d/(1+1.25*d*d)]:\\n   h=fun(d);print(k,err(aff(h)),err(aff(np.c_[h,q])),err(aff(poly(h,2))))\\n print('readout coefficients',LS(aff(q[:52]),Y[:52])); print('temporal error with exp modes');\\n for a,b0 in [(2.15,1.25),(2.15,.22),(1.25,.22),(2.15,1.25)]:\\n  for d in [np.c_[-np.expm1(-a*t),-np.expm1(-b0*t)],np.c_[-np.expm1(-a*t),t*np.exp(-b0*t)],np.c_[-np.expm1(-a*t),np.sin(b0*t)*np.exp(-.22*t)]]:\\n   print(a,b0,np.sqrt(np.mean((d@LS(d,Y[:,1:].T)-Y[:,1:].T)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/stages.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate calibration obscures the forward law -> H2 invert the independently verified nonlinear calibration and compare active C branches; best approximate cascade 52/20 MAEs were 0.0767 for y and 0.0897 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine calibration is adequate for the operator cascade.\",\"empirical_witness\":\"The affine calibration has median row error 0.214, whereas adding the diagonal tanh and opposite-coordinate sine terms yields per-output leave-one-out RMSE between 0.000086 and 0.000109.\",\"causal_blanket_diagnosis\":\"The calibration error enters upstream of the dead-zone and pair products and can change both their amplitudes and activation patterns.\",\"sublated_pivot\":\"Keep the independently verified dead-zone and pair-product operators and replace the affine inverse with the nonlinear calibration inverse.\",\"risk_kind\":\"upstream_nonlinear_calibration\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Localize any remaining prediction error after exact calibration by checking each branch, their combination, and the shared temporal modes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "76f7bc3e2cdba9ff80bbf600071084541d411bdd7a2cfc5b307f418d9ebf455c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34156.75,
+      "usage_known": true,
+      "prompt_tokens": 31956,
+      "cached_tokens": 12672,
+      "completion_tokens": 1434
+    }
+  ]
+}

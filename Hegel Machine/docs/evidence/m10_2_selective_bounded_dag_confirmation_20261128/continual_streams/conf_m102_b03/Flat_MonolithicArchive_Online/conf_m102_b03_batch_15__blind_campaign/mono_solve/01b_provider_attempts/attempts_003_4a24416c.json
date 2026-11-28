@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4a24416c626944159c9abcf1900d1dde",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:01:19.244754+00:00",
+  "ended_at_utc": "2026-11-28T16:01:38.588283+00:00",
+  "request_sha256": "8f3ef3b42110ade6b039a84e4fad651d22e387e2ec669861462b8df596cb1879",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21831,
+    "cached_tokens": 12672,
+    "completion_tokens": 747
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np,glob,importlib.util\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; T=tr['traj']; print('times/telemetry',s['eval_times'], s['telemetry_vec'],'trajectory sv',np.linalg.svd(T,compute_uv=False))\\nc={**s,'train':{k:v[:52] if k!='summary' else np.array([tr['y'][:52].mean(),tr['y'][:52].std(),T[:52,-1].mean(),T[:52,-1].std()]) for k,v in tr.items()},'test':{'x':tr['x'][52:]}}\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n sp=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\n try:\\n  p=m.solve_batch(c); print(f.split('_')[-2],*[np.mean(np.abs(p[k]-a[52:])) for k,a in [('y_hat',tr['y']),('state_pred',T)]])\\n except Exception as e:print(f,type(e).__name__,e)\\nfor key in ['panel_a','panel_b','panel_c']:\\n p=s[key]; u=p['u']; print(key)\\n for k,v in p.items():\\n  if k=='u':continue\\n  for a in [np.c_[np.ones(len(u)),u],np.c_[np.ones(len(u)),u,u*u],np.c_[np.ones(len(u)),u,np.tanh(1.8*u),np.sin(2.4*u)]]:\\n   e=np.abs(a@np.linalg.lstsq(a,v,rcond=None)[0]-v);print(k,a.shape[1],np.quantile(e,[.1,.5,.9,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py; for b in 00 03 04 05 08 10 11 12 13; do f=/tmp/hegel_continual_archive/conf_m102_b03_batch_${b}_solver.py; echo ==== $b; grep -En 'def |telemetry|panel_|expm1|roll\\\\(|\\\\*\\\\*|fast|slow' \\\"$f\\\"; done\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unmodified archive reuse -> H2 identify transferable calibration, operator, and dynamics modules; pre-LLM gate MAE was 0.147772 for y and 0.100459 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Assume panel C is active because the latest archived solver uses it\",\"rejected_reason\":\"Panel activity must be inferred on this campaign, not inherited from archive order.\"}],\"rationale\":\"Score every archived solver on the prescribed split and inspect panel fit residuals and trajectory rank to isolate the components worth retaining.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1e0efab095aef1fe1462d054a55abe46a1df083c5b770b0a8746d40afcc2c55f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19938.05,
+      "usage_known": true,
+      "prompt_tokens": 21831,
+      "cached_tokens": 12672,
+      "completion_tokens": 747
+    }
+  ]
+}

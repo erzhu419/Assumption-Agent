@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afef3c65ff604639ac02b530c079ac74",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:31.181639+00:00",
+  "ended_at_utc": "2026-11-28T15:11:00.150559+00:00",
+  "request_sha256": "4ad1fd680f89e4d05850c72026b22d0438a38db30cc413c43e061058ef2de21d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21932,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22041,
+    "cached_tokens": 12672,
+    "completion_tokens": 1168
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/*_01_solver.py /tmp/hegel_continual_archive/*_03_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation'; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,glob,importlib.util\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; d=s['train']; x=d['x']; t=s['eval_times']; T=d['traj']; print('times',t)\\ndef lin(x,y):return np.linalg.lstsq(x,y,rcond=1e-10)[0]\\ndef tb(r):return -np.expm1(-t[:,None]*r)\\nf=least_squares(lambda r:(tb(r)@lin(tb(r),T.T)-T.T).ravel(),[.4,1.8],bounds=([.01,.7],[.8,7])); A=lin(tb(f.x),T.T).T; print('rates',f.x,'traj MAE',abs(tb(f.x)@A.T-T.T).mean(),'ampl std',A.std(0))\\nfor p in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  spec=importlib.util.spec_from_file_location('archive',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); q=dict(s,train={k:v[:52] if k!='summary' else np.array([d['y'][:52].mean(),d['y'][:52].std(),T[:52,-1].mean(),T[:52,-1].std()]) for k,v in d.items()},test={'x':x[52:]}); out=m.solve_batch(q); print('archive',p,[abs(out[k]-a).mean() for k,a in zip(['y_hat','state_pred'],[d['y'][52:],T[52:]])]); print('funcs',[k for k in vars(m) if not k.startswith('__')])\\n except Exception as e:print(p,repr(e))\\np=s['panel_a']; u=p['u']; v=p['v']; O=np.c_[np.ones(len(u)),u]; keep=np.ones(len(u),bool)\\nfor _ in range(6):\\n W=lin(O[keep],v[keep]); r=np.linalg.norm(O@W-v,axis=1); keep=r<=max(np.median(r)*4,.0008)\\nprint('alignment',W,'kept',keep.sum(),'max res',max(r[keep])); z=(x-W[0])@np.linalg.inv(W[1:]); p=s['panel_b']; B=lin(np.c_[np.ones(len(p['u'])),p['u']],p['v']); w=B[0]+z@B[1:]; wi=(z-B[0])@np.linalg.inv(B[1:]); print('ranges',[(a.min(0),a.max(0)) for a in [z,w,wi]])\\nY=np.c_[d['y'],A]; print('ampl first',Y[:8]); print('raw correlations',np.corrcoef(np.c_[z,w,Y].T)[-3:,:-3]);\\nfor name,a in [('z',z),('w',w),('wi',wi),('raw',x),('ampl',A)]:\\n for deg in [1,2,3]:\\n  D=PolynomialFeatures(deg).fit_transform(a); yh=D@lin(D[:52],Y[:52]); print(name,deg,'train',abs(yh[:52]-Y[:52]).mean(0),'valid',abs(yh[52:]-Y[52:]).mean(0),'traj',abs(yh[52:,1:]@tb(f.x).T-T[52:]).mean())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test robust affine calibration and the panel B operator against a shared two-rate trajectory model; the baseline 52/20 MAEs are 0.482191 for y and 0.402336 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit eight independent trajectory regressions\",\n      \"rejected_reason\": \"The first two singular values are 26.37 and 2.55, while the third is 0.055; a shared time basis is better supported by the observed trajectories.\"\n    }\n  ],\n  \"rationale\": \"Recover the two trajectory amplitudes and test low-degree descriptions in calibrated and operator coordinates. Compare on the specified split to separate errors in the time basis from errors in the input-to-amplitude map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "df0716534a466dcca0f3e5ac6e50d5620f6044ddba476561a6230fa058e7d01c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29526.01,
+      "usage_known": true,
+      "prompt_tokens": 22041,
+      "cached_tokens": 12672,
+      "completion_tokens": 1168
+    }
+  ]
+}

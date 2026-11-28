@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc5af48cd9f644dbbffbb17de8026200",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_15__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_15__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:55:03.986884+00:00",
+  "ended_at_utc": "2026-11-28T15:55:37.740245+00:00",
+  "request_sha256": "cc2addd312eca7d695ac06f05a5b36855d6f11db100a5c6bb87273fce44879cc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48718,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32497,
+    "cached_tokens": 12672,
+    "completion_tokens": 1472
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m15.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; ix,iy=np.triu_indices(4,1)\\ndef ls(a,y):return np.linalg.lstsq(a,y,rcond=1e-10)[0]\\ndef one(x):return np.c_[np.ones(len(x)),x]\\ndef cal(p,x):\\n u,v=p['u'],p['v']; m=np.linalg.norm(v,axis=1)<5\\n def a(z):\\n  b=np.roll(z,-1,axis=1); return np.stack([np.ones_like(z),z,b,z*b,z**3],axis=-1)\\n f=a(u); w=np.array([ls(f[m,j],v[m,j]) for j in range(4)]);return np.array([least_squares(lambda z:(a(z[None])[0]*w).sum(-1)-r,r,gtol=1e-12).x for r in x])\\ndef prof(f,u,v,q,bounds=(.01,7)):\\n def obj(q):\\n  a=one(f(u,q));return (a@ls(a,v)-v).ravel()\\n q=least_squares(obj,q,bounds=bounds,gtol=1e-12,max_nfev=250).x\\n return q,ls(one(f(u,q)),v),np.std(obj(q))\\nfs={'sin+tanh':(lambda x,q:np.c_[np.tanh(q[0]*x),np.sin(q[1]*x)],[3.3,1.1]),'lin+sin+tanh':(lambda x,q:np.c_[x,np.tanh(q[0]*x),np.sin(q[1]*x)],[3.3,2.1]),'softsign':(lambda x,q:x/(1+q[0]*abs(x))+q[1]*x,[1.,.01]),'tanh+rat':(lambda x,q:np.c_[np.tanh(q[0]*x),x/(1+q[1]*x*x)],[2.,1.]),'softsign+sin':(lambda x,q:np.c_[x/(1+q[0]*abs(x)),np.sin(q[1]*x)],[1.2,1.4]),'tanh+sin+softsign':(lambda x,q:np.c_[np.tanh(q[0]*x),np.sin(q[1]*x),x/(1+q[2]*abs(x))],[2.,2.,1.])}\\nf2=lambda x,q:np.c_[x,np.tanh(q[0]*x),x[:,ix]*x[:,iy]]\\ndef features(s,z,key='sin+tanh'):\\n p=s['panel_c'];u=p['u'];f,q=fs[key];q,w,e=prof(f,u,p['v1'],q);g=one(f(z,q))@w\\n r,v,d=prof(f2,u,p['v2'],[1.2]);h=one(f2(z,r))@v\\n p=s['panel_b'];b=one(z)@ls(one(p['u']),p['v']);return g,h,b,(q,e,r,d,w,v)\\ndef time(t,r):return -np.expm1(-t[:,None]*r)\\nif __name__=='__main__':\\n tr=s['train'];n=52; z=cal(s['panel_a'],np.vstack([tr['x'],s['test']['x']]));print('ranges',np.min(z,0),np.max(z,0));t=s['eval_times'];tb=time(t,[.42,1.82]); amp=ls(tb,tr['traj'].T).T;y=tr['y'];\\n for k in fs:\\n  g,h,b,d=features(s,z,k);print(k,d[:4]);\\n  if k in ['sin+tanh','lin+sin+tanh']:print('w1',np.round(d[4],4),'w2',np.round(d[5],4))\\n  dots=lambda a,c:np.sum(a*c,axis=1,keepdims=True)\\n  outer=lambda a,c:(a[:,:,None]*c[:,None,:]).reshape(len(a),-1)\\n  for name,items in {'z':[z],'gh':[g,h],'ghb':[g,h,b],'diag':[g,h,g*h],'dot':[g,h,dots(g,h)],'cross':[g,h,outer(g,h)],'mix':[z,g,h,b,g*h,g*b,h*b],'poly':[z,outer(z,z)],'prod':[g,h,b,outer(g,h),outer(g,b),outer(h,b)],'sq':[g,h,g*h,g*g,h*h], 'norm':[g,h,dots(g,h),dots(g,g),dots(h,h)]}.items():\\n   A=one(np.column_stack(items));w=ls(A[:n],np.c_[y,amp][:n]);out=A[n:72]@w; er=np.mean(abs(out[:,0]-y[n:])); et=np.mean(abs(out[:,1:]@tb.T-tr['traj'][n:])); fit=np.mean(abs(A[:n]@w-np.c_[y,amp][:n]),0); print(name,round(er,5),round(et,5),np.round(fit,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m15.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archive-wide transfer -> H2 compose the recovered cyclic calibration and two-mode dynamics with independently fitted spatial operators; current best end-to-end MAEs are 0.105787 scalar and 0.065061 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a full cubic calibration fit\",\"rejected_reason\":\"The fitted coefficients isolate a sparse cyclic map whose residual SD of 0.0000875 is already near panel noise.\"}],\"rationale\":\"The calibration and temporal bases are now supported independently. Compare readouts built from exact cyclic inversion, signed and curved auxiliary maps, and bilinear interactions to find which remaining stage limits validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d85c5f75c9ccf432479574fac049a253c6ce5885855c948103127b3533409ba8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34533.58,
+      "usage_known": true,
+      "prompt_tokens": 32497,
+      "cached_tokens": 12672,
+      "completion_tokens": 1472
+    }
+  ]
+}

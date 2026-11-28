@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "404b47e35c54441083d4481ca6ad2d76",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Flat_MonolithicArchive_Online__conf_m102_a04_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:48:03.191859+00:00",
+  "ended_at_utc": "2026-11-28T15:48:43.117306+00:00",
+  "request_sha256": "bcf1916fa53fdc176213f323bb2b67c36eb45124a11d262d3c8b3c5611b239c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30851,
+    "cached_tokens": 12672,
+    "completion_tokens": 1779
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/discover.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef one(u):return np.c_[np.ones(len(u)),u]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nix,jx=np.triu_indices(4,1)\\ndef prod(u):return u[:,ix]*u[:,jx]\\ndef prof(fn,u,v,q,bounds):\\n def r(q):\\n  f=fn(u,q); return (f@ls(f,v)-v).ravel()\\n q=least_squares(r,q,bounds=bounds,gtol=1e-12).x\\n return q,ls(fn(u,q),v),np.std(r(q))\\ndef base(s,x):\\n p=s['panel_a'];keep=np.linalg.norm(p['v'],axis=1)<4;u,v=p['u'][keep],p['v'][keep]\\n def f(u,q):return np.stack([np.ones_like(u),u,np.tanh(q[0]*u),np.sin(q[1]*np.roll(u,2,axis=-1))],-1)\\n def fit(q):\\n  a=f(u,q);w=np.array([ls(a[:,i],v[:,i]) for i in range(4)]);return w,(a*w).sum(-1)-v\\n q=least_squares(lambda q:fit(q)[1].ravel(),[1.8,2.4],gtol=1e-12).x;w,r=fit(q)\\n z=np.array([least_squares(lambda z:(f(z,q)*w).sum(-1)-row,(row-w[:,0])/(w[:,1]+w[:,2]),gtol=1e-12).x for row in x]);print('calibration',q,'error',r.std(),'weights',w,'z range',z.min(),z.max());return z\\np=s['panel_c'];u=p['u'];z=base(s,np.r_[s['train']['x'],s['test']['x']]);v=p['v1'];hfn=lambda w,q:one(np.c_[w,np.tanh(q[0]*w),prod(w)])\\nq,w,r=prof(hfn,u,p['v2'],[1.2],(.3,4));print('H',q,r,np.around(w,5));h=hfn(z,q)@w\\nb=one(z)@ls(one(s['panel_b']['u']),s['panel_b']['v'])\\nopts={\\n 'soft+linear':(lambda x,q:one(np.c_[x,x/(1+q[0]*abs(x))]),[.8],(.01,7)),\\n 'softmix':(lambda x,q:one(x/(1+q[0]*abs(x))+q[1]*x),[.8,.03],([.01,-1],[7,1])),\\n 'tanh+linear':(lambda x,q:one(np.c_[x,np.tanh(q[0]*x)]),[1.7],(.1,5)),\\n 'tanh+linear+p':(lambda x,q:one(np.c_[x,np.tanh(q[0]*x),prod(x)]),[1.7],(.1,5)),\\n 'tanh+p':(lambda x,q:one(np.c_[np.tanh(q[0]*x),prod(x)]),[1.7],(.1,5)),\\n 'tanh+sat':(lambda x,q:one(np.c_[np.tanh(q[0]*x),x/(1+q[1]*abs(x))]),[1.7,.7],([.1,.01],[6,6])),\\n 'tanh+sin':(lambda x,q:one(np.c_[np.tanh(q[0]*x),np.sin(q[1]*x)]),[1.7,2.4],(.1,6)),\\n 'rat+p':(lambda x,q:one(np.c_[x,x/(1+(q[0]*x)**2),prod(x)]),[1.2],(.1,5)),\\n 'tanh+linear+cube':(lambda x,q:one(np.c_[x,np.tanh(q[0]*x),x**3]),[1.7],(.1,5)),\\n }\\nY=np.c_[s['train']['y'],s['train']['traj']];res=[]\\nfor name,(fn,q0,bd) in opts.items():\\n q,w,r=prof(fn,u,v,q0,bd);g=fn(z,q)@w;print('G',name,q,r)\\n if name in ['soft+linear','tanh+linear','tanh+p']:print(np.around(w,4))\\n for n,a in {'gh':np.c_[g,h], 'bgh':np.c_[b,g,h], 'bh':np.c_[b,h],'bg':np.c_[b,g]}.items():\\n  for nn,f in {'linear':a,'dot':np.c_[a,(g*h).sum(1)],'diag':np.c_[a,g*h],'cross':np.c_[a,cross(g,h)],'all':np.c_[a,cross(a,a)[:,np.triu_indices(a.shape[1])[0]*a.shape[1]+np.triu_indices(a.shape[1])[1]]], 'binter':np.c_[a,cross(b,g),cross(b,h)],'bxg':np.c_[a,cross(b,g)],'bxh':np.c_[a,cross(b,h)]}.items():\\n   f=one((f-f[:52].mean(0))/np.maximum(f[:52].std(0),1e-8));f0=f[:52]\\n   for reg in [0,.001,.03,.3]:\\n    coef=ls(f0,Y[:52]) if reg==0 else np.linalg.solve(f0.T@f0+reg*np.eye(f.shape[1]),f0.T@Y[:52]);err=np.abs(f[52:72]@coef-Y[52:]);res.append((err[:,0].mean(),err[:,1:].mean(),name,n,nn,reg))\\nfor k in [0,1]: print('TOP',k,*sorted(res,key=lambda x:x[k])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/discover.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived graph transfer → H2 tanh–sine calibration and independently identified operators; best archived 52/20 MAEs remain 0.1139 for y and 0.1296 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use raw coordinates and a flexible regressor\",\n      \"rejected_reason\": \"The tanh–sine calibration explains the reference panel to roughly 0.00010 residual SD and provides coordinates for testing structured readouts.\"\n    }\n  ],\n  \"rationale\": \"Use the recovered calibration and near-noise-level v2 operator to test whether v1 and the affine panel improve each output separately on the specified split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8b09648a05bdb86922ca2ffb52fdda5389e48e2f89dabef4becb93c9c8c40f04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40924.98,
+      "usage_known": true,
+      "prompt_tokens": 30851,
+      "cached_tokens": 12672,
+      "completion_tokens": 1779
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b244c57b366418e80754ca136a78f57",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:37:21.637823+00:00",
+  "ended_at_utc": "2026-11-28T15:37:59.320084+00:00",
+  "request_sha256": "08f1750c7c2f382ce187fcbc988f99d7b9e7973855bc739002ddbbe414365e14",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32095,
+    "cached_tokens": 12672,
+    "completion_tokens": 1642
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/recover.py <<'PY'\\nfrom explore import s,t,x,y,P,aff,ls,poly\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar, root\\nA=s['panel_a']; U,V=A['u'],A['v']; O=np.roll(U,2,axis=1)\\nfs={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'asinh':np.arcsinh,'soft':lambda x:x/np.sqrt(1+x*x),'rat':lambda x:x/(1+x*x)}\\ndef calib(name1,name2,kind):\\n f,g=fs[name1],fs[name2]; keep=np.full((48,4),True)\\n def basis(u,p,j):\\n  q,r=u[:,j],u[:,(j+2)%4]; extra=[r] if kind else [];return aff(np.c_[q,*extra,f(p[0]*q),g(p[1]*r)])\\n def ev(p,get=False):\\n  ds=[basis(U,p,j) for j in range(4)]; ws=[ls(d[k],v[k]) for d,k,v in zip(ds,keep.T,V.T)]; err=np.array([d@w-v for d,w,v in zip(ds,ws,V.T)]).T;return (ws,err) if get else err[keep]\\n p=np.array([1.,2.15]);\\n for it in range(8):\\n  if it==0:\\n   _,e=ev(p,True); keep=np.abs(e)<=np.sort(abs(e),axis=0)[38]\\n  p=least_squares(ev,p,bounds=(.15,6),max_nfev=80).x; ws,e=ev(p,True); keep=np.abs(e)<=np.sort(abs(e),axis=0)[39]\\n score=np.sqrt(np.mean(e[keep]**2)); return score,p,np.array(ws),basis,e\\n\\ndef getcoords(xx, verbose=False):\\n rr=sorted([(calib(a,b,k),a,b,k) for a in fs for b in fs for k in [0,1]],key=lambda r:r[0][0]);\\n if verbose:\\n  for (e,p,ws,_,_),a,b,k in rr[:12]:print('A',e,a,b,k,p,ws.round(5))\\n (err,p,ws,f,e),a,b,k=rr[0]; z=np.array([root(lambda q:np.array([f(q[None],p,j)[0]@ws[j] for j in range(4)])-r,r,tol=1e-10).x for r in xx]);\\n b=s['panel_b'];w=aff(z)@ls(aff(b['u']),b['v']); c=s['panel_c'];u=c['u']; res={}\\n for key in ['v1','v2']:\\n  v=c[key]; scores=[]\\n  for nm,g in {**fs,'sq':lambda x:x*x,'cos':np.cos,'exp':lambda x:-np.expm1(-x*x),'log':lambda x:np.log1p(x*x)}.items():\\n   for kind in [0,1,2]:\\n    def basis(x,p):return aff(np.c_[x,g(p*x)]) if kind==0 else (aff(g(p*x)) if kind==1 else aff(np.c_[x,g(p*x),x*x]))\\n    def loss(p):\\n     d=basis(u,p); pi=np.linalg.pinv(d); r=(d@(pi@v)-v)/(1-np.sum(d*pi.T,axis=1))[:,None];return np.mean(r*r)**.5\\n    p=minimize_scalar(loss,bounds=(.08,6),method='bounded').x;scores.append((loss(p),nm,kind,p))\\n  scores.sort();\\n  if verbose:print(key,scores[:12]);\\n  _,nm,kind,p=scores[0];g={**fs,'sq':lambda x:x*x,'cos':np.cos,'exp':lambda x:-np.expm1(-x*x),'log':lambda x:np.log1p(x*x)}[nm];\\n  d=lambda x:aff(np.c_[x,g(p*x)]) if kind==0 else (aff(g(p*x)) if kind==1 else aff(np.c_[x,g(p*x),x*x])); cf=ls(d(u),v); res[key]=lambda x,d=d,cf=cf:d(x)@cf\\n  if verbose:print('C coef',cf.round(4));\\n return z,w,res\\nif __name__=='__main__':\\n z,w,f=getcoords(x,True); print('ranges',z.min(0),z.max(0),w.min(0),w.max(0)); Z={'x':x,'z':z,'w':w};\\n for n,q in list(Z.items()):\\n  Z[n+'1']=f['v1'](q);Z[n+'2']=f['v2'](q)\\n np.savez('/tmp/coords.npz',**Z); T=np.c_[y,P];\\n for n,q in Z.items():\\n  for nm,F in [('aff',q),('poly',poly(q,2)),('pair',np.c_[q,q*np.roll(z,1,axis=1),q*np.roll(z,-1,axis=1)]),('add',np.c_[q,w]),('dual',np.c_[q,Z.get(n[:-1]+('2' if n.endswith('1') else '1'),z)])]:\\n   d=aff(F); r=d@ls(d[:52],T[:52])-T; print(n,nm,np.round([abs(r[:52,0]).mean(),abs(r[52:,0]).mean(),abs(r[:52,1:]).mean(),abs(r[52:,1:]).mean()],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/recover.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Opposite-coordinate calibration -> shared nonlinear calibration and dual-panel operator recovery; exploratory 52/20 scalar and trajectory MAEs are 0.1159 and 0.1591.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a high-degree polynomial for panel inversion\",\n      \"rejected_reason\": \"Opposite-coordinate saturating features already reduce trimmed panel residuals by an order of magnitude and are less prone to unstable inversion.\"\n    }\n  ],\n  \"rationale\": \"Fit shared saturation scales using independent panel rows, then test which recovered coordinates predict the scalar and trajectory on the prescribed split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7c580813b800f3444831beecf2eba7e342b85e822de58f026cc2ecbc4073b03e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38195.01,
+      "usage_known": true,
+      "prompt_tokens": 32095,
+      "cached_tokens": 12672,
+      "completion_tokens": 1642
+    }
+  ]
+}

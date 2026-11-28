@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "446e7e259b8d49f3a698f2410969f095",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Hegel_SelectiveBoundedDAG_Online__conf_m102_a04_batch_10__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:35:12.589239+00:00",
+  "ended_at_utc": "2026-11-28T15:35:38.884623+00:00",
+  "request_sha256": "99076306a2c15d5937788e844a285973a24d347bf2e364235a60dfca55015cd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51107,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28111,
+    "cached_tokens": 5504,
+    "completion_tokens": 1025
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/compact.py <<'PY'\\nexec(open('/tmp/stress.py').read().split('out=[]')[0])\\nc,d=m._operators(s['panel_c'],z); cd=(c[:,:,None]*d[:,None,:]).reshape(len(c),16); A=m._one(np.c_[c,d,np.sum(c*d,axis=1),c[:,0]*d[:,1]]); print('compact full coeff (y and trajectory time points)'); print(np.round(m._ls(A,np.c_[y,T]),4)); Y=np.c_[y,T];\\nfor name,iy,it in [('dense',F,F),('compact',A,A),('decoupled',A[:,:-1],A),('ranktwo',A[:,:-1],A)]:\\n out=[]\\n for l,b in splits:\\n  a=np.setdiff1d(allidx,b); py=iy[b]@m._ls(iy[a],y[a]);\\n  if name=='ranktwo':\\n   q=m._time(s['eval_times'],T[a]); pt=it[b]@m._ls(it[a],m._ls(q,T[a].T).T)@q.T\\n  else:pt=it[b]@m._ls(it[a],T[a]);\\n  out.append((l,np.mean(abs(py-y[b])),np.mean(abs(pt-T[b])),np.max(np.mean(abs(pt-T[b]),0))))\\n print(name,out[0]); print('worst random, tail',[(max(q,key=lambda t:t[j])[:j+1]) for q in (out[1:25],out[25:]) for j in range(1,4)])\\np=s['panel_c']; u,V=p['u'],p['v1']; from scipy.optimize import minimize_scalar\\nfor name,fun in [('asinhos',lambda a,q:np.arcsinh(q*a)),('atan',lambda a,q:np.arctan(q*a)),('tanh',lambda a,q:np.tanh(q*a)),('sin',lambda a,q:np.sin(q*a)),('sqrt',lambda a,q:a/np.sqrt(1+q*a*a)),('erf',lambda a,q:__import__('scipy').special.erf(q*a)),('rational',lambda a,q:a/(1+q*a*a))]:\\n def basis(a,q,extra):return m._one(np.c_[a,fun(a,q),a**3] if extra else np.c_[a,fun(a,q)])\\n for extra in (False,True):\\n  def err(q):\\n   B=basis(u,q,extra); return np.std(B@m._ls(B,V)-V)\\n  grid=np.linspace(.2,5,80); j=np.argmin([err(q) for q in grid]); r=minimize_scalar(err,bounds=(grid[max(0,j-1)],grid[min(len(grid)-1,j+1)]),method='bounded'); print(name,extra,r.x,r.fun)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted bilinear readout -> H2 shared diagonal contraction with a separate trajectory interaction; current public scalar/trajectory MAEs are 0.00683/0.00398, but worst coordinate-tail MAEs are 0.06138/0.01698.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the current schema-valid solver\",\n      \"rejected_reason\": \"The scalar error exceeds 0.038 on one coordinate-tail split, and the fitted coefficient pattern suggests a simpler readout worth testing.\"\n    }\n  ],\n  \"rationale\": \"The four diagonal interactions have nearly equal coefficients, and only one off-diagonal interaction is substantial for the trajectory. Test the compact readout on the same splits to determine whether this structure improves extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "77a92499404dee07b51ff11ca3a59101387f8b0e45cfd36404a4d668f9a68a4d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26294.35,
+      "usage_known": true,
+      "prompt_tokens": 28111,
+      "cached_tokens": 5504,
+      "completion_tokens": 1025
+    }
+  ]
+}

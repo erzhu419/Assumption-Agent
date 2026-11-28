@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "627998b7273846d88b6ce26d305b63c4",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:21:49.234896+00:00",
+  "ended_at_utc": "2026-11-28T15:22:28.239198+00:00",
+  "request_sha256": "b0c535696ff8a825859072e5fe60e1f45a6a5ccefdc4977c30aa60f51365b0e2",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 41936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30901,
+    "cached_tokens": 12672,
+    "completion_tokens": 1660
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/structure05.py <<'PY'\\nexec(open('/tmp/probe05.py').read().split(\\\"a=s['panel_a']\\\")[0])\\nfrom scipy.optimize import linear_sum_assignment\\nfrom scipy.spatial.distance import cdist\\n\\ndef lib(u,a=.165,deg=3):\\n names=['1'];cols=[np.ones(len(u))]; d=u.shape[1]\\n for k in range(1,deg+1):\\n  for j in combinations_with_replacement(range(d),k): names.append(''.join(map(str,j)));cols.append(np.prod(u[:,j],axis=1))\\n return names,np.column_stack(cols)\\ndef sparse(D,y,k):\\n sel=[]\\n for _ in range(k):\\n  r=y-D[:,sel]@fit(D[:,sel],y) if sel else y\\n  residual=D-D[:,sel]@fit(D[:,sel],D) if sel else D\\n  c=abs(residual.T@r)/np.maximum(np.linalg.norm(residual,axis=0),1e-12);c[sel]=-1\\n  sel.append(int(np.argmax(c)))\\n return sel,fit(D[:,sel],y)\\nfor p in 'ab':\\n a=s['panel_'+p];u,v=a['u'],a['v'];\\n if p=='a':\\n  keep=(abs(v-u).max(1)<3);u,v=u[keep],v[keep]\\n print('PANEL',p,'range',u.min(0),u.max(0), 'n',len(u));n,D=lib(u)\\n for d in [1,2,3]:\\n  _,Q=lib(u,deg=d); f=fit(Q,v); print('poly',d,np.sqrt(np.mean((Q@f-v)**2)),np.sqrt(np.mean((Q[::5]@fit(Q[np.arange(len(u))%5!=0],v[np.arange(len(u))%5!=0])-v[::5])**2)))\\n for j in range(4):\\n  ix,b=sparse(D,v[:,j],10);print(j,list(zip(np.array(n)[ix],b.round(4))),np.std(D[:,ix]@b-v[:,j]))\\n print('u, v',np.c_[u,v][:6])\\n print('singular',np.linalg.svd(v-v.mean(0),compute_uv=False))\\n\\nx,y,z=[s['train'][k] for k in ('x','y','traj')]; q=s['test']['x']; print('study x range',x.min(0),x.max(0));\\nfor p in 'abc':\\n a=s['panel_'+p]\\n for k,v in a.items():\\n  if v.shape[1]==4: print('dist',p,k, np.quantile(cdist(x,v).min(1),[0,.05,.25,.5,1]))\\n# Probe raw and calibrated coordinates with exact observed nonlinearities. \\na=s['panel_a'];keep=abs(a['v']-a['u']).max(1)<3; u,v=a['u'][keep],a['v'][keep]; W=fit(aff(u),v); X=np.vstack([x,q]); variants={'raw':X, 'Adiag':(X-W[0])/W[1:].diagonal(),'Ainv':(X-W[0])@np.linalg.inv(W[1:])}\\nfor d in (2,3):\\n def F(w):return lib(w,deg=d)[1]\\n co=fit(F(u),v)\\n variants['Ainv'+str(d)]=np.array([least_squares(lambda a:(F(a[None])@co-r).ravel(),a, max_nfev=45).x for r,a in zip(X,variants['Ainv'])]);variants['Adirect'+str(d)]=F(X)@co\\nb=s['panel_b']; c=s['panel_c']; ac=2.1143; alpha=.1653\\nP=lambda x:aff(np.arctan(ac*x)); Q=lambda x:np.c_[aff(x),x*x/(1+alpha*x*x)]\\nwc=fit(P(c['u']),c['v1']);wd=fit(Q(c['u']),c['v2']);\\nfor k,w in list(variants.items()):\\n for d in (1,2,3):variants[k+'/B'+str(d)]=poly(w,d)@fit(poly(b['u'],d),b['v'])\\nY=np.c_[y,z];ii=np.arange(52); jj=np.arange(52,72); res=[]\\nfor key,w in variants.items():\\n for name,v in [('id',w),('atan',np.arctan(ac*w)),('C1',P(w)@wc),('C2',Q(w)@wd),('amp',np.c_[P(w),Q(w)@wd])]:\\n  for d in (1,2,3):\\n   D=poly(v,d) if v.shape[1]<=4 else aff(v); A=D[ii];B=D[jj];\\n   for l in (.00001,.002,.025,.2):\\n    coef=np.linalg.solve(A.T@A+l*np.eye(A.shape[1]),A.T@Y[ii]); e=abs(B@coef-Y[jj]).mean(0);res.append((e[0],e[1:].mean(),key,name,d,l))\\nfor i in [0,1]:print('BEST',i,*sorted(res,key=lambda x:x[i])[:15],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent GPs -> H2 inverse panel calibration and structured spatial amplitudes; archived public MAEs are at least 0.1404 for the scalar and 0.2194 for the trajectory, while shared temporal reconstruction has RMSE 0.00415.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refine the temporal basis alone\",\n      \"rejected_reason\": \"Temporal reconstruction is already close to the noise floor; predicting the spatial amplitudes is the larger bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Inspect the sparse panel terms and compare forward and inverse calibrations. Treat public-split scores as screening evidence, then check the best structures on independent folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "79bef46ca0699fd1b213c16e11b45dd0c93e861bdd8cb5121c9ba9f4cf8f8f50",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39002.53,
+      "usage_known": true,
+      "prompt_tokens": 30901,
+      "cached_tokens": 12672,
+      "completion_tokens": 1660
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d05b8533d3e34ce7b23eb86dd9ee21cc",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:39:14.191540+00:00",
+  "ended_at_utc": "2026-11-28T15:40:00.659575+00:00",
+  "request_sha256": "179484a5781b0d37e8f1e3715cfae321ed3f12842870dca9d5eb439bd4040d11",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48253,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33425,
+    "cached_tokens": 12672,
+    "completion_tokens": 1885
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Robust inverse calibration followed by polynomial and affine readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    a = u.ravel()\\n    b = np.roll(u, 2, axis=1).ravel()\\n    channel = np.tile(np.eye(4), (len(u), 1))\\n\\n    def design(p):\\n        return np.column_stack((channel, channel * a[:, None],\\n                                np.tanh(p[0] * a), np.sin(p[1] * b)))\\n\\n    discrepancy = np.linalg.norm(v - u, axis=1)\\n    mask = discrepancy <= 4 * max(np.median(discrepancy), 1e-8)\\n    if mask.sum() < 8:\\n        mask[:] = True\\n    p = np.array([1.8, 2.4])\\n    for _ in range(5):\\n        keep = np.repeat(mask, 4)\\n        target = v.ravel()[keep]\\n\\n        def residual(q):\\n            f = design(q)[keep]\\n            return f @ _fit(f, target) - target\\n\\n        p = least_squares(residual, p, bounds=([0.5, 1.5], [3.5, 3.5]),\\n                          ftol=1e-12, gtol=1e-12, xtol=1e-12).x\\n        f = design(p)\\n        c = _fit(f[keep], target)\\n        err = np.linalg.norm((f @ c).reshape(v.shape) - v, axis=1)\\n        updated = err <= max(6 * np.median(err), 1e-7)\\n        if updated.sum() < 8 or np.array_equal(updated, mask):\\n            break\\n        mask = updated\\n    return p, c\\n\\n\\ndef _decode(x, cal):\\n    p, c = cal\\n    bias, gain = c[:4], c[4:8]\\n    h, k = c[8:]\\n    i = np.arange(4)\\n    j = (i + 2) % 4\\n\\n    def residual(z, x):\\n        return bias + gain * z + h * np.tanh(p[0] * z) + k * np.sin(p[1] * z[j]) - x\\n\\n    def jac(z, x):\\n        q = np.tanh(p[0] * z)\\n        g = np.diag(gain + h * p[0] * (1 - q*q))\\n        g[i, j] = k * p[1] * np.cos(p[1] * z[j])\\n        return g\\n\\n    z = [least_squares(residual, (row - bias) / gain, jac=jac, args=(row,),\\n                       gtol=1e-12, ftol=1e-12, xtol=1e-12).x for row in x]\\n    return np.asarray(z).reshape(-1, 4)\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _quadratic(z):\\n    return np.column_stack((_affine(z), *[z[:, i] * z[:, j]\\n                           for i, j in combinations_with_replacement(range(4), 2)]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    cal = _calibration(study['panel_a'])\\n    z = _decode(train['x'], cal)\\n    zt = _decode(study['test']['x'], cal)\\n    y_hat = _quadratic(zt) @ _fit(_quadratic(z), train['y'])\\n    state_pred = _affine(zt) @ _fit(_affine(z), train['traj'])\\n    last = state_pred[:, -1]\\n    diagnostics_vec = np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics_vec}\\nPY\\ncat > /tmp/verify_batch09.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; d=s['train']; z=m._decode(d['x'],m._calibration(s['panel_a']))\\ndef cv(i,j):\\n    out=m.solve_batch({**s,'train':{**d, **{k:d[k][i] for k in ('x','y','traj')}}, 'test':{'x':d['x'][j]}})\\n    a=abs(out['y_hat']-d['y'][j]); b=abs(out['state_pred']-d['traj'][j]); return a.mean(),b.mean(),b.mean(0).max(),a.max(),b.max()\\nN=len(z); ind=np.arange(N)\\nbase=cv(ind[:52],ind[52:]); print('52/20 mean y, mean trajectory, worst timestamp, max row y, max individual state:',base); assert max(base[:3])<.038\\nrng=np.random.default_rng(9184); groups=[]\\nfor _ in range(12):\\n    ix=rng.permutation(N); groups.append(cv(ix[:52],ix[52:]))\\nfor col in [*z.T,np.linalg.norm(z,axis=1)]:\\n    ix=np.argsort(col); groups.extend([cv(ix[20:],ix[:20]),cv(ix[:-20],ix[-20:])])\\nprint('worst across 22 random or edge-extrapolation splits:',np.max(groups,axis=0)); assert np.max(np.array(groups)[:,:3])<.038\\nb=s['panel_b']; w=m._affine(z)@m._fit(m._affine(b['u']),b['v']); np.set_printoptions(precision=5,suppress=True)\\nfor name,q in [('latent',z),('panel b',w)]:\\n    print(name,'scalar coefficients',m._fit(m._quadratic(q),d['y']))\\n    print(name,'time-coefficient singular values',np.linalg.svd(m._fit(m._affine(q),d['traj']),compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch09.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 next-neighbor polynomial calibration → H2 tanh self-response and sine opposite-channel coupling, followed by quadratic scalar and affine trajectory readouts; 52/20 probe MAEs are 0.00402 for y and 0.00169 for the rank-two trajectory fit.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Include the dual auxiliary nonlinear panel\",\"rejected_reason\":\"Its tested compositions did not improve on the low-order readouts in calibrated coordinates.\"}],\"rationale\":\"Implement the panel-supported calibration and the simplest successful readout for each target, then verify the exact artifact on the required split and on random and edge-extrapolation splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3b153565543b398d2fba5756443899d7c69267acaa37dcd83042c14d37e503fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46466.99,
+      "usage_known": true,
+      "prompt_tokens": 33425,
+      "cached_tokens": 12672,
+      "completion_tokens": 1885
+    }
+  ]
+}

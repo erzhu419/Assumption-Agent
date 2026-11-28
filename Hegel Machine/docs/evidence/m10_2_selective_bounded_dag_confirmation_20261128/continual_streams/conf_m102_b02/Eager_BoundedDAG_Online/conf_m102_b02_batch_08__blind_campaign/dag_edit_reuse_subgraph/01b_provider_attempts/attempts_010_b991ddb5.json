@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b991ddb560794a0fb8133d1ea4752184",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:11:26.523055+00:00",
+  "ended_at_utc": "2026-11-28T16:12:09.205844+00:00",
+  "request_sha256": "b264963273663b121a3d2fd22b8b2814e6dd8429a67937064d627d849756dd01",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 68725,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41345,
+    "cached_tokens": 12672,
+    "completion_tokens": 1803
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/G={}/,$d' /tmp/heads8.py >/tmp/joint8.py; cat >>/tmp/joint8.py <<'PY'\\nr=lambda x,i=1:np.roll(x,-i,axis=1)\\nV=np.c_[Y[:,0],s['train']['traj']]; base=D(np.c_[z,b*r(b)])[:n]; names=[]; cols=[]; groups=[]\\ndef add(name,x,g):\\n names.append(name);cols.append(x[:n]);groups.append(g)\\nfor name,x in [('z',z),('b',b),('c',c),('d',d)]:\\n for i in range(4):add(name+str(i),x[:,i],name)\\nraw=dict(zip(names,cols));\\nfor deg in (2,3):\\n for ns in itertools.combinations_with_replacement(raw,deg):add('*'.join(ns),np.prod([raw[k] for k in ns],axis=0),''.join(k[0] for k in ns))\\nfor a,x in raw.items():\\n for bn,v in raw.items():\\n  for k in [.2,.6,1.5,4]:add(f'{a}/{bn}/{k}',x/(1+k*v*v),'r'+a[0]+bn[0])\\nfor a,x in raw.items():\\n for bn,v in raw.items():\\n  if a>=bn:continue\\n  for k in [-2,-1,-.5,.5,1,2]:\\n   for fun in [np.sin,np.tanh,np.cos,np.abs]:add(f'{fun.__name__}:{a},{k},{bn}',fun(x+k*v),'m'+a[0]+bn[0])\\nA=np.array(cols).T; names=np.array(names);groups=np.array(groups); stable={}\\nfor ir,it in slices:\\n x=base[ir]; Q=np.linalg.qr(x)[0]; inv=fit(x,A[ir]); g=A[ir]-Q@(Q.T@A[ir]); sc=np.maximum(np.linalg.norm(g,axis=0),1e-9); g/=sc; gt=(A[it]-base[it]@inv)/sc; E=V[ir]-Q@(Q.T@V[ir]); u,sv,v=np.linalg.svd(E,full_matrices=False); ey=u[:,0]*sv[0]; init=base[it]@fit(x,V[ir]);\\n # Train-only forward beam using PRESS for the dominant shared residual direction.\\n beam=[()]; lv=np.sum(Q*Q,axis=1); out=[]\\n for step in range(7):\\n  hits={}\\n  for ks in beam:\\n   if ks:\\n    q=np.linalg.qr(g[:,ks])[0]; h=g-q@(q.T@g); e=ey-q@(q.T@ey); l=lv+np.sum(q*q,axis=1)\\n   else:h=g;e=ey;l=lv\\n   norm=np.linalg.norm(h,axis=0); h=h/np.maximum(norm,1e-9); pred=h*(h.T@e); er=np.mean(abs((e[:,None]-pred)/np.maximum(1-l[:,None]-h*h,.02)),axis=0);er[norm<1e-6]=np.inf\\n   for j in np.argpartition(er,14)[:14]:hits[tuple(sorted((*ks,j)))]=er[j]\\n  beam=sorted(hits,key=hits.get)[:14]; preds=[]\\n  for ks in beam[:7]:\\n   pred=init+gt[:,ks]@fit(g[:,ks],E);preds.append(pred); mae=abs(pred-V[it]).mean(0);out.append((hits[ks],mae[0],mae[1:].mean(),list(names[list(ks)])))\\n  mae=abs(np.mean(preds,axis=0)-V[it]).mean(0); print('beam',it[0],step,np.round([mae[0],mae[1:].mean()],4),out[-7],flush=True)\\n # Tensor-polynomial kernel with explicit group scaling, keeping known base unpenalized.\\n acts=[]\\n for pattern in ['b','d','bd','bcd','zbd','zbcd','zd','bc','zc','zbc']:\\n  for deg in (2,3,4,5):\\n   for scl in (.3,.7,1.5,3):\\n    for zw in (.2,1,3):\\n     U=np.column_stack([raw[name]*scl*(zw if name[0]=='z' else 1) for name in raw if name[0] in pattern]); dot=U@U.T\\n     for kind,K in [('poly',(1+dot)**deg),('rbf',np.exp(-.5*np.maximum(0,np.diag(dot)[:,None]+np.diag(dot)-2*dot)))]:\\n      L=K[np.ix_(ir,ir)]; P=np.eye(len(ir))-Q@Q.T; M=P@L@P; Kt=(K[np.ix_(it,ir)]-base[it]@fit(x,L))@P\\n      w,Ue=np.linalg.eigh(M); w=np.maximum(w,0); D0=Ue.T@E; Lt=Kt@Ue\\n      for a in [1e-6,1e-4,.003,.04,.4]:\\n       rat=a/(w+a); err=Ue@(D0*rat[:,None]); press=np.mean(abs(err/np.maximum((Ue**2@rat-lv)[:,None],.001)),axis=0); mae=abs(init+Lt@(D0/(w+a)[:,None])-V[it]).mean(0); spec=(pattern,deg,scl,zw,kind,a); acts.append((press[0]+press[1:].mean(),mae[0],mae[1:].mean(),spec)); stable.setdefault(spec,[]).append(mae)\\n print('kernel-train',it[0],sorted(acts)[:3]);print('kernel-oracle',it[0],sorted(acts,key=lambda e:e[1]+e[2])[:3]);\\nprint('kernel-stable',sorted((max(e[0]+e[1:].mean() for e in es),[(round(e[0],4),round(e[1:].mean(),4)) for e in es],sp) for sp,es in stable.items())[:8]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint8.py | sed -n '/^beam\\\\|^kernel/p'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent interaction corrections → H2 a shared low-rank residual driven by cross-panel products; the saved candidate’s public scalar and trajectory MAEs are 0.137214 and 0.070786.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the current shared design unchanged\",\"rejected_reason\":\"It satisfies the runtime contract but fails both public error thresholds.\"}],\"rationale\":\"Search individual cross-panel terms using the dominant residual shared by both heads. Compare training-only PRESS selection against external slices before changing the saved artifacts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "29c9235fad26537e70e336da55e03c2800b6899d6ccdfe5316c7d1dd608a43b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43318.74,
+      "usage_known": true,
+      "prompt_tokens": 41345,
+      "cached_tokens": 12672,
+      "completion_tokens": 1803
+    }
+  ]
+}

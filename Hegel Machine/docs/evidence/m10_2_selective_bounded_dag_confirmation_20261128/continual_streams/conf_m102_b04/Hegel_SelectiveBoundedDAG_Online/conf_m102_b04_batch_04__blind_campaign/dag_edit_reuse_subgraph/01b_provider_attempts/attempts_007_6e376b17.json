@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e376b176fc54f9e90f71e74d42635bd",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Hegel_SelectiveBoundedDAG_Online__conf_m102_b04_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:51.329434+00:00",
+  "ended_at_utc": "2026-11-28T15:10:31.696380+00:00",
+  "request_sha256": "bc2bc08f9a0bb8602b92d5dbfbf80501aa5e6bbd720955f1b8abd4cc42e66bf9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 43203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29833,
+    "cached_tokens": 5504,
+    "completion_tokens": 1761
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,86p' /holdout_task/test_dag_candidate.py; cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Nonlinear panel calibration and additive kernel features for frozen ridge heads.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize, minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _panel_fit(u, v, design, bounds):\\n    def loss(a):\\n        d = design(u, a)\\n        return np.sum((d @ np.linalg.lstsq(d, v, rcond=None)[0] - v)**2)\\n    a = minimize_scalar(loss, bounds=bounds, method='bounded').x\\n    d = design(u, a)\\n    return a, np.linalg.lstsq(d, v, rcond=None)[0]\\n\\n\\ndef _coordinates(s, x):\\n    a, c = s['panel_a'], s['panel_c']\\n    u, v = a['u'], a['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    off, gain = [], []\\n    for p, q in zip(u.T, v.T):\\n        delta = p[j] - p[i]\\n        ok = np.abs(delta) > 1e-10\\n        slope = np.median((q[j][ok] - q[i][ok])/delta[ok]) if np.any(ok) else 1.\\n        coef = np.array([np.median(q - slope*p), slope])\\n        d = _affine(p[:,None])\\n        for _ in range(4):\\n            r = np.abs(q-d@coef)\\n            keep = r <= max(1e-8, 6*np.median(r))\\n            if keep.sum() < 2:\\n                break\\n            coef = np.linalg.lstsq(d[keep], q[keep], rcond=None)[0]\\n        off.append(coef[0]); gain.append(coef[1] if abs(coef[1]) > 1e-6 else 1.)\\n    cx = (x-off)/gain\\n    def atan(q, a):\\n        return _affine(np.arctan(a*q))\\n    def rat(q, a):\\n        return _affine(np.column_stack((q, q*q/(1+a*q*q))))\\n    a1, b1 = _panel_fit(c['u'], c['v1'], atan, (.5,4.))\\n    a2, b2 = _panel_fit(c['u'], c['v2'], rat, (.001,1.))\\n    return np.column_stack((cx, atan(cx,a1) @ b1, rat(cx,a2) @ b2))\\n\\n\\ndef _dist(x):\\n    return (x[:,None,:]-x[None,:,:])**2\\n\\n\\ndef _kernel(sq, t):\\n    d = sq.shape[-1]\\n    exponent = -.5 * sq * np.exp(t[:d])\\n    joint = np.exp(exponent.sum(axis=-1))\\n    add = np.exp(exponent + t[d])/d\\n    return joint, add, exponent\\n\\n\\ndef _learn(sq, y):\\n    n, _, d = sq.shape\\n    sd = np.std(y)\\n    y = (y - np.mean(y))/max(sd,1e-10)\\n    def objective(t):\\n        joint, add, exp = _kernel(sq,t)\\n        k = joint + add.sum(axis=-1)\\n        noise = np.exp(t[-1]); k.flat[::n+1] += noise\\n        f = cho_factor(k, check_finite=False)\\n        alpha = cho_solve(f,y,check_finite=False)\\n        g = .5*(cho_solve(f,np.eye(n),check_finite=False)-np.outer(alpha,alpha))\\n        grad = np.einsum('ij,ijk->k',g,exp*(joint[:,:,None]+add))\\n        return .5*y@alpha+np.log(np.diag(f[0])).sum(), np.r_[grad,np.sum(g*add.sum(axis=-1)),noise*np.trace(g)]\\n    return minimize(objective,np.r_[np.zeros(d),-2.,-9.],jac=True,method='L-BFGS-B',bounds=[(-11.,7.)]*d+[(-10.,5.),(-15.,-2.)],options={'maxiter':110}).x\\n\\n\\ndef _gram(sq,t):\\n    j,a,_ = _kernel(sq,t)\\n    return (j+a.sum(axis=-1))/np.exp(t[-1])\\n\\n\\ndef _features(g,n,penalty):\\n    # A training-landmark square root gives exactly the requested kernel ridge fit.\\n    ev, u = np.linalg.eigh(g[:n,:n])\\n    good = ev > max(ev[-1]*1e-12,1e-12)\\n    return g[:,:n] @ (u[:,good]*np.sqrt(penalty/ev[good]))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']; tr = s['train']; n = len(tr['x'])\\n    x = np.concatenate((tr['x'],s['test']['x']))\\n    q = _coordinates(s,x)\\n    sq = _dist(q)\\n    a = tr['traj'] @ np.linalg.svd(tr['traj'],full_matrices=False)[2][0]\\n    ty = _learn(sq[:n,:n],tr['y'])\\n    ta = _learn(sq[:n,:n],a)\\n    gy = _gram(sq,ty)\\n    ga = _gram(sq,ta)\\n    return {'raw': _features((gy+ga)*.5,n,.014),\\n            'aligned': _features(ga,n,.014),\\n            'hybrid': _features(gy,n,.007)}\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel features → H2 nonlinear panel coordinates with additive kernel features; prior standalone scalar and trajectory public MAEs were 0.02528 and 0.02601, pending frozen-DAG verification.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the frozen ridge sink with Gaussian regression\",\"rejected_reason\":\"The same kernel geometry can be represented as numeric ridge features without editing the frozen node.\"}],\"rationale\":\"Fit panel transforms from paired measurements and kernel parameters from training rows only. Pass factored kernels through the required raw, aligned, and hybrid keys and test both frozen heads.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bd29d852874bcac298d96ce823c6a7fa9e09e18dd33ec8bd2859b49f9e081ce9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40923.28,
+      "usage_known": true,
+      "prompt_tokens": 29833,
+      "cached_tokens": 5504,
+      "completion_tokens": 1761
+    }
+  ]
+}

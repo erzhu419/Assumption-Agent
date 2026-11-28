@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a306a1b65784c0a93b060b2158e2bc6",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:09:26.903731+00:00",
+  "ended_at_utc": "2026-11-28T15:09:58.252943+00:00",
+  "request_sha256": "c0f9aad464c45007268bcf2d817dbbda48cc3a94b05cd8594849535991326e85",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72475,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42912,
+    "cached_tokens": 12672,
+    "completion_tokens": 1156
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/stress_gate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold,ShuffleSplit\\nsp=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; off,scale=m._calibration(s['panel_a']); x=(t['x']-off)/scale; q=m._quadratic(x); ids=np.arange(len(x));\\nsplits=[('mandatory',ids[:52],ids[52:])]+[(f'fold{i}',a,b) for i,(a,b) in enumerate(KFold(4,shuffle=True,random_state=12).split(x))]+[(f'rand{i}',a,b) for i,(a,b) in enumerate(ShuffleSplit(96,test_size=20,random_state=1199).split(x))];\\nfor label,r in [('boundary',abs(x[:,2])),('norm',-np.linalg.norm(x,axis=1))]:\\n b=np.argsort(r)[:20]; splits.append((label,np.setdiff1d(ids,b),b))\\ndef fit(a,b):\\n qa,xa,ya=q[a],x[a],y[a]; qb,xb=q[b],x[b];\\n def fit_one(start):\\n  def resid(p):\\n   f=m._gated(xa,qa,p); return f@np.linalg.lstsq(f,ya,rcond=None)[0]-ya\\n  o=least_squares(resid,start,bounds=([1,-.35,-3,-3,-3],[35,.35,3,3,3]),max_nfev=100)\\n  f=m._gated(xa,qa,o.x); pred=m._gated(xb,qb,o.x)@np.linalg.lstsq(f,ya,rcond=None)[0]; return (o.cost,o.x,pred)\\n starts=[[8,0,0,0,0],[3,0,0,0,0],[14,0,0,0,0],[8,-.12,0,0,0],[8,.12,0,0,0],[8,0,1,0,0],[8,0,-1,0,0]]\\n sol=[fit_one(st) for st in starts]; best=min(sol,key=lambda z:z[0]); fa=np.c_[qa,qa*np.tanh(8*xa[:,2:3])]; fb=np.c_[qb,qb*np.tanh(8*xb[:,2:3])]; base=fb@np.linalg.lstsq(fa,ya,rcond=None)[0];\\n def mae(p):return np.mean(abs(p-y[b]));\\n return [mae(sol[0][2]),mae(best[2]),mae(.8*best[2]+.2*base),mae(.5*best[2]+.5*base),mae(base)],sol[0][:2],best[:2]\\nrows=[]\\nfor name,a,b in splits:\\n e,p1,p2=fit(a,b);rows.append(e)\\n if name in ('mandatory','boundary','norm') or e[0]>.028 or e[1]>.028: print(name,np.round(e,6),'local',p1,'multi',p2,flush=True)\\nprint('random mean / worst',np.mean(rows[5:-2],axis=0),np.max(rows[5:-2],axis=0)); print('full fit:',fit(ids,ids)[1:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_gate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (single-start tilted tanh gate) -> H2 (multistart gate profiling with a fixed-gate comparator); the current solver scores 0.01197 on the prescribed split but 0.12148 on the worst fresh split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Immediately revert to the fixed gate\",\n      \"rejected_reason\": \"It has not been tested on the same failing split, and the failure may reflect optimizer initialization rather than a defect in the tilted-gate model.\"\n    }\n  ],\n  \"rationale\": \"Compare single-start and multistart fits on identical folds. Select each multistart solution using training residuals only, and report the gate parameters alongside errors to distinguish local optimization failures from model misspecification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "e9259f02056b861f2b0906da0d0cfb23461a61c9963d9dd89f5211880713b15c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31922.67,
+      "usage_known": true,
+      "prompt_tokens": 42912,
+      "cached_tokens": 12672,
+      "completion_tokens": 1156
+    }
+  ]
+}

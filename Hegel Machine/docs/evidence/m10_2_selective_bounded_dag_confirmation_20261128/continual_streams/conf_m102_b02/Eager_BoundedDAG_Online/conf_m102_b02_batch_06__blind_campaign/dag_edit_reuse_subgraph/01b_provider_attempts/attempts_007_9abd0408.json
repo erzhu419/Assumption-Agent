@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9abd04082eec471a9c0edf9ea025e540",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:49:41.089628+00:00",
+  "ended_at_utc": "2026-11-28T15:50:14.659840+00:00",
+  "request_sha256": "28229e7a8f9662c2fb4ea1a74dc170e05c2b499321577e4f470dc7246b8342aa",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 49647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33673,
+    "cached_tokens": 5504,
+    "completion_tokens": 1444
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/heads.py <<'PY'\\nexec(open('/tmp/diagnose.py').read().split(\\\"for k in ['panel_a'\\\")[0])\\nfrom scipy.special import erf\\nfrom scipy.linalg import solve\\np=s['panel_c'];u=p['u']; v=p['v2'];\\nforms=[lambda x,q:x+q[0]*x*x/(1+q[1]*x*x),lambda x,q:x+q[0]*np.log1p(q[1]*x*x),lambda x,q:x+q[0]*np.tanh(q[1]*x*x),lambda x,q:x+q[0]*(np.sqrt(1+q[1]*x*x)-1),lambda x,q:x+q[0]*(1-np.exp(-q[1]*x*x))]\\nrr=[]\\nfor fn in forms:\\n def design(x,q):return D(fn(x,q))\\n q=least_squares(lambda q:(design(u,q)@old.fit(design(u,q),v)-v).ravel(),[.55,.2],bounds=([0,.001],[10,5]),max_nfev=400); print('C2',q.x,np.std(q.fun));rr.append((q.cost,fn,q.x))\\n_,fn,q=min(rr,key=lambda r:r[0]); c= D(fn(z,q))@old.fit(D(fn(u,q)),v)\\nc1=D(z*np.roll(z,-1,axis=1))@old.fit(D(u*np.roll(u,-1,axis=1)),p['v1'])\\nprint('y quantiles',np.quantile(T[:,0],np.linspace(0,1,11))); print('trajectory endpoint', np.quantile(t['traj'][:,-1],np.linspace(0,1,11)))\\nnp.savez('/tmp/feat.npz',z=z,b=b,c=c,c1=c)\\n# Profile one nonlinear index plus a low-dimensional linear background. Optimize on training rows only.\\ninputs={'z':z,'b':b,'c':c,'c1':c1,'zb':np.c_[z,b],'bc':np.c_[b,c],'zc':np.c_[z,c],'zbc':np.c_[z,b,c],'zbc1':np.c_[z,b,c1],'bc1':np.c_[b,c1],'all':np.c_[z,b,c,c1]}\\nY=np.c_[T[:,0],t['traj'][:,-1]]\\nacts={'tanh':np.tanh,'sin':np.sin,'erf':erf,'rational':lambda x:x/np.sqrt(1+x*x),'quadratic':lambda x:x*x,'cubic':lambda x:x**3,'radial':lambda x:np.exp(-x*x)}\\nres=[]\\nfor name,X in inputs.items():\\n X=D((X-X[:n].mean(0))/X[:n].std(0)); d=X.shape[1];\\n for typ,g in acts.items():\\n  for back in ['0','z','self','bc']:\\n   B=np.ones((len(X),1)) if back=='0' else D(inputs[name if back=='self' else back]); scores=[]; rms=[]\\n   for i,j in sl[:2]:\\n    vals=[]; rng=np.random.default_rng(23)\\n    for h in range(2):\\n     w0=old.fit(X[i],Y[i,h]); w0[0]=0;w0/=max(.01,np.linalg.norm(w0));\\n     def f(p,ix):return np.c_[B[ix],g(X[ix]@p)]\\n     def fun(p):\\n      A=f(p,i); return A@old.fit(A,Y[i,h])-Y[i,h]\\n     fits=[least_squares(fun,a,max_nfev=65) for a in [w0,2*w0,rng.normal(0,.4,d)]]; fit=min(fits,key=lambda r:r.cost); vals.append(np.abs(f(fit.x,j)@old.fit(f(fit.x,i),Y[i,h])-Y[j,h]).mean()); rms.append(np.std(fit.fun))\\n    scores.append(vals)\\n   res.append((np.array(scores),np.array(rms).reshape(-1,2),name,typ,back))\\nfor h in range(2):\\n for r in sorted(res,key=lambda r:r[0][:,h].mean())[:16]: print(h,r)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/heads.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic kernels on panel features -> H2 calibrated C2 saturation and a nonlinear projection for each head; archived worst-split MAEs remain 0.153646 and 0.074807.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Panel C2 is adequately described by a shared linear-plus-quadratic coordinate transform at the calibration noise floor.\",\"empirical_witness\":\"The shared quadratic fit has residual SD 0.005269; adding even fourth- and sixth-order terms lowers it to 0.0000974.\",\"causal_blanket_diagnosis\":\"The omitted even saturation terms enter upstream of the predictive heads, so regression error alone does not identify the head mechanism.\",\"sublated_pivot\":\"Profile compact even saturation functions on the independent panel and fit nonlinear head projections on training rows only.\",\"risk_kind\":\"calibration misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the panel to recover a compact coordinate transform, then compare head mechanisms by held-out error rather than calibration fit alone.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3e95707553ba17add5d5bdae894efc30489d1dd0ebb7cb34cad2a9eea59f01b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34143.5,
+      "usage_known": true,
+      "prompt_tokens": 33673,
+      "cached_tokens": 5504,
+      "completion_tokens": 1444
+    }
+  ]
+}

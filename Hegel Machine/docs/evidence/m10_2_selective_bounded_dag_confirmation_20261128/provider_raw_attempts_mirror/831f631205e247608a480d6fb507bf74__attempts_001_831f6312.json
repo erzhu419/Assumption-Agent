@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "831f631205e247608a480d6fb507bf74",
+  "call_seq": 1,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__init_decomp_conf_m102_b02_batch_06",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:46:10.992549+00:00",
+  "ended_at_utc": "2026-11-28T15:47:05.685326+00:00",
+  "request_sha256": "abba81b0d24e69505c03866a3700f2da8540af2c3f3ea91707b3b616b1942e32",
+  "system_prompt_chars": 1946,
+  "stdin_payload_chars": 5082,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 9232,
+    "cached_tokens": 0,
+    "completion_tokens": 2424
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"Spatial calibration and temporal basis fitting are independent numerical transformations. The spatial node computes the calibrated features once and uses them for the scalar prediction; the trajectory node combines the shared spatial features with the fitted temporal modes. The final node assembles the original outputs. The refactor preserves the source formulas, solver settings, and blend weights. The role-blind statistics do not identify which stage caused the shifted-batch failure.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\", \"node_03\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_02\"],\n    [\"node_00\", \"node_03\"],\n    [\"node_02\", \"node_03\"]\n  ],\n  \"sink_node_id\": \"node_03\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef D(x):\\n    return np.c_[np.ones(len(x)), x]\\n\\n\\ndef fit(F, y):\\n    return np.linalg.lstsq(F, y, rcond=1e-10)[0]\\n\\n\\ndef cal(s, x):\\n    p = s['panel_a']\\n    F = D(p['u'])\\n    y = p['v']\\n    keep = np.ones(len(F), bool)\\n    for _ in range(8):\\n        c = fit(F[keep], y[keep])\\n        e = np.linalg.norm(F @ c - y, axis=1)\\n        keep = e < max(.001, 3 * np.median(e))\\n    return np.linalg.solve(c[1:].T, (x - c[0]).T).T, c, e\\n\\n\\ndef AF(u):\\n    return D(np.c_[u, u * np.roll(u, -1, axis=1), u**3])\\n\\n\\ndef coords(s, x):\\n    p = s['panel_a']\\n    u, v = p['u'], p['v']\\n    F = AF(u)\\n    _, _, e = cal(s, x)\\n    w = fit(F[e < 2], v[e < 2])\\n    z = np.linalg.solve(w[1:5].T, (x - w[0]).T).T\\n    for _ in range(12):\\n        J = np.broadcast_to(w[1:5], (len(z), 4, 4)).copy()\\n        K = w[5:9]\\n        rr = np.roll(z, -1, axis=1)\\n        J += rr[:, :, None] * K[None, :, :] + np.roll(z[:, :, None] * K[None, :, :], 1, axis=1) + 3 * z[:, :, None]**2 * w[None, 9:13, :]\\n        dz = np.linalg.solve(J.transpose(0, 2, 1), (AF(z) @ w - x)[..., None])[..., 0]\\n        z -= np.clip(dz, -.4, .4)\\n    return z\\n\\n\\ndef kernel(x, degree, decay):\\n    dot = x @ x.T / x.shape[1]\\n    dist = np.maximum(np.diag(dot)[:, None] + np.diag(dot) - 2 * dot, 0)\\n    return (1 + dot)**degree + np.exp(-decay * dist)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    tr = study['train']\\n    z = coords(study, np.r_[tr['x'], study['test']['x']])\\n    p = study['panel_b']\\n    u, v = p['u'], p['v']\\n\\n    def H(x, q):\\n        return D(np.sign(x) * np.maximum(abs(x) - q[0], 0)**q[1])\\n\\n    def err(q):\\n        f = H(u, q)\\n        return (f @ fit(f, v) - v).ravel()\\n\\n    q = least_squares(err, [.35, 1.5], bounds=([.15, .6], [.6, 2.5])).x\\n    b = H(z, q) @ fit(H(u, q), v)\\n    sym = np.c_[.3 * z + b, .3 * z - b]\\n    sep = np.c_[.3 * z, b]\\n    n = len(tr['x'])\\n\\n    def head(design, degree, decay):\\n        k = kernel(design, degree, decay)\\n        return k[n:, :n] @ np.linalg.solve(k[:n, :n] + 1e-06 * np.eye(n), tr['y'])\\n\\n    y = 0.5 * head(np.arcsinh(sym), 2, 1.4) + 0.5 * head(sym, 3, 0.15)\\n    return {'y_hat': y, 'trajectory_design': np.arcsinh(sep)}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef fit(F, y):\\n    return np.linalg.lstsq(F, y, rcond=1e-10)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    t = study['eval_times']\\n    T = study['train']['traj']\\n\\n    def F(p):\\n        return -np.expm1(-t[:, None] * p)\\n\\n    def err(p):\\n        f = F(p)\\n        return (f @ fit(f, T.T) - T.T).ravel()\\n\\n    f = F(least_squares(err, [1.8, .42], bounds=([1., .15], [3., .85])).x)\\n    return {'basis': f, 'modes': fit(f, T.T).T}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\n\\n\\ndef kernel(x, degree, decay):\\n    dot = x @ x.T / x.shape[1]\\n    dist = np.maximum(np.diag(dot)[:, None] + np.diag(dot) - 2 * dot, 0)\\n    return (1 + dot)**degree + np.exp(-decay * dist)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    design = inputs['node_00']['trajectory_design']\\n    temporal = inputs['node_01']\\n    modes = temporal['modes']\\n    n = len(modes)\\n\\n    def head(decay):\\n        k = kernel(design, 3, decay)\\n        return k[n:, :n] @ np.linalg.solve(k[:n, :n] + 1e-06 * np.eye(n), modes)\\n\\n    state = (0.25 * head(0.15) + 0.75 * head(1.4)) @ temporal['basis'].T\\n    return {'state_pred': state}\\n\"\n    },\n    {\n      \"node_id\": \"node_03\",\n      \"code\": \"import numpy as np\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    y = inputs['node_00']['y_hat']\\n    state = inputs['node_02']['state_pred']\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "0a03177456e3a50e270bbb02cca52f134c16635341b05feaf4cb7e7f84b45e52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54691.6,
+      "usage_known": true,
+      "prompt_tokens": 9232,
+      "cached_tokens": 0,
+      "completion_tokens": 2424
+    }
+  ]
+}

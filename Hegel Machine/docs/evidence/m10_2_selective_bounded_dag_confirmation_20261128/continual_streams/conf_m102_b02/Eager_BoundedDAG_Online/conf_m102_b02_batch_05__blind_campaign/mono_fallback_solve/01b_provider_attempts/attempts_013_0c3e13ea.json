@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c3e13ea206245db823ff369852ae20e",
+  "call_seq": 13,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Eager_BoundedDAG_Online__conf_m102_b02_batch_05__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:44:23.076332+00:00",
+  "ended_at_utc": "2026-11-28T15:45:09.304257+00:00",
+  "request_sha256": "0952d033dba87f691f4c8ac3846eb9849bdc3c311c08ba465e5ac9b40cb8ee42",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 88651,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 48224,
+    "cached_tokens": 12672,
+    "completion_tokens": 2090
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/final_ratchet.py <<'PY'\\nimport itertools,pickle,sys\\nfrom pathlib import Path\\nimport numpy as np\\nfrom sklearn.model_selection import KFold\\nfrom batch_solver import parts,times,fit,kernel,AF,D\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];n=len(tr['x']);z,b=parts(s)\\nsplits=[(np.arange(52),np.arange(52,n))]+list(KFold(4,shuffle=True,random_state=921).split(z[:n]));\\nfor x in [z,b]:\\n j=np.argsort(np.linalg.norm(x[:n],axis=1))[-18:];splits.append((np.setdiff1d(np.arange(n),j),j))\\nX=np.c_[.3*z+b,.3*z-b]; W=np.c_[.3*z,b]; inputs=[np.arcsinh(X),np.arcsinh(W),X,W]\\nopts=[(0,3,.15,1e-6),(1,3,.7,1e-6)]+list(itertools.product(range(4),(2,3),(.15,.4,.7,1.4),(1e-6,1e-4)))\\nTF=[]\\nfor i,j in splits:\\n f=times(dict(s,train={'traj':tr['traj'][i]})); TF.append((f,np.c_[tr['y'],fit(f,tr['traj'].T).T]));\\nE=[]\\nfor a,p,k,r in opts:\\n K=kernel(inputs[a],p,k); pred=[]\\n for (i,j),(f,Y) in zip(splits,TF):\\n  h=K[j][:,i]@np.linalg.solve(K[i][:,i]+r*np.eye(len(i)),Y[i]);pred.append((h[:,0]-tr['y'][j],h[:,1:]@f.T-tr['traj'][j]))\\n E.append(pred)\\nchosen=[]\\nfor h in range(2):\\n base=E[h]; bmetrics=np.array([np.mean(abs(row[h])) for row in base]); best=(np.inf,h,h,1.,bmetrics)\\n for a,c in itertools.combinations_with_replacement(range(len(opts)),2):\\n  for frac in ((1.,) if a==c else (0.25,0.5,0.75)):\\n   e=np.array([np.mean(abs(frac*u[h]+(1-frac)*v[h])) for u,v in zip(E[a],E[c])]);\\n   if e[0]>[.032,.037][h] or e[1:5].max()>bmetrics[1:5].max()+.001 or e[1:5].mean()>bmetrics[1:5].mean()+.0015 or e[5:].max()>bmetrics[5:].max():continue\\n   val=.15*e[0]+.35*e[1:5].mean()+.15*e[1:5].max()+.20*e[5:].mean()+.15*e[5:].max()\\n   if val<best[0]:best=(val,a,c,frac,e)\\n _,a,c,frac,e=best; chosen.append((opts[a],opts[c],frac)); print('head',h,'baseline',bmetrics,'challenger',chosen[-1],e)\\n if not (e[5:].max()<bmetrics[5:].max()*(.985)):chosen[-1]=(opts[h],opts[h],1.)\\na=s['panel_a']; F=AF(a['u']); W0=fit(D(a['u']),a['v']); keep=np.linalg.norm(D(a['u'])@W0-a['v'],axis=1)<2\\nfor label,F in [('affine',D(a['u'])),('cyclic cubic',F)]:\\n rows=[]\\n for j in np.flatnonzero(keep):\\n  i=keep.copy();i[j]=False;rows.append(F[j]@fit(F[i],a['v'][i])-a['v'][j]);\\n print('Panel A inlier LOO',label,np.mean(np.abs(rows)))\\np=s['panel_b']; u,v=p['u'],p['v'];\\nfor name in ['hinge','erf reference']:\\n from scipy.special import erf\\n def H(x,q):\\n  return D(np.sign(x)*np.maximum(abs(x)-q[0],0)**q[1]) if name=='hinge' else D(np.c_[x,erf(q[0]*x)])\\n errs=[]\\n for j in range(len(u)):\\n  i=np.arange(len(u))!=j\\n  def err(q):\\n   F=H(u[i],q);return (F@fit(F,v[i])-v[i]).ravel()\\n  q=least_squares(err,[.35,1.5],bounds=([.15,.6],[.6,2.5])).x if name=='hinge' else least_squares(err,[1.49],bounds=([.4],[3.])).x\\n  errs.append(H(u[j:j+1],q)@fit(H(u[i],q),v[i])-v[j]);\\n print('Panel B nested LOO',name,np.mean(np.abs(errs)))\\nP=Path('/holdout_task/batch_solver.py'); src=P.read_text(); start=src.index('def predict(study):'); end=src.index('def solve_batch',start)\\nif chosen!=[(opts[0],opts[0],1.),(opts[1],opts[1],1.)]:\\n body='''def predict(study):\\n    z,b=parts(study)\\n    f=times(study)\\n    tr=study['train']; n=len(tr['x'])\\n    modes=fit(f,tr['traj'].T).T\\n    sym=np.c_[.3*z+b,.3*z-b]\\n    sep=np.c_[.3*z,b]\\n    designs=(np.arcsinh(sym),np.arcsinh(sep),sym,sep)\\n    def head(spec,target):\\n        form,degree,decay,ridge=spec\\n        k=kernel(designs[form],degree,decay)\\n        return k[n:,:n]@np.linalg.solve(k[:n,:n]+ridge*np.eye(n),target)\\n    def blend(a,b,w,target):\\n        pred=head(a,target)\\n        return pred if w==1 else w*pred+(1-w)*head(b,target)\\n    y=blend(*{y!r},tr['y'])\\n    state=blend(*{t!r},modes)@f.T\\n    return y,state\\n\\n'''.format(y=chosen[0],t=chosen[1]);P.write_text(src[:start]+body+src[end:])\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\ncp /holdout_task/batch_solver.py /tmp/verified_b05.py\\nPYTHONPATH=/holdout_task python3 /tmp/final_ratchet.py\\nif ! python3 /holdout_task/validate_public_schema.py | tee /tmp/b05_validate.json | grep -q '\\\"schema_valid\\\": true'; then cp /tmp/verified_b05.py /holdout_task/batch_solver.py; fi\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\nPYTHONPATH=/holdout_task python3 /tmp/verify_heads.py | sed -n '1,7p'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: compare the verified separate heads with blends that reduce high-norm extrapolation error; current 52/20 MAEs are 0.02644 and 0.03678, with stress-slice maxima of 0.11790 and 0.06980.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\",\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Submit the already verified kernels unchanged\",\"rejected_reason\":\"High-norm slices show appreciable extrapolation error; a constrained blend can be tested without sacrificing the public gate.\"}],\"rationale\":\"Promote a blend only if it improves the worst high-norm slice without materially worsening ordinary folds, then verify the exact saved solver in a clean Python process. Panel-only leave-one-out checks separately test the calibration and hinge mechanisms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "94182cf743a6ee171ff121c8a9bc22188a9cee8b6415fd66822cf40396f524ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46226.57,
+      "usage_known": true,
+      "prompt_tokens": 48224,
+      "cached_tokens": 12672,
+      "completion_tokens": 2090
+    }
+  ]
+}

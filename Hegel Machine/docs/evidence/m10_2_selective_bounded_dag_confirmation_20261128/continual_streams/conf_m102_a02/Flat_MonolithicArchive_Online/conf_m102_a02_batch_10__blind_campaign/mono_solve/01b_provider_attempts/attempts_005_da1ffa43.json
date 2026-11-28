@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da1ffa439652456c8ac47856151b848c",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_10__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_10__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:00.039193+00:00",
+  "ended_at_utc": "2026-11-28T15:50:25.315263+00:00",
+  "request_sha256": "8322d4a644108847d3e94d4949dac4f49687dd02db85b936c831140d2fd0a97f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39089,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28754,
+    "cached_tokens": 12672,
+    "completion_tokens": 1027
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_04_solver.py; sed -n '1,65p' /tmp/hegel_continual_archive/*batch_06_solver.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/detail.py | head -20; cat >/tmp/opscan.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; dat=np.load('/tmp/detail.npz'); x=dat['x']; a=dat['amp']; y=s['train']['y']; t=s['eval_times']; B=-np.expm1(-t[:,None]*dat['rates']);\\ndef ls(f,z):return np.linalg.lstsq(f,z,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ni,j=np.triu_indices(4); ij=i!=j\\ndef quad(x):return x[:,i]*x[:,j]\\ndef cv(f, l=0):\\n w=ls(np.r_[f[:52],l*np.eye(f.shape[1])],np.r_[np.c_[y,a][:52],np.zeros((f.shape[1],3))]); e=f[52:]@w-np.c_[y,a][52:];return np.round([np.mean(abs(e[:,0])),np.mean(abs(e[:,1:]@B.T)),*np.mean(abs(e[:,1:]),0)],5)\\nprint('base',cv(aff(x)),cv(np.c_[aff(x),quad(x)])); ops={}\\nfns={'tan':(lambda x,p:np.tanh(p[0]*x),[1.]),'sin':(lambda x,p:np.sin(p[0]*x),[1.]),'rat':(lambda x,p:x/(1+p[0]*abs(x)**p[1]),[1.,2.]),'exp':(lambda x,p:x*np.exp(-p[0]*abs(x)**p[1]),[1.,2.]),'cos':(lambda x,p:np.cos(p[0]*x),[1.]),'sq':(lambda x,p:x*x,[]),'cross':(lambda x,p:x[:,i[ij]]*x[:,j[ij]],[]),'quad':(lambda x,p:quad(x),[]),'poly3':(lambda x,p:x**3,[])}\\nfor k in ('panel_b','panel_c'):\\n u=s[k]['u']\\n for n,v in s[k].items():\\n  if n=='u':continue\\n  res=[]\\n  for name,(fun,p0) in fns.items():\\n   for base in (0,1):\\n    def f(q,p):return np.c_[aff(q),fun(q,p)] if base else np.c_[np.ones(len(q)),fun(q,p)]\\n    def r(p):\\n     A=f(u,p);return (A@ls(A,v)-v).ravel()\\n    p=least_squares(r,p0,bounds=(.02,12.)).x if p0 else []\\n    err=np.std(r(p)); h=f(x,p)@ls(f(u,p),v); sc=cv(np.c_[aff(x),h]); res.append((err,name,base,p,sc,h))\\n  print(k,n)\\n  for R in sorted(res,key=lambda z:z[0])[:6]:print(R[:-1])\\n  print('best cv');\\n  for R in sorted(res,key=lambda z:z[4][1])[:4]:print(R[:-1]);\\n  ops[k+n]=min(res,key=lambda z:z[0])[-1]\\nnp.savez('/tmp/ops.npz',**ops)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/opscan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test componentwise primitive dictionaries for auxiliary operators after nonlinear calibration; best archived trajectory MAE is 0.128928.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The single-index panel models leave substantial residuals. Test shared componentwise primitives and score the reconstructed panel outputs against both downstream branches.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ef165cfbabd0d721e1466ebef01f2d3071ac17157af0747407024c5e3440d229",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25789.03,
+      "usage_known": true,
+      "prompt_tokens": 28754,
+      "cached_tokens": 12672,
+      "completion_tokens": 1027
+    }
+  ]
+}

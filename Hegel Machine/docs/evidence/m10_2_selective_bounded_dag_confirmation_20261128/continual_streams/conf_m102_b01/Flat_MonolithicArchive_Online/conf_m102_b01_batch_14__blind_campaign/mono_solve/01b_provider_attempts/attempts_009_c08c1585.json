@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c08c15853b55478e9ec0274b77d73456",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:31.481458+00:00",
+  "ended_at_utc": "2026-11-28T16:03:11.097823+00:00",
+  "request_sha256": "17105ddeb83fb86d6e2786f5c33507eb14daf40896e7790a4f147a91160b1a48",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49045,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31883,
+    "cached_tokens": 12672,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit14.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom itertools import combinations\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; obs=tr['traj']; t=s['eval_times']; n=len(x)\\nprint('study and train keys',sorted(s),sorted(tr),'unique times',len(np.unique(t)))\\na=s['panel_a']; u,v=a['u'],a['v']; affine=m._aff(u); basis=m._cal_basis(u)\\nkeep=np.ones(len(u),bool)\\nfor _ in range(8):\\n c=np.stack([m._ls(basis[keep,j],v[keep,j]) for j in range(4)])\\n e=np.linalg.norm((basis*c).sum(axis=-1)-v,axis=1); keep=e<=max(8*np.median(e),.002)\\nidx=np.flatnonzero(keep); out=[]\\nfor k in idx:\\n ii=idx[idx!=k]; ca=m._ls(affine[ii],v[ii]); cn=np.stack([m._ls(basis[ii,j],v[ii,j]) for j in range(4)])\\n out.append([affine[k]@ca-v[k],(basis[k]*cn).sum(-1)-v[k]])\\nprint('Panel A clean-row leave-one-out RMSE (affine, nonlinear)',np.sqrt(np.mean(np.array(out)**2,axis=(0,2))), 'gross residuals',e[~keep]); assert np.sqrt(np.mean(np.array(out)[:,1]**2)) < .001\\nq=m._latent(s,x); a=m._aff(q); d=np.c_[a,q[:,0]*q[:,2],q[:,1]*q[:,3]]\\nbases={'quadratic':d,'affine':a}\\nfor power in [.05,.22,1.]:\\n for name,g in [('coordinate',q),('sum',np.column_stack([q[:,i]+q[:,j] for i,j in combinations(range(4),2)])),('difference',np.column_stack([q[:,i]-q[:,j] for i,j in combinations(range(4),2)]))]:\\n  bases[f'plus_{name}_rational_{power}']=np.c_[d,g/(1+power*g*g)]\\n  for j in range(g.shape[1]):bases[f'quotient_{name}_{j}_{power}']=d/(1+power*g[:,j,None]**2)\\nbases['plus_distinct_triples']=np.c_[d,*[np.prod(q[:,j],axis=1) for j in combinations(range(4),3)]]\\nrng=np.random.default_rng(182); splits=[np.arange(n)] + [rng.permutation(n) for _ in range(40)]\\nfor axis in [0,1,2,3]:\\n i=np.argsort(x[:,axis]);splits.extend([i,i[::-1]])\\nsplits.append(np.argsort(np.linalg.norm(x,axis=1)))\\ndef i_mae(d,i,j):return np.mean(np.abs(d[j]@m._ls(d[i],y[i])-y[j]))\\nerrs=[]; picks=[]\\nfor split in splits:\\n i,j=split[:52],split[52:]; inner=np.array_split(i,4)\\n key=min(bases,key=lambda k:np.mean([i_mae(bases[k],np.setdiff1d(i,f),f) for f in inner])); picks.append(key)\\n local={**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':x[j]}}; pred=m.solve_batch(local)\\n d0=np.abs(pred['y_hat']-y[j]); dt=np.abs(pred['state_pred']-obs[j]); z=pred['state_pred'][:,-1]\\n np.testing.assert_allclose(pred['diagnostics_vec'],[pred['y_hat'].mean(),pred['y_hat'].std(),z.mean(),z.std()]); errs.append([d0.mean(),dt.mean(),dt.mean(0).max(),i_mae(bases[key],i,j)])\\nE=np.array(errs);print('scalar / state / worst time / nested grammar scalar'); print('required',E[0]); print('means',E.mean(0),'max',E.max(0),'max ordered',E[-9:].max(0)); print('selected grammar counts',[(k,picks.count(k)) for k in sorted(set(picks))]); assert E[:,:3].max()<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit14.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine calibration) → H2 (nonlinear inverse calibration, cosine B and C-v1 with separate readouts); the largest previously measured slice MAE is 0.00624.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch classification, relay, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The public task supplies continuous outputs, a single apparatus vector, and no batch labels, relay states, or density observations; those checks would not test the specified system.\"\n    }\n  ],\n  \"rationale\": \"Use clean-panel leave-one-out residuals to independently test the calibration pivot, then compare the compact readout against rational and interaction challengers selected only within outer training folds. Coordinate-ordered and high-norm holdouts test extrapolation on measured data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c63c71db258a1b7370cb39321bca72930a402caa03cd35a7890a6b17e6e85c55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40246.08,
+      "usage_known": true,
+      "prompt_tokens": 31883,
+      "cached_tokens": 12672,
+      "completion_tokens": 1451
+    }
+  ]
+}

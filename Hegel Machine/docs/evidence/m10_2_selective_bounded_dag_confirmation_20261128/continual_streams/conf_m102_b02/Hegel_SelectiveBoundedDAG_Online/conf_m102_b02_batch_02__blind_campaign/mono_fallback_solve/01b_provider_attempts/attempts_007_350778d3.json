@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "350778d3c4d0437c88fcccd49e20e126",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:16:41.260087+00:00",
+  "ended_at_utc": "2026-11-28T15:17:12.541208+00:00",
+  "request_sha256": "01789e3ff693f309896b5131215c26241de48f78ce4d67d01db9aba9322b99c5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51298,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34714,
+    "cached_tokens": 12672,
+    "completion_tokens": 1313
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict scalar and trajectory readouts in calibrated panel coordinates.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _affine_design(u):\\n    return np.column_stack((np.ones(len(u)), u))\\n\\n\\ndef _calibrate(panel, measured):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    corrected = np.empty_like(measured, dtype=float)\\n    for j in range(u.shape[1]):\\n        d = _affine_design(u[:, j:j+1])\\n        keep = np.ones(len(u), bool)\\n        for _ in range(8):\\n            coef = np.linalg.lstsq(d[keep], v[keep, j], rcond=None)[0]\\n            residual = np.abs(d @ coef - v[:, j])\\n            new = residual <= max(.0005, 4 * np.median(residual))\\n            if new.sum() < 3 or np.array_equal(new, keep):\\n                break\\n            keep = new\\n        corrected[:, j] = (measured[:, j] - coef[0]) / coef[1]\\n    return corrected\\n\\n\\ndef _design(z):\\n    pairs = ((0, 1), (0, 3), (1, 2), (2, 3))\\n    triples = [c for c in combinations_with_replacement(range(4), 3)\\n               if any(i in c and j in c for i, j in pairs)]\\n    return np.column_stack((np.ones(len(z)), z, *(\\n        np.prod(z[:, c], axis=1) for c in (*pairs, *triples))))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = _calibrate(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    b = study['panel_b']\\n    operator = np.linalg.lstsq(_affine_design(b['u']), b['v'], rcond=None)[0]\\n    d = _design(_affine_design(x) @ operator)\\n    target = np.column_stack((train['y'], train['traj']))\\n    coef = np.linalg.lstsq(d[:n], target, rcond=None)[0]\\n    pred = d[n:] @ coef\\n    y, state = pred[:, 0], pred[:, 1:]\\n    end = state[:, -1]\\n    return dict(y_hat=y, state_pred=state,\\n                diagnostics_vec=np.array([y.mean(), y.std(), end.mean(), end.std()]))\\nPY\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\ncat > /tmp/refine.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _design\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nA=np.load('/tmp/paths.npz'); z=A['z'];T=A['T'];Y=A['Y'];t=A['t'];n=52;D=_design(z); H=np.c_[Y,T]\\nnp.set_printoptions(precision=5,suppress=True,linewidth=145)\\nW=np.linalg.lstsq(D[:n],H[:n],rcond=None)[0];r=H-D@W;print('CV errors',abs(r[n:]).mean(0)); print('fit errors',abs(r[:n]).mean(0)); print('SVD T/H/R',*(np.linalg.svd(M,compute_uv=False) for M in [T,H,r[:n]]));print('coeff',W)\\nfor j,k in [(0,5),(5,9),(9,21),(0,21)]:\\n Z=W[j:k];print('block singular',j,k,np.linalg.svd(Z,compute_uv=False));print('time rows V',np.linalg.svd(Z,full_matrices=False)[2][:3]); print('y v time coeff corr',np.corrcoef(Z.T)[0]);\\nprint('residual corr',np.corrcoef(r[:n].T)[0]);print('tele',A['t'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (full cubic readouts) → H2 (21-term bilinear-path readouts); worst MAEs over 17 splits were 0.00921 for y, 0.00723 overall for trajectories, and 0.01130 at a single horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Include panel C v2\",\"rejected_reason\":\"It increases worst-split trajectory MAE from 0.00723 to 0.01160 when added to the supported cubic span.\"}],\"rationale\":\"Save and schema-check the compact predictor, then inspect coefficient and residual ranks to see whether shared scalar and trajectory structure can improve held-out errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "42dac1299dfa46f03f81c13ed20b16ad49f0d27cfff79061cff75fe78815788d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31279.86,
+      "usage_known": true,
+      "prompt_tokens": 34714,
+      "cached_tokens": 12672,
+      "completion_tokens": 1313
+    }
+  ]
+}

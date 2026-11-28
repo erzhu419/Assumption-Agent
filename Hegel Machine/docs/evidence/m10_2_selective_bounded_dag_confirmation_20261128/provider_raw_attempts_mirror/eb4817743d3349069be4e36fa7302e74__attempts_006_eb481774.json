@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb4817743d3349069be4e36fa7302e74",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Hegel_SelectiveBoundedDAG_Online__conf_m102_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:27.284357+00:00",
+  "ended_at_utc": "2026-11-28T15:05:57.138831+00:00",
+  "request_sha256": "2cfa66fcc278d48dd79a5b213380c425a1829d619e9b2d931317897fcacbcf87",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44425,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31009,
+    "cached_tokens": 12672,
+    "completion_tokens": 1044
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/sparse_probe.py <<'PY'\\nimport numpy as np,pickle,runpy,itertools\\nfrom sklearn.model_selection import KFold\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; T=s['train']['traj']; w=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['w'][:len(y)]\\npairs=list(itertools.combinations_with_replacement(range(w.shape[1]),2)); F=np.column_stack([np.ones(len(w)),w,*[w[:,i]*w[:,j] for i,j in pairs]]); names=['1']+[str(i) for i in range(w.shape[1])]+[str(p) for p in pairs]\\nls=lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\ndef sel(a,Y,penalty):\\n    J=list(range(F.shape[1])); n=len(a)\\n    def fit(j):\\n        A=F[np.ix_(a,j)]; q=ls(A,Y[a]); return n*np.log(max(np.mean((A@q-Y[a])**2),1e-30))+penalty*len(j)*np.log(n)\\n    while len(J)>1:\\n        score=fit(J); v,j=min((fit([l for l in J if l!=k]),k) for k in J)\\n        if v>=score:break\\n        J.remove(j)\\n    return J\\nprint('coefficients: term scalar endpoints'); print([(nm,round(v,4),np.round(r[[0,-1]],4).tolist()) for nm,v,r in zip(names,ls(F,y),ls(F,T))]); print('w columns',w.shape)\\nsplits=[(np.arange(52),np.arange(52,72))];\\nfor seed in range(6):splits+=list(KFold(6,shuffle=True,random_state=seed).split(F))\\nr=np.linalg.norm(w,axis=1); splits += [(np.argsort(r)[:-12],np.argsort(r)[-12:])]\\nfor p in [0,.5,1,2,3,4]:\\n    for Y in [y,T]:\\n        err=[]; tails=[]; selection=[]\\n        for a,b in splits:\\n            j=sel(a,Y,p); pred=F[np.ix_(b,j)]@ls(F[np.ix_(a,j)],Y[a]); ee=np.abs(pred-Y[b]); err.append(ee.mean()); tails.append(max(ee.mean(axis=0).ravel())); selection.append(j)\\n        print('p',p,'shape',Y.shape,'public mean max extrap',np.round([err[0],np.mean(err[1:-1]),max(err[1:-1]),err[-1]],6),'worst horizon',round(max(tails),6),'public selected',[names[k] for k in selection[0]],'full selected',[names[k] for k in sel(np.arange(len(y)),Y,p)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse_probe.py; cat /holdout_task/_frozen_nodes/node_00.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether sparse quadratic heads preserve the full quadratic model’s accuracy; the worst shuffled-fold MAEs so far are 0.03412 for the scalar and 0.00702 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Impose a specific two-function time law\",\n      \"rejected_reason\": \"The rational and double-exponential bases fit nearly equally well, so the time law is not yet uniquely identified.\"\n    }\n  ],\n  \"rationale\": \"Several quadratic coefficients are near zero. Select terms using only each training fold and compare against the full basis on both shuffled folds and a high-radius extrapolation slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e2cc200334b975fafee23de7064592508d481c76305ed76c47f13def54e9d986",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29853.36,
+      "usage_known": true,
+      "prompt_tokens": 31009,
+      "cached_tokens": 12672,
+      "completion_tokens": 1044
+    }
+  ]
+}

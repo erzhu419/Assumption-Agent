@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db4938d01cba4189844fd5e5a40ed310",
+  "call_seq": 5,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_16__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_16__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:37:57.554308+00:00",
+  "ended_at_utc": "2026-11-28T16:38:34.701434+00:00",
+  "request_sha256": "7f8283cb1b9eff6cbc2dff13aa46a1ea1259e70be6f236419f6266885315aca1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41272,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29070,
+    "cached_tokens": 12672,
+    "completion_tokens": 1484
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/hegel_spatial_probe.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nsys.path.insert(0,'/holdout_task/_frozen_nodes');import node_00 as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];d=np.load('/tmp/hegel_public_features.npz');X,R,T,y=(d[k] for k in ('X','R','T','y'));z=X[:,:4];u,v=[s['panel_b'][k] for k in ('u','v')];qu=lambda z:m._quad(z)\\nb,h=m._branch(s['panel_b'],z); w=z-.4*np.sin(h[0]*z)\\nprint('branch linear transform',np.round(np.linalg.lstsq(np.c_[np.ones(len(z)),w],b,rcond=None)[0],3));print('archived diagnostics');print(open('/tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json').read()[:1800]);\\nrng=np.random.default_rng(19); folds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(rng.permutation(72),4)]\\ndef fit(A,B,p): return np.linalg.lstsq(np.r_[A,np.diag(np.sqrt(p))],np.r_[B,np.zeros((len(p),B.shape[1]))],rcond=1e-10)[0]\\ndef evaluate(D,Y,prior,regs,robust=False):\\n Y=Y.reshape(len(Y),-1); out=[]\\n for l in regs:\\n  es=[]\\n  for a,c in folds:\\n   A=D[a]; scale=np.maximum(np.sqrt(np.mean(A*A,0)),1e-9);A=A/scale; B=Y[a];p=l*np.asarray(prior); W=fit(A,B,p)\\n   if robust:\\n    for _ in range(8):\\n     e=np.sqrt(np.mean((A@W-B)**2,axis=1));wt=(1+(e/max(np.median(e)*2,1e-5))**2)**(-.5);W=fit(A*wt[:,None],B*wt[:,None],p)\\n   es.append(np.mean(abs((D[c]/scale)@W-Y[c])))\\n  out.append((l,es[0],np.mean(es[1:]),max(es[1:])))\\n return min(out,key=lambda x:x[1]+x[2]+x[3]*.3)\\nregs=np.geomspace(.0001,10,16)\\nalt={'b':b,'w':w};\\nfor kind in ('sinatan','sintanh','warp','rational','sincos'):alt[kind]=m._branch(s['panel_b'],z,kind)[0]\\nfor name,f in alt.items():\\n for typ,D in [('diagonal',np.c_[z,np.ones(len(z)),z*z,f*f,f]),('full',np.c_[z,np.ones(len(z)),qu(z),qu(f),f]),('mixed',np.c_[z,np.ones(len(z)),qu(z),qu(f),f,z*f])]:\\n  print(name,typ,'ridge',np.round(evaluate(D,T,np.ones(D.shape[1]),regs),5),'robust',np.round(evaluate(D,T,np.ones(D.shape[1]),regs,True),5))\\nfor name,D,Y in [('X',X,T),('R',R,y)]:\\n for l in (1e-5,1e-4,.001,.01,.1):\\n  es=[]\\n  for a,c in folds:\\n   A=D[a];scale=np.maximum(np.sqrt(np.mean(A*A,0)),1e-9);A=A/scale;B=Y[a].reshape(len(a),-1);W=fit(A,B,np.full(D.shape[1],l));\\n   for k in range(35):\\n    p=l/(.01+np.linalg.norm(W,axis=1)/np.sqrt(B.shape[1]))**1.25;W=fit(A,B,p)\\n   es.append(np.mean(abs((D[c]/scale)@W-Y[c].reshape(len(c),-1))))\\n  print('adaptive',name,l,np.round(es,5))\\nfor opt in [('diagonal',np.r_[0:5,5,9,12,14,15,19,22,24,25:29]),('Bdiag',np.r_[0:5,15,19,22,24,25:29]),('BdiagQ',np.r_[0:15,15,19,22,24,25:29])]:\\n D=X[:,np.unique(opt[1])];print(opt[0],np.round(evaluate(D,T,np.ones(D.shape[1]),regs),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/hegel_spatial_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 uniform ridge -> H2 sparse or block-structured spatial amplitudes; uniform ridge gives public trajectory MAE 0.052135 and worst random-fold MAE 0.070799.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refine only the temporal rate fit\",\"rejected_reason\":\"The best rank-two temporal basis reconstructs observed trajectories at about 0.0035 MAE, far below the spatial prediction error.\"}],\"rationale\":\"Test diagonal, mixed, adaptive-sparse, and robust spatial models across the public split and four additional folds to identify the dominant source of trajectory error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "96d3f1c82eed624ba0aaa3cf5c02ca0ac6bbbec41ad2f20afc8aa8e42734d8f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37916.16,
+      "usage_known": true,
+      "prompt_tokens": 29070,
+      "cached_tokens": 12672,
+      "completion_tokens": 1484
+    }
+  ]
+}

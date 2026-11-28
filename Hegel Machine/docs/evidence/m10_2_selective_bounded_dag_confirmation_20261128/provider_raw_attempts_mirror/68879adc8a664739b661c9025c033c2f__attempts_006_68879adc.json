@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "68879adc8a664739b661c9025c033c2f",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:16:35.152417+00:00",
+  "ended_at_utc": "2026-11-28T16:17:14.442937+00:00",
+  "request_sha256": "fe8c137d4b1ac8b5536c9d74aadb8e8c38ef844462a62b84440d02d10ab810ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43103,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32040,
+    "cached_tokens": 12672,
+    "completion_tokens": 1654
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ops14.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef D(*x):return np.column_stack((np.ones(len(x[0])),*x))\\ndef ls(x,y):return np.linalg.lstsq(x,y,rcond=1e-10)[0]\\ndef cal(p):\\n u,v=p['u'],p['v'];k=np.max(abs(u-v),1)<3;u,v=u[k],v[k]; j=np.arange(4);opp=np.roll(j,2)\\n def db(a,i,q):return D(a[:,i],a[:,opp[i]],np.sin(q[0]*a[:,i]),np.sin(q[1]*a[:,opp[i]]))\\n def err(q):return np.column_stack([db(u,i,q)@ls(db(u,i,q),v[:,i])-v[:,i] for i in j]).ravel()\\n q=least_squares(err,[2.4,2.4],bounds=(.5,5)).x;c=np.stack([ls(db(u,i,q),v[:,i]) for i in j]);print('A',q,np.std(err(q)),c)\\n def inv(x):\\n  return np.stack([least_squares(lambda a:np.array([db(a[None],i,q)[0]@c[i] for i in j])-t,t,gtol=1e-12).x for t in x])\\n return inv\\nfamilies={\\n 'tanh_sq':(lambda a,q:np.tanh(q[0]*a*a),[1.5],[.05],[8]),\\n 'tanh_shift_sq':(lambda a,q:np.tanh(q[0]*a*a+q[1]),[1.5,0],[.05,-3],[8,3]),\\n 'cos':(lambda a,q:np.cos(q[0]*a),[2.5],[.05],[8]),\\n 'exp':(lambda a,q:np.exp(-q[0]*a*a),[.3],[.005],[8]),\\n 'cos_sq':(lambda a,q:np.c_[np.cos(q[0]*a),a*a],[2.5],[.05],[8]),\\n 'tanh_sq_cos':(lambda a,q:np.c_[np.tanh(q[0]*a*a),np.cos(q[1]*a)],[1.5,2.5],[.05,.05],[8,8]),\\n 'tanh':(lambda a,q:np.tanh(q[0]*a),[1.5],[.05],[8]),\\n 'atan':(lambda a,q:np.arctan(q[0]*a),[1.5],[.05],[8]),\\n 'asinh':(lambda a,q:np.arcsinh(q[0]*a),[2.],[.05],[8]),\\n 'sin':(lambda a,q:np.sin(q[0]*a),[3.],[.05],[8]),\\n 'rat':(lambda a,q:a/(1+q[0]*a*a),[2.],[.005],[30]),\\n 'ratabs':(lambda a,q:a/(1+q[0]*abs(a)+q[1]*a*a),[1.,1.],[0.,0.],[30,30]),\\n 'expodd':(lambda a,q:a*np.exp(-q[0]*a*a),[.3],[.005],[8]),\\n 'tanh_sin':(lambda a,q:np.c_[np.tanh(q[0]*a),np.sin(q[1]*a)],[1.5,3],[.05,.05],[8,8]),\\n 'rat_sin':(lambda a,q:np.c_[a/(1+q[0]*a*a),np.sin(q[1]*a)],[2.,3],[.005,.05],[30,8]),\\n 'atan_sq':(lambda a,q:np.arctan(q[0]*a*a),[.5],[.005],[8]),\\n 'log':(lambda a,q:np.log1p(q[0]*a*a),[.3],[.005],[8]),\\n 'rateven':(lambda a,q:1/(1+q[0]*a*a),[.3],[.005],[8]),\\n 'sq':(lambda a,q:a*a,[],[],[])}\\ndef op(u,v,n,linear):\\n f,q0,lo,hi=families[n]\\n def db(a,q):return D(a,f(a,q)) if linear else D(f(a,q))\\n def err(q):\\n  b=db(u,q);return (b@ls(b,v)-v).ravel()\\n q=least_squares(err,q0,bounds=(lo,hi),gtol=1e-11).x if len(q0) else []\\n a=db(u,q); c=ls(a,v); e=err(q).reshape(v.shape); h=np.sum(np.linalg.qr(a,mode='reduced')[0]**2,axis=1);return np.sqrt(np.mean(e**2)),np.sqrt(np.mean((e/(1-h[:,None]))**2)),q,lambda x:db(x,q)@c,c\\nif __name__=='__main__':\\n cal(s['panel_a']);\\n for pn,key in [('b','v'),('c','v1'),('c','v2')]:\\n  p=s['panel_'+pn]; L=[]\\n  for name in families:\\n   for linear in [False,True]:\\n    try:\\n     e,loo,q,fn,c=op(p['u'],p[key],name,linear);L.append((loo,e,name,linear,q,c))\\n    except Exception as exc:print(name,exc)\\n  print(pn,key);L.sort(key=lambda t:t[0]);\\n  for row in L[:10]:print(*row[:-1]);\\n  print(L[0][-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ops14.py; sed -n '1,180p' /tmp/hegel_continual_archive/*_13_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection calibration robust reference panel' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed-grid nonlinear bases -> variable projection of compact panel operators; fixed-grid panel RMSE is 0.0037–0.0120, and best archived response MAE is 0.4137.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Estimate nonlinear scales from the reference measurements and compare residuals after adjusting for leverage. Accurate operators are needed before testing their ordering and readouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ae07ca23097a698a6de21da580dd8a6d9888a466cbcffa19036ff4400dac7240",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39289.61,
+      "usage_known": true,
+      "prompt_tokens": 32040,
+      "cached_tokens": 12672,
+      "completion_tokens": 1654
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60dc3fb80fda4b0db4a5da69d02c4c20",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:55.687121+00:00",
+  "ended_at_utc": "2026-11-28T15:06:26.079216+00:00",
+  "request_sha256": "000df368dd54931ca09557193f7881f174e77e02ecca2dce35f77ff6888453ab",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 20206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20124,
+    "cached_tokens": 12672,
+    "completion_tokens": 1010
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_dag.py <<'PY'\\nimport sys, pickle, numpy as np\\nfrom itertools import combinations_with_replacement as comb\\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\\nfrom node_00 import run_node\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=np.vstack([t['x'],s['test']['x']]); y=t['y']; z=t['traj']; n=len(y)\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\na=lambda q:np.column_stack([np.ones(len(q)),q]); fit=lambda u,v:np.linalg.lstsq(a(u),v,rcond=None)[0]\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec'],'summary',t['summary']); print('y/z ranges', [np.min(y),np.max(y)],z.min(0),z.max(0)); print('trajectory singular values and temporal basis',np.linalg.svd(z,full_matrices=False)[1:]); print('first x, y, z',x[:5],y[:5],z[:5]); print('x stats',x.mean(0),x.std(0),x.min(0),x.max(0))\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; print(k,'u mean/std',u.mean(0),u.std(0));\\n for key in set(p)-{'u'}:\\n  v=p[key]; w=fit(u,v); f=a(u)\\n  for _ in range(10):\\n   idx=np.argsort(np.linalg.norm(f@w-v,axis=1))[:int(.82*len(u))]; w=np.linalg.lstsq(f[idx],v[idx],rcond=None)[0]\\n  print(key,'robust affine',w,'abs residual percentiles',np.quantile(abs(f@w-v), [0,.5,.75,.9,1]))\\nfeatures=run_node({'__input__':s}); features['x']=a(x)\\nY=np.column_stack([y,z]); splits=[(np.arange(52),np.arange(52,n))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(np.random.default_rng(11).permutation(n),4)]\\nfor name,F in features.items():\\n for d in ([1] if name=='x' else [1,2,3]+([4] if name=='hybrid' else [])):\\n  g=F[:,:{1:5,2:15,3:35,4:70}[d]]\\n  vals=[]\\n  for reg in [1e-8,1e-4,.001,.01,.1,1]:\\n   ms=[]\\n   for i,j in splits:\\n    p=g[j]@np.linalg.solve(g[i].T@g[i]+reg*np.eye(g.shape[1]),g[i].T@Y[i]); e=abs(p-Y[j]); ms.append([e[:,0].mean(),e[:,1:].mean()])\\n   vals.append((reg,np.round(ms[0],5),np.round(np.max(ms,axis=0),5)))\\n  print(name,d,vals)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe_dag.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust affine ridge nuisance profiling' \",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited cubic regressions and rank-two trajectories -> H2 compare panel maps, polynomial degree, and empirical trajectory rank; worst-fold MAE pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Quantify both heads on the fixed public split and randomized folds, and use panel residuals and temporal singular values to guide structural model selection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "42063b3fb61270ea09f9be391d163d648888e5238a1cfbc3704ff4db48a84512",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30391.17,
+      "usage_known": true,
+      "prompt_tokens": 20124,
+      "cached_tokens": 12672,
+      "completion_tokens": 1010
+    }
+  ]
+}

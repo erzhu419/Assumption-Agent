@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38abdd0616dc436a84b3d7efdb66f048",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:18:14.225810+00:00",
+  "ended_at_utc": "2026-11-28T15:18:54.676559+00:00",
+  "request_sha256": "f6d570bcd8ee0cbc9d450cabdb0d29f5343caa84db7d1e50c425e3735e089381",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36288,
+    "cached_tokens": 12672,
+    "completion_tokens": 1527
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/separable.py | sed -n '/^times/,/^C2 \\\\[3\\\\]/p'; sed -n '115,250p' /holdout_task/test_dag_candidate.py; ls /tmp/cal*; cat >/tmp/outcome.py <<'PY'\\nexec(open('/tmp/fit.py').read().split(\\\"print('B linear'\\\")[0])\\nimport glob\\nfrom scipy.optimize import least_squares\\nu,v=c['u'],c['v1']; cf=lambda z:np.c_[np.ones(len(z)),z[:,0]*z[:,1],z[:,0]*z[:,3],z[:,1]*z[:,2],z[:,2]*z[:,3]]\\nC=cf(x)@ls(cf(u),v)\\nu,v=c['u'],c['v2']; cf2=lambda z,p:aff(z+p[0]*z*z/(1+p[1]*z*z)); fun=lambda p:(cf2(u,p)@ls(cf2(u,p),v)-v).ravel(); p=least_squares(fun,[.55,.18]).x; D=cf2(x,p)@ls(cf2(u,p),v)\\nY=np.c_[tr['y'],tr['traj']]; n=len(Y); ids=np.arange(n); folds=[(ids[:52],ids[52:])]+[(a[:52],a[52:]) for a in [np.random.default_rng(j).permutation(ids) for j in range(8)]]\\ndef cv(f,lam=.02):\\n f=f[:n]; ret=[]\\n for ti,vi in folds:\\n  F=aff((f-f[ti].mean(0))/np.maximum(f[ti].std(0),1e-8)); z=F[ti]; pred=F[vi]@np.linalg.solve(z.T@z+lam*np.eye(z.shape[1]),z.T@Y[ti]); r=abs(pred-Y[vi]); ret.append([r[:,0].mean(),r[:,1:].mean()])\\n return np.r_[ret[0],np.max(ret,0),np.mean(ret,0)]\\nu,v=b['u'],b['v']; Bs={'cubic':aff(x**3)@ls(aff(u**3),v),'lcubic':np.c_[aff(x),x**3]@ls(np.c_[aff(u),u**3],v)}; Bs.update({a.split('/tmp/cal_B_')[-1][:-4]:np.load(a)['bx'] for a in glob.glob('/tmp/cal_B_*.npz')})\\n# Fit shared separable rational cubics, allowing input saturation or enhancement.\\nfor name,g in [('cuberat',lambda z,p:(z**3+p[0]*z)/(1+p[1]*z*z)),('cubetan',lambda z,p:np.tanh(p[0]*z**3)+p[1]*z),('cubeatan',lambda z,p:np.arctan(p[0]*z**3)+p[1]*z),('rat1',lambda z,p:z/(1+p[0]*z*z)+p[1]*z**3),('odd',lambda z,p:z+p[0]*z**3+p[1]*z**5),('cubeout',lambda z,p:z)] :\\n def err(p):\\n  Z=aff(g(u,p)); return (Z@ls(Z,v)-v).ravel()\\n fit=min((least_squares(err,p0,bounds=([-20,-.40],[40,30]),max_nfev=120) for p0 in ([.22,.22],[1.25,1.25],[4.,.2],[.1,-.2])),key=lambda fit:fit.cost); p=fit.x; print('B warp',name,p,np.mean(abs(err(p)))); Bs[name]=aff(g(x,p))@ls(aff(g(u,p)),v)\\nfor name,M in Bs.items():\\n print('B',name,'C2 p',p if False else '')\\n results=[]\\n for an,L in [('B',M),('BC',np.c_[M,C]),('BD',np.c_[M,D]),('BCD',np.c_[M,C,D]),('BC+D',np.c_[M+C,D]),('BC-D',np.c_[M-C,D]),('B+C+D',M+C+D),('CX',np.c_[C,D,x])]:\\n  def nlf(z,k):return [z,np.tanh(1.25*z),np.arctan(1.25*z),np.arcsinh(1.25*z),np.sinh(np.arcsinh(4*z)/3),np.sin(1.25*z),z+z**3,np.c_[z,np.tanh(1.25*z)]][k]\\n  for k in range(8):\\n   f=nlf(L,k); results.append((cv(f),an,k));\\n   if k in [0,4] and an in ['BCD','B','BC','BD']: results.append((cv(np.c_[f,q(f[:,:4])]),an+'+Q',k))\\n for j in [0,1]:\\n  for err,an,k in sorted(results,key=lambda a:a[0][j+2])[:4]: print(j,an,k,err.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/outcome.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: combine sparse bilinear C1 features with separable rational C2 calibration and screen nonlinear panel-B representations; C2 pooled calibration LOO MAE is 0.000224, while the full-quadratic outcome baseline has worst MAEs of 0.1018 and 0.1251.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a free quartic expansion for C2\",\"rejected_reason\":\"Its calibration LOO MAE is roughly four times that of the separable rational map.\"}],\"rationale\":\"Recover the missing panel-B results without truncation, then compare calibrated features for scalar and trajectory outcomes on repeated splits before writing the sink.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ea51c28a8e26be4e204e71ef224c50c7f84f54d5cac46714d459f815e69f64d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40449.22,
+      "usage_known": true,
+      "prompt_tokens": 36288,
+      "cached_tokens": 12672,
+      "completion_tokens": 1527
+    }
+  ]
+}

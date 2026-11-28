@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69c1ef020c284ee1944d340d08ec3b77",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:04:32.751504+00:00",
+  "ended_at_utc": "2026-11-28T15:05:23.630820+00:00",
+  "request_sha256": "a0f52e7af99b6718378e6a8c4018bc6af7cc857bccaff40d0f2fb4f938d45176",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 70949,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41431,
+    "cached_tokens": 5504,
+    "completion_tokens": 1796
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('node_01.py')\\ns = p.read_text().split('def _features')[0]\\ns = s.replace('import numpy as np', 'import numpy as np\\\\nfrom scipy.optimize import minimize_scalar')\\np.write_text(s + '''def _features(z, frequency):\\n    w = np.sin(frequency * z)**3\\n    pairs = [w[:, i]*w[:, j] for i, j in combinations(range(z.shape[1]), 2)]\\n    return np.column_stack((np.ones(len(z)), w, z, w*w, *pairs))\\n\\n\\ndef _fit(z, targets, square_penalty, pair_penalty, rank=None):\\n    n = z.shape[1]\\n    scale = np.maximum(targets.std(axis=0), 1e-8)\\n\\n    def profile(frequency):\\n        design = _features(z, frequency)\\n        penalty = design.std(axis=0)**2\\n        penalty[1:1+2*n] *= .0135\\n        penalty[1+2*n:1+3*n] *= square_penalty\\n        penalty[1+3*n:] *= pair_penalty\\n        coef = np.linalg.solve(design.T @ design + np.diag(penalty), design.T @ targets)\\n        return design, coef\\n\\n    def loss(frequency):\\n        design, coef = profile(frequency)\\n        return np.mean(((design @ coef - targets) / scale)**2)\\n\\n    frequency = minimize_scalar(loss, bounds=(.5, 1.2), method='bounded',\\n                                options={'xatol': 1e-5}).x\\n    design, coef = profile(frequency)\\n    if rank is not None:\\n        _, _, vt = np.linalg.svd(design @ coef, full_matrices=False)\\n        modes = vt[:rank].T\\n        coef = (coef @ modes) @ modes.T\\n    return frequency, coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, frozen = inputs['__input__'], inputs['node_00']\\n    offsets, gains = _calibrate(study['panel_a'])\\n    z = (np.asarray(frozen['a'], float)[:, 1:] - offsets) / gains\\n    y = np.asarray(study['train']['y'], float).reshape(-1, 1)\\n    states = np.asarray(study['train']['traj'], float)\\n    fy, by = _fit(z, y, 1.4, 6.)\\n    fs, bs = _fit(z, states, 5.6, 20., rank=2)\\n    return {'offsets': offsets, 'gains': gains, 'frequencies': np.array([fy, fs]),\\n            'endpoint_coef': by, 'trajectory_coef': bs}\\n''')\\nPY\\ncat > node_02.py <<'PY'\\n\\\"\\\"\\\"Apply the calibrated endpoint and trajectory readouts.\\\"\\\"\\\"\\nfrom itertools import combinations\\nimport numpy as np\\n\\n\\ndef _features(z, frequency):\\n    w = np.sin(frequency * z)**3\\n    pairs = [w[:, i]*w[:, j] for i, j in combinations(range(z.shape[1]), 2)]\\n    return np.column_stack((np.ones(len(z)), w, z, w*w, *pairs))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    a = np.asarray(inputs['node_00']['a_test'], float)\\n    fit = inputs['node_01']\\n    z = (a[:, 1:] - fit['offsets']) / fit['gains']\\n    fy, fs = fit['frequencies']\\n    y = (_features(z, fy) @ fit['endpoint_coef']).ravel()\\n    states = _features(z, fs) @ fit['trajectory_coef']\\n    final = states[:, -1]\\n    return {'y_hat': y, 'state_pred': states,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nresult=$(python3 -I /holdout_task/test_dag_candidate.py)\\nprintf '%s\\\\n' \\\"$result\\\"\\npython3 -I -c 'import json,sys; r=json.loads(sys.argv[1]); assert r[\\\"accepted\\\"] and all(v==1 for v in r[\\\"exec_counts\\\"].values())' \\\"$result\\\"\\npython3 -I - <<'PY'\\nimport runpy, copy\\nimport numpy as np\\nm=runpy.run_path('/tmp/final10.py'); load=m['load']; s=m['s']; N=m['N']; Y=m['Y']\\nfrozen=load('_frozen_nodes/node_00.py'); fitter=load('node_01.py'); sink=load('node_02.py')\\nerrors=[]\\nfor j in m['folds']+m['newer']:\\n    i=np.setdiff1d(N,j); study=copy.deepcopy(s)\\n    for k in ('x','y','traj'): study['train'][k]=s['train'][k][i]\\n    study['test']['x']=s['train']['x'][j]\\n    f=frozen.run_node({'__input__':study}); p=fitter.run_node({'__input__':study,'node_00':f}); o=sink.run_node({'node_00':f,'node_01':p})\\n    y,t,d=(o[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape==(len(j),) and t.shape==(len(j),Y.shape[1]-1) and d.shape==(4,)\\n    assert np.isfinite(np.r_[y,t.ravel(),d]).all()\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])\\n    e=abs(np.c_[y,t]-Y[j]); errors.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(axis=0).max()])\\ne=np.asarray(errors); worst=e.max(axis=0)\\nprint('Exact artifact stress:',len(e),'slices; worst endpoint / trajectory / individual horizon MAE:',worst)\\nassert np.all(worst<=.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared nonlinear fit -> H2 separate regularized sine-cubic readouts; prototype worst endpoint/trajectory MAE is 0.02743/0.02157 across both split sets, with worst individual-horizon MAE 0.02985.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the endpoint fit with the lowest original tail error\",\n      \"rejected_reason\": \"Its worst error increases to 0.03412 across both split sets, versus 0.02743 for the selected fit.\"\n    }\n  ],\n  \"rationale\": \"Promote the independently regularized readouts because they improve both official-split prototypes and coordinate-tail stability. Verify the exact two-node implementation in isolated processes against the official gate, all stress folds, each trajectory horizon, and the diagnostics contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "2bc4b735cf828dff49751d088c5af7c5f872a1df9ca24c0d3d91f98fdb43d8af",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51391.68,
+      "usage_known": true,
+      "prompt_tokens": 41431,
+      "cached_tokens": 5504,
+      "completion_tokens": 1796
+    }
+  ]
+}

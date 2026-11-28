@@ -1,0 +1,163 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m102_a04_batch_10_84311911b22c",
+    "source_hash": "84311911b22c519f588101bba03f72670043b804a6ff1ac283c605d7a6d49b7d",
+    "parent_ids": [],
+    "source_episode_id": "mono_solve",
+    "task_id": "conf_m102_a04_batch_10__blind_campaign",
+    "wormhole_family": "m102_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit10.py",
+        "archived_relpath": "producers/tmp__audit10.py",
+        "bytes": 1347,
+        "sha256": "3ff9abaf5893a22dc87f65f952a4a8ec31e0057c303c959221bf6c78e2897787"
+      },
+      {
+        "container_path": "/tmp/batch10_full_bilinear.py",
+        "archived_relpath": "producers/tmp__batch10_full_bilinear.py",
+        "bytes": 2685,
+        "sha256": "91f2a1c5135f6cc2c9909f1b39d5347d13acf2b56752abdc7cdee39f5c64977b"
+      },
+      {
+        "container_path": "/tmp/compact10.py",
+        "archived_relpath": "producers/tmp__compact10.py",
+        "bytes": 1493,
+        "sha256": "ef624a40534ec0c407508dfc3ff3dee0a51b917b6b745e261a8450cf2e2f6b70"
+      },
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 2486,
+        "sha256": "f990f420b531dd3019e3456346ff2edfa5e2962a850f04851c1e2973b5de08c6"
+      },
+      {
+        "container_path": "/tmp/final_audit10.py",
+        "archived_relpath": "producers/tmp__final_audit10.py",
+        "bytes": 1634,
+        "sha256": "f2389a058b8f8f94bf9b9415d6468b13f1e03b7ad6ed3fd1b540737cabacdbe5"
+      },
+      {
+        "container_path": "/tmp/operators10.py",
+        "archived_relpath": "producers/tmp__operators10.py",
+        "bytes": 1830,
+        "sha256": "d18dd13bd21648c074c336e79fbab6ec026f9a0fbe638b999ab0172c1e036054"
+      },
+      {
+        "container_path": "/tmp/separate10.py",
+        "archived_relpath": "producers/tmp__separate10.py",
+        "bytes": 1482,
+        "sha256": "472c51b68e185400a8e2f86ff3faef806eb61c96746bfb39cf69c295f96bb6e9"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a04_batch_00_solver.py",
+        "bytes": 3047,
+        "sha256": "3b6f7dfd18373895c436630a920c32b99bd57b50b52ac3e2ac9428d7f7b96508"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a04_batch_01_solver.py",
+        "bytes": 2391,
+        "sha256": "73e5b1a39d1a0866097bcb2d73fdb6334fae8621f4ced1c57496519c6d5dc40a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a04_batch_03_solver.py",
+        "bytes": 2879,
+        "sha256": "5949e8f68ca2682c64ad50faedbda2a16249cbad1d98b4f100e554b2f39b6f5a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_05_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a04_batch_05_solver.py",
+        "bytes": 3263,
+        "sha256": "8b17c8214b4227c5691c317a9f442a0b6b0dfb14f6da66d270e1eb2d15c59f30"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_06_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m102_a04_batch_06_solver.py",
+        "bytes": 2865,
+        "sha256": "2869ac511a8c540d9906794cc9ed1671b0e5548c8707adbe01dc271cdc0b93bf"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; ls -la; cat validate_public_schema.py; ls -la /tmp/hegel_continual_archive; cat /tmp/hegel_continual_archive/archive_manifest.json; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference panel alignment regression ridge nuisance profiling'",
+      "cd /holdout_task; cat public_asset_index.json; tail -25 validate_public_schema.py; ls -lh /tmp/hegel_continual_archive; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -nE '^def |^class |^[[:space:]]*# ' \"$f\" | head -95; done; python3 - <<'PY'\nimport pickle,numpy as n\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True)\nfor k,v in s.items():\n if not isinstance(v,dict): print(k,v); continue\n for j,a in v.items(): print(k,j,a.shape,'range',a.min(axis=0),a.max(axis=0),'first',a[:4])\nPY",
+      "cd /holdout_task; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; wc -l \"$f\"; grep -nE '^def ' \"$f\"; done; cat /tmp/hegel_continual_archive/*batch_05_solver.py; tail -50 /tmp/hegel_continual_archive/*batch_06_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -20",
+      "cd /holdout_task; export OPENBLAS_NUM_THREADS=1; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \"$f\"); python3 validate_public_schema.py \"$f\"; done; sed -n '25,92p' /tmp/hegel_continual_archive/*batch_00_solver.py; sed -n '12,58p' /tmp/hegel_continual_archive/*batch_01_solver.py; python3 - <<'PY'\nimport pickle,numpy as n\nfrom scipy.optimize import least_squares\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; T=s['train']['traj']; print('SVD',n.linalg.svd(T,compute_uv=False));\nfor k in (1,2,3):\n def residual(r):\n  b=-n.expm1(-t[:,None]*r);",
+      "cat >/tmp/explore.py <<'PY'\nimport importlib.util,glob,pickle,numpy as np\nfrom scipy.optimize import least_squares\nm=importlib.util.module_from_spec(sp:=importlib.util.spec_from_file_location('arch',glob.glob('/tmp/hegel_continual_archive/*batch_03_solver.py')[0]));sp.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=m._calibrate(s['panel_a'],tr['x']); ls=m.lin; one=m.one\nu=s['panel_c']['u']; unique=[('tanh',lambda w,q:np.tanh(q[0]*w)),('tanh+lin',lambda w,q:np.c_[w,np.tanh(q[0]*w)]),('cos',lambda w,q:np.cos(q[0]*w)),('cos+lin',lambd",
+      "cat >/tmp/operators10.py <<'PY'\nexec(open('/tmp/explore.py').read().split('ops=[]')[0])\nY=s['panel_c']['v1']; t=s['eval_times']; b=s['panel_b']; tel=s['telemetry_vec']; print('times',t,'telemetry',tel)\nfuncs={'tanh':lambda x,k:np.tanh(k*x),'sin':lambda x,k:np.sin(k*x),'rational':lambda x,k:x/(1+k*x*x),'radical':lambda x,k:x/np.sqrt(1+k*x*x),'atan':lambda x,k:np.arctan(k*x),'erf':__import__('scipy.special',fromlist=['erf']).erf,'softsign':lambda x,k:x/(1+k*abs(x))}\nfuncs['erf']=lambda x,k:__import__('scipy.special',fromlist=['erf']).erf(k*x)\nextra={'lin':lambda x:x,'cubic':lambda x:x**3,'quinti",
+      "set -e\nf=/holdout_task/batch_solver.py\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/*batch_03_solver.py | sed '1c\\\"\"\"Cyclic calibration, panel operators, and separate response readouts.\"\"\"' > \"$f\"\npython3 - <<'PY'\np='/holdout_task/batch_solver.py'\ns=open(p).read(); a=s.index('def _panel_maps'); b=s.index('def _time_basis',a)\ns=s[:a]+'''def _panel_maps(panel, z):\n    u = np.asarray(panel['u'])\n\n    def odd(w, k):\n        return one(np.c_[np.tanh(k*w), w, w**3, w**5])\n\n    def even(w, k):\n        return one(np.cos(k*w))\n\n    def fit(design, key, start, bounds):\n        y = np.asarray",
+      "cat >/tmp/compact10.py <<'PY'\nexec(open('/tmp/audit10.py').read().split('for F,tar')[0])\nt=s['eval_times']; diag=(g*h).sum(1); off=g[:,0]*h[:,1]; features=[D,m.one(np.c_[g,h,diag,off]),m.one(np.c_[g[:,0]+g[:,2],g[:,1],g[:,3],h,diag,off])]; groups=[np.arange(52,72),np.argsort(np.linalg.norm(z,axis=1))[-20:], *(np.random.default_rng(i).permutation(n)[:20] for i in range(8))]; dest=[]\nfor fi,F in enumerate(features):\n vals=[]\n for test in groups:\n  fit=np.setdiff1d(np.arange(n),test); y=Y[fit,1:]; amp=m.lin(F[fit],y); b=m._time_basis(t,y); pred=[F[test]@amp,F[test]@m.lin(F[fit],m.lin(b,y.T).T)@b.",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\nsed -n '/^def _time_basis/,$p' /holdout_task/batch_solver.py\ncat >/tmp/separate10.py <<'PY'\nexec(open('/tmp/audit10.py').read().split('for F,tar')[0])\nfrom scipy.optimize import least_squares\nT=s['eval_times']; diag=(g*h).sum(1); off=g[:,0]*h[:,1]; A=np.c_[g,diag]; B=np.c_[h,off]; FF=m.one(np.c_[A,B]);\n\ndef fit_modes(A,B,Y,t,style):\n    n,p=A.shape; q=B.shape[1]\n    def design(r,aa,bb):\n        fast=-np.expm1(-r[0]*t)\n        slow=-np.expm1(-r[1]*t)/r[1]\n        if style==1: slow=slow+r[2]*t\n        if style==2: slow=slow+r[2]*(t*t)\n        return np.concat",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\np=/holdout_task/batch_solver.py\ncp \"$p\" /tmp/batch10_full_bilinear.py\npython3 - <<'PY'\np='/holdout_task/batch_solver.py'\ns=open(p).read().replace('    cross = (g[:, :, None]*h[:, None, :]).reshape(len(z),16)\\n    y = _readout(np.c_[g, h, (g*h).sum(1)], train[\\'y\\'], n, 1e-5)', '    # The scalar uses the diagonal contraction; the trajectory also resolves g0*h1.\\n    diagonal = np.einsum(\"ni,ni->n\", g, h)\\n    scalar_features = np.c_[g, h, diagonal]\\n    y = _readout(scalar_features, train[\\'y\\'], n, 1e-5)').replace('_readout(np.c_[g,h,cross], amp, n, 1e-5)',"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m102_a04_batch_05_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m102_a04_batch_05_solver.py",
+      "selected_channels": [
+        "m102_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2808,
+        "sha256": "39406170d23aa4221c10c39827eaa2b37e3154c7044a0354e675045c572fcaac",
+        "content_addressed_ref": "content_addressed_blobs/39406170d23aa4221c10c39827eaa2b37e3154c7044a0354e675045c572fcaac.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m102_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "84311911b22c519f588101bba03f72670043b804a6ff1ac283c605d7a6d49b7d",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\np=/holdout_task/batch_solver.py\ncp \"$p\" /tmp/batch10_full_bilinear.py\npython3 - <<'PY'\np='/holdout_task/batch_solver.py'\ns=open(p).read().replace('    cross = (g[:, :, None]*h[:, None, :]).reshape(len(z)",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "84311911b22c519f588101bba03f72670043b804a6ff1ac283c605d7a6d49b7d",
+        "expected_candidate_sha256": "84311911b22c519f588101bba03f72670043b804a6ff1ac283c605d7a6d49b7d",
+        "computed_candidate_sha256": "84311911b22c519f588101bba03f72670043b804a6ff1ac283c605d7a6d49b7d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2808
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_84311911"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": []
+  }
+}

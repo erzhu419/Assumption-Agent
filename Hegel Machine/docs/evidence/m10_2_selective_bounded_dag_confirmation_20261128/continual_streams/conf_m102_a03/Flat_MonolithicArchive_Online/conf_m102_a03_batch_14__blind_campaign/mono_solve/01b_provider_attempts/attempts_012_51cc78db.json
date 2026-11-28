@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51cc78dbe230447092f55b4affaba5e7",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:14:00.794280+00:00",
+  "ended_at_utc": "2026-11-28T16:14:28.190872+00:00",
+  "request_sha256": "da0bdb6e411156df222f61741c1260c1f88460b14c26f60eb84b8737358f513b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46145,
+    "cached_tokens": 12672,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/finalprobe14.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _features,_fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; h,z,b,d,q=_features(s,tr['x']); n=len(y); p=q.sum(1); X=(d[:,:,None]*q[:,None,:]).reshape(n,16); rr=np.random.default_rng(34); ar=np.arange(n); folds=[(ar[:52],ar[52:])]+[(i[:52],i[52:]) for i in [rr.permutation(n) for _ in range(12)]]; folds+= [(np.r_[ar[:j],ar[j+20:]],ar[j:j+20]) for j in [0,13,26,39]]\\nfor a in [0,.003,.01,.03,.1,.3,1,3]:\\n A=np.c_[h,X]; es=[]; pred=[]\\n for t,v in folds:\\n  sc=np.sqrt(np.mean(A[t]**2,axis=0)).clip(1e-9); B=A/sc; C=np.diag(np.r_[np.zeros(6),np.full(16,np.sqrt(a))]); c=_fit(np.r_[B[t],C],np.r_[y[t],np.zeros(22)]); es.append(np.mean(abs(B[v]@c-y[v]))); pred.append(B[v]@c)\\n print('ridge',a,np.round([es[0],np.mean(es),max(es)],6))\\n# Profile shared nonlinear scalar modulation using only the fitting portion of each split.\\nfor name,Z in [('z',z),('b',b),('d',d),('z+d',np.c_[z,d])]:\\n for family in ['rat','tanh','cos','sq']:\\n  for mod in ['p','q','b']:\\n   M={'p':p[:,None],'q':q,'b':b}[mod]; E=[]; F=[]\\n   for t,v in folds[:8]:\\n    def des(Z,M,a):\\n     u=Z@a[:-1]+a[-1]; g={'rat':lambda:1/(1+u*u),'tanh':lambda:np.tanh(u),'cos':lambda:np.cos(u),'sq':lambda:u*u}[family]();return M*g[:,None]\\n    def r(a):\\n     A=np.c_[h[t],des(Z[t],M[t],a)];return A@_fit(A,y[t])-y[t]\\n    rg=np.random.default_rng(49); opt=min([least_squares(r,rg.normal(0,.7,Z.shape[1]+1),bounds=(-5,5),max_nfev=75) for _ in range(6)],key=lambda o:o.cost)\\n    A=np.c_[h,des(Z,M,opt.x)]; E.append(np.mean(abs(A[v]@_fit(A[t],y[t])-y[v]))); F.append(np.mean(abs(opt.fun)))\\n   if max(E)<.055 or np.mean(F)<.012:print(name,family,mod,np.round([E[0],np.mean(E),max(E),np.mean(F)],6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/finalprobe14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted panel C interaction → H2 regularized or shared modulation; fixed 52/20 MAE is 0.028751 for y and 0.004271 for trajectories, with worst alternate-split y MAE 0.052839.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the lowest-error rational term on the fixed split\",\"rejected_reason\":\"That term worsens the worst alternate split relative to the current solver.\"}],\"rationale\":\"Hold the passing artifact in place while testing whether shrinkage or a shared nonlinear term improves scalar prediction across splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c7599f19a42cf3b6e231553c5dcb0eca8b8bdac3398214265d7802dcd6e20b3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28030.18,
+      "usage_known": true,
+      "prompt_tokens": 46145,
+      "cached_tokens": 12672,
+      "completion_tokens": 1050
+    }
+  ]
+}

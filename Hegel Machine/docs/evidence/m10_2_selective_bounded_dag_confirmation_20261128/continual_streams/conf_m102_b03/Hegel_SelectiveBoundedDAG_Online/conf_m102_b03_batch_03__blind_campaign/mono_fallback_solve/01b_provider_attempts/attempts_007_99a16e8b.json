@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99a16e8b82654cde85aeb3da62eef6e5",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Hegel_SelectiveBoundedDAG_Online__conf_m102_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:11:54.923956+00:00",
+  "ended_at_utc": "2026-11-28T15:12:31.068839+00:00",
+  "request_sha256": "98294168acbc4fb6c021bdb801eab2a85dc2cb581760f84c14b033fde8734672",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46290,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33585,
+    "cached_tokens": 12672,
+    "completion_tokens": 1382
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/search.py <<'PY'\\nfrom studyfit import *\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\np=s['panel_b'];E=p['v']-one(p['u'])@ls(one(p['u']),p['v']);print('B affine rmse',np.std(E))\\nf=np.load('/tmp/features.npz'); z,L,C,D,Y,H=(f[k] for k in ('z','L','C','D','Y','H'));Y=Y[:,:9];\\nfor nm,W in [('z',z),('L',L),('C',C),('D',D)]:print(nm,'range',W.min(0),W.max(0),'SD',W.std(0))\\n\\ndef col(A,B):return (A[:,:,None]*B[:,None,:]).reshape(len(A),-1)\\ndef norm(A):return (A-A[:52].mean(0))/np.maximum(A[:52].std(0),1e-9)\\nM={'z':z,'L':L,'C':C,'D':D,'CD':np.c_[C,D],'LCD':np.c_[L,C,D],'plus':C+D,'minus':C-D,'dot':np.sum(C*D,axis=1)[:,None]};\\nM.update({k:np.c_[M[k],pair(M[k])] for k in ('plus','minus')}); M['bilin']=np.c_[C,D,col(C,D)]; M['diag']=np.c_[C,D,C*D];M['LC']=np.c_[L,C,col(L,C)];M['LD']=np.c_[L,D,col(L,D)];M['allpair']=np.c_[L,C,D,col(L,C),col(L,D),col(C,D),pair(L),pair(C),pair(D)];M['CDquad']=np.c_[C,D,pair(C),pair(D),col(C,D)]; M['zquad']=np.c_[z,pair(z)];M['Lquad']=np.c_[L,pair(L)];\\nKp={k:1+norm(F)@norm(F).T/F.shape[1] for k,F in M.items()};\\nP={};\\nfor k in ('z','L','C','D','CD','LCD','plus','minus','bilin','LC','LD','allpair'):\\n A=norm(M[k]);sq=cdist(A,A,'sqeuclidean')/A.shape[1];\\n for j in [.25,.5,1,2,4,8]:\\n  T=sq/j**2; R=np.sqrt(5*T);P[k,j,'g']=np.exp(-T);P[k,j,'q']=(1+T)**-2;P[k,j,'m']=(1+R+R*R/3)*np.exp(-R)\\ne=[];i=np.eye(52)\\ndef bench(K,name,grid):\\n for q in grid:\\n  F=cho_factor(K[:52,:52]+q*i,check_finite=False);b=cho_solve(F,Y[:52],check_finite=False);inv=cho_solve(F,i,check_finite=False).diagonal()[:,None]; cv=abs(b/inv).mean(0); y=K[52:,:52]@b;va=abs(y-Y[52:]).mean(0);e.append((name,q,cv[0],cv[1:].mean(),va[0],va[1:].mean(),y))\\nfor k,K in Kp.items():bench(K,k,[1e-7,.0001,.002,.03])\\nfor key,K in P.items():\\n for k in ('z','CD','bilin','diag','allpair','CDquad','zquad','LC','LD','plus'):\\n  for w in [.1,1,10]:bench(K+w*Kp[k],(key,k,w),[1e-6,.0001,.001,.01])\\nfor ii in [2,3,4,5]:\\n print('Best by',ii)\\n for a in sorted(e,key=lambda r:r[ii])[:8]:print(a[:6]);\\n a=sorted(e,key=lambda r:r[ii])[:30]; w=np.exp(-20*(np.array([v[ii] for v in a])/a[0][ii]-1));p=np.average(np.stack([r[-1] for r in a]),axis=0,weights=w);print('ensemble',abs(p[:,0]-Y[52:,0]).mean(),abs(p[:,1:]-Y[52:,1:]).mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated bilinear fusion -> H2 regularized fusion with independently validated residual structure; plain bilinear 52/20 scalar MAE is 0.06321.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the lowest in-sample residual\",\"rejected_reason\":\"The unrestricted bilinear fit degrades materially on the 20 held-out rows.\"}],\"rationale\":\"Compare calibrated branch interactions with residual kernels using leave-one-out selection only on the 52 fitting rows, then score scalar and trajectory predictions separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5d1df221ea36671f2b42de5d46adc7b7b6d5793cf7df7a21973886a638379b24",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36546.86,
+      "usage_known": true,
+      "prompt_tokens": 33585,
+      "cached_tokens": 12672,
+      "completion_tokens": 1382
+    }
+  ]
+}

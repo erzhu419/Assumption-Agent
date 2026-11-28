@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a49233b11c694b69a62af47186b33eda",
+  "call_seq": 7,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Hegel_SelectiveBoundedDAG_Online__conf_m102_b02_batch_09__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_09__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:45:01.620705+00:00",
+  "ended_at_utc": "2026-11-28T15:45:40.793354+00:00",
+  "request_sha256": "3df9cc1433e16888966e1845e386ebdb8d8cd55dc510efb96b6921605f26690a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42587,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30852,
+    "cached_tokens": 12672,
+    "completion_tokens": 1646
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\n\\\"\\\"\\\"Recover latent coordinates from the paired calibration panels.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\ndef _panel_a(panel, x):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    pair = (np.arange(u.shape[1]) + 2) % u.shape[1]\\n    # Remove the shared nonlinear terms before estimating the channel gains.\\n    w = v - 0.18 * np.tanh(1.8 * u) + 0.32 * np.sin(2.4 * u[:, pair])\\n    i, j = np.triu_indices(len(u), 1)\\n    gain = np.empty(u.shape[1])\\n    offset = np.empty_like(gain)\\n    for k in range(u.shape[1]):\\n        du = u[j, k] - u[i, k]\\n        dw = w[j, k] - w[i, k]\\n        good = np.abs(du) > 0.05 * np.ptp(u[:, k])\\n        slope = np.median(dw[good] / du[good])\\n        intercept = np.median(w[:, k] - slope * u[:, k])\\n        error = np.abs(w[:, k] - intercept - slope * u[:, k])\\n        keep = error <= max(0.001, 6 * np.median(error))\\n        design = np.column_stack((np.ones(keep.sum()), u[keep, k]))\\n        offset[k], gain[k] = np.linalg.lstsq(design, w[keep, k], rcond=None)[0]\\n\\n    # Every Jacobian is strictly diagonally dominant for the calibrated gains.\\n    # Backtracking gives Newton a safe route even around the sinusoid's turns.\\n    rhs = x - offset\\n    z = rhs / gain\\n    idx = np.arange(u.shape[1])\\n\\n    def residual(q):\\n        return q * gain + 0.18 * np.tanh(1.8 * q) - 0.32 * np.sin(2.4 * q[:, pair]) - rhs\\n\\n    for _ in range(40):\\n        r = residual(z)\\n        if np.max(np.abs(r), initial=0.0) < 1e-12:\\n            break\\n        th = np.tanh(1.8 * z)\\n        jac = np.zeros((len(z), len(idx), len(idx)))\\n        jac[:, idx, idx] = gain + 0.324 * (1 - th * th)\\n        jac[:, idx, pair] -= 0.768 * np.cos(2.4 * z[:, pair])\\n        step = np.linalg.solve(jac, r[..., None])[..., 0]\\n        norm = np.sum(r * r, axis=1)\\n        size = np.ones((len(z), 1))\\n        trial = z - step\\n        for _ in range(15):\\n            rt = residual(trial)\\n            bad = np.sum(rt * rt, axis=1) > norm\\n            if not np.any(bad):\\n                break\\n            size[bad] *= 0.5\\n            trial[bad] = z[bad] - size[bad] * step[bad]\\n        z = trial\\n    return z\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x = np.asarray(study['train']['x'], dtype=float)\\n    xt = np.asarray(study['test']['x'], dtype=float)\\n    latent = _panel_a(study['panel_a'], np.vstack((x, xt)))\\n    panel = study['panel_b']\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    design = np.column_stack((np.ones(len(u)), u))\\n    coef = np.linalg.lstsq(design, v, rcond=None)[0]\\n    z = latent @ coef[1:] + coef[0]\\n    return {'z': z[:len(x)].copy(), 'zt': z[len(x):].copy()}\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a,b,c=[runpy.run_path(p)['run_node'] for p in ['node_00.py','_frozen_nodes/node_01.py','_frozen_nodes/node_02.py']]; train=s['train']; ix=np.arange(len(train['x'])); z=a({'__input__':s})['z']; folds=list(np.array_split(np.random.default_rng(9).permutation(ix),4)); folds += [np.argsort(np.linalg.norm(z,axis=1))[-12:]]\\nfor t in folds:\\n    tr=np.setdiff1d(ix,t); sub={**s,'train':{k:train[k][tr] for k in ('x','y','traj')},'test':{'x':train['x'][t]}}; p=c({'node_00':a({'__input__':sub}),'node_01':b({'__input__':sub})}); print('slice MAE',len(t),np.mean(abs(p['y_hat']-train['y'][t])),np.mean(abs(p['state_pred']-train['traj'][t])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full affine calibration → H2 robust diagonal calibration with shared tanh and paired sine terms; worst calibration jackknife RMSE is 0.000132 for the sparse family.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain a full linear mixing matrix in panel A\",\n      \"rejected_reason\": \"The fitted off-diagonal terms are below 0.0001 and the full matrix worsens worst-coordinate calibration jackknife RMSE.\"\n    }\n  ],\n  \"rationale\": \"Fit only the panel-specific gains and offsets after subtracting the identified nonlinear terms. Invert that map, compose the independently verified affine panel B, and test the unchanged readout on the official split and additional random and high-norm slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7ffd1743eb62d603d76464461bd1776434c3e6a6da5cbc46065bf80b862c96a1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39171.28,
+      "usage_known": true,
+      "prompt_tokens": 30852,
+      "cached_tokens": 12672,
+      "completion_tokens": 1646
+    }
+  ]
+}

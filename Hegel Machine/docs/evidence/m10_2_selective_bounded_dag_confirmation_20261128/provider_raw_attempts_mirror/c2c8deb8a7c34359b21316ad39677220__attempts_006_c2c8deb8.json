@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2c8deb8a7c34359b21316ad39677220",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:00:51.928713+00:00",
+  "ended_at_utc": "2026-11-28T16:01:25.628830+00:00",
+  "request_sha256": "2e79d3f661494a20a2c5e186fa1ec46ab798d3eccc813ded6419a812e16328a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43263,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30243,
+    "cached_tokens": 12672,
+    "completion_tokens": 1390
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph14.py <<'PY'\\nfrom explore14 import *\\nfrom scipy.optimize import root\\n\\ndef coords(s,x):\\n a=s['panel_a'];u,v=a['u'],a['v'];d=aff(u);rows=np.arange(len(u))\\n for _ in range(6):rows=np.flatnonzero(np.linalg.norm(d@ls(d[rows],v[rows])-v,axis=1)<2)\\n cs=np.stack([ls(aff(np.c_[u[:,j],np.tanh(1.8*u[:,j]),np.sin(2.4*u[:,(j+2)%4])])[rows],v[rows,j]) for j in range(4)]).T\\n bias,gain,sat,cross=cs\\n z=np.stack([root(lambda q:bias+gain*q+sat*np.tanh(1.8*q)+cross*np.sin(2.4*np.roll(q,2))-row,(row-bias)/gain,tol=1e-11).x for row in x]); b=s['panel_b'];c=s['panel_c'];\\n bf=lambda u:aff(np.cos(2.6*u));cf=lambda u:aff(np.tanh(1.75*u)+.30*np.sin(2.1*np.roll(u,1,axis=1)));df=lambda u:aff(np.c_[u,np.cos(1.28195*u)])\\n w=bf(z)@ls(bf(b['u']),b['v']);c1=lambda u:cf(u)@ls(cf(c['u']),c['v1']);c2=lambda u:df(u)@ls(df(c['u']),c['v2']);\\n return dict(x=x,z=z,w=w,q=c1(w),r=c2(w),qz=c1(z),rz=c2(z),rq=c2(c1(w)),qr=c1(c2(w)))\\n\\ndef yy(s):\\n t=s['eval_times'];p=s['train']['traj'];\\n def bb(r):return -np.expm1(-t[:,None]*r)\\n def e(r):\\n  h=bb(r);return (h@ls(h,p.T)-p.T).ravel()\\n rates=least_squares(e,[.4,1.8],bounds=([.02,1.],[.99,4.])).x\\n print('rates',rates,np.std(e(rates)));return np.c_[s['train']['y'],ls(bb(rates),p.T).T]\\n\\nif __name__=='__main__':\\n from itertools import combinations\\n x=s['train']['x'];ds=coords(s,x);y=yy(s);print('corr',np.corrcoef(y.T));rows=[];allb={}\\n for k,u in ds.items():\\n  f={'id':u,'poly2':poly(u,[1,2]),'poly3':poly(u,[1,2,3]),'pair':poly(u,[2]),'cross':np.c_[u,u[:,0]*u[:,2],u[:,1]*u[:,3]],'asinh':np.arcsinh(2.15*u),'rat':u/(1+.22*u*u),'tanh':np.tanh(2.15*u),'sin':np.sin(2.15*u),'cos':np.cos(2.15*u),'asinh+id':np.c_[u,np.arcsinh(2.15*u)],'rat+id':np.c_[u,u/(1+.22*u*u)],'sqrt':np.sign(u)*np.sqrt(abs(u))}\\n  for k2 in ['z','w','q','r']:\\n   if k2!=k:\\n    f['+'+k2]=np.c_[u,ds[k2]];f['*'+k2]=np.c_[u,u*ds[k2]];f['*roll'+k2]=np.c_[u,u*np.roll(ds[k2],-1,axis=1)]\\n  for j,d in f.items():\\n   d=aff(d);allb[k,j]=d; e=d@ls(d[:52],y[:52])-y;rows.append((k,j,np.mean(abs(e[52:]),axis=0),np.std(e[:52],axis=0)))\\n for j in range(3):print('target',j,*sorted(rows,key=lambda r:r[2][j])[:15],sep='\\\\n')\\n c=s['panel_c'];D=aff(np.c_[c['u'],np.cos(1.28195*c['u'])]); print('C2 weights',ls(D,c['v2'])); print('C2 residual',np.std(D@ls(D,c['v2'])-c['v2'],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine calibration) → H2 (nonlinear calibration plus cosine and dual-output operators); calibration residual RMS is about 0.00010, but the new graph has not yet been scored on 52/20.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine calibration law adequately accounts for uncorrupted panel A measurements.\",\"empirical_witness\":\"After excluding three gross outlier rows, affine residual RMS is 0.132–0.146 per coordinate, versus 0.000094–0.000104 with a diagonal tanh and opposite-coordinate sine.\",\"causal_blanket_diagnosis\":\"The omitted cross-coordinate response distorts the recovered latent inputs before any downstream panel transform.\",\"sublated_pivot\":\"Invert the sparse nonlinear map and test downstream graph cuts on the prescribed split.\",\"risk_kind\":\"omitted algebraic terms\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit panel maps independently of outcome labels, then compare candidate latent coordinates and readout designs against y and both dynamical mode amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6571fbe2202391c0181abc602dc45dd685f0768e32f79cadb2339bb934c00e37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34262.27,
+      "usage_known": true,
+      "prompt_tokens": 30243,
+      "cached_tokens": 12672,
+      "completion_tokens": 1390
+    }
+  ]
+}

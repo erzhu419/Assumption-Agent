@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d05abe40807445d99e9b513fb9c45d70",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Flat_MonolithicArchive_Online__conf_m102_b04_batch_09__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_09__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:22.566895+00:00",
+  "ended_at_utc": "2026-11-28T15:29:51.130329+00:00",
+  "request_sha256": "2bcd6dfe395b4e2c5d960a5882cb440bde72937e23e7c9c7aa26bf1e35f9d824",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40415,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29447,
+    "cached_tokens": 12672,
+    "completion_tokens": 1200
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph.py <<'PY'\\nfrom model import *\\ntr=s['train'];y=tr['y'];t=tr['traj'];times=s['eval_times']\\ndef prof(A,z):return z-A@ls(A,z)\\nfor j in range(4):\\n a=u[:,j];b=u[:,(j+2)%4];tar=v[:,j];out=[]\\n for n,f in funcs().items():\\n  for where in ['self','cross','sum','diff','both']:\\n   def D(p):\\n    hs={'self':[f(a,p[0])],'cross':[f(b,p[0])],'sum':[f(a+b,p[0])],'diff':[f(a-b,p[0])],'both':[f(a,p[0]),f(b,p[0])]}\\n    return np.c_[np.ones(len(a)),a,b,*hs[where]]\\n   k=min([least_squares(lambda p:prof(D(p),tar),[q],bounds=(.04,4)) for q in [.3,1,2.3]],key=lambda x:x.cost);out.append((rm(k.fun),n,where,k.x,ls(D(k.x),tar)))\\n print('cal j',j,sorted(out,key=lambda x:x[0])[:5])\\nF=lambda p:-np.expm1(-times[:,None]*p)\\nfor p0 in [[.3,1.7],[.22,2.15],[1.25,2.15]]:\\n p=least_squares(lambda p:prof(F(p),t[:52].T).ravel(),p0,bounds=(.0001,8)).x\\n print('rates',p,rm(prof(F(p),t.T)));print('telemetry rates',rm(prof(F([1.25,2.15]),t.T)),rm(prof(F([.22,1.25]),t.T)))\\ncal=fitcal(funcs()['tanh'],2); x=calibrate(tr['x'],funcs()['tanh'],cal[1],cal[2],2)\\nb=s['panel_b']; B=ls(af(b['u']),b['v']);\\ndef Cbasis(x,k):return np.c_[af(x),funcs()['soft'](x,k)]\\nC=ls(Cbasis(c,.83),v1);Q=ls(np.c_[af(c),c*c],v2)\\nnp.set_printoptions(precision=4,suppress=True);print('cal',cal);print('C1',C,'C2',Q)\\nZ=np.c_[y,ls(F(p),t.T).T]; Z=Z/Z[:52].std(axis=0)\\nfor name,h in [('x',x),('B',af(x)@B),('C',Cbasis(x,.83)@C),('Q',np.c_[af(x),x*x]@Q),('C(B)',Cbasis(af(x)@B,.83)@C),('Q(B)',np.c_[af(af(x)@B),(af(x)@B)**2]@Q),('B(C)',af(Cbasis(x,.83)@C)@B),('B(Q)',af(np.c_[af(x),x*x]@Q)@B)]:\\n print(name,'range',abs(h).max());models={'aff':af(h),'quad':quad(h),'addsoft':np.c_[af(h),funcs()['soft'](h,.83)],'addtanh':np.c_[af(h),np.tanh(h)],'quadr+soft':np.c_[quad(h),funcs()['soft'](h,.83)]}\\n for n,d in models.items():\\n  w=ls(d[:52],Z[:52]);out=d@w;err=out-Z\\n  print(n,np.round(mae(err[:52]),4),np.round(mae(err[52:]),4),round(mae((err[52:,1:]*ls(F(p),t.T).T[:52].std(axis=0))@F(p).T).mean(),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic archive maps -> H2 inspect cyclic calibration, shared relaxation rates, and ordered panel compositions; current best worst-output 52/20 MAE is 0.09590.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel B is affine to its noise floor and panel C has distinct odd and even nonlinear outputs. Test operator order and fit the two trajectory rates on the training partition before selecting readout features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "4a38ebb75397a4d9aecbae23929260440ac7d30d99c049aac3098689f7c43e37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28561.77,
+      "usage_known": true,
+      "prompt_tokens": 29447,
+      "cached_tokens": 12672,
+      "completion_tokens": 1200
+    }
+  ]
+}

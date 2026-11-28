@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fdb18c013d2d48fea0a17cdea14ad8e9",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:29:22.119864+00:00",
+  "ended_at_utc": "2026-11-28T15:29:57.330307+00:00",
+  "request_sha256": "2059472811c736a589884010dac8ba566fe6a902b7c99ad888ae8893f6f0b518",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68780,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41085,
+    "cached_tokens": 12672,
+    "completion_tokens": 1509
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m102_b01_batch_00_solver.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/last07.py <<'PY'\\nexec(open('/tmp/mixed07.py').read().split('acts=')[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom itertools import combinations, combinations_with_replacement\\nn=len(y); Y=np.c_[y,T]; sc=Y.std(0); I=np.eye(n); idx=np.arange(n); folds=[np.arange(52,72)]+[np.arange(j,j+18) for j in range(0,72,18)]\\ndef feat(x,k): return np.column_stack([np.prod(x[:,i],axis=1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef norm(x):return (x-x.mean(0))/np.maximum(x.std(0),1e-4)\\ndef gram(x): x=norm(x); return (x@x.T)/x.shape[1]\\ndef cv(K,alpha):\\n es=[]\\n for h in folds:\\n  tr=np.setdiff1d(idx,h); pred=K[np.ix_(h,tr)]@solve(K[np.ix_(tr,tr)]+alpha*I[np.ix_(tr,tr)],Y[tr],assume_a='pos'); E=abs(pred-Y[h]);es.append([E[:,0].mean(),E[:,1:].mean()])\\n return np.r_[np.max(es,axis=0),es[0]]\\na=g._aff(np.c_[v,pair(v),q]); K0=1+gram(a[:,1:]); sources={'U':u,'V':v,'Q':q,'PQ':np.c_[pair(v),q],'VPQ':a[:,1:],'UVQ':np.c_[u,v,q]}; rows=[]\\nfor name,x in sources.items():\\n L=gram(x); D=cdist(norm(x),norm(x),'sqeuclidean')/x.shape[1]\\n for kind,K in [('lin',L),('quad',(1+L)**2),('cube',(1+L)**3),('q3',gram(feat(x,3)))]+[(f'rbf{r}',np.exp(-r*D)) for r in [.08,.25,.7,1.5]]+[(f'mat{r}',(1+np.sqrt(r*D))*np.exp(-np.sqrt(r*D))) for r in [.5,2,5]]:\\n  for weight in [.05,.3,1.,3.,20.]:\\n   for alpha in [.00001,.0003,.003,.015,.06,.2]: rows.append((cv(K0+weight*K,alpha),name,kind,weight,alpha))\\nfor ix in [0,1,2,3]: print('KERNEL',ix,*sorted(rows,key=lambda r:r[0][ix])[:4],sep='\\\\n')\\n# Explicit analogues of a gated panel-C mixture and triples in calibrated space.\\nfrom scipy.optimize import least_squares\\nfor Xname,X0 in [('vq',np.c_[v,q]),('vpq',a[:,1:]),('uvq',np.c_[u,v,q])]:\\n X=g._aff(norm(X0)); A=a.copy(); A[:,1:]=norm(A[:,1:]); M=A.shape[1]; Yn=Y/sc\\n for mode in [0,1,2]:\\n  es=[]\\n  for h in folds:\\n   tr=np.setdiff1d(idx,h); Atr=A[tr]; Xtr=X[tr]; yt=Yn[tr]; L=np.linalg.lstsq(Atr,yt,rcond=None)[0]; R=yt-Atr@L; uu,ss,vv=np.linalg.svd(R,full_matrices=False); direction=vv[0]; rr=R@direction; rng=np.random.default_rng(17); best=None\\n   def fun(Z,W,p):\\n    t=Z@p[:Z.shape[1]]; k=p[Z.shape[1]:Z.shape[1]+M]; m=p[-M:];\\n    if mode==0: f=np.tanh(t)\\n    elif mode==1: f=1/(1+t*t)\\n    else:f=np.sin(t)\\n    return W@k+f*(W@m)\\n   for it in range(16):\\n    start=np.r_[rng.normal(0,.65,X.shape[1]),np.zeros(M),rng.normal(0,.15,M)]\\n    fit0=least_squares(lambda p:np.r_[fun(Xtr,Atr,p)-rr,.045*p],start,max_nfev=100); val=np.dot(fit0.fun,fit0.fun)\\n    if best is None or val<best[0]:best=val,fit0.x\\n   pred=(A[h]@L+fun(X[h],A[h],best[1])[:,None]*direction)*sc; e=abs(pred-Y[h]); es.append([e[:,0].mean(),e[:,1:].mean()])\\n  print('GATE',Xname,mode,np.max(es,0),es[0],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/last07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive calibrated readout -> H2 gated interactions or structured kernel residual; saved baseline public MAEs are 0.104406 and 0.070498.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best model on the official split alone\",\"rejected_reason\":\"The unregularized interaction scans improve the official split more than the worst held-out slice.\"}],\"rationale\":\"Test whether a shared nonlinear residual closes the error gap on multiple slices before replacing the verified baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "070501386aceeaf98f63cd53f09e14d405ae5404acac33e41c96b649d0c45e23",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35208.92,
+      "usage_known": true,
+      "prompt_tokens": 41085,
+      "cached_tokens": 12672,
+      "completion_tokens": 1509
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4cf292c00e8945e983eee0e02ed03ba8",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:05:51.049665+00:00",
+  "ended_at_utc": "2026-11-28T15:06:52.546475+00:00",
+  "request_sha256": "75f2bf3959fcde41279f1ff110ec526d02672da277ff5c4e1f9e0d4ac9557f18",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 45281,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27749,
+    "cached_tokens": 5504,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrated scalar readout and reduced-rank trajectory prediction.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _readout(z):\\n    return np.column_stack((_affine(z), z[:, 0]*z[:, 2] + z[:, 1]*z[:, 3]))\\n\\n\\ndef _scalar(z, zt, u, ut, y):\\n    l, lt = _readout(z), _readout(zt)\\n    x, xt = _affine(u), _affine(ut)\\n    q = np.linalg.qr(l, mode='reduced')[0]\\n    residual = y - q @ (q.T @ y)\\n\\n    def loss(h):\\n        f = np.tanh(x @ h)\\n        f -= q @ (q.T @ f)\\n        d = f @ f\\n        if d < 1e-22:\\n            return residual\\n        return residual - f * ((f @ residual) / d)\\n\\n    starts = [np.r_[0., k*np.eye(u.shape[1])[j]] for j in range(u.shape[1]) for k in (0.85, 1.8)]\\n    best = min((least_squares(loss, h, bounds=(-5., 5.), max_nfev=110) for h in starts), key=lambda opt: opt.cost)\\n    d = np.column_stack((l, np.tanh(x @ best.x)))\\n    dt = np.column_stack((lt, np.tanh(xt @ best.x)))\\n    return dt @ _fit(d, y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    encoded = inputs['node_00']\\n    train = study['train']\\n    z, zt = (np.asarray(encoded[k], dtype=float) for k in ('z', 'zt'))\\n    panel = study['panel_b']\\n    b = _fit(_affine(np.asarray(panel['u'], dtype=float)), np.asarray(panel['v'], dtype=float))\\n    u, ut = (np.linalg.solve(b[1:].T, (v-b[0]).T).T for v in (z, zt))\\n    yh = _scalar(z, zt, u, ut, np.asarray(train['y'], dtype=float))\\n    q, r = np.linalg.qr(z, mode='reduced')\\n    left, sv, right = np.linalg.svd(q.T @ train['traj'], full_matrices=False)\\n    sp = zt @ _fit(r, (left[:, :2] * sv[:2]) @ right[:2])\\n    tail = sp[:, -1]\\n    return {'y_hat': yh, 'state_pred': sp,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), tail.mean(), tail.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/stress_dag.py <<'PY'\\nimport pickle, runpy, numpy as np\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; f=runpy.run_path('/holdout_task/node_01.py')['run_node']; enc=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; x=st['train']['x']; y=st['train']['y']; traj=st['train']['traj']; n=len(y); ids=np.arange(n); z=enc({'__input__':st})['z']; rng=np.random.default_rng(24)\\ndef run(j):\\n i=np.setdiff1d(ids,j); batch=dict(st,train={'x':x[i],'y':y[i],'traj':traj[i]},test={'x':x[j]}); out=f({'__input__':batch,'node_00':enc({'__input__':batch})}); ey=abs(out['y_hat']-y[j]); et=abs(out['state_pred']-traj[j]); return ey.mean(),et.mean(),ey.max(),et.mean(0).max()\\nfor kind, groups in [('random', [g for _ in range(5) for g in np.array_split(rng.permutation(n),6)]),('feature-tail', [ix for k in range(z.shape[1]) for ix in (z[:,k].argsort()[:12],z[:,k].argsort()[-12:])]),('contiguous',np.array_split(ids,6))]:\\n v=np.array([run(j) for j in groups]); print(kind,'mean',v.mean(0),'worst',v.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_dag.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed bilinear readout → H2 bilinear readout plus one learned saturating direction; the prototype achieved fixed-split MAE 0.011416 and worst randomized-fold MAE 0.014936.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted cubic readout\",\n      \"rejected_reason\": \"It misses the public threshold and generalizes worse than the single-direction correction.\"\n    },\n    {\n      \"option\": \"Add feature-dependent correction amplitudes\",\n      \"rejected_reason\": \"The added parameters did not improve average randomized-fold MAE.\"\n    }\n  ],\n  \"rationale\": \"Implement the smallest tested nonlinear readout that clears the tolerance by a wide margin, preserve the archived trajectory fit, and verify the exact artifact on the official split and on held-out feature tails, contiguous blocks, and randomized folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "017f256004eef758fa0038825607d49ca9e79a1a7ad556f5507210b0a2a91aeb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 61495.49,
+      "usage_known": true,
+      "prompt_tokens": 27749,
+      "cached_tokens": 5504,
+      "completion_tokens": 1550
+    }
+  ]
+}

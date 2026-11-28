@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5c19cef66334d789fc0f8fa29fab679",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:10:54.892306+00:00",
+  "ended_at_utc": "2026-11-28T16:11:34.924064+00:00",
+  "request_sha256": "ea4da5ea5ccc5223b2e4ba11f8d26ab3ee826e4f5110db27c6cda7a8921d8622",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59162,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38633,
+    "cached_tokens": 12672,
+    "completion_tokens": 1669
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a,b):\\n    return np.linalg.lstsq(a,b,rcond=1e-9)[0]\\n\\n\\ndef _panel(u,v,features,bounds):\\n    def loss(k):\\n        a=features(u,k)\\n        return np.mean((a@_fit(a,v)-v)**2)\\n    k=minimize_scalar(loss,bounds=bounds,method='bounded').x\\n    q=_fit(features(u,k),v)\\n    return lambda x: features(x,k)@q\\n\\n\\ndef _cos(x,k):\\n    return _aff(np.cos(k*x))\\n\\n\\ndef _c1(x,k):\\n    return np.column_stack((_aff(x),np.arcsinh(k*x)))\\n\\n\\ndef _c2(x,k):\\n    return np.column_stack((_aff(x),np.cbrt(1+(k*x)**2)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s=inputs['__input__']; w=np.asarray(inputs['node_00']['w']); b=s['panel_b']; c=s['panel_c']; tr=s['train']; n=len(tr['y'])\\n    a=_fit(_aff(b['u']),b['v']); u=(w-a[0])@np.linalg.pinv(a[1:]); z=_panel(b['u'],b['v'],_cos,(1.5,3.7))(u)\\n    v=np.arctan(2.15*z); i,j=np.triu_indices(z.shape[1]); d=_aff(np.column_stack((v,v[:,i]*v[:,j]))); y=d[n:]@_fit(d[:n],tr['y'])\\n    p=_c1(z,1.85); state=p[n:]@_fit(p[:n],tr['traj'])\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/test_dag_candidate.py\\ncat > /tmp/struct.py <<'PY'\\nexec(open('/tmp/compose.py').read().split('for j in [')[0]); from scipy.optimize import least_squares\\nz=V['b']; ii=np.where(~idx)[0]; jj=np.where(idx)[0]; print('sorted by b2'); print(np.round(np.c_[z,Y,T[:,0],T[:,-1]][np.argsort(z[:,2])],3));\\nfor k,h in [('c1',C),('c2',D)]: print(k,'at B',np.linalg.lstsq(ab(h(z)),Y,rcond=None)[0], 'at Z matrix',np.round(h(np.vstack([np.zeros((1,4)),np.eye(4),-np.eye(4)])),3));\\nF={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'asinh':np.arcsinh,'sat':lambda v:v/np.sqrt(1+v*v),'inv3':lambda v:np.sinh(np.arcsinh(v)/3),'rat':lambda v:v/(1+v*v),'gauss':lambda v:np.exp(-v*v),'clip':lambda v:np.clip(v,-1,1),'soft':lambda v:np.sqrt(1+v*v)}\\nresults=[]\\nfor kind,f in F.items():\\n for key,d in {'z':ab(z),'zc':ab(np.c_[z,C(z),D(z)]),'C':ab(C(z)),'t':ab(np.c_[z,np.arctan(2.15*z)]),'q':ab(np.c_[np.arctan(2.15*z),Q(np.arctan(2.15*z))])}.items():\\n  for m in [0,1,2,3,4,5]:\\n   latent=ab(z) if m==5 else (ab(C(z)) if m==4 else ab(z[:,m:m+1])); l=latent.shape[1];\\n   def design(p):return np.c_[d,f(latent@p)]\\n   def opt(p):\\n    a=design(p)[jj]; return a@np.linalg.lstsq(a,Y[jj],rcond=1e-8)[0]-Y[jj]\\n   g=np.linalg.lstsq(latent[jj],Y[jj],rcond=None)[0]; g/=max(np.std(latent[jj]@g),.03)\\n   best=None\\n   for start in [.6,1.6,4,8]:\\n    for shift in [0,.7,-.7]:\\n     p0=start*g; p0[0]+=shift\\n     p=least_squares(opt,p0,max_nfev=70)\\n     if best is None or p.cost<best.cost: best=p\\n   a=design(best.x); pred=a@np.linalg.lstsq(a[jj],Y[jj],rcond=1e-8)[0]; results.append((np.abs(pred[ii]-Y[ii]).mean(),np.abs(best.fun).mean(),kind,key,m,best.x.round(3)))\\nprint('projection top cv',sorted(results,key=lambda r:r[0])[:18]);print('projection top train',sorted(results,key=lambda r:r[1])[:18]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct.py > /tmp/struct.log; tail -90 /tmp/struct.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 exact cosine panel-B map → H2 scalar readout with a saturating latent term; previous scalar holdout MAE was 0.0883 and repeated trajectory worst-split MAE was 0.0327.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save and score the current model, then test whether the scalar plateaus are explained by a separate saturating term on top of the panel-based readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b7ac556890229c4875afbd28e98ba69ea73de73b2514f8bcde3587a9b64c60b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40713.55,
+      "usage_known": true,
+      "prompt_tokens": 38633,
+      "cached_tokens": 12672,
+      "completion_tokens": 1669
+    }
+  ]
+}

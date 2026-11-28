@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cbac7c806414743ab7d3cbb679cefd0",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:20.390503+00:00",
+  "ended_at_utc": "2026-11-28T15:26:51.864475+00:00",
+  "request_sha256": "07110792c5fd950b98d7e57fa5de0a17b4b535368e6251f53f7cadf5091ea5ac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71568,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37059,
+    "cached_tokens": 5504,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/stress.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import batch_solver as b\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.model_selection import KFold\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=S['train']; y=tr['y']; T=tr['traj']; z=b._decode(tr['x'],b._calibration(S['panel_a'])); ix=np.arange(52); val=np.arange(52,72)\\nfrom itertools import combinations_with_replacement\\npairs=list(combinations_with_replacement(range(4),2))\\ndef pq(h):return np.column_stack([h[:,i]*h[:,j] for i,j in pairs])\\ndef setup(i,j):\\n def pp(p):\\n  q=b._mixed(z[i],b._warp(z[i],p)); return q@b._fit(q,y[i])-y[i]\\n p=min((least_squares(pp,k,bounds=([0,.5],[.75,4]),max_nfev=100) for k in ([.22,1.25],[.35,1.5],[.5,2])),key=lambda r:r.cost).x\\n h=b._warp(z,p); h0=b._warp(z,[.42,1.25]); Q=b._mixed(z,h); G=np.c_[b._mixed(z,h0),pq(z)]; D={'profile':b._ridge(Q[i],Q[j],y[i],.006),'fixed':b._ridge(G[i],G[j],y[i],.03)}\\n def fit(Q,a=.006):return b._ridge(Q[i],Q[j],y[i],a)\\n for a in (0,.002,.01,.03,.1):\\n  for k,X in [('mixed',Q),('expand',np.c_[Q,pq(z)]),('simple',np.c_[Q[:,:19],pq(z)]),('hybrid',np.c_[Q,pq(z),h0])]:\\n   sc=np.sqrt((X[i]**2).mean(0)).clip(1e-8); xx=X/sc; D[k,a]=xx[j]@np.linalg.lstsq(xx[i].T@xx[i]+a*np.eye(xx.shape[1]),xx[i].T@y[i],rcond=1e-12)[0]\\n # Adaptive shrinkage of higher-order mixed interactions.\\n for k,X in [('mix',Q),('full',np.c_[Q,pq(z)]),('fixed',G)]:\\n  sc=np.sqrt((X[i]**2).mean(0)).clip(1e-8); xx=X/sc; I=xx[i]; J=xx[j]; c=np.linalg.lstsq(I.T@I+.03*np.eye(xx.shape[1]),I.T@y[i],rcond=None)[0]\\n  for a in (.0003,.003,.03,.1):\\n   for power in (1,2):\\n    cc=c.copy()\\n    for _ in range(5):\\n     rr=a/(np.abs(cc)+.035)**power; rr[:9]*=.1; cc=np.linalg.solve(I.T@I+np.diag(rr),I.T@y[i])\\n    D['adapt',k,a,power]=J@cc\\n return D\\nD=[]; splits=[(ix,val),*KFold(5,shuffle=True,random_state=41).split(z),*KFold(5,shuffle=True,random_state=76).split(z)]\\nfor i,j in splits:\\n d=setup(i,j); h=b._warp(z,[.35,1.5]); q=b._mixed(z,h); rho=b._ridge(q[i],q[j],T[i],.015); print('baseline',np.mean(abs(d['profile']-y[j])),np.mean(abs(rho-T[j])), 'max-time',abs(rho-T[j]).mean(0).max()); D.append((d,y[j]))\\nR=[]\\nfor k in D[0][0]:\\n for l in ('profile','fixed'):\\n  for a in (0,.25,.5,.75,1):\\n   e=[np.mean(abs((1-a)*d[k]+a*d[l]-v)) for d,v in D]; R.append((e[0],np.mean(e[1:]),max(e[1:]),str(k),l,a))\\nprint('gate',*sorted(R)[:10],sep='\\\\n');print('cv',*sorted(set(R),key=lambda x:x[1])[:16],sep='\\\\n');print('minimax',*sorted(set(R),key=lambda x:max(x[:3]))[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full mixed quadratic readout -> H2 structured shrinkage; the existing profiled readout reached 0.03244 scalar MAE on the 52/20 split before final regularization.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure the saved solver's errors and compare shrinkage on the prescribed split and two sets of held-out folds before deciding whether to update it.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b669f79c9e146771fd49243200ebe7b939217fcd8a14bdbab1ecbd89e46b3ce1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31472.73,
+      "usage_known": true,
+      "prompt_tokens": 37059,
+      "cached_tokens": 5504,
+      "completion_tokens": 1300
+    }
+  ]
+}

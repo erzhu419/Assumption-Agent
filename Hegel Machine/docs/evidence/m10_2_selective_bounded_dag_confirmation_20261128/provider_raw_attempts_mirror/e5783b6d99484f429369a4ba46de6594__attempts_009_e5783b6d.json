@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5783b6d99484f429369a4ba46de6594",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:03:21.495145+00:00",
+  "ended_at_utc": "2026-11-28T15:04:04.441166+00:00",
+  "request_sha256": "e7d0b1356e07702702bae9863a8d40c01e7ce4b10338a8b80a07318724043567",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61486,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39762,
+    "cached_tokens": 12672,
+    "completion_tokens": 1903
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated predictor for the campaign's scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    out = np.empty_like(x, dtype=float)\\n    for j, (u, v) in enumerate(zip(panel['u'].T, panel['v'].T)):\\n        d = _aff(u)\\n        b = _ls(d, v)\\n        for _ in range(8):\\n            keep = np.argsort(np.abs(d @ b - v))[:int(.875 * len(u))]\\n            b = _ls(d[keep], v[keep])\\n        e = np.abs(d @ b - v)\\n        keep = e <= max(10 * np.median(e), .002)\\n        b = _ls(d[keep], v[keep])\\n        out[:, j] = (x[:, j] - b[0]) / b[1]\\n    return out\\n\\n\\ndef _panel(u, v, feature, init, bounds):\\n    def error(p):\\n        a = _aff(feature(u, p))\\n        return (a @ _ls(a, v) - v).ravel()\\n    p = least_squares(error, init, bounds=bounds, max_nfev=300).x\\n    b = _ls(_aff(feature(u, p)), v)\\n    return lambda x: _aff(feature(x, p)) @ b\\n\\n\\ndef _b(x, p):\\n    a, b, c, d = p\\n    return (x**5 + d*x)/(1 + a*np.abs(x)**3 + b*x**4) + c*x\\n\\n\\ndef _c(x, p):\\n    a, b, c, d = p\\n    return x/(1 + a*np.abs(x) + b*x*x + c*np.abs(x)**3) + d*x\\n\\n\\ndef _latent(study, x):\\n    b, c = study['panel_b'], study['panel_c']\\n    f = _panel(b['u'], b['v'], _b, [19., 10., -.015, .016], ([0,0,-1,-1], [20,20,1,1]))\\n    g = _panel(c['u'], c['v1'], _c, [.98,.37,.05,.087], ([0,0,0,-1], [20,20,20,1]))\\n    return g(f(_calibrate(study['panel_a'], x)))\\n\\n\\ndef _scalar_design(z):\\n    return np.c_[_aff(z), z[:,0]*z[:,2], z[:,1]*z[:,3]]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    z = _latent(study, np.vstack((tr['x'], study['test']['x'])))\\n    n = len(tr['x'])\\n    d = _scalar_design(z)\\n    y = d[n:] @ _ls(d[:n], tr['y'])\\n    d = _aff(z)\\n    pred = d[n:] @ _ls(d[:n], tr['traj'])\\n    return {'y_hat': y, 'state_pred': pred,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), pred[:,-1].mean(), pred[:,-1].std()])}\\nPY\\ncat > /tmp/diagnose.py <<'PY'\\nimport sys;sys.path.insert(0,'/holdout_task');import batch_solver as b\\nfrom structure import *\\ntr=s['train'];X=tr['x'];y=tr['y'];T=tr['traj'];tt=s['eval_times'];z=b._latent(s,X);print('times',tt)\\ndef report(D,Y):\\n P=D@ls(D[:52],Y[:52]); print('RMSE train',np.std((P-Y)[:52],axis=0),'MAE test',np.mean(abs((P-Y)[52:]),axis=0));return P-Y\\nreport(b._scalar_design(z),y);r=report(aff(z),T);print('traj singular and residual singular',np.linalg.svd(T[:52],compute_uv=False),np.linalg.svd(r[:52],compute_uv=False));print('trajectory linear coefficients',ls(aff(z[:52]),T[:52]));print('test ranges',[(u.min(),u.max()) for u in [s['panel_b']['u'],a_cal(X),a_cal(s['test']['x']),z]])\\nfor k,fn,init,bounds,key in [('panel_b',b._b,[19.,10.,-.015,.016],([0,0,-1,-1],[20,20,1,1]),'v'),('panel_c',b._c,[.98,.37,.05,.087],([0,0,0,-1],[20,20,20,1]),'v1')]:\\n u,v=s[k]['u'],s[k][key];\\n def resid(p):\\n  d=aff(fn(u,p));return (d@ls(d,v)-v).ravel()\\n o=least_squares(resid,init,bounds=bounds,max_nfev=500);m=ls(aff(fn(u,o.x)),v); vals=((v-m[0])@np.linalg.inv(m[1:])).ravel(); ind=np.argsort(abs(u.ravel()));print(k,'p',o.x,'RMSE',np.std(o.fun));print(np.c_[abs(u.ravel()[ind]),vals[ind]*np.sign(u.ravel()[ind])][::3]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/diagnose.py; python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (approximate smooth panel operators) → H2 (rational B/C1 composition with sparse scalar and affine trajectory readouts); prior 52/20 MAE was 0.00464 for y and 0.00906 at the worst trajectory horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use all quadratic monomials for both endpoints\",\"rejected_reason\":\"Only two scalar interactions dominate, and adding quadratic terms worsened trajectory holdout MAE.\"}],\"rationale\":\"Build the self-contained passing candidate now, then measure whether the sparse readout and fitted panel shapes leave any material errors at the input extremes or latest horizons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7a20cb151b309d073270f4aaafa1b6230b919d1ea25d4837e468963b60fc408d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42944.66,
+      "usage_known": true,
+      "prompt_tokens": 39762,
+      "cached_tokens": 12672,
+      "completion_tokens": 1903
+    }
+  ]
+}

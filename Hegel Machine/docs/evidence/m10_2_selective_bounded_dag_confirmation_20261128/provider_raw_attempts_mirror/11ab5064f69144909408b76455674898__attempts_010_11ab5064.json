@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "11ab5064f69144909408b76455674898",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:26:18.924894+00:00",
+  "ended_at_utc": "2026-11-28T16:26:40.128725+00:00",
+  "request_sha256": "ade25bd35123c0190d8ed653593cc3379bc2e4e597fb64590c222a855302f012",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61438,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37301,
+    "cached_tokens": 12672,
+    "completion_tokens": 807
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\np = '/holdout_task/'\\nrun = runpy.run_path(p + 'test_dag_candidate.py')['run_dag']\\ns = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; ids = np.arange(len(t['x']))\\nup = runpy.run_path(p + '_frozen_nodes/node_00.py')['run_node']({'__input__':s})\\nnode = runpy.run_path(p + 'node_01.py')\\nq = node['_inverse'](s['panel_a'], t['x'], up['gain'], up['offset'])\\nfolds = list(np.array_split(ids, 4)) + [np.argsort(np.max(abs(q), axis=1))[-16:]]\\nscores = []\\nfor val in folds:\\n    tr = np.setdiff1d(ids, val)\\n    fold = copy.deepcopy(s)\\n    y, z = t['y'][tr], t['traj'][tr]\\n    fold['train'] = {'x':t['x'][tr], 'y':y, 'traj':z, 'summary':np.array([y.mean(), y.std(), z[:,-1].mean(), z[:,-1].std()])}\\n    fold['test'] = {'x':t['x'][val]}\\n    out, count = run(fold)\\n    e = abs(out['state_pred'] - t['traj'][val])\\n    scores.append([abs(out['y_hat']-t['y'][val]).mean(), e.mean(), e.mean(axis=0).max()])\\n    assert all(v == 1 for v in count.values())\\nprint('Blocked folds and high-coordinate slice [scalar, trajectory, worst horizon]:', np.round(scores, 6).tolist())\\nprint('Worst:', np.max(scores, axis=0).tolist())\\nassert np.max(scores) < 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired-sine panel-A inversion -> H2 shared cosine panel B and independent sparse readouts; official held-out scalar and trajectory MAEs are 0.008733 and 0.008441.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The saved sink already passes the official test. Check the unchanged artifact on four blocked folds and a high-magnitude slice, including the worst trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a90edf4f037a29bf938765fb9d9d8e297ecd1d6ebbbb8f9d49090b54a2bbce1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21717.94,
+      "usage_known": true,
+      "prompt_tokens": 37301,
+      "cached_tokens": 12672,
+      "completion_tokens": 807
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "14b83e64ca184059bebdd279aacecff2",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Eager_BoundedDAG_Online__conf_m102_a02_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:27:37.970258+00:00",
+  "ended_at_utc": "2026-11-28T15:28:13.603945+00:00",
+  "request_sha256": "c082bbcaf1c8f0987700bb71dfc528f62e24d71d9a506bebc9548d1d804a2fe5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60501,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38202,
+    "cached_tokens": 12672,
+    "completion_tokens": 1436
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Calibrate the measured coordinates and fit separate endpoint and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    delta = u[j] - u[i]\\n    slopes = np.divide(v[j] - v[i], delta, out=np.full_like(delta, np.nan), where=np.abs(delta) > 1e-8)\\n    scale = np.nanmedian(slopes, axis=0)\\n    offset = np.median(v - scale * u, axis=0)\\n    for k in range(u.shape[1]):\\n        e = v[:, k] - offset[k] - scale[k] * u[:, k]\\n        keep = np.abs(e) < max(.025, 6 * np.median(np.abs(e)))\\n        offset[k], scale[k] = np.linalg.lstsq(np.c_[np.ones(keep.sum()), u[keep, k]], v[keep, k], rcond=None)[0]\\n    return offset, scale\\n\\n\\ndef _panel(panel, key, op, bounds):\\n    u, v = panel['u'], panel[key]\\n    def design(x, k):\\n        return np.c_[np.ones(len(x)), x, op(k*x)]\\n    def residual(k):\\n        a = design(u, k)\\n        return np.square(a @ np.linalg.lstsq(a, v, rcond=None)[0] - v).sum()\\n    k = minimize_scalar(residual, bounds=bounds, method='bounded').x\\n    a = design(u, k)\\n    c = np.linalg.lstsq(a, v, rcond=None)[0]\\n    return lambda x: design(x, k) @ c, lambda x: op(k*x)\\n\\n\\ndef _quad(x):\\n    i, j = np.triu_indices(x.shape[1])\\n    return x[:, i] * x[:, j]\\n\\n\\ndef _ridge(x, w, y, lam):\\n    m, s = x.mean(0), np.maximum(x.std(0), 1e-8)\\n    a = (x-m)/s\\n    ym = y.mean(0)\\n    c = np.linalg.solve(a.T @ a + lam*np.eye(a.shape[1]), a.T @ (y-ym))\\n    return ym + ((w-m)/s) @ c\\n\\n\\ndef _features(study, raw):\\n    offset, scale = _calibration(study['panel_a'])\\n    z = np.concatenate((raw['a'][:, 1:], raw['a_test'][:, 1:]))\\n    z = (z-offset)/scale\\n    bp, h = _panel(study['panel_b'], 'v', np.sin, (2., 3.8))\\n    cp, _ = _panel(study['panel_c'], 'v1', np.arctan, (1., 4.))\\n    dp, g = _panel(study['panel_c'], 'v2', lambda x: np.exp(-x*x), (.2, .9))\\n    b, c, d, h, g = bp(z), cp(z), dp(z), h(z), g(z)-1\\n    return z, b, c, d, h, g\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, raw = inputs['__input__'], inputs['node_00']\\n    z, b, c, d, h, g = _features(study, raw)\\n    y, traj = study['train']['y'], study['train']['traj']\\n    n = len(y)\\n    pred = []\\n    for f, lam in [(np.c_[b, _quad(d), _quad(h), b*c], .1),\\n                   (np.c_[b, _quad(d), _quad(h), _quad(z)], .01),\\n                   (np.c_[b, _quad(b), d], .025)]:\\n        pred.append(_ridge(f[:n], f[n:], y, lam))\\n    endpoint = np.average(pred, axis=0, weights=[.60, .25, .15])\\n    f = np.c_[z, b, c, np.sin(3*z)]\\n    state = _ridge(f[:n], f[n:], traj, .05)\\n    values = np.column_stack((endpoint, state))\\n    return {'test_features': values, 'coefficients': np.eye(values.shape[1])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py; sed -n '140,167p' /holdout_task/test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | head -16\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 panel-linear readout -> H2 regularized interactions in calibrated coordinates; the leading interaction design reached 0.0358 on the provisional public split and 0.0383 on its worst slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a single dense interaction design\",\n      \"rejected_reason\": \"Errors were sensitive to regularization; the ensemble gives most weight to the most stable tested design.\"\n    }\n  ],\n  \"rationale\": \"Save a calibrated candidate now and run it through the actual DAG evaluator before interpreting provisional split metrics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d6f4c4905ba3bae4a8517b33d3ea7deed717a0df96c6315703ba182ea2e60dc3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35632.55,
+      "usage_known": true,
+      "prompt_tokens": 38202,
+      "cached_tokens": 12672,
+      "completion_tokens": 1436
+    }
+  ]
+}

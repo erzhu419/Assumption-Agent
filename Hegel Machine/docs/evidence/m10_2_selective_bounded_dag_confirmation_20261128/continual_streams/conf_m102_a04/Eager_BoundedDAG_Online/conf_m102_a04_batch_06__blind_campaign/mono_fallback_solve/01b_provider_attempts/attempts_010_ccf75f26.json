@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ccf75f2642054f8bab4c0d7a8236cc14",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a04__Eager_BoundedDAG_Online__conf_m102_a04_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:27:58.856582+00:00",
+  "ended_at_utc": "2026-11-28T15:28:34.181133+00:00",
+  "request_sha256": "2a1b37b446a6e63a682cbadd6108234f36ecf2873c58a2645aea234a88307d39",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71289,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44475,
+    "cached_tokens": 12672,
+    "completion_tokens": 1334
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^print('\\\\''B errors/,$d' /tmp/joint_probe.py > /tmp/ridge_probe.py\\ncat >> /tmp/ridge_probe.py <<'PY'\\nF=-np.expm1(-t[:,None]*np.array([.37633,1.78968,5.5352])); H=lin(F,T.T).T; L=np.c_[y,H]; a=np.arange(52); h=np.arange(52,72)\\nfrom scipy.linalg import qr\\nW=B(z); P=mon(z,cyc); Q=np.cos(2.4*z); R=np.cos(2.4*W); Cx=C(z); Dx=C2(z)\\nprint('ranges',z.min(0),z.max(0),'inverse errors', np.max(abs(ca(z)@c-tr['x'])));print('rates fits baseline')\\ndef jd(m):\\n E=m@lin(m[a],L[a])-L;return np.round(np.mean(abs(E[a]),0),4),np.round(np.mean(abs(E[h]),0),4)\\nfor k,m in [('z',one(z)),('z2',one(np.c_[z,mon(z,list(itertools.combinations_with_replacement(range(4),2)))])),('z3',one(np.c_[z,mon(z,list(itertools.combinations_with_replacement(range(4),2))),mon(z,list(itertools.combinations_with_replacement(range(4),3)))])),('zPQ',one(np.c_[z,P,Q])),('zPQR',one(np.c_[z,P,Q,R])),('known',one(np.c_[z,P,Q,R,mon(W,cyc),np.sin(1.25*W),np.sin(1.25*z)]))]: print(k,jd(m))\\n# Scan free Fourier ridges after removing low-complexity measured operators; jointly refine multiple peaks.\\nrng=np.random.default_rng(313); D=np.r_[rng.normal(size=(22000,4))*rng.uniform(.4,6,(22000,1)),cb[1:].T*1.25,cb[1:].T*2.4,np.eye(4)*2.4]\\nSW=np.sin(z@D.T); CW=np.cos(z@D.T)\\nbase={ 'aff':one(z),'phys':one(np.c_[z,P,Q,R]),'quad':one(np.c_[z,mon(z,list(itertools.combinations_with_replacement(range(4),2))),Q,R]) }\\nfor k,G in base.items():\\n for j in range(4):\\n  best=[]; yy=L[:,j]; Ws=np.empty((0,4))\\n  for count in range(1,5):\\n   def design(w):\\n    P0=z@w.reshape(-1,4).T;return np.c_[G,np.sin(P0),np.cos(P0)]\\n   Q0=qr(design(Ws)[a],mode='economic')[0]; res=yy[a]-Q0@(Q0.T@yy[a]); s=SW[a]-Q0@(Q0.T@SW[a]); c0=CW[a]-Q0@(Q0.T@CW[a]); vs=(s*s).sum(0); vc=(c0*c0).sum(0); cs=(s*c0).sum(0); u=s.T@res; v=c0.T@res; scores=(u*u*vc+v*v*vs-2*u*v*cs)/np.maximum(vs*vc-cs*cs,1e-12); idx=np.argsort(scores)[-100:][::-1]; seeds=[]\\n   for ii in idx:\\n    if all(min(np.linalg.norm(D[ii]-vv),np.linalg.norm(D[ii]+vv))>.65 for vv in seeds):seeds.append(D[ii]);\\n    if len(seeds)>=5:break\\n   def fun(w):\\n    M=design(w)[a];return M@lin(M,yy[a])-yy[a]\\n   opt=min((least_squares(fun,np.r_[Ws.ravel(),w],max_nfev=85) for w in seeds),key=lambda o:o.cost); Ws=opt.x.reshape(-1,4); M=design(Ws); coef=lin(M[a],yy[a]); err=abs(M@coef-yy);best.append((np.round(err[a].mean(),4),np.round(err[h].mean(),4)))\\n   if err[h].mean()<.05 or count==2: print('ridge',k,j,count,best[-1],np.round(Ws,3),np.round(coef[-2*count:],3))\\n  print('ridge summary',k,j,best)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/ridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (sparse coordinatewise dictionary) -> H2 (non-axis-aligned Fourier ridges plus measured operators); downstream MAE remains above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Search off-axis frequencies within the fitting split, then refine them by variable projection and check whether the resulting expressions generalize to the 20 unseen rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8db7801e205df631dd39fba9f72ffa134c72fd42eb64fa9b01ad22dd88d3c72d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35322.47,
+      "usage_known": true,
+      "prompt_tokens": 44475,
+      "cached_tokens": 12672,
+      "completion_tokens": 1334
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d92b2207023245e68292c0f44a6c8e06",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:05.371306+00:00",
+  "ended_at_utc": "2026-11-28T15:33:37.881502+00:00",
+  "request_sha256": "e274981ffcc9cf3a333d95fb42b75a901c3b6306912d36eeb09799f3466e3b5a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69120,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40431,
+    "cached_tokens": 12672,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/finalprobe.py <<'PY'\\nexec(open('/tmp/graph.py').read().split(\\\"print('B'\\\")[0])\\nfrom scipy.optimize import least_squares\\ntr=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; n=52\\nprint('TELEMETRY AND TIMES',s['telemetry_vec'],t,'calibration',coef,flush=True)\\nP=ops['P'](z); Q=ops['Q'](z); B=ops['B'](z)\\ndef soft(a):return np.logaddexp(0,a)\\ndef pp(a): return (a[:,:,None]*a[:,None,:])[:,np.triu_indices(4)[0],np.triu_indices(4)[1]]\\ndef designs(k):\\n sp=soft(k*P); sq=soft(k*Q); R=np.sum(P*Q,1)[:,None];\\n return {'P':P,'Q':Q,'softP':sp,'softQ':sq,'softP+Q':np.c_[sp,Q],'P+Q':np.c_[P,Q],'P+Q+dot':np.c_[P,Q,R],'softP+Q+dot':np.c_[sp,Q,R],'softP+Q+prod':np.c_[sp,Q,P*Q],'softP+Q+softprod':np.c_[sp,Q,sp*Q],'softP+P':np.c_[sp,P],'Q+cross':np.c_[Q,pp(Q)],'P+cross':np.c_[P,pp(P)],'P Q rat':np.c_[P,Q,P/(1+k*Q*Q)],'P Q soft projection':np.c_[P,Q,soft(k*(P+Q))],'P Q soft diff':np.c_[P,Q,soft(k*(P-Q))],'P Q soft dot':np.c_[P,Q,soft(k*R)]}\\nH=-np.expm1(-t[:,None]*np.array([1.8,.4,5.8])); modes=ls(H,tr.T).T\\nfor j,v in enumerate([y,*modes.T]):\\n r=[]\\n for k in [.2,.7,1.25,2.4,4,7,12]:\\n  for a,f in designs(k).items():\\n   f=D(f); e=v-f@ls(f[:n],v[:n]); lev=np.sum(f[:n]*np.linalg.pinv(f[:n]).T,1); r.append((np.mean(abs(e[:n]/(1-lev))),np.mean(abs(e[n:])),k,a))\\n print('MOD',j,sorted(r)[:6],flush=True)\\n# Profile unknown affine ridge nonlinearities, both signs and multiplicative interactions.\\nfrom scipy.special import expit\\nrng=np.random.default_rng(7)\\nfor j,v in enumerate([y,modes[:,0],modes[:,1]]):\\n rr=[]\\n for key,F,W in [('PQ',np.c_[P,Q],np.c_[P,Q]),('P',P,np.c_[P,Q]),('Q',Q,np.c_[P,Q]),('z',z,np.c_[P,Q]),('zPQ',np.c_[z,P,Q],np.c_[P,Q]),('B',B,np.c_[P,Q])]:\\n  for nm,fun in [('soft',soft),('sin',np.sin),('tanh',np.tanh),('rat',lambda a:1/(1+a*a)),('gate',expit)]:\\n   for variant in [0,1]:\\n    W0=D(W); d=F.shape[1]+1\\n    def pred(a):\\n     g=fun(D(F)@a); return np.c_[W0,g] if variant==0 else np.c_[W0,W0*g[:,None]]\\n    def obj(a):\\n     f=pred(a)[:n]; return f@ls(f,v[:n])-v[:n]\\n    for _ in range(4):\\n     r=least_squares(obj,rng.normal(0,.75,d),max_nfev=65); f=pred(r.x); e=f@ls(f[:n],v[:n])-v; rr.append((np.mean(abs(e[:n])),np.mean(abs(e[n:])),key,nm,variant,r.x.round(2)))\\n print('RIDGE',j,*sorted(rr,key=lambda a:a[0])[:5],sep='\\\\n',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/finalprobe.py; grep -n 'telemetry\\\\|def _operators\\\\|def _branches' /tmp/hegel_continual_archive/*py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic kernel ensemble -> H2 softplus or gated panel readout; the saved solver's 52/20 MAEs are 0.299429 for response and 0.167298 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The exploratory fits repeatedly favor softplus of C1 for the fast mode and C2 for the slow mode. Test those readouts with nonlinear projection and gating before selecting the final candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0aff95126d1719ad329422e11d397465cf8a02f8d726a9b2af205380c816e5c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32508.93,
+      "usage_known": true,
+      "prompt_tokens": 40431,
+      "cached_tokens": 12672,
+      "completion_tokens": 1297
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99fbd613c3a74b0f93bff511f2cd8733",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Flat_MonolithicArchive_Online__conf_m102_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:33:03.382706+00:00",
+  "ended_at_utc": "2026-11-28T15:33:45.187298+00:00",
+  "request_sha256": "c025ef89d738efc14f55e4638992a7721ac59a7fd6087b3bed095c7ec2315ce0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21326,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17600,
+    "cached_tokens": 8832,
+    "completion_tokens": 777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$f; grep -nE '^def |panel_|exp|tanh|sin|cos|poly|design|lstsq' \\\"$f\\\"; done; python3 - <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=np.c_[s['train']['y'],s['train']['traj']]; a=s['panel_a']; U=np.c_[np.ones(len(a['u'])),a['u']]; v=a['v']; C=np.linalg.lstsq(U,v,rcond=None)[0]\\nfor i in range(8):\\n r=np.linalg.norm(U@C-v,axis=1); j=np.argsort(r)[:40]; C=np.linalg.lstsq(U[j],v[j],rcond=None)[0]\\nprint('times telemetry affine residuals',s['eval_times'],s['telemetry_vec'],C,np.sort(np.linalg.norm(U@C-v,axis=1))[::3]); print('trajectory right factors',np.linalg.svd(y[:,1:],full_matrices=False)[2][:3]); print('label vs traj corr',np.corrcoef(y.T)[0]);\\nfor name,z in [('raw',x),('direct',C[0]+x@C[1:]),('inverse',(x-C[0])@np.linalg.pinv(C[1:]))]:\\n def design(d): return np.column_stack([np.prod(z[:,ix],axis=1) for k in range(d+1) for ix in itertools.combinations_with_replacement(range(4),k)])\\n for d in [1,2,3]:\\n  A=design(d); pred=A@np.linalg.lstsq(A[:52],y[:52],rcond=None)[0]; e=np.abs(pred-y); print(name,d,e[:52,0].mean(),e[52:,0].mean(),e[:52,1:].mean(),e[52:,1:].mean())\\n for fun in [np.tanh,np.sin,lambda z:z/(1+z*z),lambda z:z*np.exp(-z*z)]:\\n  A=np.c_[design(2),fun(z),z*fun(z)]; e=np.abs(A@np.linalg.lstsq(A[:52],y[:52],rcond=None)[0]-y); print(name,fun,e[52:,0].mean(),e[52:,1:].mean())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine trajectory and quadratic readout -> H2 calibrated nonlinear operators with a low-rank temporal response; archive gate MAE was 0.369278 for y and 0.191761 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure how much exact low-degree terms and calibrated coordinate nonlinearities explain before fitting more complex panel compositions. Audit the endpoint and temporal predictions separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3a3c2513be04104e85d37ad95d2f57635bad9e5b9e24f3919342b2a928f69262",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41803.77,
+      "usage_known": true,
+      "prompt_tokens": 17600,
+      "cached_tokens": 8832,
+      "completion_tokens": 777
+    }
+  ]
+}

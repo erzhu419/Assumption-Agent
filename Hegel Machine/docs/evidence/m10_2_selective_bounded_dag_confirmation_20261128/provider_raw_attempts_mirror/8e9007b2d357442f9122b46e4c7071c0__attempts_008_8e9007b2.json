@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e9007b2d357442f9122b46e4c7071c0",
+  "call_seq": 8,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:50:07.106383+00:00",
+  "ended_at_utc": "2026-11-28T15:50:43.938227+00:00",
+  "request_sha256": "dd5ad7ea963eecb2eca25c6bdbc1e5dfe098323205e570c0a3f59a0a6c751ff1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38563,
+    "cached_tokens": 12672,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '/for k,j /,$p' /tmp/model6.py >/dev/null; OPENBLAS_NUM_THREADS=1 python3 /tmp/model6.py | grep -A5 '^panel_b'; cat >/tmp/search8.py <<'PY'\\nexec(open('/tmp/graph7.py').read().split('for dg in (1,2,3):')[0]); from scipy.optimize import least_squares\\np=s['panel_b']; U=p['u']; V=p['v'];\\n# fit common componentwise activation and profile the affine forward map\\nfs={'rat':lambda x,w:x/(1+w[0]*x*x)+w[1]*x,'rat3':lambda x,w:(x+w[1]*x**3)/(1+w[0]*x*x+w[2]*x**4),'tanh':lambda x,w:np.tanh(w[0]*x)+w[1]*x,'sin':lambda x,w:np.sin(w[0]*x)+w[1]*x,'atan':lambda x,w:np.arctan(w[0]*x)+w[1]*x,'sqrt':lambda x,w:x/np.sqrt(1+w[0]*x*x)+w[1]*x,'rat2':lambda x,w:x/(1+w[0]*x*x)+w[1]*x/(1+w[2]*x*x)}\\nfor name,f in fs.items():\\n n=3 if name in ('rat3','rat2') else 2\\n def err(w):\\n  X=aff(f(U,w)); return (X@ls(X,V)-V).ravel()\\n r=min([least_squares(err,[a,b,.25][:n],bounds=([.001,-10,.001][:n],[12,10,12][:n]),max_nfev=120) for a in [.3,1.3,2.9] for b in [-.45,0,.3]],key=lambda r:np.linalg.norm(r.fun)); print('B shared',name,r.x,np.std(r.fun)); c=ls(aff(f(U,r.x)),V);D['B_'+name]=aff(f(z,r.x))@c\\n def err2(w):\\n  X=aff(f(U,w)) if name!='rat' else aff(U/(1+U*U*w));return (X@ls(X,V)-V).ravel()\\n if name=='rat':\\n  r=least_squares(err2,np.ones(4),bounds=(.001,20));print('B per coordinate',r.x,np.std(r.fun));X=aff(U/(1+U*U*r.x)); D['B_sep']=aff(z/(1+z*z*r.x))@ls(X,V)\\nfor name,w in [('rat',.22),('rat',1.25),('atan',1.25),('atan',2.449),('sin',1.25),('tanh',1.25),('tanh',2.5),('sqrt',1.25),('sqrt',4.)]:D[f'{name}{w}']=fs[name](z,[w,0.])\\n# Features combining the native coordinates and componentwise nonlinearities, plus structured polynomials.\\nfrom itertools import combinations\\nY0=Y[:,0]; T=Y[:,1:]; t=s['eval_times']; _,_,vh=np.linalg.svd(T-T[:52].mean(0),full_matrices=False); amp=T@vh[0]; scores=[]\\nfor key in ['z','B(z)','C1(z)','C2(z)','C1(B(z))','C2(B(z))']+[k for k in D if '(' not in k and k not in ('z','x')]:\\n h=D[key]; mul=np.array([h[:,i]*h[:,j] for i,j in combinations(range(4),2)]).T; cyc=h*roll(h)\\n for tag,X in [('lin',aff(h)),('quadr',np.c_[aff(h),h*h,mul]),('offdiag',np.c_[aff(h),mul]),('cyc',np.c_[aff(h),cyc]),('z+quad',np.c_[aff(z),h,h*h,mul]),('z+cyc',np.c_[aff(z),h,cyc]),('z+offdiag',np.c_[aff(z),h,mul]),('cross',np.c_[aff(h),h*h,mul,z,z*h]),('cubicRidge',PolynomialFeatures(3).fit_transform(h))]:\\n  for reg in ([0,.03,.3] if tag=='cubicRidge' else [0]):\\n   A=X[:52]; c=ls(A,Y[:52]) if reg==0 else np.linalg.solve(A.T@A+reg*np.diag(np.r_[0,np.maximum(np.sum(A[:,1:]**2,axis=0),1e-8)]),A.T@Y[:52]); E=abs(X[52:]@c-Y[52:]);scores.append((E[:,0].mean(),E[:,1:].mean(),key,tag,reg))\\nprint('top scalar',sorted(scores)[:16]);print('top trajectory',sorted(scores,key=lambda a:a[1])[:16]);\\nfor key in ['z','B(z)','B_rat','B_sep','C2(B(z))']:\\n h=D[key]; p=PolynomialFeatures(2);A=p.fit_transform(h); c=ls(A[:52],np.c_[Y0,amp][:52]);print(key,np.c_[p.get_feature_names_out(),c]);print('quant',np.quantile(h,[0,.5,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Refine the active B operator and test structured readouts; the best 52/20 MAEs so far are 0.103811 for y and 0.049830 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The inverted calibration is accurate on panel A, and B gives the best quadratic fits for both outputs. Separate errors in B from omissions in the readout before adding model complexity.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5dc9583acdb678c09b4a3c53c71aa1eeba7213866396312bc130f28110d3efaa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37344.65,
+      "usage_known": true,
+      "prompt_tokens": 38563,
+      "cached_tokens": 12672,
+      "completion_tokens": 1521
+    }
+  ]
+}

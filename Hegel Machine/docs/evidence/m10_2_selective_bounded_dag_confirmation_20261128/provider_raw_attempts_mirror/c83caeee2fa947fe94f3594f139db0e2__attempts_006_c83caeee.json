@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c83caeee2fa947fe94f3594f139db0e2",
+  "call_seq": 6,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Eager_BoundedDAG_Online__conf_m102_b01_batch_13__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_13__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:02:55.938090+00:00",
+  "ended_at_utc": "2026-11-28T16:03:31.165733+00:00",
+  "request_sha256": "7fe8223da05cc773f61b8fd86a893bc5657fd7b48661e38910d5627ddbefa2c0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31328,
+    "cached_tokens": 12672,
+    "completion_tokens": 1409
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat _frozen_nodes/node_00.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nimport runpy,pickle,numpy as np,pathlib\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; o=runpy.run_path('_frozen_nodes/node_00.py')['run_node']({'__input__':s}); print([(k,np.shape(v)) for k,v in o.items()]); n=len(s['train']['x'])+len(s['test']['x']); d=s['train']['x'].shape[1]; key=next(k for k,v in o.items() if np.shape(v)==(n,d)); src=next(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')).read_text(); start=src.index('def _operator'); end=src.index('def _features'); src=src[:start]+'''def _operator(study, projection):\\n    b = study['panel_b']\\n    u, v = b['u'], b['v']\\n    affine = _ls(_aff(u), v)\\n    x = _ls(affine[1:].T, (projection - affine[0]).T).T\\n\\n    def basis(z, frequency):\\n        return _aff(np.cos(frequency * z))\\n\\n    def loss(frequency):\\n        m = basis(u, frequency)\\n        r = m @ _ls(m, v) - v\\n        return np.mean(r*r)\\n\\n    grid = np.linspace(0.4, 8.0, 77)\\n    i = int(np.argmin([loss(g) for g in grid]))\\n    g = minimize_scalar(loss, bounds=(grid[max(0, i-1)], grid[min(len(grid)-1, i+1)]),\\n                        method='bounded', options={'xatol': 1e-9}).x\\n    return basis(x, g) @ _ls(basis(u, g), v)\\n\\n\\n'''+src[end:]; src=src.replace('def solve_batch(study):','def run_node(inputs: dict) -> dict:\\\\n    study = inputs[\\\\'__input__\\\\']\\\\n    projection = inputs[\\\\'node_00\\\\']['+repr(key)+']');src=src.replace(\\\"_operator(study, np.concatenate((tr['x'], te['x']), axis=0))\\\",\\\"_operator(study, projection)\\\");pathlib.Path('node_01.py').write_text(src)\\nPY\\npython3 -I test_dag_candidate.py || true\\ncat > /tmp/head_probe.py <<'PY'\\nimport numpy as np,pickle,runpy,copy\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; f=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']; m=runpy.run_path('/holdout_task/node_01.py');o=f({'__input__':s});w=m['_operator'](s,next(v for v in o.values() if np.shape(v)==(108,4)))[:72]; ls=m['_ls'];aff=m['_aff'];\\nfuncs={'lin':lambda x:x,'asinh':np.arcsinh,'atan':np.arctan,'tanh':np.tanh,'inv3':lambda x:np.sinh(np.arcsinh(x)/3),'sin':np.sin,'erf':__import__('scipy.special',fromlist=['erf']).erf,'softsign':lambda x:x/np.sqrt(1+x*x)}\\nfor label in ('y','traj'):\\n y=s['train'][label];sc=np.maximum(y.std(axis=0),1e-8);print(label)\\n for k,f in funcs.items():\\n  for mode in (0,1,2,3):\\n   def basis(g):\\n    z=f(g*w);a=aff(z) if mode in (0,2) else aff(np.c_[w,z]);return np.c_[a,*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]] if mode>=2 else a\\n   scores=[]\\n   for val in [np.arange(i,i+18) for i in (0,18,36,54)]+[np.arange(52,72)]:\\n    tr=np.setdiff1d(np.arange(72),val)\\n    def fit(g,predict=False):\\n     a=basis(g);b=ls(a[tr],y[tr]);return np.mean(abs(a[val]@b-y[val])) if predict else np.mean(((a[tr]@b-y[tr])/sc)**2)\\n    g=minimize_scalar(fit,bounds=(0.2,9),method='bounded').x;scores.append((fit(g,True),g))\\n   print(k,mode,np.round(np.array(scores).T,4).tolist())\\nPY\\npython3 /tmp/head_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel B → H2 coordinatewise cosine before mixing; panel-B leave-one-out MAE is 0.000095, versus 0.258221 for a full quadratic.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Add sine or polynomial terms to the cosine calibration\",\"rejected_reason\":\"They lower training residuals but worsen held-out calibration error.\"}],\"rationale\":\"Fit the shared cosine frequency from panel B alone, apply it to the recovered frozen coordinates, and test each prediction head independently with gain fitted inside each training fold.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ed5e3cd921157a62955c2d4c5e87097f9b386a59ec297a886d037b8b01360463",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35822.45,
+      "usage_known": true,
+      "prompt_tokens": 31328,
+      "cached_tokens": 12672,
+      "completion_tokens": 1409
+    }
+  ]
+}

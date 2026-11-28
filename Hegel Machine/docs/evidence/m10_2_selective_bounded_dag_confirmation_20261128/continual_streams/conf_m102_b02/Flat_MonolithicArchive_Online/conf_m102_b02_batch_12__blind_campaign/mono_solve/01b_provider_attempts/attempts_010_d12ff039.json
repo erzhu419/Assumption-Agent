@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d12ff0396f1e416981d4c51c2ace5880",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_12__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_12__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:03:26.579706+00:00",
+  "ended_at_utc": "2026-11-28T16:03:57.707346+00:00",
+  "request_sha256": "f19e31e18b970c8eea3d22803b41391754a7d6939c323a30dd55021c2705d850",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63367,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37819,
+    "cached_tokens": 12672,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bsearch.py <<'PY'\\nfrom stress import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\nu,v=s['panel_b']['u'],s['panel_b']['v']; ls=m._ls\\nF={'sin':np.sin,'tanh':np.tanh,'asinh':np.arcsinh,'atan':np.arctan,'rat':lambda x:x/(1+x*x),'erf':__import__('scipy').special.erf,'exp':lambda x:x*np.exp(-x*x),'cube':lambda x:x**3,'soft':lambda x:x/(1+abs(x)),'sq':lambda x:x*x,'logcosh':lambda x:np.logaddexp(x,-x)-np.log(2),'cos':lambda x:1-np.cos(x)}\\nrec=[]\\ndef test(tag,f,starts,lo,hi):\\n def d(x,p):return np.c_[np.ones(len(x)),f(x,p)]\\n def r(p):\\n  a=d(u,p);return (a@ls(a,v)-v).ravel()\\n fit=min((least_squares(r,p,bounds=(lo,hi),max_nfev=90) for p in starts),key=lambda a:a.cost);p=fit.x; a=d(u,p); h=(np.linalg.qr(a)[0]**2).sum(1); rm=np.sqrt(np.mean((r(p).reshape(v.shape)/(1-h[:,None]))**2));rec.append((rm,tag,p,lambda x:d(x,p)@ls(a,v)))\\nfor name,g in F.items():\\n for kind in ('offset','coordgain','coordoffset'):\\n  if kind=='offset':\\n   test((name,kind),lambda x,p:x+p[1]*g(p[0]*x+p[2]),[[a,b,0] for a in (1.25,2.6,4.2) for b in (-.4,.4)],[.05,-10,-3],[10,10,3])\\n  else:\\n   test((name,kind),lambda x,p:x+(p[1:5] if kind=='coordgain' else p[1])*g(p[0]*x+(0 if kind=='coordgain' else p[2:6])),[[a]+([b]*4 if kind=='coordgain' else [b]+[0]*4) for a in (1.25,2.6,4.2) for b in (-.4,.4)],[.05]+[-10]*(4 if kind=='coordgain' else 5),[10]+[10]*(4 if kind=='coordgain' else 5))\\nfor (name,g),(name2,h) in combinations(F.items(),2):\\n test((name,name2),lambda x,p:x+p[2]*g(p[0]*x)+p[3]*h(p[1]*x),[[a,b,c,d] for a,b in [(1.25,2.15),(2.15,1.25),(4,3)] for c,d in [(-.4,.4),(.4,-.4),(-.4,-.4)]],[.05,.05,-10,-10],[10,10,10,10])\\nz,h=m._coords(s,xx); C=m._panel(s['panel_c'],'v1',lambda x,p:np.c_[np.sin(p[0]*x),np.tanh(p[1]*x)],[2.1,1.75],([.15,.15],[6,6])); rec.append((.002775,'baseline',None,None));\\nfor rm,n,p,b in sorted(rec,key=lambda v:v[0])[:18]:\\n H=h if b is None else C(b(z)); X=np.c_[np.ones(len(z)),z,H,(z*H).sum(1),z[:,1]*H[:,0]]; es=[]\\n for _,i,j in slices:\\n  e=np.abs(X[j]@ls(X[i],y[i])-y[j]);es.append([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()])\\n print(n,round(rm,7),np.round(p,5) if p is not None else '',np.round(es[0],6),np.round(np.max(es,axis=0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bsearch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full bilinear readout -> H2 tied diagonal interactions plus one directed cross-term; the challenger reaches 52/20 MAEs of 0.005419 for y and 0.006223 for state, with worst slice-by-horizon MAE 0.011076.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tie the diagonal interaction sum and directed cross-term to the same coefficient\",\"rejected_reason\":\"That restriction raises the 52/20 MAEs to 0.074747 for y and 0.094875 for state.\"}],\"rationale\":\"The sparse readout improves held-out errors; probe a broader Panel B basis using panel rows alone, then check whether the best panel fits also improve outcome prediction across input extremes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "319be9445ce4cb12d1b86003f3c5a25cee8615e5b506330494882555ea637357",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31783.94,
+      "usage_known": true,
+      "prompt_tokens": 37819,
+      "cached_tokens": 12672,
+      "completion_tokens": 1307
+    }
+  ]
+}

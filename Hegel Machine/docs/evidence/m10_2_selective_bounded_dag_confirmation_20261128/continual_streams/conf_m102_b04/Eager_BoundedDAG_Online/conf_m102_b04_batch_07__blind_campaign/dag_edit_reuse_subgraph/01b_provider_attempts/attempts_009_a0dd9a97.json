@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a0dd9a979c1548518d92b94cd64eb96d",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b04__Eager_BoundedDAG_Online__conf_m102_b04_batch_07__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_07__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:26:44.231824+00:00",
+  "ended_at_utc": "2026-11-28T15:27:09.381492+00:00",
+  "request_sha256": "14b1733681d9e3bad67a69c1c019fa9eb3d9f5dd84dffea9477f9a42fd8574be",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50777,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33228,
+    "cached_tokens": 5504,
+    "completion_tokens": 811
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nfrozen=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']\\nsink=runpy.run_path('/holdout_task/node_01.py')['run_node']\\nt=s['train']; x=t['x']; idx=np.arange(len(x))\\ndef score(va):\\n tr=np.setdiff1d(idx,va); fold=dict(s,train={k:v[tr] for k,v in t.items()},test=dict(s['test'],x=x[va]))\\n out=sink({'__input__':fold,'node_00':frozen({'__input__':fold})})\\n y,z=out['y_hat'],out['state_pred']; end=z[:,-1]\\n assert y.shape==t['y'][va].shape and z.shape==t['traj'][va].shape and np.isfinite(y).all() and np.isfinite(z).all()\\n np.testing.assert_allclose(out['diagnostics_vec'],[y.mean(),y.std(),end.mean(),end.std()])\\n return np.mean(abs(y-t['y'][va])), np.mean(abs(z-t['traj'][va]),axis=0)\\ndef summarize(name,folds):\\n e=[score(va) for va in folds]; y=np.array([a for a,b in e]); z=np.array([b for a,b in e]); print(name,'mean',y.mean(),z.mean(),'worst fold',y.max(),z.mean(1).max(),'worst per-horizon mean',z.mean(0).max())\\nsummarize('development folds',[va for seed in range(3) for va in np.array_split(np.random.default_rng(seed).permutation(idx),4)])\\nsummarize('additional folds',[va for seed in range(3,9) for va in np.array_split(np.random.default_rng(seed).permutation(idx),4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic panel ridge → H2 panel-informed smooth kernel with a quadratic trend; the exact artifact passed public CV at 0.029259 scalar MAE and 0.018181 trajectory MAE, and the prototype's worst repeated folds were 0.03750 and 0.02343.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the accepted kernel with a separable panel model\",\n      \"rejected_reason\": \"The separable fit reduces panel residuals, but there is no evidence yet that it improves either prediction head.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the saved node rather than its prototype, checking both heads, individual horizons, and diagnostic consistency on additional folds without editing the accepted artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "34000e589ee2921619a5f7ee2f94456d289f65fdcec89e3f00867008d11d8bba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25148.32,
+      "usage_known": true,
+      "prompt_tokens": 33228,
+      "cached_tokens": 5504,
+      "completion_tokens": 811
+    }
+  ]
+}

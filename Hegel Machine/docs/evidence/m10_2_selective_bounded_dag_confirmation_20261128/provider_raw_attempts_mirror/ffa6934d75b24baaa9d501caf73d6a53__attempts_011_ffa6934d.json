@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ffa6934d75b24baaa9d501caf73d6a53",
+  "call_seq": 11,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Flat_MonolithicArchive_Online__conf_m102_a03_batch_14__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:13:11.305215+00:00",
+  "ended_at_utc": "2026-11-28T16:13:51.551187+00:00",
+  "request_sha256": "9030a4a6a0769f20f08b8aebe1c31a8cb4e9ecbee10bca2c2d30bdcc5e4d6ae5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75095,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42740,
+    "cached_tokens": 12672,
+    "completion_tokens": 1776
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsrc=$(find /tmp/hegel_continual_archive -name '*batch_09_solver.py' | head -1)\\nsed '/^def _affine(/,$d' \\\"$src\\\" > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _panel(panel, key, family):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', key))\\n    if family == 'threshold':\\n        def design(x, p):\\n            return _affine(np.sign(x) * np.maximum(abs(x)-p[0],0.)**p[1])\\n        start, bounds = [.35, 1.5], ([0.,.3],[.9,3.])\\n    else:\\n        def design(x, p):\\n            return _affine(np.column_stack((x, np.cos(p[0]*x))))\\n        start, bounds = [1.3], ([.2],[3.])\\n    def residual(p):\\n        a = design(u,p)\\n        return (a @ _fit(a,v) - v).ravel()\\n    p = least_squares(residual,start,bounds=bounds,ftol=1e-12,xtol=1e-12,gtol=1e-12).x\\n    coef = _fit(design(u,p),v)\\n    return lambda x: design(x,p) @ coef\\n\\n\\ndef _features(study,x):\\n    z = _decode(x,_calibration(study['panel_a']))\\n    b = _panel(study['panel_b'],'v','threshold')(z)\\n    d = _panel(study['panel_c'],'v2','cos')(z)\\n    q = z*np.roll(b,1,axis=1)\\n    h = _affine(np.c_[b,q.sum(axis=1)])\\n    return h,z,b,d,q\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    h,z,b,d,q = _features(study,np.concatenate((train['x'],study['test']['x']),axis=0))\\n    scalar = np.c_[h,(d[:,:,None]*q[:,None,:]).reshape(len(h),16)]\\n    y_hat = scalar[n:] @ _fit(scalar[:n],train['y'])\\n    state_pred = h[n:] @ _fit(h[:n],train['traj'])\\n    diagnostics_vec = np.array([y_hat.mean(),y_hat.std(),state_pred[:,-1].mean(),state_pred[:,-1].std()])\\n    return dict(y_hat=y_hat,state_pred=state_pred,diagnostics_vec=diagnostics_vec)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/struct14.py <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _features,_fit,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; n=len(y); h,z,b,d,q=_features(s,tr['x']); p=q.sum(1); X=(d[:,:,None]*q[:,None,:]).reshape(n,16); ar=np.arange(n); rr=np.random.default_rng(34); folds=[(ar[:52],ar[52:])]+[(i[:52],i[52:]) for i in [rr.permutation(n) for _ in range(12)]]\\ndef cv(A,B=y):\\n e=np.array([np.mean(abs(A[v]@_fit(A[t],B[t])-B[v])) for t,v in folds]); return np.array([e[0],e.mean(),max(e),np.mean(abs(A[:52]@_fit(A[:52],B[:52])-B[:52]))])\\nprint('baseline',cv(np.c_[h,X]),cv(h,T)); print('coef',_fit(np.c_[h,X][:52],y[:52]).round(4)); print('coef all',_fit(np.c_[h,X],y).round(4)); print('state',_fit(h,T).round(4)); print('D3 delta',np.max(abs(np.load('/tmp/spaces.npz')['D3'][:n]-d)))\\nresults=[]\\ndef ck(k,*cols):\\n A=np.column_stack((h,*cols));results.append((cv(A),k))\\nfor lag in range(4):\\n v=d*np.roll(q,lag,axis=1)\\n for k,V in [('all',v),('sum',v.sum(1))]:ck(('cyclic',lag,k),V)\\nfor k,V in [('D',d),('Z',z),('B',b),('Q',q)]:\\n for j in range(4):\\n  for l in range(j,4):\\n   for t in [.1,.25,.5,1,2,4]:\\n    for m,U in [('sum',V[:,j]+V[:,l]),('diff',V[:,j]-V[:,l]),('prod',V[:,j]*V[:,l]),('norm',np.hypot(V[:,j],V[:,l]))]:\\n     g=1/(1+t*U**2)\\n     ck((k,j,l,t,m,'p'),p*g);ck((k,j,l,t,m,'all'),h[:,1:]*g[:,None]);ck((k,j,l,t,m,'D'),p*g,d)\\n     ck((k,j,l,t,m,'b'),p*g,b*g[:,None]);ck((k,j,l,t,m,'X'),p*g,X)\\nfor k in range(1,6):\\n R=[]\\n for idx in itertools.combinations(range(16),k):\\n  a=np.c_[h,X[:,idx]]; t=folds[0][0]; r=np.mean((a[t]@_fit(a[t],y[t])-y[t])**2);R.append((r,idx))\\n for _,i in sorted(R)[:5]:ck(('sparse',i),X[:,i])\\nprint('mean',sorted(results,key=lambda a:a[0][1])[:15]);print('train',sorted(results,key=lambda a:a[0][3])[:12]);print('fixed',sorted(results,key=lambda a:a[0][0])[:10]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic interaction alone → H2 cyclic interaction modulated by panel C’s second output; the public scalar MAE is 0.02875, with worst alternate-split MAE 0.04733.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use the scalar link fitted on an approximate panel B operator\",\"rejected_reason\":\"The panel C interaction achieves a better fixed-split result while retaining the independently identified threshold-power operator.\"}],\"rationale\":\"Save the passing structure first, then test whether a smaller interaction basis improves the weak alternate splits without harming trajectory prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "df5d95750eb7a0d030082bacc70f6f5eed9d0393c0eefa5c812e62ef741f58e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41512.08,
+      "usage_known": true,
+      "prompt_tokens": 42740,
+      "cached_tokens": 12672,
+      "completion_tokens": 1776
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09f6622891d248979f7132dd4b7024b0",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a02__Hegel_SelectiveBoundedDAG_Online__conf_m102_a02_batch_15__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a02_batch_15__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:25:38.998682+00:00",
+  "ended_at_utc": "2026-11-28T16:26:15.216820+00:00",
+  "request_sha256": "1a3b5a81ce381c6b5865499e96cd85af8628da98f55b62fb33aae429b258d283",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59248,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36928,
+    "cached_tokens": 12672,
+    "completion_tokens": 1591
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\n\\\"\\\"\\\"Recalibrate the two panels and fit independent scalar and trajectory readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar, root\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _profile(design, target, grid, width):\\n    def score(w):\\n        f = design(w)\\n        return np.mean((f @ _ls(f, target) - target)**2)\\n    w0 = grid[np.argmin([score(w) for w in grid])]\\n    w = minimize_scalar(score, bounds=(w0-width, w0+width), method='bounded').x\\n    return w, _ls(design(w), target)\\n\\n\\ndef _inverse(panel, x, gain, offset):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    size = np.max(np.abs(v), axis=1)\\n    mid = np.median(size)\\n    clean = size < mid + max(1.5, 8*np.median(np.abs(size-mid)))\\n    if clean.sum() >= 12:\\n        u, v = u[clean], v[clean]\\n    def design(q, j, w):\\n        return np.c_[np.ones(len(q)), q, np.sin(w*q[:, (j+2)%4]), np.sin(w*q[:, j])]\\n    calibrations = [_profile(lambda w: design(u, j, w), v[:, j], np.linspace(.8, 5., 75), .07) for j in range(4)]\\n    def forward(q):\\n        return np.array([c[0] + q @ c[1:5] + c[5]*np.sin(w*q[(j+2)%4]) + c[6]*np.sin(w*q[j]) for j, (w, c) in enumerate(calibrations)])\\n    out = np.empty_like(x, dtype=float)\\n    safe_gain = np.where(np.abs(gain) > 1e-6, gain, 1.)\\n    for i, row in enumerate(x):\\n        fun = lambda q: forward(q) - row\\n        start = (row-offset)/safe_gain\\n        sol = root(fun, start, tol=1e-10).x\\n        if not np.all(np.isfinite(sol)) or np.linalg.norm(fun(sol)) > 1e-7 or np.max(np.abs(sol)) > 1.4:\\n            alt = root(fun, row/1.2, tol=1e-10).x\\n            if np.all(np.isfinite(alt)) and (not np.all(np.isfinite(sol)) or np.linalg.norm(fun(alt)) < np.linalg.norm(fun(sol)) or (np.linalg.norm(fun(alt)) <= 1e-7 and np.linalg.norm(alt) < np.linalg.norm(sol))):\\n                sol = alt\\n        out[i] = sol if np.all(np.isfinite(sol)) else start\\n    return out\\n\\n\\ndef _even_panel(panel, q):\\n    u, v = (np.asarray(panel[k], dtype=float) for k in ('u', 'v'))\\n    def design(x, w):\\n        return np.c_[np.ones(len(x)), np.cos(w*x)]\\n    w, coef = _profile(lambda w: design(u, w), v, np.linspace(.5, 6., 111), .06)\\n    return design(q, w) @ coef\\n\\n\\ndef _sparse_readout(f, target, n, terms=6):\\n    mu = f[:n].mean(0)\\n    scale = np.maximum(f[:n].std(0), 1e-6)\\n    norm = (f-mu)/scale\\n    a = norm[:n]\\n    target = np.asarray(target)\\n    center = target.mean(0)\\n    y = target-center\\n    residual = y\\n    columns = []\\n    for _ in range(min(terms, a.shape[1])):\\n        correlation = np.linalg.norm((a.T @ residual).reshape(a.shape[1], -1), axis=1)\\n        correlation[columns] = -1.\\n        columns.append(int(np.argmax(correlation)))\\n        coef = _ls(a[:, columns], y)\\n        residual = y-a[:, columns] @ coef\\n    return norm[n:, columns] @ coef + center\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study, upstream = inputs['__input__'], inputs['node_00']\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.vstack((train['x'], study['test']['x'])).astype(float)\\n    q = _inverse(study['panel_a'], x, np.asarray(upstream['gain']), np.asarray(upstream['offset']))\\n    b = _even_panel(study['panel_b'], q)\\n    scalar = np.column_stack([b] + [b[:, i]*b[:, j] for i, j in combinations_with_replacement(range(b.shape[1]), 2)])\\n    y = _sparse_readout(scalar, train['y'], n)\\n    z = _sparse_readout(np.c_[q, b], train['traj'], n)\\n    last = z[:, -1]\\n    return {'y_hat': y, 'state_pred': z, 'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired-sine panel-A inversion -> H2 shared cosine panel B and separate sparse readouts; exploratory worst-slice scalar/trajectory MAEs were 0.00969/0.00882.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the diagonal cubic correction\",\n      \"rejected_reason\": \"Its worst blocked scalar and trajectory errors were 0.01760 and 0.01504, both higher than the paired-sine model.\"\n    }\n  ],\n  \"rationale\": \"Save the best blocked-validation model, using the frozen gain and offset to initialize inversion. Run the official clean-process test against the exact saved artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f70ab572fce53c4c1d9ad059f5b24f4cbbec1b0cefc8e213350b547d6573e441",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36752.38,
+      "usage_known": true,
+      "prompt_tokens": 36928,
+      "cached_tokens": 12672,
+      "completion_tokens": 1591
+    }
+  ]
+}

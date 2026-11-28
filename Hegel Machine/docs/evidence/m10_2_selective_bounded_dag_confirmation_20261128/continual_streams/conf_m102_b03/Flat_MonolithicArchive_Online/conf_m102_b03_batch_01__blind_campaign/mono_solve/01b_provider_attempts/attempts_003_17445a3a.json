@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17445a3aae344bfcb679345992905604",
+  "call_seq": 3,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b03__Flat_MonolithicArchive_Online__conf_m102_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:58:55.787532+00:00",
+  "ended_at_utc": "2026-11-28T14:59:23.637405+00:00",
+  "request_sha256": "190faec2763bc480dddf89289a95ecab543cfdb2412a44495dbfbc166ed27b56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21038,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21337,
+    "cached_tokens": 14720,
+    "completion_tokens": 1122
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/explore.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=135)\\ndef F(x):return np.c_[np.ones(len(x)),x]\\ndef fit(X,Y):return np.linalg.lstsq(X,Y,rcond=None)[0]\\na=s['panel_a']; u=a['u']; v=a['v']; ids=np.arange(len(u))\\nfor _ in range(5):\\n A=fit(F(u[ids]),v[ids]); r=np.linalg.norm(v-F(u)@A,axis=1);ids=np.argsort(r)[:45]\\nprint('A',A,'resid',np.sort(r));print('A residual samples', (v-F(u)@A)[ids[-8:]])\\nb=s['panel_b']; B=fit(F(b['u']),b['v']);print('B sv',np.linalg.svd(B[1:])[1])\\nc=s['panel_c'];print('C',[(k,np.round(v[:10],4)) for k,v in c.items()]);print('times',s['eval_times']);t=s['eval_times'];tr=s['train']['traj'];print('traj SVD',np.linalg.svd(tr)[1]);\\nfor n in [1,2,3]:\\n def h(p):return -np.expm1(-t[:,None]*p)\\n def fun(p):\\n  H=h(p);return (H@fit(H,tr.T)-tr.T).ravel()\\n q=least_squares(fun,np.geomspace(.4,2,n),bounds=(.001,20));print('rates',q.x,'MAE',np.mean(abs(q.fun)))\\ny=np.c_[s['train']['y'],tr]; x=s['train']['x']; z=(x-A[0])@np.linalg.inv(A[1:]); w=F(z)@B\\nfor name,X in [('raw',x),('aligned',z),('B',w)]:\\n for d in range(1,5):\\n  P=PolynomialFeatures(d).fit_transform(X); err=abs(P[52:]@fit(P[:52],y[:52])-y[52:]);print(name,'poly',d,err[:,0].mean(),err[:,1:].mean())\\n D=cdist(X,X,'sqeuclidean');I=np.eye(52);P=PolynomialFeatures(1).fit_transform(X)\\n for g in [.01,.04,.12,.35,1.]:\\n  K=np.exp(-g*D); best=[]\\n  for l in [1e-6,1e-4,1e-3,.01]:\\n   core=np.block([[K[:52,:52]+l*I,P[:52]],[P[:52].T,np.zeros((P.shape[1],P.shape[1]))]]); coef=np.linalg.solve(core,np.r_[y[:52],np.zeros((P.shape[1],y.shape[1]))]);err=abs(np.c_[K[52:,:52],P[52:]]@coef-y[52:]);best.append((err[:,0].mean(),err[:,1:].mean()))\\n  print(name,'kernel',g,best)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived diagonal calibration and branch laws) → H2 (robust full calibration and reidentified operators); archived transfer worst 52/20 MAE is 0.886345.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived diagonal-calibration and direct-branch grammar transfers unchanged.\",\"empirical_witness\":\"Archived transfer produced 52/20 MAEs of 0.675520 and 0.886345 against a 0.038 gate; panel A also contains three extreme residual rows under ordinary affine fitting.\",\"causal_blanket_diagnosis\":\"Calibration contamination and a changed operator composition must be separated before attributing predictive effects to individual panels.\",\"sublated_pivot\":\"Retain robust calibration and variable projection, but test full affine mixing and reidentify the spatial and temporal operators.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Direct archive reuse\",\"rejected_reason\":\"Fails both public metrics by over an order of magnitude.\"}],\"rationale\":\"Fit the clean reference rows first, then use temporal rank and held-out polynomial/kernel baselines to locate which parts require an explicit operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e0ce2225d66d476c11bd58118113540ddd8273fe23c41b3cf49365cd865bedd7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28355.12,
+      "usage_known": true,
+      "prompt_tokens": 21337,
+      "cached_tokens": 14720,
+      "completion_tokens": 1122
+    }
+  ]
+}

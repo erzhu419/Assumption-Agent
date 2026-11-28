@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d30f85a715543dbaa3812f98d9c40ac",
+  "call_seq": 10,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Eager_BoundedDAG_Online__conf_m102_a03_batch_14__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_14__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T16:15:17.294506+00:00",
+  "ended_at_utc": "2026-11-28T16:15:52.117347+00:00",
+  "request_sha256": "e2b572d218b26aa46b84d05d8169e6511a54654f645e138017f216aa22a09b0a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 70228,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41816,
+    "cached_tokens": 12672,
+    "completion_tokens": 1471
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -i \\\"s/enc\\\\['z_test'\\\\]/enc['zt']/g\\\" node_01.py; python3 -I test_dag_candidate.py; cat >/tmp/satur14.py <<'PY'\\nimport os,sys,pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nos.chdir('/holdout_task');sys.path.insert(0,os.getcwd());from node_01 import _coords,_aff,_fit,_quad,_panel\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];en=runpy.run_path('_frozen_nodes/node_00.py')['run_node']({'__input__':s});z=_coords(s,en['z']);b=s['panel_b'];print('B residual',np.round(np.linalg.norm(_panel(b['u'],b,'v',np.sin,[-.4,2.9])-b['v'],axis=1),5));Y=np.c_[s['train']['y'],s['train']['traj']];n=52\\n\\ndef feature(pre,kind,p,D,Q):\\n q=D@p[:D.shape[1]]\\n if kind=='tanh':return np.tanh(q)\\n if kind=='sin':return np.sin(q)\\n if kind=='rat':return q/(1+q*q)\\n if kind=='soft':return q/np.sqrt(1+q*q)\\n if kind=='asinh':return np.arcsinh(q)\\n if kind=='log':return np.logaddexp(0,q)\\n if kind=='den':return q/(1+(Q@p[D.shape[1]:])**2)\\n if kind=='prod':return q*np.tanh(Q@p[D.shape[1]:])\\n\\ndef train(z,Y,znew,pre='q',kind='tanh',strength=1.0,extra=None):\\n Z=np.r_[z,znew];A=_aff(Z);n=len(z);B=A if extra is None else np.c_[A,extra];P=np.linalg.pinv(B[:n]);D=np.c_[A,_quad(Z)] if pre=='q' else _aff(Z);Q=A\\n # Use a principal residual shared by scalar and all trajectory times.\\n R=Y-B[:n]@(P@Y);scale=np.r_[1.4,np.ones(Y.shape[1]-1)/np.sqrt(Y.shape[1]-1)];U,_,_=np.linalg.svd(R*scale,full_matrices=False);r=U[:,0]*np.linalg.norm(R[:,0]);C=_fit(D[:n],r); rng=np.random.default_rng(144);f0=D[:n]@C;C/=max(np.std(f0),1e-4)\\n def err(p):\\n  g=feature(pre,kind,p,D[:n],Q[:n]);g-=B[:n]@(P@g); e=r-g*(g@r/max(g@g,1e-18));return e\\n opts=[]\\n for m in (.22,.6,1.2,2.3):\\n  for offset in (0.,-.6,.6):\\n   p=C*m;p[0]+=offset\\n   if kind in ('den','prod'):p=np.r_[p,rng.normal(0,.8,Q.shape[1])]\\n   opts.append(least_squares(err,p,max_nfev=130,ftol=1e-8))\\n o=min(opts,key=lambda o:o.cost);G=np.c_[B,feature(pre,kind,o.x,D,Q)];return G[n:]@_fit(G[:n],Y),np.sqrt(2*o.cost/n),o.x\\nif __name__=='__main__':\\n for tag,Z in [('z',z),('v',_panel(z,s['panel_c'],'v1',np.tanh,[2.,2.27])),('w',_panel(z,s['panel_c'],'v2',np.cos,[-.65,1.29]))]:\\n  for kind in ['tanh','sin','rat','soft','asinh','log','den','prod']:\\n   p,l,c=train(Z[:n],Y[:n],Z[n:],kind=kind);e=abs(p-Y[n:]);print(tag,kind,round(l,6),round(e[:,0].mean(),6),round(e[:,1:].mean(),6),np.round(c,3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/satur14.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent quadratic readouts → one shared saturated quadratic signal; the latest comparable MAEs are 0.10298 scalar and 0.05634 trajectory, with scalar and trajectory residual correlations above 0.97.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more sparse terms independently to both outputs\",\"rejected_reason\":\"The previous feature search worsened held-out error, and the residual correlations support modeling a common signal first.\"}],\"rationale\":\"Correct the frozen encoder's test key, verify the runnable baseline, and test whether one profiled nonlinear signal explains the residuals of both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "885b1af498770ec0dab4aed7e354e2afbbeda722c6c381834b7b480f0cf163af",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34820.54,
+      "usage_known": true,
+      "prompt_tokens": 41816,
+      "cached_tokens": 12672,
+      "completion_tokens": 1471
+    }
+  ]
+}

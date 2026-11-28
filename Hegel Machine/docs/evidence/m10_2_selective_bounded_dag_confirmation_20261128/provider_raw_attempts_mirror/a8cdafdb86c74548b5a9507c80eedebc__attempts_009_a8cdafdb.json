@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a8cdafdb86c74548b5a9507c80eedebc",
+  "call_seq": 9,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__stageS__conf_m102_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T14:55:16.644763+00:00",
+  "ended_at_utc": "2026-11-28T14:55:48.403092+00:00",
+  "request_sha256": "80e0802568ce8041c60aad9eea975b25511cea84b5dc4eb8b4fa51908172ca45",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61110,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39119,
+    "cached_tokens": 12672,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/recover.py <<'PY'\\nexec(open('/tmp/grammar.py').read().split('f=PolynomialFeatures(5)')[0])\\nfrom scipy.optimize import least_squares\\np=s['panel_c']; u=p['u']; print('panel norms',np.max(abs(u),axis=0))\\ndef fitmap(key, kind, ids):\\n a=u[ids]; b=p[key][ids]; U=lambda X:np.c_[np.ones(len(X)),X];\\n def feat(X,q):\\n  Z=X*q[:4]+q[4:]; h={'tanh':lambda:np.tanh(Z),'sin':lambda:np.sin(Z),'xtanh':lambda:X*np.tanh(Z),'sat2':lambda:X**2/(1+Z**2),'cos':lambda:np.cos(Z),'logcosh':lambda:np.logaddexp(Z,-Z)}[kind]();return np.c_[U(X),h]\\n def prof(q):\\n  F=feat(a,q); w=np.linalg.lstsq(F,b,rcond=None)[0]; return F@w-b,w\\n best=None\\n for k in ([1.5,2.5,3.5] if key=='v1' else [.4,.8,1.5]):\\n  sol=least_squares(lambda q:prof(q)[0].ravel(),np.r_[np.full(4,k),np.zeros(4)],bounds=(np.r_[np.full(4,.03),np.full(4,-1.)],np.r_[np.full(4,5.),np.ones(4)]),max_nfev=120)\\n  if best is None or sol.cost<best.cost:best=sol\\n q=best.x; e,w=prof(q); return q,w,np.sqrt(np.mean(e**2)),lambda X:feat(X,q)@w\\nmaps={}\\nfor key,kinds in [('v1',['tanh','sin']),('v2',['xtanh','sat2','cos','logcosh'])]:\\n for k in kinds:\\n  q,W,r,g=fitmap(key,k,np.arange(24)); loo=[]\\n  for v in range(24):\\n   _,_,_,h=fitmap(key,k,np.delete(np.arange(24),v));loo.append(h(u[v:v+1])[0]-p[key][v]);\\n  print(key,k,q.round(4),r,np.sqrt(np.mean(np.asarray(loo)**2)), '\\\\n',W.round(4)); maps[key,k]=g\\nP=lambda X,d:PolynomialFeatures(d).fit_transform(X)\\nrows=[]\\nfor name,XX in [('raw',x),('inverse',xf),('direct',x*A[0][1:].diagonal()+A[0][0])]:\\n G=np.c_[np.ones(len(XX)),XX]; C=G@A[2]; Z=maps['v1','tanh'](XX); V=maps['v2','xtanh'](XX); R=G@A[1]; S=C/np.sqrt(1+.09*C*C); \\n for label,F in [('C',P(S,3)),('Z',P(Z,3)),('V',P(V,3)),('R',P(R,3)),('ZV',P(np.c_[Z,V],2)),('Z+V',np.c_[P(Z,3),V]),('S+ZV',np.c_[P(S,3),.5*P(np.c_[Z,V],2)]),('S+V',np.c_[P(S,3),.5*P(V,2)]),('X+ZV',np.c_[P(XX,2),P(np.c_[Z,V],2)]),('X+Z+V',np.c_[P(XX,2),Z,V]),('R+ZV',np.c_[P(R,2),P(np.c_[Z,V],2)]),('all',np.c_[P(XX,2),P(np.c_[Z,V,R],2)])]:\\n  for reg in [.001,.006,.012,.025,.05]:\\n   T=scores(F,reg);rows.append((T[2].sum(),name,label,reg,T))\\nfor _,nm,lab,r,T in sorted(rows,key=lambda a:a[0])[:20]:print(nm,lab,r,T.round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/recover.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel-C proxy -> H2 coordinate-wise nonlinear panel operators; the current proxy gives 0.00909 prescribed scalar MAE and 0.02882 worst-slice horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the best fixed-frequency panel maps as recovered operators\",\n      \"rejected_reason\": \"Their leave-one-panel-row-out errors exceed the noise level observed in the affine reference panels.\"\n    }\n  ],\n  \"rationale\": \"Fit nonlinear scales to the independent panel data and check them out of sample there. Then compare their compositions and calibration directions on matched response splits before replacing the verified cubic baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5f54d96c01ec7e8b823252066c745df9c93991b5b8b6df4594337657e7e50253",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31757.11,
+      "usage_known": true,
+      "prompt_tokens": 39119,
+      "cached_tokens": 12672,
+      "completion_tokens": 1297
+    }
+  ]
+}

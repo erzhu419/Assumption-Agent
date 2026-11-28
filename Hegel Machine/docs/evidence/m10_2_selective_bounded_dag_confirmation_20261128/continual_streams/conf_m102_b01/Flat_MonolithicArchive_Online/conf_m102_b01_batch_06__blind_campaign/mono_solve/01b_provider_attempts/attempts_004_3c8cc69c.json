@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c8cc69c1f83405eaeb7c794086da068",
+  "call_seq": 4,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b01__Flat_MonolithicArchive_Online__conf_m102_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:28:08.474343+00:00",
+  "ended_at_utc": "2026-11-28T15:28:38.995317+00:00",
+  "request_sha256": "f9d53f1b44a99bb3a624f5ab6b31dd350bb862d33f9bc7ea3ce546e0e37aeea6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 28600,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24358,
+    "cached_tokens": 12672,
+    "completion_tokens": 1223
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe6.py <<'PY'\\nimport numpy as np,pickle,sys,importlib.util,itertools\\nfrom scipy.optimize import minimize_scalar,differential_evolution,least_squares\\np='/tmp/hegel_continual_archive/conf_m102_b01_batch_05_solver.py';spec=importlib.util.spec_from_file_location('prev',p);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; train=s['train']; x=train['x']; Y=np.c_[train['y'],train['traj']]; A=m._aff; L=m._ls\\nnp.set_printoptions(precision=5,suppress=True,linewidth=165)\\ndef poly(x,k):\\n return np.column_stack([np.prod(x[:,j],axis=1) for d in range(k+1) for j in itertools.combinations_with_replacement(range(x.shape[1]),d)])\\ndef cross(x): return m._cross(x)\\ndef dead(x,a,b): return np.sign(x)*np.maximum(abs(x)-a,0)**b\\nca=m._calibration(s['panel_a']); z=m._inverse(ca,x);print('calibration',ca);print('A errors',np.sort(np.linalg.norm((m._cal_basis(s['panel_a']['u'])*ca).sum(-1)-s['panel_a']['v'],axis=1)));print('trajectory singular',np.linalg.svd(Y[:,1:],compute_uv=False));print('y trajectory last corr',np.corrcoef(Y[:,[0,8]].T));print('cal latent extrema',z.min(0),z.max(0))\\nb=s['panel_b']; c=s['panel_c']; bu=b['u']; cu=c['u']; bv=b['v'];\\nfor key,panel,arrs in [('B',b,['v']),('C',c,['v1','v2'])]:\\n u=panel['u']\\n for vkey in arrs:\\n  v=panel[vkey]\\n  for name,f in [('aff',A),('cross',cross),('aff+cross',lambda x:np.c_[A(x),cross(x)[:,1:]]),('dead',lambda x:A(dead(x,.35,1.5))),('quad',lambda x:poly(x,2))]:\\n   d=f(u); C=L(d,v); e=d@C-v; h=np.sum(np.linalg.qr(d)[0]**2,axis=1); print(key,vkey,name,'RMSE, LOO',np.sqrt(np.mean(e**2)),np.sqrt(np.mean((e/(1-h[:,None]))**2))); \\n   if np.sqrt(np.mean(e**2))<.003:print(C)\\ndef er(par):\\n d=A(dead(bu,*par)); return np.mean((d@L(d,bv)-bv)**2)\\nfit=differential_evolution(er,[(0,.75),(.5,3)],seed=1,tol=1e-9); print('B dead fit',fit.x,fit.fun)\\ndef B(z):return A(dead(z,*fit.x))@L(A(dead(bu,*fit.x)),bv)\\nw=B(z)\\nfs={'aff':A,'cross':cross,'aff+cross':lambda x:np.c_[A(x),cross(x)[:,1:]],'quad':lambda x:poly(x,2)}\\nlat={'raw':x,'cal':z,'B':w,'dead':dead(z,*fit.x)}\\nfor v in ('v1','v2'):\\n for n,f in fs.items():\\n  lat[v+n]=f(w)@L(f(cu),c[v]);lat['solo'+v+n]=f(z)@L(f(cu),c[v]);\\nfor k,q in lat.items():\\n print('CV',k,[(np.round(np.mean(abs(e[:,0])),5),np.round(np.mean(abs(e[:,1:])),5)) for e in [d[52:]@L(d[:52],Y[:52])-Y[52:] for d in (A(q),poly(q,2),np.c_[A(q),q[:,0]*q[:,2],q[:,1]*q[:,3]])]])\\nfor v in ('v1','v2'):\\n print('C coefs',v,L(poly(cu,2),c[v]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct archive transfer → H2 separately identify calibrated panel operators and compare compositions; archived 52/20 MAEs are 0.106758 for y and 0.077781 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure each panel’s operator residual independently, then use the prescribed split to check whether either branch alone explains both outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "fc833f291decd6db4583e9c8d554edd3cccab149c5cc5b1d043cbe60d473775c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30519.55,
+      "usage_known": true,
+      "prompt_tokens": 24358,
+      "cached_tokens": 12672,
+      "completion_tokens": 1223
+    }
+  ]
+}

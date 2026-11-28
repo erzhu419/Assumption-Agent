@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7a2d97ae0d04b7193afe9a693c82572",
+  "call_seq": 2,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_b02__Flat_MonolithicArchive_Online__conf_m102_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:06:26.960874+00:00",
+  "ended_at_utc": "2026-11-28T15:06:48.648415+00:00",
+  "request_sha256": "5ef774058c0e746493b7b7a5cf874a35447bc74d47bd59578a6f779f7de5b2c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12901,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17904,
+    "cached_tokens": 12672,
+    "completion_tokens": 613
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*solver.py; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=5,suppress=True,linewidth=140)\\nfor k,v in s.items():\\n print(k)\\n for a,x in (v.items() if isinstance(v,dict) else [(k,v)]):\\n  print(a,x.shape,x[:5] if x.ndim==2 else x[:10], 'range',np.min(x,axis=0),np.max(x,axis=0))\\n  if k.startswith('panel') and a!='u':\\n   U=np.c_[np.ones(len(x)),v['u']]; M=np.linalg.lstsq(U,x,rcond=None)[0]; print('affine',M,'row residual quantiles',np.quantile(np.linalg.norm(x-U@M,axis=1),[0,.25,.5,.75,.9,1]))\\nT=s['train']['traj'];print('traj svd',np.linalg.svd(T-T.mean(0),compute_uv=False)); print('y,traj corr',np.corrcoef(np.c_[s['train']['y'],T].T)[0]);print('first eight response paths',np.c_[s['train']['y'],T][:8]);print('y projection MAE',np.mean(np.abs(np.c_[np.ones(len(T)),T]@np.linalg.lstsq(np.c_[np.ones(len(T)),T],s['train']['y'],rcond=None)[0]-s['train']['y'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use archived equations and panel residuals to identify active graph stages; the archived gate failed at 0.241505 response MAE and 0.175337 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived candidate unchanged\",\n      \"rejected_reason\": \"The archived gate misses the target on both outputs.\"\n    }\n  ],\n  \"rationale\": \"Inspect operator structure, trajectory rank, and response coupling separately before transferring any archived equations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "689165b98e00417d05a5626b502cda24914aa003b4b9ac024645a1ba9557582c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21686.11,
+      "usage_known": true,
+      "prompt_tokens": 17904,
+      "cached_tokens": 12672,
+      "completion_tokens": 613
+    }
+  ]
+}

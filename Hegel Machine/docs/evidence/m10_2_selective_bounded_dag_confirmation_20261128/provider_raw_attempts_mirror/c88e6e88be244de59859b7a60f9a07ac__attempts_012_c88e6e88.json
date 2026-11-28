@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c88e6e88be244de59859b7a60f9a07ac",
+  "call_seq": 12,
+  "stage_subdir": "m102_confirmation_20261128T145036Z_a032935b__conf_m102_a03__Hegel_SelectiveBoundedDAG_Online__conf_m102_a03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m102_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T15:10:08.355688+00:00",
+  "ended_at_utc": "2026-11-28T15:10:34.177354+00:00",
+  "request_sha256": "fd2b934add647f1d70a1640d553e43cb2753cfdb08d02ec58924201488492991",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72905,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41491,
+    "cached_tokens": 12672,
+    "completion_tokens": 928
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_v01.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().replace('from scipy.special import expit','from scipy.special import erf, expit')\\nstart=s.index('    return .3 * fit_branch')\\nend=s.index('\\\\n\\\\ndef solve_batch',start)\\ns=s[:start]+'''    # A scalar gate uses fewer degrees of freedom than a gated affine\\n    # branch, which is particularly useful outside the fitted index range.\\n    scalar_starts = starts[:10]\\n\\n    def fit_scalar(transform):\\n        def residual(h):\\n            v = transform(l @ h)\\n            w = v - orth @ (orth.T @ v)\\n            return w * ((w @ target) / max(w @ w, 1e-24)) - target\\n\\n        h = min((least_squares(residual, h0, bounds=(-10., 10.), max_nfev=100)\\n                 for h0 in scalar_starts), key=lambda result: result.cost).x\\n        coef = _fit(np.column_stack((q, transform(l @ h))), y)\\n        return np.column_stack((qt, transform(lt @ h))) @ coef\\n\\n    scalar = np.mean([fit_scalar(f) for f in\\n                      (lambda g: g / (1. + g*g), erf, np.tanh)], axis=0)\\n    affine = .3 * fit_branch(0) + .4 * fit_branch(1) + .3 * fit_branch(2)\\n    return .85 * scalar + .15 * affine\\n\\n\\ndef _state(z, z_test, traj):\\n    # Fit in the orthonormal spatial basis, then shrink weak temporal modes.\\n    l, lt = _affine(z), _affine(z_test)\\n    qr, r = np.linalg.qr(l, mode='reduced')\\n    score = qr.T @ traj\\n    u, sing, vh = np.linalg.svd(score, full_matrices=False)\\n    rank_two = (u[:, :2] * sing[:2]) @ vh[:2]\\n    return lt @ _fit(r, .35 * score + .65 * rank_two)\\n''' + s[end:]\\ns=s.replace('np.asarray(train[\\\\'traj\\\\'], dtype=float),\\\\n                        np.asarray(study[\\\\'eval_times\\\\'], dtype=float))','np.asarray(train[\\\\'traj\\\\'], dtype=float))')\\ns=s.replace('Calibrated response-surface and relaxation model','Calibrated response-surface and low-rank state model')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /tmp/stress_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 flexible gated readout and two-rate trajectory → H2 scalar-dominant gates and rank-two temporal shrinkage; the challenger reduced worst readout MAE from 0.044062 to 0.027950 and worst trajectory MAE from 0.007023 to 0.004713.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Pure scalar-gate ensemble\",\"rejected_reason\":\"Its worst stress-slice MAE was 0.030610 versus 0.027950 for the scalar-dominant blend.\"}],\"rationale\":\"Promote the challenger that brings the extreme-index slice below 0.038 and improves trajectory accuracy, then rerun the schema validator and isolated stress checks on the exact artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "36fb6117518fb765822af53bc44dc87d2ae98643f27f1a919dadcea6c6bed096",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26377.93,
+      "usage_known": true,
+      "prompt_tokens": 41491,
+      "cached_tokens": 12672,
+      "completion_tokens": 928
+    }
+  ]
+}
