@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c154facebe2470795abd8bd99df6bb6",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:00:48.214550+00:00",
+  "ended_at_utc": "2026-11-28T09:01:17.839170+00:00",
+  "request_sha256": "cbbb4777fcdb5b554c76649997925f2c764ff10dd04f7fa3945301745e651ead",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50701,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33791,
+    "cached_tokens": 10880,
+    "completion_tokens": 1075
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rational_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import polar\\nx=s['train']['x']; Z=s['train']['traj']; y=s['train']['y']; I=np.arange(len(x)); folds=[I[56:]]+list(np.array_split(np.random.default_rng(42).permutation(len(I)),4))+[np.argsort(np.linalg.norm(x,axis=1))[-12:]]\\nF={d:poly(x,d) for d in [1,2,3]}\\np=s['panel_b']; P=fit(poly(p['u'],1),p['v']); print('Panel B affine residual',np.std(poly(p['u'],1)@P-p['v']), 'singular values',np.linalg.svd(P[1:],compute_uv=False),'offset',P[0]); print('times',s['eval_times'])\\n\\ndef predict(t,v,head,degree,form,reg):\\n Y=y[:,None] if head==0 else Z; sub=np.eye(Y.shape[1]) if head==0 else np.linalg.svd(Y[t],full_matrices=False)[2][:2].T; T=Y[t]@sub\\n X=F[degree]; Q=F[2][:,1:]; A=X[t]; lam=np.zeros(A.shape[1]); lam[15:]=reg\\n def den(D,p):\\n  if form=='quad':return np.exp(np.clip(D@p,-4,4))\\n  if form=='rank1':return 1+(p[0]+D[:,:4]@p[1:])**2\\n def inner(p):\\n  N=A/den(Q[t],p)[:,None]; B=np.linalg.solve(N.T@N+np.diag(lam+1e-10),N.T@T); return N,B\\n def res(p):\\n  N,B=inner(p); return np.r_[(N@B-T).ravel(),(lam[:,None]**.5*B).ravel(), .02*p]\\n rng=np.random.default_rng(57); starts=[np.zeros(14)] if form=='quad' else [rng.normal(0,.3,5) for _ in range(5)]; r=min((least_squares(res,p,max_nfev=110) for p in starts),key=lambda a:a.cost); N,B=inner(r.x)\\n return (X[v]@B/den(Q[v],r.x)[:,None])@sub.T, np.sqrt(np.mean((N@B-T)**2)),r.x\\nfor head in (0,1):\\n for degree in (2,3):\\n  for form in ('quad','rank1'):\\n   for reg in ([0] if degree==2 else [.002,.03]):\\n    L=[predict(np.setdiff1d(I,v),v,head,degree,form,reg) for v in folds]; Y=y[:,None] if head==0 else Z; E=np.array([np.mean(abs(P-Y[v]),axis=0) for v,(P,_,_) in zip(folds,L)]); print(head,degree,form,reg,'avg/worst/edge',E[:-1].mean(),E[:-1].max(),E[-1].max(),'fit',np.mean([r[1] for r in L]),'p first',L[0][2]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct panel-branch interactions → H2 compact rational readouts with two trajectory modes; current high-norm MAEs are 0.0137 for y and 0.0221 at the worst time, using separate smooth models.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the best screened parallel-panel readout.\",\"rejected_reason\":\"It does not improve on the smooth baselines for either head.\"}],\"rationale\":\"Test whether a shared denominator accounts for the higher-order terms with fewer free coefficients. If it cannot improve both ordinary and high-norm slices for the relevant head, retain the smooth baseline for that head.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d755fbef7dc7bd8ed903528ac5ab069d49ba2782bd6267ba92f4891921fc3eb0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32183.03,
+      "usage_known": true,
+      "prompt_tokens": 33791,
+      "cached_tokens": 10880,
+      "completion_tokens": 1075
+    }
+  ]
+}

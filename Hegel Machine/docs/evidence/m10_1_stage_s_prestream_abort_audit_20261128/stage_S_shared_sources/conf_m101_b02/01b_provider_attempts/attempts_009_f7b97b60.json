@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7b97b6028aa4ad2aa5c5b7a1966f16b",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:02:28.213495+00:00",
+  "ended_at_utc": "2026-11-28T09:03:08.511613+00:00",
+  "request_sha256": "76ebac2ab3c4e7d97e5d60a58453a517854b40c7f00a557a596311e5c01fbc6a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60023,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35986,
+    "cached_tokens": 5504,
+    "completion_tokens": 1717
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/b02_struct.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import lstsq\\nsp=importlib.util.spec_from_file_location('base','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ndef kernels(z):\\n    groups=np.split(z,3,axis=1); ds=[cdist(g,g,'sqeuclidean')/4 for g in groups]; gs=[g@g.T/4 for g in groups]\\n    for h in (.25,.55,1.1):\\n        rb=[np.exp(-h*d) for d in ds]; dr=np.sqrt(h*sum(ds)/3); full=(1+dr+dr**2/3)*np.exp(-dr)\\n        for w in (0,.25,1):\\n            for p in (0,.06,.25):\\n                yield ('group',h,w,p), full+w*(sum(rb)/3)+p*sum(gs)/3\\n        U=np.exp(-h*(z[:,None,:]-z[None,:,:])**2); a=U.mean(2); b=(U.sum(2)**2-(U*U).sum(2))/132\\n        for w in (.25,1.):\\n            yield ('component',h,w), full+w*(.5*a+.5*b)\\n    for h in (.035,.1,.25):\\n        for w in (.03,.12,.4):\\n            G=sum(gs)/3\\n            yield ('poly',h,w), (1+G)**2+w*sum(np.exp(-h*d) for d in ds)/3+w*np.exp(-h*sum(ds)/3)\\n\\ndef eval_model(study, report=False):\\n    x=study['train']['x']; y=study['train']['y']; T=study['train']['traj']; F=m._basis(study['eval_times'],T); Y=np.c_[y,lstsq(F,T.T)[0].T]\\n    n=len(x); rows=np.arange(n); te=np.arange(n,n+len(study['test']['x'])); Z=m._coordinates(study,np.r_[x,study['test']['x']])\\n    def norm(z):return (z-z[:n].mean(0))/z[:n].std(0)\\n    z=norm(Z['abcd']); raw=norm(Z['raw']); rad=(raw[:n]**2).sum(1)\\n    folds=[*np.array_split(np.random.default_rng(498).permutation(n),4), np.argsort(rad)[-max(6,n//7):]]\\n    splits=[(np.setdiff1d(rows,j),j) for j in folds]\\n    records=[]\\n    for k,K in [*kernels(z), *[(('raw',k),K) for k,K in m._kernels(raw)], *[(('abcd',k),K) for k,K in m._kernels(z)]]:\\n        if k[0] in ('raw','abcd') and k[1].startswith('anova'):continue\\n        for reg in (1e-6,3e-5,.0005,.003,.015):\\n            e=[]\\n            for I,J in splits:\\n                pred=m._pred(K,I,J,Y,reg); d=abs(pred[:,1:]@F.T-T[J]);e.append([abs(pred[:,0]-y[J]).mean(),.4*d.mean()+.6*d[:,-1].mean()])\\n            e=np.array(e); score=.50*e[:-1].mean(0)+.15*e[:-1].max(0)+.35*e[-1]\\n            records.append((score,k,reg,e,K))\\n    result=[]\\n    for j in range(2):\\n        best=sorted(records,key=lambda a:a[0][j]); used=set(); ps=[]; ws=[]\\n        if report:print('inner',j,[(k,l,np.round(e[:,j],4)) for _,k,l,e,_ in best[:3]])\\n        for score,k,l,e,K in best:\\n            if k[0] in used:continue\\n            q=score[j]/max(best[0][0][j],1e-10)\\n            if q>1.23:break\\n            used.add(k[0]); ps.append(m._pred(K,rows,te,Y,l));ws.append(np.exp(-7*(q-1)))\\n        p=np.average(ps,axis=0,weights=ws);result.append(p[:,0] if j==0 else p[:,1:]@F.T)\\n    return result\\nif __name__=='__main__':\\n    s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y'];T=s['train']['traj'];n=len(x);a=np.arange(n);r=np.sum(((x-x.mean(0))/x.std(0))**2,axis=1)\\n    z=s['test']['x'];rt=np.sum(((z-x.mean(0))/x.std(0))**2,axis=1);print('radial quantiles train/test',np.quantile(r,[.5,.85,1]),np.quantile(rt,[.5,.85,1]))\\n    for J in [a[56:],*np.array_split(np.random.default_rng(34).permutation(n),4),np.argsort(r)[-12:]]:\\n        I=np.setdiff1d(a,J);sub={**s,'train':{k:v[I] for k,v in s['train'].items() if k!='summary'},'test':{'x':x[J]}}\\n        p,t=eval_model(sub,True);d=abs(t-T[J]);print('errors',np.round([abs(p-y[J]).mean(),d.mean(),d[:,-1].mean(),d.mean(0).max()],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b02_struct.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fixed operator geometry → grouped operator kernels with an extrapolating trend; the verified baseline has radial holdout MAEs of 0.116675 for y and 0.157042 for final state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the baseline with the anisotropic Gaussian process\",\n      \"rejected_reason\": \"Its radial errors are smaller, but the ordinary folds generally worsen; the gains may come from extrapolation behavior rather than from improved operator sensitivity.\"\n    }\n  ],\n  \"rationale\": \"The two panel-C outputs together provide the strongest trajectory features. Test whether modeling their contributions separately, while retaining a shared interaction term, reduces edge error without giving up ordinary-fold accuracy. Compare test and training radii to establish how relevant this edge slice is.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e7dc565293fe588b6a9f684fa94b3a4194a91aec7d36baea0c529020c8dc4dbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45577.75,
+      "usage_known": true,
+      "prompt_tokens": 35986,
+      "cached_tokens": 5504,
+      "completion_tokens": 1717
+    }
+  ]
+}

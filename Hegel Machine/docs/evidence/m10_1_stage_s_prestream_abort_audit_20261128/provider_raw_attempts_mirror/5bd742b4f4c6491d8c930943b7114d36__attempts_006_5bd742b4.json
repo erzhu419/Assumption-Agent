@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5bd742b4f4c6491d8c930943b7114d36",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:18.521574+00:00",
+  "ended_at_utc": "2026-11-28T08:59:54.663456+00:00",
+  "request_sha256": "ae3c02bd762dc5353e3bda6161b0d4877c21159b314505bf2fa745ea99801758",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45939,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31825,
+    "cached_tokens": 10880,
+    "completion_tokens": 1445
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/links.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/graph.py').read())\\nfrom scipy.optimize import least_squares\\nF={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'erf':__import__('scipy.special',fromlist=['erf']).erf,'asinh':np.arcsinh,'softsign':lambda a:a/np.sqrt(1+a*a),'softplus':lambda a:np.logaddexp(0,a),'silu':lambda a:a/(1+np.exp(-a)),'gelu':lambda a:a*__import__('scipy.special',fromlist=['ndtr']).ndtr(a)}\\nops2=[]\\nfor V in (R,S):\\n results=[]\\n for nm,f in F.items():\\n  for mode in ('pure','plus'):\\n   def feat(W,p):\\n    H=f(W*p[:4]+p[4:]);return aff(H if mode=='pure' else np.c_[W,H])\\n   def solve(idx):\\n    def res(p):\\n     E=feat(U[idx],p);return (E@fit(E,V[idx])-V[idx]).ravel()\\n    o=min((least_squares(res,np.r_[np.full(4,k),np.zeros(4)],bounds=([.15]*4+[-2]*4,[5]*4+[2]*4),max_nfev=100) for k in (.8,1.8,2.8)),key=lambda o:np.linalg.norm(o.fun)); p=o.x;w=fit(feat(U[idx],p),V[idx]);return p,w\\n   p,w=solve(np.arange(18));e=np.mean(abs(feat(U[18:],p)@w-V[18:]));results.append((e,nm,mode,p))\\n print('panel link candidates',sorted(results,key=lambda q:q[0])[:6]); _,nm,mode,_=min(results,key=lambda q:q[0]);f=F[nm];p,w=solve(np.arange(24)); print('full panel',nm,mode,p,w,np.std(feat(U,p)@w-V));ops2.append((nm,mode,p,w))\\ndef app(W,op):\\n nm,mode,p,w=op;H=F[nm](W*p[:4]+p[4:]);return aff(H if mode=='pure' else np.c_[W,H])@w\\n# Look for small predictive cut sets using cross-validated quadratic libraries.\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom sklearn.model_selection import KFold\\nss={}\\nfor name,W in [('z',z),('Bz',z@B+b),('invBz',(z-b)@np.linalg.inv(B)),('x',x)]:\\n H,J=[app(W,op) for op in ops2];ss[name]=W;ss[name+'1']=H;ss[name+'2']=J;ss[name+'12']=np.c_[H,J];ss[name+'all']=np.c_[W,H,J]\\nK=[]\\nfor name,W in ss.items():\\n W=(W-W.mean(0))/W.std(0);d=cdist(W,W,'sqeuclidean')/W.shape[1]; p=W@W.T/W.shape[1]\\n for typ,M in [('rbf',np.exp(-d/2)),('rbfl',np.exp(-d/8)),('rbfs',np.exp(-d*2)),('p3',(1+p)**3),('p4',(1+p)**4),('p5',(1+p)**5)]:\\n  K.append((name,typ,M))\\nK += [('mix',typ,np.mean([M for name,t,M in K if t==typ and name.startswith('z')],axis=0)) for typ in ('rbf','rbfl','rbfs','p3','p4','p5')]\\nfolds=list(KFold(6,shuffle=True,random_state=932).split(z))\\nres=[]\\nfor name,typ,M in K:\\n for lam in (.00001,.0001,.001,.01):\\n  pp=np.empty_like(Y)\\n  for i,j in folds:\\n   pp[j]=M[np.ix_(j,i)]@solve(M[np.ix_(i,i)]+lam*np.eye(len(i)),Y[i],assume_a='pos')\\n  E=np.c_[abs(pp[:,2]-y),abs(pp[:,:2]@D.T-T)];res.append((E[:,0].mean(),E[:,1:].mean(0).max(),name,typ,lam))\\nprint('best scalar',sorted(res)[:12]);print('best trajectory',sorted(res,key=lambda q:q[1])[:12]);print('stats',T.mean(0),T.std(0),y.mean(),y.std(),C.mean(0),C.std(0),'summary',tr['summary'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/links.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared two-mode dynamics → test calibrated operator links and nonlinear cuts; the existing 56/16 baseline has 0.03353 scalar MAE and 0.03210 worst-horizon MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the lowest-error panel composition immediately\",\"rejected_reason\":\"Accurate reconstruction of a panel alone does not establish that it participates in either output.\"}],\"rationale\":\"Fit coordinate-specific panel links on panel measurements, then screen calibrated feature spaces across six folds. The screen will guide structural tests and identify a fallback if no compact law validates.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "bb8d586f6f6f8a83d2328c1c303e4b4f546ff5860c66634a11410dab8015c347",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38710.01,
+      "usage_known": true,
+      "prompt_tokens": 31825,
+      "cached_tokens": 10880,
+      "completion_tokens": 1445
+    }
+  ]
+}

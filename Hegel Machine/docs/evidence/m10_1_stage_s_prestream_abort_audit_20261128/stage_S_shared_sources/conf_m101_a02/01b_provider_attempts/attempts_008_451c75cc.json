@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "451c75cc65a4406a9540b67a632669d1",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:00:57.168729+00:00",
+  "ended_at_utc": "2026-11-28T09:01:43.846319+00:00",
+  "request_sha256": "3efe8c725eec27b9a58e548d34cc9b642592f62771ccf03cf90f27d5fd4977df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48895,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29446,
+    "cached_tokens": 10880,
+    "completion_tokens": 2046
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m101.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\npath = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', path + 'batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open(path + 'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']\\nx, y, traj = (tr[k] for k in ('x', 'y', 'traj'))\\nz = solver._calibrated(s, x)\\nF = solver._readout(z)\\npair_difference = z[:, 0]*z[:, 2] - z[:, 1]*z[:, 3]\\nfull = np.column_stack([np.ones(len(x)), z, *[z[:, a]*z[:, b] for a in range(4) for b in range(a, 4)]])\\n\\ndef ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\ndef predict(key, i, j):\\n    if key == 'rational':\\n        q = z @ ls(z[i], y[i])\\n        def design(idx, a):\\n            return F[idx] / (1 + a*q[idx, None]**2)\\n        def loss(a):\\n            d = design(i, a)\\n            return np.mean((d @ ls(d, y[i]) - y[i])**2)\\n        a = minimize_scalar(loss, bounds=(0., 0.5), method='bounded').x\\n        d = design(i, a)\\n        return design(j, a) @ ls(d, y[i])\\n    d = designs[key]\\n    return d[j] @ ls(d[i], y[i])\\n\\ndesigns = {'affine': np.column_stack([np.ones(len(x)), z]), 'deployed': F, 'untie_products': np.column_stack([F, pair_difference]), 'full_quadratic': full}\\nkeys = (*designs, 'rational')\\nidx = np.arange(len(x))\\nedge = np.argsort(np.linalg.norm((x-x.mean(0))/x.std(0), axis=1))\\nfolds = [('ordered', idx[:56], idx[56:]), ('edge', edge[:-16], edge[-16:])]\\nfor seed in (83, 211):\\n    for k, j in enumerate(np.array_split(np.random.default_rng(seed).permutation(idx), 6)):\\n        folds.append((f'{seed}:{k}', np.setdiff1d(idx, j), j))\\nerr = {k: [] for k in (*keys, 'nested_selection')}\\nterr = {k: [] for k in ('affine', 'rank2', 'deployed')}\\nchosen = []\\nfor n, (name, i, j) in enumerate(folds):\\n    inner = [(np.setdiff1d(i, v), v) for v in np.array_split(np.random.default_rng(550+n).permutation(i), 4)]\\n    key = min(keys, key=lambda k: np.mean([np.mean(np.abs(predict(k, a, b)-y[b])) for a, b in inner]))\\n    chosen.append(key)\\n    for k in keys:\\n        err[k].append(np.abs(predict(k, i, j)-y[j]))\\n    err['nested_selection'].append(err[key][-1])\\n    out = solver.solve_batch({**s, 'train': {k: tr[k][i] for k in ('x', 'y', 'traj')}, 'test': {'x': x[j]}})\\n    np.testing.assert_allclose(np.abs(out['y_hat']-y[j]), err['deployed'][-1], atol=1e-12, rtol=0)\\n    w = ls(designs['affine'][i], traj[i])\\n    direct = designs['affine'][j] @ w\\n    _, _, vh = np.linalg.svd(designs['affine'][i] @ w, full_matrices=False)\\n    for k, p in zip(terr, (direct, direct @ vh[:2].T @ vh[:2], out['state_pred'])):\\n        e = np.abs(p-traj[j]); terr[k].append([e.mean(), e[:, -1].mean(), e.mean(0).max()])\\nfor k, es in err.items():\\n    avg = np.array([e.mean() for e in es]); worst = avg.argmax()\\n    print('scalar', k, 'pooled/ordered/edge/worst', np.round([np.concatenate(es).mean(), avg[0], avg[1], avg[worst]], 7), 'worst slice', folds[worst][0])\\nprint('inner choices', {k: chosen.count(k) for k in keys})\\nfor k, es in terr.items():\\n    es = np.array(es); print('trajectory', k, 'mean and worst [all, terminal, worst horizon]', np.round(es.mean(0), 7), np.round(es.max(0), 7))\\nprint('available study keys', sorted(s), 'train keys', sorted(tr))\\nassert np.concatenate(err['deployed']).mean() < 0.01 * 2\\nassert np.mean(np.concatenate(err['affine'])) > 5*np.mean(np.concatenate(err['deployed']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m101.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated tied cross-products and two exponential modes → test whether untied products, rational saturation, or a free rank-two basis improve on worst-slice MAEs of 0.00595 scalar, 0.00451 trajectory, and 0.00528 terminal.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classifier confounding, or drift operators\",\n      \"rejected_reason\": \"The supplied measurements are continuous regression targets from one study, with no documented relay modes, cohort labels, or drift-operator variables.\"\n    }\n  ],\n  \"rationale\": \"Test whether the product symmetry or the unsaturated readout misses reproducible curvature, with scalar model selection confined to inner folds. Compare the saved trajectory model with affine and free rank-two alternatives on the same outer splits, checking terminal and worst-horizon errors separately. Change the artifact only if a challenger fixes a demonstrated weakness.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "489ce61396c46f04eca41d72a5e52f57bd192f9aa159f7f7f98ab7f58a1493d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51891.44,
+      "usage_known": true,
+      "prompt_tokens": 29446,
+      "cached_tokens": 10880,
+      "completion_tokens": 2046
+    }
+  ]
+}

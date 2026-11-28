@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "12c18faffecc4751b91936fbb2ecb222",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:03:11.296565+00:00",
+  "ended_at_utc": "2026-11-28T09:03:45.384071+00:00",
+  "request_sha256": "9a205c7d433e4ef19ae525621fc81110db670859d252cd260f0b1856882787b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39286,
+    "cached_tokens": 10880,
+    "completion_tokens": 1357
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/batch_solver.py /tmp/b02_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); start=s.index('def _kernels'); stop=s.index('def _pred',start); s=s[:start]+s[stop:]; s=s.replace(\\\"    abi = solve(B[1:].T, (a - B[0]).T).T\\\\n\\\",''); start=s.index('    return dict(raw='); stop=s.index('\\\\n\\\\n\\\\ndef _basis',start); s=s[:start]+\\\"    return np.column_stack((ab, c1(ab), c2(ab)))\\\"+s[stop:]; start=s.index('def _predict'); stop=s.index('def solve_batch',start); s=s[:start]+'''def _kernel(z, I, h, weight):\\n    z = (z-z[I].mean(axis=0))/np.maximum(z[I].std(axis=0), 1e-8)\\n    K = (1 + z@z.T/z.shape[1])**2\\n    d = [cdist(g, g, 'sqeuclidean')/g.shape[1] for g in np.split(z, 3, axis=1)]\\n    return K + weight*(sum(np.exp(-h*u) for u in d)/3 + np.exp(-h*sum(d)/3))\\n\\n\\ndef _predict(study, report=False):\\n    tr = study['train']; x = tr['x']; y = tr['y']; T = tr['traj']\\n    t = np.asarray(study['eval_times']); n = len(x)\\n    rows = np.arange(n); test = np.arange(n, n+len(study['test']['x']))\\n    z = _coordinates(study, np.concatenate((x, study['test']['x'])))\\n    radius = np.sum(((x-x.mean(0))/x.std(0))**2, axis=1)\\n    folds = [*np.array_split(np.random.default_rng(498).permutation(n), 4),\\n             np.argsort(radius)[-max(6, n//7):]]\\n    splits = []\\n    for J in folds:\\n        I = np.setdiff1d(rows, J)\\n        F = _basis(t, T[I])\\n        Y = np.zeros((n, 3)); Y[I] = np.column_stack((y[I], lstsq(F, T[I].T)[0].T))\\n        splits.append((I, J, F, Y))\\n    best = [(np.inf, None), (np.inf, None)]\\n    for h in (.035, .1, .25):\\n        for weight in (.03, .12, .4):\\n            ks = [_kernel(z[:n], I, h, weight) for I, _, _, _ in splits]\\n            for lam in (1e-6, 3e-5, .0005, .003, .015):\\n                e = []\\n                for K, (I, J, F, Y) in zip(ks, splits):\\n                    p = _pred(K, I, J, Y, lam)\\n                    d = np.abs(p[:, 1:] @ F.T - T[J])\\n                    e.append((np.abs(p[:, 0]-y[J]).mean(), .4*d.mean()+.6*d[:, -1].mean()))\\n                e = np.asarray(e)\\n                score = .50*e[:-1].mean(0)+.15*e[:-1].max(0)+.35*e[-1]\\n                for j, val in enumerate(score):\\n                    if val < best[j][0]:\\n                        best[j] = val, (h, weight, lam)\\n    if report:\\n        print('inner selected', best)\\n    F = _basis(t, T); Y = np.column_stack((y, lstsq(F, T.T)[0].T))\\n    predictions = [_pred(_kernel(z, rows, h, w), rows, test, Y, lam)\\n                   for _, (h, w, lam) in best]\\n    return predictions[0][:, 0], predictions[1][:, 1:] @ F.T\\n\\n\\n'''+s[stop:]; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b02_verify.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Stationary kernel ensemble → quadratic readout over composed panel operators; exploratory worst-slice MAEs fell to 0.026099 for y and 0.037533 for final state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Keep the larger grouped-kernel ensemble\",\"rejected_reason\":\"The polynomial family won every tested split for both outputs; retain its quadratic readout and small smooth correction.\"}],\"rationale\":\"Write the stronger model to the deliverable and refit both the time basis and coordinate normalization within inner folds. This tests whether the improvement survives removal of shared inner-fold preprocessing and whether the exact artifact meets the schema.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a78cadc0d4c1b05534894c626cb586cad90408afe7975f22448d56b4405245cd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36653.24,
+      "usage_known": true,
+      "prompt_tokens": 39286,
+      "cached_tokens": 10880,
+      "completion_tokens": 1357
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "59e5dc4bb90a4fabb95784dc0e3e7fbc",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:01:15.826426+00:00",
+  "ended_at_utc": "2026-11-28T09:01:57.441971+00:00",
+  "request_sha256": "ea26c88e00a477bde6c325a5494e8004599af146014215cc0126e4acfa6423ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37901,
+    "cached_tokens": 10880,
+    "completion_tokens": 1663
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    scale, bias = [], []\\n    for x, y in zip(u.T, v.T):\\n        dx = x[i] - x[j]\\n        nz = dx != 0\\n        m = np.median((y[i] - y[j])[nz] / dx[nz])\\n        b = np.median(y - m*x)\\n        err = np.abs(y - m*x - b)\\n        keep = err <= 5 * np.median(err)\\n        b, m = _fit(_affine(x[keep]), y[keep])\\n        scale.append(m)\\n        bias.append(b)\\n    return np.array(scale), np.array(bias)\\n\\n\\ndef _activate(x, p):\\n    b, a, d, c = p\\n    return b*x + np.tanh(a*x) + d*np.tanh(c*x)\\n\\n\\ndef _panel_map(panel):\\n    u, v = panel['u'], panel['v1']\\n    def residual(p):\\n        A = _affine(_activate(u, p))\\n        return (A @ _fit(A, v) - v).ravel()\\n    p = least_squares(residual, [.18, 1.56, .13, 6], bounds=([0, .5, 0, 2], [1, 3, 1, 12])).x\\n    W = _fit(_affine(_activate(u, p)), v)\\n    return lambda x: _affine(_activate(x, p)) @ W\\n\\n\\ndef _readout(z):\\n    return np.column_stack((z, z[:, 0]*z[:, 2] + z[:, 1]*z[:, 3]))\\n\\n\\ndef _time_basis(t, p):\\n    return -np.expm1(-t[:, None] * p)\\n\\n\\ndef solve_batch(study):\\n    train, test = study['train'], study['test']\\n    m, b = _calibrate(study['panel_a'])\\n    panel_b = study['panel_b']\\n    W = _fit(_affine(panel_b['u']), panel_b['v'])\\n    panel_c = _panel_map(study['panel_c'])\\n    def encode(x):\\n        return panel_c(_affine((x - b) / m) @ W)\\n    z, zt = encode(train['x']), encode(test['x'])\\n    y = _readout(zt) @ _fit(_readout(z), train['y'])\\n    t = np.asarray(study['eval_times'])\\n    coeff = _fit(z, train['traj'])\\n    def residual(p):\\n        T = _time_basis(t, p)\\n        return (z @ (_fit(T, coeff.T).T @ T.T - coeff)).ravel()\\n    p = least_squares(residual, [.4, 1.8], bounds=([.05, 1], [1, 10])).x\\n    T = _time_basis(t, p)\\n    state = zt @ _fit(T, coeff.T).T @ T.T\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat >/tmp/check_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; ids=np.arange(len(tr['y'])); scale,bias=m._calibrate(s['panel_a']); print('calibration',scale,bias)\\nW=m._fit(m._affine(s['panel_b']['u']),s['panel_b']['v']); q=m._affine((tr['x']-bias)/scale)@W\\nfolds=[(f'mod4-{i}',ids%4==i) for i in range(4)]+[('last16',ids>=56)]\\nfor i in range(4):\\n cut=np.quantile(np.abs(q[:,i]),.75); folds.append((f'tail-{i}',abs(q[:,i])>=cut))\\nfor label,k in folds:\\n st=dict(s,train={**tr,**{a:tr[a][~k] for a in ['x','y','traj']}},test={'x':tr['x'][k]}); out=m.solve_batch(st)\\n e=abs(out['state_pred']-tr['traj'][k]).mean(0)\\n print(label,'y / all-state / worst horizon / terminal', np.round([abs(out['y_hat']-tr['y'][k]).mean(),e.mean(),e.max(),e[-1]],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: full quadratic with affine trajectory readout → H2: shared pairwise-product scalar readout and zero-offset two-mode dynamics; previous worst-fold MAE was 0.00592 for y and 0.00574 across horizons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the full quadratic readout\",\"rejected_reason\":\"Only two cross terms have substantial coefficients, and their fitted weights agree within the observed noise.\"}],\"rationale\":\"Implement the supported computation graph and check withheld rows, including input-magnitude tails where the inferred activation must extrapolate. These checks will show whether tying the cross terms or imposing shared temporal modes introduces bias.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "778e16bd5980e8dba78d9b4ce614293ac222d1c815a60325aa81e6efba1f6cca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44237.72,
+      "usage_known": true,
+      "prompt_tokens": 37901,
+      "cached_tokens": 10880,
+      "completion_tokens": 1663
+    }
+  ]
+}

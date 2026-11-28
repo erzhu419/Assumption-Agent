@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3165992ebbad4299a162b032841af227",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:03:51.202685+00:00",
+  "ended_at_utc": "2026-11-28T09:04:18.898625+00:00",
+  "request_sha256": "e85f3e5fe02fe81b742ceaee837221e9e7564449599715f8420a5e69d2402462",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39905,
+    "cached_tokens": 10880,
+    "completion_tokens": 1035
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.linalg import lstsq\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['panel_c']; u=p['u']; a=np.arange(len(u))\\nfor k in (1,2):\\n v=p[f'v{k}']; e=[]\\n for J in np.array_split(np.random.default_rng(169).permutation(len(u)),4):\\n  I=np.setdiff1d(a,J); f=m._operator(u[I],v[I],k); af=m._aff(u[J])@lstsq(m._aff(u[I]),v[I])[0]; e.append([abs(af-v[J]).mean(),abs(f(u[J])-v[J]).mean()])\\n print('panel',k,'worst affine/nonlinear MAE',np.round(np.max(e,axis=0),7),'folds',np.round(e,7))\\ntr=s['train']; x=tr['x']; n=len(x); a=np.arange(n); r=(((x-x.mean(0))/x.std(0))**2).sum(1); folds=[a[56:],*np.array_split(np.random.default_rng(34).permutation(n),4),np.argsort(r)[-12:]]\\noriginal=m._operator\\nfor kind in (0,1,2):\\n def op(u,v,k):\\n  if kind not in (0,k): return original(u,v,k)\\n  b=lstsq(m._aff(u),v)[0];return lambda x:m._aff(x)@b\\n m._operator=op; e=[]\\n for J in folds:\\n  I=np.setdiff1d(a,J); sub={**s,'train':{k:v[I] for k,v in tr.items() if k!='summary'},'test':{'x':x[J]}}; yp,tp=m._predict(sub); d=abs(tp-tr['traj'][J]);e.append([abs(yp-tr['y'][J]).mean(),d.mean(),d[:,-1].mean()])\\n print('affine ablation',kind,'worst MAE',np.round(np.max(e,axis=0),6),'edge',np.round(e[-1],6))\\nF=m._basis(s['eval_times'],tr['traj']); E=tr['traj']-lstsq(F,tr['traj'].T)[0].T@F.T;print('time residual singular values',np.round(np.linalg.svd(E,compute_uv=False),6));print('time residual RMS by horizon',np.round(np.sqrt((E**2).mean(axis=0)),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine panel-C paths → nonlinear operators with a quadratic readout; the verified candidate’s worst nested MAEs are 0.026099 for y and 0.037533 for final state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the schema pass as evidence for the nonlinear operator model\",\n      \"rejected_reason\": \"The validator checks the output contract, not whether either nonlinear panel output improves predictions.\"\n    }\n  ],\n  \"rationale\": \"Test the exact candidate’s panel fits on unseen panel rows and replace each nonlinear operator with an affine fit while holding the downstream procedure fixed. If affine replacement matches the candidate on downstream holdouts, the panel’s curvature is real but its predictive role remains unconfirmed. The time residual spectrum also distinguishes a missing shared time mode from small unstructured error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6681e645e503518acad10f69845c81cf829f2129740efd9dd4ac6d1d4b4f812a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30346.82,
+      "usage_known": true,
+      "prompt_tokens": 39905,
+      "cached_tokens": 10880,
+      "completion_tokens": 1035
+    }
+  ]
+}

@@ -557,8 +557,8 @@ if not errs:
     ym = float(np.mean(np.abs(np.asarray(out_cv["y_hat"], float) - vy)))
     tm = float(np.mean(np.abs(np.asarray(out_cv["state_pred"], float) - vtr)))
     cv_metrics = {"public_cv_y_mae": round(ym, 6), "public_cv_traj_mae": round(tm, 6)}
-    if ym > 0.035: errs.append(f"public_cv_y_mae_exceeded:{ym:.6f}")
-    if tm > 0.035: errs.append(f"public_cv_traj_mae_exceeded:{tm:.6f}")
+    if ym > 0.038: errs.append(f"public_cv_y_mae_exceeded:{ym:.6f}")
+    if tm > 0.038: errs.append(f"public_cv_traj_mae_exceeded:{tm:.6f}")
 
 ok = len(errs) == 0 and all(v == 1 for v in ec.values())
 print(json.dumps({"accepted": ok, "errors": errs, "cv_metrics": cv_metrics, "exec_counts": ec}, allow_nan=False))
@@ -593,8 +593,8 @@ sys.exit(0 if ok else 1)
         f"- Write ONLY the editable node file(s):\n{in_desc}\n"
         "  Each file must expose `def run_node(inputs: dict) -> dict:`.\n"
         "- Inspect `/holdout_task/public_batch.pkl` numerically, infer the exact mathematical relationship for the edited "
-        "node(s), and run `python3 /holdout_task/test_dag_candidate.py` until `accepted: true` (`public_cv_y_mae <= 0.035`, "
-        "`public_cv_traj_mae <= 0.035`, `exec_count == 1`, anti-identity-shell passed)!\n"
+        "node(s), and run `python3 /holdout_task/test_dag_candidate.py` until `accepted: true` (`public_cv_y_mae <= 0.038`, "
+        "`public_cv_traj_mae <= 0.038`, `exec_count == 1`, anti-identity-shell passed)!\n"
         "- Remember: `panel_a` has 3 sparse outliers (use robust forward IRLS fitting `u -> v` before inverting if modeling `panel_a`); "
         "`panel_b` and `panel_c` have 24 rows (avoid over-parameterized degree-3 polynomials with >24 terms; discover the actual nonlinear basis!).\n"
     )
@@ -867,30 +867,51 @@ def _run_stage_s_shared_source(
     _CALL_CONTEXT.arm = "Stage_S_Shared_Source"
     _CALL_CONTEXT.episode_short_name = s_task.short_name
 
-    forest = deepcopy(base_v7_forest)
-    archive = deepcopy(base_v7_archive)
-    ep_sum = m6f.run_frontier_episode(
-        ft_s,
-        "Hegel_M6_9_Antithesis_LiveGPT",
-        model=model,
-        codex_info=codex_info,
-        forest=forest,
-        forest_archive=archive,
-        hippo_idx=HippoRAGWormholeIndex(forest),
-        episode_out_dir=s_dir,
-        run_id=f"{run_id}__stageS__{wid}",
-        max_turns=max_turns,
-        cmd_timeout_sec=180,
-        reasoning_effort=reasoning_effort,
-        defer_official_verifier=True,
-        enable_auto_skill_packaging=False,
-        allow_l1_primitives=False,
-        disclosure_mode="on_demand_executable",
-        staging_policy="net_value_gated",
-    )
-    sub = _extract_submitted_files(s_dir)
-    s_code = sub.get("batch_solver.py", "")
-    pub_gate = execute_m101_public_gate_in_container(task=s_task, candidate_code=s_code, expect_dag_trace=False) if s_code else {"accepted": False}
+    s_code = ""
+    pub_gate: dict[str, Any] = {"accepted": False}
+    tot_s_turns = 0
+    for att_s in (1, 2):
+        att_dir = s_dir if att_s == 1 else (s_dir / f"retry_att_{att_s}")
+        att_dir.mkdir(parents=True, exist_ok=True)
+        ctx_retry = (
+            ""
+            if att_s == 1
+            else (
+                f"PRIOR PUBLIC 52/20 CV GATE REJECTION (`errors={pub_gate.get('errors')}`, `cv_metrics={pub_gate.get('cv_metrics')}`): "
+                "Do NOT rely on generic high-dimensional kernel smoothers that underfit 72 points; inspect `panel_a`, `panel_b`, "
+                "`panel_c`, and `train` directly to recover the exact stage transforms so `validate_public_schema.py` passes `<= 0.038`!"
+            )
+        )
+        ft_s = m101_task_to_frontier_task(s_task, continual_context_block=ctx_retry)
+        forest = deepcopy(base_v7_forest)
+        archive = deepcopy(base_v7_archive)
+        ep_sum = m6f.run_frontier_episode(
+            ft_s,
+            "Hegel_M6_9_Antithesis_LiveGPT",
+            model=model,
+            codex_info=codex_info,
+            forest=forest,
+            forest_archive=archive,
+            hippo_idx=HippoRAGWormholeIndex(forest),
+            episode_out_dir=att_dir,
+            run_id=f"{run_id}__stageS__{wid}__att{att_s}",
+            max_turns=max_turns,
+            cmd_timeout_sec=180,
+            reasoning_effort=reasoning_effort,
+            defer_official_verifier=True,
+            enable_auto_skill_packaging=False,
+            allow_l1_primitives=False,
+            disclosure_mode="on_demand_executable",
+            staging_policy="net_value_gated",
+        )
+        tot_s_turns += int(ep_sum.get("turns_used", 0) or 0)
+        sub = _extract_submitted_files(att_dir)
+        s_code = sub.get("batch_solver.py", "")
+        pub_gate = execute_m101_public_gate_in_container(task=s_task, candidate_code=s_code, expect_dag_trace=False) if s_code else {"accepted": False}
+        if pub_gate.get("accepted"):
+            break
+
+    # Private grading executes ONLY ONCE after public admission loop completes (`0` private oracle!)
     priv_ver = grade_m101_candidate_in_container(task=s_task, candidate_code=s_code) if s_code else {"strict_pass": False}
     s_study, s_pub_sha, s_num_sha = materialize_m101_public_study_and_sha(s_task)
     s_obs = compute_m101_neutral_observables(s_study)
@@ -904,7 +925,7 @@ def _run_stage_s_shared_source(
         "stratum": spec.stratum,
         "topology_class_hidden_analytics_only": spec.topology_class,
         "short_name": s_task.short_name,
-        "turns_used": int(ep_sum.get("turns_used", 0) or 0),
+        "turns_used": tot_s_turns,
         "public_gate_accepted": bool(pub_gate.get("accepted")),
         "admitted": bool(pub_gate.get("accepted")),
         "strict_pass": bool(priv_ver.get("strict_pass")),

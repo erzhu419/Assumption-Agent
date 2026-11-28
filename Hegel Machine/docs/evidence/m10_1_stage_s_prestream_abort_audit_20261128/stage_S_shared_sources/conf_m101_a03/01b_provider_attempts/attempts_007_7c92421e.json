@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7c92421e394848799471094493e63221",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:00:01.432092+00:00",
+  "ended_at_utc": "2026-11-28T09:00:34.678495+00:00",
+  "request_sha256": "4f0d94c33b472f2e3d1ecdf2cec58e759a64ecac27fd172932b233385ae40cd8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27703,
+    "cached_tokens": 10880,
+    "completion_tokens": 1289
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_basis.py <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; d=s['train']; x=d['x']; y=d['y']; n=len(y); u=m._coordinates(s,x); g=u[:,0]*u[:,2]+u[:,1]*u[:,3]; f=np.c_[u,g]; ix=range(u.shape[1]); q=np.column_stack([np.prod(u[:,k],axis=1) for k in itertools.combinations_with_replacement(ix,2)]); cub=np.column_stack([np.prod(u[:,k],axis=1) for k in itertools.combinations(ix,3)])\\n# Give scale-dependent attenuation and omitted interactions a fair test without choosing on the outer holdout.\\nforms=[u[:,j] for j in ix]+[u[:,i]+sign*c*u[:,j] for i,j in itertools.combinations(ix,2) for sign in (-1,1) for c in (.5,1.,2.)]\\nrat=[f/(1+a*h[:,None]**2) for h in forms for a in (.002,.01,.04,.16)]\\next=[np.c_[f,h] for h in np.c_[q,cub].T]\\nls=m._ls\\ndef pred(F,tr,va): return F[va]@ls(F[tr],y[tr])\\ndef select(candidates,tr,seed):\\n    scores=np.zeros(len(candidates));\\n    for va in np.array_split(np.random.default_rng(seed).permutation(tr),3):\\n        fit=np.setdiff1d(tr,va)\\n        for j,F in enumerate(candidates): scores[j]+=np.mean(abs(pred(F,fit,va)-y[va]))\\n    return candidates[scores.argmin()]\\nprint('variable groups:',sorted(s),'training fields:',sorted(d),'telemetry:',s['telemetry_vec'])\\nc=s['panel_c']; C=m._affine(c['u']);\\nfor k in ('v1','v2'):\\n    H=ls(C,c[k]); print('panel_c',k,'affine RMS',np.sqrt(np.mean((C@H-c[k])**2)))\\nfor name,folds in [('random',[v for seed in (3,91,201,17,49) for v in np.array_split(np.random.default_rng(seed).permutation(n),4)]),('tail',[np.arange(56,n)]),('directional',[np.argsort(h)[-12:] for h in [*x.T,*(-x).T,*u.T,*(-u).T]])]:\\n    rows=[]\\n    for i,va in enumerate(folds):\\n        tr=np.setdiff1d(np.arange(n),va)\\n        st={**s,'train':{k:d[k][tr] for k in ('x','y','traj')},'test':{'x':x[va]}}\\n        ans=m.solve_batch(st); z=ans['state_pred']; end=z[:,-1]; assert np.allclose(ans['diagnostics_vec'],[ans['y_hat'].mean(),ans['y_hat'].std(),end.mean(),end.std()]);\\n        models=[m._affine(x),select([f]+rat,tr,i),select([f]+ext,tr,i),np.c_[f,cub]]\\n        rows.append([np.mean(abs(ans['y_hat']-y[va]))]+[np.mean(abs(pred(F,tr,va)-y[va])) for F in models]+[np.mean(abs(z-d['traj'][va]),axis=0).max()])\\n    print(name,'MAE columns: artifact, affine, nested rational, nested extra term, all three-way terms, artifact max horizon'); print('mean',np.mean(rows,0),'worst',np.max(rows,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_basis.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine scalar and horizon-wise trajectories -> H2 one shared calibrated interaction and two temporal modes; verified worst scalar MAE 0.00690 and worst per-horizon MAE 0.00596.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch-centered classification or test relay initial modes.\",\n      \"rejected_reason\": \"The study has continuous responses, one study-level telemetry vector, and no batch labels, relay states, or control inputs. Those checks would not test the documented prediction task.\"\n    }\n  ],\n  \"rationale\": \"Compare the exact saved solver with the affine scalar baseline and test whether rational attenuation, pairwise sums or differences, or three-way interactions improve held-out prediction. Select additional terms inside each training fold; change the solver only if they materially improve the stress slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "54ae9cbbec3de8833eee4cca3dc8a2b1d31963fd2503859613b196d118871034",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35903.48,
+      "usage_known": true,
+      "prompt_tokens": 27703,
+      "cached_tokens": 10880,
+      "completion_tokens": 1289
+    }
+  ]
+}

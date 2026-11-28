@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "49f0a86655594a69a604f1d1620ad4fb",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:51.788328+00:00",
+  "ended_at_utc": "2026-11-28T09:00:35.151228+00:00",
+  "request_sha256": "4f70fdbf0143654e6a298ff30eddee5f2fa76716a505a21a6e097739df92bf23",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29125,
+    "cached_tokens": 10880,
+    "completion_tokens": 1866
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated polynomial readout and two-mode trajectory predictor.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibrated(study, x):\\n    a, b = study['panel_a'], study['panel_b']\\n    u, v = a['u'], a['v']\\n    # Estimate diagonal calibration from pairwise slopes, then refit on clean rows.\\n    i, j = np.triu_indices(len(u), 1)\\n    slope = np.array([np.median((v[i, k] - v[j, k])[keep] / du[keep])\\n                      for k in range(u.shape[1])\\n                      for du in [u[i, k] - u[j, k]]\\n                      for keep in [np.abs(du) > 1e-8]])\\n    offset = np.median(v - u * slope, axis=0)\\n    err = np.linalg.norm(v - u * slope - offset, axis=1)\\n    clean = err <= 5 * np.median(err)\\n    uc = u[clean] - u[clean].mean(axis=0)\\n    vc = v[clean] - v[clean].mean(axis=0)\\n    slope = (uc * vc).sum(axis=0) / (uc * uc).sum(axis=0)\\n    offset = v[clean].mean(axis=0) - u[clean].mean(axis=0) * slope\\n\\n    # The auxiliary operator is a scaled orthogonal map plus a translation.\\n    bu, bv = b['u'], b['v']\\n    linear = np.linalg.lstsq(bu - bu.mean(axis=0), bv - bv.mean(axis=0), rcond=None)[0]\\n    left, singular, right = np.linalg.svd(linear)\\n    linear = singular.mean() * (left @ right)\\n    return ((x - offset) / slope - bu.mean(axis=0)) @ linear + bv.mean(axis=0)\\n\\n\\ndef _readout(z):\\n    return np.column_stack((z, z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]))\\n\\n\\ndef _trajectory(z, traj, ztest, times):\\n    fitted = z @ np.linalg.lstsq(z, traj, rcond=None)[0]\\n\\n    def basis(rates):\\n        return -np.expm1(-np.outer(rates, times))\\n\\n    def residual(rates):\\n        t = basis(rates)\\n        return (fitted @ np.linalg.pinv(t) @ t - fitted).ravel()\\n\\n    rates = least_squares(residual, (0.4, 1.8), bounds=((0.05, 0.9), (0.89, 5))).x\\n    t = basis(rates)\\n    amplitudes = np.linalg.lstsq(z, traj @ np.linalg.pinv(t), rcond=None)[0]\\n    return ztest @ amplitudes @ t\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    z, ztest = np.split(_calibrated(study, np.concatenate((x, xt))), [len(x)])\\n    w = np.linalg.lstsq(_readout(z), train['y'], rcond=None)[0]\\n    y_hat = _readout(ztest) @ w\\n    state_pred = _trajectory(z, train['traj'], ztest, study['eval_times'])\\n    terminal = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; a=np.arange(len(x))\\nr=np.argsort(np.linalg.norm((x-x.mean(0))/x.std(0),axis=1))\\nfolds=[('tail',a[:56],a[56:]),('edge',r[:-16],r[-16:])]\\nfor seed in (3,19,73):\\n    for k,j in enumerate(np.array_split(np.random.default_rng(seed).permutation(a),6)):\\n        folds.append((f'{seed}:{k}',np.setdiff1d(a,j),j))\\nrows=[]\\nfor name,i,j in folds:\\n    pred=m.solve_batch({**s,'train':{k:tr[k][i] for k in ('x','y','traj')},'test':{'x':x[j]}})\\n    dy=np.abs(pred['y_hat']-tr['y'][j]); dz=np.abs(pred['state_pred']-tr['traj'][j]); row=[dy.mean(),dz.mean(),dz[:,-1].mean(),dz.mean(0).max()]; rows.append(row)\\n    if name in ('tail','edge'): print(name,np.round(row,6))\\nrows=np.array(rows); print('worst scalar/state/terminal/horizon',rows.max(axis=0)); print('worst slices',[folds[k][0] for k in rows.argmax(axis=0)]); assert np.all(rows.max(axis=0)<[.007,.006,.007,.008])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full quadratic and affine regressions → tied cross-products and two fitted temporal modes; the previous constraint study found worst-slice MAEs of 0.00519 for the tied scalar fit and 0.00450 for the origin-constrained fixed-rise trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Hardcode the rounded rates and product coefficient\",\n      \"rejected_reason\": \"These values were inferred from the public responses. Refit them within each fold to measure the performance of the actual estimator without using held-out labels.\"\n    }\n  ],\n  \"rationale\": \"Implement the calibrated sparse readout and shared temporal model, then check the exact artifact in an isolated process. Ordered, high-radius, and shuffled holdouts test whether the constraints introduce bias; report terminal and worst-horizon errors separately so trajectory averages cannot hide a weak horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f17865bf0a51388d4e4cd473ed794c34b465a3f7a5c856c790957d85ea7f0785",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48631.81,
+      "usage_known": true,
+      "prompt_tokens": 29125,
+      "cached_tokens": 10880,
+      "completion_tokens": 1866
+    }
+  ]
+}

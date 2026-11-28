@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5daa48cc10547799ce115df098e3889",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:58:22.345586+00:00",
+  "ended_at_utc": "2026-11-28T08:58:56.077052+00:00",
+  "request_sha256": "ddfe9f9e5c1732bc92748f70e40ece5375b43c6f9a43fe25d6d06a9caf790e4f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30264,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24278,
+    "cached_tokens": 10880,
+    "completion_tokens": 1289
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/refine.py <<'PY'\\nfrom structure import *\\nfrom itertools import combinations_with_replacement\\nw=(x-M[0])/np.diag(M[1:]); u=aff(w)@N\\nD=aff(u); G=np.c_[u[:,0]*u[:,2],u[:,1]*u[:,3]]; Q=quad(u)\\nmodels={'shared_pair':np.c_[D,G.sum(1)],'distinct_pairs':np.c_[D,G],'full_quad':Q,'pair_no_intercept':np.c_[u,G.sum(1)],'pair_fixed_018':D}\\nprint('scalar fits')\\nfor k,F in models.items():\\n yy=y-.18*G.sum(1) if k=='pair_fixed_018' else y\\n coef=ls(F,yy); print(k,coef, 'rms',np.sqrt(np.mean((yy-F@coef)**2)))\\nprint('trajectory coefficients raw/calibrated/composed')\\nfor q in (x,w,u):\\n d=aff(q); C=ls(d,z); print(C)\\n def basis(p): return -np.expm1(-t[:,None]*p)\\n def err(p):\\n  T=basis(p); return (C-ls(T,C.T).T@T.T).ravel()\\n opt=least_squares(err,[.42,1.82],bounds=([.02,.9],[.9,4])); T=basis(opt.x); print('rate/amplitudes/residual',opt.x,ls(T,C.T).T,err(opt.x).reshape(C.shape),sep='\\\\n')\\nprint('cross-validation')\\nfor label,folds in [('repeat-random',[f for seed in (3,91,201) for f in np.array_split(np.random.default_rng(seed).permutation(len(x)),4)]),('tail',[np.arange(56,len(x))]),('directional extremes',[np.argsort(q)[-12:] for q in [*w.T,*(-w).T,*u.T,*(-u).T]])]:\\n res=[]\\n for va in folds:\\n  tr=np.setdiff1d(np.arange(len(x)),va); row=[]\\n  for k,F in models.items():\\n   yy=y-.18*G.sum(1) if k=='pair_fixed_018' else y\\n   row.append(np.mean(abs(yy[va]-F[va]@ls(F[tr],yy[tr]))))\\n  A=aff(w); X=A[tr]; Z=z[tr]; C=ls(X,Z); P=A[va]@C\\n  def pred(p):\\n   T=basis(p); return ls(T,C.T).T@T.T\\n  opt=least_squares(lambda p:(X@(C-pred(p))).ravel(),[.42,1.82],bounds=([.02,.9],[.9,4])); S=A[va]@pred(opt.x)\\n  U,_,V=np.linalg.svd(X@C,full_matrices=False); V=V[:2]; R=P@V.T@V\\n  zs=[P,S,R,A[va]@pred([.42,1.8])]\\n  row.extend([np.mean(abs(v-z[va])) for v in zs]); row.extend([np.mean(abs(v-z[va]),axis=0).max() for v in zs]);res.append(row)\\n print(label,list(models),'affine / two-exp / rank-2 / fixed-exp respectively (averaged horizons then max per-horizon)');print('mean',np.mean(res,0));print('worst',np.max(res,0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py | sed -n '/scalar fits/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic scalar and affine trajectories -> H2 two calibrated cross-products and two shared temporal modes; baseline worst-fold MAEs are 0.00661 for y and 0.00548 across trajectory horizons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fix both interaction coefficients immediately at 0.18.\",\n      \"rejected_reason\": \"The fitted coefficients suggest a common value, but held-out extrapolation should establish whether fixing that value introduces bias.\"\n    },\n    {\n      \"option\": \"Fit a nonlinear model to panel C.\",\n      \"rejected_reason\": \"Inverting panel A and applying panel B already isolates two dominant scalar interactions; panel C is worth revisiting only if residuals show reproducible structure.\"\n    }\n  ],\n  \"rationale\": \"The calibrated Hessian isolates the 0×2 and 1×3 interactions. Held-out extremes test the cost of imposing their symmetry, while split-local temporal fits distinguish useful mode pooling from a fit that only improves in sample.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "eceecc1662cfc3cf267decb521e2488a8f066b516cdb800dc8b416c3524a15b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36313.27,
+      "usage_known": true,
+      "prompt_tokens": 24278,
+      "cached_tokens": 10880,
+      "completion_tokens": 1289
+    }
+  ]
+}

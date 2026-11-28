@@ -1,0 +1,195 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b02_batch_00_671007e751bc",
+    "source_hash": "671007e751bc40c9ac36b817c8bfb36c8063849d6262ad5a5407cd24d54abef5",
+    "parent_ids": [],
+    "source_episode_id": "conf_m101_b02",
+    "task_id": "conf_m101_b02_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/b02_baseline.py",
+        "archived_relpath": "producers/tmp__b02_baseline.py",
+        "bytes": 5188,
+        "sha256": "2b36061ce0fed63d3fe3acd5c20ea8c7d04046ea9fd5129d77e70af7da58b3c2"
+      },
+      {
+        "container_path": "/tmp/b02_c.py",
+        "archived_relpath": "producers/tmp__b02_c.py",
+        "bytes": 4036,
+        "sha256": "4802df46c8b478492446f8285dd2a8265fd0af3e3679ce90bcbfca03140a0796"
+      },
+      {
+        "container_path": "/tmp/b02_gp.py",
+        "archived_relpath": "producers/tmp__b02_gp.py",
+        "bytes": 2497,
+        "sha256": "13a481267a5836b8d17b4b8dd8fd76c2e0e44a6cf66f9edd103433bf39b620e2"
+      },
+      {
+        "container_path": "/tmp/b02_graph.py",
+        "archived_relpath": "producers/tmp__b02_graph.py",
+        "bytes": 3057,
+        "sha256": "8bd208a8bb99181a5f95d425c77e5d844e1280d69895b5c054f3eb904a27cdf4"
+      },
+      {
+        "container_path": "/tmp/b02_operators.py",
+        "archived_relpath": "producers/tmp__b02_operators.py",
+        "bytes": 1947,
+        "sha256": "9fee3ab435ee7568cda07dbaa0f216f9ab90c88b4c4dd58166b43951ad574b9c"
+      },
+      {
+        "container_path": "/tmp/b02_paths.py",
+        "archived_relpath": "producers/tmp__b02_paths.py",
+        "bytes": 3365,
+        "sha256": "287f7e4c8bd5d248f17c8a3da14276e20444e324fc88382a99adfcbebbc21139"
+      },
+      {
+        "container_path": "/tmp/b02_probe.py",
+        "archived_relpath": "producers/tmp__b02_probe.py",
+        "bytes": 1453,
+        "sha256": "eadf62a1901560f53ba3e33a59c936dcfa7f6d79fd7959e87bd2ee79d0deca53"
+      },
+      {
+        "container_path": "/tmp/b02_struct.py",
+        "archived_relpath": "producers/tmp__b02_struct.py",
+        "bytes": 3445,
+        "sha256": "85f39ba814ffdd90bb931e233e924ee83948d35d8c9c7522a2a03ff9a4c66448"
+      },
+      {
+        "container_path": "/tmp/b02_v02.py",
+        "archived_relpath": "producers/tmp__b02_v02.py",
+        "bytes": 4334,
+        "sha256": "4cdeac9351fc8f3d502233236d3151d47859bed01e8cb1e4131a2e60f814a16e"
+      },
+      {
+        "container_path": "/tmp/b02_verify.py",
+        "archived_relpath": "producers/tmp__b02_verify.py",
+        "bytes": 997,
+        "sha256": "76061778fcfe3d1f8f29cfbec0bf02e3a361ee6be4d0c97815654d1ab39b7424"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=140)\nfor k,v in s.items():\n for n,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(k,n,a.shape,'range',a.min(axis=0),a.max(axis=0)); print(a if a.ndim==1 and len(a)<12 else a[:5])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust outliers' 2>/dev/null || true",
+      "cd /holdout_task && cat validate_public_schema.py; cat > /tmp/b02_probe.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.linalg import lstsq\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=5,suppress=True,linewidth=160)\ndef poly(x,d):\n return np.column_stack([np.prod(x[:,i],axis=1) for j in range(d+1) for i in itertools.combinations_with_replacement(range(x.shape[1]),j)])\ndef fit(a,b,n):\n c=lstsq(a[:n],b[:n])[0];e=a[n:]@c-b[n:];return np.mean(abs(e),axis=0)\nfor key in ('panel_a','panel_b','panel_c'):\n p=s[key];x=p['u'];print(key)\n fo",
+      "cat > /tmp/b02_graph.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.linalg import lstsq\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\ndef affine(u,v):return lstsq(np.c_[np.ones(len(u)),u],v)[0]\ndef panel():\n p=s['panel_a'];u=p['u'];v=p['v']; A=[]\n for j in range(4):\n  uu=u[:,j];vv=v[:,j];i,k=np.triu_indices(len(u),1); slope=np.median(((vv[i]-vv[k])/(uu[i]-uu[k])));r=vv-slope*uu;ok",
+      "cat > /tmp/b02_c.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.linalg import lstsq\nfrom scipy.spatial.distance import cdist,pdist,squareform\nfrom scipy.linalg import solve\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=4,suppress=True,linewidth=130)\ndef aff(x):return np.c_[np.ones(len(x)),x]\ndef coeff(x,y):return lstsq(x,y)[0]\ndef poly(x,d,sep=False):return np.column_stack([np.prod(x[:,j],axis=1) for k in range(d+1) for j in itertools.combinations_with_replacement(range(x.shape[1]),k) if n",
+      "cat > /tmp/b02_operators.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.linalg import lstsq\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['panel_c'];u=p['u']\nnp.set_printoptions(precision=4,suppress=True)\n# Panel outputs are linear mixtures of coordinatewise transforms. Profile the mixing matrix.\ndef fit(u,v,fn,k0,shift,linear):\n def basis(x,q):\n  z=x*q[:4]+(q[4:] if shift else 0)\n  a=fn(z)\n  return np.column_stack((np.ones(len(x)),x,a)) if linear else np.column_stack((np.ones(len(x)),a))\n def residual(q):\n  A=basis(u,q);re",
+      "cat > /tmp/b02_paths.py <<'PY'\nimport numpy as np,pickle,itertools\nfrom scipy.optimize import least_squares\nfrom scipy.linalg import lstsq\nfrom scipy.spatial.distance import cdist\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef aff(x): return np.c_[np.ones(len(x)),x]\ndef fit(x,y): return lstsq(x,y)[0]\ndef op(u,v,fn,q0,linear):\n def base(x,q): return np.c_[aff(x) if linear else np.ones(len(x)),fn(x*q)]\n def res(q):\n  a=base(u,q);return (a@fit(a,v)-v).ravel()\n q=least_squares(res,np.array(q0),bounds=(.1,8),max_nfev=150).x\n c=fit(base(u,q),v);return lambda x:base(x,q)@c",
+      "cat > /holdout_task/batch_solver.py <<'PY'\nimport numpy as np\nfrom scipy.linalg import lstsq, solve\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\n\n\ndef _aff(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _operator(u, v, kind):\n    def basis(x, q):\n        z = x * q\n        f = np.arcsinh(z) if kind == 1 else np.logaddexp(z, -z) - np.log(2.)\n        return np.column_stack((_aff(x), f))\n\n    def residual(q):\n        a = basis(u, q)\n        return (a @ lstsq(a, v)[0] - v).ravel()\n\n    q = least_squares(residual, np.full(4, 3.5 if kind == 1 else 1.1)",
+      "cat > /tmp/b02_gp.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.linalg import cho_factor,cho_solve,lstsq\nfrom scipy.optimize import minimize\nsp=importlib.util.spec_from_file_location('base','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\n\ndef gp(Z,Y,n,kernel,ard):\n    Z=(Z-Z[:n].mean(0))/np.maximum(Z[:n].std(0),1e-8)\n    Y=np.asarray(Y); mu=Y.mean(0); sd=np.maximum(Y.std(0),1e-8); V=(Y-mu)/sd\n    D=(Z[:,None,:]-Z[None,:,:])**2/Z.shape[1]; d=D[:n,:n]; eye=np.eye(n); p=Z.shape[1] if ard else 1\n    if not ard: d=d.sum(2,keepdims=Tru",
+      "cat > /tmp/b02_struct.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import lstsq\nsp=importlib.util.spec_from_file_location('base','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\ndef kernels(z):\n    groups=np.split(z,3,axis=1); ds=[cdist(g,g,'sqeuclidean')/4 for g in groups]; gs=[g@g.T/4 for g in groups]\n    for h in (.25,.55,1.1):\n        rb=[np.exp(-h*d) for d in ds]; dr=np.sqrt(h*sum(ds)/3); full=(1+dr+dr**2/3)*np.exp(-dr)\n        for w in (0,.25,1):\n            for p in (0,.06,.2",
+      "cp /holdout_task/batch_solver.py /tmp/b02_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); start=s.index('def _kernels'); stop=s.index('def _pred',start); s=s[:start]+s[stop:]; s=s.replace(\"    abi = solve(B[1:].T, (a - B[0]).T).T\\n\",''); start=s.index('    return dict(raw='); stop=s.index('\\n\\n\\ndef _basis',start); s=s[:start]+\"    return np.column_stack((ab, c1(ab), c2(ab)))\"+s[stop:]; start=s.index('def _predict'); stop=s.index('def solve_batch',start); s=s[:start]+'''def _kernel(z, I, h, weight):\n    z = (z-z[I].mean(axis=0))/n",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.linalg import lstsq\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['panel_c']; u=p['u']; a=np.arange(len(u))\nfor k in (1,2):\n v=p[f'v{k}']; e=[]\n for J in np.array_split(np.random.default_rng(169).permutation(len(u)),4):\n  I=np.setdiff1d(a,J); f=m._operator(u[I],v[I],k); af=m._aff(u[J])@lstsq(m._aff(u[I]),v[I])[0]; e.",
+      "cp /holdout_task/batch_solver.py /tmp/b02_v02.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py'); s=p.read_text()\ns=s.replace('    return np.column_stack((ab, c1(ab), c2(ab)))','    odd = c1(ab)\\n    affine_v2 = _aff(ab) @ lstsq(_aff(c[\\'u\\']), c[\\'v2\\'])[0]\\n    return (np.column_stack((ab, odd, c2(ab))),\\n            np.column_stack((ab, odd, affine_v2)))')\ns=s.replace('            ks = [_kernel(z[:n], I, h, weight) for I, _, _, _ in splits]', '            ks = [tuple(_kernel(q[:n], I, h, weight) for q in z)\\n                  for I, _, _, _ in splits]')\ns=s"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__b02_baseline.py",
+      "primary_producer_container_path": "/tmp/b02_baseline.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4576,
+        "sha256": "1359bc3c47e2297ac01c69f2c1381220175d430c9724d6d0d420699193905756",
+        "content_addressed_ref": "content_addressed_blobs/1359bc3c47e2297ac01c69f2c1381220175d430c9724d6d0d420699193905756.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_aff",
+      "_operator",
+      "_coordinates",
+      "_basis",
+      "_kernels",
+      "_pred",
+      "_predict",
+      "fit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "671007e751bc40c9ac36b817c8bfb36c8063849d6262ad5a5407cd24d54abef5",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cp /holdout_task/batch_solver.py /tmp/b02_v02.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py'); s=p.read_text()\ns=s.replace('    return np.column_stack((ab, c1(ab), c2(ab)))','    odd = c1(ab)\\n    affine",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "671007e751bc40c9ac36b817c8bfb36c8063849d6262ad5a5407cd24d54abef5",
+        "expected_candidate_sha256": "671007e751bc40c9ac36b817c8bfb36c8063849d6262ad5a5407cd24d54abef5",
+        "computed_candidate_sha256": "671007e751bc40c9ac36b817c8bfb36c8063849d6262ad5a5407cd24d54abef5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4576
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_671007e7"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_aff",
+        "code": "def _aff(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_operator",
+        "code": "def _operator(u, v, kind):\n    from scipy.optimize import least_squares\n    from scipy.linalg import lstsq\n\n    def basis(x, q):\n        z = x * q\n        f = np.arcsinh(z) if kind == 1 else np.logaddexp(z, -z) - np.log(2.0)\n        return np.column_stack((_aff(x), f))\n\n    def residual(q):\n        a = basis(u, q)\n        return (a @ lstsq(a, v)[0] - v).ravel()\n    q = least_squares(residual, np.full(4, 3.5 if kind == 1 else 1.1), bounds=(0.2, 8.0), max_nfev=100).x\n    c = lstsq(basis(u, q), v)[0]\n    return lambda x: basis(x, q) @ c"
+      },
+      {
+        "name": "_coordinates",
+        "code": "def _coordinates(study, x):\n    from scipy.linalg import lstsq\n    from scipy.linalg import solve\n    (a, b, c) = (study[k] for k in ('panel_a', 'panel_b', 'panel_c'))\n    (i, j) = np.triu_indices(len(a['u']), 1)\n    (offset, scale) = ([], [])\n    for (u, v) in zip(a['u'].T, a['v'].T):\n        (du, dv) = (u[i] - u[j], v[i] - v[j])\n        ok = abs(du) > 1e-12\n        m = np.median(dv[ok] / du[ok])\n        r = v - m * u\n        r = abs(r - np.median(r))\n        keep = r <= max(7 * np.median(r), 1e-09)\n        (b0, m) = lstsq(_aff(u[keep, None]), v[keep])[0]\n        offset.append(b0)\n        scale.append(m)\n    a = (x - offset) / scale\n    B = lstsq(_aff(b['u']), b['v'])[0]\n    ab = _aff(a) @ B\n    abi = solve(B[1:].T, (a - B[0]).T).T\n    c1 = _operator(c['u'], c['v1'], 1)\n    c2 = _operator(c['u'], c['v2'], 2)\n    return dict(raw=x, a=a, ab=ab, abi=abi, ac=c1(a), abc=c1(ab), abd=np.column_stack((ab, c2(ab))), abcd=np.column_stack((ab, c1(ab), c2(ab))))"
+      },
+      {
+        "name": "_basis",
+        "code": "def _basis(t, traj):\n    from scipy.optimize import least_squares\n    from scipy.linalg import lstsq\n\n    def base(q):\n        return -np.expm1(-t[:, None] * np.sort(q))\n\n    def residual(q):\n        f = base(q)\n        return (f @ lstsq(f, traj.T)[0] - traj.T).ravel()\n    fit = least_squares(residual, [0.4, 1.8], bounds=(0.03, 15.0))\n    return base(fit.x)"
+      },
+      {
+        "name": "_kernels",
+        "code": "def _kernels(z):\n    from scipy.spatial.distance import cdist\n    d = cdist(z, z, 'sqeuclidean') / z.shape[1]\n    r = np.sqrt(d)\n    for h in (0.55, 1.0, 1.7):\n        q = h * r\n        yield ('m' + str(h), (1 + q + q * q / 3) * np.exp(-q))\n    for h in (0.2, 0.5, 1.0):\n        yield ('r' + str(h), np.exp(-h * d))\n    if z.shape[1] == 4:\n        dz = (z[:, None, :] - z[None, :, :]) ** 2\n        for h in (0.3, 0.7):\n            u = np.exp(-h * dz)\n            v = u.mean(axis=2)\n            w = (u.sum(axis=2) ** 2 - (u * u).sum(axis=2)) / 12\n            yield ('anova' + str(h), 0.2 * v + 0.4 * w + 0.4 * np.exp(-h * d))"
+      },
+      {
+        "name": "_pred",
+        "code": "def _pred(K, I, J, Y, lam):\n    from scipy.linalg import solve\n    a = K[np.ix_(I, I)].copy()\n    a.flat[::len(I) + 1] += lam\n    rhs = np.column_stack((Y[I], np.ones(len(I))))\n    c = solve(a, rhs, assume_a='pos')\n    offset = c[:, :-1].sum(axis=0) / c[:, -1].sum()\n    return K[np.ix_(J, I)] @ (c[:, :-1] - c[:, -1, None] * offset) + offset"
+      },
+      {
+        "name": "_predict",
+        "code": "def _predict(study, report=False):\n    from scipy.linalg import lstsq\n    tr = study['train']\n    x = tr['x']\n    y = tr['y']\n    T = tr['traj']\n    F = _basis(np.asarray(study['eval_times']), T)\n    Y = np.column_stack((y, lstsq(F, T.T)[0].T))\n    n = len(x)\n    rows = np.arange(n)\n    test = np.arange(n, n + len(study['test']['x']))\n    coords = _coordinates(study, np.concatenate((x, study['test']['x'])))\n    folds = list(np.array_split(np.random.default_rng(498).permutation(n), 4))\n    z = coords['a'][:n]\n    radius = np.sum(((z - z.mean(0)) / z.std(0)) ** 2, axis=1)\n    folds.append(np.argsort(radius)[-max(6, n // 7):])\n    splits = [(np.setdiff1d(rows, J), J) for J in folds]\n    records = []\n    for (key, z) in coords.items():\n        z = (z - z[:n].mean(0)) / np.maximum(z[:n].std(0), 1e-08)\n        for (kind, K) in _kernels(z):\n            for lam in (1e-06, 0.0001, 0.001, 0.006, 0.025):\n                e = []\n                for (I, J) in splits:\n                    p = _pred(K, I, J, Y, lam)\n                    er = np.abs(p[:, 1:] @ F.T - T[J])\n                    e.append([np.mean(abs(p[:, 0] - y[J])), 0.4 * er.mean() + 0.6 * er[:, -1].mean()])\n                e = np.array(e)\n                score = 0.55 * e[:-1].mean(0) + 0.2 * e[:-1].max(0) + 0.25 * e[-1]\n                records.append((score, key, kind, lam, e, K))\n    result = []\n    for j in range(2):\n        best = sorted(records, key=lambda r: r[0][j])\n        if report:\n            print('inner', j, [(k, f, l, np.round(e[:, j], 4).tolist()) for (_, k, f, l, e, _) in best[:3]])\n        ensemble = []\n        used = set()\n        weights = []\n        threshold = best[0][0][j]\n        for (score, key, kind, lam, _, K) in best:\n            if key in used:\n                continue\n            if score[j] > 1.17 * threshold or len(used) == 4:\n                break\n            used.add(key)\n            weights.append(np.exp(-9 * (score[j] / max(threshold, 1e-12) - 1)))\n            ensemble.append(_pred(K, rows, test, Y, lam))\n        p = np.average(ensemble, axis=0, weights=weights)\n        result.append(p[:, 0] if j == 0 else p[:, 1:] @ F.T)\n    return result"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(u, v, fn, k0, shift, linear):\n    from scipy.optimize import least_squares\n    from scipy.linalg import lstsq\n\n    def basis(x, q):\n        z = x * q[:4] + (q[4:] if shift else 0)\n        a = fn(z)\n        return np.column_stack((np.ones(len(x)), x, a)) if linear else np.column_stack((np.ones(len(x)), a))\n\n    def residual(q):\n        A = basis(u, q)\n        return (A @ lstsq(A, v)[0] - v).ravel()\n    x0 = np.r_[np.full(4, k0), np.zeros(4) if shift else []]\n    q = least_squares(residual, x0, bounds=(np.r_[np.full(4, 0.1), np.full(4, -2) if shift else []], np.r_[np.full(4, 5.0), np.full(4, 2) if shift else []]), max_nfev=150).x\n    A = basis(u, q)\n    c = lstsq(A, v)[0]\n    return (lambda x: basis(x, q) @ c, q, c)"
+      }
+    ]
+  }
+}

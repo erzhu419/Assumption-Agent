@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1df22f8d10434072bc9b64405bebb38c",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:01:05.825296+00:00",
+  "ended_at_utc": "2026-11-28T09:01:44.778922+00:00",
+  "request_sha256": "5c16f66a676d81f9a9a65c1cf196d02c46c1e9d694006460e4f85d4e1bd5a6b5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55574,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36354,
+    "cached_tokens": 10880,
+    "completion_tokens": 1595
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/metric8.py <<'PY'\\nexec(open('/tmp/readout7.py').read().split('folds=')[0])\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nYobs=np.c_[y,T];\\nfor label,g in G.items():\\n f=np.c_[aff(g),*[g[:,i]*g[:,j] for i in range(4) for j in range(i,4)]]; co=ls(f,Y)\\n print('quadratic',label,'RMSE',np.std(f@co-Y,0));\\n if label in ('DB','D','a'):\\n  print('coeff',co[5:].T.round(3));\\nprint('corr',np.corrcoef(Y.T));print('y on amps rms',np.std(y-aff(q)@ls(aff(q),y)))\\nGD=np.c_[G['DB'],z]; folds=np.array_split(np.random.default_rng(202).permutation(len(z)),6)\\ndef kernel(A,B,mode):\\n R=cdist(A,B);return ((1+R+R*R/3)*np.exp(-R)) if mode=='mat' else np.exp(-R*R/2)\\ndef one(A,B,Yt,mode):\\n # Standardize axes using the training fold. Fit a mildly regularized length metric separately for each response.\\n mu=A.mean(0);sd=A.std(0);A=(A-mu)/sd;B=(B-mu)/sd; m=Yt.mean();s=Yt.std();y=(Yt-m)/s;eye=np.eye(len(A)); nf=A.shape[1]\\n dd=(A[:,None,:]-A[None,:,:])**2; de=(B[:,None,:]-A[None,:,:])**2\\n def calc(p,d,grad=False):\\n  w=np.exp(-2*p[:nf]); R2=d@w; R=np.sqrt(R2); K=(1+R+R2/3)*np.exp(-R) if mode=='mat' else np.exp(-R2/2)\\n  if grad:return K, (1+R)*np.exp(-R)/3 if mode=='mat' else K, w\\n  return K\\n def loss(p):\\n  K,g,w=calc(p,dd,True);reg=np.exp(p[-1]);C=cho_factor(K+reg*eye);b=cho_solve(C,y);inv=cho_solve(C,eye)-np.outer(b,b);a=y@b/len(y)\\n  # profile response variance\\n  v=(inv+np.outer(b,b)*(1-1/a))/2\\n  pen=.15*np.sum((p[:nf]-np.log(4))**2)\\n  return len(y)*np.log(a)/2+np.log(C[0].diagonal()).sum()+pen,np.r_[np.einsum('ij,ij,ijk,k->k',v,g,dd,w)+.3*(p[:nf]-np.log(4)),reg*np.trace(v)]\\n p=minimize(loss,np.r_[np.full(nf,np.log(4)),-9.],method='L-BFGS-B',jac=True,bounds=[(-1,4)]*nf+[(-16,-3)],options={'maxiter':100}).x\\n C=cho_factor(calc(p,dd)+np.exp(p[-1])*eye)\\n return calc(p,de)@cho_solve(C,y)*s+m,p\\nfor gn,g in [('D',G['D']),('DB',G['DB']),('DI',G['DI']),('a',z),('DB+a',GD)]:\\n for mode in ('mat','rbf'):\\n  E=[];P=[]\\n  for hi in folds:\\n   tr=np.setdiff1d(np.arange(len(z)),hi); pred=[];p=[]\\n   for j in range(3):\\n    pp,pj=one(g[tr],g[hi],Y[tr,j],mode);pred.append(pp);p.append(pj)\\n   pred=np.asarray(pred).T; e=np.mean(abs(np.c_[pred[:,0],pred[:,1:]@F(p_saved).T]-Yobs[hi]),0) if False else np.mean(abs(np.c_[pred[:,0],pred[:,1:]@F(rates).T]-Yobs[hi]),0)\\n   E.append(e);P.append(p)\\n  print(gn,mode,'mean',np.mean(E,0)[[0,1,4,8]],'worst',np.max(E,0)[[0,1,4,8]],'param',np.median(P,0).round(2))\\nPY\\nsed -i '/Yobs=/i rates=p.copy()' /tmp/metric8.py\\nsed -i 's/e=np.mean(abs(np.c_\\\\[pred\\\\[:,0\\\\],pred\\\\[:,1:\\\\]@F(p_saved).T\\\\]-Yobs\\\\[hi\\\\]),0) if False else /e=/' /tmp/metric8.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/metric8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: isotropic interpolation after panel C v2 -> H2: learn target-specific length scales in calibrated and panel coordinates; current worst-fold MAEs are 0.059 for y and 0.076 for the final state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use greedy sparse readouts for all targets\",\"rejected_reason\":\"The selected terms were unstable across coordinates, and their held-out y errors were higher than the isotropic baseline.\"}],\"rationale\":\"Check whether isotropic distances hide predictive directions. Learn length scales from each training fold and compare errors across time, not just at the endpoint.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "33bf6005c2623ad6446947de7078925b2a4bc0eba8a24127977dd9376ab93d17",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44168.92,
+      "usage_known": true,
+      "prompt_tokens": 36354,
+      "cached_tokens": 10880,
+      "completion_tokens": 1595
+    }
+  ]
+}

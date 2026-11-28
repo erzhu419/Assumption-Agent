@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c31d3e73f6e4ec1a770c7659baec781",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:03:27.891750+00:00",
+  "ended_at_utc": "2026-11-28T09:04:03.862820+00:00",
+  "request_sha256": "bfc5ea931adda07d2e77912c8e67673b714aad5943eb90f687b47b8e016f8874",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71595,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42278,
+    "cached_tokens": 5504,
+    "completion_tokens": 1556
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cov11.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _coordinates,_mode_fit,_predict\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; X=tr['x']; D=_coordinates(s,X); Y=np.c_[tr['y'],tr['traj']]; idx=np.arange(len(X)); near=cdist(X/X.std(0),X/X.std(0)); np.fill_diagonal(near,np.inf)\\nfolds=[*np.array_split(np.random.default_rng(202).permutation(len(X)),6),idx[-16:],np.argsort(near.min(1))[-12:]]\\ndef model(A,B,x,xt,y,mode):\\n m,sd=A.mean(0),A.std(0); A,B=(A-m)/sd,(B-m)/sd\\n m,sd=x.mean(0),x.std(0); x,xt=(x-m)/sd,(xt-m)/sd\\n m,sd=y.mean(),y.std(); y=(y-m)/sd; n=len(y); eye=np.eye(n)\\n def pair(A,B,x,xt):return ((A[:,None]-B)**2,(x[:,None]-xt)**2,(1+A@B.T/4)**2)\\n Q=pair(A,A,x,x); P=pair(B,A,xt,x)\\n def kern(p,Q):\\n  d,dx,p2=Q; w=np.exp(-2*p[:4]); r2=d@w\\n  if mode=='merged':rho=np.exp(p[5]);r2+=rho*dx.sum(-1)\\n  r=np.sqrt(r2); h=np.exp(-r); k=(1+r+r2/3)*h; g=(1+r)*h/3\\n  if mode=='poly':extra=np.exp(p[5])*p2;k+=extra\\n  elif mode=='merged':extra=-.5*g*rho*dx.sum(-1)\\n  elif mode=='product':\\n   rr=np.sqrt(5*d*w); ff=(1+rr+rr**2/3)*np.exp(-rr); k=ff.prod(-1); g=5*(1+rr)*np.exp(-rr)*k[:,:,None]/(3*ff)\\n  return k,g,w,extra if mode in ('poly','merged') else None\\n def obj(p):\\n  k,g,w,j=kern(p,Q); nu=np.exp(p[4]); cf=cho_factor(k+nu*eye); a=cho_solve(cf,y); v=y@a/n; R=(cho_solve(cf,eye)-np.outer(a,a)/v)/2; delta=p[:4]-np.log(4.)\\n  d=Q[0]; g=g[:,:,None] if g.ndim==2 else g\\n  dp=np.einsum('ij,ijk,ijk,k->k',R,g,d,w)+.3*delta\\n  if j is not None: grad=np.r_[dp,nu*np.trace(R),np.sum(R*j)]\\n  else:grad=np.r_[dp,nu*np.trace(R)]\\n  return n*np.log(v)/2+np.log(cf[0].diagonal()).sum()+.15*(delta@delta),grad\\n p0=[np.log(4.)]*4+[-9.]; bd=[(-1,4)]*4+[(-16,-3)]\\n if mode in ('poly','merged'):p0 += [-3.];bd += [(-11,4)]\\n p=minimize(obj,p0,jac=True,bounds=bd,method='L-BFGS-B',options={'maxiter':120}).x\\n return m+sd*(kern(p,P)[0]@cho_solve(cho_factor(kern(p,Q)[0]+np.exp(p[4])*eye),y))\\nvariants=['base','poly','merged','product']; allpred={k:[] for k in variants}\\nfor h in folds:\\n i=np.setdiff1d(idx,h); a,F=_mode_fit(s['eval_times'],tr['traj'][i]); out=np.c_[tr['y'][i],a]\\n for k in variants:\\n  q=np.column_stack([_predict(D[i], D[h], y) if k=='base' else model(D[i],D[h],X[i],X[h],y,k) for y in out.T]);allpred[k].append(np.c_[q[:,0],q[:,1:]@F]);\\nfor k in ['poly','merged','product']:allpred['base+'+k]=[(a+b)/2 for a,b in zip(allpred['base'],allpred[k])]\\nallpred['all']=[np.mean(x,0) for x in zip(*(allpred[k] for k in variants))]\\nfor k,p in allpred.items():\\n E=np.array([np.abs(u-Y[h]).mean(0) for u,h in zip(p,folds)])[:,[0,1,4,8]];print(k,'mean',E[:6].mean(0).round(4),'worst',E[:6].max(0).round(4),'tail',E[-2].round(4),'isolated',E[-1].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cov11.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: stationary target-specific Matérn on panel C v2 → H2: test polynomial, mixed-coordinate, and separable covariance on ordinary and isolated-row folds; baseline worst-fold MAEs are 0.0622 for y and 0.0745 for final state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the baseline with fitted rational readouts\",\"rejected_reason\":\"Even the best tested rational candidate increased worst-fold errors in both y and final state.\"}],\"rationale\":\"The calibrated panel fit is already near measurement noise; the remaining risk is extrapolation in the readout. Compare covariance variants with temporal modes fitted inside each fold, and retain the baseline unless a challenger improves the difficult slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8a1402207b13bfd8d7be6b176a7a2bf3c120ffcacc20ce0441dec58331c05f41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41209.65,
+      "usage_known": true,
+      "prompt_tokens": 42278,
+      "cached_tokens": 5504,
+      "completion_tokens": 1556
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3e709e5463c40a8abb12c6bf84a3cf9",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:39.822012+00:00",
+  "ended_at_utc": "2026-11-28T09:00:10.634294+00:00",
+  "request_sha256": "af180961bffa02c8542f0b5137818a535242c74f98a3d58bf0696589c06b599f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43117,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30567,
+    "cached_tokens": 10880,
+    "completion_tokens": 1216
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/spatial.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; n=len(x); Y=np.c_[y,z]; I=np.arange(n)\\nfolds=[I[56:]]+list(np.array_split(np.random.default_rng(42).permutation(n),4))+[np.argsort((x*x).sum(1))[-12:]]\\ndef metrics(pred):\\n E=np.array([np.mean(abs(p-Y[v]),axis=0) for v,p in zip(folds,pred)]); return np.r_[E[:5,0].mean(),E[:5,1:].mean(),E[:5,0].max(),E[:5,1:].max(),E[-1,0],E[-1,1:].max()]\\ndef score(F,L):\\n return metrics([F[v]@solve(F[t].T@F[t]+np.diag(L),F[t].T@Y[t],assume_a='pos') for v in folds for t in [np.setdiff1d(I,v)]])\\nP=[poly(x,d) for d in range(1,7)]; deg=np.array([k for k in range(7) for _ in combinations_with_replacement(range(4),k)]); out=[]\\nfor d in range(3,7):\\n F=P[d-1]; dd=deg[:F.shape[1]]\\n for a in [1e-5,.0001,.001,.01,.04,.16]:\\n  for m in [3,12,48]:\\n   l=a*m**(dd-3.);l[dd<2]=1e-10;out.append((score(F,l),('poly',d,a,m)))\\nD=cdist(x,x,'sqeuclidean'); S=(x@x.T)/4\\nfor d in [1,2,3]:\\n F=P[d-1];\\n for a in [.25,.5,1.,2.,4.,8.]:\\n  for tag,K in [('gauss',np.exp(-D/(2*a*a))),('rq',(1+D/(2*a*a))**-2),('m52',(1+np.sqrt(5*D)/a+5*D/(3*a*a))*np.exp(-np.sqrt(5*D)/a)),('expdot',np.exp(S/a))]:\\n   for l in [1e-6,.0001,.003,.03]:\\n    pred=[]\\n    for v in folds:\\n     t=np.setdiff1d(I,v); Q=F[t]; A=K[np.ix_(t,t)]+100*Q@Q.T+np.eye(len(t))*l; b=solve(A,Y[t],assume_a='pos'); pred.append((K[np.ix_(v,t)]+100*F[v]@Q.T)@b)\\n    out.append((metrics(pred),(tag,d,a,l)))\\nfor h,m in [(0,4),(1,5)]:\\n print('best average head',h,sorted(out,key=lambda q:q[0][h])[:8]);print('best average+edge',h,sorted(out,key=lambda q:q[0][h]+.35*q[0][m])[:8]);\\nF=P[2]; b=fit(F,Y); inds=[q for d in range(4) for q in combinations_with_replacement(range(4),d)];\\nfor j in [0,1,8]:print('coeff',j,sorted(zip(inds,b[:,j]),key=lambda q:-abs(q[1]))[:24]);\\nT=np.linalg.svd(z,full_matrices=False)[2][:2]; c=z@T.T\\nprint('rank latent corrs with y',np.corrcoef(np.c_[y,c].T))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/spatial.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse panel-aligned readouts → H2 raw-coordinate higher-order or rational structure; cubic regression has worst discovery-fold MAEs of 0.0328 for y and 0.0265 across trajectory times.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Advance the best screened panel-aligned cubic model.\",\n      \"rejected_reason\": \"Even after searching many directions, those models underperformed unrestricted raw cubic regression on both heads.\"\n    }\n  ],\n  \"rationale\": \"Inspect dominant polynomial interactions for a compact readout and compare regularized polynomial and smooth baselines. Hold out the largest-norm inputs separately because the public test set extends beyond the training norm range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "bb8bea96c1d8a432035b5d41ebcfc767d2902da0feefe523a22817be654b8a12",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33470.75,
+      "usage_known": true,
+      "prompt_tokens": 30567,
+      "cached_tokens": 10880,
+      "completion_tokens": 1216
+    }
+  ]
+}

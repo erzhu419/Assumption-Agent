@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09efae379521434fbad1e2f444bbc310",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:03:15.770579+00:00",
+  "ended_at_utc": "2026-11-28T09:03:46.088352+00:00",
+  "request_sha256": "99ff660d4fae28b941a8b16f5b19fab4cacfb360857b76f11d8ae26540b7ce6e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39149,
+    "cached_tokens": 10880,
+    "completion_tokens": 1162
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/axis_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.spatial.distance import cdist\\nY=np.c_[y,T]; ids=np.arange(len(x)); edge=lambda v:np.argsort(v)[-14:]\\nfolds=[ids[56:],*np.array_split(ids,4),edge(np.linalg.norm(x,axis=1)),*[edge(abs(z)) for z in x.T]]\\nP=poly(x,2); C=poly(x,3)[:,15:]; H0=P@P.T; H3=C@C.T\\n\\ndef kernel(z, kind, l):\\n    r=cdist(z,z)/l\\n    if kind=='mat': return (1+r+r*r/3)*np.exp(-r)\\n    if kind=='rbf': return np.exp(-r*r/2)\\n    w=np.exp(-.5*((z[:,None,:]-z[None,:,:])/l)**2)\\n    return sum(w[:,:,i]*w[:,:,j] for i in range(4) for j in range(i,4))/10\\n\\ndef evaluate(K,reg):\\n    ee=[]; preds=[]\\n    for jj in folds:\\n        ii=np.setdiff1d(ids,jj); V=np.linalg.svd(T[ii],full_matrices=False)[2][:2]\\n        p=K[np.ix_(jj,ii)]@np.linalg.solve(K[np.ix_(ii,ii)]+reg*np.eye(len(ii)),Y[ii]); p[:,1:]=p[:,1:]@V.T@V\\n        preds.append(p); ee.append(np.abs(p-Y[jj]))\\n    return np.array([[e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()] for e in ee]),preds\\n\\nzs={'x':x,'b':x@B[1:],'bi':x@np.linalg.inv(B[1:])}; rs=[]\\nfor zn,z in zs.items():\\n    z=z/z.std(0)\\n    for kind in ['mat','rbf','pair']:\\n        for l in [.9,1.6,2.5,4.]:\\n            G=kernel(z,kind,l)\\n            for c in [0,.05,.25,1]:\\n                for reg in [.0003,.003,.03]:\\n                    E,_=evaluate(H0+c*H3+G,reg); rs.append(((zn,kind,l,c,reg),E))\\nfor col in [0,1,2]:\\n    print('criterion',col)\\n    for cfg,E in sorted(rs,key=lambda r:(r[1].max(0)+r[1].mean(0))[col])[:6]:\\n        print(cfg,'mean',E.mean(0).round(5),'worst',E.max(0).round(5),'axis4',E[-1].round(5))\\n# Check whether the trajectory bottleneck comes from a few held-out rows.\\n_,a=evaluate(H0+kernel(x/x.std(0),'mat',1.6),.003); z=zs['b']; _,b=evaluate(H0+kernel(z/z.std(0),'mat',1.6),.03)\\njj=folds[-1]; e=np.abs(.75*a[-1][:,-1]+.25*b[-1][:,-1]-T[jj,-1]); print('axis4 endpoint errors sorted',np.sort(e).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/axis_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic-trend Matérn fit → H2 regularized cubic trend or alternative smooth residual; the verified solver’s worst-slice MAE is 0.02304 for y, 0.02495 across horizons, and 0.03561 at the endpoint.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified solver unchanged\",\n      \"rejected_reason\": \"The fourth-coordinate holdout is the main trajectory bottleneck. One targeted comparison can test whether an explicit cubic trend reduces it without worsening the other slices.\"\n    }\n  ],\n  \"rationale\": \"Leave the verified artifact untouched while comparing challengers. Promote a change only if it materially lowers the coordinate-extreme trajectory error without broadly worsening held-out performance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "72695b7e961d245e4c964567e6b4a9d992a6aa376b88959ba01a18bc693db8b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32885.84,
+      "usage_known": true,
+      "prompt_tokens": 39149,
+      "cached_tokens": 10880,
+      "completion_tokens": 1162
+    }
+  ]
+}

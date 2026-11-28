@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08eff992de574538933bd1b5e230afce",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:45.444581+00:00",
+  "ended_at_utc": "2026-11-28T09:00:28.655769+00:00",
+  "request_sha256": "a81fae44546864f87fc48c2f35b00884a4e4012b5e5305960ee6616300e6243e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43771,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31544,
+    "cached_tokens": 10880,
+    "completion_tokens": 1711
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/branch.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('U,D,V=')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cwr\\nfrom collections import defaultdict\\nnp.set_printoptions(precision=4,suppress=True,linewidth=145)\\nfn={'s':np.sin,'c':np.cos,'t':np.tanh,'r':lambda a:a/(1+a*a),'p':lambda a:a*a,'o':lambda a:a**3}\\npc=s['panel_c']; u=pc['u']; folds=[np.arange(24)%4==i for i in range(4)]\\ndef base(X,p,seq,lin):\\n return np.column_stack([np.ones(len(X))]+([X] if lin else [])+[fn[f](w*X) for w,f in zip(p,seq)])\\ndef fit(X,Y,idx,seq,lin,init):\\n def solve(p):\\n  D=base(X[idx],p,seq,lin); w=np.linalg.lstsq(D,Y[idx],rcond=None)[0]; return D@w-Y[idx],w\\n if seq:p=least_squares(lambda p:solve(p)[0].ravel(),init,bounds=(.3,6),max_nfev=160).x\\n else:p=[]\\n e,w=solve(p);return p,w,np.mean(abs(e))\\nmodels={}\\nfor key,seqs in [('v1',['t','r','s','ts','tr','to','rs','so','to','tt','rr']),('v2',['c','cp','cc','cs','p'])]:\\n Y=pc[key]; scores=[]\\n for lin in [False,True]:\\n  for seq in seqs:\\n   init={'t':2.2,'c':1.3,'r':3.4,'s':2.5,'o':1.,'p':1.}; start=np.array([init[f] for f in seq]);\\n   if len(seq)==2 and seq[0]==seq[1]:start[1]*=.7\\n   p,w,e=fit(u,Y,np.ones(24,dtype=bool),seq,lin,start); cv=[]\\n   for mask in folds:\\n    pp,ww,_=fit(u,Y,~mask,seq,lin,start);cv.append(np.mean(abs(base(u[mask],pp,seq,lin)@ww-Y[mask])))\\n   scores.append((np.mean(cv),max(cv),e,seq,lin,p,w))\\n scores.sort(key=lambda row:row[0]); print(key,[(round(v,6),round(m,6),round(e,6),seq,lin,p) for v,m,e,seq,lin,p,_ in scores[:7]])\\n for _,_,_,seq,lin,p,w in scores[:2]:\\n  print('weights',key,seq,lin,w);models[key+str(len([k for k in models if k.startswith(key)]))]=(seq,lin,p,w)\\ndef tb(p):return -np.expm1(-t[:,None]*p)\\np=least_squares(lambda p:(tr-tr@np.linalg.pinv(tb(p).T)@tb(p).T).ravel(),[.365,1.908],bounds=(.05,10)).x; print('weighted temporal',p,np.mean(abs(tr-tr@np.linalg.pinv(tb(p).T)@tb(p).T)))\\nY=np.c_[y,tr@np.linalg.pinv(tb(p).T)]; q=coords['AinvB']; idx=np.arange(len(q)); folds=[idx>=56]+[idx%4==j for j in range(4)];\\nC={key:base(q,p,seq,lin)@w for key,(seq,lin,p,w) in models.items()}\\nraw={'Q':q,**C,'C':np.c_[C['v10'],C['v20']],'QC':np.c_[q,C['v10'],C['v20']]}\\nraw.update({'Qv1':np.c_[q,C['v10']],'Qv2':np.c_[q,C['v20']]})\\nraw['shared']=np.column_stack([q,np.tanh(2.2*q),np.cos(1.3*q),np.sin(2.5*q),q/(1+8*q*q)])\\nfor name,M in raw.items():\\n for deg in ([1,2,3] if M.shape[1]<=4 else [1,2]):\\n  D=np.column_stack([np.prod(M[:,j],axis=1) for k in range(1,deg+1) for j in cwr(range(M.shape[1]),k)]); out=[]\\n  for mask in folds:\\n   h=~mask; mx=D[h].mean(0); sx=D[h].std(0); Z=(D-mx)/sx; yc=Y[h].mean(0); U,S,V=np.linalg.svd(Z[h],full_matrices=False); proj=U.T@(Y[h]-yc); vals=[]\\n   for lam in [1e-8,1e-5,1e-3,.03,.3,3]:\\n    pred=Z[mask]@(V.T@((S/(S*S+lam))[:,None]*proj))+yc; e=pred-Y[mask]; vals.append(np.r_[np.mean(abs(e),axis=0),np.mean(abs(e[:,1:]@tb(p)[-1]))])\\n   out.append(vals)\\n  out=np.array(out); m=out.mean(0); ids=np.argmin(m,axis=0); print(name,deg,'mean',m[ids,np.arange(4)],'worst',out.max(0)[ids,np.arange(4)],'ridge',ids)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: separate nonlinear fits in calibrated coordinates → H2: shared panel C operators feeding downstream readouts; last-16 slow-amplitude MAE is 0.0144 in the exploratory model.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a separate nonlinear frequency for every panel coordinate\",\n      \"rejected_reason\": \"The previous scan found similar frequencies across coordinates; a shared-frequency fit can distinguish a real common operator from panel overfitting.\"\n    }\n  ],\n  \"rationale\": \"If the shared panel operators predict withheld panel rows and improve downstream prediction across slices, retain them. Otherwise, use the calibrated direct model and focus further discovery on its residuals. The ridge sweep is exploratory, not a final validation estimate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b080dc7d5bb34b9537ead15ab5d2148d6442e86b92897835facfb831e727b2dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45868.72,
+      "usage_known": true,
+      "prompt_tokens": 31544,
+      "cached_tokens": 10880,
+      "completion_tokens": 1711
+    }
+  ]
+}

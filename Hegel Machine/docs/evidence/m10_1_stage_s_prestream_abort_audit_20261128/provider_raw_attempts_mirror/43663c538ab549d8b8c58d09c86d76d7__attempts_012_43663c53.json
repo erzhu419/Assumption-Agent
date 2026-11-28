@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43663c538ab549d8b8c58d09c86d76d7",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:04:06.775366+00:00",
+  "ended_at_utc": "2026-11-28T09:04:35.029412+00:00",
+  "request_sha256": "a61400b468129116cf613103a82cf45c18370c6a05e4ae9fb286708f1c86909b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42743,
+    "cached_tokens": 10880,
+    "completion_tokens": 945
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 validate_public_schema.py\\npython3 -I -B - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.spatial.distance import cdist\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\n\\ndef checked(s):\\n    out = solver.solve_batch(s)\\n    n, nt = len(s['test']['x']), len(s['eval_times'])\\n    for key, shape in [('y_hat', (n,)), ('state_pred', (n, nt)), ('diagnostics_vec', (4,))]:\\n        a = out[key]\\n        assert isinstance(a, np.ndarray) and a.shape == shape and np.isfinite(a).all(), key\\n    y, state = out['y_hat'], out['state_pred']\\n    last = state[:, -1]\\n    np.testing.assert_array_equal(out['diagnostics_vec'], [y.mean(), y.std(), last.mean(), last.std()])\\n    return y, state\\n\\nchecked(study)\\nidx = np.arange(len(train['x']))\\nz = solver._coordinates(study, train['x'])\\nd = cdist(z/z.std(0), z/z.std(0)); np.fill_diagonal(d, np.inf)\\nfolds = [*np.array_split(np.random.default_rng(202).permutation(len(idx)), 6), idx[-16:], np.argsort(d.min(1))[-12:]]\\nerrors = []\\nfor h in folds:\\n    keep = np.setdiff1d(idx, h)\\n    tr = {k: train[k][keep] for k in ('x', 'y', 'traj')}\\n    last = tr['traj'][:, -1]\\n    tr['summary'] = np.array([tr['y'].mean(), tr['y'].std(), last.mean(), last.std()])\\n    y, state = checked(dict(study, train=tr, test={'x': train['x'][h]}))\\n    errors.append(np.r_[np.abs(y-train['y'][h]).mean(), np.abs(state-train['traj'][h]).mean(0)])\\ne = np.array(errors)\\nfor label, row in [('worst_ordinary', e[:6].max(0)), ('tail', e[-2]), ('isolated_panel_coordinates', e[-1])]:\\n    print(label, np.round(row, 5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated panel C v2 coordinates → H2: target-specific Matérn readouts with two shared temporal modes; worst six-fold MAEs are 0.0622 for y and 0.0745 for final state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the mixed-coordinate covariance\",\n      \"rejected_reason\": \"It lowered worst-fold final-state MAE by 0.0014 but raised mean final-state MAE by 0.0018, with no meaningful change in y.\"\n    }\n  ],\n  \"rationale\": \"Keep the validated baseline and run the exact deliverable in an isolated process. Check all output fields and all eight horizons on ordinary, tail, and isolated-coordinate splits; a contract failure would require a fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ca7cfae87912d4d4b0a801d6b7a67bffd2d227083cba8e132b8f3dbfe9fa23f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30819.1,
+      "usage_known": true,
+      "prompt_tokens": 42743,
+      "cached_tokens": 10880,
+      "completion_tokens": 945
+    }
+  ]
+}

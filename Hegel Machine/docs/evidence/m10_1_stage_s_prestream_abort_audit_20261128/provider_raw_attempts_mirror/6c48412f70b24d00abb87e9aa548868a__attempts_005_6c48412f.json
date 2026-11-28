@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c48412f70b24d00abb87e9aa548868a",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:58:57.437898+00:00",
+  "ended_at_utc": "2026-11-28T08:59:38.751386+00:00",
+  "request_sha256": "888d0f2bc31ff8b6fa0cf3d4252bfa3d62473ddc4121884a4eff22f7b9ce727c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39597,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28240,
+    "cached_tokens": 10880,
+    "completion_tokens": 1744
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict scalar and trajectory outputs from the calibrated operator coordinates.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _ls(design, response):\\n    return np.linalg.lstsq(design, response, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _coordinates(study, x):\\n    a = study['panel_a']\\n    u, v = a['u'], a['v']\\n    designs = [_affine(u[:, j:j+1]) for j in range(u.shape[1])]\\n    keep = np.arange(len(u))\\n    for step in range(7):\\n        coeffs = np.array([_ls(d[keep], v[keep, j]) for j, d in enumerate(designs)])\\n        residuals = np.linalg.norm(v - np.column_stack(\\n            [d @ c for d, c in zip(designs, coeffs)]), axis=1)\\n        if step < 6:\\n            keep = np.argsort(residuals)[:int(0.85 * len(u))]\\n    keep = residuals <= 5 * np.median(residuals)\\n    coeffs = np.array([_ls(d[keep], v[keep, j]) for j, d in enumerate(designs)])\\n    b = study['panel_b']\\n    operator = _ls(_affine(b['u']), b['v'])\\n    return _affine((x - coeffs[:, 0]) / coeffs[:, 1]) @ operator\\n\\n\\ndef _trajectory(train_x, train_z, test_x, times):\\n    coeffs = _ls(train_x, train_z)\\n    fitted = train_x @ coeffs\\n\\n    def project(rates):\\n        basis = -np.expm1(-times[:, None] * rates)\\n        return _ls(basis, coeffs.T).T @ basis.T\\n\\n    rates = least_squares(\\n        lambda p: (train_x @ project(p) - fitted).ravel(),\\n        [0.42, 1.82], bounds=([0.02, 0.9], [0.9, 4.0]),\\n    ).x\\n    return test_x @ project(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, test = study['train'], study['test']\\n    u = _coordinates(study, train['x'])\\n    v = _coordinates(study, test['x'])\\n\\n    def scalar_design(w):\\n        interaction = w[:, 0] * w[:, 2] + w[:, 1] * w[:, 3]\\n        return np.column_stack((w, interaction))\\n\\n    y_hat = scalar_design(v) @ _ls(scalar_design(u), train['y'])\\n    state_pred = _trajectory(u, train['traj'], v, study['eval_times'])\\n    end = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/verify_solver.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; d=s['train']; x,y,z=(d[k] for k in ('x','y','traj')); n=len(x); u=m._coordinates(s,x); t=s['eval_times']\\nfor name,folds in [('random',[a for seed in (3,91,201,17,49) for a in np.array_split(np.random.default_rng(seed).permutation(n),4)]),('tail',[np.arange(56,n)]),('extremes', [np.argsort(q)[-12:] for q in [*x.T,*(-x).T,*u.T,*(-u).T]])]:\\n rows=[]\\n for va in folds:\\n  tr=np.setdiff1d(np.arange(n),va); st={**s,'train':{k:d[k][tr] for k in ('x','y','traj')},'test':{'x':x[va]}}; o=m.solve_batch(st)\\n  yz=abs(o['y_hat']-y[va]); zz=abs(o['state_pred']-z[va]);\\n  base=m._affine(x[va])@m._ls(m._affine(x[tr]),z[tr]); g=u[:,0]*u[:,2]+u[:,1]*u[:,3]; y18=u[va]@m._ls(u[tr],y[tr]-.18*g[tr])+.18*g[va]\\n  rows.append([yz.mean(),abs(y18-y[va]).mean(),zz.mean(),zz.mean(0).max(),zz[:,-1].mean(),abs(base-z[va]).mean(),abs(base-z[va]).mean(0).max()]);\\n print(name,'y, y_fixed, traj, max_horizon, final, affine_traj, affine_max_horizon; mean',np.mean(rows,axis=0),'worst',np.max(rows,axis=0))\\n# Confirm that no single panel observation drives the actual test predictions.\\no=m.solve_batch(s)\\nfor panel in ('panel_a','panel_b'):\\n errs=[]\\n for i in range(len(s[panel]['u'])):\\n  st={**s,panel:{k:np.delete(a,i,axis=0) for k,a in s[panel].items()}}; q=m.solve_batch(st); errs.append([np.max(abs(o[k]-q[k])) for k in ('y_hat','state_pred','diagnostics_vec')]);\\n print(panel,'jackknife max change',np.max(errs,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted polynomial and affine fits -> H2 one shared calibrated interaction and two temporal modes; exploratory worst directional MAEs were 0.006842 for the scalar and 0.005987 across trajectory horizons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Use separate coefficients for the two scalar interactions.\",\"rejected_reason\":\"The extra coefficient worsened worst directional and random-fold errors.\"},{\"option\":\"Use a separate affine model for each trajectory horizon.\",\"rejected_reason\":\"Temporal pooling lowered both mean and worst-horizon errors on directional folds.\"}],\"rationale\":\"Fit the sparse scalar law and shared trajectory modes in coordinates obtained by inverting panel A and applying panel B. Verify the exact artifact on row holdouts, directional extremes and panel jackknifes; these checks can reveal extrapolation bias or calibration instability that the schema check cannot.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f9dc75af7abbe703816c563384f18a709edc76534d017ac29b7c62810bc871f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46539.41,
+      "usage_known": true,
+      "prompt_tokens": 28240,
+      "cached_tokens": 10880,
+      "completion_tokens": 1744
+    }
+  ]
+}

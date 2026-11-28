@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "424b78d50470495581ee628e8fbba375",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:57:26.595830+00:00",
+  "ended_at_utc": "2026-11-28T08:57:52.125773+00:00",
+  "request_sha256": "4b244ce0032a845555c7f5d4f4b081c5e945c0ace605fc3109d6ebb660f78418",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12306,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17090,
+    "cached_tokens": 10880,
+    "completion_tokens": 956
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as n,itertools as it\\nfrom scipy.linalg import svdvals\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef basis(x,d):\\n return n.column_stack([n.prod(x[:,idx],axis=1) for j in range(d+1) for idx in it.combinations_with_replacement(range(x.shape[1]),j)])\\ndef panel(u,v,d,rob):\\n f=basis(u,d); keep=n.arange(len(f));\\n for _ in range(8 if rob else 1):\\n  b=n.linalg.lstsq(f[keep],v[keep],rcond=None)[0]; e=n.linalg.norm(v-f@b,axis=1); keep=n.argsort(e)[:len(f)-8]\\n return b,e\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]\\n for out,v in p.items():\\n  if out=='u':continue\\n  for d in (1,2):\\n   b,e=panel(p['u'],v,d,k=='panel_a');print(k,out,d,n.round(n.sort(e),5));print(n.round(b,4).T if d==1 else '')\\nprint('times',s['eval_times']); a=s['train'];x=a['x'];t=a['traj'];y=a['y'];print('trajectory sv',svdvals(t),svdvals(n.diff(t,axis=1)));print('y moments/traj endpoint',y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std(),a['summary']);print('traj temporal directions',n.linalg.svd(t,full_matrices=False)[2][:4]);\\nG={'raw':x}; b,_=panel(s['panel_a']['u'],s['panel_a']['v'],1,True);G['A forward']=basis(x,1)@b;G['A inverse']=(x-b[0])@n.linalg.pinv(b[1:]);\\nfor k in ('panel_b','panel_c'):\\n for out,v in s[k].items():\\n  if out=='u':continue\\n  b,_=panel(s[k]['u'],v,2,False)\\n  for name in ('raw','A forward','A inverse'): G[k+out+name]=basis(G[name],2)@b\\nfor name,z in G.items():\\n for d in (1,2,3):\\n  f=basis(z,d); p=f[56:]@n.linalg.lstsq(f[:56],n.c_[y,t][:56],rcond=None)[0]; print(name,d,n.mean(abs(p-n.c_[y,t][56:]),axis=0)[[0,1,4,8]])\\nfor d in (1,2,3):\\n f=basis(n.c_[x,t[:,[0,-1]]],d); print('y with endpoint, d',d,n.mean(abs(f[56:]@n.linalg.lstsq(f[:56],y[:56],rcond=None)[0]-y[56:])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated coordinates and shared trajectory modes -> H2: compare decoded operator maps against raw-coordinate baselines on the 16-row held-out slice; no error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel residuals will distinguish affine calibration from nonlinear operators, while temporal singular values and held-out errors will show whether a shared low-dimensional trajectory law is justified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "428e6ad2e177276c278edf4b73dc79d82bb2755e691ef9b9e9f76bbc9efa324f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28084.28,
+      "usage_known": true,
+      "prompt_tokens": 17090,
+      "cached_tokens": 10880,
+      "completion_tokens": 956
+    }
+  ]
+}

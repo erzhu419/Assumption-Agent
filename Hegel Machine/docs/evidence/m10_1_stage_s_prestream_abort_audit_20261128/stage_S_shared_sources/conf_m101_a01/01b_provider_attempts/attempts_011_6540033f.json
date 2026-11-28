@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6540033f5ab848b19b71a7f225cb54ab",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:02:36.393666+00:00",
+  "ended_at_utc": "2026-11-28T09:03:13.457309+00:00",
+  "request_sha256": "38252a1487bab8814bb72dd656bd63161d8b0ffe76750802343780eeccbb2ae4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59308,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36994,
+    "cached_tokens": 10880,
+    "completion_tokens": 1489
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _features(x):\\n    return np.column_stack([np.ones(len(x)), x, *[\\n        x[:, i] * x[:, j] for i, j in combinations_with_replacement(range(x.shape[1]), 2)\\n    ]])\\n\\n\\ndef _predict(x, y, traj, test, panel_b):\\n    u = np.asarray(panel_b['u'])\\n    operator = np.linalg.lstsq(np.column_stack([np.ones(len(u)), u]), panel_b['v'], rcond=None)[0][1:]\\n    dx, dq = _features(x), _features(test)\\n    gram, cross = dx @ dx.T, dq @ dx.T\\n\\n    def fit(target, z, q, nugget):\\n        scale = z.std(axis=0)\\n        z, q = z / scale, q / scale\\n\\n        def matern(a, b):\\n            r = np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1) / 1.6\\n            return (1 + r + r*r/3) * np.exp(-r)\\n\\n        k = gram + matern(z, z)\\n        k.flat[::len(x)+1] += nugget\\n        return (cross + matern(q, z)) @ np.linalg.solve(k, target)\\n\\n    inv = np.linalg.inv(operator)\\n    scalar = fit(y, x @ inv, test @ inv, 0.0003)\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    latent = traj @ modes.T\\n    state = (0.75 * fit(latent, x, test, 0.003) +\\n             0.25 * fit(latent, x @ operator, test @ operator, 0.03)) @ modes\\n    return scalar, state\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    y, state = _predict(train['x'], train['y'], train['traj'], study['test']['x'], study['panel_b'])\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/validate_solver.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\nx = train['x']\\ny = train['y']\\nT = train['traj']\\nids = np.arange(len(x))\\nr = np.linalg.norm(x, axis=1)\\naxes = [np.argsort(abs(x[:, j]))[-14:] for j in range(x.shape[1])]\\nfolds = [ids[56:], *np.array_split(ids, 4), np.argsort(r)[-14:], *axes]\\nerrors = []\\nfor jj in folds:\\n    ii = np.setdiff1d(ids, jj)\\n    q = {**study, 'train': {**train, 'x': x[ii], 'y': y[ii], 'traj': T[ii]}, 'test': {'x': x[jj]}}\\n    out = mod.solve_batch(q)\\n    yp, tp = out['y_hat'], out['state_pred']\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yp.mean(), yp.std(), tp[:, -1].mean(), tp[:, -1].std()])\\n    err = np.abs(tp - T[jj])\\n    errors.append([np.mean(abs(yp-y[jj])), err.mean(), err[:, -1].mean(), *err.mean(0)])\\nnp.set_printoptions(precision=5)\\nprint('last16, contiguous 1-4, norm, axis 1-4; scalar, trajectory mean, endpoint:')\\nprint(np.asarray(errors)[:, :3]); print('worst and average', np.max(errors, axis=0), np.mean(errors, axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/validate_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 compact rational forcing → H2 separate Matérn spatial fits with two shared trajectory modes; the prior benchmark worst-slice MAEs were 0.0220 for y, 0.0152 across horizons, and 0.0243 at the endpoint.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the fitted rational law\",\n      \"rejected_reason\": \"Even the separate cubic-over-square-denominator model had worse boundary MAE than Matérn for both scalar and trajectory prediction.\"\n    }\n  ],\n  \"rationale\": \"Save the strongest validated model family now. The isolated schema check detects contract failures; the contiguous, high-norm, and coordinate-extreme slices test whether the exact implementation or its trajectory blend needs adjustment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5004a4c7e69f7d3c761b6b64cd3e52e934b118166704cfe54bc4c70f9c549c8f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39704.26,
+      "usage_known": true,
+      "prompt_tokens": 36994,
+      "cached_tokens": 10880,
+      "completion_tokens": 1489
+    }
+  ]
+}

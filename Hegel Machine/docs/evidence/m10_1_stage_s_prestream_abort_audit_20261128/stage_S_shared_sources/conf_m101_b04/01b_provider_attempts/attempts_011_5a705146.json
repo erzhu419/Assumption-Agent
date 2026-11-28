@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a7051469fb842e9b9d31e93c055dee5",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:03:16.155985+00:00",
+  "ended_at_utc": "2026-11-28T09:03:57.045654+00:00",
+  "request_sha256": "a34ed58d9742b7d48a3f707c5a5e27117f5708faf560f8c8ab3d2737191132cb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36917,
+    "cached_tokens": 10880,
+    "completion_tokens": 1568
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from scipy.linalg import solve\\\\n','from scipy.linalg import solve\\\\nfrom scipy.optimize import least_squares\\\\n')\\npos = s.index('\\\\ndef solve_batch(')\\ns = s[:pos] + '''\\ndef _trajectory_ridges(x, w, scores):\\n    # Profile the quadratic trend and linear ridge amplitudes out of the fit.\\n    trend = _poly(x, 2)\\n    q = np.linalg.qr(trend, mode='reduced')[0]\\n    residual = scores - q @ (q.T @ scores)\\n    penalty = 1.e-4\\n\\n    def features(a, params):\\n        p = params.reshape(3, 5)\\n        return np.tanh(a @ p[:, :4].T + p[:, 4])\\n\\n    def profile(params):\\n        h = features(x, params)\\n        g = h - q @ (q.T @ h)\\n        coef = np.linalg.solve(g.T @ g + penalty * np.eye(3), g.T @ residual)\\n        return h, g, coef\\n\\n    def objective(params):\\n        _, g, coef = profile(params)\\n        return np.r_[(g @ coef - residual).ravel(),\\n                     np.sqrt(penalty) * coef.ravel(), .002 * params]\\n\\n    starts = np.random.default_rng(21).normal(0, .55, (8, 15))\\n    best = min((least_squares(objective, start, max_nfev=120) for start in starts),\\n               key=lambda result: result.cost)\\n    h, _, coef = profile(best.x)\\n    beta = np.linalg.lstsq(trend, scores - h @ coef, rcond=None)[0]\\n    return _poly(w, 2) @ beta + features(w, best.x) @ coef\\n\\n''' + s[pos:]\\ns = s.replace(\\\"    state_pred = (.6 * _predict(x, w, scores, ('m52', 1, 8., 1.e-6)) + .4 * _predict(x, w, scores, ('dot', 1, 1., .003))) @ modes\\\", \\\"    smooth = (.6 * _predict(x, w, scores, ('m52', 1, 8., 1.e-6))\\\\n              + .4 * _predict(x, w, scores, ('dot', 1, 1., .003)))\\\\n    state_pred = (.5 * smooth + .5 * _trajectory_ridges(x, w, scores)) @ modes\\\")\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py && python3 -I /holdout_task/validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.spatial.distance import cdist\\n\\ndef load(p):\\n    spec = importlib.util.spec_from_file_location(p.parent.name, p)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\np = Path('/holdout_task')\\nnew = load(p/'batch_solver.py')\\nold = load(next(Path('/tmp/.hegel_candidate_archive/v01_e71391a5').rglob('batch_solver.py')))\\nwith (p/'public_batch.pkl').open('rb') as f:\\n    s = pickle.load(f)[0]['study']\\nx, y, z = [s['train'][k] for k in ('x','y','traj')]\\nw = s['test']['x']; i = np.arange(len(x))\\nfolds = [('56/16', i[56:])]\\nfor seed in (121, 611):\\n    folds.extend((f'random-{seed}-{j}', v) for j,v in enumerate(np.array_split(np.random.default_rng(seed).permutation(len(x)),4)))\\nfolds += [('norm', np.argsort(np.linalg.norm(x,axis=1))[-12:]), ('low-coverage', np.argsort(cdist(x,w).min(axis=1))[-12:]), ('coordinate-edge', np.argsort(np.max(abs(x),axis=1))[-12:])]\\nfor name, v in folds:\\n    t = np.setdiff1d(i,v)\\n    fold = {'train':{'x':x[t],'y':y[t],'traj':z[t]},'test':{'x':x[v]},'eval_times':s['eval_times']}\\n    vals=[]\\n    for m in (old,new):\\n        out=m.solve_batch(fold); py=out['y_hat']; pz=out['state_pred']; last=pz[:,-1]\\n        np.testing.assert_allclose(out['diagnostics_vec'], [py.mean(),py.std(),last.mean(),last.std()])\\n        e=np.mean(abs(pz-z[v]),axis=0)\\n        vals.append([np.mean(abs(py-y[v])), e.mean(), e.max()])\\n    print(name,'baseline / challenger (scalar, trajectory mean, worst time):',np.round(vals,5).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 smooth two-mode trajectory ensemble → H2 equal blend with a sparse tanh correction; measured worst trajectory-slice MAE improved from 0.02133 to 0.01930, while the unchanged scalar head's worst MAE was 0.01954.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the scalar head with an anisotropic kernel.\",\n      \"rejected_reason\": \"The fitted anisotropy increased mean scalar MAE and worsened high-norm extrapolation.\"\n    },\n    {\n      \"option\": \"Replace the smooth trajectory head outright.\",\n      \"rejected_reason\": \"The tanh fit alone increased ordinary-fold MAE; the blend retained ordinary accuracy and reduced the worst stress error.\"\n    }\n  ],\n  \"rationale\": \"Promote the trajectory blend and leave the scalar head unchanged. Verify the exact saved file in an isolated process, then compare it with the archived baseline on fresh folds and boundary slices; a material regression there would warrant reverting the correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7d6c49d9514c8ff637d819d8bdec6282acd5446b71918af223dce3d1ed82ec37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43458.77,
+      "usage_known": true,
+      "prompt_tokens": 36917,
+      "cached_tokens": 10880,
+      "completion_tokens": 1568
+    }
+  ]
+}

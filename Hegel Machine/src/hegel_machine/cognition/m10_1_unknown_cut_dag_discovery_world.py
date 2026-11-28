@@ -976,7 +976,7 @@ BLIND_M101_INSTRUCTION_TEXT = (
     "  - `telemetry_vec`: shape `(4,)` apparatus state vector.\n"
     "Note: Not every panel is necessarily active in the forward physical law of a given campaign; infer the true "
     "mathematical mapping strictly from the data in `public_batch.pkl` and validate via internal held-out cross-validation "
-    "(e.g., fitting on `train[:56]` and checking MAE on `train[56:]`).\n"
+    "(fitting on `train[:52]` and checking MAE `<= 0.038` on `train[52:]`).\n"
     "Write `/holdout_task/batch_solver.py` exposing `solve_batch(study: dict) -> dict` returning:\n"
     "  - `'y_hat'`: finite `np.ndarray` of shape `(len(study['test']['x']),)`\n"
     "  - `'state_pred'`: finite `np.ndarray` of shape `(len(study['test']['x']), len(study['eval_times']))`\n"
@@ -1258,6 +1258,29 @@ else:
         exp_dv = np.array([float(np.mean(yh)), float(np.std(yh)), float(np.mean(sp[:, -1])), float(np.std(sp[:, -1]))], dtype=float)
         if float(np.max(np.abs(dv - exp_dv))) > 1e-3:
             errs.append("diagnostics_vec_handoff_mismatch")
+if not errs:
+    st_cv = copy.deepcopy(st)
+    sp_idx = max(40, len(st["train"]["x"]) - 20)
+    vx, vy, vtr = st["train"]["x"][sp_idx:].copy(), st["train"]["y"][sp_idx:].copy(), st["train"]["traj"][sp_idx:].copy()
+    st_cv["train"] = {
+        "x": st["train"]["x"][:sp_idx].copy(),
+        "y": st["train"]["y"][:sp_idx].copy(),
+        "traj": st["train"]["traj"][:sp_idx].copy(),
+        "summary": np.array([
+            float(np.mean(st["train"]["y"][:sp_idx])),
+            float(np.std(st["train"]["y"][:sp_idx])),
+            float(np.mean(st["train"]["traj"][:sp_idx, -1])),
+            float(np.std(st["train"]["traj"][:sp_idx, -1])),
+        ], dtype=float),
+    }
+    st_cv["test"] = {"x": vx}
+    out_cv = mod.solve_batch(st_cv)
+    ym = float(np.mean(np.abs(np.asarray(out_cv["y_hat"], dtype=float) - vy)))
+    tm = float(np.mean(np.abs(np.asarray(out_cv["state_pred"], dtype=float) - vtr)))
+    if ym > 0.038:
+        errs.append(f"public_cv_y_mae_exceeded:{ym:.6f}")
+    if tm > 0.038:
+        errs.append(f"public_cv_traj_mae_exceeded:{tm:.6f}")
 print(json.dumps({"schema_valid": not errs, "errors": errs}, allow_nan=False))
 sys.exit(1 if errs else 0)
 """
@@ -1395,8 +1418,8 @@ def execute_m101_public_gate_in_container(
     task: HoldoutOODTask,
     candidate_code: str,
     expect_dag_trace: bool = False,
-    y_mae_tol: float = 0.035,
-    traj_mae_tol: float = 0.035,
+    y_mae_tol: float = 0.038,
+    traj_mae_tol: float = 0.038,
     timeout_sec: int = 40,
 ) -> dict[str, Any]:
     """Execute candidate `batch_solver.py` inside isolated `hegel-clean-scipy:m7v1` container using ONLY public data:

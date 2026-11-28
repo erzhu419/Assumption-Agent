@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c0109002c5446e2a0b0a1f73ee0e5e0",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:57:48.333057+00:00",
+  "ended_at_utc": "2026-11-28T08:58:28.532327+00:00",
+  "request_sha256": "59c4afcedf69394cf36aa37d55fc52d7ca233f2ba1474ce6b866096c61d3f525",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20166,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20031,
+    "cached_tokens": 10880,
+    "completion_tokens": 1661
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/b02_graph.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.linalg import lstsq\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef affine(u,v):return lstsq(np.c_[np.ones(len(u)),u],v)[0]\\ndef panel():\\n p=s['panel_a'];u=p['u'];v=p['v']; A=[]\\n for j in range(4):\\n  uu=u[:,j];vv=v[:,j];i,k=np.triu_indices(len(u),1); slope=np.median(((vv[i]-vv[k])/(uu[i]-uu[k])));r=vv-slope*uu;ok=abs(r-np.median(r))<0.01;A.append(affine(uu[ok,None],vv[ok]))\\n p=s['panel_b'];B=affine(p['u'],p['v']);return np.array(A),B\\nA,B=panel();print('A,B',A,B)\\ndef coords(x):\\n z=x*A[:,1]+A[:,0];zi=(x-A[:,0])/A[:,1];return {'x':x,'a':z,'ai':zi,'b':x@B[1:]+B[0],'ab':z@B[1:]+B[0],'aib':zi@B[1:]+B[0]}\\ndef poly(x,d):\\n ix=[j for k in range(d+1) for j in itertools.combinations_with_replacement(range(x.shape[1]),k)];return np.column_stack([np.prod(x[:,j],axis=1) for j in ix]),ix\\np=s['panel_c'];P,ix=poly(p['u'],2)\\nfor k in ['v1','v2']:\\n c=lstsq(P,p[k])[0];print(k,'quadratic coeff',list(zip(ix,c)),'rms',np.sqrt(np.mean((P@c-p[k])**2,axis=0)))\\n# Time models: use projection to identify which common time functions survive truncation.\\nfor n,f,guess in [('two exp',lambda q:np.c_[np.expm1(-q[0]*t),np.expm1(-q[1]*t)],[.6,2]),('exp+linear',lambda q:np.c_[np.expm1(-q[0]*t),t],[1]),('log+exp',lambda q:np.c_[np.log1p(q[0]*t),np.expm1(-q[1]*t)],[1,2]),('log+time-exp',lambda q:np.c_[np.log1p(q[0]*t),t*np.exp(-q[1]*t)],[1,2]),('exp+time-exp',lambda q:np.c_[np.expm1(-q[0]*t),t*np.exp(-q[1]*t)],[1,2]),('log+tanh',lambda q:np.c_[np.log1p(q[0]*t),np.tanh(q[1]*t)],[1,2]),('log+atan',lambda q:np.c_[np.log1p(q[0]*t),np.arctan(q[1]*t)],[1,2]),('log+sin',lambda q:np.c_[np.log1p(q[0]*t),np.sin(q[1]*t)],[1,1])]:\\n def fun(q):\\n  F=f(q);return (F@lstsq(F,T.T)[0]-T.T).ravel()\\n r=least_squares(fun,guess,bounds=(1e-4,15));print(n,r.x,np.sqrt(np.mean(r.fun**2)))\\n# Power and univariate saturation scan, all feature selection on first 56.\\nU,S,V=np.linalg.svd(T[:56],full_matrices=False);Z=np.c_[y,T@V[:2].T]\\nfor key,z in coords(x).items():\\n F,ix=poly(z,3);names=[str(k) for k in ix];Fs=[F];\\n for size in (1,2):\\n  for i,j in ([(i,i) for i in range(4)] if size==1 else itertools.combinations(range(4),2)):\\n   for sign in ([0] if size==1 else [-1,1]):\\n    q=z[:,i]+sign*z[:,j]\\n    for n,g in [('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('atan',np.arctan),('abs',np.abs),('rational',lambda q:q/(1+q*q))]:\\n     Fs.append(g(q)[:,None]);names.append(f'{n}({i},{sign},{j})')\\n F=np.column_stack(Fs);F=F[:,1:];names=names[1:];F-=F[:56].mean(0);F/=np.maximum(np.linalg.norm(F[:56],axis=0),1e-9)\\n for j in range(3):\\n  Y=Z[:,j];Y=Y-Y[:56].mean();r=Y[:56].copy();J=[];out=[]\\n  for k in range(12):\\n   sc=abs(F[:56].T@r);sc[J]=-1;a=np.argmax(sc);J.append(a);c=lstsq(F[:56,J],Y[:56])[0];r=Y[:56]-F[:56,J]@c\\n   if k in (2,4,7,11):out.append(round(np.mean(abs(F[56:,J]@c-Y[56:])),5))\\n  print(key,j,out,[names[i] for i in J[:8]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/b02_graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Raw polynomials → panel-aligned nonlinear coordinates and shared rank-two dynamics; best contiguous-holdout MAEs are 0.0953 for y and 0.1711 at the final horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Predict y solely from the trajectory factors\",\"rejected_reason\":\"Its held-out MAE is at least 0.431, versus 0.0953 from the raw inputs.\"}],\"rationale\":\"The calibration panel is nearly diagonal after outlier removal and the trajectory has two dominant modes. Test whether calibrated coordinate systems admit a compact spatial law and whether explicit time bases can explain the rest at the noise floor.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "64b2cb220a365abc71d471627bed5a812202736437f4bf87fb63118d96b3b8e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42801.09,
+      "usage_known": true,
+      "prompt_tokens": 20031,
+      "cached_tokens": 10880,
+      "completion_tokens": 1661
+    }
+  ]
+}

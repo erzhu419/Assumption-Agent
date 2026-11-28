@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3d45a9af79040fa8c15205ff568128d",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:36.479247+00:00",
+  "ended_at_utc": "2026-11-28T09:00:21.165179+00:00",
+  "request_sha256": "721feecb352c2736ec0ac5689ef1ed4195c9ff7a5f3188af8cf84264c3c9856a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42153,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31081,
+    "cached_tokens": 10880,
+    "completion_tokens": 1916
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/dag6.py <<'PY'\\nimport numpy as np,pickle,itertools as it\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef ls(x,y): return np.linalg.lstsq(x,y,rcond=1e-11)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\nA=s['panel_a']; a=np.array([ls(aff(A['u'][:,i:i+1]),A['v'][:,i]) for i in range(4)]); err=np.linalg.norm(A['v']-A['u']*a[:,1]-a[:,0],axis=1);m=np.argsort(err)[:45]; a=np.array([ls(aff(A['u'][m,i:i+1]),A['v'][m,i]) for i in range(4)])\\nB=s['panel_b'];b=ls(aff(B['u']),B['v']); U,_,V=np.linalg.svd(b[1:]);b[1:]=.88*U@V\\nC=s['panel_c'];u=C['u'];v=C['v1'];w=C['v2'];\\nfunc={'lin':lambda x:x,'sin':np.sin,'tanh':np.tanh,'atan':np.arctan,'rat':lambda x:x/(1+x*x),'erf':__import__('scipy').special.erf,'softsign':lambda x:x/np.sqrt(1+x*x)}\\ndef make(z,ns,p):return np.column_stack([np.ones(len(z))]+[func[n](z*k) for n,k in zip(ns,p)])\\ndef err(p,ns,idx):\\n f=make(u[idx],ns,p);return (f@ls(f,v[idx])-v[idx]).ravel()\\nmodels=[]\\nfor k in [1,2,3]:\\n for ns in it.combinations(func,k):\\n  if k==3 and not ('lin' in ns and 'sin' in ns): continue\\n  pp=least_squares(err,[1.6 if n!='lin' else 1 for n in ns],args=(ns,np.arange(24)),bounds=(.08,8),max_nfev=100).x\\n  er=np.std(err(pp,ns,np.arange(24))); models.append((er,ns,pp))\\nfor er,ns,p in sorted(models,key=lambda x:x[0])[:12]:\\n val=[]\\n for idx in np.array_split(np.arange(24),4):\\n  ii=np.setdiff1d(np.arange(24),idx); q=least_squares(err,p,args=(ns,ii),bounds=(.08,8),max_nfev=60).x; val.extend((make(u[idx],ns,q)@ls(make(u[ii],ns,q),v[ii])-v[idx]).ravel())\\n print('v1',ns,np.round(p,5),er,np.std(val))\\nns=('lin','sin','tanh');p=min([z for z in models if z[1]==ns],key=lambda z:z[0])[2]; va=ls(make(u,ns,p),v)\\nf2=lambda z,k:np.c_[aff(z),np.sqrt(1+(k*z)**2)-1];k=least_squares(lambda p:(f2(u,p[0])@ls(f2(u,p[0]),w)-w).ravel(),[1],bounds=(.2,3)).x[0];wa=ls(f2(u,k),w)\\nprint('v2',k,'coef',wa.T);print('v1 coef',va.T)\\nX=s['train']['x'];Y=np.c_[s['train']['y'],s['train']['traj']];Ainv=lambda x:(x-a[:,0])/a[:,1]; ops={'B':lambda x:aff(x)@b,'I':lambda x:(x-b[0])@np.linalg.inv(b[1:]),'C':lambda x:make(x,ns,p)@va,'D':lambda x:f2(x,k)@wa}\\nG={'x':X,'a':Ainv(X)}\\nfor base,x in list(G.items()):\\n for h,g in ops.items():\\n  G[base+h]=g(x)\\n  for j,fun in ops.items():\\n   if j+h not in ('BI','IB'):G[base+h+j]=fun(g(x))\\n   if h not in 'CD' or j not in 'CD':continue\\n   for l,ff in list(ops.items())[:2]:G[base+h+j+l]=ff(fun(g(x)))\\nfolds=np.array_split(np.random.default_rng(202).permutation(len(X)),6)\\ndef cv(F,reg=None):\\n out=[]\\n for hi in folds:\\n  tr=np.setdiff1d(np.arange(len(F)),hi)\\n  pred=F[hi]@ls(F[tr],Y[tr]) if reg is None else F[np.ix_(hi,tr)]@np.linalg.solve(F[np.ix_(tr,tr)]+reg*np.eye(len(tr)),Y[tr]-Y[tr].mean(0))+Y[tr].mean(0)\\n  out.append(np.mean(abs(pred-Y[hi]),axis=0)[[0,8]])\\n return np.asarray(out)\\nres=[]\\ndef record(name,er):res.append((er.mean(0).sum(),name,er.mean(0),er.max(0)))\\nfor name,z in G.items():\\n if not np.isfinite(z).all():continue\\n for mode in ('linear','diagonal','quadratic','cubic','rbf','matern'):\\n  if mode in ('linear','diagonal','quadratic','cubic'):\\n   fs=aff(z)\\n   if mode=='diagonal': fs=np.c_[fs,z*z,np.tanh(z),np.sin(2*z)]\\n   if mode in ('quadratic','cubic'):\\n    fs=np.column_stack([fs]+[z[:,idx].prod(1) for d in range(2,4 if mode=='cubic' else 3) for idx in it.combinations_with_replacement(range(4),d)])\\n   record((name,mode),cv(fs))\\n  else:\\n   zd=(z-z.mean(0))/np.maximum(.1,z.std(0)); d=cdist(zd,zd)\\n   for l in (1.,2.,4.,8.):\\n    R=d/l; K=np.exp(-R**2/2) if mode=='rbf' else (1+R+R**2/3)*np.exp(-R)\\n    for reg in (.00001,.001,.015):record((name,mode,l,reg),cv(K,reg))\\nfor z in sorted(res,key=lambda q:q[0])[:25]:print(z)\\nfor i in [2,3]:\\n print('target',i,[z for z in sorted(res,key=lambda q:q[i][0])[:3]],[z for z in sorted(res,key=lambda q:q[i][1])[:3]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: parallel linear readouts from panel C -> H2: test serial operator paths and regularized nonlinear readouts; current 16-row held-out raw cubic MAEs are 0.106 for y and 0.064 for final state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the parallel linear panel C readout\",\"rejected_reason\":\"Its final-state MAE was about 0.112 on the previous split, versus 0.064 for the raw cubic baseline.\"}],\"rationale\":\"Panel jackknifes distinguish stable operator laws from saturated fits. Shared campaign folds then test whether serial composition improves both prediction targets, with smooth kernels as a comparison.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "92b5295530da0b1ec8bc15470c4ae7940911a86d9bf84df977bc5bcc67f72b09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49943.38,
+      "usage_known": true,
+      "prompt_tokens": 31081,
+      "cached_tokens": 10880,
+      "completion_tokens": 1916
+    }
+  ]
+}

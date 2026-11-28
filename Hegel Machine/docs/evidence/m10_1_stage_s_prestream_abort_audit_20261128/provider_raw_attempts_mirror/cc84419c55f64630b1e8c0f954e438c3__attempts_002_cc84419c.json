@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc84419c55f64630b1e8c0f954e438c3",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:57:24.079003+00:00",
+  "ended_at_utc": "2026-11-28T08:57:47.894855+00:00",
+  "request_sha256": "0d4a86c6e2c1db862cae8000676d3ab3cde05403016f9ee99b9fe6d08f2d063e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 11900,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16890,
+    "cached_tokens": 10880,
+    "completion_tokens": 876
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference-panel alignment Cauchy IRLS' 2>/dev/null || true; cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef poly(x,d=2):\\n return np.column_stack([np.prod(x[:,i],axis=1) for k in range(d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef fit(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\nif __name__=='__main__':\\n print('time',s['eval_times'],'telemetry',s['telemetry_vec'])\\n for k in ['panel_a','panel_b','panel_c']:\\n  p=s[k]; u=p['u']; y=np.column_stack([a for q,a in p.items() if q!='u']); print(k)\\n  for d in (1,2):\\n   X=poly(u,d); B=fit(X,y); e=y-X@B; h=np.sum(np.linalg.qr(X,mode='reduced')[0]**2,axis=1); print(d,'loo MAE',np.mean(abs(e/(1-h[:,None])),axis=0),'row RMS sorted',np.sort(np.mean(e**2,axis=1)**.5)); print('coef',B if d==1 else np.linalg.norm(B,axis=1))\\n x=s['train']['x']; z=s['train']['traj']; y=s['train']['y']; print('traj sv',np.linalg.svd(z,compute_uv=False)); print('traj means',z.mean(0)); print('traj diff sv',np.linalg.svd(np.diff(z,axis=1),compute_uv=False)); print('y-from-traj',np.mean(abs(y-poly(z,1)@fit(poly(z,1),y)))); print('traj residual per time from rank 2/3',*[np.std(z-np.linalg.svd(z,full_matrices=False)[0][:,:j]@np.diag(np.linalg.svd(z,compute_uv=False)[:j])@np.linalg.svd(z,full_matrices=False)[2][:j],axis=0) for j in [2,3]])\\n for d in (1,2,3):\\n  X=poly(x,d); Y=np.c_[y,z]; B=fit(X[:56],Y[:56]); print('raw poly',d,'heldout MAE',np.mean(abs(X[56:]@B-Y[56:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibration and auxiliary operators → H2 low-rank trajectory and scalar readout; held-out metrics pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel leave-one-row-out errors distinguish low-order operators from outliers or missing nonlinear terms. Trajectory singular values test whether to fit shared temporal modes, while the 56/16 split sets a baseline for both prediction heads.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "69757c387bb5851e8e0a6fcd55d3e4ead7c83d7b170b3fdd9e9acc4b12e035b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26360.82,
+      "usage_known": true,
+      "prompt_tokens": 16890,
+      "cached_tokens": 10880,
+      "completion_tokens": 876
+    }
+  ]
+}

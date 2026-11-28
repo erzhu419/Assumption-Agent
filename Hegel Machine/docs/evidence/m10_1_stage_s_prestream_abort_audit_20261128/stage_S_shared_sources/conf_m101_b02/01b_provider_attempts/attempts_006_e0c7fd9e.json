@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0c7fd9efba94a83b7d150b57aa0e749",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_b02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:59:55.962156+00:00",
+  "ended_at_utc": "2026-11-28T09:00:39.775082+00:00",
+  "request_sha256": "55a72247096dda654e305f1eb85c943447855e884766cc8556f7e872becbcbac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43058,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30182,
+    "cached_tokens": 10880,
+    "completion_tokens": 1947
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/b02_paths.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import lstsq\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef fit(x,y): return lstsq(x,y)[0]\\ndef op(u,v,fn,q0,linear):\\n def base(x,q): return np.c_[aff(x) if linear else np.ones(len(x)),fn(x*q)]\\n def res(q):\\n  a=base(u,q);return (a@fit(a,v)-v).ravel()\\n q=least_squares(res,np.array(q0),bounds=(.1,8),max_nfev=150).x\\n c=fit(base(u,q),v);return lambda x:base(x,q)@c,np.mean(abs(res(q))),q\\np=s['panel_c'];u=p['u'];v=p['v1'];g=lambda z:np.logaddexp(z,-z)-np.log(2)\\nfor n,fn in [('atan',np.arctan),('erf',__import__('scipy').special.erf),('root',lambda z:z/np.sqrt(1+z*z)),('tanh',np.tanh),('asinh',np.arcsinh),('sin',np.sin)]:\\n for lin in (False,True):\\n  _,e,q=op(u,v,fn,[2]*4,lin); print(n,lin,round(e,6),np.round(q,3))\\nC1,_,_=op(u,v,np.arctan,[2]*4,True)\\nC2,_,_=op(u,p['v2'],g,[1.1]*4,True)\\na=s['panel_a'];A=[]\\nfor j in range(4):\\n u=a['u'][:,j];v=a['v'][:,j];i,k=np.triu_indices(len(u),1);m=np.median((v[i]-v[k])/(u[i]-u[k]));e=v-m*u;I=abs(e-np.median(e))<.01;A.append(fit(aff(u[I,None]),v[I]))\\nA=np.array(A);p=s['panel_b'];B=fit(aff(p['u']),p['v']);b=lambda x:aff(x)@B;bi=lambda x:(x-B[0])@np.linalg.inv(B[1:]);\\nx=s['train']['x']; y=s['train']['y'];T=s['train']['traj'];t=s['eval_times'];F=-np.expm1(-t[:,None]*[.4121,1.8165]);Y=np.c_[y,fit(F,T.T).T];Z={'x':x,'a':x*A[:,1]+A[:,0],'ai':(x-A[:,0])/A[:,1]}\\nfor k,z in list(Z.items()): Z[k+'b']=b(z); Z[k+'bi']=bi(z)\\nfor k,z in list(Z.items()):\\n Z[k+'c']=C1(z);Z[k+'d']=C2(z);Z[k+'cb']=b(C1(z));Z[k+'db']=b(C2(z)); Z[k+'+d']=np.c_[z,C2(z)];Z[k+'+c']=np.c_[z,C1(z)]; Z[k+'cd']=np.c_[C1(z),C2(z)]\\nnp.savez('/tmp/b02_paths.npz',**Z,Y=Y,F=F,T=T)\\nfolds=[np.arange(56,72),*np.array_split(np.random.default_rng(34).permutation(72),4)]\\nfor col in (0,1,2):\\n out=[]\\n for name,z in Z.items():\\n  if z.shape[1]!=4: continue\\n  features=[z];names=[f'x{i}' for i in range(4)]\\n  for j in (2,3):\\n   for ix in itertools.combinations_with_replacement(range(4),j): features.append(np.prod(z[:,ix],axis=1)[:,None]);names.append(str(ix))\\n  for i,j in itertools.combinations_with_replacement(range(4),2):\\n   for c in ([0] if i==j else [-1.,-.5,.5,1.]):\\n    w=z[:,i]+c*z[:,j];\\n    for h in (.6,1.,1.6,2.4):\\n     for k,f in [('t',np.tanh),('s',np.sin),('c',np.cos),('a',np.arctan),('r',lambda q:q/(1+q*q)),('g',g)]:\\n      features.append(f(h*w)[:,None]);names.append(f'{k}{h}({i},{c:g},{j})')\\n  for i,j in itertools.product(range(4),repeat=2):\\n   features.append((z[:,i]/(1+z[:,j]**2))[:,None]); names.append(f'quot{i},{j}')\\n  P=np.column_stack(features);ee=[]\\n  for J in folds:\\n   I=np.setdiff1d(np.arange(72),J);tr=P[I];mu=tr.mean(0);tr=tr-mu;scale=np.linalg.norm(tr,axis=0).clip(1e-10);tr/=scale;val=(P[J]-mu)/scale;yy=Y[I,col];ym=yy.mean(); yy=yy-ym;M=[];err=[];r=yy.copy();norm=1\\n   for step in range(14):\\n    sc=abs(tr.T@r)/np.maximum(norm,1e-4);sc[M]=-1;w=np.argmax(sc);M.append(w);D=tr[:,M];c=fit(D,yy);r=yy-D@c;norm=np.sqrt(np.maximum(0,1-np.sum((np.linalg.qr(D)[0].T@tr)**2,axis=0)));err.append(np.mean(abs(val[:,M]@c+ym-Y[J,col])))\\n   ee.append(err)\\n   if J[0]==56: terms=[names[k] for k in M]\\n  e=np.array(ee);j=e.mean(0).argmin();out.append((e.mean(0)[j],e.max(0)[j],name,j+1,terms[:j+1]))\\n print('sparse',col,sorted(out)[:5])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/b02_paths.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine panel-C maps → nonlinear operator paths and sparse downstream laws; exploratory worst-fold MAEs are 0.0630 for y and 0.0865 for final state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the same operator path for both deliverables\",\"rejected_reason\":\"The best exploratory kernels differ by output, so each output needs independent selection.\"}],\"rationale\":\"Panel C's log-cosh model predicts held-out v2 to 0.000145 MAE, so test its composed paths alongside direct and inverse calibration. Select sparse terms inside each fold; if no path yields a stable improvement, retain the kernel baseline for that output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "86b0c30ffbea288daece754197e14af61ad98c8a958116547072620dd0ea43c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49084.11,
+      "usage_known": true,
+      "prompt_tokens": 30182,
+      "cached_tokens": 10880,
+      "completion_tokens": 1947
+    }
+  ]
+}

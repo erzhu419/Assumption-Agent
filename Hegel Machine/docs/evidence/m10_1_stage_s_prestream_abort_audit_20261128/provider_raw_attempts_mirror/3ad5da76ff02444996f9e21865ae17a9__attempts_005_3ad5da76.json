@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ad5da76ff02444996f9e21865ae17a9",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:58:48.746743+00:00",
+  "ended_at_utc": "2026-11-28T08:59:31.179987+00:00",
+  "request_sha256": "1ed56d96a6270d3455652de3ce4ba7b53cd55c323e691de546d40c0c30cf5830",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36137,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27744,
+    "cached_tokens": 10880,
+    "completion_tokens": 1668
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; T=tr['traj']; y=tr['y']; t=s['eval_times']; N=len(x); np.set_printoptions(precision=4,suppress=True,linewidth=145)\\ndef affine(p):\\n u,v=p['u'],p['v']; D=np.c_[np.ones(len(u)),u]; m=np.ones(len(u),bool)\\n for _ in range(4):\\n  w=np.linalg.lstsq(D[m],v[m],rcond=None)[0]; e=np.linalg.norm(D@w-v,axis=1); m=e<4*np.median(e)+1e-9\\n return w\\nA=affine(s['panel_a']); B=affine(s['panel_b']); za=(x-A[0])/np.diag(A[1:]); zb=(x-B[0])@np.linalg.inv(B[1:]); zba=(za-B[0])@np.linalg.inv(B[1:]); zab=(zb-A[0])/np.diag(A[1:]);\\ndef poly(x,d):\\n return np.column_stack([np.prod(x[:,i],axis=1) for k in range(d+1) for i in combinations_with_replacement(range(x.shape[1]),k)])\\ndef timefit(T):\\n def basis(p): return np.c_[-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)]\\n def fun(p):\\n  D=basis(p);return (T@D@np.linalg.pinv(D)-T).ravel()\\n return basis(least_squares(fun,[1.55,.26],bounds=([.7,.05],[3.,.65])).x)\\n\\ndef ridgebranch(x,Y,ii,jj,f,start,kind):\\n D=poly(x,2); L=poly(x,1); R=D[ii]; Z=Y[ii]; QR=np.linalg.pinv(R)\\n if kind=='ridge':\\n  def fun(p):\\n   g=f(L[ii]@p); h=g-R@(QR@g); q=Z-R@(QR@Z); a=h@q/max(h@h,1e-18); return q-a*h\\n  r=least_squares(fun,start,max_nfev=150,bounds=(-6.,6.),gtol=1e-9); G=np.c_[D,f(L@r.x)]\\n elif kind=='outer':\\n  def fun(p):\\n   g=f(D[ii]@p); q=np.c_[np.ones(len(ii)),g]; return q@np.linalg.lstsq(q,Z,rcond=None)[0]-Z\\n  p=np.linalg.lstsq(D[ii],Z,rcond=None)[0]*start; r=least_squares(fun,p,max_nfev=120); G=np.c_[np.ones(len(x)),f(D@r.x)]\\n w=np.linalg.lstsq(G[ii],Z,rcond=None)[0]; return np.mean(abs(G[jj]@w-Y[jj])),np.mean(abs(G[ii]@w-Z)),r.x,w\\nif __name__=='__main__':\\n ii=np.arange(56); jj=np.arange(56,72); D=timefit(T[ii]); F=T@np.linalg.pinv(D.T); print('temporal basis',D,'amplitudes',F.std(0),'rms',np.std(T-F@D.T,axis=0)); targets=np.c_[y,F];\\n for name,z in [('raw',x),('Ainv',za),('Binv',zb),('AinvBinv',zba),('BinvAinv',zab),('AinvBforward',za@B[1:]+B[0])]:\\n  Q=poly(z,2); w=np.linalg.lstsq(Q[ii],targets[ii],rcond=None)[0]; print(name,'polynomial coefficients',w.T)\\n for k,Y in enumerate(targets.T):\\n  D=poly(za,2); p=np.linalg.lstsq(D[ii],Y[ii],rcond=None)[0][1:5]; H=np.zeros((4,4)); w=np.linalg.lstsq(D[ii],Y[ii],rcond=None)[0];\\n  for c,(i,j) in zip(w[5:],combinations_with_replacement(range(4),2)): H[i,j]=H[j,i]=c if i==j else c/2\\n  _,V=np.linalg.eigh(H); starts=[np.r_[b,v] for b in [0,.5] for v in [p/np.linalg.norm(p),*V.T,*np.eye(4)]]\\n  print('TARGET',k)\\n  for fn,f in [('tanh',np.tanh),('sin',np.sin),('atan',np.arctan),('rational',lambda x:x/(1+x*x)),('exp',lambda x:np.exp(np.clip(x,-20,20)))]:\\n   rr=sorted([ridgebranch(za,Y,ii,jj,f,st,'ridge') for st in starts],key=lambda v:v[1]); print(fn,[(round(a,5),round(b,5),c,d[-1]) for a,b,c,d in rr[:2]])\\n  for fn,f in [('tanh',np.tanh),('sin',np.sin),('atan',np.arctan),('rational',lambda x:x/(1+x*x))]:\\n   rr=sorted([ridgebranch(za,Y,ii,jj,f,st,'outer') for st in [.25,.65,1,1.5]],key=lambda v:v[1]); a,b,c,d=rr[0]; print('outer',fn,round(a,5),round(b,5),c[:5],d)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic surrogate → H2 two temporal modes with nonlinear spatial amplitudes; last-16 cubic MAE is 0.0138 for y and 0.0226 at the final horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each trajectory horizon separately\",\"rejected_reason\":\"Two shared modes already reconstruct the observed trajectories to about 0.0043 RMS; spatial prediction is the larger source of error.\"}],\"rationale\":\"Compare an additive nonlinear projection with a nonlinear readout of a quadratic latent variable, using the last 16 rows to test whether either structure improves prediction. Inspect coefficients in calibrated coordinates to identify sparse terms worth testing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "57ee21b842a48d6d90c216202807ca89e5680ad1d98366f9da0e4a39e828b40d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45057.25,
+      "usage_known": true,
+      "prompt_tokens": 27744,
+      "cached_tokens": 10880,
+      "completion_tokens": 1668
+    }
+  ]
+}

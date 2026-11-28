@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fef402170c21422d91ef99196ddbd6ae",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:57:50.662270+00:00",
+  "ended_at_utc": "2026-11-28T08:58:11.640792+00:00",
+  "request_sha256": "ea1555e4f858789c0a7aa4f534657cf9dc65626ef53744971e1c8897a82f9c05",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21792,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20809,
+    "cached_tokens": 5504,
+    "completion_tokens": 741
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 bash -c 'python3 /tmp/probe.py | head -62'; cat >/tmp/timeprobe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/probe.py').read())\\nfrom scipy.optimize import least_squares\\nP=fit(aff(T),y); print('y on traj',P,np.mean(abs(aff(T)@P-y)))\\nfor k in ['panel_b','panel_c']:\\n p=s[k];U=p['u']; D=poly(U,2)\\n for j,V in p.items():\\n  if j=='u':continue\\n  B=fit(D,V); print(k,j,'quadratic coefficients',B,'res',np.std(D@B-V,0));print('resid rms for linear',np.std(aff(U)@fit(aff(U),V)-V,0))\\nfor rank in range(1,5):\\n u,d,v=np.linalg.svd(T,full_matrices=False);print('rank',rank,'MAE by time',np.mean(abs(T-(u[:,:rank]*d[:rank])@v[:rank]),0));print('right singular',v[rank-1])\\nfor typ in ['exp','power','exp2','expt','exp3']:\\n def D(p):\\n  e=[-np.expm1(-a*ts) for a in p];\\n  if typ=='power':return np.array([ts,ts**2,ts**3]).T\\n  if typ=='expt':return np.array(e+[ts]).T\\n  return np.array(e).T\\n n={'exp':1,'power':1,'exp2':2,'expt':1,'exp3':3}[typ];r=least_squares(lambda p:(D(p)@fit(D(p),T.T)-T.T).ravel(),np.linspace(.3,2,n),bounds=(.005,15)); print('time basis',typ,r.x,np.mean(abs(r.fun)),np.std(r.fun))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/timeprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent cubic predictions → test shared trajectory modes and recover panel operators; inverse-calibrated sine cubic gives 0.03353 response MAE and 0.03210 worst-horizon MAE on the 56/16 split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep independent horizon regressions\",\"rejected_reason\":\"The observed trajectories suggest structured time dependence; measuring its rank will determine whether to pool horizons or retain independent fits.\"}],\"rationale\":\"Time-basis residuals will show whether to fit shared modes or input-dependent kinetics; panel coefficient and residual patterns will distinguish exact operators from approximate features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "dcfe66d10002a51581e329e56e758f07ec765246d8cdbe5ec87a4b2b785a7dca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23583.05,
+      "usage_known": true,
+      "prompt_tokens": 20809,
+      "cached_tokens": 5504,
+      "completion_tokens": 741
+    }
+  ]
+}

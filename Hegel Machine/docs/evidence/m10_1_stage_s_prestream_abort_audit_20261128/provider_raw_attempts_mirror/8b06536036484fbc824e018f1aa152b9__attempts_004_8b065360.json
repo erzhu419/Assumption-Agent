@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b06536036484fbc824e018f1aa152b9",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T085707Z_2428717c__stageS__conf_m101_a01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T08:58:12.789251+00:00",
+  "ended_at_utc": "2026-11-28T08:58:47.440758+00:00",
+  "request_sha256": "9eafd9fc7e2949af7718711a69f45a8ca3e5991d62d4a696c99ffd58dea82222",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29014,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24504,
+    "cached_tokens": 10880,
+    "completion_tokens": 1304
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as n\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=4,suppress=True,linewidth=150)\\nx=s['train']['x']; t=s['eval_times']; T=s['train']['traj']; y=s['train']['y']; U,S,V=n.linalg.svd(T,full_matrices=False); Z=T@V[:2].T; d=n.c_[n.ones(len(x)),x,*[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)]]\\nfor target in [y,*Z.T]:\\n w=n.linalg.lstsq(d,target,rcond=None)[0]; H=n.zeros((4,4));\\n for c,(i,j) in zip(w[5:],combinations_with_replacement(range(4),2)): H[i,j]=H[j,i]=c if i==j else c/2\\n print('basic',w[:5], 'hessian',H,'eigs',n.linalg.eigh(H),'resid',n.std(d@w-target))\\nM={};\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u'];D=n.c_[n.ones(len(u)),u];\\n for key,v in p.items():\\n  if key=='u':continue\\n  keep=n.ones(len(u),bool)\\n  for _ in range(4):\\n   w=n.linalg.lstsq(D[keep],v[keep],rcond=None)[0];e=n.linalg.norm(D@w-v,axis=1);keep=e<4*n.median(e)+1e-9\\n  M[k+key]=w\\np=s['panel_c'];u=p['u']; Y=n.c_[p['v1'],p['v2']]; A=n.c_[n.ones(len(u)),u];\\nfor k,f in [('sq',lambda u:u*u),('cos',n.cos),('cos2',lambda u:n.cos(2*u)),('tanh',n.tanh),('sin',n.sin),('sin2',lambda u:n.sin(2*u)),('rollprod',lambda u:u*n.roll(u,-1,axis=1)),('rollsum_sin',lambda u:n.sin(u+n.roll(u,-1,axis=1))),('rollsum_cos',lambda u:n.cos(u+n.roll(u,-1,axis=1)))]:\\n D=n.c_[A,f(u)]; P=D@n.linalg.pinv(D); print('panel C LOO',k,n.mean(abs((P@Y-Y)/(1-n.diag(P))[:,None]),axis=0))\\nfor name,f in [('exps',lambda p:n.c_[-n.expm1(-p[0]*t),-n.expm1(-p[1]*t)]),('exp and t',lambda p:n.c_[-n.expm1(-p[0]*t),t]),('logs',lambda p:n.c_[n.log1p(p[0]*t),n.log1p(p[1]*t)]),('rational',lambda p:n.c_[t/(1+p[0]*t),t/(1+p[1]*t)]),('exp and log',lambda p:n.c_[-n.expm1(-p[0]*t),n.log1p(p[1]*t)]),('exp and sin',lambda p:n.c_[-n.expm1(-p[0]*t),n.sin(p[1]*t)])]:\\n def fun(p):\\n  B=f(p); return (B@n.linalg.lstsq(B,V[:2].T,rcond=None)[0]-V[:2].T).ravel()\\n r=least_squares(fun,[1.,.3],bounds=([.0001,.0001],[50,50])); B=f(r.x); E=(T@B@n.linalg.pinv(B)-T); print('time',name,r.x,n.linalg.norm(r.fun),n.sqrt(n.mean(E**2)),n.sqrt(n.mean(E**2,axis=0)))\\nprint('noise centered',n.mean(T-Z@V[:2],axis=0),n.std(T-Z@V[:2],axis=0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unconstrained polynomial responses -> H2 two shared temporal modes and structured spatial forcing; last-16 cubic MAE is 0.0138 for y and 0.0226 at the final horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit eight independent horizon models\",\"rejected_reason\":\"Only two trajectory singular values clearly exceed the noise floor.\"}],\"rationale\":\"Test which two-mode temporal laws reach the measured noise floor and inspect spatial Hessians and panel-C leave-one-out errors to identify candidate features for held-out prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "be1d08b1d7025dfd10f6237d214778320a4fe1ae3b02377e776617b85dcce1a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37233.72,
+      "usage_known": true,
+      "prompt_tokens": 24504,
+      "cached_tokens": 10880,
+      "completion_tokens": 1304
+    }
+  ]
+}

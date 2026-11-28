@@ -1,0 +1,189 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a04_batch_00_4206af7bfec5",
+    "source_hash": "4206af7bfec55dbc27e1be1b7df282014a3870fccbf6c437a3b87b490cfbe3ed",
+    "parent_ids": [],
+    "source_episode_id": "conf_m101_a04",
+    "task_id": "conf_m101_a04_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check_solver.py",
+        "archived_relpath": "producers/tmp__check_solver.py",
+        "bytes": 1192,
+        "sha256": "b293ccad14bbed7c8b01fb86c552a066e64f5d7f4efc722d4ee97fe35f6e127b"
+      },
+      {
+        "container_path": "/tmp/compact.py",
+        "archived_relpath": "producers/tmp__compact.py",
+        "bytes": 1858,
+        "sha256": "c6ec1b8f0e3f8a1296a24f57bc0ddda5ed3058daa3009a63fa082b464cfd44c2"
+      },
+      {
+        "container_path": "/tmp/cut.py",
+        "archived_relpath": "producers/tmp__cut.py",
+        "bytes": 2206,
+        "sha256": "e8c7044ebaf2d89f3a18bccdac8aafabdf652506d23a35e6e9d325d9cefdca65"
+      },
+      {
+        "container_path": "/tmp/graph.py",
+        "archived_relpath": "producers/tmp__graph.py",
+        "bytes": 2170,
+        "sha256": "3859063aedfc9e65960eaa8efcecc42aee34759af297dc5580b91d6c36fd3b60"
+      },
+      {
+        "container_path": "/tmp/links.py",
+        "archived_relpath": "producers/tmp__links.py",
+        "bytes": 2737,
+        "sha256": "0877e29959294094976ffef9c6a69a3f9a8c4ea5dc4f1c093cbba927fb059f22"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1662,
+        "sha256": "8173d3e51d4c1164ba6e3363de79e4dbbe9ded664ae0c927844d426ab75b1fbb"
+      },
+      {
+        "container_path": "/tmp/refine.py",
+        "archived_relpath": "producers/tmp__refine.py",
+        "bytes": 2513,
+        "sha256": "a6ea6cc0e2be02f827378a273e426f7f2a72254bbdaf6d1acf02e1644baf8a2c"
+      },
+      {
+        "container_path": "/tmp/saturator.py",
+        "archived_relpath": "producers/tmp__saturator.py",
+        "bytes": 1419,
+        "sha256": "730a6394bc00b6b099927d4f5ef8e2ffc6ff8b850031e7638843e78f0bf93de1"
+      },
+      {
+        "container_path": "/tmp/structure.py",
+        "archived_relpath": "producers/tmp__structure.py",
+        "bytes": 2059,
+        "sha256": "3907c2932d13ec10f7b5beca9376648bd94685b67e09eb167ad33c4695404cde"
+      },
+      {
+        "container_path": "/tmp/timeprobe.py",
+        "archived_relpath": "producers/tmp__timeprobe.py",
+        "bytes": 1064,
+        "sha256": "79c008cc9ef2d20d3c2998c9658e49e38cafe8d5d55f9b64106d348d1d494301"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=6,suppress=True,linewidth=140)\nfor k,v in s.items():\n for q,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(k,q,a.shape,'range',a.min(),a.max(),'mean',a.mean(axis=0),'std',a.std(axis=0)); print(a[:4] if a.ndim>1 or a.size>8 else a)\nPY",
+      "cd /holdout_task; cat validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment robust affine outliers' 2>/dev/null || true; cat >/tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\nfrom scipy.linalg import svdvals\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=map(tr.get,['x','y','traj']); ts=s['eval_times']; np.set_printoptions(precision=5,suppress=True,linewidth=120)\ndef fit(X,Y):return np.linalg.lstsq(X,Y,rcond=None)[0]\ndef aff(X):return np.colu",
+      "OPENBLAS_NUM_THREADS=1 bash -c 'python3 /tmp/probe.py | head -62'; cat >/tmp/timeprobe.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/probe.py').read())\nfrom scipy.optimize import least_squares\nP=fit(aff(T),y); print('y on traj',P,np.mean(abs(aff(T)@P-y)))\nfor k in ['panel_b','panel_c']:\n p=s[k];U=p['u']; D=poly(U,2)\n for j,V in p.items():\n  if j=='u':continue\n  B=fit(D,V); print(k,j,'quadratic coefficients',B,'res',np.std(D@B-V,0));print('resid rms for linear',np.std(aff(U)@fit(aff(U),V)-V,0))\nfor rank in range(1,5):\n u,d,v=np.linalg.svd(T,full_",
+      "cat >/tmp/structure.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/probe.py').read())\nfrom scipy.optimize import least_squares, minimize_scalar\np=s['panel_a']; u=p['u']; v=p['v']; slope=np.array([np.median((v[:,i,None]-v[:,i])[(abs(u[:,i,None]-u[:,i])>.2)]/(u[:,i,None]-u[:,i])[(abs(u[:,i,None]-u[:,i])>.2)]) for i in range(4)]); b0=np.median(v-u*slope,0)\nmask=np.max(abs(v-u*slope-b0),1)<.01\ncoef=np.array([fit(aff(u[mask,i,None]),v[mask,i]) for i in range(4)]); z=(x-coef[:,0])/coef[:,1]\nq=fit(aff(s['panel_b']['u']),s['panel_b']['v']); B=q[1:]; b=q[",
+      "cat >/tmp/graph.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/structure.py').read())\nfrom scipy.optimize import minimize_scalar\nfrom itertools import combinations_with_replacement\n\ndef link(u,k,m):\n if m=='tanh':return np.tanh(k*u)\n if m=='softplus':return np.logaddexp(-k*u,k*u)\n if m=='sin':return np.sin(k*u)\n if m=='gauss':return np.exp(-(k*u)**2)\n if m=='rational':return 1/(1+(k*u)**2)\n if m=='odd_rational':return u/(1+(k*u)**2)\n if m=='atan':return np.arctan(k*u)\n\ndef panel(u,v,m,idx):\n def design(k,X):return aff(np.c_[X,link(X,k,m)])\n def f",
+      "cat >/tmp/links.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/graph.py').read())\nfrom scipy.optimize import least_squares\nF={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'erf':__import__('scipy.special',fromlist=['erf']).erf,'asinh':np.arcsinh,'softsign':lambda a:a/np.sqrt(1+a*a),'softplus':lambda a:np.logaddexp(0,a),'silu':lambda a:a/(1+np.exp(-a)),'gelu':lambda a:a*__import__('scipy.special',fromlist=['ndtr']).ndtr(a)}\nops2=[]\nfor V in (R,S):\n results=[]\n for nm,f in F.items():\n  for mode in ('pure','plus'):\n   def feat(W,p):\n    H=f(W*p[:4]+p",
+      "cat >/tmp/cut.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/links.py').read())\nfrom sklearn.linear_model import Ridge,OrthogonalMatchingPursuit\nfrom sklearn.preprocessing import PolynomialFeatures\nfrom scipy.special import erf\nH,J=[app(z,op) for op in ops2]; W=np.c_[H,J]; print('panel1 row space',np.linalg.svd(ops2[0][-1][5:])[1]); print('z bounds',z.min(0),z.max(0));\nopts={}\nfor nm,L in [('HJ',W),('zHJ',np.c_[z,W]),('intrinsic',np.c_[np.arcsinh(z*ops2[0][2][:4]+ops2[0][2][4:]),np.logaddexp(0,z*2.2)]),('basic',np.c_[z,np.sin(1.5*z),np.tanh(2*z),",
+      "cat >/tmp/refine.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/links.py').read())\nfrom itertools import product\nfrom scipy.special import erf\nfrom sklearn.linear_model import Ridge\nfrom scipy.linalg import orthogonal_procrustes\n\ndef af(X):return np.c_[np.ones(len(X)),X]\nbase={'tanh':np.tanh,'atan':np.arctan,'erf':erf,'asinh':np.arcsinh,'softsign':lambda x:x/np.sqrt(1+x*x),'sin':np.sin,'rational':lambda x:x/(1+x*x),'algebraic':lambda x:x/np.cbrt(1+abs(x)**3),'log':lambda x:np.sign(x)*np.log1p(abs(x))}\nresults=[]\nfor nm,f in base.items():\n for mod",
+      "sed -i \"s/app(z,ops2\\[0\\])/af(np.c_[z,np.arcsinh(z*ops2[0][2][:4]+ops2[0][2][4:])])@ops2[0][-1]/\" /tmp/refine.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py | tail -47\ncat >/tmp/saturator.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/graph.py').read())\nfns={\n 'abs_power':(lambda x,p:x/(1+p[0]*abs(x)**p[1])**p[2],[1.,1.,1.],[.01,.35,.1],[12,4,5]),\n 'abs_power_lin':(lambda x,p:x/(1+p[0]*abs(x)**p[1])**p[2]+p[3]*x,[1.,1.,1.,0],[.01,.35,.1,-5],[12,4,5,5]),\n 'exp_abs':(lambda x,p:np.sign(x)*(-np.expm1(-p[0]*abs(x)**p[1]))+p[2]*x,[2.,1.,0],[.05,.35,",
+      "cat >/tmp/compact.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/graph.py').read())\nfrom scipy.linalg import orthogonal_procrustes\nfrom sklearn.model_selection import KFold\nh=lambda u:np.sign(u)*(-np.expm1(-1.8*np.abs(u)))\nj=lambda u:np.logaddexp(0,2.2*u)\ndef op(f,V):\n W=fit(aff(f(U)),V); O,_=orthogonal_procrustes(f(U)-f(U).mean(0),V-V.mean(0)); q=np.sum(((f(U)-f(U).mean(0))@O)*(V-V.mean(0)))/np.sum((f(U)-f(U).mean(0))**2); print('panel errors and scale',np.std(aff(f(U))@W-V),np.std((f(U)-f(U).mean(0))@O*q+V.mean(0)-V),q); return lambda z:(f(z)-f",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated dual-panel response and two-mode trajectory prediction.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(x, y):\n    return np.linalg.lstsq(x, y, rcond=None)[0]\n\n\ndef _calibrate(panel, x):\n    u, v = panel['u'], panel['v']\n    du = u[:, None, :] - u[None, :, :]\n    dv = v[:, None, :] - v[None, :, :]\n    slope = np.array([np.median(dv[:, :, j][abs(du[:, :, j]) > .2] /\n                               du[:, :, j][abs(du[:, :, j]) > .2])\n              "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__links.py",
+      "primary_producer_container_path": "/tmp/links.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2866,
+        "sha256": "8b236e0fe388372686fdd598f8d185fd795c85b11a025a1a62e7377a096b032e",
+        "content_addressed_ref": "content_addressed_blobs/8b236e0fe388372686fdd598f8d185fd795c85b11a025a1a62e7377a096b032e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "scores",
+      "link",
+      "fit",
+      "aff",
+      "poly",
+      "af",
+      "panel"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4206af7bfec55dbc27e1be1b7df282014a3870fccbf6c437a3b87b490cfbe3ed",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated dual-panel response and two-mode trajectory prediction.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4206af7bfec55dbc27e1be1b7df282014a3870fccbf6c437a3b87b490cfbe3ed",
+        "expected_candidate_sha256": "4206af7bfec55dbc27e1be1b7df282014a3870fccbf6c437a3b87b490cfbe3ed",
+        "computed_candidate_sha256": "4206af7bfec55dbc27e1be1b7df282014a3870fccbf6c437a3b87b490cfbe3ed",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2866
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4206af7b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "scores",
+        "code": "def scores(e):\n    return np.array([e[0].mean(), e[1].mean(axis=0).max()])"
+      },
+      {
+        "name": "link",
+        "code": "def link(u, k, m):\n    if m == 'tanh':\n        return np.tanh(k * u)\n    if m == 'softplus':\n        return np.logaddexp(-k * u, k * u)\n    if m == 'sin':\n        return np.sin(k * u)\n    if m == 'gauss':\n        return np.exp(-(k * u) ** 2)\n    if m == 'rational':\n        return 1 / (1 + (k * u) ** 2)\n    if m == 'odd_rational':\n        return u / (1 + (k * u) ** 2)\n    if m == 'atan':\n        return np.arctan(k * u)"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(X, Y):\n    return np.linalg.lstsq(X, Y, rcond=None)[0]"
+      },
+      {
+        "name": "aff",
+        "code": "def aff(X):\n    return np.column_stack([np.ones(len(X)), X])"
+      },
+      {
+        "name": "poly",
+        "code": "def poly(X, d):\n    from itertools import combinations_with_replacement\n    return np.column_stack([np.ones(len(X))] + [np.prod(X[:, j], axis=1) for i in range(1, d + 1) for j in combinations_with_replacement(range(X.shape[1]), i)])"
+      },
+      {
+        "name": "af",
+        "code": "def af(X):\n    return np.c_[np.ones(len(X)), X]"
+      },
+      {
+        "name": "panel",
+        "code": "def panel(u, v, m, idx):\n    from scipy.optimize import minimize_scalar\n\n    def design(k, X):\n        return aff(np.c_[X, link(X, k, m)])\n\n    def f(k):\n        d = design(k, u[idx])\n        return np.mean((d @ fit(d, v[idx]) - v[idx]) ** 2)\n    r = minimize_scalar(f, bounds=(0.1, 4.5), method='bounded')\n    k = r.x\n    w = fit(design(k, u[idx]), v[idx])\n    return (k, w, lambda X: design(k, X) @ w)"
+      }
+    ]
+  }
+}
