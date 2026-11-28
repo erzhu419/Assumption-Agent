@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9483af7756014a04b21001018e2fbaa4",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:35.995218+00:00",
+  "ended_at_utc": "2026-11-28T09:36:06.769926+00:00",
+  "request_sha256": "ae667d25d3cf118329d5d8a0c5689f69456c801d57d51088afd94f8b17fcf7ad",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62916,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32515,
+    "cached_tokens": 9344,
+    "completion_tokens": 1198
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import hyp2f1\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\n\\na = s['panel_a']; u, v = a['u'], a['v']; ids = np.arange(len(u))\\n# Evaluate forward residuals at each omitted row's known reference coordinates.\\n# Use the fitted inverse only on omitted inliers; the three corrupted outputs\\n# are not measurements of the forward law.\\naffine_errors, inverse_errors = [], []\\nfor i in ids:\\n    eligible = ids[ids != i]\\n    keep = eligible.copy()\\n    design = m._affine(u)\\n    for _ in range(5):\\n        w = m._fit(design[keep], v[keep])\\n        r = np.linalg.norm(design @ w - v, axis=1)\\n        keep = eligible[r[eligible] < 5 * np.median(r[eligible])]\\n    pred = np.array([m._calibration_basis(u[i:i+1], j)[0] @ m._fit(m._calibration_basis(u[keep], j), v[keep, j]) for j in range(u.shape[1])])\\n    if np.linalg.norm(pred - v[i]) > 1:\\n        continue\\n    panel = {k: values[eligible] for k, values in a.items()}\\n    est = m._calibrate(panel, v[i:i+1])[0]\\n    affine = np.linalg.solve(w[1:].T, v[i] - w[0])\\n    affine_errors.append(np.linalg.norm(affine - u[i]))\\n    inverse_errors.append(np.linalg.norm(est - u[i]))\\nprint(f'Panel A omitted inlier rows: {len(inverse_errors)}; inverse median error affine={np.median(affine_errors):.8f}, delivered={np.median(inverse_errors):.8f}; delivered max={max(inverse_errors):.8f}')\\nassert len(inverse_errors) == 45 and max(inverse_errors) < .002\\n\\nc = s['panel_c']; u, v = c['u'], c['v1']; ids = np.arange(len(u))\\nold, new = [], []\\nfor i in ids:\\n    keep = ids != i\\n    panel = {'u': u[keep], 'v1': v[keep]}\\n    new.append(m._c1_coordinates(panel, u[i:i+1])[0])\\n    def design(q, p):\\n        scale, power = np.exp(p)\\n        return m._affine(q * hyp2f1(.5, power, 1.5, -scale*q*q))\\n    def residual(p):\\n        g = design(u[keep], p)\\n        return (g @ m._fit(g, v[keep]) - v[keep]).ravel()\\n    p = least_squares(residual, [0., 0.], bounds=(-4., 4.)).x\\n    old.append((design(u[i:i+1], p) @ m._fit(design(u[keep], p), v[keep]))[0])\\nr0 = np.mean((np.asarray(old)-v)**2)**.5\\nr1 = np.mean((np.asarray(new)-v)**2)**.5\\nprint(f'Panel C1 leave-one-row-out RMSE: integral-only={r0:.8f}, delivered={r1:.8f}')\\nassert r1 < .5*r0\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the cyclic inverse and C1 integral-plus-linear transform passed 11 held-out splits, with worst scalar MAE 0.007112, trajectory MAE 0.008049, and timestamp MAE 0.011992; test the two calibration stages directly on omitted reference rows.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the public schema and stress checks\",\"rejected_reason\":\"The exact saved artifact already passed both; repeating them would not test whether either calibration stage generalizes on its own.\"}],\"rationale\":\"The outstanding evidence concerns the calibration stages, not the interface. Test the saved solver functions on omitted reference rows to check whether the cyclic inverse recovers known coordinates and whether the added C1 term improves panel predictions without access to the omitted row.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ad413e9e26c08abaec8141d6b1ba5966fac5edb39f0c270e9c9abdde064a9f31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33421.76,
+      "usage_known": true,
+      "prompt_tokens": 32515,
+      "cached_tokens": 9344,
+      "completion_tokens": 1198
+    }
+  ]
+}

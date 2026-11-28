@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d4312acc293b4a76a9bfd6b77eaa198a",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:46.799268+00:00",
+  "ended_at_utc": "2026-11-28T09:31:28.403901+00:00",
+  "request_sha256": "50151998b91426f7370c968cf22858869d84e627c06127da6cdcfb3bcf0f7924",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74008,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41678,
+    "cached_tokens": 9344,
+    "completion_tokens": 1694
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate inputs, recover the panel-B warp, and predict sparse readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    design, target = _linear(panel['u']), panel['v']\\n    initial = _fit(design, target)\\n    robust = least_squares(\\n        lambda b: (design @ b.reshape(initial.shape) - target).ravel(),\\n        initial.ravel(), loss='cauchy', f_scale=.02,\\n    ).x.reshape(initial.shape)\\n    residual = np.linalg.norm(design @ robust - target, axis=1)\\n    keep = residual <= 10 * np.median(residual)\\n    return _fit(design[keep], target[keep])\\n\\n\\ndef _warp(x, parameters):\\n    strength, scale = parameters\\n    return _linear(x - strength * erf(scale * x))\\n\\n\\ndef _panel_operator(panel):\\n    u, v = panel['u'], panel['v']\\n\\n    def residual(parameters):\\n        design = _warp(u, parameters)\\n        return (design @ _fit(design, v) - v).ravel()\\n\\n    parameters = least_squares(residual, [.68, 1.45],\\n                               bounds=([.02, .15], [4., 4.])).x\\n    return parameters, _fit(_warp(u, parameters), v)\\n\\n\\ndef _readouts(b):\\n    b0, b1, b2, b3 = b.T\\n    scalar = np.column_stack((_linear(b), b0 * b2, b1 * b3))\\n    trajectory = np.column_stack((scalar, b0 * b3))\\n    return scalar, trajectory\\n\\n\\ndef _time_basis(times, trajectory):\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ _fit(b, trajectory.T) - trajectory.T).ravel()\\n\\n    rates = least_squares(residual, [1.6, .3],\\n                          bounds=([.58, .01], [5., 1.2])).x\\n    return np.linalg.qr(basis(rates), mode='reduced')[0]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    calibration = _calibration(study['panel_a'])\\n    parameters, mixing = _panel_operator(study['panel_b'])\\n\\n    def design(raw):\\n        calibrated = np.linalg.solve(calibration[1:].T,\\n                                     (raw - calibration[0]).T).T\\n        return _readouts(_warp(calibrated, parameters) @ mixing)\\n\\n    scalar, trajectory = design(train['x'])\\n    scalar_test, trajectory_test = design(study['test']['x'])\\n    time_basis = _time_basis(study['eval_times'], train['traj'])\\n    y_hat = scalar_test @ _fit(scalar, train['y'])\\n    state_pred = trajectory_test @ _fit(trajectory, train['traj'] @ time_basis) @ time_basis.T\\n    final = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return dict(y_hat=y_hat, state_pred=state_pred, diagnostics_vec=diagnostics)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cv_b04.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntrain = s['train']\\np = m.solve_batch(s)\\ny, st = p['y_hat'], p['state_pred']\\nassert y.shape == (36,) and st.shape == (36, 8)\\nnp.testing.assert_allclose(p['diagnostics_vec'], [y.mean(), y.std(), st[:, -1].mean(), st[:, -1].std()])\\nassert all(np.isfinite(a).all() for a in p.values())\\n\\ndef metrics(i, j):\\n    out = m.solve_batch(dict(s, train={k: train[k][i] for k in ('x', 'y', 'traj')}, test={'x': train['x'][j]}))\\n    yerr = np.abs(out['y_hat'] - train['y'][j]); terr = np.abs(out['state_pred'] - train['traj'][j])\\n    return np.array([yerr.mean(), terr.mean(), terr[:, -1].mean()])\\nrequired = metrics(np.arange(52), np.arange(52, 72))\\nassert required[0] <= .038\\nrng = np.random.default_rng(4802)\\nfresh = [metrics(a[:52], a[52:]) for a in (rng.permutation(72) for _ in range(24))]\\nprint('Prescribed [scalar, trajectory, final] MAE:', required)\\nprint('Worst of 24 fresh shuffled splits:', np.max(fresh, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated quadratic–tanh baseline → H2: tied-erf panel B with sparse output-specific readouts; the probe’s worst coordinate-edge MAEs were 0.02920 for y and 0.01164 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the panel warp jointly with the outputs\",\n      \"rejected_reason\": \"It slightly lowered prescribed-split scalar error but did not improve the worst scalar slice.\"\n    }\n  ],\n  \"rationale\": \"Promote the sparse panel-B model because it materially reduces edge errors. Verify the exact artifact in isolated Python on the prescribed split, the prior edge slices, and fresh shuffled splits, and check the diagnostics against the returned predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "11b0e7ad69349dbd9d520c0a0a88b2876cdbe8f2796e16dbef6c6fc59f069748",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44248.51,
+      "usage_known": true,
+      "prompt_tokens": 41678,
+      "cached_tokens": 9344,
+      "completion_tokens": 1694
+    }
+  ]
+}

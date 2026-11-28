@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f0be646c9c647e49eea472dc7b97149",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:18.722658+00:00",
+  "ended_at_utc": "2026-11-28T09:22:07.577888+00:00",
+  "request_sha256": "75b65f887b724e89aad144810f8d3c6664093fd8b11cd1343b9b0895a37e101c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51162,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32173,
+    "cached_tokens": 9344,
+    "completion_tokens": 2021
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/kernel_probe.py <<'PY'\\nfrom features import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cholesky,solve_triangular\\nfrom scipy.optimize import minimize\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/compose.py').read().split(\\\"print('temporal residual'\\\")[0])\\nF=pol(x,2); print('quadratic y eigensystem:',flush=True)\\nq=ls(F[:52],y[:52]); Q=np.zeros((4,4));\\nfor z,(a,b) in zip(q[5:],combinations_with_replacement(range(4),2)):Q[a,b]=Q[b,a]=z if a==b else z/2\\nprint(np.linalg.eigh(Q), 'lin',q[1:5],flush=True)\\nU={};\\nfor k in ['x','a','ai','xb','ab','aib']:\\n w=coords[k]; U[k]=w; U[k+'c']=c(w);U[k+'d']=d(w);U[k+'dc']=c(d(w));U[k+'cd']=d(c(w));\\n\\ndef kernels():\\n K={}\\n def add(n,G):\\n  G=G-F@ls(F,G); z=np.mean(G**2)*G.shape[1];\\n  if z>1e-16: K[n]=G@G.T/z\\n for nm,W in U.items():\\n  W=W/np.std(W,axis=0)\\n  S=cdist(W,W,'sqeuclidean'); dot=W@W.T/4\\n  for L in [.7,1.5,3.]:\\n   R=np.sqrt(5*S)/L;K[nm+'m'+str(L)]=(1+R+R**2/3)*np.exp(-R)\\n   if nm=='x':K[nm+'e'+str(L)]=np.exp(-.5*S/L**2)\\n  add(nm+'nonlin',np.c_[W,np.sin(2*W),np.cos(2*W),np.tanh(2*W)])\\n  add(nm+'cross',np.einsum('ni,nj->nij',W,x).reshape(-1,16))\\n  for j in [3,4]: K[nm+'p'+str(j)]=dot**j\\n # Axis and quadratic-model projection kernels complement isotropic 4D distances.\\n for m in [1.,2.,4.]:\\n  R=np.abs(x[:,None,:]-x[None,:,:])*np.sqrt(5)/m\\n  d0=(1+R+R**2/3)*np.exp(-R); K['add'+str(m)]=d0.mean(2);K['pairs'+str(m)]=np.mean([d0[:,:,a]*d0[:,:,b] for a,b in combinations_with_replacement(range(4),2) if a<b],axis=0)\\n return K\\nK=kernels();\\ndef pred(i,j,kk,target,mean=F):\\n a=mean[i]; b=mean[j]; A=kk[np.ix_(i,i)]; L=cholesky(A,lower=True); wt=solve_triangular(L,np.c_[a,target[i]],lower=True); c0=ls(wt[:,:-1],wt[:,-1]); return b@c0+kk[np.ix_(j,i)]@solve_triangular(L.T,wt[:,-1]-wt[:,:-1]@c0,lower=False)\\ndef metric(k,target,mean=F):\\n e=[np.mean(abs(pred(i,j,k,target,mean)-target[j])) for i,j in splits];return np.array([e[0],np.median(e[1:]),max(e[1:])])\\nfor t in range(2):\\n yy=Y[:,t]; tbl=[]\\n for name,k in K.items():\\n  for rr in [1e-4,.003,.03,.3]:\\n   a=metric(k+rr*np.eye(n),yy);tbl.append((a,name,rr))\\n print('target',t,flush=True)\\n for a,nm,r in sorted(tbl,key=lambda a:a[0][0]+a[0][1]+.3*a[0][2])[:14]:print(nm,r,a,flush=True)\\n for names in [['xm1.5','xm3.0','add1.0','pairs1.0','xp3','xp4'],['xm1.5','xm3.0','add1.0','pairs1.0','xp3','xp4','adcm1.5','adcp3','abcm1.5','abcp3','abcdm1.5','abcdp3'],list(K)[::4]]:\\n  ks=np.array([K[a] for a in names]+[np.eye(n)]); errs=[]; weights=[]\\n  for i,j in splits:\\n   q,r=np.linalg.qr(F[i],mode='complete'); N=q[:,F.shape[1]:]; yy0=N.T@yy[i]; Ks=N.T@ks[:,i][:,:,i]@N\\n   def loss(p):\\n    w=np.exp(p); C=np.einsum('k,kij->ij',w,Ks); LL=cholesky(C,lower=True); l=solve_triangular(LL,yy0,lower=True); ci=solve_triangular(LL,np.eye(len(i)-F.shape[1]),lower=True); alpha=ci.T@l\\n    return np.log(np.diag(LL)).sum()+.5*l@l, .5*w*np.einsum('ij,kij->k',ci.T@ci-np.outer(alpha,alpha),Ks)\\n   p=minimize(loss,np.r_[np.full(len(names),-4.),-8.],jac=True,bounds=[(-18,4)]*len(ks),method='L-BFGS-B',options={'maxiter':120}).x;w=np.exp(p);e=abs(pred(i,j,np.einsum('k,kij->ij',w,ks),yy)-yy[j]);errs.append(np.mean(e));weights.append(w)\\n  print('learned',len(names),errs[0],np.median(errs[1:]),max(errs[1:]),sorted(zip(np.round(weights[0],5),names+['noise']),reverse=True)[:8],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (single composed-feature ridge) -> H2 (structured covariance over raw and panel-derived coordinates); best screened composition gives 52/20 y MAE 0.05733 and repeated-split worst MAE 0.08456.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Commit to the lowest 52/20 error among composed feature sets\",\"rejected_reason\":\"Its repeated-split error is substantially worse, and it still misses the required threshold.\"}],\"rationale\":\"Test whether training-only covariance fitting can combine panel interactions with a quadratic trend. Inspect the quadratic eigensystem in parallel: a dominant projection would motivate a compact nonlinear readout instead of a larger feature search.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "24f0f7884c78b6f48e25ffaabcce24de640158d4c24a5c15018211a7a438368c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51438.89,
+      "usage_known": true,
+      "prompt_tokens": 32173,
+      "cached_tokens": 9344,
+      "completion_tokens": 2021
+    }
+  ]
+}

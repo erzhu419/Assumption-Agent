@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcc4e32d1eb54410a507a6e9bf5b16b8",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:53.881953+00:00",
+  "ended_at_utc": "2026-11-28T09:33:32.315948+00:00",
+  "request_sha256": "c0e33e997a60ac1da292244279022aa9d173f5003c17d1d598307bd1b0a94827",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50600,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28659,
+    "cached_tokens": 9344,
+    "completion_tokens": 1555
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'batch_solver.py')\\nb = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(b)\\nwith open('public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; y = tr['y']; x = tr['x']; panel = s['panel_a']\\nprint('Recorded fields:', sorted(s), 'training fields:', sorted(tr))\\np = s['panel_b']; mixer = b._fit(b._affine(p['u']), p['v'])\\ndef loo(d, target):\\n    h = np.sum(d * np.linalg.pinv(d).T, axis=1)\\n    return np.sqrt(np.mean(((d @ b._fit(d, target) - target)/(1-h[:, None]))**2))\\nprint('Panel B affine LOO RMS', loo(b._affine(p['u']), p['v']))\\nc = b._calibration(panel)\\nforward = lambda u: c[:4] + c[4:8]*u + c[8]*np.roll(u,-1,axis=1) + c[9]*u*np.roll(u,-1,axis=1) + c[10]*u**3\\nfor tag, data in [('train', x), ('test', s['test']['x'])]:\\n    u = b._invert(data, c)\\n    err = np.max(np.abs(forward(u)-data))\\n    print(tag, 'inverse max residual', err, 'latent max norm', np.linalg.norm(u,axis=1).max())\\n    assert err < 1e-9\\nu = b._invert(x,c); z = b._affine(u) @ mixer\\np0,p1,p2,p3 = z.T\\nbase = b._label_design(z); pair = p0*p2+p1*p3\\nforms = {'base':base, 'split pair':np.c_[b._affine(z),p0*p2,p1*p3], 'cross difference':np.c_[base,p0*p2-p1*p3], 'quadratic':np.c_[b._affine(z),*[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)]], 'triple':np.c_[base,p0*p1*p2,p0*p1*p3,p0*p2*p3,p1*p2*p3]}\\nfor direction, h in [('group',p0+p1-p2-p3),('opposed 02',p0-p2),('opposed 13',p1-p3),('neighbors',p0-p1+p2-p3)]:\\n    for scale in (.25,1.,4.):\\n        forms[f'rational {direction} {scale}'] = np.c_[base,pair/(1+scale*h*h)]\\npu,pv=panel['u'],panel['v']; da=b._affine(pu); keep=np.ones(len(pu),bool)\\nfor _ in range(3):\\n    r=np.linalg.norm(da@b._fit(da[keep],pv[keep])-pv,axis=1); keep=r<3*np.median(r)\\na=b._fit(da[keep],pv[keep]); za=b._affine((x-a[0])@np.linalg.inv(a[1:]))@mixer\\nprint('Panel A matched-inlier affine LOO RMS',loo(da[keep],pv[keep]))\\ndef score(d,target,t,v):\\n    return np.mean(np.abs(d[v] @ b._fit(d[t],target[t])-target[v]))\\nidx=np.arange(len(x)); folds={'52/20':idx[52:], 'tail norm':np.argsort(np.linalg.norm(u,axis=1))[-16:], 'edge of calibration':np.argsort(np.min(np.linalg.norm(u[:,None]-pu[None,keep],axis=2),axis=1))[-16:]}\\nfor name,v in folds.items():\\n    t=np.setdiff1d(idx,v)\\n    inner=np.array_split(np.random.default_rng(219).permutation(t),4)\\n    choice=min(forms,key=lambda k:np.mean([score(forms[k], y, np.setdiff1d(t,q),q) for q in inner]))\\n    out=b._state_readout(b._affine(z)[t],tr['traj'][t],b._affine(z)[v],s['eval_times'])\\n    worst=np.mean(np.abs(out-tr['traj'][v]),axis=0).max()\\n    exact=score(base,y,t,v)\\n    print(f'{name}: scalar={exact:.6f}, nested challenger={choice} {score(forms[choice],y,t,v):.6f}, affine calibration scalar={score(b._label_design(za),y,t,v):.6f}, worst state horizon={worst:.6f}')\\n    assert max(exact,worst)<.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic cubic calibration and affine mixing → shared pair-product scalar readout and two-rate trajectory; the verified solver’s worst scalar fold MAE is 0.005918 and worst trajectory horizon MAE is 0.005573.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, drift-equation, or cohort classification checks\",\n      \"rejected_reason\": \"The public contract provides continuous regression measurements and no relay modes, drift observations, classification labels, or batch identifiers.\"\n    }\n  ],\n  \"rationale\": \"Compare affine and cyclic calibration on real held-out readouts to test whether the calibration improvement matters downstream. Select algebraic challengers inside each training fold and test them on the prescribed and extrapolation slices; change the solver only if a challenger fixes a material error. Check inverse closure on the actual test inputs to catch a failure not covered by prior training holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "35e900a85c26ef468e4451747f1bf7fa2d7339030ab5897763e1952d7a0a7b5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41055.85,
+      "usage_known": true,
+      "prompt_tokens": 28659,
+      "cached_tokens": 9344,
+      "completion_tokens": 1555
+    }
+  ]
+}

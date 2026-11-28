@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2f2ec9488e04a7e924a0452f21ba52a",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:04:21.731591+00:00",
+  "ended_at_utc": "2026-11-28T10:05:08.616357+00:00",
+  "request_sha256": "d4cdbe3d6d321f6de55d52d5994ea0ab75207a1a6ce7a9701b0f2e800a7a6d24",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 60405,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35084,
+    "cached_tokens": 9344,
+    "completion_tokens": 2074
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout_probe.py <<'PY'\\nfrom merged_probe import *\\nfrom scipy.special import erf\\nfrom sklearn.linear_model import MultiTaskLasso\\nfrom sklearn.model_selection import KFold\\nfrom itertools import combinations\\nU=S['panel_b']['u']; V=S['panel_b']['v'];\\ndef bench(fun,initial,lb,ub):\\n def res(t):\\n  ff=np.c_[ones(U),fun(U,t)]; return (ff@ls(ff,V)-V).ravel()\\n z=least_squares(res,initial,bounds=(lb,ub),max_nfev=150); return np.std(z.fun), z.x\\nbest=[]\\nfor name,g in {'tanh':lambda x,k:np.tanh(k*x),'rat':lambda x,k:x/(1+k*x*x),'exp':lambda x,k:x*np.exp(-k*x*x),'sin':lambda x,k:np.sin(k*x),'erf':lambda x,k:erf(k*x),'sig':lambda x,k:x/(1+k*abs(x)),'sqrt':lambda x,k:x/np.sqrt(1+k*x*x),'asinh':lambda x,k:np.arcsinh(k*x),'atan':lambda x,k:np.arctan(k*x),'abs':lambda x,k:x*abs(x)**k,'cub':lambda x,k:x**3}.items():\\n for nm,h in {'lin':lambda x:x,'cub':lambda x:x**3,'abs':lambda x:x*abs(x)}.items():\\n  for nm2,q in {'none':lambda x:0,'square':lambda x:x*x,'cub':lambda x:x**3,'abs':lambda x:x*abs(x)}.items():\\n   if nm2==nm: continue\\n   f=lambda x,t,g=g,h=h,q=q:h(x)+t[0]*g(x,t[1])+t[2]*q(x)\\n   out=min([bench(f,[a,k,0],[-10,.12,-10],[10,10,10]) for a in [-.75,.75] for k in [1.,2.5]],key=lambda r:r[0]); best.append((*out,name,nm,nm2,f))\\nprint('B BEST',[(r[0],r[1].round(5),r[2:5]) for r in sorted(best,key=lambda r:r[0])[:10]])\\ne,p,*_,fn=min(best,key=lambda r:r[0]); M=ls(np.c_[ones(U),fn(U,p)],V); b1=lambda x:np.c_[ones(x),fn(x,p)]@M\\nb0=b_fit(S['panel_b']); c,d=c_fit(S['panel_c']); x=S['train']['x']; a=a_fit(S['panel_a']); u=a_inv(x,a)[0]; Y=np.c_[S['train']['y'],S['train']['traj']]; N=len(x)\\nsplits=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=17).split(x)); I=np.eye(N)\\ndef cv(F,k=1,reg=.001):\\n E=[]\\n for i,j in splits:\\n  f=(F-F[i].mean(0))/np.maximum(1e-7,F[i].std(0)); G=f@f[i].T/F.shape[1]; K=(1+G)**k\\n  e=np.mean(abs(K[j]@np.linalg.solve(K[i]+reg*np.eye(len(i)),Y[i])-Y[j]),axis=0); E.append([e[0],e[1:].mean(),e[-1]])\\n E=np.array(E); return np.round(np.r_[E[0,:2],E.max(0)],5)\\nfor bn,b in [('old',b0),('new',b1)]:\\n P,Q,R=b(u),c(u),d(u); print(bn,'ranges',[(np.round(F.std(0),3),np.round(F.min(0),2),np.round(F.max(0),2)) for F in [u,P,Q,R]])\\n B={'u':u,'b':P,'c':Q,'d':R,'x':x}; F=B.copy()\\n for tag,z in B.items():\\n  for key,fun in [('b',b),('c',c),('d',d)]:\\n   if tag!='u': F[key+tag]=fun(z)\\n G=np.column_stack(list(F.values())); names=list(F)\\n opts=[]\\n for l in range(1,4):\\n  for sub in combinations(names,l):\\n   z=np.column_stack([F[s] for s in sub]); score=cv(z,1,1e-6); opts.append((max(score[2:4]),sub,score))\\n print(bn,'LINEAR BEST',sorted(opts,key=lambda r:r[0])[:11]);\\n for g in [(k,) for k in names]+[('u','b','c','d','bd','cb','db','cd','dc','bc'),('b','cb','db'),('u','b','cb','db'),('b','c','d','cb','db'),('b','c','d','cb','db','bd','bc')]:\\n  z=np.column_stack([F[s] for s in g]); vals=[(cv(z,k,r),k,r) for k in [1,2,3] for r in [1e-5,.0003,.003]]; print(bn,g,min(vals,key=lambda v:max(v[0][2:4])))\\n # Sparse supervised readout selected inside each fold.\\n for lam in [.0003,.001,.003,.006,.012]:\\n  E=[]; az=[]\\n  for i,j in splits:\\n   f=(G-G[i].mean(0))/np.maximum(1e-7,G[i].std(0)); m=MultiTaskLasso(alpha=lam,max_iter=5000,tol=1e-4).fit(f[i],Y[i][:,[0,4,8]]); ids=np.linalg.norm(m.coef_,axis=0)>1e-7; A=np.c_[ones(f),f[:,ids]]; err=np.mean(abs(A[j]@ls(A[i],Y[i])-Y[j]),axis=0); E.append([err[0],err[1:].mean()]); az.append(ids.sum())\\n  print(bn,'sparse',lam,np.round(E[0],4),np.round(np.max(E,axis=0),4),az)\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/readout_probe.py > /tmp/readout_probe.log && grep -E 'BEST|ranges|sparse|cb.*db' /tmp/readout_probe.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: cross-panel compositions improve on additive calibration → H2: isolate a compact joint readout and improve panel B calibration; the current composed kernel’s worst tested split has y MAE 0.0618 and trajectory MAE 0.0471.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the broad composed kernel\",\"rejected_reason\":\"It misses both thresholds on the worst tested splits; the next comparison tests whether a smaller set of compositions generalizes better.\"}],\"rationale\":\"Score compact compositions on the exact public split and shuffled folds. Fit B’s transform from calibration rows alone, and select sparse supervised features within each training fold. If a smaller readout improves both targets, use it in the merged node.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6a7ad461f7cddb9da5d5eb65381c58856f5f3ae413aea14e437135c8915add00",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52240.62,
+      "usage_known": true,
+      "prompt_tokens": 35084,
+      "cached_tokens": 9344,
+      "completion_tokens": 2074
+    }
+  ]
+}

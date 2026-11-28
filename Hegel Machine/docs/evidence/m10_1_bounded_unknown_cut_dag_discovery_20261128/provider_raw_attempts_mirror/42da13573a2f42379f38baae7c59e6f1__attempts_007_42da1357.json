@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42da13573a2f42379f38baae7c59e6f1",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:59.916140+00:00",
+  "ended_at_utc": "2026-11-28T09:14:37.981122+00:00",
+  "request_sha256": "c3cddd92fdae98396c127828f3fe7dc8e65e35c63b7a3625b1535b532bac398d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57001,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34988,
+    "cached_tokens": 10880,
+    "completion_tokens": 1643
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares,minimize_scalar\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as base\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\ndef fit(g,y): return np.linalg.lstsq(g,y,rcond=None)[0]\\ndef design(*x): return np.column_stack((np.ones(len(x[0])),*x))\\ndef profile(u,v,phi,bounds):\\n def err(a):\\n  g=phi(u,a);return np.sum((g@fit(g,v)-v)**2)\\n r=minimize_scalar(err,bounds=bounds,method='bounded',options={'xatol':1e-12});g=phi(u,r.x);return r.x,fit(g,v),np.sqrt(r.fun/v.size)\\ndef operators(s,kind='sqrt_rat'):\\n b=s['panel_b'];g=design(b['u']); bb=fit(g,b['v']); pan=s['panel_c']; u,v,w=[pan[k] for k in ('u','v1','v2')];\\n odd=lambda x,a:design(np.sign(x)*(-np.expm1(-a*abs(x))))\\n even={'sqrt_rat':lambda x,a:design(x,x*x/np.sqrt(1+a*x*x)), 'sqrt':lambda x,a:design(x,np.sqrt(1+a*x*x)-1), 'quad':lambda x,a:design(x,x*x)}[kind]\\n a,bc,e=profile(u,v,odd,(.1,5));q,bd,h=profile(u,w,even,(.0001,2));return (lambda x:design(x)@bb),(lambda x:odd(x,a)@bc),(lambda x:even(x,q)@bd),(a,e,q,h)\\nx=s['train']['x'];y=s['train']['y'];z=s['train']['traj'];Y=np.c_[y,z]; n=len(x); i=np.arange(n); rng=np.random.RandomState(228); radial=np.argsort(np.linalg.norm(x,axis=1))[-15:];folds=[(i[:52],i[52:])]+[(np.setdiff1d(i,j),j) for j in np.array_split(rng.permutation(n),5)]+[(np.setdiff1d(i,radial),radial)]\\ndef assess(g,lam=.0003, target=Y, inv=lambda p:p):\\n ee=[]\\n for tr,va in folds:\\n  p=np.repeat(lam,g.shape[1]);p[0]=0; b=np.linalg.solve(g[tr].T@g[tr]+np.diag(p),g[tr].T@target[tr]); e=np.abs(inv(g[va]@b)-Y[va]);ee.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()]);\\n e=np.array(ee);return np.array([e[0],e[1:6].mean(0),e[1:6].max(0),e[-1]])\\nif __name__=='__main__':\\n for k in ['panel_a','panel_b']:\\n  d=s[k];g=design(d['u']);e=np.linalg.norm(d['v']-g@fit(g,d['v']),axis=1);print(k,np.sort(e),flush=True)\\n print('range y, z, times, summary',y.min(),y.max(),z.min(),z.max(),s['eval_times'],[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]);print('baseline metrics',assess(base._features(s,x)))\\n for k in ('sqrt_rat','sqrt','quad'):\\n  B,C,D,p=operators(s,k);f=B(x); c=C(f);d=D(f);m=(f[:,:,None]*c[:,None,:]).reshape(n,16);g=design(f,c,d,m);print(k,p,assess(g))\\n B,C,D,p=operators(s);f=B(x);c=C(f);d=D(f);m=(f[:,:,None]*c[:,None,:]).reshape(n,16);g=design(f,c,d,m); coef=fit(g[:52],Y[:52]); print('coef y, state first, last',coef[:,[0,1,-1]]); e=y-g@coef[:,0];print('y training residual rms',np.std(e[:52]),'corr y/pred',np.corrcoef([e,y,g@coef[:,0]])); print('radial train test',np.sort(np.linalg.norm(x,axis=1))[-17:],np.sort(np.linalg.norm(s['test']['x'],axis=1))[-12:]);\\n for width in (1.05,1.2,1.5,2,3,5):\\n  if width<=max(abs(y)):continue\\n  T=Y.copy();T[:,0]=np.arctanh(y/width)*width\\n  def inv(p):p[:,0]=width*np.tanh(p[:,0]/width);return p\\n  print('link tanh',width,assess(g,.0003,T,inv)[:,0]);\\n for width in (max(abs(y))*1.02,1.3,1.7,2,3):\\n  T=Y.copy();T[:,0]=np.arcsin(y/width)*width\\n  def inv(p):p[:,0]=width*np.sin(p[:,0]/width);return p\\n  print('link sine',width,assess(g,.0003,T,inv)[:,0]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 flexible panel approximations → H2 compact saturation operators with a separately tested scalar readout; the baseline gives prescribed y MAE 0.02276 and high-amplitude y MAE 0.04933.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Immediately replace the baseline panel maps\",\n      \"rejected_reason\": \"The signed exponential fits panel C better, but the change should also hold up on the prescribed split, high-amplitude rows, and terminal-state prediction.\"\n    }\n  ],\n  \"rationale\": \"Compare the compact maps and the existing baseline on the same splits. Test whether a bounded scalar link reduces the high-amplitude error, and check whether that stress slice overlaps the amplitudes of the actual test inputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "16570f59310fb4d404518004e39189f602e2ce25190baea26961c68c706627e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43356.03,
+      "usage_known": true,
+      "prompt_tokens": 34988,
+      "cached_tokens": 10880,
+      "completion_tokens": 1643
+    }
+  ]
+}

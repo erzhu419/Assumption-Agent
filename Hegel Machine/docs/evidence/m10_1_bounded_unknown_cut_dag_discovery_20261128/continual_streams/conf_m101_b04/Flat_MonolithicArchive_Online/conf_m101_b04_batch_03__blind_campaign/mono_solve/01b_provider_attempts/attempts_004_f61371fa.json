@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f61371fa36554ab496ff623921bcd30a",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:30.144575+00:00",
+  "ended_at_utc": "2026-11-28T09:27:09.931314+00:00",
+  "request_sha256": "302d386ce943ac27f1998f403fba5be6e10ac34d9f3f6e3bccdc40da6e596189",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32469,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22946,
+    "cached_tokens": 9344,
+    "completion_tokens": 1710
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators03.py <<'PY'\\nimport numpy as np,itertools,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef quad(x):return np.c_[aff(x),*[x[:,j]*x[:,k] for j,k in itertools.combinations_with_replacement(range(4),2)]]\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef proj(u,v,fn,base,share):\\n def des(x,k):return np.c_[base(x),fn(x*k)]\\n def r(k):\\n  a=des(u,k);return (a@fit(a,v)-v).ravel()\\n out=min((least_squares(r,[k]*(1 if share else 4),bounds=(.25,5.5),max_nfev=140) for k in (0.7,1.3,2,3,4.7)),key=lambda z:np.mean(z.fun**2))\\n a=des(u,out.x);w=fit(a,v);h=np.sum(np.linalg.qr(a,mode='reduced')[0]**2,1);e=(a@w-v)/(1-h[:,None]);return np.mean(e**2)**.5,out.x,w,lambda x:des(x,out.x)@w\\n\\ndef panels(verbose=False):\\n u,v=(S['panel_a'][k] for k in ('u','v')); keep=np.arange(len(u))\\n for it in range(4):\\n  d=np.array([fit(aff(u[keep,j:j+1]),v[keep,j]) for j in range(4)]).T\\n  e=np.linalg.norm(d[0]+u*d[1]-v,axis=1);keep=np.argsort(e)[:38] if it==0 else np.flatnonzero(e<8*np.median(e))\\n ops=[lambda x:d[0]+x*d[1]]\\n for pn,j,fns,bases in [('panel_b','v',[np.sin,np.tanh],[aff]),('panel_c','v1',[np.sin,np.tanh],[aff]),('panel_c','v2',[np.cos],[aff,quad])]:\\n  u,v=S[pn]['u'],S[pn][j]; fits=[]\\n  for fn,base,share in itertools.product(fns,bases,[True,False]):\\n   p=proj(u,v,fn,base,share);fits.append(p)\\n   if verbose:print(pn,j,fn.__name__,base.__name__,share,round(p[0],7),np.round(p[1],5))\\n  p=min(fits,key=lambda z:z[0]);ops.append(p[-1])\\n  if verbose: print('best coeffs',np.round(p[2],4))\\n return ops\\n\\ndef relax(tr,t):\\n def basis(r):return -np.expm1(-t[:,None]*r)\\n def r(k):\\n  a=basis(k);return (a@fit(a,tr.T)-tr.T).ravel()\\n rr=least_squares(r,[1.8,.41],bounds=([.7,.05],[4,.65])).x\\n B=np.linalg.qr(basis(rr))[0];return tr@B,B\\n\\ndef coords(x):\\n A,B,C,D=panels();ops=[B,C,D]; names=['B','C','D']; zz={'X':x,'A':A(x)}\\n for src in ['X','A']:\\n  for n,f in zip(names,ops):\\n   nt=src+n;zz[nt]=f(zz[src])\\n   for m,g in zip(names,ops):zz[nt+m]=g(zz[nt]);\\n return zz\\n\\ndef gp(x,xt,p,pt,y,alpha=.002,l=.3):\\n k=np.exp(-l*cdist(x,x,'sqeuclidean'));kt=np.exp(-l*cdist(xt,x,'sqeuclidean'));cf=cho_factor(k+alpha*np.eye(len(k)));v=cho_solve(cf,y);a=cho_solve(cf,p);w=fit(p.T@a,p.T@v);return pt@w+kt@(v-a@w)\\nif __name__=='__main__':\\n panels(True)\\n x=S['train']['x'];y=S['train']['y'];tr=S['train']['traj'];t=S['eval_times']; zz=coords(x); rng=np.random.default_rng(43); splits=[np.arange(72),*[rng.permutation(72) for _ in range(5)]]; scores=[]\\n for name,z in zz.items():\\n  for typ in ('aff','quad','gpraw','gp'):\\n   rec=[]\\n   for ix in splits:\\n    a,b=ix[:52],ix[52:];Y,B=relax(tr[a],t); target=np.c_[y[a],Y]; p=(aff if typ=='aff' else quad)(z)\\n    if typ.startswith('gp'):\\n     xx=x if typ=='gpraw' else z;pred=gp(xx[a],xx[b],p[a],p[b],target)\\n    else: pred=p[b]@fit(p[a],target)\\n    rec.append([np.abs(pred[:,0]-y[b]).mean(),np.abs(pred[:,1:]@B.T-tr[b]).mean()])\\n   scores.append((name,typ,np.array(rec)))\\n for col in (0,1):\\n  print('leaderboard',col)\\n  for nm,ty,a in sorted(scores,key=lambda o:o[2][:,col].mean())[:14]: print(nm,ty,np.round(a[:,col],4),round(a[:,col].mean(),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators03.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine auxiliary operators → H2 nonlinear operators with robust diagonal calibration and two-mode relaxation; trajectory reconstruction RMSE is 0.00455, while inherited forecast MAEs are 0.05040 for y and 0.07321 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine basis can represent both auxiliary panel operators.\",\"empirical_witness\":\"Panel B leave-one-out RMSE drops from 0.20072 to 0.02330 with tanh terms; panel C v2 drops from 0.11517 to 0.00092 with quadratic and cosine terms.\",\"causal_blanket_diagnosis\":\"An affine approximation discards reproducible panel structure, but its effect on the downstream observables is not yet established.\",\"sublated_pivot\":\"Fit compact nonlinear panel laws and compare candidate compositions on training-only splits.\",\"risk_kind\":\"operator_basis_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Profile panel frequencies against their own measured outputs, then test whether the recovered operators predict either readout better than raw-coordinate models. The low temporal reconstruction error points to amplitude forecasting as the primary trajectory bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f3688dc63e20df7c8a5105bf9bfb22a642ab40ff92e1a9a30682c960499d1510",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45072.46,
+      "usage_known": true,
+      "prompt_tokens": 22946,
+      "cached_tokens": 9344,
+      "completion_tokens": 1710
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a02_batch_06_d19ba06af3ac",
+    "source_hash": "d19ba06af3ac6005192a0b589b0df2566dabe3fc21e38fb6edd0eb56f45dedf8",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_a02_batch_06__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/dag_c_only.py",
+        "archived_relpath": "producers/tmp__dag_c_only.py",
+        "bytes": 1292,
+        "sha256": "2752519953e455f766640ea98105e92071885c1154802f1427128eacc0e0c44e"
+      },
+      {
+        "container_path": "/tmp/dag_finish.py",
+        "archived_relpath": "producers/tmp__dag_finish.py",
+        "bytes": 2768,
+        "sha256": "df7decef9560eb48743d587315ae0220d1aa6896ec2ea66ab8e5620c7966a1da"
+      },
+      {
+        "container_path": "/tmp/dag_modes.py",
+        "archived_relpath": "producers/tmp__dag_modes.py",
+        "bytes": 3103,
+        "sha256": "1a3024a1f9ee20345c586770592c3f8d826d53da7c415bad2f46e06d7cd23590"
+      },
+      {
+        "container_path": "/tmp/dag_probe.py",
+        "archived_relpath": "producers/tmp__dag_probe.py",
+        "bytes": 2217,
+        "sha256": "c398f6620de67a98267cfa7dfadd4874145b5f592d59ea0f5523d1ac53557024"
+      },
+      {
+        "container_path": "/tmp/dag_resid.py",
+        "archived_relpath": "producers/tmp__dag_resid.py",
+        "bytes": 3077,
+        "sha256": "8dcce5b8a01890321f45f187ba5051487ff0d8a166acc4b627a554d7972da0b7"
+      },
+      {
+        "container_path": "/tmp/dag_sink_probe.py",
+        "archived_relpath": "producers/tmp__dag_sink_probe.py",
+        "bytes": 2229,
+        "sha256": "7ac4b41a54653a4f91b2901aa334c997f9d7fa950c2331025c0f402498879190"
+      },
+      {
+        "container_path": "/tmp/dag_structure.py",
+        "archived_relpath": "producers/tmp__dag_structure.py",
+        "bytes": 2591,
+        "sha256": "ebe7d97dce1b8f1f9a45493d725cb53809c3d60614f0890775aafc448396e519"
+      },
+      {
+        "container_path": "/tmp/dag_temporal.py",
+        "archived_relpath": "producers/tmp__dag_temporal.py",
+        "bytes": 2394,
+        "sha256": "1227a807d61285cbb63e6f7ccb6b1dcf65284f57319766d3655864b63957273b"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a02_batch_00_solver.py",
+        "bytes": 2398,
+        "sha256": "875f678e6174901bfd45d8b57a2c9a7bda5d66903f070a515c8ecc7389010fac"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json public_asset_index.json _frozen_nodes/node_00.py test_dag_candidate.py validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(x,k='',depth=0):\n if isinstance(x,dict):\n  for a,b in x.items(): show(b,k+'/'+str(a),depth+1)\n elif isinstance(x,np.ndarray):\n  print(k,x.shape,x.dtype,repr(x[:3] if x.ndim else x)[:450])\n elif isinstance(x,(list,tuple)):\n  print(k,type(x).__name__,len(x));\n  for i,y in enumerate(x[:2]): show(y,k+'/'+str(i),depth+1)\n else: print(k,repr(x)[:250])\nsho",
+      "cd /holdout_task && cat > /tmp/dag_probe.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom itertools import combinations_with_replacement\nfrom scipy.linalg import svd\nfrom scipy.optimize import minimize_scalar\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nm=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); z=m['run_node']({'__input__':s})['z_tr']; a,b,c=[s['panel_'+k] for k in 'abc']; u=c['u']; v=np.column_stack((c['v1'],c['v2'])); y=s['train']['y']; t=s['eval_times']; tr=s['train']['traj']; x=s['train']",
+      "cat > /tmp/dag_sink_probe.py <<'PY'\nimport runpy,pickle,numpy as np\nfrom scipy.optimize import minimize_scalar\nfrom itertools import combinations\nnp.set_printoptions(precision=4,suppress=True,linewidth=160)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':s})['z_tr']; c=s['panel_c']; u=c['u']; y=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']; tel=s['telemetry_vec']; Y=np.column_stack((y,tr));\ndef stack(*a):return np.column_stack(a)\ndef one(x):return np.ones(len(x))\ndef ls(a,b):",
+      "cat > /tmp/dag_structure.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\nL=stack(one(z),z); ZQ=stack(L,Q)\nprint('linear/pure quadratic fit coefficients by time (and y)',ls(ZQ,Y))\nprint('y vs final residual and observed',np.corrcoef((Y-ZQ@ls(ZQ,Y)).T)[0]); print('PCA residual singular values',np.linalg.svd(Y-ZQ@ls(ZQ,Y),compute_uv=False)); print('time fits',V[0]);\nfor name,fn in [('log',lambda k:np.log1p(k*t)),('exp',lam",
+      "cat > /tmp/dag_resid.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nx=s['train']['x']; m=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); pa,pb=s['panel_a'],s['panel_b']; co,se=m['_fit_a'](pa['u'],pa['v']); ref=m['_invert_a'](x,co,se); kb,cb=m['_fit_b'](pb['u'],pb['v']); print('keys',s.keys(), 'panel C',c.keys(), 'A residual sorted',np.sort(np.linalg.norm(stack(*[m['_a_design'](pa['u'],j)@co[:,j] for j in range(4)])-pa['v'],axis=1))); prin",
+      "cat /holdout_task/_frozen_nodes/node_00.py; sed -n '48,150p' /holdout_task/test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling variable projection' 2>&1 | head -25; cat > /tmp/dag_temporal.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\nfrom itertools import combinations_with_replacement, combinations\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nfrom scipy.stats import spearmanr\nnp.set_printoptions(",
+      "sed -n '65,155p' /holdout_task/test_dag_candidate.py; cat > /tmp/dag_modes.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\nm=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); pa=s['panel_a']; co,se=m['_fit_a'](pa['u'],pa['v']); ref=m['_invert_a'](s['train']['x'],co,se); raw=s['train']['x']; n=len(y); ii=np.arange(n); splits=[ii>=52]+[ii%5==i for i in",
+      "cd /holdout_task; sed -n '1,65p' test_dag_candidate.py; sed '/^k=minimize_scalar/,$d' /tmp/dag_sink_probe.py > /tmp/dag_c_only.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/dag_c_only.py; python3 - <<'PY'\nfrom pathlib import Path\nf=Path('_frozen_nodes/node_00.py').read_text(); core=f[f.index('def _affine'):f.index('def _b_design')]\nPath('node_01.py').write_text('''\"\"\"Fit a shared nonlinear response for the endpoint and trajectory.\"\"\"\nfrom itertools import combinations_with_replacement\nimport numpy as np\n\n'''+core+'''def _basis(x, k, family):\n    if family == 'sin':\n        h = np.sin(k*x)\n    elif f",
+      "cat > /tmp/dag_finish.py <<'PY'\nimport itertools,pickle,runpy,numpy as np\nfrom pathlib import Path\nfrom scipy.linalg import solve\np=Path('/holdout_task/node_01.py'); m=runpy.run_path(str(p)); enc=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; c,seed=m['_fit_a'](a['u'],a['v']); r=m['_invert_a'](s['train']['x'],c,seed); z=enc['run_node']({'__input__':s})['z_tr']; Y=np.column_stack((s['train']['y'],s['train']['traj'])); t=s['eval_times']; scale=s['telemetry_vec'][0]; L=m['_affine'](np.column_stack(("
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__dag_modes.py",
+      "primary_producer_container_path": "/tmp/dag_modes.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 3625,
+        "sha256": "bc4191265402a17f209d8484b30a022f05c14b0760ac8b1db603aaad165a97de",
+        "content_addressed_ref": "content_addressed_blobs/bc4191265402a17f209d8484b30a022f05c14b0760ac8b1db603aaad165a97de.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "stack",
+      "one",
+      "ls",
+      "press",
+      "t1",
+      "t2",
+      "q",
+      "lin"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d19ba06af3ac6005192a0b589b0df2566dabe3fc21e38fb6edd0eb56f45dedf8",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "cat > /tmp/dag_finish.py <<'PY'\nimport itertools,pickle,runpy,numpy as np\nfrom pathlib import Path\nfrom scipy.linalg import solve\np=Path('/holdout_task/node_01.py'); m=runpy.run_path(str(p)); enc=runpy.run_path('/holdout_task/_frozen_nodes/",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d19ba06af3ac6005192a0b589b0df2566dabe3fc21e38fb6edd0eb56f45dedf8",
+        "expected_candidate_sha256": "d19ba06af3ac6005192a0b589b0df2566dabe3fc21e38fb6edd0eb56f45dedf8",
+        "computed_candidate_sha256": "d19ba06af3ac6005192a0b589b0df2566dabe3fc21e38fb6edd0eb56f45dedf8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 3625
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_d19ba06a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "stack",
+        "code": "def stack(*a):\n    return np.column_stack(a)"
+      },
+      {
+        "name": "one",
+        "code": "def one(x):\n    return np.ones(len(x))"
+      },
+      {
+        "name": "ls",
+        "code": "def ls(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]"
+      },
+      {
+        "name": "press",
+        "code": "def press(a, b):\n    (q, r) = np.linalg.qr(a)\n    return np.mean(np.abs((b - q @ (q.T @ b)) / (1 - (q * q).sum(1)[:, None])))"
+      },
+      {
+        "name": "t1",
+        "code": "def t1(x, k, lin):\n    return stack(one(x), *([x] if lin else []), np.tanh(k * x))"
+      },
+      {
+        "name": "t2",
+        "code": "def t2(x):\n    return stack(one(x), x, x * x)"
+      },
+      {
+        "name": "q",
+        "code": "def q(x):\n    from itertools import combinations_with_replacement\n    return stack(*[x[:, i] * x[:, j] for (i, j) in combinations_with_replacement(range(x.shape[1]), 2)])"
+      },
+      {
+        "name": "lin",
+        "code": "def lin(x):\n    return stack(one(x), x)"
+      }
+    ]
+  }
+}

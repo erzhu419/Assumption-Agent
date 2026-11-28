@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50a682e6c3d34c288f27e4f53327ba57",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:39.601574+00:00",
+  "ended_at_utc": "2026-11-28T09:21:04.932750+00:00",
+  "request_sha256": "27afbada7bc9280cc954ca457fe9f643001ccb3b8c9c5bb18c1f1389ed5cd798",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40975,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26453,
+    "cached_tokens": 9344,
+    "completion_tokens": 855
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nencode = runpy.run_path(root + 'node_00.py')['run_node']\\npredict = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nt = s['train']; x = t['x']; n = len(x)\\ndef evaluate(idx, panel=None):\\n    keep = np.ones(n, dtype=bool); keep[idx] = False\\n    train = {k: t[k][keep] for k in ('x', 'y', 'traj')}\\n    train['summary'] = np.array([train['y'].mean(), train['y'].std(), train['traj'][:, -1].mean(), train['traj'][:, -1].std()])\\n    study = dict(s, train=train, test={'x': x[idx]})\\n    if panel is not None:\\n        study['panel_b'] = panel\\n    inputs = {'__input__': study}; inputs['node_00'] = encode(inputs)\\n    out = predict(inputs)\\n    return [np.abs(out['y_hat']-t['y'][idx]).mean(), np.abs(out['state_pred']-t['traj'][idx]).mean()]\\nslices = {f'block_{i}': ind for i, ind in enumerate(np.array_split(np.arange(n), 4))}\\nfor j in range(x.shape[1]):\\n    order = np.argsort(x[:, j]); slices[f'x{j}_low'] = order[:18]; slices[f'x{j}_high'] = order[-18:]\\nslices['largest_norm'] = np.argsort(np.linalg.norm(x, axis=1))[-18:]\\nresults = {k: evaluate(idx) for k, idx in slices.items()}\\nfor k, v in results.items(): print(k, 'y_mae=%.6f traj_mae=%.6f' % tuple(v))\\np = s['panel_b']; m = len(p['u']); idx = np.arange(n-20,n)\\nresults_jk = np.array([evaluate(idx, {k: v[np.arange(m)!=i] for k,v in p.items()}) for i in range(m)])\\nprint('panel B refit jackknife worst (y, traj):', results_jk.max(axis=0))\\nprint('stress slices worst (y, traj):', np.array(list(results.values())).max(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine mixer → shared coordinatewise harmonic mixer after robust alignment; verified public MAE is 0.012105 for labels and 0.007747 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public test passed. Coordinate-tail holdouts test whether that split hid extrapolation errors, and refitting after each panel B row deletion tests sensitivity to individual calibration rows. Revisit the mixer only if either check exposes a material loss of margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b1ab9a0b4f3752fa686a216e2f3c1baa73684145c5e38810f61967d9b65456ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25292.05,
+      "usage_known": true,
+      "prompt_tokens": 26453,
+      "cached_tokens": 9344,
+      "completion_tokens": 855
+    }
+  ]
+}

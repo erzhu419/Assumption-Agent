@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3bdbd6165fe341b09c9c99056af5cee6",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__dag_edit_extract_module__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign__extract_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:08.994815+00:00",
+  "ended_at_utc": "2026-11-28T09:37:55.043066+00:00",
+  "request_sha256": "4a0de80a80a91b9b48b493ae9260fc58c3cf8db202d8b7bf5dba3a143ec10a64",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 56848,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33049,
+    "cached_tokens": 5504,
+    "completion_tokens": 1864
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout_probe.py <<'PY'\\nexec(open('/tmp/dag_probe.py').read().split(\\\"if '--setup'\\\")[0])\\nfrom scipy.linalg import qr\\nfrom itertools import combinations\\nH=-np.expm1(-t[:,None]*np.array([.42,1.8])); A=T@np.linalg.pinv(H.T); Y=np.c_[y,A]; print('amplitude range and correlations',np.quantile(Y,[0,.5,1],axis=0),np.corrcoef(Y.T),flush=True)\\nfolds=[(np.arange(52),np.arange(52,72))]; rng=np.random.default_rng(25); folds += [(np.setdiff1d(np.arange(72),v),v) for v in np.array_split(rng.permutation(72),4)]\\nfeat={'lin':lambda x:x,'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'soft':lambda x:x/(1+abs(x)),'sq':lambda x:x*x,'cub':lambda x:x**3,'abs':abs,'exp':lambda x:np.exp(-x*x),'rat':lambda x:x/(1+x*x)}\\nbase={'z':z,'B':b,'F':f,'C':c,'D':d,'x':x};\\ndef basemat(q, names):\\n return np.c_[np.ones(n),*[feat[k](q) for k in names]]\\ndef ridge(X,y,a,v,lam):\\n scale=np.maximum(np.std(X[a],axis=0),.001);scale[0]=1;P=X/scale; W=P[a];return P[v]@np.linalg.solve(W.T@W+lam*np.eye(W.shape[1]),W.T@y[a])\\ndef report(P):\\n return np.array([abs(P[:,0]).mean(),abs(P[:,1:]@H.T).mean()])\\nrows=[]\\nfor name,q in list(base.items())+[(a+k,np.c_[base[a],base[k]]) for a,k in combinations(base,2)]+[('zBCD',np.c_[z,b,c,d]),('zFCD',np.c_[z,f,c,d])]:\\n for fs in [('lin','sin'),('lin','tanh'),('lin','sq'),('lin','sq','cub'),('lin','sin','cos'),('lin','tanh','cos'),('lin','soft','abs'),('lin','rat','exp'),('lin','sq','cub','sin','cos','tanh')]:\\n  X=basemat(q,fs)\\n  for lam in [.00001,.001,.02,.3]:\\n   E=np.array([report(ridge(X,Y,a,v,lam)-Y[v]) for a,v in folds]); rows.append((E[0],E[1:].max(axis=0),name,fs,lam))\\nfor j in range(2): print('additive best',j,sorted(rows,key=lambda r:r[0][j])[:8],flush=True)\\n# A train-only search over single-index and additive projection mechanisms.\\nfuncs={'sin':np.sin,'tanh':np.tanh,'cos':np.cos,'soft':lambda q:q/np.sqrt(1+q*q),'mix':lambda q:np.column_stack((np.sin(q[:,0]),np.tanh(q[:,1])))}\\ndef fit(q,lin,a,v,yy,kind,m,seed):\\n q=q/np.maximum(q[a].std(axis=0),.01); qq=np.c_[np.ones(len(q)),q]; X=L(lin); xa=X[a]; U=np.linalg.svd(xa,full_matrices=False)[0][:,:xa.shape[1]]; yo=yy[a]-U@(U.T@yy[a]); p=qq.shape[1]; rng=np.random.default_rng(seed); fun=funcs[kind]; best=None\\n def residual(theta):\\n  N=fun(qq[a]@theta.reshape(p,m)); N-=U@(U.T@N); coef=np.linalg.lstsq(N,yo,rcond=1e-8)[0];return np.r_[N@coef-yo, .002*theta]\\n for _ in range(6):\\n  opt=least_squares(residual,rng.normal(0,.45,p*m),max_nfev=95)\\n  loss=opt.fun@opt.fun\\n  if best is None or loss<best[0]:best=(loss,opt.x)\\n N=fun(qq@best[1].reshape(p,m)); P=np.c_[X,N]; C=np.linalg.lstsq(P[a],yy[a],rcond=1e-8)[0];return P[v]@C,np.sqrt(best[0]/len(a))\\nresults=[]\\nfor name,q in base.items():\\n for linear in ['z',name] if name!='z' else ['z']:\\n  for kind,m in [('sin',1),('tanh',1),('cos',1),('sin',2),('tanh',2),('mix',2),('soft',2),('sin',3)]:\\n   a,v=folds[0]; ps=[];tr=[];ev=[]\\n   for j in range(3):\\n    p,r=fit(q,base[linear],a,v,Y[:,j],kind,m,10+j); ps.append(p);tr.append(round(r,5));ev.append(round(np.mean(abs(p-Y[v,j])),5))\\n   e=report(np.column_stack(ps)-Y[v]);results.append((e,name,linear,kind,m,tr,ev))\\nfor j in range(2): print('projection best',j,sorted(results,key=lambda r:r[0][j])[:12],flush=True)\\nfor j in range(3): print('amplitude best',j,sorted(results,key=lambda r:r[-1][j])[:6],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic kernel readout → H2 low-dimensional nonlinear projections with two relaxation modes; the best observed kernel worst-fold MAEs are 0.089 for y and 0.090 for the trajectory, and two exponentials reconstruct measured trajectories to RMSE 0.0044.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a third trajectory time mode\",\n      \"rejected_reason\": \"It improves reconstruction RMSE by only about 0.0005; predicting the two dominant amplitudes is the bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed additive readouts with train-only nonlinear projection fits. Scoring the two amplitudes independently will show whether one mechanism dominates the trajectory error and whether the scalar readout needs a different model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dd71d1b69b3bb4599535a5ba665e115319a5653907b513a382f3c9fa03081fbc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48746.51,
+      "usage_known": true,
+      "prompt_tokens": 33049,
+      "cached_tokens": 5504,
+      "completion_tokens": 1864
+    }
+  ]
+}

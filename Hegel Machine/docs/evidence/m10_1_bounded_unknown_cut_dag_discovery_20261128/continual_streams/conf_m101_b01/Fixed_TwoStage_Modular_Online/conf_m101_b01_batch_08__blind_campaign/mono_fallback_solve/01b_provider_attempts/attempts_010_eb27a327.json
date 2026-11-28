@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb27a3275589441d88d276643400df1e",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:13:41.378870+00:00",
+  "ended_at_utc": "2026-11-28T10:14:23.549053+00:00",
+  "request_sha256": "7926c2c718ce635870c01297355ad63673aa04042d70bc07cf2f846037c44ebb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73351,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41195,
+    "cached_tokens": 9344,
+    "completion_tokens": 1723
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/interactions.py <<'PY'\\nfrom compose import *\\nfrom sklearn.linear_model import ElasticNet, ARDRegression\\nfrom itertools import combinations_with_replacement\\nfrom scipy.spatial.distance import cdist\\np=s['train']; Y=np.c_[p['y'],p['traj']]; z=inverse(afit(s)['diagsecond'],p['x']); op=operators(s)\\nu,v=[s['panel_b'][k] for k in ('u','v')]\\ndef Bfit(par):\\n f,a,g,h=par\\n fun=lambda x:x+a*np.sin(f*x)+g*np.tanh(h*x)\\n w=ls(aff(fun(u)),v)\\n return lambda x:aff(fun(x))@w\\nop['B']=Bfit(least_squares(lambda par:(Bfit(par)(u)-v).ravel(),[3.,-.3,-.05,2.],max_nfev=150).x)\\nP={'z':z}\\nfor k in ['b','c','d','bc','bd','cb','cd','db','dc','bcd','bdc']:\\n P[k]=op[k[-1].upper()](P[k[:-1] or 'z'])\\nfolds=[np.arange(52,72)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(64,73)]\\nres=[]\\nfor keys in [('z','bc','bd'),('z','b','bc','bd'),('z','bc','bd','bcd'),('z','b','bc','bd','bcd'),('z','bc','bcd'),('z','bc','bd','bdc'),('z','bc','bd','c','d'),('z','c','d'),('b','bc','bd'),('z','b','bc'),('z','bc'),('z','bd')]:\\n for typ in ['full','cross','within','matched','cyclic','kernel']:\\n  A=np.column_stack([P[k] for k in keys]); N=A.shape[1]; ii,jj=np.triu_indices(N); I,J=ii//4,jj//4; i,j=ii%4,jj%4\\n  sel={'full':np.ones(len(i),bool),'cross':I!=J,'within':I==J,'matched':(I==J)|(i==j),'cyclic':(I==J)|(i==j)|((i-j)%4==1)|((j-i)%4==1),'kernel':np.ones(len(i),bool)}[typ]; ii,jj=ii[sel],jj[sel]\\n  for model in (['k0.0002','k0.001','k0.005','k0.02'] if typ=='kernel' else ['r0.005','r0.05','r0.4','r2','e0.0005','e0.002']):\\n   e=[]\\n   for te in folds:\\n    tr=np.setdiff1d(np.arange(72),te); a=(A-A[tr].mean(0))/A[tr].std(0); bn=Y[tr].mean(0); yy=Y[tr]-bn; reg=float(model[1:]);\\n    if model[0]=='k':\\n     K=(1+a@a.T/(N*1.5))**2; pr=K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+reg*np.eye(len(tr)),yy)+bn\\n    else:\\n     d=np.c_[a,a[:,ii]*a[:,jj]]; d=(d-d[tr].mean(0))/d[tr].std(0).clip(1e-8); X=d[tr];\\n     if model[0]=='r':pr=d[te]@X.T@np.linalg.solve(X@X.T+reg*np.eye(len(tr)),yy)+bn\\n     else:\\n      _,_, vt=np.linalg.svd(yy[:,1:],full_matrices=False); v0=vt[0]; q=np.c_[yy[:,0],yy[:,1:]@v0]; est=ElasticNet(alpha=reg,l1_ratio=.92,max_iter=3500,tol=.0003); yp=[est.fit(X,col).predict(d[te]) for col in q.T]; pr=np.c_[yp[0],yp[1][:,None]*v0]+bn\\n    E=abs(pr-Y[te]); e.append([E[:,0].mean(),E[:,1:].mean()]);\\n   res.append((keys,typ,model,np.array(e)))\\nfor j in range(2):\\n for sort in [lambda e:e[1:].mean(0)[j],lambda e:e[:,j].max(),lambda e:e[0,j]]:\\n  print(j,[(r[:3],r[-1][0].round(4).tolist(),r[-1][1:].mean(0).round(4).tolist(),r[-1].max(0).round(4).tolist()) for r in sorted(res,key=lambda r:sort(r[-1]))[:6]])\\nA=np.column_stack([P[k] for k in ('z','bc','bd')]); i,j=np.triu_indices(12); F=np.c_[A,A[:,i]*A[:,j]]; sc=F.std(0); F=(F-F.mean(0))/sc; names=[f'{k}{j}' for k in ('z','c','d') for j in range(4)]; names=names+[names[x]+'*'+names[y] for x,y in zip(i,j)];\\nfor target in [Y[:,0],Y[:,-1]]:\\n for alpha in [.0004,.002]:\\n  m=ElasticNet(alpha=alpha,l1_ratio=.95,max_iter=8000).fit(F,target); print('coeff',alpha,[(names[k],round(m.coef_[k]/sc[k],3)) for k in np.argsort(abs(m.coef_))[-16:][::-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/interactions.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 smooth branch kernel → H2 identify which quadratic interactions carry the scalar and trajectory signals; leading kernel required-split MAEs are 0.0617 and 0.0211, with six-split maxima 0.0617 and 0.0630.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the lowest scalar error on the prescribed split alone\",\"rejected_reason\":\"That kernel reaches 0.0500 on the prescribed split but 0.1319 on another split.\"}],\"rationale\":\"The strongest repeated improvement came from supplying calibrated inputs alongside both downstream branches. Separate within-branch, cross-branch, and cyclic interactions on fresh splits; if none transfers, retain regularized full interactions while treating the scalar tolerance as unresolved.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "30aea8c50d1805e7778552f2bc9294bbb1236c2d7d51a0e94bf0738cfd6e94bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47599.72,
+      "usage_known": true,
+      "prompt_tokens": 41195,
+      "cached_tokens": 9344,
+      "completion_tokens": 1723
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "15438a07352a4667a5ce67465ebc216c",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:38.797334+00:00",
+  "ended_at_utc": "2026-11-28T09:23:17.017155+00:00",
+  "request_sha256": "57fa2ed5c59364e29f1f302185455b34fbd8e7162b16d9ed45b77cb45ee32dff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38227,
+    "cached_tokens": 9344,
+    "completion_tokens": 1556
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/np.set_printoptions/,$d' /tmp/probe.py > /tmp/metric.py; cat >> /tmp/metric.py <<'PY'\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nrng=np.random.default_rng(812); splits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(p[:52],p[52:]) for p in [rng.permutation(n) for _ in range(8)]]\\nD=aff(x); Q=quad(x)[:,5:]; H=np.c_[*[np.prod(x[:,j],axis=1) for j in itertools.combinations_with_replacement(range(4),3)]]\\n\\ndef model(i,j,Y,kind,reg,extras=0,mean='aff'):\\n V=bi(x); S=np.c_[V,x]; dd=V[:,None,:]-V[None,:,:]; ix=np.ix_(i,i); di=dd[ix]; ij=np.tril_indices(4,-1); off=np.zeros((4,4)); D0=D if mean=='aff' else np.c_[D,Q]; W=D0[i]; Y=Y.reshape(n,-1); R=Y[i]; m=len(i)-W.shape[1]; ny=R.shape[1]\\n L0=np.eye(4); P=Q@Q.T; C=H@H.T; extra=np.array([P,C]); E=extra[:,i[:,None],i]; G=np.sum(di**2,axis=2)\\n def kernel(d,h,e):\\n  L=np.diag(np.exp(h[:4]/2)); L[ij]=h[4:10]; q=np.sum((d@L)**2,axis=2)\\n  if kind=='sq': K=np.exp(-q/2)\\n  elif kind=='rq': K=1/(1+q/2)\\n  else:\\n   t=np.sqrt(q); K=(1+t+t*t/3)*np.exp(-t)\\n  if extras: K=K+np.einsum('k,kij->ij',np.exp(h[11:]),e[:extras]);\\n  return K\\n def objective(h):\\n  K=kernel(di,h,E)+np.exp(h[10])*np.eye(len(i)); cf=cho_factor(K); F=cho_solve(cf,np.c_[W,R]); p=W.shape[1]; A=W.T@F[:,:p]; b=W.T@F[:,p:]; U=R-W@np.linalg.solve(A,b); C=U.T@cho_solve(cf,U); cost=m*np.linalg.slogdet(C)[1]+ny*(2*np.log(np.diag(cf[0])).sum()+np.linalg.slogdet(A)[1]); return cost+reg*(np.dot(h[4:10],h[4:10])*4+np.var(h[:4])*2)\\n h=minimize(objective,np.r_[np.full(4,-1.),np.zeros(6),-10.,np.full(extras,-4.)],bounds=[(-6,3)]*4+ [(-1.5,1.5)]*6+[(-16,-2)]+[(-12,3)]*extras,method='L-BFGS-B',options={'maxiter':105}).x\\n K=kernel(dd,h,extra); cf=cho_factor(K[ix]+np.exp(h[10])*np.eye(len(i))); F=cho_solve(cf,np.c_[W,R]); p=W.shape[1]; C=np.linalg.solve(W.T@F[:,:p],W.T@F[:,p:]); return D0[j]@C+K[np.ix_(j,i)]@(F[:,p:]-F[:,:p]@C)\\n\\nif __name__=='__main__':\\n out=[]\\n for kind in ['sq','rq','m52']:\\n  for ytype,Y in [('joint',T),('solo',y)]:\\n   for reg,ex,mean in [(1,0,'aff'),(8,0,'aff'),(30,0,'aff'),(8,1,'aff'),(8,2,'aff'),(8,0,'quad')]:\\n    pred=[model(i,j,Y,kind,reg,ex,mean) for i,j in splits]; err=np.array([np.mean(abs(p[:,0]-y[j])) for p,(_,j) in zip(pred,splits)]); out.append((err.mean(),(kind,ytype,reg,ex,mean),pred));print(out[-1][1],err.round(4),err.mean().round(4),flush=True)\\n for m in [3,6,12,len(out)]:\\n  best=sorted(out,key=lambda o:o[0])[:m]; err=np.array([np.mean(abs(np.mean([o[2][k][:,0] for o in best],axis=0)-y[j])) for k,(_,j) in enumerate(splits)]); print('ensemble',m,err.round(4),err.mean().round(4),err.max().round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/metric.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test a full kernel metric and separately regularized polynomial terms; the best previous joint model has 52/20 scalar MAE 0.0429 and worst-split MAE 0.0564.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit more unconstrained nonlinear gates\",\"rejected_reason\":\"The tested gates reduced training error without improving either ordered validation split over the joint kernel.\"}],\"rationale\":\"A full metric tests whether the dominant interactions lie along directions not aligned with the panel axes. Each metric is fitted only on the training rows of its split; the ordered and random splits show whether the added flexibility helps beyond one partition.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9cff3dc3e7144e85c5a76b0fba679b7e07466a0203a79b3eaf453fc4ad81fcff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40777.81,
+      "usage_known": true,
+      "prompt_tokens": 38227,
+      "cached_tokens": 9344,
+      "completion_tokens": 1556
+    }
+  ]
+}

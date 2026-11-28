@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1111e5239b6d4db28cacfae0025760cf",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:37.622350+00:00",
+  "ended_at_utc": "2026-11-28T09:22:16.832046+00:00",
+  "request_sha256": "c5116a4eda86c892012d63dd5648ba8b130745af19e5e6a1f58d9632e1734a90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33672,
+    "cached_tokens": 9344,
+    "completion_tokens": 1722
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; grep 'cross-head' /tmp/dictprobe.log; cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Invert the reference calibration and predict the response and relaxation modes.\\\"\\\"\\\"\\nfrom itertools import combinations, combinations_with_replacement\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    nxt = np.roll(u, -1, axis=1)\\n    basis = [np.column_stack((np.ones(len(u)), x, z, x*z, x**3))\\n             for x, z in zip(u.T, nxt.T)]\\n    ids = np.arange(len(u))\\n    for _ in range(8):\\n        coef = np.column_stack([np.linalg.lstsq(f[ids], v[ids, j], rcond=None)[0]\\n                                for j, f in enumerate(basis)])\\n        residual = np.column_stack([f @ coef[:, j] for j, f in enumerate(basis)]) - v\\n        ids = np.argsort(np.linalg.norm(residual, axis=1))[:len(u)-3]\\n    return coef\\n\\n\\ndef _inverse(x, c):\\n    def residual(z, row):\\n        w = np.roll(z, -1)\\n        return c[0] + c[1]*z + c[2]*w + c[3]*z*w + c[4]*z**3 - row\\n    return np.array([least_squares(residual, (row-c[0])/c[1], args=(row,),\\n                                   gtol=1e-11).x for row in x])\\n\\n\\ndef _modes(t, traj):\\n    def basis(r):\\n        return -np.expm1(-t[:, None]*r)\\n    def project(h):\\n        return np.linalg.lstsq(h, traj.T, rcond=None)[0]\\n    def residual(r):\\n        h = basis(r)\\n        return (h @ project(h) - traj.T).ravel()\\n    r = least_squares(residual, [.5, 2.], bounds=(.01, 10.)).x\\n    h = basis(np.sort(r))\\n    return h, project(h).T\\n\\n\\ndef _dictionary(z):\\n    x = z.T\\n    columns = [np.prod(x[list(ids)], axis=0) for k in range(1, 5)\\n               for ids in combinations_with_replacement(range(4), k)]\\n    for i, j in combinations(range(4), 2):\\n        w = x[i]*x[j]\\n        for k in (.7, 1.5, 2.5, 3.5):\\n            columns.extend((np.sin(k*w), np.tanh(k*w), np.cos(k*w)))\\n    for i, a in enumerate(x):\\n        for k in (.5, 1., 1.5, 2., 2.5, 3., 3.5, 4.):\\n            for f in (np.sin(k*a), np.cos(k*a), np.tanh(k*a), 1/(1+k*a*a),\\n                      a/(1+k*a*a), np.sqrt(1+k*a*a)):\\n                columns.append(f)\\n                columns.extend(b*f for j, b in enumerate(x) if i != j)\\n    return np.column_stack(columns)\\n\\n\\ndef _ridge(features, y, reg):\\n    n = len(y)\\n    a = features[:n]\\n    f = (features - a.mean(axis=0)) / np.maximum(a.std(axis=0), 1e-12)\\n    a = f[:n]\\n    return y.mean(axis=0) + (f[n:] @ a.T) @ np.linalg.solve(a@a.T+reg*np.eye(n), y-y.mean(axis=0))\\n\\n\\ndef solve_batch(study):\\n    train, test = study['train'], study['test']\\n    z = _inverse(np.vstack((train['x'], test['x'])), _calibrate(study['panel_a']))\\n    h, modes = _modes(study['eval_times'], train['traj'])\\n    p = _ridge(_dictionary(z), np.column_stack((train['y'], modes)), .15)\\n    y, state = p[:, 0], p[:, 1:] @ h.T\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/check_solver.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; idx=np.arange(len(tr['y'])); rng=np.random.RandomState(111)\\nparts=np.array_split(rng.permutation(idx),4); splits=[idx[52:],idx[56:],*parts]\\nfor b in splits:\\n a=np.setdiff1d(idx,b); v=m.solve_batch(dict(s, train={**tr,**{k:tr[k][a] for k in ['x','y','traj']}},test={'x':tr['x'][b]})); ey=abs(v['y_hat']-tr['y'][b]); et=abs(v['state_pred']-tr['traj'][b]); print(f'n={len(b)} y={ey.mean():.6f} traj={et.mean():.6f} worst_time={et.mean(0).max():.6f}',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_solver.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unrestricted nonlinear feature dictionary → H2: calibrated univariate and pairwise interactions; preliminary 52/20 response MAE is 0.0266, with worst shuffled-fold MAE 0.0422 at the same regularization.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Use all tested pairwise sums and differences\",\"rejected_reason\":\"Adding those features increased the prescribed holdout response MAE from about 0.027 to 0.052.\"}],\"rationale\":\"Save the first candidate that clears the prescribed response gate, then verify that the standalone implementation reproduces the result and measure its trajectory errors. These checks establish which output or slice needs further improvement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2ee2ec76a612fc31f5d6077262e3565bfa2956ea51ded7ae5f096f6f72cf1e49",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44448.63,
+      "usage_known": true,
+      "prompt_tokens": 33672,
+      "cached_tokens": 9344,
+      "completion_tokens": 1722
+    }
+  ]
+}

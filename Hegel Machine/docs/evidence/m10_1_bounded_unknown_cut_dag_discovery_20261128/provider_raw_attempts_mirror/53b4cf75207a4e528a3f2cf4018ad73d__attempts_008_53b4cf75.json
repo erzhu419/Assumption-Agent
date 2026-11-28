@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53b4cf75207a4e528a3f2cf4018ad73d",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:48.749166+00:00",
+  "ended_at_utc": "2026-11-28T09:28:33.574086+00:00",
+  "request_sha256": "b1f5dfa66257c87c9c14577323e2756b340f08acfeeb04b27574eb18c2661d6c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55654,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33745,
+    "cached_tokens": 9344,
+    "completion_tokens": 1865
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated scalar prediction and two-mode relaxation.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    designs = [_aff(u[:, j:j+1]) for j in range(u.shape[1])]\\n    w = np.ones(len(u))\\n    for _ in range(20):\\n        coef = np.stack([_fit(a*w[:, None], v[:, j]*w)\\n                         for j, a in enumerate(designs)], axis=1)\\n        err = np.linalg.norm(coef[0]+u*coef[1]-v, axis=1)\\n        w = np.sqrt(np.minimum(1, 0.03/np.maximum(err, 1e-12)))\\n    keep = err < 0.01\\n    if np.count_nonzero(keep) >= len(u)//2:\\n        coef = np.stack([_fit(a[keep], v[keep, j])\\n                         for j, a in enumerate(designs)], axis=1)\\n    return (x-coef[0])/coef[1]\\n\\n\\ndef _edges(z):\\n    return z[:, [0, 0, 1, 2]]*z[:, [1, 3, 2, 3]]\\n\\n\\ndef _operators(panel, z):\\n    u = panel['u']\\n    first = _aff(_edges(z)) @ _fit(_aff(_edges(u)), panel['v1'])\\n    v = panel['v2']\\n\\n    def design(x, freq):\\n        return _aff(np.column_stack((x, np.cos(freq*x))))\\n\\n    def loss(freq):\\n        a = design(u, freq)\\n        return np.linalg.norm(a @ _fit(a, v)-v)\\n\\n    grid = np.linspace(0.25, 6, 45)\\n    i = np.argmin([loss(f) for f in grid])\\n    freq = minimize_scalar(loss, bounds=(grid[max(0, i-1)], grid[min(i+1, len(grid)-1)]),\\n                           method='bounded').x\\n    second = design(z, freq) @ _fit(design(u, freq), v)\\n    return first, second\\n\\n\\ndef _quadratic(z):\\n    return np.column_stack((z, *(z[:, i]*z[:, j] for i,j in\\n                                combinations_with_replacement(range(z.shape[1]), 2))))\\n\\n\\ndef _basis(t, rates):\\n    return -np.expm1(-t[:, None]*rates)\\n\\n\\ndef _rates(t, trajectory):\\n    def residual(rates):\\n        a = _basis(t, rates)\\n        return (a @ _fit(a, trajectory.T)-trajectory.T).ravel()\\n\\n    return least_squares(residual, [0.35, 1.6], bounds=([0.04, 0.65], [0.65, 6])).x\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    n = len(train['x'])\\n    z = _calibrate(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    c, w = _operators(study['panel_c'], z)\\n    design = _aff(np.column_stack((_quadratic(z), c*w)))\\n    t = study['eval_times']\\n    basis = _basis(t, _rates(t, train['traj']))\\n    amplitudes = _fit(basis, train['traj'].T).T\\n    pred = design[n:] @ _fit(design[:n], np.column_stack((train['y'], amplitudes)))\\n    y = pred[:, 0]\\n    state = pred[:, 1:] @ basis.T\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat >/tmp/check_batch.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p);p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; idx=np.arange(len(tr['x'])); rng=np.random.default_rng(771)\\ndef errors(fn,i,j):\\n v={**s,'train':{k:w[i] if k!='summary' else w for k,w in tr.items()},'test':{'x':tr['x'][j]}}; p=fn(v); return np.abs(p['y_hat']-tr['y'][j]), np.abs(p['state_pred']-tr['traj'][j])\\ndef check(fn):\\n for n in (52,56):\\n  y,a=errors(fn,idx[:n],idx[n:]);print(n, y.mean(),a.mean(),a.mean(0).max())\\n vals=[]\\n for _ in range(12):\\n  i=rng.permutation(idx); y,a=errors(fn,i[:52],i[52:]); vals.append([y.mean(),a.mean(),a.mean(0).max()])\\n print('random 52/20 median/max',np.median(vals,0),np.max(vals,0))\\n z=m._calibrate(s['panel_a'],tr['x']); radius=np.linalg.norm(z,axis=1);i=idx[np.argsort(radius)];y,a=errors(fn,i[:52],i[52:]);print('high radius',y.mean(),a.mean(),a.mean(0).max())\\nif __name__=='__main__':check(m.solve_batch)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial surrogate → H2 calibrated panel-C interaction with two relaxation modes; the 52/20 prototype gives scalar MAE 0.00929, pooled trajectory MAE 0.01896, and worst-horizon MAE 0.02929.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add the best training-side slow-mode interaction\",\n      \"rejected_reason\": \"It worsens held-out trajectory MAE from 0.01896 to 0.02648.\"\n    }\n  ],\n  \"rationale\": \"Save the panel-based candidate and verify it in a clean process. Random splits test sensitivity to which rows are withheld; the high-radius split tests extrapolation. If either exposes a trajectory weakness, refine the slow mode without replacing the validated scalar readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "70ce20810ccf75d6058bfad719a691da5c786d1b3fc36e9204b5a7831d117f29",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47456.67,
+      "usage_known": true,
+      "prompt_tokens": 33745,
+      "cached_tokens": 9344,
+      "completion_tokens": 1865
+    }
+  ]
+}

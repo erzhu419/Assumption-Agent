@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78a9d606497f4b70b19ca9b71349352b",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:32.320336+00:00",
+  "ended_at_utc": "2026-11-28T09:25:12.648981+00:00",
+  "request_sha256": "92510c8e5a82b012a3f546938e381778558714cb7a4649698bea638692276f21",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 33665,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23590,
+    "cached_tokens": 5504,
+    "completion_tokens": 1786
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/structured_dag.py <<'PY'\\nimport numpy as np, pickle, runpy, itertools\\nfrom scipy.optimize import least_squares\\nP='/holdout_task/'\\ns=pickle.load(open(P+'public_batch.pkl','rb'))[0]['study']; m=runpy.run_path(P+'_frozen_nodes/node_00.py'); z=m['run_node']({'__input__':s})['z_tr']; y=s['train']['y']; n=len(y)\\nrng=np.random.default_rng(11)\\ngroups=[np.arange(52,72)]+[rng.permutation(n)[:20] for _ in range(8)]+[np.argsort(abs(a))[-12:] for a in z.T]; allidx=np.arange(n)\\ndef folds(g): return np.setdiff1d(allidx,g),g\\ndef design(terms): return np.column_stack([np.ones(n)]+[z[:,k].prod(1) for k in terms])\\nterms=[k for d in (1,2,3) for k in itertools.combinations_with_replacement(range(4),d)]\\nA=design(terms); coef=np.linalg.lstsq(A,y,rcond=None)[0]; print('cubic coefficients',list(zip(terms,np.round(coef[1:],4))))\\nQ=A[:,:15]; L=A[:,:5]\\ndef fit(F,tr,te):\\n c=np.linalg.lstsq(F[tr],y[tr],rcond=None)[0]; return np.mean(abs(F[te]@c-y[te]))\\ndef cv(F):\\n e=[fit(F,*folds(g)) for g in groups]; return np.round([e[0],np.mean(e[1:9]),max(e[1:9]),max(e[9:])],5)\\nfor name,F in [('cubic',A),('mixed cubic',A[:,[0]+[i+1 for i,k in enumerate(terms) if len(k)<3 or len(set(k))>1]]),('pure cubic',np.column_stack([Q,z**3])),('triple',np.column_stack([Q,*[z[:,k].prod(1) for k in itertools.combinations(range(4),3)]]))]: print(name,cv(F))\\ndirs=[(str(i),z[:,i]) for i in range(4)]+[(f'{i}{sgn:+d}{j}',z[:,i]+sgn*z[:,j]) for i,j in itertools.combinations(range(4),2) for sgn in (-1,1)]\\nlibrary=[]; names=[]\\nfor name,u in dirs:\\n for f in (.5,1.,1.5,2.,2.5,3.):\\n  for kind,v in [('sin',np.sin(f*u)-f*u),('cos',np.cos(f*u)-1+(f*u)**2/2),('tanh',np.tanh(f*u)-f*u),('rat',u/(1+f*u*u)-u),('gauss',np.exp(-f*u*u)-1+f*u*u)]: names.append((name,kind,f)); library.append(v)\\n for j,w in enumerate(z.T):\\n  for f in (.5,1.,2.):\\n   for kind,v in [('crossrat',w/(1+f*u*u)-w),('crosssin',w*(np.sin(f*u)-f*u)),('crosscos',w*(np.cos(f*u)-1))]: names.append((name,kind,j,f)); library.append(v)\\nfor k in terms[14:]: names.append(k); library.append(z[:,k].prod(1))\\nD=np.column_stack(library)\\ndef greedy(B,tr,te,k):\\n X=B.copy(); sel=[]\\n for _ in range(k):\\n  U=np.linalg.qr(X[tr],mode='reduced')[0]; G=D[tr]-U@(U.T@D[tr]); norm=np.linalg.norm(G,axis=0); scores=abs(G.T@(y[tr]-U@(U.T@y[tr])))/np.maximum(norm,1e-9); scores[sel]=-1; j=scores.argmax(); sel.append(j); X=np.column_stack((X,D[:,j]))\\n return fit(X,tr,te),sel\\nfor B in (L,Q):\\n for k in (1,2,3,4,6,8):\\n  e=[greedy(B,*folds(g),k)[0] for g in groups]; a,sel=greedy(B,allidx,allidx,k); print('greedy',B.shape[1],k, np.round([a,e[0],np.mean(e[1:9]),max(e[1:9]),max(e[9:])],5),[names[j] for j in sel])\\ndef projected(kind,B,tr,te,k=1):\\n def f(t):\\n  u=z@t.reshape(k,5)[:,:4].T+t.reshape(k,5)[:,4];\\n  if kind=='sin': H=np.sin(u)\\n  if kind=='tanh': H=np.tanh(u)\\n  if kind=='atan': H=np.arctan(u)\\n  if kind=='rat': H=u/(1+u*u)\\n  if kind=='gauss': H=np.exp(-u*u)\\n  return np.column_stack((B,H))\\n def res(t):\\n  X=f(t)[tr]; return X@np.linalg.lstsq(X,y[tr],rcond=None)[0]-y[tr]\\n gen=np.random.default_rng(62); best=(np.inf,None)\\n for i in range(10):\\n  t=gen.normal(0,.9,size=5*k)\\n  r=least_squares(res,t,bounds=(-4,4),max_nfev=65)\\n  if r.cost<best[0]: best=(r.cost,r.x)\\n return fit(f(best[1]),tr,te),best[1]\\nfor kind in ('sin','tanh','atan','rat','gauss'):\\n for B in (L,Q):\\n  ae,p=projected(kind,B,allidx,allidx); e=[projected(kind,B,*folds(g))[0] for g in groups]; print('ridge term',kind,B.shape[1],np.round([ae,e[0],np.mean(e[1:9]),max(e[1:9]),max(e[9:])],5),p.round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -u /tmp/structured_dag.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (global polynomial label model) -> H2 (sparse interactions or a bounded nonlinear term in the frozen coordinates); unrestricted cubic label MAE reaches 0.090813 on coordinate-tail slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase the global polynomial degree\",\n      \"rejected_reason\": \"The cubic already has large tail errors, and higher-degree fits have performed worse on the measured splits.\"\n    }\n  ],\n  \"rationale\": \"Fit explicit pairwise, three-way, and rational terms inside each training split. Compare them with a fitted single-index nonlinearity to see which explains the label residual without changing the accurate affine trajectory fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b3ca24f51454defa626879e919e3481cf2f44835baf54bc2dd165892bd58e240",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45446.8,
+      "usage_known": true,
+      "prompt_tokens": 23590,
+      "cached_tokens": 5504,
+      "completion_tokens": 1786
+    }
+  ]
+}

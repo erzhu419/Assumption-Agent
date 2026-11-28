@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d3d2ffeaaa543f8b77d610359a30995",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_06__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:46.057712+00:00",
+  "ended_at_utc": "2026-11-28T09:56:09.583262+00:00",
+  "request_sha256": "0fa90cc6223917f3d1c4a40935e0b6d9b93aecada7a4d81574832bc0bbe71dc9",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 47815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30596,
+    "cached_tokens": 5504,
+    "completion_tokens": 875
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/test_dag_candidate.py')\\nns = {'__file__': str(p), '__name__': '__stress__'}\\n# Load the DAG runner without invoking the public script's top-level exit.\\nexec(compile(p.read_text().split('\\\\nst = pickle.load', 1)[0], str(p), 'exec'), ns)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nx, y, tr = (s['train'][k] for k in ('x', 'y', 'traj'))\\nrows = np.arange(len(x))\\nfolds = {'public': rows[52:], 'first': rows[:20], 'middle': rows[20:40], 'late': rows[40:52], 'radial_tail': np.argsort(np.linalg.norm(x, axis=1))[-16:]}\\nfor label, val in folds.items():\\n    keep = np.setdiff1d(rows, val)\\n    case = copy.deepcopy(s)\\n    last = tr[keep, -1]\\n    case['train'] = dict(x=x[keep], y=y[keep], traj=tr[keep], summary=np.array([y[keep].mean(), y[keep].std(), last.mean(), last.std()]))\\n    case['test'] = {'x': x[val]}\\n    pred, counts = ns['run_dag'](case)\\n    a, b, d = (pred[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    assert a.shape == y[val].shape and b.shape == tr[val].shape and d.shape == (4,)\\n    assert all(np.isfinite(v).all() for v in (a, b, d))\\n    np.testing.assert_allclose(d, [a.mean(), a.std(), b[:, -1].mean(), b[:, -1].std()])\\n    ey, et = np.abs(a-y[val]).mean(), np.abs(b-tr[val]).mean(axis=0)\\n    print(f'{label}: y_mae={ey:.6f} traj_mae={et.mean():.6f} worst_horizon_mae={et.max():.6f}', flush=True)\\n    assert set(counts.values()) == {1} and max(ey, et.max()) < 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal readout products → H2 diagonal products plus a training-selected off-diagonal trajectory term; the exact bundle passed public CV with y MAE 0.004821 and trajectory MAE 0.004723.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public acceptance receipt alone\",\n      \"rejected_reason\": \"The prior output did not show the intended row-block, radial-tail, or per-horizon checks on the exact artifacts.\"\n    }\n  ],\n  \"rationale\": \"Run only the missing stress checks. A failure would distinguish sensitivity to training rows from high-norm extrapolation or a weak trajectory horizon and guide any targeted revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "913b0a65a32942f8b5f4bf201e6ca0989da7dce3e12cbe2ca4d64d087e0edc2e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26138.32,
+      "usage_known": true,
+      "prompt_tokens": 30596,
+      "cached_tokens": 5504,
+      "completion_tokens": 875
+    }
+  ]
+}

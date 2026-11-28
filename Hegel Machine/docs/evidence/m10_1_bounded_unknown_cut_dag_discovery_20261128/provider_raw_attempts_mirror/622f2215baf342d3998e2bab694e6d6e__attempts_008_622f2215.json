@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "622f2215baf342d3998e2bab694e6d6e",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:44.545095+00:00",
+  "ended_at_utc": "2026-11-28T09:31:25.134229+00:00",
+  "request_sha256": "104f1cb96e04a6d1419a82f32727ac446adb88abecfd794236efee305742d728",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30232,
+    "cached_tokens": 5504,
+    "completion_tokens": 1673
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(design, targets):\\n    return np.linalg.lstsq(design, targets, rcond=None)[0]\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _v1_basis(x):\\n    return _affine(x[:, [0, 0, 1, 2]] * x[:, [1, 3, 2, 3]])\\n\\n\\ndef _v2_basis(x):\\n    return np.column_stack((_affine(x), x * x))\\n\\n\\ndef _relaxation(times, trajectories):\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * np.sort(rates))\\n\\n    def residual(rates):\\n        temporal = basis(rates)\\n        return (temporal @ _fit(temporal, trajectories.T) - trajectories.T).ravel()\\n\\n    rates = least_squares(residual, [0.41, 1.8], bounds=(0.05, 5.0)).x\\n    return basis(rates)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    x = np.vstack((train['x'], study['test']['x']))\\n    f = inputs['node_00']['f']\\n    panel = study['panel_c']\\n    u = panel['u']\\n    v1 = _v1_basis(x) @ _fit(_v1_basis(u), panel['v1'])\\n    # Retain the diagonal quadratic approximation for v2 in the sink:\\n    # it extrapolates better downstream than the closer nonlinear panel fit.\\n    v2 = _v2_basis(x) @ _fit(_v2_basis(u), panel['v2'])\\n\\n    left, right = np.triu_indices(f.shape[1])\\n    pairs = (f[:, :, None] * v2[:, None, :]).reshape(len(f), -1)\\n    design = np.column_stack((_affine(f), f[:, left] * f[:, right], f * v1, pairs))\\n    n_train = len(train['x'])\\n    temporal = _relaxation(np.asarray(study['eval_times']), train['traj'])\\n    amplitudes = _fit(temporal, train['traj'].T).T\\n    prediction = design[n_train:] @ _fit(design[:n_train], np.column_stack((train['y'], amplitudes)))\\n    y_hat = prediction[:, 0]\\n    state_pred = prediction[:, 1:] @ temporal.T\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), state_pred[:, -1].mean(), state_pred[:, -1].std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nbase = '/holdout_task/'\\nfrozen = runpy.run_path(base + '_frozen_nodes/node_00.py')['run_node']\\nsink = runpy.run_path(base + 'node_01.py')['run_node']\\nwith open(base + 'public_batch.pkl', 'rb') as handle:\\n    study = pickle.load(handle)[0]['study']\\ntrain = study['train']\\nn = len(train['x'])\\nrows = np.arange(n)\\nouter = [(f'fold_{i}', ids) for i, ids in enumerate(np.array_split(np.random.default_rng(42).permutation(n), 5), 1)]\\nouter.append(('high_norm', np.argsort(np.linalg.norm(train['x'], axis=1))[-16:]))\\nfor name, test in outer:\\n    keep = np.setdiff1d(rows, test)\\n    split = copy.deepcopy(study)\\n    split['train'] = {k: train[k][keep] for k in ('x', 'y', 'traj')}\\n    yt, zt = split['train']['y'], split['train']['traj'][:, -1]\\n    split['train']['summary'] = np.array([yt.mean(), yt.std(), zt.mean(), zt.std()])\\n    split['test'] = {'x': train['x'][test]}\\n    panel = split['panel_c']\\n    worst = np.zeros(3)\\n    omissions = range(-1, len(panel['u'])) if name == 'high_norm' else [-1]\\n    for omit in omissions:\\n        if omit >= 0:\\n            split['panel_c'] = {k: np.delete(v, omit, axis=0) for k, v in panel.items()}\\n        out = sink({'__input__': split, 'node_00': frozen({'__input__': split})})\\n        y, z, d = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n        assert all(np.isfinite(v).all() for v in (y, z, d))\\n        np.testing.assert_allclose(d, [y.mean(), y.std(), z[:, -1].mean(), z[:, -1].std()])\\n        e = np.abs(z - train['traj'][test])\\n        worst = np.maximum(worst, [np.mean(np.abs(y - train['y'][test])), e.mean(), e.mean(0).max()])\\n    print(name, 'y / trajectory / worst horizon MAE:', np.round(worst, 6))\\n    assert np.max(worst) <= 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent trajectory regressions) → H2 (two shared relaxation modes with calibrated panel interactions); the prototype's high-input-norm MAE is 0.01486 for y and 0.01097 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the closer nonlinear v2 calibration downstream\",\n      \"rejected_reason\": \"The tested cosine basis fit the panel more closely but raised high-input-norm trajectory MAE from 0.01097 to 0.02969.\"\n    }\n  ],\n  \"rationale\": \"Write the tested sink without modifying the frozen node. Run the official acceptance test in an isolated Python process, then check each trajectory horizon and omit each Panel C row on the high-norm slice. A failure there would identify whether to revisit the temporal model or the panel calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8fe522e9718bda98e81a14c991549f8ac34afe0c8c33006ce5100fdeb6ef6541",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43236.54,
+      "usage_known": true,
+      "prompt_tokens": 30232,
+      "cached_tokens": 5504,
+      "completion_tokens": 1673
+    }
+  ]
+}

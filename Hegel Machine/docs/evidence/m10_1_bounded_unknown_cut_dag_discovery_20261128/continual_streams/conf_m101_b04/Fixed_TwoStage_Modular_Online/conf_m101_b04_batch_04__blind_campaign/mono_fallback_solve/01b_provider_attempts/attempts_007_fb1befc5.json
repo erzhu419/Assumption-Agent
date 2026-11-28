@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb1befc526fc4a289e28313b930e865f",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:03.381514+00:00",
+  "ended_at_utc": "2026-11-28T09:35:31.737061+00:00",
+  "request_sha256": "f0ad809ca52fc3f3ae4a898f339dea4c6cefa11d87b8a97ec3dbf12e8dac930c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43264,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26721,
+    "cached_tokens": 9344,
+    "completion_tokens": 1107
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,200p' /holdout_task/validate_public_schema.py\\nsed -i 's/jac=lambda w: matrix, loss=/jac=lambda w: matrix.copy(), loss=/' /holdout_task/batch_solver.py\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; a=np.arange(len(tr['x'])); w=m._calibration(s['panel_a']); u=s['panel_a']['u']; off,gain=w[:4],w[4:8]; c,d,e=w[8:]\\ndef forward(q):\\n    n=np.roll(q,-1,axis=1)\\n    return off+gain*q+c*n+d*q*n+e*q**3\\nr=np.linalg.norm(forward(u)-s['panel_a']['v'],axis=1); print('calibration median / max clean / gross count',np.median(r),np.sort(r)[-4],np.sum(r>8*np.median(r))); assert np.sort(r)[-4]<.001\\nraw=np.concatenate((tr['x'],s['test']['x'])); z=m._invert(raw,w); inversion=np.max(abs(forward(z)-raw)); print('max inversion residual',inversion); assert inversion<1e-9\\nsplits=[('public52/20',a[:52],a[52:]),('archive56/16',a[:56],a[56:])]; rng=np.random.default_rng(7)\\nfor i in range(5):\\n    p=rng.permutation(a); splits.append((f'random{i}',p[:52],p[52:]))\\nfor j in range(4):\\n    for sign in [-1,1]:\\n        p=np.argsort(sign*z[:len(a),j]); splits.append((f'tail{j}:{sign}',p[:52],p[52:]))\\nresults=[]\\nfor name,ti,vi in splits:\\n    sub={**s,'train':{k:tr[k][ti] for k in ('x','y','traj')},'test':{'x':tr['x'][vi]}}\\n    pred=m.solve_batch(sub); yh,st=pred['y_hat'],pred['state_pred']; ts=np.mean(abs(st-tr['traj'][vi]),axis=0); results.append((np.mean(abs(yh-tr['y'][vi])),ts.mean(),ts.max())); print(name,*(round(j,6) for j in results[-1]))\\n    np.testing.assert_allclose(pred['diagnostics_vec'],[yh.mean(),yh.std(),st[:,-1].mean(),st[:,-1].std()],rtol=0,atol=0)\\nprint('worst (y, state, individual time)',np.max(results,axis=0)); assert np.max(results)<.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared Jacobian storage corrupts the calibration fit) -> H2 (independent Jacobian storage preserves the cyclic calibration); current public CV MAEs are 0.166224 for y and 0.229653 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the sparse readouts\",\n      \"rejected_reason\": \"Both outputs degraded together despite strong probe results, so first test the shared calibration stage.\"\n    }\n  ],\n  \"rationale\": \"SciPy can scale a supplied Jacobian in place for robust losses. The Jacobian currently aliases the design used by the residual and final refit. Return a copy, then check calibration residuals to distinguish that failure from a model mismatch and verify the corrected artifact on the public and coordinate-tail splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0f014f08de77ca8175cf6539a932299bbc2c1291da9ad69086a46cfe80d00ec8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31003.37,
+      "usage_known": true,
+      "prompt_tokens": 26721,
+      "cached_tokens": 9344,
+      "completion_tokens": 1107
+    }
+  ]
+}

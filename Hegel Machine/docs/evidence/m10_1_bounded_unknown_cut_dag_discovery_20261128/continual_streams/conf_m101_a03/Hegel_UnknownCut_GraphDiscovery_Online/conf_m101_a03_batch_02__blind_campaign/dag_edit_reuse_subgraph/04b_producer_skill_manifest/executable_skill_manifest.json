@@ -1,0 +1,130 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a03_batch_02_39d9911725af",
+    "source_hash": "39d9911725af83949f63b3d78e7fb48aa1387754dacfba4852b537b8f3250ce5",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_a03_batch_02__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a03_batch_00_solver.py",
+        "bytes": 2230,
+        "sha256": "014fe3825f091ccd635c89bc124022ce79cccbc383bf45b3b092f86e0a6c1bfc"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a03_batch_01_solver.py",
+        "bytes": 2518,
+        "sha256": "98a28b1364211c944ac74ce23583f084fbcdf870d3df5d5ddc4778a41d2884f8"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json public_asset_index.json _frozen_nodes/node_01.py _frozen_nodes/node_02.py test_dag_candidate.py validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS multivariate polynomial calibration' ; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb'))\ndef show(x,k=''):\n if isinstance(x,dict):\n  for a,v in x.items(): show(v,k+'/'+str(a))\n elif isinstance(x,np.ndarray):\n  print(k,x.shape,x.dtype, 'first:',x[:2] if x.ndim else x)\n else: print(k,type(x).__name__,st",
+      "cd /holdout_task && cat _frozen_nodes/node_01.py _frozen_nodes/node_02.py && grep -nE 'accept|shell|exec|node_00|mae' test_dag_candidate.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools as it,pickle,numpy as np\nbatch=pickle.load(open('/holdout_task/public_batch.pkl','rb'));print('studies',len(batch))\nfor item in batch:\n s=item['study'];print('shapes',{k:{j:np.shape(x) for j,x in v.items()} for k,v in s.items() if isinstance(v,dict)})\n u,v=(np.asarray(s['panel_a'][k]) for k in ('u','v'));print('u bounds',u.min(0),u.max(0),'v bounds',v.min(0),v.max(0)); print('train x bounds',s['trai",
+      "cat > /holdout_task/node_00.py <<'PY'\nimport numpy as np\n\n\ndef _basis(u):\n    neighbor = np.roll(u, -1, axis=1)\n    return np.stack((np.ones_like(u), u, neighbor, u * neighbor, u**3), axis=-1)\n\n\ndef _fit_forward(u, v):\n    # Use one weight per panel row because the contamination is row-wise.\n    design = _basis(u)\n    weight = np.ones(len(u))\n\n    def fit(w):\n        return np.stack([\n            np.linalg.lstsq(design[:, j] * w[:, None], v[:, j] * w, rcond=None)[0]\n            for j in range(u.shape[1])\n        ])\n\n    for _ in range(16):\n        coeff = fit(weight)\n        residual = np.lina",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\na = runpy.run_path('node_00.py')\nb = runpy.run_path('_frozen_nodes/node_01.py')['run_node']\nc = runpy.run_path('_frozen_nodes/node_02.py')['run_node']\nfit, basis, invert = (a[k] for k in ('_fit_forward', '_basis', '_invert'))\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\nresidual = lambda u,v,beta: np.einsum('njk,jk->nj',basis(u),beta)-v\nbeta = fit(u, v)\nnorm = np.linalg.norm(residual(u,v,beta),axis=1)\nclean = np.argsort(norm)[:-3]\nlo",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\n\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\na = runpy.run_path('node_00.py')\nb = runpy.run_path('_frozen_nodes/node_01.py')['run_node']\nc = runpy.run_path('_frozen_nodes/node_02.py')['run_node']\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\nd = a['_basis'](u)\nn = np.roll(u, -1, axis=1)\npredict = lambda d, beta: np.einsum('njk,jk->nj', d, beta)\nfull_beta = a['_fit_forward'](u, v)\nprint('Panel A sorted row residual norms (five largest):', np.sort(np.linalg.norm(predict(d, full_b"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_a03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_a03_batch_01_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 2474,
+        "sha256": "c61d061175d59336da51488a7bd5aa1578426f62544c368c414cc690caaf770a",
+        "content_addressed_ref": "content_addressed_blobs/c61d061175d59336da51488a7bd5aa1578426f62544c368c414cc690caaf770a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_affine",
+      "_fit",
+      "_calibration",
+      "solve_batch",
+      "_readout_design",
+      "_readout"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "39d9911725af83949f63b3d78e7fb48aa1387754dacfba4852b537b8f3250ce5",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\n\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\na = runpy.run_path('node_00.py')\nb = runpy.run_path('_frozen_nodes/node_01.p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "39d9911725af83949f63b3d78e7fb48aa1387754dacfba4852b537b8f3250ce5",
+        "expected_candidate_sha256": "39d9911725af83949f63b3d78e7fb48aa1387754dacfba4852b537b8f3250ce5",
+        "computed_candidate_sha256": "39d9911725af83949f63b3d78e7fb48aa1387754dacfba4852b537b8f3250ce5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 2474
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_39d99117"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(x, y):\n    return np.linalg.lstsq(x, y, rcond=None)[0]"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    (u, v) = (panel['u'], panel['v'])\n    (i, j) = np.triu_indices(len(u), k=1)\n    du = u[j] - u[i]\n    dv = v[j] - v[i]\n    gain = np.array([np.median(dv[du[:, k] != 0, k] / du[du[:, k] != 0, k]) for k in range(u.shape[1])])\n    bias = np.median(v - u * gain, axis=0)\n    error = np.linalg.norm(v - u * gain - bias, axis=1)\n    center = np.median(error)\n    inlier = error <= center + 8 * np.median(np.abs(error - center))\n    (bias, gain) = np.array([_fit(_affine(u[inlier, k:k + 1]), v[inlier, k]) for k in range(u.shape[1])]).T\n    return (bias, gain)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    \"\"\"Predict the scalar readout and trajectory in the calibrated operator coordinates.\"\"\"\n    from itertools import combinations_with_replacement\n    train = study['train']\n    (bias, gain) = _calibration(study['panel_a'])\n    panel_b = study['panel_b']\n    operator = _fit(_affine(panel_b['u']), panel_b['v'])\n    z = _affine((train['x'] - bias) / gain) @ operator\n    z_test = _affine((study['test']['x'] - bias) / gain) @ operator\n    (a, a_test) = (_affine(z), _affine(z_test))\n    (i, j) = np.array(list(combinations_with_replacement(range(z.shape[1]), 2))).T\n    products = z[:, i] * z[:, j]\n    quadratic = _fit(np.column_stack((a, products)), train['y'])[a.shape[1]:]\n    keep = np.argsort(np.abs(quadratic))[-2:]\n    pooled = products[:, keep].sum(axis=1)\n    pooled_test = (z_test[:, i[keep]] * z_test[:, j[keep]]).sum(axis=1)\n    y_hat = np.column_stack((a_test, pooled_test)) @ _fit(np.column_stack((a, pooled)), train['y'])\n    traj = train['traj']\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\n    state_pred = a_test @ _fit(a, traj @ modes.T) @ modes\n    last = state_pred[:, -1]\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}"
+      },
+      {
+        "name": "_readout_design",
+        "code": "def _readout_design(z):\n    interaction = z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\n    return np.column_stack((_affine(z), interaction))"
+      },
+      {
+        "name": "_readout",
+        "code": "def _readout(p, design):\n    q = design @ p[:-3]\n    (offset, amplitude, frequency) = p[-3:]\n    return q + amplitude * np.tanh(frequency * q + offset)"
+      }
+    ]
+  }
+}

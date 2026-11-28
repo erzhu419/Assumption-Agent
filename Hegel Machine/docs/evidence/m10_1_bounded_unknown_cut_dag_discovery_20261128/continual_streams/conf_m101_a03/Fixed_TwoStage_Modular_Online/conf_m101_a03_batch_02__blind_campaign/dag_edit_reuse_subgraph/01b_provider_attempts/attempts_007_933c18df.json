@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "933c18df37c74a629c416401d297eff2",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Fixed_TwoStage_Modular_Online__conf_m101_a03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:49.502399+00:00",
+  "ended_at_utc": "2026-11-28T09:26:27.756106+00:00",
+  "request_sha256": "920fe24a2e998e737de2e3a181f87c747cf00992a6cb29fd811244f6de226b3b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40433,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25128,
+    "cached_tokens": 9344,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nnode = runpy.run_path(root + 'node_00.py')\\nsink = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\npanel = study['panel_a']\\nu, v = panel['u'], panel['v']\\nsuccessor = np.roll(u, -1, axis=1)\\nphi = np.stack((np.ones_like(u), u, successor, u*successor, u**3), axis=-1)\\ntrain = study['train']\\nvalidation = np.argsort(np.max(abs(train['x']), axis=1))[-12:]\\nfit = np.setdiff1d(np.arange(len(train['x'])), validation)\\nbase = {**study, 'train': {key: train[key][fit] for key in ('x', 'y', 'traj')}, 'test': {'x': train['x'][validation]}}\\nmetrics, calibration, omitted_residual = [], [], []\\nfor i in range(len(u)):\\n    ids = np.delete(np.arange(len(u)), i)\\n    fold_panel = {'u': u[ids], 'v': v[ids]}\\n    coef = node['_parameters'](fold_panel)\\n    residual = np.linalg.norm(node['_forward'](u[ids], coef) - v[ids], axis=1)\\n    clean = ids[np.argsort(residual)[:len(ids)-3]]\\n    held = [node['_forward'](u[i:i+1], coef)[0], [], [], [], []]\\n    for j in range(u.shape[1]):\\n        d = phi[:, j, :]\\n        for k, design in [(1, d[:, [0, 1, 2, 4]]), (2, np.column_stack((d, (u[:, j]-successor[:, j])**2)))]:\\n            beta = np.linalg.lstsq(design[clean], v[clean, j], rcond=None)[0]\\n            held[k].append(design[i] @ beta)\\n        # Fit a nonnegative denominator coefficient on calibration training rows only.\\n        for k, q in [(3, u[:, j]), (4, u[:, j]-successor[:, j])]:\\n            q2 = q*q\\n            augmented = np.column_stack((d[clean], -v[clean, j]*q2[clean]))\\n            a = max(0., np.linalg.lstsq(augmented, v[clean, j], rcond=None)[0][-1])\\n            design = d/(1+a*q2[:, None])\\n            beta = np.linalg.lstsq(design[clean], v[clean, j], rcond=None)[0]\\n            held[k].append(design[i] @ beta)\\n    calibration.append(np.linalg.norm(np.asarray(held)-v[i], axis=1))\\n    omitted_residual.append(calibration[-1][0])\\n    handoff = node['run_node']({'__input__': {**base, 'panel_a': fold_panel}})\\n    pred = sink({'node_00': handoff})\\n    metrics.append([np.mean(abs(pred['y_hat']-train['y'][validation])), np.mean(abs(pred['state_pred']-train['traj'][validation]))])\\ncalibration = np.asarray(calibration)\\norder = np.argsort(omitted_residual)\\nprint('Held-out outlier separation (largest inlier, smallest outlier):', np.asarray(omitted_residual)[order[-4:-2]])\\nfor name, values in zip(('cyclic mixed-degree', 'no adjacent product', 'plus squared pair difference', 'rational self', 'rational pair difference'), calibration[order[:-3]].T):\\n    print(name, 'LOO clean RMS/max:', np.sqrt(np.mean(values**2)), np.max(values))\\nworst = np.max(metrics, axis=0)\\nprint('Worst high-amplitude prediction MAE across all calibration-row omissions:', worst, '; margins:', 0.038-worst)\\nprint('Public study keys:', sorted(study), '; train keys:', sorted(train), '; panel keys:', sorted(panel))\\nassert np.all(np.isfinite(metrics)) and np.all(worst < .038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 homogeneous cubic → H2 cyclic mixed quadratic–cubic Panel A inverse followed by the affine Panel B map; the verified worst stress-fold scalar and trajectory MAEs are 0.005865 and 0.004371.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or within-batch classification\",\n      \"rejected_reason\": \"The published interface is a continuous calibration and regression DAG; none of those mechanisms is indicated. Inspect the study keys for an actual batch variable before considering a nuisance adjustment.\"\n    }\n  ],\n  \"rationale\": \"Combine a calibration-row jackknife with the high-amplitude prediction slice to detect dependence on a single calibration measurement. Compare the adjacent-product ablation, pair-difference extension, and rational extensions on the same held-out calibration rows; revisit the model only if they expose a material residual or prediction bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "996353b22c052059238380e5b022267350351880eed542bfb5581bb5dcc80b36",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40813.48,
+      "usage_known": true,
+      "prompt_tokens": 25128,
+      "cached_tokens": 9344,
+      "completion_tokens": 1511
+    }
+  ]
+}

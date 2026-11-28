@@ -1,0 +1,153 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b03_batch_04_5dd83cc1cd21",
+    "source_hash": "5dd83cc1cd2197a512615aa27782b198dfbced422aa26bf227a323390cf4a351",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_b03_batch_04__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_00_solver.py",
+        "bytes": 2597,
+        "sha256": "a20eb65292c40ebe6a51afd3a889eddadcddac526aafaf7a82dc0aa854cda796"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_01_solver.py",
+        "bytes": 4383,
+        "sha256": "359f9dbd7b1cf80758809fe2d4cac3a20073f7207dd5687751eb68a5aef5ff19"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_02_solver.py",
+        "bytes": 3609,
+        "sha256": "a9b812d02e2170560a6da9d690998806077dffc4ce8923f4aa2b8cdf811100ff"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_03_solver.py",
+        "bytes": 2800,
+        "sha256": "b63773ba06bcdb09bbb4621325264fb52dbe04fd1bc82773c9f88844690ed4ab"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json && for f in _frozen_nodes/*.py test_dag_candidate.py validate_public_schema.py; do echo \"--- $f\"; cat \"$f\"; done && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(x,p='',level=0):\n if isinstance(x,dict):\n  for k,v in x.items(): show(v,p+'/'+str(k),level+1)\n elif isinstance(x,(list,tuple)) and x and isinstance(x[0],dict):\n  print(p,type(x).__name__,len(x)); show(x[0],p+'/0',level+1)\n else:\n  a=np.asarray(x); print(p,a.shape,a.dtype,str(a.reshape(-1)[:8])[:180])\nshow(d)\nPY",
+      "cd /holdout_task && cat _frozen_nodes/node_02.py _frozen_nodes/node_03.py && cat test_dag_candidate.py && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))[0]['study']['panel_c']; u,y=p['u'],p['v1']; n,d=u.shape\nprint('u ranges',u.min(0),u.max(0),'v1 ranges',y.min(0),y.max(0))\nfor name,A in [('constant',np.ones((n,1))),('linear',np.c_[np.ones(n),u]),('even univariate',np.c_[np.ones(n),u*u]),('additive cubic',np.c_[np.ones(n),u,u*u,u**3]),('full quadratic',np.column_stack([np.ones(n),*u.T,*[u[:,i]*u[:,j] for i in range(d) for j in range(i,d)]]))]:\n pred=np.",
+      "set -e\ncd /holdout_task\ncat > node_01.py <<'PY'\nimport numpy as np\n\n\ndef _design(x):\n    i, j = np.triu_indices(x.shape[1])\n    return np.column_stack((np.ones(len(x)), x, x[:, i] * x[:, j]))\n\n\ndef run_node(inputs: dict) -> dict:\n    upstream = inputs['node_00']\n    panel = upstream['panel_c']\n    coef = np.linalg.lstsq(_design(panel['u']), panel['v1'], rcond=None)[0]\n    return {'a': _design(upstream['z']) @ coef}\nPY\npython3 /holdout_task/test_dag_candidate.py\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('node_01', '/",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nimport pickle\nimport numpy as np\np = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']['panel_c']\nu, v = p['u'], p['v1']\ni, j = np.triu_indices(u.shape[1])\nx = np.column_stack((np.ones(len(u)), u, u[:, i] * u[:, j]))\nexpected = {(0, 1), (1, 2), (2, 3), (0, 3)}\nerrors = []\nfor k in range(len(u)):\n    train = np.arange(len(u)) != k\n    coef = np.linalg.lstsq(x[train], v[train], rcond=None)[0]\n    idx = np.argsort(np.linalg.norm(coef[1+u.shape[1]:], axis=1))[-4:]\n    assert {(i[t], j[t]) for t in idx} == expected, (k, idx)\n    small = x[:, np.r_[0",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\ndef load(name, path):\n    spec = importlib.util.spec_from_file_location(name, path)\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod.run_node\n\nnodes = [load(f'node_{k:02}', f'{\"_frozen_nodes/\" if k != 1 else \"\"}node_{k:02}.py') for k in range(4)]\nwith open('public_batch.pkl', 'rb') as f:\n    batch = pickle.load(f)\nfor row in batch:\n    study = row['study']\n    panel = study['panel_c']\n    u, v = panel['u'], panel['v1']\n    nxt = np.roll(u, -1, axis=",
+      "set -e\ncd /holdout_task\ncat _frozen_nodes/node_03.py\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\ndef load(k):\n    name = f'node_{k:02}'\n    path = f'{\"_frozen_nodes/\" if k != 1 else \"\"}{name}.py'\n    spec = importlib.util.spec_from_file_location(name, path)\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod.run_node\n\nnodes = [load(k) for k in range(4)]\nwith open('public_batch.pkl', 'rb') as f:\n    batch = pickle.load(f)\n\ndef linear(x):\n    return np.c_[np.ones(len(x)), x]\n\ndef full(x):\n    i, j = np.triu_indices(x.sha"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_b03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 449,
+        "sha256": "24572019cfcf69e5e31ad7a5dd7d0ee8d51950bab71b8685a101f94fffe62117",
+        "content_addressed_ref": "content_addressed_blobs/24572019cfcf69e5e31ad7a5dd7d0ee8d51950bab71b8685a101f94fffe62117.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": [
+      "_time_modes",
+      "_latent",
+      "_operator",
+      "_features",
+      "_matern",
+      "_predict_amplitudes",
+      "solve_batch",
+      "_fit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "5dd83cc1cd2197a512615aa27782b198dfbced422aa26bf227a323390cf4a351",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "set -e\ncd /holdout_task\ncat _frozen_nodes/node_03.py\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\ndef load(k):\n    name = f'node_{k:02}'\n    path = f'{\"_frozen_nodes/\" if k != 1 else \"\"}{name}.py'\n    spec = i",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "5dd83cc1cd2197a512615aa27782b198dfbced422aa26bf227a323390cf4a351",
+        "expected_candidate_sha256": "5dd83cc1cd2197a512615aa27782b198dfbced422aa26bf227a323390cf4a351",
+        "computed_candidate_sha256": "5dd83cc1cd2197a512615aa27782b198dfbced422aa26bf227a323390cf4a351",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 449
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_5dd83cc1"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_time_modes",
+        "code": "def _time_modes(t, traj):\n    from scipy.optimize import least_squares\n\n    def basis(r):\n        return -np.expm1(-t[:, None] * r)\n\n    def project(h):\n        return np.linalg.lstsq(h, traj.T, rcond=None)[0]\n\n    def residual(r):\n        h = basis(r)\n        return (h @ project(h) - traj.T).ravel()\n    rates = least_squares(residual, [0.5, 2.0], bounds=(0.01, 10.0)).x\n    h = basis(np.sort(rates))\n    return (h, project(h).T)"
+      },
+      {
+        "name": "_latent",
+        "code": "def _latent(panel, x):\n    (u, v) = (panel['u'], panel['v'])\n    linear = np.column_stack((np.ones(len(u)), u))\n    keep = np.ones(len(u), dtype=bool)\n    for _ in range(8):\n        coef = np.linalg.lstsq(linear[keep], v[keep], rcond=None)[0]\n        error = np.max(abs(linear @ coef - v), axis=1)\n        keep = error < max(0.001, 3 * np.median(error))\n    (u, v) = (u[keep], v[keep])\n    i = np.arange(4)\n    j = (i + 1) % 4\n    coef = np.column_stack([np.linalg.lstsq(np.column_stack((np.ones(len(u)), u[:, a], u[:, b], u[:, a] * u[:, b], u[:, a] ** 3)), v[:, a], rcond=None)[0] for (a, b) in zip(i, j)])\n    (shift, gain, cross, product, cubic) = coef\n    z = (x - shift) / gain\n    for _ in range(20):\n        zj = z[:, j]\n        error = shift + gain * z + cross * zj + product * z * zj + cubic * z ** 3 - x\n        if np.max(np.abs(error), initial=0.0) < 1e-12:\n            break\n        jac = np.zeros((len(z), 4, 4))\n        jac[:, i, i] = gain + product * zj + 3 * cubic * z * z\n        jac[:, i, j] = cross + product * z\n        z -= np.linalg.solve(jac, error[..., None])[..., 0]\n    return z"
+      },
+      {
+        "name": "_operator",
+        "code": "def _operator(panel, key, z):\n    from scipy.optimize import least_squares\n    (u, v) = (panel['u'], panel[key])\n    if key == 'v1':\n\n        def nonlinear(x, h):\n            return np.tanh(h[0] * x) + h[1] * x / (1 + (h[2] * x) ** 2)\n        starts = [[w, c, f] for w in (1, 2.3, 3) for c in (-0.3, 0.3) for f in (0.8, 2)]\n    else:\n\n        def nonlinear(x, h):\n            return x * x + h[1] * (np.cos(h[0] * x) - 1)\n        starts = [[w, -0.2] for w in (1, 2.3, 3)]\n\n    def design(x, h):\n        return np.column_stack((np.ones(len(x)), x, nonlinear(x, h)))\n\n    def residual(h, loo=False):\n        (q, _) = np.linalg.qr(design(u, h))\n        r = v - q @ (q.T @ v)\n        if loo:\n            r = r / (1 - (q * q).sum(axis=1, keepdims=True))\n        return r.ravel()\n    fits = (least_squares(residual, start, max_nfev=300) for start in starts)\n    h = min(fits, key=lambda fit: np.linalg.norm(residual(fit.x, True))).x\n    return design(z, h) @ np.linalg.lstsq(design(u, h), v, rcond=None)[0]"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(study, x):\n    z = _latent(study['panel_a'], x)\n    panel = study['panel_c']\n    (a, b) = (_operator(panel, key, z) for key in ('v1', 'v2'))\n    paired = a * b\n    scalar = np.column_stack((np.ones(len(z)), a, b, paired.sum(axis=1)))\n    state = np.column_stack((scalar[:, :-1], paired))\n    return (scalar, state, b)"
+      },
+      {
+        "name": "_matern",
+        "code": "def _matern(a, b):\n    d = np.sqrt(5 * np.sum((a[:, None, :] - b[None, :, :]) ** 2, axis=2)) / 1.4\n    return (1 + d + d * d / 3) * np.exp(-d)"
+      },
+      {
+        "name": "_predict_amplitudes",
+        "code": "def _predict_amplitudes(features, coordinates, amplitudes):\n    from scipy.linalg import cho_factor\n    from scipy.linalg import cho_solve\n    n = len(amplitudes)\n    d = features[:n]\n    cov = _matern(coordinates[:n], coordinates[:n]) + 0.001 * np.eye(n)\n    (inverse_design, inverse_targets) = np.split(cho_solve(cho_factor(cov), np.column_stack((d, amplitudes))), [d.shape[1]], axis=1)\n    coef = np.linalg.solve(d.T @ inverse_design + 0.0003 * np.eye(d.shape[1]), d.T @ inverse_targets)\n    weights = inverse_targets - inverse_design @ coef\n    return features[n:] @ coef + _matern(coordinates[n:], coordinates[:n]) @ weights"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    n = len(train['x'])\n    (scalar, state, coordinates) = _features(study, np.concatenate((train['x'], study['test']['x'])))\n    (h, amplitudes) = _time_modes(study['eval_times'], train['traj'])\n    y_hat = scalar[n:] @ np.linalg.lstsq(scalar[:n], train['y'], rcond=None)[0]\n    state_pred = _predict_amplitudes(state, coordinates, amplitudes) @ h.T\n    endpoint = state_pred[:, -1]\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), endpoint.mean(), endpoint.std()])}"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(design, target):\n    return np.linalg.lstsq(design, target, rcond=None)[0]"
+      }
+    ]
+  }
+}

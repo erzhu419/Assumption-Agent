@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f1121d26c0144a8aa8f132720679e46",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:05.462541+00:00",
+  "ended_at_utc": "2026-11-28T09:32:42.385189+00:00",
+  "request_sha256": "9bfed5abb4aaa2db492c675dc1a6d7755ab2d5f58a2ba507aa276649c39bcc65",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30055,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21277,
+    "cached_tokens": 9344,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\n\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\na = runpy.run_path('node_00.py')\\nb = runpy.run_path('_frozen_nodes/node_01.py')['run_node']\\nc = runpy.run_path('_frozen_nodes/node_02.py')['run_node']\\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\\nd = a['_basis'](u)\\nn = np.roll(u, -1, axis=1)\\npredict = lambda d, beta: np.einsum('njk,jk->nj', d, beta)\\nfull_beta = a['_fit_forward'](u, v)\\nprint('Panel A sorted row residual norms (five largest):', np.sort(np.linalg.norm(predict(d, full_beta)-v, axis=1))[-5:])\\n# Compare rational saturation with the polynomial on held-out panel rows.\\n# A sum or difference in the numerator is already in the span of u and n.\\noptions = [('polynomial', d)] + [\\n    (f'{label}, a={alpha:g}', d / (1+alpha*q*q)[...,None])\\n    for label, q in [('self', u), ('sum', u+n), ('difference', u-n)]\\n    for alpha in (0.0001, 0.001, 0.01, 0.1)\\n]\\nix = np.arange(len(u))\\nerrors = {label: [] for label, _ in options}\\nexcluded = []\\nfor te in np.array_split(ix, 6):\\n    tr = ix[~np.isin(ix, te)]\\n    beta = a['_fit_forward'](u[tr], v[tr])\\n    r = np.linalg.norm(predict(d, beta)-v, axis=1)\\n    # A fixed cutoff separates gross corruption from sub-milliscale residuals.\\n    tr = tr[r[tr]<0.1]\\n    excluded.extend(te[r[te]>=0.1])\\n    te = te[r[te]<0.1]\\n    for label, design in options:\\n        coef = np.stack([np.linalg.lstsq(design[tr,j], v[tr,j], rcond=None)[0] for j in range(u.shape[1])])\\n        errors[label].append(np.sqrt(np.mean((predict(design[te],coef)-v[te])**2)))\\nscores = sorted((max(e), label) for label, e in errors.items())\\nprint('Held-out gross-outlier indices:', sorted(excluded))\\nprint('Worst clean panel fold RMSE, polynomial:', max(errors['polynomial']), '; best rational challenger:', next(z for z in scores if z[1]!='polynomial'))\\n\\n# Isolate the highest observed input magnitudes to test extrapolation.\\nt = s['train']\\norder = np.argsort(np.linalg.norm(t['x'], axis=1))\\nworst = np.zeros(3)\\nfor te in np.array_split(order, 4):\\n    keep = ~np.isin(np.arange(len(order)), te)\\n    tr = {k: t[k][keep] for k in ('x','y','traj')}\\n    tr['summary'] = np.array([tr['y'].mean(),tr['y'].std(),tr['traj'][:,-1].mean(),tr['traj'][:,-1].std()])\\n    sub = dict(s, train=tr, test={'x':t['x'][te]})\\n    out = c({'node_01': b({'__input__':sub, 'node_00':a['run_node']({'__input__':sub})})})\\n    traj_err = abs(out['state_pred']-t['traj'][te])\\n    result = np.array([abs(out['y_hat']-t['y'][te]).mean(), traj_err.mean(), traj_err.mean(axis=0).max()])\\n    print('Input norm slice upper bound', np.linalg.norm(t['x'][te],axis=1).max(), ':', result)\\n    worst = np.maximum(worst, result)\\nassert np.all(worst < 0.038), worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/quadratic → H2 robust cyclic cubic calibration; worst blocked-fold y MAE is 0.005193, trajectory MAE is 0.004316, and single-horizon MAE is 0.005421.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test batch centering, relay modes, or stochastic drift\",\n      \"rejected_reason\": \"The task has one public study with no batch labels, relay states, or stochastic drift inputs; these checks would not test the edited calibration node.\"\n    }\n  ],\n  \"rationale\": \"The focused audit checks whether rational saturation improves worst-fold calibration and whether high-magnitude real inputs erode the downstream margin. Either finding would identify a reason to revisit the basis or inversion; neither check requires changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ee7275dbd024841fc8e36849b0c7781a17ae1036e7134227c0924e02fd6b10b2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42215.37,
+      "usage_known": true,
+      "prompt_tokens": 21277,
+      "cached_tokens": 9344,
+      "completion_tokens": 1592
+    }
+  ]
+}

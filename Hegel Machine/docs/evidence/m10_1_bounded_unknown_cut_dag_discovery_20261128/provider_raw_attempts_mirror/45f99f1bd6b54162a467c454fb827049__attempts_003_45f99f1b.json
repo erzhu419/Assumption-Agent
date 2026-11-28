@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45f99f1bd6b54162a467c454fb827049",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:20.063516+00:00",
+  "ended_at_utc": "2026-11-28T09:50:42.588844+00:00",
+  "request_sha256": "06889b4543ca06a871da565b38b410e9ce42d1a263caf618a8410f5d405b74d3",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 18083,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17638,
+    "cached_tokens": 9344,
+    "completion_tokens": 831
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout_probe.py <<'PY'\\nimport numpy as np, pickle, importlib.util,itertools\\nP='/holdout_task/'\\ns=pickle.load(open(P+'public_batch.pkl','rb'))[0]['study']; spec=importlib.util.spec_from_file_location('enc',P+'_frozen_nodes/node_00.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nz=m.run_node({'__input__':s})['z_tr']; x=s['train']['x']; a=s['panel_a']; u=m._invert_a(x,*m._fit_a(a['u'],a['v'])); Y=np.c_[s['train']['y'],s['train']['traj']]; fs=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),i), i) for i in np.array_split(np.random.default_rng(123).permutation(72),4)];\\ndef poly(q,d):return np.column_stack([np.prod(q[:,j],axis=1) for n in range(d+1) for j in itertools.combinations_with_replacement(range(q.shape[1]),n)])\\ndef check(D,Y=Y):\\n es=np.array([np.mean(abs(D[b]@np.linalg.lstsq(D[a],Y[a],rcond=None)[0]-Y[b]),axis=0) for a,b in fs]); return np.round(np.c_[es[:,0],es[:,1:].mean(axis=1)][[0,1+np.argmax(es[1:,0]),1+np.argmax(es[1:,1:].mean(axis=1))]],5).tolist()\\nnp.set_printoptions(precision=4,suppress=True);print('z range',z.min(0),z.max(0));print('z rows',np.c_[z,Y[:,0],Y[:,-1]][:12]);\\nfor name,q in [('encoded',z),('reference',u),('measured',x)]:\\n for d in [1,2,3,4]: print(name,d,check(poly(q,d)))\\n for fun in [np.tanh,np.sin,lambda q:q*np.abs(q),lambda q:q/(1+q*q),lambda q:q*np.exp(-q*q)]:\\n  for k in [.5,1,2]: print(name,fun.__name__,k,check(np.c_[poly(q,2),fun(k*q)]))\\nD=poly(z,3); c=np.linalg.lstsq(D,Y,rcond=None)[0]; print('encoded cubic terms: monomial, y coefficient, final trajectory coefficient');print(list(zip([j for n in range(4) for j in itertools.combinations_with_replacement(range(4),n)],c[:,0].round(4),c[:,-1].round(4))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Frozen nonlinear encoder → compact polynomial or nonlinear readouts; worst-slice MAE not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare representations and basis families on the official split and four other folds to detect missing nonlinear terms and avoid choosing on one split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3b93a79f475d78a7dbb060f31755d9b9491ae47ded7760a0cddb5e2b6feb66c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25121.66,
+      "usage_known": true,
+      "prompt_tokens": 17638,
+      "cached_tokens": 9344,
+      "completion_tokens": 831
+    }
+  ]
+}

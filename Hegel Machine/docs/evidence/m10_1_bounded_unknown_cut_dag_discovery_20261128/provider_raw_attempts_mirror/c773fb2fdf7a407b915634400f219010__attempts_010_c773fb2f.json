@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c773fb2fdf7a407b915634400f219010",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a02_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:44.487278+00:00",
+  "ended_at_utc": "2026-11-28T09:46:18.224822+00:00",
+  "request_sha256": "5a91e671e02803dda63e02ee93b5834be35108a5f3121db5c5ee4750a15e99ee",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 69873,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38395,
+    "cached_tokens": 9344,
+    "completion_tokens": 1350
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_02.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _features(x, z):\\n    cyclic = x * np.roll(z, 1, axis=1)\\n    base = np.column_stack((np.ones(len(x)), z, cyclic))\\n    contrast = z[:, 2:].sum(axis=1) - z[:, :2].sum(axis=1)\\n    # Two compact saturation models: one gated by the cyclic interaction,\\n    # the other by the positive half of the mixed-coordinate contrast.\\n    interaction_gate = 2 * cyclic[:, 0] - cyclic.sum(axis=1)\\n    mixed_gate = z[:, 2:].sum(axis=1)\\n    gates = np.column_stack((interaction_gate, mixed_gate))\\n    return base, contrast[:, None] / (1 + gates**2)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    cal, mix = inputs['node_00'], inputs['node_01']\\n    f, corrections = _features(cal['cal_tr'], mix['z_tr'])\\n    g, test_corrections = _features(cal['cal_te'], mix['z_te'])\\n    y_train = study['train']['y']\\n    predictions = []\\n    for a, b in zip(corrections.T, test_corrections.T):\\n        fit = np.column_stack((f, a))\\n        coefficients = np.linalg.lstsq(fit, y_train, rcond=None)[0]\\n        predictions.append(g @ coefficients[:-1] + b * coefficients[-1])\\n    y = np.mean(predictions, axis=0)\\n    state = g @ np.linalg.lstsq(f, study['train']['traj'], rcond=None)[0]\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py || exit $?\\npython3 -I - <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom sklearn.model_selection import KFold\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']\\np=runpy.run_path(root+'_frozen_nodes/node_00.py')['run_node']({'__input__':s})\\nz=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']({'node_00':p})\\nf=runpy.run_path(root+'node_02.py')['run_node']\\ny,tr=s['train']['y'],s['train']['traj']\\ndef check(a,b):\\n    out=f({'__input__':{'train':{'y':y[a],'traj':tr[a]}},'node_00':{'cal_tr':p['cal_tr'][a],'cal_te':p['cal_tr'][b]},'node_01':{'z_tr':z['z_tr'][a],'z_te':z['z_tr'][b]}})\\n    err=np.abs(out['state_pred']-tr[b]); return [np.abs(out['y_hat']-y[b]).mean(),err.mean(),err.mean(axis=0).max()]\\nfor seed in (281,406):\\n    vals=np.array([check(a,b) for a,b in KFold(4,shuffle=True,random_state=seed).split(y)])\\n    print('four-fold seed',seed,'mean',vals.mean(0).round(6),'worst',vals.max(0).round(6),'[y, trajectory, horizon]')\\norder=np.argsort(np.linalg.norm(p['cal_tr'],axis=1)); print('high-calibrated-norm holdout',np.round(check(order[:-18],order[-18:]),6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Broad polynomial readout → compact cyclic interaction with rational scalar corrections; the archived sink scored 0.039077 scalar and 0.011723 trajectory MAE, while two compact correction probes scored 0.033945 and 0.034883 scalar MAE on the prescribed split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Retain the broad panel-cosine sink\",\"rejected_reason\":\"The official run passed the trajectory threshold but missed the scalar threshold.\"}],\"rationale\":\"Both compact corrections improved the prescribed scalar split and the alternate folds. Average their predictions and retain a separate compact trajectory fit; verify the exact artifact with the official harness, then measure split and high-norm sensitivity.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4fb6752842dea228e712759fd1c157a53fee0833d1e068fccb59608d918c0286",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36375.33,
+      "usage_known": true,
+      "prompt_tokens": 38395,
+      "cached_tokens": 9344,
+      "completion_tokens": 1350
+    }
+  ]
+}

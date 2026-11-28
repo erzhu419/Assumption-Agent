@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c9f42fd5c26d4b5a85f917d553b03bde",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:42.677514+00:00",
+  "ended_at_utc": "2026-11-28T09:33:14.960927+00:00",
+  "request_sha256": "09272055c584952ae15e53b577c200026b130c096525ecbc918566509b8aba90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66199,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39228,
+    "cached_tokens": 9344,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rat.py <<'PY'\\nfrom panels import *\\nfrom sklearn.model_selection import KFold\\nfrom scipy.optimize import least_squares\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=13).split(X)]\\nprint('A',ab,'B',B,'t',s['eval_times']); print('C1 params',C1.__defaults__[1:]); print('C2 params',C2.__defaults__[1:]); print('raw quadratic y',ls(PolynomialFeatures(2).fit_transform(X),Y))\\ndef run(A,i,j,mode,out):\\n q=PolynomialFeatures(2).fit_transform(A); l=aug(A); a=q[i]; b=l[i]; yy=out[i]; m=a.shape[1];\\n def make(p,a,b):\\n  if mode=='r1': return a/(1+(b@p)**2)[:,None]\\n  if mode=='r2': return a/(1+np.sum((b@p.reshape(-1,b.shape[1]).T)**2,axis=1))[:,None]\\n  if mode=='s1': return a/np.sqrt(1+(b@p)**2)[:,None]\\n  if mode=='rplus': return np.c_[a,a/(1+(b@p)**2)[:,None]]\\n  if mode=='sinplus': return np.c_[a,b*np.sin(b@p)[:,None]]\\n  if mode=='cos': return a*np.cos(b@p)[:,None]\\n  if mode=='escale': return a*np.exp(-np.minimum((b@p)**2,20))[:,None]\\n  if mode=='r4': return a/(1+(A0(a)@p)**2).sum(1)[:,None]\\n def A0(a):return a[:,1:5]\\n def cf(D):\\n  reg=1e-6 if mode!='rplus' else .001\\n  return np.linalg.solve(D.T@D+reg*np.eye(D.shape[1]),D.T@yy)\\n rng=np.random.default_rng(4); fits=[]\\n size=2*b.shape[1] if mode=='r2' else (4 if mode=='r4' else b.shape[1]);\\n for p in np.r_[np.eye(size)*.7,rng.normal(0,.6,(6,size))]:\\n  def err(p):\\n   D=make(p,a,b); c=cf(D); return np.r_[D@c-yy,np.sqrt(1e-6 if mode!='rplus' else .001)*c,.004*p]\\n  r=least_squares(err,p,max_nfev=110); fits.append(r)\\n r=min(fits,key=lambda r:r.cost);D=make(r.x,a,b);c=cf(D);return make(r.x,q[j],l[j])@c,r.cost,r.x,c\\nans=[]\\nfor n,d in routes(X):\\n if n not in ['X','Ai','AiB','AiBi']:continue\\n for k,A in [('d',d),('C1',C1(d)),('C2',C2(d)),('diff',C1(d)-C2(d)),('sum',C1(d)+C2(d)),('d+z',d+C1(d)),('d+w',d+C2(d))]:\\n  for mode in ['r1','r2','s1','rplus','sinplus','cos','escale']:\\n   i,j=splits[0]; h,c,p,a=run(A,i,j,mode,Y); err=abs(h-Y[j]).mean(); ans.append((err,c,n,k,mode,A));\\nfor e,c,n,k,mode,A in sorted(ans,key=lambda r:r[1])[:12]:print('fit rank',round(e,6),round(c,7),n,k,mode)\\nfor e,c,n,k,mode,A in sorted(ans,key=lambda r:r[0])[:16]:\\n es=[]\\n for i,j in splits[1:]:h,_,p,a=run(A,i,j,mode,Y);es.append(abs(h-Y[j]).mean())\\n print('ration',n,k,mode,round(c,6),np.round([e]+es,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rat.py | tail -57\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive panel kernels -> H2 shared multiplicative denominators or modulators on compact quadratic readouts; best fixed-dictionary worst-split scalar MAE remains 0.05223.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Additive models have not closed the scalar error gap. A common denominator or modulator changes all quadratic terms together, so fit that structure on training rows and test whether the gain persists beyond the designated split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "aa542305eaa5017d7a2f0be9eba0405acbbd661fc0d64bd8b88fdfde24c59b18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34893.98,
+      "usage_known": true,
+      "prompt_tokens": 39228,
+      "cached_tokens": 9344,
+      "completion_tokens": 1298
+    }
+  ]
+}

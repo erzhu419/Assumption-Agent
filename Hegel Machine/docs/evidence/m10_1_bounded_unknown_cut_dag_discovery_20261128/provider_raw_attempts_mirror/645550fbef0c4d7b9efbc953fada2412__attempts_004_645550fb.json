@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "645550fbef0c4d7b9efbc953fada2412",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:20.275679+00:00",
+  "ended_at_utc": "2026-11-28T09:26:03.280581+00:00",
+  "request_sha256": "d0d6a292b200e24a9ef118b4d6c2b242aecd155d7871a70a6045acaba846f85b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32352,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22733,
+    "cached_tokens": 9344,
+    "completion_tokens": 1762
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat > /tmp/probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom sklearn.linear_model import ElasticNet, Ridge\\nfrom itertools import combinations_with_replacement\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; T=S['train']; t=S['eval_times']\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(a): return np.c_[np.ones(len(a)),a]\\ndef power(a,d): return np.column_stack([np.prod(a[:,k],axis=1) for j in range(1,d+1) for k in combinations_with_replacement(range(a.shape[1]),j)])\\ndef coords(x):\\n p=S['panel_a']; u,v=p['u'],p['v']; c=np.stack([fit(aff(u[:,i:i+1]),v[:,i]) for i in range(4)],axis=1)\\n for i in range(25):\\n  e=np.linalg.norm(c[0]+c[1]*u-v,axis=1); w=np.sqrt(np.minimum(1,0.03/np.maximum(e,1e-12))); c=np.stack([fit(aff(u[:,j:j+1])*w[:,None],v[:,j]*w) for j in range(4)],axis=1)\\n k=e<.01; c=np.stack([fit(aff(u[k,j:j+1]),v[k,j]) for j in range(4)],axis=1); z=(x-c[0])/c[1]\\n p=S['panel_b']; b=aff(z)@fit(aff(p['u']),p['v']); out=[z,b];p=S['panel_c'];u=p['u']\\n for j in (1,2):\\n  v=p['v'+str(j)]; best=(np.inf,None)\\n  for fun in (np.tanh,np.sin,np.cos):\\n   def d(x,f):return np.c_[aff(x),fun(f*x)]\\n   def loss(f):\\n    a=d(u,f);return np.linalg.norm(a@fit(a,v)-v)\\n   fs=np.linspace(.25,6,45); ii=np.argmin([loss(f) for f in fs]); f=minimize_scalar(loss,bounds=(fs[max(ii-1,0)],fs[min(ii+1,len(fs)-1)]),method='bounded').x\\n   print('C',j,fun.__name__,round(f,4),round(loss(f)/np.sqrt(v.size),6))\\n   if loss(f)<best[0]:best=(loss(f),d(z,f)@fit(d(u,f),v))\\n  out.append(best[1]); print('C polynomial LOOCV',[(d,np.mean(abs((v-(a:=aff(power(u,d)))@fit(a,v))/(1-np.diag(a@np.linalg.pinv(a)))[:,None]))) for d in (1,2)])\\n return out\\n\\ndef modes(a):\\n def basis(r): return -np.expm1(-t[:,None]*r)\\n def r(p):\\n  d=basis(p);return (d@fit(d,a.T)-a.T).ravel()\\n q=least_squares(r,[.35,1.6],bounds=([.04,.65],[.65,6])).x; d=basis(q);return d,fit(d,a.T).T,q\\n\\ndef cv(f,target,est='ridge',alpha=.01):\\n n=52; a=f[:n]; m=a.mean(0); sc=np.maximum(a.std(0),1e-10); a=(a-m)/sc;b=(f[n:]-m)/sc\\n if est=='ridge': return Ridge(alpha=alpha).fit(a,target[:n]).predict(b)\\n return np.column_stack([ElasticNet(alpha=alpha,l1_ratio=.85,max_iter=20000,tol=1e-5).fit(a,v).predict(b) for v in target[:n].T])\\nif __name__=='__main__':\\n z,b,c,w=coords(T['x']); d,a,q=modes(T['traj'][:52]); a=fit(d,T['traj'].T).T; y=np.c_[T['y'],a]; n=52\\n print('rates',q,'in sample state projection',np.mean(abs(a@d.T-T['traj'])))\\n for name,v in [('z',z),('b',b),('c',c),('w',w),('zc',np.c_[z,c]),('zw',np.c_[z,w]),('zcw',np.c_[z,c,w])]:\\n  for k in range(1,5 if v.shape[1]==4 else 3):\\n   f=power(v,k)\\n   for model,al in [('ridge',1e-4),('ridge',.1),('elastic',.001)]:\\n    p=cv(f,y,model,al);print(name,k,model,al,round(np.mean(abs(p[:,0]-y[n:,0])),6),round(np.mean(abs(p[:,1:]@d.T-T['traj'][n:])),6))\\n for name,f in [('trig_b',np.c_[power(b,2),np.sin(b),np.cos(b),np.tanh(b)]),('mixed',np.c_[power(z,2),np.sin(b),np.cos(b),np.tanh(b),c,w]),('oracle_mode',power(np.c_[z,a],2))]:\\n  p=cv(f,y);print(name,np.mean(abs(p[:,0]-y[n:,0])),np.mean(abs(p[:,1:]@d.T-T['traj'][n:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived nonlinear calibration -> H2 robust diagonal affine calibration and a separately profiled readout; the archived batch-01 solver yields 52/20 MAEs of 0.20607 for the scalar and 0.12424 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The prior campaign's nonlinear calibration grammar is needed for panel A.\",\n    \"empirical_witness\": \"After trimming gross outliers, panel A has diagonal affine coefficients to measurement precision. Inlier leave-one-out RMS worsens from 0.000194 for affine to 0.000236 for quadratic and 0.000739 for cubic.\",\n    \"causal_blanket_diagnosis\": \"Sparse contaminated rows make the pooled panel fit appear nonlinear and cross-coupled.\",\n    \"sublated_pivot\": \"Use a robust diagonal affine inverse, then test panel activation and readout order independently.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the archived nonlinear inverse\",\n      \"rejected_reason\": \"The panel measurements support the simpler affine inverse, which avoids using unstable nonlinear terms to explain contamination.\"\n    }\n  ],\n  \"rationale\": \"The probe tests whether either auxiliary panel adds predictive information after calibration and whether scalar and trajectory errors require different readouts. The measured split errors will determine which feature families to refine.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "aa27bad56d1542cc6b7cabaeb5a271ff8c6894d81d18b0baa99ceca284a6fe90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45630.16,
+      "usage_known": true,
+      "prompt_tokens": 22733,
+      "cached_tokens": 9344,
+      "completion_tokens": 1762
+    }
+  ]
+}

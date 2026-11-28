@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee32b06b7a3a4707a737dcf18f7caa7d",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:50.183284+00:00",
+  "ended_at_utc": "2026-11-28T09:31:29.912779+00:00",
+  "request_sha256": "144cc582e552b40ecba84480ce4bc32904513b7d547b02b2c869f2b856540395",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52012,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33494,
+    "cached_tokens": 9344,
+    "completion_tokens": 1617
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^for n,d in routes(X):/,$d' /tmp/graph.py > /tmp/panels.py\\ncat > /tmp/ridges.py <<'PY'\\nfrom panels import *\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nrng=np.random.default_rng(25)\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=13).split(X)]\\n\\ndef nl(z,kind):\\n if kind=='sin': return np.sin(z),np.cos(z)\\n if kind=='tanh':\\n  a=np.tanh(z);return a,1-a*a\\n if kind=='soft': return z/(1+abs(z)),(1+abs(z))**-2\\n if kind=='rat': return z/(1+z*z),(1-z*z)/(1+z*z)**2\\n if kind=='even': return 1/(1+z*z),-2*z/(1+z*z)**2\\n if kind=='quart': return z*z/(1+abs(z)**2),2*z/(1+z*z)**2\\n\\ndef fit(d,i,j,ks,degree,reg,seed=32,nstart=10):\\n r=np.random.default_rng(seed); q=PolynomialFeatures(degree).fit_transform(d); xx=aug(d); F=q[i]; A=xx[i]; y=Y[i]; m=F.shape[1]; k=len(ks); n=len(i)\\n penal=np.r_[np.full(m,reg),np.full(k,reg),np.full(k*5,reg*.08)]**.5; penal[0]=0\\n def calc(p,xx= A,qq=F,jac=False):\\n  ww=p[m+k:].reshape(k,5); z=xx@ww.T; h,dh=[np.stack(a,1) for a in zip(*(nl(z[:,a],kind) for a,kind in enumerate(ks)))]; c=p[m:m+k];\\n  if jac:return np.r_[np.c_[qq,h,(dh[:,:,None]*c[None,:,None]*xx[:,None,:]).reshape(len(xx),-1)],np.diag(penal)]\\n  return qq@p[:m]+h@c\\n def err(p):return np.r_[calc(p)-y,penal*p]\\n opt=[]\\n for rep in range(nstart):\\n  w=r.normal(0,.75,(k,5)); w[:,0]*=.75\\n  if rep<4:\\n   w[:,1:]=np.roll(np.eye(4),rep,axis=0)[:k]*r.uniform(.6,2); w[:,0]*=.5\\n  H=np.stack([nl(A@w[a],kind)[0] for a,kind in enumerate(ks)],1); p=np.r_[ls(np.c_[F,H],y),w.ravel()];\\n  opt.append(least_squares(err,p,jac=lambda p:calc(p,jac=True),max_nfev=150,ftol=1e-7))\\n opt.sort(key=lambda a:a.cost); ps=np.array([calc(a.x,xx[j],q[j]) for a in opt[:3]]); return ps,opt[0]\\n\\nif __name__=='__main__':\\n print('B',B,'A',ab,flush=True)\\n print('panels A/B residual',rms(aug(b['u'])@B-b['v']),flush=True)\\n configs=[]\\n for nm,d in [('X',X),('Ai',(X-ab[:,0])/ab[:,1])]:\\n  for ks in [('sin',),('sin','sin'),('sin','sin','sin'),('tanh','tanh'),('soft','soft'),('rat','rat'),('sin','even'),('sin','tanh'),('sin','rat'),('sin','sin','even'),('tanh','even')]:\\n   for deg,reg in [(2,.0003),(1,.0003),(2,.005)]:\\n    ps,o=fit(d,*splits[0],ks,deg,reg,nstart=12); er=np.mean(abs(ps-Y[splits[0][1]]),axis=1); ee=np.mean(abs(ps.mean(0)-Y[splits[0][1]])); configs.append((min(er[0],ee),nm,d,ks,deg,reg)); print('ridge',nm,ks,deg,reg,round(o.cost,5),np.round(er,4),round(ee,4),flush=True)\\n for _,nm,d,ks,deg,reg in sorted(configs,key=lambda a:a[0])[:12]:\\n  err=[]\\n  for i,j in splits:\\n   p,o=fit(d,i,j,ks,deg,reg,nstart=18); err.append([abs(p[0]-Y[j]).mean(),abs(p.mean(0)-Y[j]).mean()]);\\n  print('CV',nm,ks,deg,reg,np.array(err).round(4).tolist(), 'param',o.x.round(3).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridges.py > /tmp/ridges.log; grep -E '^B|^panels|^CV' /tmp/ridges.log; grep '^ridge' /tmp/ridges.log | sort -nk10 | head -8\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed panel-coordinate dictionary -> H2 learn a few oblique nonlinear directions for the scalar readout; fixed-dictionary worst-split MAE is 0.05223, with one 52/20 result at 0.03593.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the sparse dictionary fit on the designated split alone\",\n      \"rejected_reason\": \"It passes that split but reaches 0.06312 on a different fold, so it is a fallback rather than evidence for the readout structure.\"\n    }\n  ],\n  \"rationale\": \"Fixed directions can miss a rotated nonlinear readout. Fit a few continuous directions using training rows only, compare their held-out errors with the dictionary, and retain the dictionary if the learned directions do not improve the worst slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b5424cb1fac2c5106002b285fbeab620126f435612c95057ca5c91b91b0be003",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42387.2,
+      "usage_known": true,
+      "prompt_tokens": 33494,
+      "cached_tokens": 9344,
+      "completion_tokens": 1617
+    }
+  ]
+}

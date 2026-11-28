@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9d1bbaf1d9dc448fa0582b1d06f68295",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__dag_edit_extract_module__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign__extract_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:23.165747+00:00",
+  "ended_at_utc": "2026-11-28T09:40:11.338025+00:00",
+  "request_sha256": "360a9aba15198ccb82f0e6ade11e3e26d1cfd3a65ab0b02df41a41fd175817bc",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 79164,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41087,
+    "cached_tokens": 5504,
+    "completion_tokens": 2100
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && tail -55 test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\\ncat >/tmp/sparse_readout.py <<'PY'\\nexec(open('/tmp/dag_probe.py').read().split(\\\"if '--setup'\\\")[0])\\nfrom sklearn.linear_model import ElasticNet\\nfrom itertools import combinations, combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nH=-np.expm1(-t[:,None]*np.array([.4167,1.8204])); Y=np.c_[y,T@np.linalg.pinv(H.T)]\\nprint('ranges',[(w.min(0),w.max(0)) for w in (x,z,b,c,d)]); print('linear',np.linalg.lstsq(L(z),Y,rcond=None)[0],flush=True)\\nF={}\\ndef add(name,v): F[name]=v\\nfor nm,w in [('z',z),('x',x),('b',b),('f',f),('c',c),('d',d)]:\\n for js in combinations_with_replacement(range(4),3):add((nm,'cubic',js),np.prod(w[:,js],axis=1))\\n for j,v in enumerate(w.T):\\n  for k in [.5,1.,1.5,2.,3.]:\\n   for name,fun in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('soft',lambda q:q/(1+abs(q))),('rat',lambda q:q/(1+q*q))]:add((nm,name,j,k),fun(k*v))\\nV=[(nm,j,v) for nm,q in [('z',z),('x',x),('b',b),('f',f),('c',c),('d',d)] for j,v in enumerate(q.T)]\\nfor i,(nm,j,v) in enumerate(V):\\n for nn,k,w in V[i:]:\\n  add((nm,nn,j,k,'prod'),v*w)\\n  for h in [1.,2.]:\\n   for name,term in [('sin+',np.sin(h*(v+w))),('sin-',np.sin(h*(v-w))),('cos+',np.cos(h*(v+w))),('cos-',np.cos(h*(v-w))),('th+',np.tanh(h*(v+w))),('th-',np.tanh(h*(v-w))),('div',v/(1+h*w*w)),('rdiv',w/(1+h*v*v)),('multh',np.tanh(h*v*w))]:add((nm,nn,j,k,name,h),term)\\n  for name,term in [('cub21',v*v*w),('cub12',v*w*w),('sat1',np.tanh(v)*w),('sat2',v*np.tanh(w))]:add((nm,nn,j,k,name),term)\\nkeys=list(F); X=np.array(list(F.values())).T; rng=np.random.default_rng(25)\\n# Reproduce the evaluator split as well as testing separate resampled folds.\\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(54),np.arange(54,72)),(np.arange(56),np.arange(56,72)),(np.arange(48),np.arange(48,72))]+[(np.setdiff1d(np.arange(n),v),v) for v in np.array_split(rng.permutation(n),4)]\\nerrors={}\\nfor ix,(a,v) in enumerate(folds):\\n P=L(z); R=X-P@np.linalg.lstsq(P[a],X[a],rcond=None)[0]; keep=np.std(R[a],axis=0)>1e-7; R=R[:,keep]; R/=R[a].std(0); names=np.array(keys,dtype=object)[keep]; base=P@np.linalg.lstsq(P[a],Y[a],rcond=None)[0]; Q=Y-base\\n options={}\\n for ratio in [.1,.4,.8,1.]:\\n  for al in [.001,.005,.015,.04]:\\n   ps=[]\\n   for j in range(3):\\n    sc=Q[a,j].std(); m=ElasticNet(alpha=al,l1_ratio=ratio,max_iter=1500,tol=.001,fit_intercept=False).fit(R[a],Q[a,j]/sc); ps.append(m.predict(R[v])*sc)\\n    if ix==0 and ratio==1 and al==.015:\\n     ids=np.argsort(abs(m.coef_))[-8:][::-1];print('support',j,[(names[k],round(m.coef_[k],3)) for k in ids])\\n   options[('elastic',ratio,al)]=base[v]+np.array(ps).T\\n for cut in [3,6,10,15]:\\n  pred=[]\\n  for yy in Q.T:\\n   ids=[]; res=yy[a]; M=R[a].copy()\\n   for _ in range(cut):\\n    ns=np.linalg.norm(M,axis=0); j=np.argmax(np.abs(res@M)/np.maximum(ns,1e-8)); ids.append(j); U=np.linalg.qr(R[a][:,ids])[0]; res=yy[a]-U@(U.T@yy[a]); M=R[a]-U@(U.T@R[a]);\\n   pred.append(R[v][:,ids]@np.linalg.lstsq(R[a][:,ids],yy[a],rcond=None)[0]);\\n   if ix==0 and cut==10:print('omp',[(names[j]) for j in ids])\\n  options[('omp',cut)]=base[v]+np.array(pred).T\\n for config,p in options.items():\\n  e=np.array([abs(p[:,0]-y[v]).mean(),abs(p[:,1:]@H.T-T[v]).mean()]);errors.setdefault(config,[]).append(e)\\nfor k in range(2):\\n for label,score in [('suffix',lambda e:e[0][k]),('worst',lambda e:max(q[k] for q in e))]:print(label,k,[(m,np.round(e,4).tolist()) for m,e in sorted(errors.items(),key=lambda p:score(p[1]))[:3]],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/sparse_readout.py | tail -18\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 smooth calibrated kernel → H2 sparse mixed-coordinate readout; the best prior kernel worst-fold MAEs are 0.089 for y and 0.090 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the saved baseline with features selected from all public labels\",\n      \"rejected_reason\": \"That would contaminate the validation split and could make the error look smaller without improving predictions.\"\n    }\n  ],\n  \"rationale\": \"Measure the saved candidate on the exact evaluator split and test whether sparse pairwise and rational terms reduce both errors on held-out rows. Promote a replacement only if it improves the measured bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b0b0053ff0f34b83ef3897af40025892d4d55c59762d08997d05d1343c1be065",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53458.07,
+      "usage_known": true,
+      "prompt_tokens": 41087,
+      "cached_tokens": 5504,
+      "completion_tokens": 2100
+    }
+  ]
+}

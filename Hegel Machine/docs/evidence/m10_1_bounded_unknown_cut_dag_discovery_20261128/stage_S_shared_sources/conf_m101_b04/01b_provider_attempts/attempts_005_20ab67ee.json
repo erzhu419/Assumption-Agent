@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20ab67ee979a454e9faa7b6a6cd12c28",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:13.259976+00:00",
+  "ended_at_utc": "2026-11-28T09:12:47.881023+00:00",
+  "request_sha256": "c1662e4eb67802feaed4e275f1b7aada830bf8305c27983d9e85c721fd50d1e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42342,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30203,
+    "cached_tokens": 10880,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat > /tmp/readout_probe.py <<'PY'\\nimport pickle\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef basis(k):return -np.expm1(-t[:,None]*k)\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,q],axis=1) for j in range(1,d+1) for q in combinations_with_replacement(range(4),j)])\\na=poly(x,4); n=len(x); rng=np.random.default_rng(152); radial=np.linalg.norm(x,axis=1); splits=[np.arange(52,72)]+list(np.array_split(rng.permutation(n),4))+[np.argsort(radial)[-18:]]\\nfor va in splits:\\n tr=np.setdiff1d(np.arange(n),va); zz=z[tr].T\\n k=least_squares(lambda k:(basis(k)@ls(basis(k),zz)-zz).ravel(),[1.5,.25],bounds=([.7,.02],[4,.65])).x; b=basis(k); hd=np.c_[y,ls(b,z.T).T]; yy=np.c_[y,z]\\n if va[0]==52:\\n  for d in (2,3):\\n   aa=a[:,:{2:15,3:35}[d]]; c=ls(aa[tr],hd[tr]); print('readout coefficients degree',d,c); print('fit rmse',np.sqrt(np.mean((aa[tr]@c-hd[tr])**2,axis=0)))\\n  for d in (1,2,3):\\n   f=np.c_[a[:,:{1:5,2:15,3:35}[d]],hd[:,1:]]; c=ls(f[tr],y[tr]); print('readout from measured modes',d,'MAE',np.mean(abs(f[va]@c-y[va])),'mode weights',c[-2:])\\n print('split',len(va),va[:3],k,'oracle basis',np.mean(abs(hd[va,1:]@b.T-z[va])))\\n for quadratic in (False,True):\\n  for scale,reg in (('cubic',0.),('cubic',.05),('cubic',.2),('quartic',.1),('quartic',.35),('gauss',.001),('gauss',.01),('gauss',.1)):\\n   if scale=='gauss':\\n    g=np.exp(-.23*np.sum((x[:,None]-x[None,:])**2,axis=2)); p=a[:,:15]; G=g[np.ix_(tr,tr)]+reg*np.eye(len(tr)); C=ls(np.block([[G,p[tr]],[p[tr].T,np.zeros((15,15))]]),np.r_[hd[tr],np.zeros((15,3))]); ph=np.c_[g[np.ix_(va,tr)],p[va]]@C\\n   else:\\n    mat=a[:,:35 if scale=='cubic' else 70]; pen=np.r_[np.zeros(15),np.ones(20),np.full(mat.shape[1]-35,3.)]*reg\\n    ph=mat[va]@ls(np.r_[mat[tr],np.diag(pen)],np.r_[hd[tr],np.zeros((len(pen),3))]);\\n   if quadratic: ph[:,2]=a[va,:15]@ls(a[tr,:15],hd[tr,2])\\n   e=abs(np.c_[ph[:,0],ph[:,1:]@b.T]-yy[va]); print(scale,reg,quadratic,np.round([e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full cubic baseline → two-rate trajectories with separately regularized readouts; fixed-split scalar MAE is 0.01900 and worst-horizon MAE is 0.01663.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat panel C as an active forward operator\",\n      \"rejected_reason\": \"The tested compact panel models did not establish a transferable operator on held-out panel rows.\"\n    }\n  ],\n  \"rationale\": \"Check whether the slow amplitude needs higher-order terms and whether regularization improves prediction on both ordinary and high-radius splits. Use those results to choose the solver rather than tuning to the fixed split alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dac169d144735c111657e01b7cda740003e0a6deef92990e4ee0effd6b6caa6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37215.62,
+      "usage_known": true,
+      "prompt_tokens": 30203,
+      "cached_tokens": 10880,
+      "completion_tokens": 1353
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb85391b44b14b66a24628659d4b47e1",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:14:19.546406+00:00",
+  "ended_at_utc": "2026-11-28T09:14:59.163230+00:00",
+  "request_sha256": "71442e97ddfb31991ac118b5b5d23adcfdb4e4c6028aeed0d51de64d958da7e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58254,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37160,
+    "cached_tokens": 10880,
+    "completion_tokens": 1618
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text().split('\\\\ndef _features')[0]\\ns = s.replace('import numpy as np','import numpy as np\\\\nfrom scipy.optimize import minimize_scalar')\\np.write_text(s + '''\\n\\ndef _panel_basis(x, frequency, sine):\\n    features = [np.ones(len(x)), x]\\n    if sine:\\n        features.extend((np.sin(frequency*x), np.sin(2*frequency*x)))\\n    else:\\n        features.append(np.cos(frequency*x))\\n    return np.column_stack(features)\\n\\n\\ndef _operator(u, v, x, sine):\\n    def fit(frequency):\\n        f = _panel_basis(u, frequency, sine)\\n        coef = np.linalg.lstsq(f, v, rcond=None)[0]\\n        return f, coef\\n\\n    def residual(frequency):\\n        f, coef = fit(frequency)\\n        return np.mean((f@coef-v)**2)\\n\\n    bounds = (2.7, 3.8) if sine else (1., 1.5)\\n    frequency = minimize_scalar(residual, bounds=bounds, method='bounded').x\\n    _, coef = fit(frequency)\\n    return _panel_basis(x, frequency, sine)@coef\\n\\n\\ndef _readout_basis(x):\\n    mixed = np.column_stack([x[:, i]*x[:, j] for i, j in\\n                             combinations_with_replacement(range(x.shape[1]), 2)])\\n    return np.column_stack((np.ones(len(x)), x, .4*mixed))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    offset, scale = _calibrate(study['panel_a'])\\n    raw = np.concatenate((train['x'], study['test']['x']))\\n    x = (raw-offset)/scale\\n    c = study['panel_c']\\n    b = _operator(c['u'], c['v1'], x, True)\\n    d = _operator(c['u'], c['v2'], x, False)\\n    f = _readout_basis(np.column_stack((b, d)))\\n    n = len(train['x'])\\n    a, xt = f[:n], f[n:]\\n    gram = a@a.T\\n    cross = xt@a.T\\n    eye = np.eye(n)\\n    yh = cross@np.linalg.solve(gram+.0003*eye, train['y'])\\n    state = cross@np.linalg.solve(gram+.001*eye, train['traj'])\\n    end = state[:, -1]\\n    return {'y_hat': yh, 'state_pred': state,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), end.mean(), end.std()])}\\n''')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',root+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nr=s['train']; x=r['x']; y=r['y']; z=r['traj']; n=len(x)\\ndef check(i,j):\\n    study=dict(s, train={**r, 'x':x[i], 'y':y[i], 'traj':z[i], 'summary':np.array([y[i].mean(), y[i].std(), z[i,-1].mean(), z[i,-1].std()])},test={'x':x[j]})\\n    p=m.solve_batch(study); yh=p['y_hat']; zh=p['state_pred']; ez=abs(zh-z[j]); ey=abs(yh-y[j]);\\n    assert np.all(np.isfinite(zh)) and np.all(np.isfinite(yh))\\n    np.testing.assert_allclose(p['diagnostics_vec'], [yh.mean(), yh.std(), zh[:,-1].mean(), zh[:,-1].std()])\\n    return [ey.mean(),ez.mean(),ez[:,-1].mean(),ez.mean(0).max()]\\nbase=check(np.arange(52),np.arange(52,n)); print('prescribed [scalar, trajectory, final, worst horizon]',base); assert base[0]<=.038\\nrng=np.random.default_rng(88642)\\nE=np.array([check(p[:52],p[52:]) for p in (rng.permutation(n) for _ in range(24))]); print('fresh random mean',E.mean(0),'worst',E.max(0))\\no,sc=m._calibrate(s['panel_a']); radius=np.linalg.norm((x-o)/sc,axis=1); p=np.argsort(radius); print('largest-radius holdout',check(p[:52],p[52:]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inverse diagonal calibration → H2 dual harmonic panel operators with quadratic readouts; prior screening found worst-split MAEs of 0.02391 for the selected scalar fit and 0.02661 for the selected trajectory fit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Enforce an explicit two-exponential trajectory law\",\n      \"rejected_reason\": \"The measured trajectories support a rank-two time basis, but no held-out result yet shows that imposing it improves horizon errors over the selected readout.\"\n    }\n  ],\n  \"rationale\": \"Promote the two-harmonic panel composition because it lowers both scalar and trajectory errors on the screening splits. Test the exact artifact on the prescribed split, fresh splits, and a high-radius holdout; a failure on the last slice would identify extrapolation as the remaining bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "996e0249788b9263a553c92c35d5da22441b54aae54cbd3c1d7971b3100eec1e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44858.72,
+      "usage_known": true,
+      "prompt_tokens": 37160,
+      "cached_tokens": 10880,
+      "completion_tokens": 1618
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8df62f3bf95242769ebc926c0a9535d7",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:53:08.506490+00:00",
+  "ended_at_utc": "2026-11-28T09:53:35.958043+00:00",
+  "request_sha256": "0ba8c6de974352bd1acb69cfb1f819fa76b504fe1528cbd013335652a75cecd7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32514,
+    "cached_tokens": 9344,
+    "completion_tokens": 923
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 -I validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']\\nrows = np.arange(len(tr['x']))\\nz = solver._calibration(s['panel_a'], tr['x'])\\nouter = np.argsort(np.linalg.norm(z, axis=1))[-14:]\\nslices = [('52/20', rows[52:]), ('56/16', rows[56:]), ('outer-range', outer)]\\nslices.extend((f'fold-{k}', j) for k,j in enumerate(np.array_split(np.random.default_rng(122).permutation(len(rows)), 5)))\\nworst = np.zeros(3)\\nfor name, j in slices:\\n    i = np.setdiff1d(rows, j)\\n    fit = {k: tr[k][i] for k in ('x', 'y', 'traj')}\\n    end = fit['traj'][:, -1]\\n    fit['summary'] = np.array([fit['y'].mean(), fit['y'].std(), end.mean(), end.std()])\\n    out = solver.solve_batch(dict(s, train=fit, test={'x': tr['x'][j]}))\\n    y, state, diag = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    assert y.shape == (len(j),) and state.shape == (len(j), len(s['eval_times'])) and diag.shape == (4,)\\n    assert all(np.isfinite(v).all() for v in (y, state, diag))\\n    np.testing.assert_allclose(diag, [y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])\\n    err = np.abs(state-tr['traj'][j])\\n    metrics = np.array([np.abs(y-tr['y'][j]).mean(), err.mean(), err.mean(axis=0).max()])\\n    print(name, 'scalar / trajectory / worst timestamp MAE:', metrics)\\n    worst = np.maximum(worst, metrics)\\n    assert metrics[0] <= 0.038\\nprint('Worst across slices:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compact cyclic calibration followed by a quadratic trajectory readout and a bounded scalar index; the latest worst-slice MAEs are 0.02038 for the scalar and 0.00501 for the trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace tanh with the rational link\",\n      \"rejected_reason\": \"The rational link improves outer-range MAE by only 0.00018 and worsens some folds; neither link shows a validation bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Run the exact public entry point in an isolated process to catch discrepancies between the helper-level CV and the delivered solver. Check diagnostics and per-timestamp errors independently; revise the affected stage only if a check exposes a failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d883b58b6db3a86dc8335be49bd57918f448aa345603085714236f535fecdea8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27404.72,
+      "usage_known": true,
+      "prompt_tokens": 32514,
+      "cached_tokens": 9344,
+      "completion_tokens": 923
+    }
+  ]
+}

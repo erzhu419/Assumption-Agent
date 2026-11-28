@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b597c1297cad4c0b90069ce6e515ad92",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:28.768642+00:00",
+  "ended_at_utc": "2026-11-28T09:29:47.661194+00:00",
+  "request_sha256": "c8c3acbf30d5b14f95d803ee0408c665b7c0fe5208d453163bd75a934ed5ee1f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12942,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15177,
+    "cached_tokens": 9344,
+    "completion_tokens": 681
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat validate_public_schema.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$f; wc -l \\\"$f\\\"; grep -nE '^def |^class ' \\\"$f\\\"; done; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\nfor k in ('eval_times','telemetry_vec'): print(k,s[k])\\nt=s['train']; print('summary',t['summary']); print('rows x,y,traj',np.c_[t['x'],t['y'],t['traj']][:9]); print('x ranges',t['x'].min(0),t['x'].max(0),'test',s['test']['x'].min(0),s['test']['x'].max(0)); print('traj sv',np.linalg.svd(t['traj'],compute_uv=False))\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; x=p['u']; z=np.c_[np.ones(len(x)),x]; q=np.c_[z,*[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]]; print(k,'x bounds',x.min(0),x.max(0));\\n for name,v in p.items():\\n  if name=='u': continue\\n  a=np.linalg.lstsq(z,v,rcond=None)[0]; e=np.linalg.norm(z@a-v,axis=1); b=np.linalg.lstsq(q,v,rcond=None)[0]; print(name,'affine',a,'row residual quantiles',np.quantile(e,[0,.5,.8,.9,1]),'quad rms',np.std(q@b-v))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived calibration motifs -> a campaign-specific operator graph; the pre-LLM 56/16 gate reported scalar MAE 0.198626 and trajectory MAE 0.124845.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived solver unchanged\",\n      \"rejected_reason\": \"The pre-LLM gate misses both error targets, so reuse should start with individual operators rather than the whole graph.\"\n    }\n  ],\n  \"rationale\": \"Panel residual distributions distinguish sparse contamination from systematic nonlinearity and determine which operator families to fit. The trajectory singular values test whether a low-dimensional temporal model is worth pursuing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "5093aa39e6eb27aa986490116d05fc4a13a763af97aec9fded21852b6b92c22a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21523.14,
+      "usage_known": true,
+      "prompt_tokens": 15177,
+      "cached_tokens": 9344,
+      "completion_tokens": 681
+    }
+  ]
+}

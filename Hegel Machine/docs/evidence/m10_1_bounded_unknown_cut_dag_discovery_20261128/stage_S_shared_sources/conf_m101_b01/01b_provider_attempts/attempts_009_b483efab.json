@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b483efabd17e46d38388f2bcc8175e82",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:39.306114+00:00",
+  "ended_at_utc": "2026-11-28T09:16:17.694148+00:00",
+  "request_sha256": "257fd1e2fb3837ef2137417c92411aaacf72704b3f48ca42e0d7827ea7fd8fbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65850,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36952,
+    "cached_tokens": 10880,
+    "completion_tokens": 1569
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text().replace('state = np.column_stack((_affine_features(x), h, h*h))','state = np.column_stack((np.ones(len(x)), h, h*h))')\\na = s.index('    def coefficients(p):')\\nb = s.index('\\\\n\\\\ndef solve_batch(', a)\\ns = s[:a] + '''    normalized = targets / scale\\n\\n    def profile(d, v):\\n        penalty = np.diag(np.r_[0., np.full(d.shape[1] - 1, 0.02)])\\n        w = np.linalg.lstsq(np.vstack((d, penalty)),\\n                            np.vstack((v, np.zeros((len(penalty), v.shape[1])))),\\n                            rcond=None)[0]\\n        return w, (d @ w - v).ravel(), (penalty @ w).ravel()\\n\\n    def residual(p):\\n        d, g = _features(x, p)\\n        _, e1, r1 = profile(d, normalized[:, :1])\\n        _, e2, r2 = profile(g, normalized[:, 1:])\\n        return np.r_[e1, e2, r1, r2, 0.07*p[1:5]]\\n\\n    fit = least_squares(residual, [np.log(3.), 0., 0., 0., 0., 0.5],\\n                        bounds=([-1.5] + [-0.45]*4 + [0.2], [1.9] + [0.45]*4 + [1.3]),\\n                        max_nfev=75)\\n    d, g = _features(x, fit.x)\\n    w, _, _ = profile(d, normalized[:, :1])\\n    v, _, _ = profile(g, normalized[:, 1:])\\n    return fit.x, w[:, 0] * scale[0], v * scale[1:]\\n''' + s[b:]\\np.write_text(s)\\nPY\\ncat >/tmp/check_batch_solver.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\ntr=s['train']; x=m._coordinates(s,tr['x']); n=len(x); rng=np.random.default_rng(413)\\nsplits={'ordered':np.arange(n),'radius':np.argsort(np.linalg.norm(x,axis=1))}\\nfor k in range(4):\\n    for sign in (1,-1): splits[f'axis{k}/{sign}']=np.argsort(sign*x[:,k])\\nfor k in range(13): splits[f'random{k}']=rng.permutation(n)\\ndef check(args):\\n    out=m.solve_batch(args); y,z,d=(out[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert (y.shape,z.shape,d.shape)==((len(args['test']['x']),),(len(y),len(args['eval_times'])),(4,))\\n    assert all(np.isfinite(a).all() for a in (y,z,d))\\n    np.testing.assert_array_equal(d,[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); return y,z\\nrows={}\\nfor name,idx in splits.items():\\n    i,j=idx[:52],idx[52:]; sub=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':tr['x'][j]})\\n    y,z=check(sub); e=np.abs(z-tr['traj'][j]).mean(0)\\n    rows[name]=(np.abs(y-tr['y'][j]).mean(),e.mean(),e.max())\\n    if not name.startswith('random'): print(name,np.round(rows[name],6))\\n    if name=='ordered':\\n        print('horizons',np.round(e,6)); assert rows[name][0]<=0.038\\nprint('random worst',np.max([v for k,v in rows.items() if k.startswith('random')],axis=0))\\nprint('all-slice worst',[(max(rows,key=lambda k:rows[k][i]),max(v[i] for v in rows.values())) for i in range(3)])\\ncheck(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch_solver.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Redundant affine and nonlinear terms → regularized nonlinear readout with additive state amplitudes; the challenger measured 0.0110 ordered scalar MAE and directional maxima of 0.0283 scalar and 0.0173 worst-horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the independent affine terms and increase the penalty\",\n      \"rejected_reason\": \"The tested affine-inclusive variants retained higher directional errors. Removing those terms preserved the required split while reducing the worst directional error on both outputs.\"\n    },\n    {\n      \"option\": \"Add panel C to the predictor\",\n      \"rejected_reason\": \"Its standalone operators are predictable, but the evidence does not yet show that either output improves the task predictions.\"\n    }\n  ],\n  \"rationale\": \"Promote the smaller model because it improves the observed directional bottleneck without materially changing ordered scalar error. Verify the exact saved solver in isolation on both outputs and every stress split; a regression would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "37eafb05565c3c21892da0640f0e0fe20b497d3df289ef2577f629daeb7b4cf2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40964.83,
+      "usage_known": true,
+      "prompt_tokens": 36952,
+      "cached_tokens": 10880,
+      "completion_tokens": 1569
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "000c5dee6e9f4d92a036be5b108228d6",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:34.543634+00:00",
+  "ended_at_utc": "2026-11-28T09:21:01.191386+00:00",
+  "request_sha256": "c2f3dcef3923ebe0979ee22803998634d117dc5e70cdc43d8edf3816b81a7ca3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39409,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27272,
+    "cached_tokens": 9344,
+    "completion_tokens": 1020
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cvops.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom operators import panels,lin,ls\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; target=np.c_[y,t]; n=len(x)\\nprint('eval_times',s['eval_times'],'telemetry',s['telemetry_vec']); print('test ranges',s['test']['x'].min(0),s['test']['x'].max(0))\\nops=panels(s); A=ops['A'](np.r_[np.zeros((1,4)),np.eye(4)]); B=ops['B'](np.r_[np.zeros((1,4)),np.eye(4)]);ops['a']=lambda z:(z-A[0])@np.linalg.inv(A[1:]-A[0]);ops['b']=lambda z:(z-B[0])@np.linalg.inv(B[1:]-B[0]);\\nprint('A',A,'B',B)\\nstates={'X':x}\\nfor k,f in ops.items():states[k]=f(x)\\nfor k,z in list(states.items()):\\n if k!='X':\\n  for l in ('B','b','C','D','a','A'):\\n   if l.lower()!=k.lower():states[k+l]=ops[l](z)\\nfolds=[(np.arange(52),np.arange(52,72))]; rng=np.random.default_rng(123)\\nfor _ in range(5):\\n ids=rng.permutation(n);folds.append((ids[:52],ids[52:]))\\ndef kern(p,d):\\n p=p/np.maximum(np.sqrt(np.mean(p*p,axis=0)),1e-8);return (1+p@p.T/p.shape[1])**d\\nKx=kern(x,2); E={};\\nfor k,z in states.items():\\n for tag,K in [('p1',kern(z,1)),('p2',kern(z,2)),('p3',kern(z,3)),('rbf',np.exp(-.2*cdist(z,z,'sqeuclidean')))]:\\n  for mix,M in [('single',K),('X2',K+Kx)]:\\n   for reg in [1e-5,2e-4,.002,.02]:\\n    err=[]\\n    for i,j in folds:\\n     pred=M[np.ix_(j,i)]@cho_solve(cho_factor(M[np.ix_(i,i)]+reg*np.eye(len(i))),target[i]);err.append(np.abs(pred-target[j]).mean(0))\\n    e=np.array(err);E[k,tag,mix,reg]=np.c_[e[:,0],e[:,1:].mean(1)]\\nfor col in range(2):\\n print('output',col)\\n for k,e in sorted(E.items(), key=lambda a:a[1][:,col].mean())[:18]:print(k,np.round(e[:,col],5),np.round(e[:,col].mean(),5))\\nnp.savez('/tmp/cvops.npz',**states)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cvops.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Single-activation panel proxies -> shared nonlinear operators composed with forward and inverse calibrations; the archived scalar 52/20 MAE is 0.051373.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare forward, inverse, and composed coordinates on the required split and several additional splits. If improvement is isolated to one split, use the operator results to guide structural fitting rather than selecting that model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "35c7cc44805dded73f08484fd854737cc299c57b5baaebc5faf5b36ab5d29191",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29026.7,
+      "usage_known": true,
+      "prompt_tokens": 27272,
+      "cached_tokens": 9344,
+      "completion_tokens": 1020
+    }
+  ]
+}

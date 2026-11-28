@@ -1,0 +1,160 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a02_batch_02_7f6c1d2f3500",
+    "source_hash": "7f6c1d2f3500d3da9ea6787ccf6e077ac6a997ee38bce3d5f4e61df0d7a4aa7e",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_rewire_edge",
+    "task_id": "conf_m101_a02_batch_02__blind_campaign__rewire_edge",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/probe_basis.py",
+        "archived_relpath": "producers/tmp__probe_basis.py",
+        "bytes": 1723,
+        "sha256": "27f8bd633545e3725edc8114659ab77eac0dc6c41c6989b591d76996f8ecf84b"
+      },
+      {
+        "container_path": "/tmp/probe_dag.py",
+        "archived_relpath": "producers/tmp__probe_dag.py",
+        "bytes": 1675,
+        "sha256": "eff9ac194b7c435a85f03ba7302cd3e1a8ab9706c1a7f7ccc6ddba5c62d9a234"
+      },
+      {
+        "container_path": "/tmp/refine_dag.py",
+        "archived_relpath": "producers/tmp__refine_dag.py",
+        "bytes": 2077,
+        "sha256": "601d0dcbb7675a4befc7cf601e6813cddb7d9eb5a99397f26d9962c805fa4b6b"
+      },
+      {
+        "container_path": "/tmp/scan_dag.py",
+        "archived_relpath": "producers/tmp__scan_dag.py",
+        "bytes": 2821,
+        "sha256": "c539389c793cd3734821c86350633ffa30cda1dedff44dd70abf33867ac46435"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a02_batch_00_solver.py",
+        "bytes": 2398,
+        "sha256": "875f678e6174901bfd45d8b57a2c9a7bda5d66903f070a515c8ecc7389010fac"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_00.py _frozen_nodes/node_01.py test_dag_candidate.py validate_public_schema.py public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: p=pickle.load(f)\ndef show(o,k='batch'):\n if isinstance(o,dict):\n  for a,b in o.items(): show(b,k+'.'+str(a))\n elif isinstance(o,(list,tuple)) and o and isinstance(o[0],dict):\n  print(k,type(o).__name__,len(o));show(o[0],k+'[0]')\n else:\n  a=np.asarray(o); print(k,a.shape,a.dtype,a.ravel()[:8]);\n  if a.size and a.dtype.kind in 'iuf': print('  range',np",
+      "cd /holdout_task && sed -n '35,180p' test_dag_candidate.py && cat > /tmp/probe_dag.py <<'PY'\nimport sys,pickle,itertools as it,numpy as np\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\nimport node_00,node_01\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=node_00.run_node({'__input__':s}); b=node_01.run_node({'node_00':a}); p=s['panel_c']; x=a['cal_tr']; z=b['z_tr']; y=s['train']['y']; r=s['train']['traj']; t=s['eval_times']\ndef aff(x): return np.column_stack((np.ones(len(x)),x))\ndef powers(x,d): return np.column_stack([np.prod(x[:,i],axis=1) for j in range(d+1) fo",
+      "cat > /tmp/probe_basis.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from probe_dag import *\nfrom scipy.optimize import least_squares\nfrom sklearn.model_selection import KFold\nA=aff(q); U=p['v1']; V=p['v2']; F=powers(q,2); n=len(q)\nprint('v1 affine coefficients',fit(A,U)); print('v2 quadratic coefficients',fit(F,V)); print('v1 moments',U.min(0),U.max(0))\nmodels={'sin':np.sin,'tanh':np.tanh,'cubic':lambda x:x**3,'rational':lambda x:x/(1+x*x),'softsign':lambda x:x/(1+abs(x))}\ndef f(x,c,key):\n if key=='cubic': return (x@c)**3\n return models[key](x@c)\ndef vp(X,Y,c",
+      "cat > /tmp/scan_dag.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from probe_dag import *\nfrom sklearn.model_selection import KFold\nfrom scipy.linalg import qr\n\ndef dictionary(x,z):\n W=np.column_stack((x,z)); names=[f'{a}{i}' for a in 'xz' for i in range(4)]; D={}\n for i,j in it.combinations_with_replacement(range(8),2): D[f'{names[i]}*{names[j]}']=W[:,i]*W[:,j]\n for i,j,k in it.combinations_with_replacement(range(8),3): D[f'{names[i]}*{names[j]}*{names[k]}']=W[:,i]*W[:,j]*W[:,k]\n for i,j in it.combinations_with_replacement(range(8),2):\n  a,b=W[:,i],W[:,j]; n,",
+      "cat > /tmp/refine_dag.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from probe_dag import *\nfrom scipy.optimize import least_squares\nfrom sklearn.model_selection import KFold\n\ndef compact(x,z,k,mode):\n a,b,c,d=z.T\n base=[aff(z), np.sin(k[0]*(x[:,2]-z[:,3]))]\n if mode=='bilinear': base += [a*c,b*d]\n if mode=='sine': base += [a*c,b*np.sin(k[1]*d)]\n if mode=='double': base += [a*np.sin(k[2]*c),b*np.sin(k[1]*d)]\n if mode=='mixed': base += [a*c,b*d,b*np.sin(k[1]*d)]\n if mode=='rational': base += [a*c,b*d/(1+k[1]*d*d)]\n return np.column_stack(base)\n\nsplits=[(np.aran",
+      "cd /holdout_task && cat _frozen_nodes/node_00.py _frozen_nodes/node_01.py && cat > node_02.py <<'PY'\nimport numpy as np\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(design, values):\n    return np.linalg.lstsq(design, values, rcond=None)[0]\n\n\ndef _label_basis(x, z, frequency):\n    a, b, c, d = z.T\n    return np.column_stack((_affine(z), a * c, b * d,\n                            np.sin(frequency * (x[:, 2] - d))))\n\n\ndef run_node(inputs: dict) -> dict:\n    train = inputs['__input__']['train']\n    cal = inputs['node_00']\n    mix = inputs['node_01']\n    x, xt = cal[",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport copy\nimport pickle\nimport numpy as np\nfrom sklearn.model_selection import KFold\n\nroot = Path('/holdout_task')\npaths = [root / '_frozen_nodes' / f'node_{i:02}.py' for i in range(2)] + [root / 'node_02.py']\nnodes = []\nfor path in paths:\n    ns = {}\n    exec(compile(path.read_text(), str(path), 'exec'), ns)\n    nodes.append(ns['run_node'])\nwith (root / 'public_batch.pkl').open('rb') as f:\n    batch = pickle.load(f)\nlabel_mae, trajectory_mae = [], []\nfor example in batch:\n    study = example['study']\n    train = study['trai"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__scan_dag.py",
+      "primary_producer_container_path": "/tmp/scan_dag.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_02.py",
+        "filename": "node_02.py",
+        "bytes": 1418,
+        "sha256": "af847f9a1b10026272dc4d4ae4996cbf6bab674dad08c619f8ebce31947673ce",
+        "content_addressed_ref": "content_addressed_blobs/af847f9a1b10026272dc4d4ae4996cbf6bab674dad08c619f8ebce31947673ce.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_02.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "path",
+      "_fit",
+      "_affine",
+      "_calibration",
+      "_label_basis",
+      "_trajectory",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7f6c1d2f3500d3da9ea6787ccf6e077ac6a997ee38bce3d5f4e61df0d7a4aa7e",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport copy\nimport pickle\nimport numpy as np\nfrom sklearn.model_selection import KFold\n\nroot = Path('/holdout_task')\npaths = [root / '_frozen_nodes' / f'node_{i:02}.py' for",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7f6c1d2f3500d3da9ea6787ccf6e077ac6a997ee38bce3d5f4e61df0d7a4aa7e",
+        "expected_candidate_sha256": "7f6c1d2f3500d3da9ea6787ccf6e077ac6a997ee38bce3d5f4e61df0d7a4aa7e",
+        "computed_candidate_sha256": "7f6c1d2f3500d3da9ea6787ccf6e077ac6a997ee38bce3d5f4e61df0d7a4aa7e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_02.py",
+            "bytes": 1418
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_7f6c1d2f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(A, B):\n    return np.linalg.lstsq(A, B, rcond=None)[0]"
+      },
+      {
+        "name": "path",
+        "code": "def path(A, D, Y, names, tr, te, steps=12):\n    B = A.copy()\n    chosen = []\n    rows = []\n    for itn in range(steps + 1):\n        BT = B[tr]\n        c = fit(BT, Y[tr])\n        r = Y[tr] - BT @ c\n        pred = B[te] @ c\n        rows.append([np.mean(abs(r), axis=0), np.mean(abs(pred - Y[te]), axis=0), names[chosen[-1]] if chosen else 'affine'])\n        Q = np.linalg.qr(BT, mode='reduced')[0]\n        DT = D[tr]\n        P = DT - Q @ (Q.T @ DT)\n        norm = np.linalg.norm(P, axis=0)\n        score = abs(P.T @ r) / np.maximum(norm, 1e-10)\n        idx = np.argmax(score)\n        chosen.append(idx)\n        B = np.column_stack([B, D[:, idx]])\n    return rows"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(design, values):\n    return np.linalg.lstsq(design, values, rcond=None)[0]"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.column_stack((np.ones(len(x)), x))"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(panel):\n    \"\"\"Fit each gain and offset after excluding reference-panel outliers.\"\"\"\n    coefficients = []\n    for (u, v) in zip(panel['u'].T, panel['v'].T):\n        design = _affine(u)\n        keep = np.arange(len(u))\n        for _ in range(3):\n            c = _fit(design[keep], v[keep])\n            residual = np.abs(v - design @ c)\n            keep = np.argsort(residual)[:3 * len(u) // 4]\n        good = residual <= 8 * np.median(residual)\n        coefficients.append(_fit(design[good], v[good]))\n    return np.asarray(coefficients).T"
+      },
+      {
+        "name": "_label_basis",
+        "code": "def _label_basis(z):\n    paired_products = z[:, 0] * z[:, 2] + z[:, 1] * z[:, 3]\n    return np.column_stack((_affine(z), paired_products))"
+      },
+      {
+        "name": "_trajectory",
+        "code": "def _trajectory(design, observed, design_test, times):\n    from scipy.optimize import least_squares\n    affine_coeff = _fit(design, observed)\n\n    def time_basis(log_rates):\n        return -np.expm1(-np.exp(log_rates)[:, None] * times)\n\n    def profile(log_rates):\n        basis = time_basis(log_rates)\n        amplitudes = _fit(basis.T, affine_coeff.T).T\n        return amplitudes @ basis\n\n    def residual(log_rates):\n        return (design @ (affine_coeff - profile(log_rates))).ravel()\n    rates = least_squares(residual, np.log([0.4, 1.8]), bounds=(-4, 3)).x\n    return design_test @ profile(rates)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    (offset, gain) = _calibration(study['panel_a'])\n    panel_b = study['panel_b']\n    mixer = _fit(_affine(panel_b['u']), panel_b['v'])\n\n    def coordinates(x):\n        return _affine((x - offset) / gain) @ mixer\n    z_train = coordinates(train['x'])\n    z_test = coordinates(study['test']['x'])\n    y_hat = _label_basis(z_test) @ _fit(_label_basis(z_train), train['y'])\n    state_pred = _trajectory(_affine(z_train), train['traj'], _affine(z_test), study['eval_times'])\n    final = state_pred[:, -1]\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d85385a86a6d4dbbae4b918e7f454d0c",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:59.307678+00:00",
+  "ended_at_utc": "2026-11-28T09:39:25.281186+00:00",
+  "request_sha256": "09a67ee8fa49dac5e73ee3ead3e79e7dcc841c5a4630ee8506de5aa9c364fd84",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53517,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31862,
+    "cached_tokens": 9344,
+    "completion_tokens": 901
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"awk '/print\\\\('\\\\''B constrained/{exit} {print}' /tmp/compact.py > /tmp/modes.py\\ncat >> /tmp/modes.py <<'PY'\\nrng=np.random.default_rng(87)\\ninds=np.arange(n)\\nslices=[inds[52:],inds[56:],*np.array_split(rng.permutation(n),5),np.argsort(np.linalg.norm(a,axis=1))[-12:],np.argsort(np.max(abs(b),axis=1))[-12:]]\\nfor k,iv in enumerate(slices):\\n it=np.setdiff1d(inds,iv)\\n results=[]\\n for name,F,L in [('reversed',S0,F0),('slow_c',S0,F1),('shared_asym',S1,F0),('slow_c3',S0,design(a,asym,c[:,3])),('asym_c3',S1,design(a,asym,c[:,3])),('both_compact',S1,S1),('ridge',X,X)]:\\n  def G(ix,r):\\n   m=-np.expm1(-t[:,None]*r); return np.concatenate((F[ix,None,:]*m[None,:,0,None],L[ix,None,:]*m[None,:,1,None]),axis=-1).reshape(len(ix)*len(t),-1)\\n  Y=T[it].ravel()\\n  def beta(A): return np.linalg.solve(A.T@A+np.kron(np.eye(2),P)*.001,A.T@Y) if name=='ridge' else fit(A,Y)\\n  def res(r):\\n   A=G(it,r); return A@beta(A)-Y\\n  r=least_squares(res,[1.8,.4],bounds=([1,.1],[3,.9])).x\\n  err=np.abs((G(iv,r)@beta(G(it,r))).reshape(len(iv),-1)-T[iv]); results.append((name,*np.round([*r,np.std(res(r)),err.mean(),err.mean(0).max()],5)))\\n  if k==0 and name in ('reversed','slow_c3','asym_c3'): print(name,'weights',np.round(beta(G(it,r)),4))\\n print(k,*results)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 compact readouts assigned to the wrong time modes -> H2 fast pair-product readout and slow calibrated-input readout; the validated ridge fallback has worst-slice trajectory MAE 0.00521.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The compact basis assignments in the joint fit match the temporal mode ordering.\",\"empirical_witness\":\"The amplitude fit printed rates in slow–fast order, but the compact joint fit assigned those same readouts in fast–slow order. Its fitted rates hit bounds and its 52/20 trajectory MAE rose to 0.04348 versus 0.00447 for ridge.\",\"causal_blanket_diagnosis\":\"The mode ordering confounded the test of readout sparsity.\",\"sublated_pivot\":\"Match each feature block to its estimated time constant and retain ridge unless the corrected compact model improves validation.\",\"risk_kind\":\"mode_coordinate_convention\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the validated ridge trajectory model immediately.\",\"rejected_reason\":\"A direct mode-order correction is cheap to test and could reduce extrapolation error with fewer readout terms.\"}],\"rationale\":\"Compare the corrected compact model to ridge on the same folds, including high-amplitude holdouts. Retain the compact scalar readout and choose the trajectory model using both overall and worst-timestamp MAE.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2f4cbce25062b82491407872a2ce75741bb3484e8b662361378d5f92223695d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28590.54,
+      "usage_known": true,
+      "prompt_tokens": 31862,
+      "cached_tokens": 9344,
+      "completion_tokens": 901
+    }
+  ]
+}

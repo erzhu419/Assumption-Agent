@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3868d324a44d4636ae0de12afdfde850",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:33:50.998103+00:00",
+  "ended_at_utc": "2026-11-28T09:34:26.841106+00:00",
+  "request_sha256": "a223f0d8be3a8077d60fa61e06756649dbeabc5bec5b4841db9a735d7b6680ff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39793,
+    "cached_tokens": 9344,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/composed.py <<'PY'\\nfrom panels import *\\nfrom scipy.linalg import solve\\nfrom sklearn.model_selection import KFold\\nfrom itertools import combinations\\nS=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=13).split(X)]\\n\\ndef library(x):\\n def bx(a):return aug(a)@B\\n def inv(a):return (a-B[0])@np.linalg.inv(B[1:])\\n def p(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\n def q(a,d):return PolynomialFeatures(d,include_bias=False).fit_transform(a)\\n for name,d in routes(x):\\n  if name not in ['X','Ai','XB','AiB','AiBi']:continue\\n  z,w=C1(d),C2(d)\\n  for label,a in [('x',d),('z',z),('w',w),('zw',z+w),('z-w',z-w),('x+z',d+z),('x+w',d+w),('b(z)+w',bx(z)+w),('z+b(w)',z+bx(w)),('b(z)+b(w)',bx(z+w)),('b(z)-w',bx(z)-w),('z-b(w)',z-bx(w)),('x+bi(z)',d+inv(z)),('x+bi(w)',d+inv(w)),('z(w)',C1(w)),('w(z)',C2(z)),('z(z)',C1(z)),('w(w)',C2(w))]:\\n   for tag,h in [('id',a),('sin',np.sin(1.7*a)),('tanh',np.tanh(1.7*a)),('rat',a/(1+.2*a*a)),('soft',a/(1+.2*abs(a)))]:\\n    F=q(h,2);yield name,label,tag,'q2',F\\n    if tag=='id':\\n     yield name,label,tag,'q3',q(h,3)\\n     yield name,label,tag,'q2-cross',np.c_[F,q(d,2),p(d,h)]\\n  for k in [-2,-1,-.5,.5,1,2]:\\n   for l in [-2,-1,-.5,0,.5,1,2]:\\n    yield name,str((k,l)),'id','mix',q(d+k*inv(z)+l*inv(w),2)\\n  yield name,'branches','id','products',np.c_[q(d,2),p(z,w),p(d,z),p(d,w),q(z,2),q(w,2)]\\n\\nif __name__=='__main__':\\n R=[]; O=np.c_[Y,T]; predictions=[]\\n for n,k,t,form,F in library(X):\\n  errors={a:[] for a in [.000001,.002,.02,.15]}; yp={a:[] for a in errors}\\n  for i,j in S:\\n   G=(F-F[i].mean(0))/np.maximum(F[i].std(0),1e-7); a=G[i]; b=G[j]; U,z,V=np.linalg.svd(a,full_matrices=False); h=(U.T@(O[i]-O[i].mean(0)))*z[:,None]; c=b@V.T\\n   for reg in errors:\\n    pred=c@(h/(z*z+reg)[:,None])+O[i].mean(0);e=abs(pred-O[j]);errors[reg].append([e[:,0].mean(),e[:,1:].mean()]);yp[reg].append(pred)\\n  for reg,e in errors.items():R.append((n,k,t,form,reg,np.array(e)));predictions.append(yp[reg])\\n for col in [0,1]:\\n  for label,metric in [('worst',lambda a:a.max()),('designated',lambda a:a[0])]:\\n   print('rank',col,label)\\n   for h in sorted(R,key=lambda r:metric(r[-1][:,col]))[:8]: print(h[:-1],h[-1][:,col].round(5))\\n np.save('/tmp/comp_predictions.npy',np.array(predictions,dtype=object),allow_pickle=True);import pickle;pickle.dump(R,open('/tmp/comp_rank.pkl','wb'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/composed.py | tail -37\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 common scalar modulation -> H2 quadratic readouts after mixing or nesting panel branches; best scalar worst-split MAE remains 0.05223.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the common-denominator model\",\"rejected_reason\":\"Its best designated-split MAE was 0.05380, above the 0.038 limit.\"}],\"rationale\":\"Previous probes mostly used the panels in parallel or modulated the final scalar. Test whether cross-branch products or a nonlinear map after mixing branches explain the remaining error, and rank the trajectory separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "be2cd67a5e14da99a7b0ff3fce78028de8b874c3e328bea8cf5cf1b0ef8c8d82",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38516.72,
+      "usage_known": true,
+      "prompt_tokens": 39793,
+      "cached_tokens": 9344,
+      "completion_tokens": 1425
+    }
+  ]
+}

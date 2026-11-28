@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "079fbf33c1ef45228820552ac5d199ce",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:57.221310+00:00",
+  "ended_at_utc": "2026-11-28T09:45:31.565888+00:00",
+  "request_sha256": "96e7c4ec64b6f4aae7c349e5debf77254d7b0e6661aaa7877a790657ee624a71",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31885,
+    "cached_tokens": 9344,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/funcs={.tanh.:(/,$d' /tmp/index_probe.py >/tmp/inverse_probe.py; cat >>/tmp/inverse_probe.py <<'PY'\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nP=lambda z,q:PolynomialFeatures(q).fit_transform(z)\\nZ=np.c_[y,T]\\nfolds=[(np.arange(52),np.arange(52,72))]+[(p[:56],p[56:]) for p in [np.random.default_rng(i).permutation(72) for i in range(4)]]\\nprint('trajectory singular spectrum',np.linalg.svd(T,compute_uv=False));print('y vs time',ls(D(T),y),np.mean(abs(y-D(T)@ls(D(T),y))))\\nfor k in [2,3,4]:\\n def time(p):return -np.expm1(-t[:,None]*p)\\n def obj(p):\\n  F=time(p);return (F@ls(F,T[:52].T)-T[:52].T).ravel()\\n o=least_squares(obj,np.geomspace(.2,3,k),bounds=(.001,20));F=time(o.x); print('time',o.x,np.std(o.fun),np.mean(abs(F@ls(F,T[52:].T)-T[52:].T)))\\n def scores(G=None,K=None,reg=.001):\\n  vals=[]\\n  for a,b in folds:\\n   if K is not None:r=K[np.ix_(b,a)]@solve(K[np.ix_(a,a)]+reg*np.eye(len(a)), Z[a]-Z[a].mean(0),assume_a='pos')+Z[a].mean(0)\\n   else:\\n    g=G[a];l=reg*np.eye(g.shape[1]);l[0,0]=0;r=G[b]@solve(g.T@g+l,g.T@Z[a],assume_a='pos')\\n   e=abs(r-Z[b]);vals.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n  return np.array(vals)\\nres=[]\\nfor name in ['x','ai','bai','biai','cbai','dbai','mbai','cdbai','mai','cdai','mb','mbiai']:\\n z=cfg[name]; z=z/np.maximum(z.std(0),.001); d=cdist(z,z)/np.sqrt(z.shape[1]);\\n for order in [1,2,3,4]:\\n  f=P(z,order)\\n  for reg in [.0003,.01,.2,1.]:\\n   if f.shape[1]<=110:e=scores(G=f,reg=reg);res.append((name,'poly'+str(order),reg,e))\\n   else:e=scores(K=f@f.T,reg=reg);res.append((name,'poly'+str(order),reg,e))\\n for h in [.35,.6,1,1.7,2.8,5]:\\n  w=d/h\\n  for tag,K in [('rbf',np.exp(-w*w/2)),('m32',(1+w)*np.exp(-w)),('m52',(1+w+w*w/3)*np.exp(-w))]:\\n   for reg in [.00003,.002,.04]:res.append((name,tag+str(h),reg,scores(K=K,reg=reg)))\\nfor out in range(3):\\n print('OUTPUT',out)\\n for n,m,r,e in sorted(res,key=lambda v:.4*v[3][0,out]+.4*v[3][1:,out].mean()+.2*v[3][:,out].max())[:12]:print(n,m,r,np.round(e[:,out],4),np.round(e.mean(0),4))\\nprint('inverse only:')\\nfor n,m,r,e in res:\\n if n=='ai' and m.startswith('poly') and r in [.0003,.2]:print(n,m,r,np.round(e[0],4),np.round(e[1:].mean(0),4))\\nprint('bai corr',np.round(np.corrcoef(np.c_[cfg['bai'],cfg['cbai'],cfg['dbai'],Y].T)[:12,-3:],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/inverse_probe.py | tail -70\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 forward calibration → H2 inverse calibration and nonlinear latent readout; inversion reconstructs x to 7.6×10⁻¹⁰ and the best 52/20 slow-mode MAE is about 0.037 in amplitude units, but scalar prediction still misses the gate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The recovered coordinates occupy a tight box, unlike the measured inputs. Test polynomial and kernel readouts in that box as fallback predictors, and check whether a third temporal mode materially reduces the projection residual before refining the physical readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "63c9613acddce9adf2e65bc3be2127365ce66c78eb6d99bbaec98d64be1532d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36872.39,
+      "usage_known": true,
+      "prompt_tokens": 31885,
+      "cached_tokens": 9344,
+      "completion_tokens": 1353
+    }
+  ]
+}

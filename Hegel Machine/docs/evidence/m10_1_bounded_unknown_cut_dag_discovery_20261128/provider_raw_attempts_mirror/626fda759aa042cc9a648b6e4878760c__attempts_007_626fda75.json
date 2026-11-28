@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "626fda759aa042cc9a648b6e4878760c",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:24.657272+00:00",
+  "ended_at_utc": "2026-11-28T09:21:03.222314+00:00",
+  "request_sha256": "a3c9f0fc574011bf6073642d031b53184d6d6df64fa394667e50b21d648dc09e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42346,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28336,
+    "cached_tokens": 9344,
+    "completion_tokens": 1558
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_shared.py <<'PY'\\nfrom probe_graph import *\\nfrom scipy.optimize import least_squares\\np=S['panel_c']; u=p['u']; x=ops(S,T['x'])['x']; print('times',t,'telemetry',S['telemetry_vec'])\\ndef A(z):return np.c_[np.ones(len(z)),z[:,0]*z[:,1],z[:,0]*z[:,3],z[:,1]*z[:,2],z[:,2]*z[:,3]]\\nc=A(x)@ls(A(u),p['v1'])\\ndef B(z,w):return np.c_[poly(z,1),np.cos(z*w)]\\ndef res(w):\\n f=B(u,w);return (f@ls(f,p['v2'])-p['v2']).ravel()\\nw=least_squares(res,np.full(4,1.29),bounds=(.6,2)).x\\nd=B(x,w)@ls(B(u,w),p['v2']); m=c*d; k=c[:,0]*d[:,1]; one=np.ones(len(x));\\nL=np.c_[one,c,d,m]; M=np.c_[one,c,d,m.sum(1)]; G=np.c_[c,m]; H=np.c_[d,k]; HH=np.c_[G,H];\\ndef grouped(a,b,shared,intercept):\\n g=np.c_[c,m.sum(1)] if shared else G; h=H\\n if intercept:g=np.c_[one,g]\\n yy=T['traj'][a]; a0,b0=g[a],h[a]; start=ls(np.c_[a0,b0],yy); U=[]\\n for s in [start[:a0.shape[1]],start[a0.shape[1]:]]:U.append(np.linalg.svd(s,full_matrices=False)[2][0])\\n f,j=U\\n for _ in range(50):\\n  z=np.c_[(a0[:,:,None]*f).transpose((0,2,1)).reshape(-1,a0.shape[1]),(b0[:,:,None]*j).transpose((0,2,1)).reshape(-1,b0.shape[1])]; v=ls(z,yy.ravel()); R=np.c_[a0@v[:a0.shape[1]],b0@v[a0.shape[1]:]]; f,j=ls(R,yy)\\n return np.c_[g[b]@v[:a0.shape[1]],h[b]@v[a0.shape[1]:]]@np.array([f,j])\\nsplits=[(np.arange(52),np.arange(52,72))]+[(p[:56],p[56:]) for p in [np.random.default_rng(i+23).permutation(72) for i in range(12)]]\\nfor j in range(4):\\n q=np.argsort(x[:,j]);splits += [(q[16:],q[:16]),(q[:-16],q[-16:])]\\nfor name,F in [('full',L),('shared',M),('shared_zero',M[:,1:]),('full_zero',L[:,1:])]:\\n e=[]\\n for a,b in splits:e.append(np.mean(abs(F[b]@ls(F[a],T['y'][a])-T['y'][b])))\\n print('y',name,e[0],max(e[1:13]),max(e[13:]),ls(F,T['y']))\\nfor name in ['direct','rank2','grouped','grouped_shared','grouped_intercept','grouped_shared_intercept']:\\n e=[]\\n for a,b in splits:\\n  if name.startswith('grouped'):pred=grouped(a,b,'shared' in name,'intercept' in name)\\n  else:\\n   F=np.c_[one,HH]; pred=F[b]@ls(F[a],T['traj'][a]);\\n   if name=='rank2':\\n    v=np.linalg.svd(T['traj'][a],full_matrices=False)[2][:2];pred=(pred@v.T)@v\\n  err=abs(pred-T['traj'][b]); e.append([err.mean(),err.mean(0).max()])\\n print('traj',name,e[0],np.max(e[1:13],0),np.max(e[13:],0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_shared.py\\nsed -n '1,145p' /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 compact unconstrained readouts -> H2 shared product weights and two separately structured temporal modes; current worst tail MAE is 0.00726 for y and 0.00908 for trajectory, with worst timestamp MAE 0.01729.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Matched-channel products alone suffice for the trajectory readout.\",\n    \"empirical_witness\": \"Adding c0*d1 reduces worst coordinate-tail trajectory MAE from 0.11436 to 0.00908.\",\n    \"causal_blanket_diagnosis\": \"The trajectory needs an off-diagonal branch coupling that the scalar readout does not need.\",\n    \"sublated_pivot\": \"Keep the coupling only in the trajectory model and test whether shared temporal profiles make its fit more stable.\",\n    \"risk_kind\": \"missing_trajectory_interaction\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain every cross-branch product\",\n      \"rejected_reason\": \"The dense model increased worst coordinate-tail trajectory MAE to 0.02307 versus 0.00908 for the compact model.\"\n    }\n  ],\n  \"rationale\": \"Test whether the coefficient patterns justify fewer free parameters. Keep the compact unconstrained readouts if the shared constraints worsen held-out errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3089bd0a993abc142c1f14ced2cb8f76e9964cc4fa9e8b0d9da413a5e0ed57fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40947.73,
+      "usage_known": true,
+      "prompt_tokens": 28336,
+      "cached_tokens": 9344,
+      "completion_tokens": 1558
+    }
+  ]
+}

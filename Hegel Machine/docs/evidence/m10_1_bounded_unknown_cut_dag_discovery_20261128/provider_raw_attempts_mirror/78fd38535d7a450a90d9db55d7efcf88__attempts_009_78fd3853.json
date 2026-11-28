@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78fd38535d7a450a90d9db55d7efcf88",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:19.589464+00:00",
+  "ended_at_utc": "2026-11-28T09:55:58.253940+00:00",
+  "request_sha256": "c63c5da9e73c82b37828e6dff60deb2cbe30474e9099da3b5b5c59a6248f466c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53202,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31392,
+    "cached_tokens": 9344,
+    "completion_tokens": 1540
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat >/tmp/kerneltest.py <<'PY'\\nimport temporal as m, numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import minimize\\nY=np.c_[m.y,m.T]; N=len(Y);raw,x,c,d=[getattr(m,k)[:N] for k in ('raw','x','c','d')]; H=m.bias(np.c_[c,d]); F=m.ar._features(m.s,raw,x,c,d)\\nrng=np.random.default_rng(541); splits=[np.arange(52),np.arange(56),np.arange(20,72)]+[np.sort(rng.choice(N,52,False)) for _ in range(3)]\\ndef trial(tr,wanted,reg=6e-5,amp=1.,trend=H):\\n te=np.setdiff1d(np.arange(N),tr); n=len(tr);K=[]\\n for a in (raw,x,np.c_[c,d]):\\n  a=a/a[tr].std(0);q=cdist(a,a[tr],'sqeuclidean')/a.shape[1]\\n  K.extend(np.exp(-w*q) for w in (.06,.2,.5,1.25,3.))\\n for a in F:\\n  a=(a-a[tr].mean(0))/np.maximum(a[tr].std(0),1e-9);K.append(a@a[tr].T/a.shape[1])\\n K.append(np.eye(N)[:,tr]); K=np.array(K); prior=np.full(len(K),-6.);prior[:15]=-4;prior[2]=0;prior[-1]=-9\\n if wanted is not None:K=K[wanted];prior=prior[wanted]\\n h=trend[tr];q=np.linalg.qr(h,mode='complete')[0][:,h.shape[1]:]; J=np.eye(n)-q@q.T\\n flat=np.array([q@(q.T@k[tr]@q)@q.T for k in K]).reshape(len(K),-1)\\n yy=Y[tr].copy(); yy[:,1:]*=amp/np.sqrt(8.)\\n def obj(p):\\n  w=np.exp(p);P=cho_solve(cho_factor((w@flat).reshape(n,n)+J),np.eye(n))-J\\n  AY=P@yy;v=P.diagonal();e=AY/v[:,None];den=2*e/n/v[:,None]\\n  G=-(P@den)@AY.T+(P*(np.sum(den*e,axis=1))[None,:])@P\\n  return np.mean(np.sum(e*e,1))+reg*np.mean((p-prior)**2),w*(flat@G.ravel())+2*reg*(p-prior)/len(p)\\n p=minimize(obj,prior,jac=True,method='L-BFGS-B',bounds=[(-17,6)]*(len(K)-1)+[(-17,0)],options={'maxiter':210,'ftol':1e-11}).x\\n k=np.einsum('i,ijk->jk',np.exp(p),K); C=cho_factor(k[tr]);a=cho_solve(C,h);beta=m.fit(h.T@a,a.T@Y[tr]); pred=trend[te]@beta+k[te]@cho_solve(C,Y[tr]-h@beta);e=abs(pred-Y[te]);return np.array([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\nif __name__=='__main__':\\n print('group count',len(F)); junk=len(F)+15\\n for ids in ([39],[44],[52],[44,52],[39,44,52],[39,44,48,52,58]):\\n  h=np.c_[H,*[F[i-15] for i in ids]]; es=[]\\n  for tr in splits:\\n   te=np.setdiff1d(np.arange(N),tr);e=abs(h[te]@m.fit(h[tr],Y[tr])-Y[te]);es.append([e[:,0].mean(),e[:,1:].mean()])\\n  print('OLS',ids,np.round(es,4))\\n sets={'full':None,'compact':[0,1,2,3,4,39,44,52,junk],'medium':list(range(15))+[39,40,41,42,43,44,45,46,47,48,52,54,58,66,70,junk]}\\n configs=[(k,r,a) for k in sets for r in (6e-5,6e-6) for a in (.5,1,2,4)]\\n for k,r,a in configs:\\n  es=np.array([trial(t,sets[k],r,a) for t in splits]);print(k,r,a,'first',np.round(es[0],5),'56/16',np.round(es[1],5),'worst',np.round(es.max(0),5),'avg',np.round(es.mean(0),5),flush=True)\\nPY\\npython3 /tmp/kerneltest.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: broad shared covariance → H2: compact interaction kernels and readout-specific weighting; archived 52/20 MAEs are 0.02350 scalar and 0.03808 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt greedy sparse feature selection\",\"rejected_reason\":\"Training residuals fell without a corresponding improvement on the 52/20 split.\"}],\"rationale\":\"Compare the dominant interaction groups with the full covariance across six train-only splits. Track endpoint error separately so a lower aggregate trajectory MAE does not hide a worse final state.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5ee770fb96cbe47b2605ee9dc1d51832e87720e186229ea0141b5b85407b3c33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41312.49,
+      "usage_known": true,
+      "prompt_tokens": 31392,
+      "cached_tokens": 9344,
+      "completion_tokens": 1540
+    }
+  ]
+}

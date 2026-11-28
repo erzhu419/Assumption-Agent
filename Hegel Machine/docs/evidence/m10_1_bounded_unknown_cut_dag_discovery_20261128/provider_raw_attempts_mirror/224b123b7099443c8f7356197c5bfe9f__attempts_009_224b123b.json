@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "224b123b7099443c8f7356197c5bfe9f",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:17.450981+00:00",
+  "ended_at_utc": "2026-11-28T09:15:58.769723+00:00",
+  "request_sha256": "b1e00284defffd35739cf6915ebd5fc854ebdf6391bcb439b42c39112cb22785",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65721,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38350,
+    "cached_tokens": 10880,
+    "completion_tokens": 1679
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure.py <<'PY'\\nfrom compact import *\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import product\\nB,C,D,_=operators(s); f=B(x); c=C(f); d=D(f)\\n\\ndef mult(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef K(a): return a@a.T\\ndef ridge(k,tr,va,l):\\n h=k[np.ix_(tr,tr)]; kr=k[np.ix_(va,tr)]; mu=Y[tr].mean(0)\\n return (kr-kr.mean(1,keepdims=True)-h.mean(0)+h.mean())@np.linalg.solve(h-h.mean(0)-h.mean(1,keepdims=True)+h.mean()+l*np.eye(len(tr)),Y[tr]-mu)+mu\\n\\ndef err(p,va):\\n e=abs(p-Y[va]);return np.r_[e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()]\\n\\nk0=K(np.c_[f,c,d,mult(f,c)]); kfd=K(mult(f,d)); kcd=K(mult(c,d)); kr=[K(mult(f,f)),K(mult(c,c)),K(mult(d,d))]; R=cdist(f,f,'sqeuclidean'); Rc=cdist(c,c,'sqeuclidean'); Rd=cdist(d,d,'sqeuclidean')\\nkernels={'base':k0,'fd':k0+.09*kfd,'cd':k0+.09*kcd,'both':k0+.09*(kfd+kcd),'poly':k0+.09*(kfd+kcd+sum(kr)),'krbf':k0+.03*np.exp(-R/.8),'kcrbf':k0+.03*np.exp(-Rc/.8),'additive':k0+.03*sum(np.exp(-cdist(v[:,None],v[:,None],'sqeuclidean')/.20) for v in f.T),'mixrbf':k0+.03*(np.exp(-R/.8)+np.exp(-Rc/.8)+np.exp(-Rd/.8))}\\nconfig=list(product(kernels,[.00005,.0003,.001,.003,.01])); pred=np.array([[ridge(kernels[k],tr,va,l) for k,l in config] for tr,va in []]) if False else [[ridge(kernels[k],tr,va,l) for k,l in config] for tr,va in folds]; E=np.array([[err(p,va) for p in pe] for pe,(_,va) in zip(pred,folds)])\\nfor j in range(3):\\n for i in np.argsort(E[1:6,:,j].mean(0)+.5*E[-1,:,j])[:5]:print('fixed',j,config[i],E[0,i],E[1:6,i].mean(0),E[-1,i]);\\nbaseidx=config.index(('base',.0003)); ensemble=[config.index(q) for q in [('base',.0003),('fd',.003),('cd',.0003),('both',.001)]]\\nfor o,(tr,va) in enumerate(folds):\\n rng=np.random.RandomState(753+o); inner=np.array_split(rng.permutation(tr),4); inner.append(tr[np.argsort(np.linalg.norm(x[tr],axis=1))[-max(10,len(tr)//5):]])\\n e=np.array([[err(ridge(kernels[k],np.setdiff1d(tr,j),j,l),j) for k,l in config] for j in inner]); scores=e[:4].mean(0)+.35*e[4]; chosen=np.argsort(scores,axis=0)[:5]; P=np.mean(np.asarray(pred[o])[chosen[:,0]],axis=0); P[:,1:]=np.mean(np.asarray(pred[o])[chosen[:,1]],axis=0)[:,1:]; print('outer',o,'base',E[o,baseidx],'fixed blend',err(np.mean(np.asarray(pred[o])[ensemble],0),va),'nested blend',err(P,va))\\n\\n# Fit global temporal shapes on the prescribed fitting rows, compare the held-out projection floor.\\nt=s['eval_times']; tr,va=folds[0]; funcs={'exp':lambda t,a:-np.expm1(-a*t),'rat':lambda t,a:t/(1+a*t),'sin':lambda t,a:np.sin(a*t),'log':lambda t,a:np.log1p(a*t),'damped':lambda t,a:t*np.exp(-a*t),'atan':lambda t,a:np.arctan(a*t)}; r=[]\\nfor (n1,f1),(n2,f2) in product(funcs.items(),repeat=2):\\n def g(p):return np.c_[f1(t,p[0]),f2(t,p[1])]\\n def res(p):\\n  h=g(p);return (h@fit(h,z[tr].T)-z[tr].T).ravel()\\n for p in [[.4,.8],[.8,1.8],[.4,2.8]]:\\n  q=least_squares(res,p,bounds=(.001,6),max_nfev=120); h=g(q.x); ev=h@fit(h,z[va].T)-z[va].T; r.append((np.std(q.fun),np.std(ev),n1,n2,q.x))\\nfor v0 in sorted(r,key=lambda a:a[0])[:8]: print('temporal',v0)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 select one expanded readout → H2 average a small set of structured readouts; the compact baseline has high-amplitude y MAE 0.04967, and nested selection of individual expansions worsened prescribed-split y MAE from 0.02291 to 0.02854.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the top single interaction expansion\",\"rejected_reason\":\"The preferred interaction changed across folds, and nested selection worsened both prescribed-split outputs.\"}],\"rationale\":\"Compare averaging against the passing baseline on the same folds, with nested selection as a check against tuning noise. Separately test physical time bases against held-out projection error; adopt one only if it improves on the rank-two reconstruction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "817ec75a4984ab13709bd7baacd1478bf8bc0885b0ddc21d8d345f5fbda58667",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43959.55,
+      "usage_known": true,
+      "prompt_tokens": 38350,
+      "cached_tokens": 10880,
+      "completion_tokens": 1679
+    }
+  ]
+}

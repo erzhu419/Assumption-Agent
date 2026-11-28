@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1bb005a64f5a4aa7a0c5ee101ca0826e",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:59.792122+00:00",
+  "ended_at_utc": "2026-11-28T09:50:43.697611+00:00",
+  "request_sha256": "7a9ec230c2797c4db4f67cda6033d6814c01e3da41cd905cab662577eb763b81",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41615,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27227,
+    "cached_tokens": 9344,
+    "completion_tokens": 1925
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _panel_a(panel):\\n    design, target = _affine(panel['u']), panel['v']\\n    coef = _fit(design, target)\\n    for _ in range(20):\\n        residual = np.linalg.norm(design @ coef - target, axis=1)\\n        scale = max(np.median(residual), 1e-8)\\n        weight = 1.0 / np.hypot(1.0, residual / scale)\\n        coef = _fit(design * weight[:, None], target * weight[:, None])\\n    residual = np.linalg.norm(design @ coef - target, axis=1)\\n    keep = np.argsort(residual)[:-3]\\n    return _fit(design[keep], target[keep])\\n\\n\\ndef _inverse(x, coef):\\n    return np.linalg.solve(coef[1:].T, (x - coef[0]).T).T\\n\\n\\ndef _logcosh(x):\\n    return np.logaddexp(x, -x) - np.log(2.0)\\n\\n\\ndef _readout(panel, key, nonlinearity, start, bounds):\\n    u, target = panel['u'], panel[key]\\n\\n    def design(x, pars):\\n        frequency, gain = pars\\n        return _affine(x + gain * nonlinearity(frequency * x))\\n\\n    def residual(pars):\\n        d = design(u, pars)\\n        return (d @ _fit(d, target) - target).ravel()\\n\\n    pars = least_squares(residual, start, bounds=bounds).x\\n    coef = _fit(design(u, pars), target)\\n    return lambda x: design(x, pars) @ coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train, test = study['train'], study['test']\\n    x = np.concatenate((train['x'], test['x']), axis=0)\\n    a = _panel_a(study['panel_a'])\\n    b = _fit(_affine(study['panel_b']['u']), study['panel_b']['v'])\\n    ib = _affine(_inverse(x, a)) @ b\\n    panel = study['panel_c']\\n    v1 = _readout(panel, 'v1', np.arctan, (2.4, 6.3), ((0.2, 0), (15, 30)))\\n    v2 = _readout(panel, 'v2', _logcosh, (1.1, 0.9), ((0.1, 0), (4, 5)))\\n    i2b = _inverse(ib + v2(ib), b)\\n    return {'z': {'x': x, 'ib': ib, 'i2b': i2b, 'i1': v1(ib)},\\n            'y': train['y'], 'traj': train['traj']}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed '/^from scipy.optimize import least_squares/,$d' /tmp/probe_composition.py > /tmp/probe_handoff.py\\ncat >> /tmp/probe_handoff.py <<'PY'\\nnode=runpy.run_path('/holdout_task/node_00.py')\\nfit=node['_readout']; V=fit(p,'v2',node['_logcosh'],(1.1,.9),((.1,0),(4,5)))\\nD=V(np.zeros((1,4)))[0]; M=(V(.0001*np.eye(4))-V(-.0001*np.eye(4)))/.0002\\nraw=banks['Ai']; ib=banks['Ai Bf']; F=f['_scalar']; out=[]\\nscales=(-1.,-.5,-.25,.25,.5,1.,2.)\\nfor name,q in banks.items():\\n v=V(q); delta=v-D-q@M; warped=np.linalg.solve(M.T,(v-D).T).T; odd=warped-q\\n opts={'unmixed':warped,'nonlinear':odd, 'v2':v}\\n for k in scales:\\n  for tag,add in [('mixed',v),('mixed even',delta),('unmixed even',odd)]:\\n   for bn,base in [('self',q),('latent',raw),('B',ib)]:\\n    w=base+k*add; opts[f'{bn}+{k:g}{tag}']=w\\n    if bn in ('self','B'): opts[f'B-inverse({bn}+{k:g}{tag})']=iv(w,e)\\n for tag,z in opts.items():\\n  a0=score(F,'i2b',y,z);out.append((a0[1:].mean(),a0.max(),a0[0],name,tag))\\nprint('Top mean:',*sorted(out)[:8],sep='\\\\n');print('Top worst:',*sorted(out,key=lambda x:x[1])[:8],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_handoff.py | sed -n '/^Top mean/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (direct v2 handoff) -> H2 (v2 warp with a linear coordinate path); nested v2 calibration RMSE is 0.000104, while the provisional handoff has scalar MAE 0.032383 on the official split and 0.056339 on the worst additional split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pass the calibrated v2 readout directly to the sink.\",\n      \"rejected_reason\": \"The best direct v2 handoff misses the official scalar threshold; a linear coordinate path retains v2 while bringing that split below threshold.\"\n    }\n  ],\n  \"rationale\": \"Write the calibrated node and test both targets against the frozen sink. Compare mixed and unmixed variants to diagnose whether the remaining scalar error comes from the v2 warp itself or from the coordinate basis in which the sink measures distance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c1c70c6c0d9882ab03f1f394c45f10c1e4aa34046c503683c7b6a3508ca31770",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49182.08,
+      "usage_known": true,
+      "prompt_tokens": 27227,
+      "cached_tokens": 9344,
+      "completion_tokens": 1925
+    }
+  ]
+}

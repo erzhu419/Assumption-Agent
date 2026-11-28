@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abb8c53735c64ef492710061d7179d2e",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:58.273727+00:00",
+  "ended_at_utc": "2026-11-28T09:26:28.169149+00:00",
+  "request_sha256": "06c444ae8626a746236ae8d21f52fd92b5e6e0e730a7a3e2a046752da55d1f0b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21972,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18961,
+    "cached_tokens": 9344,
+    "completion_tokens": 1193
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m101_b04_batch_01_solver.py; cat > /tmp/probe03.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; rng=np.random.default_rng(321)\\ndef mono(x,d):return np.column_stack([np.prod(x[:,c],axis=1) for c in itertools.combinations_with_replacement(range(x.shape[1]),d)])\\ndef basis(x,k):\\n a=np.c_[np.ones(len(x)),x]; q=mono(x,2); c=mono(x,3); cyc=np.roll(x,-1,axis=1)\\n return dict(aff=a,cross=np.c_[a,x*cyc],quadratic=np.c_[a,q],cubicdiag=np.c_[a,x**3],quad_cubicdiag=np.c_[a,q,x**3],cubic=np.c_[a,q,c],sine=np.c_[a,np.sin(2*x)],cosine=np.c_[a,np.cos(2*x)],tan=np.c_[a,np.tanh(2*x)],pqsin=np.c_[a,q,np.sin(2*x)],pqcos=np.c_[a,q,np.cos(2*x)])[k]\\nkeys='aff cross quadratic cubicdiag quad_cubicdiag cubic sine cosine tan pqsin pqcos'.split()\\ndef fit_rob(a,v):\\n n,m=a.shape; best=(np.inf,None)\\n if m+5>=n: return np.linalg.lstsq(a,v,rcond=None)[0]\\n for it in range(140):\\n  ix=rng.choice(n,m+1,replace=False); c=np.linalg.lstsq(a[ix],v[ix],rcond=None)[0]\\n  for _ in range(3):\\n   e=np.linalg.norm(a@c-v,axis=1); keep=e.argsort()[:int(.83*n)];c=np.linalg.lstsq(a[keep],v[keep],rcond=None)[0]\\n  score=np.median(np.linalg.norm(a@c-v,axis=1));\\n  if score<best[0]:best=(score,c)\\n return best[1]\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; print(p,'range',np.round([u.min(),u.max()],3))\\n for j,v in s[p].items():\\n  if j=='u':continue\\n  for k in keys:\\n   a=basis(u,k)\\n   if a.shape[1]>len(u)-4:continue\\n   if p=='panel_a':\\n    w=fit_rob(a,v); e=np.linalg.norm(a@w-v,axis=1); keep=e.argsort()[:40]\\n   else:keep=np.arange(len(u))\\n   a=a[keep]; y=v[keep]; w=np.linalg.lstsq(a,y,rcond=None)[0]; e=a@w-y; h=np.sum(np.linalg.qr(a,mode='reduced')[0]**2,1)\\n   print(j,k,'rmse/loo',round(np.mean(e**2)**.5,6),round(np.mean((e/(1-h[:,None]))**2)**.5,6))\\n   if k=='aff': print(np.round(w,5))\\nT=s['train']['traj'].T;t=s['eval_times']\\ndef b(r):return -np.expm1(-t[:,None]*r)\\ndef err(r):\\n A=b(r);return (A@np.linalg.lstsq(A,T,rcond=None)[0]-T).ravel()\\nr=least_squares(err,[1.7,.25],bounds=([.6,.02],[6,.65])).x; print('rates',r,'rmse',np.mean(err(r)**2)**.5)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic smooth prediction → H2 robust calibration and shared two-mode trajectory; inherited gate MAEs are 0.050396 for y and 0.073207 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit eight independent time-point predictors\",\n      \"rejected_reason\": \"The third trajectory singular value is only 0.056 versus 1.310 for the second; check whether two shared relaxation modes explain the data before adding independent predictors.\"\n    }\n  ],\n  \"rationale\": \"Compare parsimonious panel laws by leave-one-row-out error and separate calibration outliers from systematic nonlinear terms. Profile the two relaxation rates to determine whether trajectory error comes from the temporal law or from predicting its amplitudes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "9781f26ea3e69a09bcf89280f875153af83d365cac5f32c9e1018551b399a607",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32449.87,
+      "usage_known": true,
+      "prompt_tokens": 18961,
+      "cached_tokens": 9344,
+      "completion_tokens": 1193
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c3e4adcc8314f3c864b9f0c415d8481",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:45.487272+00:00",
+  "ended_at_utc": "2026-11-28T09:33:22.800517+00:00",
+  "request_sha256": "e3b6bd0a56554403d539296043d4897508ae4a57509d3f426866f55bb40b15a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43309,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27428,
+    "cached_tokens": 9344,
+    "completion_tokens": 1535
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph04.py <<'PY'\\nfrom cal04 import s, u, v, fit, aff, trim\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cwr\\nnp.set_printoptions(precision=5,suppress=True,linewidth=120)\\ndef mon(x,d):return np.column_stack([np.prod(x[:,i],axis=1) for i in cwr(range(4),d)])\\ndef ac(a,b):return np.c_[np.ones(len(a)),a,b,a*b,a**3]\\ndef decode(x,u=u,v=v):\\n w=[]\\n for a,b,y in zip(u.T,np.roll(u,-1,axis=1).T,v.T):\\n  X=ac(a,b); _,c,r,ix=trim(X,y,44); ix=abs(r)<.001; w.append(fit(X[ix],y[ix]))\\n w=np.array(w); print('cal',w)\\n z=(x-w[:,0])/w[:,1]; ii=np.arange(4)\\n for j in range(20):\\n  b=np.roll(z,-1,axis=1); c=w.T; r=c[0]+c[1]*z+c[2]*b+c[3]*z*b+c[4]*z**3-x\\n  J=np.zeros((len(z),4,4)); J[:,ii,ii]=c[1]+c[3]*b+3*c[4]*z*z; J[:,ii,(ii+1)%4]=c[2]+c[3]*z\\n  z-=np.linalg.solve(J,r[...,None])[...,0]\\n print('inverse',np.max(abs(r)),z.min(0),z.max(0));return z\\nx=s['train']['x']; z=decode(np.r_[x,s['test']['x']]); b=s['panel_b']; wb=fit(aff(b['u']),b['v']); a=z; z=aff(a)@wb\\np=s['panel_c']; c=p['u']\\ndef panel_features(x,name,r=1):\\n if name=='q':return np.c_[aff(x),mon(x,2)]\\n if name=='s':return np.c_[aff(x),np.sin(x*r)]\\n if name=='t':return np.c_[aff(x),np.tanh(x*r)]\\n if name=='cos':return np.c_[aff(x),np.cos(x*r)]\\n if name=='q+s':return np.c_[aff(x),mon(x,2),np.sin(x*r)]\\n if name=='cube':return np.c_[aff(x),x**3]\\n if name=='pair':return np.c_[aff(x),x*np.roll(x,-1,axis=1)]\\n if name=='square':return np.c_[aff(x),x*x]\\n if name=='rational':return np.c_[aff(x),x/(1+r*x*x)]\\ncoords={'raw':np.r_[x,s['test']['x']], 'a':a,'ab':z}\\nfor k in ['v1','v2']:\\n v=p[k]; best=[]\\n for name in ['q','s','t','cos','q+s','cube','pair','square','rational']:\\n  def calc(r):\\n   F=panel_features(c,name,r[0]); return (F@fit(F,v)-v).ravel()\\n  rr=min((least_squares(calc,[start],bounds=(.1,8)) for start in [.5,1.7,3.5]),key=lambda o:sum(o.fun**2)).x[0] if name in ['s','t','cos','q+s','rational'] else 1.\\n  F=panel_features(c,name,rr); W=fit(F,v); R=v-F@W; h=(np.linalg.qr(F)[0]**2).sum(1); E=np.sqrt(np.mean((R/(1-h[:,None]))**2)); best.append((E,name,rr,W)); print('c',k,name,rr,np.sqrt(np.mean(R**2)),E)\\n _,name,rr,W=min(best,key=lambda e:e[0]); print(k,'winning coefs',W); coords[k+'(a)']=panel_features(a,name,rr)@W; coords[k+'(ab)']=panel_features(z,name,rr)@W\\nT=s['eval_times']; Y=s['train']['y']; S=s['train']['traj']; B=lambda r:-np.expm1(-T[:,None]*r); tr=slice(0,52); te=slice(52,72)\\ndef res(r):\\n f=B(r); return (f@fit(f,S[tr].T)-S[tr].T).ravel()\\nr=least_squares(res,[1.8,.4]).x; basis=np.linalg.qr(B(r))[0]; target=np.c_[Y,S@basis]; print('r',r)\\nfor name,zz in coords.items():\\n for n,F in [('lin',aff(zz)),('sep',np.c_[aff(zz),zz**2,zz**3]),('full2',np.c_[aff(zz),mon(zz,2)]),('cubic',np.c_[aff(zz),mon(zz,2),mon(zz,3)]),('pair',np.c_[aff(zz),zz*np.roll(zz,-1,axis=1)]),('sine',np.c_[aff(zz),np.sin(1.5*zz)])]:\\n  W=fit(F[tr],target[tr]); P=F[:72]@W; E=[np.mean(abs(P[idx,0]-Y[idx])) for idx in [tr,te]]+[np.mean(abs(P[idx,1:]@basis.T-S[idx])) for idx in [tr,te]]; print(name,n,np.round(E,5))\\n  if name in ['a','ab'] and n=='full2':print('full2 Coeffs',W)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coordinates → H2 invert the cyclic cubic calibration and test independent scalar and trajectory readouts; previous 52/20 MAE was 0.06390 and 0.06274.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The cyclic cubic fits clean calibration rows at roughly 0.00007 RMSE. Check that it inverts on the observed inputs, then compare held-out readouts with and without the auxiliary operators.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e890736a7f6b402226ed3439aa6c32d56146f37d6125da18979d65b5930f0fff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39927.57,
+      "usage_known": true,
+      "prompt_tokens": 27428,
+      "cached_tokens": 9344,
+      "completion_tokens": 1535
+    }
+  ]
+}

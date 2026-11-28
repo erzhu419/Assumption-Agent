@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "021fb51d3eee4c798beb1d691f318337",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:33.775292+00:00",
+  "ended_at_utc": "2026-11-28T09:50:17.334727+00:00",
+  "request_sha256": "ae90eadb34b6cbceb60283a37ea49bd6433268de71e39e53ef83d7219be90cbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75574,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42745,
+    "cached_tokens": 9344,
+    "completion_tokens": 1919
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/late.py <<'PY'\\nfrom operators import *\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import product\\nb,c,d=[ops[k](z) for k in 'BCD']; P=Y[:,1:]; y=Y[:,0]; az=z*(1-1.1*np.exp(-z*z)); n=len(y)\\ndef scale(a):return (a-a[:n].mean(0))/a[:n].std(0)\\ndef gram(a):\\n a=scale(a); return a@a.T/a.shape[1]\\nZ,B,C,D,A=map(gram,(z,b,c,d,az)); L=np.c_[aff(z),b,c,d];\\nfits=[]\\nfor i,j in folds:\\n Q=np.linalg.qr(L[i])[0]; R=P[i]-Q@(Q.T@P[i]);\\n def h(rate):return -np.expm1(-rate*T)\\n def loss(rate):\\n  v=h(rate);return np.linalg.norm(R-np.outer(R@v/(v@v),v))\\n rate=minimize_scalar(loss,bounds=(.1,4),method='bounded').x; v=h(rate); amp=P@v/(v@v); fits.append((i,j,amp));\\n print('rate',rate,'residual std',np.std(R-np.outer(R@v/(v@v),v)))\\nfor nm,F in [('B',aff(b)),('ZB',np.c_[aff(z),b]),('ZBC',np.c_[aff(z),b,c]),('ZBD',np.c_[aff(z),b,d]),('ZBCD',L),('ZAcos',np.c_[aff(z),az,np.cos(1.268*z)]),('ZAcosQ',np.c_[aff(z),az,np.cos(1.268*z),pol(z,2)[:,5:]]),('ZBCDq',np.c_[L,pol(b,2)[:,5:]])]:\\n print('contrast',nm,[(round(np.mean(abs(F[j]@w[:-1]+amp[j]*w[-1]-y[j])),4),round(w[-1],3)) for i,j,amp in fits for w in [fit(np.c_[F[i],amp[i]],y[i])]])\\nextra={'z':Z,'b':B,'c':C,'d':D,'lin':Z+B+C+D,'none':0,'b2':B**2,'z2':Z**2,'zb':Z*B,'zd':Z*D,'bd':B*D,'rbf':np.exp(-1.4*(np.diag(Z)[:,None]+np.diag(Z)[None,:]-2*Z)),'smooth':gram(np.c_[np.tanh(1.7*z),np.sin(1.7*z),np.cos(1.27*z)]),'mix':Z*B+Z*D+B*D,'squares':gram(np.c_[z*z,b*b]),'abc':gram(np.c_[np.sin(1.7*b),np.tanh(1.7*b),b*b])}\\n# Trajectory and label contrast can have different spatial regularity.\\nkt0=1+B+.3*B**2+.3*(Z+C+D)+2*Z*B\\nkt1=1+B+.3*B**2+Z+2*Z*B\\ntrials=[]; baselines=[]\\nfor kt in [kt0,kt1,1+B+.3*B**2+.3*(Z+C+D)+2*Z*B+.3*B**3,1+B+.3*B**2+.3*(Z+C+D)+2*Z*B+.3*Z*Z]:\\n for lam in (.0001,.001,.005,.02):\\n  amps=[kt[np.ix_(j,i)]@solve(kt[np.ix_(i,i)]+lam*np.eye(len(i)),u[i],assume_a='pos') for i,j,u in fits]; baselines.append(amps)\\nfor name,E in extra.items():\\n for w,lam in product((.03,.3,2),(.0001,.001,.01,.06)):\\n  K=1+Z+B+.25*(C+D)+w*E\\n  H=[K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),np.eye(len(i)),assume_a='pos') for i,j,u in fits]\\n  for k,at in enumerate(baselines):\\n   for cf in (.7,.9,1,1.1,1.3):\\n    e=np.array([np.mean(abs(hh@(y[i]-cf*u[i])+cf*ap-y[j])) for hh,ap,(i,j,u) in zip(H,at,fits)]); trials.append((e,name,w,lam,k,cf))\\nfor key in (lambda x:x[0].max(),lambda x:x[0][0]):\\n print('SHARED',[(a.round(5).tolist(),*p) for a,*p in sorted(trials,key=key)[:12]])\\n# Test if residual is a single ridge term in observed or augmented coordinates.\\nfor k,x in [('z',z),('b',b),('a',az),('c',c),('d',d),('zb',np.c_[z,b]),('zd',np.c_[z,d])]:\\n for tag in ('sin','tanh','cos','rational'):\\n  errors=[]; dirs=[]\\n  for i,j,u in fits:\\n   base=np.c_[L[:n],u]; Q=np.linalg.qr(base[i])[0]; ry=y[i]-Q@(Q.T@y[i]); a=x[i];\\n   func={'sin':np.sin,'cos':np.cos,'tanh':np.tanh,'rational':lambda t:1/(1+t*t)}[tag]\\n   def rr(p):\\n    f=func(a@p[:-2]+p[-2]); return ry-p[-1]*(f-Q@(Q.T@f))\\n   rng=np.random.default_rng(718); cand=[least_squares(rr,np.r_[rng.normal(0,.75,a.shape[1]),rng.normal(0,.4),.1],max_nfev=110) for _ in range(12)]; best=min(cand,key=lambda r:np.linalg.norm(r.fun)); p=best.x; f=func(x@p[:-2]+p[-2])*p[-1]; w=fit(base[i],y[i]-f[i]); obs=np.mean(abs(base[j]@w+f[j]-y[j])); errors.append(obs); dirs.append(p.round(2));\\n  print('RIDGE',k,tag,np.round(errors,4),dirs[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/late.py | grep -E '^rate|^contrast|^SHARED|^RIDGE'; sed -n '1,180p' /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (independent kernel readouts) -> H2 (shared trajectory amplitude with a separately regularized label contrast); the saved candidate fails the public label gate at 0.054230 MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the fixed signed-energy model\",\"rejected_reason\":\"It missed the label threshold on all three splits.\"}],\"rationale\":\"Fit the time mode within each fold and score the composed predictor using predicted amplitudes on held-out rows. Separately test whether a single spatial nonlinearity explains the label contrast.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "58c5c5a6b6853860d0b0859c1a8651cb55b0ca95ad9d509a95d23757d8ee6f72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48812.53,
+      "usage_known": true,
+      "prompt_tokens": 42745,
+      "cached_tokens": 9344,
+      "completion_tokens": 1919
+    }
+  ]
+}

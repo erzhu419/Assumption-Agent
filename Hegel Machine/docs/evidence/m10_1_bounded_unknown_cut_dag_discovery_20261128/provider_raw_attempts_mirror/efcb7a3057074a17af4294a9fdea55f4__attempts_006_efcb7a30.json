@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "efcb7a3057074a17af4294a9fdea55f4",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:09:27.369862+00:00",
+  "ended_at_utc": "2026-11-28T10:10:05.217492+00:00",
+  "request_sha256": "39b7f5639fc0c2377754d861b5ed7582446edb99d1941f46f11936e1f35d164c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47033,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31003,
+    "cached_tokens": 9344,
+    "completion_tokens": 1666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout.py <<'PY'\\nfrom compose import *\\nfrom sklearn.linear_model import Lasso, ElasticNet\\nfrom scipy.stats import pearsonr\\nu,v=(s['panel_b'][k] for k in ('u','v'))\\ndef bf(p,x,kind):\\n f,a,*b=p; h=x+a*np.sin(f*x)\\n if kind=='square':h+=b[0]*x*x\\n if kind=='cube':h+=b[0]*x**3\\n if kind=='cos':h+=b[0]*(np.cos(f*x)-1)\\n if kind=='second':h+=b[0]*np.sin(2*f*x)\\n if kind=='prod':h+=b[0]*cycle(x)\\n if kind=='sin2':h+=b[0]*np.sin(b[1]*x)\\n if kind=='offset':h=x+a*np.sin(f*x+b[0])\\n if kind=='tanh':h+=b[0]*np.tanh(b[1]*x)\\n return aff(h)\\ndef getb(kind):\\n x0=[2.8,-.4]+([.01,1.2] if kind in ('sin2','tanh') else [.01] if kind!='base' else [])\\n def fit(p):\\n  d=bf(p,u,kind);w=ls(d,v);return d@w-v,w\\n p=least_squares(lambda p:fit(p)[0].ravel(),x0,max_nfev=250).x;r,w=fit(p);return np.mean(abs(r)),p,lambda x:bf(p,x,kind)@w\\nbs=[(k,*getb(k)) for k in ('base','square','cube','cos','second','prod','sin2','offset','tanh')]; print('B fits',[(k,e,p) for k,e,p,_ in bs]);\\na=afit(s)['diagsecond'];z=inverse(a,s['train']['x']); op=operators(s);op['B']=min(bs,key=lambda b:b[1])[-1]; zs={'Z':z}\\nfor k,f in op.items():zs[k]=f(z)\\nfor p in ['B','C','D','BC','BD','CB','CD','DB','DC']:\\n for k,f in op.items():\\n  if k not in p:zs[p+k]=f(zs[p]);\\ny=s['train']['y'];t=s['train']['traj'];print('ranges',[(k,round(np.max(abs(x)),2)) for k,x in zs.items()]);\\ndef features(x,k):\\n d={}\\n def add(n,a):\\n  if a.ndim==1:a=a[:,None]\\n  for i,col in enumerate(a.T):d[f'{k}/{n}/{i}']=col\\n r=R(x);ss=x+r;df=x-r;pr=x*r\\n for n,a in [('x',x),('sq',x*x),('cycle',pr),('anti',x*np.roll(x,2,axis=1)[:,:]),('triple',pr*np.roll(x,2,axis=1)),('cube',x**3),('mixed',x*x*r),('mixed2',x*r*r),('tanh',np.tanh(2*x)),('sin',np.sin(3*x)),('cos',np.cos(2*x)),('rat',x/(1+2*x*x)),('pRat',pr/(1+ss*ss)),('pRat2',pr/(1+df*df)),('sRat',ss/(1+df*df)),('dRat',df/(1+ss*ss)),('hRat',x/(1+2*r*r)),('pTanh',np.tanh(2*pr)),('pSin',np.sin(3*pr))]:add(n,a)\\n return d\\nF={k:features(x,k) for k,x in zs.items()};splits=[np.arange(52,72)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(3)];\\nfor target in [y,t[:,-1]]:\\n results=[]\\n for group in [[k] for k in F]+[['Z','B'],['B','BC','BCD'],['Z','B','BC','BD','BCD'],list(F)]:\\n  for mode in ['linear','poly','rich']:\\n   names=[];cols=[]\\n   for k in group:\\n    for name,col in F[k].items():\\n     typ=name.split('/')[1];\\n     if mode=='linear' and typ!='x':continue\\n     if mode=='poly' and typ not in ['x','sq','cycle','anti','triple','cube','mixed','mixed2']:continue\\n     names.append(name);cols.append(col)\\n   d=np.array(cols).T\\n   for alpha in [.0005,.002,.005,.015,.035]:\\n    es=[]; co=None\\n    for n,te in enumerate(splits):\\n     tr=np.setdiff1d(np.arange(72),te);sc=np.maximum(d[tr].std(0),1e-9);m=ElasticNet(alpha=alpha,l1_ratio=.92,max_iter=4000,tol=.0003).fit(d[tr]/sc,target[tr]);es.append(np.mean(abs(m.predict(d[te]/sc)-target[te])));\\n     if n==0:co=[(names[i],round(m.coef_[i],3)) for i in np.argsort(abs(m.coef_))[-8:][::-1]]\\n    results.append((np.mean(es),es,group,mode,alpha,co))\\n print('target',target.std());print(*sorted(results)[:8],sep='\\\\n');print('gate',*sorted(results,key=lambda r:r[1][0])[:4],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine readout after panel composition → H2 sparse nonlinear branches; required-split MAE is 0.0763 for y and 0.0485 for trajectory under the best respective simple models.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refine panel A inversion first\",\n      \"rejected_reason\": \"Five nonlinear calibration bases produce nearly identical downstream errors; the remaining error is more likely in the operator composition or readout.\"\n    }\n  ],\n  \"rationale\": \"Test whether a missing term explains panel B’s residual, then use repeated held-out splits to identify which nonlinear readout features improve prediction without relying on the required split alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c4aa1784a83a693e26d5a34d1f9f7aa2e2a4fb43d9b6d2b078edd11d3054ba42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43227.07,
+      "usage_known": true,
+      "prompt_tokens": 31003,
+      "cached_tokens": 9344,
+      "completion_tokens": 1666
+    }
+  ]
+}

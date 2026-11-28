@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3fbb053f0833439b86cf66cc306f341e",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:31.714420+00:00",
+  "ended_at_utc": "2026-11-28T09:13:17.426177+00:00",
+  "request_sha256": "1e3a48859994095907ee0e01243061094a94b9807cec2f62af8d1e1b80277586",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47019,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32476,
+    "cached_tokens": 10880,
+    "completion_tokens": 1862
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the scalar readout and two-mode state trajectory.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    rng = np.random.default_rng(452)\\n    best = (np.inf, None, None)\\n    for _ in range(100):\\n        i, j = rng.choice(len(u), 2, replace=False)\\n        d = u[j] - u[i]\\n        if np.min(np.abs(d)) < 0.06:\\n            continue\\n        gain = (v[j] - v[i]) / d\\n        offset = v[i] - gain * u[i]\\n        err = np.linalg.norm(u * gain + offset - v, axis=1)\\n        score = np.median(err)\\n        if score < best[0]:\\n            best = (score, gain, offset)\\n    _, gain, offset = best\\n    err = np.linalg.norm(u * gain + offset - v, axis=1)\\n    keep = err <= max(0.001, 5 * np.median(err))\\n    uc, vc = u[keep], v[keep]\\n    a = uc - uc.mean(axis=0)\\n    gain = np.sum(a * (vc - vc.mean(axis=0)), axis=0) / np.sum(a * a, axis=0)\\n    return gain, vc.mean(axis=0) - uc.mean(axis=0) * gain\\n\\n\\ndef _basis(times, rates):\\n    return -np.expm1(-np.exp(rates)[:, None] * times)\\n\\n\\ndef _time_fit(times, traj):\\n    def residual(rates):\\n        b = _basis(times, rates)\\n        return (traj @ np.linalg.pinv(b) @ b - traj).ravel()\\n    fit = least_squares(residual, [-1.0, 1.0], bounds=(-8.0, 4.0))\\n    return _basis(times, np.sort(fit.x))\\n\\n\\ndef _affine_features(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _coordinates(study, x):\\n    gain, offset = _calibration(study['panel_a'])\\n    panel = study['panel_b']\\n    operator = np.linalg.lstsq(_affine_features(panel['u']), panel['v'], rcond=None)[0]\\n    return _affine_features((x - offset) / gain) @ operator\\n\\n\\ndef _features(x, p):\\n    h = np.arctan(x * np.exp(p[:4]) + p[4:])\\n    pair = np.triu_indices(4, 1)\\n    return np.column_stack((_affine_features(x), h, h[:, pair[0]] * h[:, pair[1]], h * h))\\n\\n\\ndef _spatial_fit(x, targets):\\n    scale = np.maximum(0.05, targets.std(axis=0))\\n    def residual(p):\\n        d = _features(x, p)\\n        w = np.linalg.lstsq(d, targets, rcond=1e-9)[0]\\n        return ((d @ w - targets) / scale).ravel()\\n    fit = least_squares(residual, np.zeros(8), bounds=([-2.5]*4 + [-3.0]*4, [1.5]*4 + [3.0]*4), max_nfev=160)\\n    d = _features(x, fit.x)\\n    return fit.x, np.linalg.lstsq(d, targets, rcond=1e-9)[0]\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = _coordinates(study, np.concatenate((train['x'], study['test']['x'])))\\n    n = len(train['x'])\\n    b = _time_fit(study['eval_times'], train['traj'])\\n    targets = np.column_stack((train['y'], train['traj'] @ np.linalg.pinv(b)))\\n    p, w = _spatial_fit(x[:n], targets)\\n    pred = _features(x[n:], p) @ w\\n    y, state = pred[:, 0], pred[:, 1:] @ b\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,batch_solver as m\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];tr=s['train'];x=m._coordinates(s,tr['x']);t=s['eval_times'];y,z=tr['y'],tr['traj'];rng=np.random.default_rng(413);items=[]\\nfor k in range(15):\\n p=np.arange(72) if k==0 else (np.argsort(np.linalg.norm(x,axis=1)) if k==1 else rng.permutation(72));i,j=p[:52],p[52:];b=m._time_fit(t,z[i]);q=np.c_[y,z@np.linalg.pinv(b)];a,w=m._spatial_fit(x[i],q[i]); pred=m._features(x[j],a)@w;ee=np.abs(pred[:,0]-y[j]);ez=np.abs(pred[:,1:]@b-z[j]);items.append([ee.mean(),ez.mean(),ez.mean(0).max()]);\\n if k==0:\\n  print('52/20 scalar,mean state,worst horizon',items[-1]); print('scale and bias',np.exp(a[:4]),a[4:]);print('feature coefficients\\\\n',np.round(w,5));print('state MAE per horizon',ez.mean(0));print('train projection standard dev',np.std(z[i]-q[i,1:]@b,axis=0));\\n if k==1:print('outer radius',items[-1]);\\nprint('random-split median and worst',np.median(items[2:],axis=0),np.max(items[2:],axis=0));print('calibration',m._calibration(s['panel_a']));print('train vs test coordinate ranges',np.array([x.min(0),x.max(0),m._coordinates(s,s['test']['x']).min(0),m._coordinates(s,s['test']['x']).max(0)]));\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Inverse panel-A calibration → panel-B coordinates, arctangent interactions, and two shared saturation modes; the prototype achieved approximately 0.010 scalar MAE and 0.010 worst-horizon MAE on the 52/20 split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use tanh in the same coordinates\",\n      \"rejected_reason\": \"It had higher scalar and worst-horizon error than arctangent on the required split.\"\n    }\n  ],\n  \"rationale\": \"Save the first candidate that clears the scalar threshold and test whether its margin holds on random and high-radius splits. Inspect the fitted coefficients to identify which terms warrant a more compact structural test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c1ccef66eb309305b816cd4a6390543cabc8037ba38b8ba054b782b36f4ad97f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48398.55,
+      "usage_known": true,
+      "prompt_tokens": 32476,
+      "cached_tokens": 10880,
+      "completion_tokens": 1862
+    }
+  ]
+}

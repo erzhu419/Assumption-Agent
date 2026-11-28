@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "670fea604a8f48ab91e56d30576ce36a",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:13.755723+00:00",
+  "ended_at_utc": "2026-11-28T09:44:52.005648+00:00",
+  "request_sha256": "553c53763389a8e29ca624fc3c7b1178a86550cf4ab800f5bdbe0ef505ea0260",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30975,
+    "cached_tokens": 9344,
+    "completion_tokens": 1562
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('node_00.py')\\ns = p.read_text()\\nold = '''    # B already spans the affine coordinates of the decoded inputs. Keep that\\n    # block at low weight so its quadratic interactions do not dominate ridge.\\n    return {'h': np.column_stack((0.03 * b, c1, c2)),\\n            'n_train': np.asarray(len(train['x'])),'''\\nnew = '''    n_train = len(train['x'])\\n    # Scale the interactions for the frozen ridge readout while retaining B's\\n    # affine information. Center on training rows only.\\n    h = np.column_stack((0.09 * b, 2.0 * c1, c2))\\n    h -= h[:n_train].mean(axis=0)\\n    return {'h': h,\\n            'n_train': np.asarray(n_train),'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I -B /holdout_task/test_dag_candidate.py\\npython3 -I -B - <<'PY'\\nfrom pathlib import Path\\nfrom importlib.util import spec_from_file_location, module_from_spec\\nimport pickle\\nimport numpy as np\\nroot = Path('/holdout_task')\\ndef load(name, path):\\n    spec = spec_from_file_location(name, root / path)\\n    mod = module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nup = load('editable', 'node_00.py')\\ndown = load('frozen', '_frozen_nodes/node_01.py')\\ndef loo_rmse(d, v):\\n    q = np.linalg.qr(d, mode='reduced')[0]\\n    e = (v - d @ up._fit(d, v)) / (1 - (q*q).sum(1)[:, None])\\n    return float(np.sqrt(np.mean(e*e)))\\nwith (root / 'public_batch.pkl').open('rb') as src:\\n    for entry in pickle.load(src):\\n        s = entry['study']\\n        a, c = s['panel_a'], s['panel_c']\\n        u, v = a['u'], a['v']\\n        d = up._calibration(u)\\n        w = np.ones(len(u))\\n        for _ in range(20):\\n            coeff = up._fit(d*w[:,None], v*w[:,None])\\n            r = np.linalg.norm(v-d@coeff, axis=1)\\n            w = 1/np.hypot(1, r/max(2*np.median(r), 1e-10))\\n        keep = np.argsort(r)[:-3]\\n        a_err = loo_rmse(d[keep], v[keep])\\n        c_err = loo_rmse(up._design(up._ring(c['u'])), c['v1'])\\n        print('Panel A trimmed / panel C v1 calibration LOO RMSE:', a_err, c_err)\\n        assert max(a_err, c_err) < .001\\n        x, y, traj = (s['train'][k] for k in ('x','y','traj'))\\n        ids = np.arange(len(x))\\n        z = up._decode(a, x)\\n        def tails(q):\\n            return [g for col in q.T for g in (np.argsort(col)[:12], np.argsort(col)[-12:])]\\n        groups = {\\n            'random': [g for seed in (733,1013,7177,408,6182) for g in np.array_split(np.random.default_rng(seed).permutation(ids),5)],\\n            'raw_tails': tails(x), 'latent_tails': tails(z),\\n            'radial': list(np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5)),\\n        }\\n        for name, folds in groups.items():\\n            scores = []\\n            for te in folds:\\n                tr = np.setdiff1d(ids, te)\\n                fold = dict(s, train={'x':x[tr], 'y':y[tr], 'traj':traj[tr]}, test={'x':x[te]})\\n                mid = up.run_node({'__input__':fold})\\n                pred = down.run_node({'node_00':mid})\\n                ey = np.abs(pred['y_hat']-y[te]); et = np.abs(pred['state_pred']-traj[te])\\n                assert ey.shape == (len(te),) and et.shape == (len(te), traj.shape[1])\\n                assert np.isfinite(ey).all() and np.isfinite(et).all()\\n                scores.append([ey.mean(), et.mean(), et.mean(axis=0).max()])\\n            worst = np.max(scores, axis=0)\\n            print(name, 'worst y/trajectory/horizon MAE:', worst)\\n            assert np.all(worst[:2] <= .038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (underweighted affine and ring features) -> H2 (train-centered, rebalanced panel features); pilot worst coordinate-tail y/trajectory MAEs improved from 0.06851/0.04325 to 0.03464/0.02651.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Scale every feature block equally\",\n      \"rejected_reason\": \"The tested common scales left at least one coordinate-tail y MAE above 0.038; relative weighting improved both tail metrics while preserving the public margin.\"\n    }\n  ],\n  \"rationale\": \"Promote the weighting that improves the worst slice without changing the calibrated maps or frozen node. Re-run the official test and the stress folds on the exact artifact in isolated Python; a missed threshold would block submission, and the direct calibration checks would distinguish a basis regression from a readout problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c0312a2bb55f081f84466066653e0c7b3c0c2305bef82a277d6f30a15188f369",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40863.65,
+      "usage_known": true,
+      "prompt_tokens": 30975,
+      "cached_tokens": 9344,
+      "completion_tokens": 1562
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99112595c6d34350bacf6100ee273d2f",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:58:34.946443+00:00",
+  "ended_at_utc": "2026-11-28T09:59:16.483760+00:00",
+  "request_sha256": "dbd929303a7926eddc7bef6e48451ce5aa0b0239d8c3bbfdf9545520249da457",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48167,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29146,
+    "cached_tokens": 9344,
+    "completion_tokens": 1632
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat > /tmp/probe6.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from graph_probe import *\\nfrom itertools import product\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.model_selection import KFold\\nfrom importlib.util import spec_from_file_location,module_from_spec\\nimport glob,copy\\nfor path in sorted(glob.glob('/tmp/hegel_continual_archive/*_solver.py')):\\n spec=spec_from_file_location('prior',path); m=module_from_spec(spec); spec.loader.exec_module(m)\\n ss=copy.deepcopy(s); ss['test']['x']=x[n:]; ss['train'].update(x=x[:n],y=y[:n],traj=T[:n]); o=m.solve_batch(ss)\\n print('archive',path.rsplit('/',1)[-1],np.mean(abs(o['y_hat']-y[n:])),np.mean(abs(o['state_pred']-T[n:])))\\ndef pair4(z): return np.c_[z[:,0]*z[:,1],z[:,0]*z[:,3],z[:,1]*z[:,2],z[:,2]*z[:,3]]\\nwc=np.linalg.lstsq(aff(pair4(p['u'])),p['v1'],rcond=None)[0]\\ndef obj(k):\\n f=aff(np.cos(k*p['u'])); return np.linalg.norm(f@np.linalg.lstsq(f,p['v2'],rcond=None)[0]-p['v2'])\\nk=minimize_scalar(obj,bounds=(2.2,2.6),method='bounded').x\\nwd=np.linalg.lstsq(aff(np.cos(k*p['u'])),p['v2'],rcond=None)[0]\\ndef outer(q,v):return (q[:,:,None]*v[:,None,:]).reshape(len(q),-1)\\ndef sym(z,d):return np.column_stack([(z[:,i]*z[:,j]) for i,j in combinations_with_replacement(range(d),2)])\\ncv=list(KFold(4,shuffle=True,random_state=6).split(x[:n])); targets=np.c_[y,a,T]\\nfor name,z in list(maps.items())[:6]:\\n q=pair4(z); h=np.cos(k*z); cc=aff(q)@wc; dd=aff(h)@wd; bfeat=aff(z)@b\\n g={'z':z,'quad':q,'quad+':np.c_[z*z,z[:,0]*z[:,2],z[:,1]*z[:,3]],'cos':h,'sin':np.sin(k*z),'sumsin':np.sin(k*np.c_[[z[:,i]+sg*z[:,j] for i,j in pairs for sg in (-1,1)]].T),'linC':np.c_[cc,dd],'q*h':outer(q,h),'z*h':outer(z,h),'z*q':outer(z,q),'q*q':sym(q,4),'h*h':sym(h,4),'tanh':np.tanh(2*z),'rat':z/(1+z*z),'mod':np.c_[np.linalg.norm(z,axis=1),np.linalg.norm(cc,axis=1),np.linalg.norm(dd,axis=1)]}\\n for j in range(4):\\n  g[f'z.C{j}']=np.sum(z*np.roll(cc,j,axis=1),axis=1)[:,None]\\n  g[f'z.D{j}']=np.sum(z*np.roll(dd,j,axis=1),axis=1)[:,None]\\n  g[f'C.D{j}']=np.sum(cc*np.roll(dd,j,axis=1),axis=1)[:,None]\\n  g[f'B.C{j}']=np.sum(bfeat*np.roll(cc,j,axis=1),axis=1)[:,None]\\n  g[f'B.D{j}']=np.sum(bfeat*np.roll(dd,j,axis=1),axis=1)[:,None]\\n def matrix(keys): return np.column_stack([np.ones(len(z)),*[g[i] for i in keys]])\\n def pred(F,tr,te,v): return F[te]@np.linalg.lstsq(F[tr],v[tr],rcond=1e-8)[0]\\n def mae(F,v,sl):\\n  err=pred(F,*sl,v)-v[sl[1]]\\n  if v.ndim==2: err=err@basis(r).T\\n  return np.mean(abs(err))\\n def search(v):\\n  def score(keys):\\n   F=matrix(keys)\\n   if F.shape[1]>32:return 1e6\\n   return np.mean([mae(F,v,sl) for sl in cv])\\n  beam=[(score(()),())]; seen={()}; records=[]\\n  for _ in range(6):\\n   nxt=[]\\n   for _,ks in beam:\\n    for j in g:\\n     if j in ks:continue\\n     kk=tuple(sorted((*ks,j)))\\n     if kk in seen:continue\\n     seen.add(kk); nxt.append((score(kk),kk))\\n   beam=sorted(nxt)[:10];records.extend(beam)\\n  for cvmae,keys in sorted(records)[:3]:\\n   F=matrix(keys); print(round(cvmae,5),round(mae(F,v,(np.arange(n),np.arange(n,len(x)))),5),keys,end='; ')\\n for label,v in [('scalar',y),('traj',a)]:\\n  print(name,label,end=' '); search(v); print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic and cosine panel operators -> H2 test their products and cyclic contractions in separate scalar and trajectory heads; the archived reference trajectory MAE is 0.090348 against the 0.038 gate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use panel C only as a generic nonlinear embedding\",\n      \"rejected_reason\": \"Its outputs are explained near the panel noise floor by four pair products and four cosines, so their explicit interactions are testable with fewer parameters.\"\n    }\n  ],\n  \"rationale\": \"Reproduce archived performance on the required split, then select interaction families using only folds within the first 52 rows. The final 20 rows distinguish a transferable input-to-amplitude law from an interaction basis that only fits the training observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a04440d2cc49a0c756ff38ed7ef4e6ccc6bf795d60cce09a50582924c831216e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44128.95,
+      "usage_known": true,
+      "prompt_tokens": 29146,
+      "cached_tokens": 9344,
+      "completion_tokens": 1632
+    }
+  ]
+}

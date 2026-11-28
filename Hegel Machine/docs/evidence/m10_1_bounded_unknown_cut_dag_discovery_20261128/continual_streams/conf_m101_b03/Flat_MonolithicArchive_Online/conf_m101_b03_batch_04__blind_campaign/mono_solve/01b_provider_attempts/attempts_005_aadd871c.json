@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aadd871cfd984e35b5a83aa422894997",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:45.887770+00:00",
+  "ended_at_utc": "2026-11-28T09:40:22.824064+00:00",
+  "request_sha256": "4cd50e3de6bb259af2383906e494a23c8234481245bcb5a126715877a57d54fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25633,
+    "cached_tokens": 9344,
+    "completion_tokens": 1472
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m101_b03_batch_02_solver.py; cat >/tmp/graph_probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import svd\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']\\np='/tmp/hegel_continual_archive/conf_m101_b03_batch_03_solver.py'; m=importlib.util.module_from_spec(sp:=importlib.util.spec_from_file_location('old',p));sp.loader.exec_module(m)\\ndef A(*a):return np.column_stack((np.ones(len(a[0])),*a))\\ndef fit(a,y):return np.linalg.lstsq(a,y,rcond=1e-10)[0]\\ndef products(x,d):return np.column_stack([x[:,j].prod(1) for j in combinations_with_replacement(range(x.shape[1]),d)])\\nz=m._calibrated_coordinates(s['panel_a'],tr['x']); b=s['panel_b']; u=b['u']; bc=fit(A(u),b['v']); b=A(z)@bc\\nu=s['panel_c']['u']; f0=s['panel_c']['v1'];g0=s['panel_c']['v2']; fd=lambda x:A(x,products(x,2)); fc=fit(fd(u),f0); f=fd(z)@fc\\nprint('C1 coef\\\\n',np.round(fc,4)); print('B coef\\\\n',np.round(bc,4));print('z extent',z.min(0),z.max(0))\\nfor name,fun,p0 in [('gauss',lambda x,k:np.exp(-k*x*x),.55),('cos',lambda x,k:np.cos(k*x),1.28),('rational',lambda x,k:1/(1+k*x*x),.2)]:\\n for d in (1,4):\\n  def design(x,k):return A(x,fun(x,k))\\n  def res(k):\\n   a=design(u,k);return (a@fit(a,g0)-g0).ravel()\\n  opt=least_squares(res,[p0]*d,bounds=(.0001,5),gtol=1e-13)\\n  print('C2',name,opt.x,np.sqrt(np.mean(opt.fun**2))); \\n  if name=='gauss' and d==4:\\n   gc=fit(design(u,opt.x),g0);print('C2 coef\\\\n',np.round(gc,4));g=design(z,opt.x)@gc\\nT=tr['traj'];t=s['eval_times']; basis=lambda r:-np.expm1(-t[:,None]*r)\\nfor starts in [[.4,2.],[.4,2.,5.],[.4,2.,5.,9.]]:\\n def res(r):\\n  h=basis(r);return (h@fit(h,T[:52].T)-T[:52].T).ravel()\\n o=least_squares(res,starts,bounds=(.01,20),gtol=1e-12);print('rates',o.x,'rmse',np.sqrt(np.mean(o.fun**2)))\\n if len(starts)==2: h=basis(o.x)\\ny=np.c_[tr['y'],T]; n=52\\nfeatures={'z':z,'b':b,'f':f,'g':g,'z+b':z+b,'z+f':z+f,'z+g':z+g,'f+g':f+g}\\nsets={}\\nfor nm,w in features.items():\\n sets[nm+'^2']=A(w,products(w,2));sets[nm+'^3']=A(w,products(w,2),products(w,3));\\nfor nm,w in [('zf',np.c_[z,f]),('zg',np.c_[z,g]),('fg',np.c_[f,g]),('zfg',np.c_[z,f,g]),('bfg',np.c_[b,f,g])]:\\n sets[nm+' full2']=A(w,products(w,2));sets[nm+' diag']=A(z,products(z,2),f,g,*[features[i]*features[j] for i,j in combinations_with_replacement(nm,2)])\\nfor nm,a in sets.items():\\n v=a[:,1:]-a[:n,1:].mean(0);v=v/np.maximum(v[:n].std(0),1e-8); U,S,V=svd(v[:n],full_matrices=False); result=[]\\n for lam in (1e-8,1e-5,.0001,.001,.01,.1,1):\\n  yp=y[:n].mean(0)+v[n:]@(V.T*(S/(S*S+lam)))@U.T@y[:n]; e=np.abs(yp-y[n:]);result.append((lam,round(e[:,0].mean(),5),round(e[:,1:].mean(),5)))\\n print(nm, min(result,key=lambda e:e[1]),min(result,key=lambda e:e[2]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived composition) → H2 (nonlinear calibration with independently fitted panel operators); the best prior solver scored 0.08463 target and 0.08152 trajectory MAE on 52/20.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume every calibrated panel contributes to both outputs\",\n      \"rejected_reason\": \"An accurate panel fit does not establish downstream relevance; compare compositions separately for target and trajectory.\"\n    }\n  ],\n  \"rationale\": \"Panel A's cyclic calibration and panel C's quadratic first operator fit near measurement noise. Compare compact readout compositions and relaxation ranks to identify which operators and interactions reduce held-out error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c29266f6d6874ce99529642fcf85cdb7c4ce3756434a9face456e0276a44f585",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39557.66,
+      "usage_known": true,
+      "prompt_tokens": 25633,
+      "cached_tokens": 9344,
+      "completion_tokens": 1472
+    }
+  ]
+}

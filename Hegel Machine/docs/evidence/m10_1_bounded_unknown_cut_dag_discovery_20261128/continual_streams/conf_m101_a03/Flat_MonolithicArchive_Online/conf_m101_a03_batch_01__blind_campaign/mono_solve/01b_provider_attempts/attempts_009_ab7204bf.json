@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab7204bfe04640cabc0734dbebbb9c80",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:47.044210+00:00",
+  "ended_at_utc": "2026-11-28T09:22:28.743588+00:00",
+  "request_sha256": "910533631a1e69509a0ee12ec07ad7b2e0be79cfd73013e23018b8dbf076dd7d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36428,
+    "cached_tokens": 9344,
+    "completion_tokens": 1704
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _coordinates(study, x):\\n    panel = study['panel_a']\\n    design = _affine(panel['u'])\\n    v = panel['v']\\n    err = np.linalg.norm(design @ _fit(design, v) - v, axis=1)\\n    keep = np.argsort(err)[:int(.86 * len(err))]\\n    calibration = _fit(design[keep], v[keep])\\n    z = (x - calibration[0]) / np.diag(calibration[1:])\\n    panel = study['panel_b']\\n    return _affine(z) @ _fit(_affine(panel['u']), panel['v'])\\n\\n\\ndef _polynomial(x, degree):\\n    return np.column_stack([np.ones(len(x))] + [\\n        x[:, cols].prod(axis=1)\\n        for d in range(1, degree + 1)\\n        for cols in combinations_with_replacement(range(x.shape[1]), d)\\n    ])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    w = _coordinates(study, np.vstack((train['x'], study['test']['x'])))\\n    a = _affine(w)\\n    state_pred = a[n:] @ _fit(a[:n], train['traj'])\\n    index = a @ _fit(a[:n], train['y'])\\n    f = _polynomial(w, 3) / (1 + .2 * np.abs(index[:, None]))\\n    y_hat = f[n:] @ _fit(f[:n], train['y'])\\n    end = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), end.mean(), end.std()])}\\nPY\\ncat > /tmp/compact.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _affine as af,_fit as fit,_polynomial as poly,_coordinates,solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; w=_coordinates(s,t['x']); x=t['x']; n=len(y)\\nrng=np.random.default_rng(127); splits=[(np.arange(k),np.arange(k,n)) for k in (52,56)]; splits += [(q[:52],q[52:]) for q in [rng.permutation(n) for _ in range(12)]]; splits += [(np.argsort(w[:,k]*d)[:52],np.argsort(w[:,k]*d)[52:]) for k in range(4) for d in (-1,1)]\\ndef alt(i,j):\\n a=af(w); f=poly(w,2); v=poly(w,3); h=fit(a[i],y[i]); d=a@h; rows={}\\n def put(k,p): rows[k]=np.mean(abs(p[j]-y[j]))\\n b=dict(s,train={key:val[i] if key!='summary' else val for key,val in t.items()},test={'x':x[j]}); pred=solve_batch(b); rows['fixed3']=np.mean(abs(pred['y_hat']-y[j])); rows['traj_worst_time']=np.max(np.mean(abs(pred['state_pred']-t['traj'][j]),axis=0))\\n for typ,fn,p0 in [('tanh',np.tanh,1.),('sqrt',lambda q:q/np.sqrt(1+q*q),.8),('softsign',lambda q:q/(1+abs(q)),.3),('atan',np.arctan,1.)]:\\n  def fitprof(p,g):\\n   z=np.c_[g,fn(a@p)]; return z@fit(z[i],y[i]),fit(z[i],y[i]);\\n  for g,label in [(f,'full'),(np.c_[a,w[:,0]*w[:,2],w[:,1]*w[:,3]],'pair')]:\\n   r=least_squares(lambda p:fitprof(p,g)[0][i]-y[i],h*p0,max_nfev=125); p,c=fitprof(r.x,g); put(typ+'_'+label,p)\\n   if i[0]==0 and len(i)==52 and label=='full':print(typ,'train rmse',np.std(p[i]-y[i]),'quadratic w',c[5:-1].round(3),'index',r.x.round(3),'amp',round(c[-1],3))\\n for k in (.1,.2,.35,1.):\\n  for dr in (0,.003,.015,.05):\\n   z=v/(1+k*abs(d[:,None])); L=np.diag(np.r_[np.zeros(5),np.repeat(.15,10),np.ones(20)])*np.sqrt(dr); c=fit(np.r_[z[i],L],np.r_[y[i],np.zeros(35)]);put(f'fixed{k}_{dr}',z@c)\\n return rows\\nout=[alt(i,j) for i,j in splits]; print('model required52 required56 random_mean random_worst directional_worst');\\nfor k in sorted(out[0],key=lambda k:max(r[k] for r in out[2:14])):\\n e=np.array([r[k] for r in out]);print(k,np.round([*e[:2],e[2:14].mean(),max(e[2:14]),max(e[14:])],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unnormalized cubic readout → H2: a cubic readout with a shared absolute denominator; scalar MAE is 0.01400 on 52/20 and at most 0.01743 across seven tested splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Save the passing solver, then test whether a compact additive saturation law or mild cubic regularization improves predictions on directional holdouts, where cubic extrapolation is most likely to fail.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "da92399a15616c08137630dc3df1db3f2b55b27e3a3b2df1fc1d527fec0752ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44314.42,
+      "usage_known": true,
+      "prompt_tokens": 36428,
+      "cached_tokens": 9344,
+      "completion_tokens": 1704
+    }
+  ]
+}

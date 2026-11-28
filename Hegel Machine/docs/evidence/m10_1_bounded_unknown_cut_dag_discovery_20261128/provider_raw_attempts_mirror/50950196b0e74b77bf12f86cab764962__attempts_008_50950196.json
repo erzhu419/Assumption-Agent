@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50950196b0e74b77bf12f86cab764962",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:55.924367+00:00",
+  "ended_at_utc": "2026-11-28T09:28:29.596829+00:00",
+  "request_sha256": "47e523402f558c437509df7fc692bf811407d66ea0eb32c1fc15297c298a5fdc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33882,
+    "cached_tokens": 9344,
+    "completion_tokens": 1325
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/compose02.py <<'PY'\\nexec(open('/tmp/search02.py').read().split('G={};')[0])\\nfrom scipy.linalg import qr\\nbase=np.c_[np.ones(len(z)),z,cross(z),z*z]\\ntrain=np.arange(52); test=np.arange(52,72)\\nread=np.linalg.lstsq(np.c_[base,Y[:,1:]][train],y[train],rcond=None)[0]; Yo=Y[:,1:].copy(); Yo[:,1]=(Yo[:,1]+(y-np.c_[base,Yo[:,0]]@read[:-1])/read[-1])/2\\nviews={n:np.column_stack([X[n+str(i)] for i in range(4)]) for n in ('z','b','i','pz','qz','pb','qb','pi','qi','mz','rz')}\\ndef report(pred):\\n yp=base[test]@read[:-2]+pred@read[-2:]; return np.round([np.mean(abs(yp-y[test])),np.mean(abs(pred@h.T-traj[test])),*np.mean(abs(pred-Yo[test]),axis=0)],5)\\ndef fit(F,reg):\\n A0=F[train]; norm=np.linalg.norm(A0,axis=0); W=np.linalg.lstsq(np.r_[A0,np.diag(norm*np.sqrt(reg))],np.r_[Yo[train],np.zeros((F.shape[1],2))],rcond=1e-9)[0];return F[test]@W\\nresults=[]\\nfor n,m in combinations(views,2):\\n U,V=views[n],views[m]; f=(U[:,:,None]*V[:,None,:]).reshape(-1,16)\\n for tag,extra in [('plain',f),('quartic',np.c_[f,U*U,V*V]),('cubic',np.c_[f,(U[:,:,None]**2*V[:,None,:]).reshape(-1,16),(U[:,:,None]*V[:,None,:]**2).reshape(-1,16)])]:\\n  F=np.c_[base,U,V,extra]\\n  for reg in [.000001,.0001,.003,.03]:\\n   p=fit(F,reg); results.append((list(report(p)),n,m,tag,reg))\\nprint('linear interactions',*sorted(results)[:12],sep='\\\\n')\\nfor n,m in [('pz','qz'),('mz','qz'),('pz','z'),('pb','qb'),('pi','qi')]:\\n U,V=views[n],views[m]; F=np.c_[base,U,V]; Q,R,P=qr(F[train],pivoting=True,mode='economic'); d=np.count_nonzero(abs(R.diagonal())>1e-8); Q=Q[:,:d];\\n def res(f):return f[train]-Q@(Q.T@f[train]);\\n RR=res(Yo); J=res((U[:,:,None]*V[:,None,:]).reshape(-1,16)); W=np.linalg.lstsq(J,RR,rcond=1e-9)[0];\\n for j in (0,1): print('interaction sv',n,m,j,np.round(np.linalg.svd(W[:,j].reshape(4,4),compute_uv=False),4))\\n for j in (0,1):\\n  fits=[]\\n  for mode in ('prod','rat','tanh','gate','cos'):\\n   def evalf(p):\\n    A=U@p[:4]; B=V@p[4:8]+p[8];\\n    if mode=='prod':return A*B\\n    if mode=='rat':return A/(1+B*B)\\n    if mode=='tanh':return np.tanh(A+B)*p[9]\\n    if mode=='gate':return A*np.tanh(B)\\n    return np.cos(A+B)*p[9]\\n   rng=np.random.default_rng(557)\\n   def rr(p):return np.r_[res(evalf(p))-RR[:,j],.0003*p]\\n   best=min((least_squares(rr,rng.normal(0,.5,10),max_nfev=180) for _ in range(6)),key=lambda x:np.linalg.norm(x.fun)); feat=evalf(best.x); coef=np.linalg.lstsq(F[train],Yo[train,j]-feat[train],rcond=1e-9)[0]; pred=F@coef+feat;fits.append((mode,round(np.mean(abs(pred[train]-Yo[train,j])),5),round(np.mean(abs(pred[test]-Yo[test,j])),5)))\\n  print('rank1',n,m,j,fits)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compose02.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent nonlinear corrections -> H2 bilinear or gated coupling of panel-C views; best archived final-20 MAE is 0.064842 for response and 0.036226 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"A single sparse correction did not generalize for the fast mode. Test whether the missing interaction is dense in coordinate space but bilinear or low rank in the calibrated panel outputs; this would constrain extrapolation without relying on measured test trajectories.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7aeedee290279706972355c62fa0448c513557e21c884646b5dfe5423bcf9ecd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36303.8,
+      "usage_known": true,
+      "prompt_tokens": 33882,
+      "cached_tokens": 9344,
+      "completion_tokens": 1325
+    }
+  ]
+}

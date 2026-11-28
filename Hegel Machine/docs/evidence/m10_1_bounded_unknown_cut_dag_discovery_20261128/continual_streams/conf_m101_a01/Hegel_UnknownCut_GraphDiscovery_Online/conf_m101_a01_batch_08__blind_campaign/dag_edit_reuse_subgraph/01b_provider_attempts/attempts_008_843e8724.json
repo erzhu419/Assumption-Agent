@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "843e872476d3466dade4b0f1a14ffe15",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:40.152492+00:00",
+  "ended_at_utc": "2026-11-28T09:49:07.316550+00:00",
+  "request_sha256": "4dbd782c769715ab335dcfa54c5648adc3a796943614d619dfeedd77ff593d62",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30125,
+    "cached_tokens": 9344,
+    "completion_tokens": 1125
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/index05.py <<'PY'\\nexec(open('/tmp/probe05.py').read().split('for lbl,A in')[0])\\nfrom scipy.optimize import least_squares\\nn=len(q); Q=poly(q); H=Q[:,5:]; splits=[('official',np.arange(n-20),np.arange(n-20,n))]\\nfor k in range(24):\\n r=np.random.default_rng(k).permutation(n);splits.append((str(k),r[:-20],r[-20:]))\\nfor k in range(4):\\n r=q[:,k].argsort();splits.extend([(f'{k}low',r[20:],r[:20]),(f'{k}high',r[:-20],r[-20:])])\\ndef fit(i,j,kind,structure,Y=y):\\n Z={'linear':Q[:,1:5],'quadratic':Q[:,1:],'pairs':np.c_[q,H[:,[1,2,3,5,6,8]]]}[structure]; core=Q[:,1:5] if structure=='quadratic' else Q[:,1:]; W=np.c_[np.ones(n),core]; blocks=np.linalg.qr(W[i])[0]; yi=Y[i]; yi=yi-blocks@(blocks.T@yi)\\n def calc(p,k):\\n  t=p[0]+Z[k]@p[1:];return {'sin':np.sin,'tanh':np.tanh,'cos':np.cos,'soft':lambda x:x/np.sqrt(1+x*x)}[kind](t)\\n def loss(p):\\n  v=calc(p,i);v=v-blocks@(blocks.T@v); coef=(v@yi)/(v@v+1e-9);return np.r_[coef*v-yi,.002*p]\\n w=np.linalg.lstsq(Q[i],Y[i],rcond=None)[0]; d=Z.shape[1]; rng=np.random.default_rng(15); guesses=[np.r_[0.,w[1:1+d]] if structure!='pairs' else np.r_[0.,w[1:5],w[[6,7,8,10,11,13]]]]\\n guesses.extend(rng.normal(0,.8,(7,d+1))); cand=min((least_squares(loss,p,max_nfev=105) for p in guesses), key=lambda a:a.cost); p=cand.x\\n A=np.c_[W[i],calc(p,i)];c=np.linalg.lstsq(A,Y[i],rcond=None)[0];return np.c_[W[j],calc(p,j)]@c,p,c\\nfor struct in ['linear','pairs','quadratic']:\\n for kind in ['sin','tanh','cos','soft']:\\n  es=[]\\n  for name,i,j in splits:\\n   yh,p,c=fit(i,j,kind,struct); es.append(np.mean(abs(yh-y[j])))\\n  _,p,c=fit(np.arange(n),np.arange(n),kind,struct); print(struct,kind,np.round([es[0],np.mean(es[1:25]),max(es[1:25]),np.mean(es[25:]),max(es[25:])],5),'p',np.round(p,2),'amp',round(c[-1],3),flush=True)\\nprint('trajectory singular values',np.linalg.svd(T,compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/index05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cosine-calibrated response kernel → H2 compact nonlinear response index; the verified kernel passes official CV at 0.028473 response MAE but reaches 0.172372 on coordinate-tail splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the nested kernel immediately\",\n      \"rejected_reason\": \"It improves the worst tail slice but worsens the worst random slice, from 0.08394 to 0.08992.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact intact while testing whether response curvature is concentrated in a low-dimensional index. Fit the index only on each split's training rows; promote it only if it improves extrapolation and retains official acceptance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "66c5c44414b787999ad5c1ab170c4772d51b570d33aca33b203db0f6c815db3f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32426.17,
+      "usage_known": true,
+      "prompt_tokens": 30125,
+      "cached_tokens": 9344,
+      "completion_tokens": 1125
+    }
+  ]
+}

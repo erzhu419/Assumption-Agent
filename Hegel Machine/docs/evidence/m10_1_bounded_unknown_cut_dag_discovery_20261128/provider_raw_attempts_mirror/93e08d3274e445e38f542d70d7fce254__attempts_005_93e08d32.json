@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93e08d3274e445e38f542d70d7fce254",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:58:57.457909+00:00",
+  "ended_at_utc": "2026-11-28T09:59:32.743990+00:00",
+  "request_sha256": "0038876c03cf268c02fca6abee0104903de28e6a56f69126fecfbaffc546c786",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42701,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27205,
+    "cached_tokens": 9344,
+    "completion_tokens": 1530
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/panelprobe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u=np.load('/tmp/probe.npz')['u']; n=len(u)\\nfrom itertools import combinations_with_replacement\\n\\ndef feat(x,kind,k):\\n if kind=='cos': return np.cos(k*x)-1\\n if kind=='sin': return np.sin(k*x)\\n if kind=='rat': return x/(1+(k*x)**2)\\n return np.tanh(k*x)\\ndef design(x,kind,k,mode):\\n return np.column_stack((np.ones(len(x)), *((x,) if mode&1 else ()), feat(x,kind,k), *((x*x,) if mode&2 else ())))\\ndef panel(p,key):\\n X,Y=p['u'],p[key]; out=[]\\n for kind in ('cos','sin','rat','tanh'):\\n  for mode in (0,1,2,3):\\n   if kind=='cos' and not mode&1: continue\\n   def fit(k,full=False):\\n    h=design(X,kind,k,mode); q=np.linalg.qr(h,mode='reduced')[0]; b=np.linalg.lstsq(h,Y,rcond=None)[0]; r=h@b-Y; loo=np.mean(abs(r/(1-(q*q).sum(1))[:,None])); return (loo,np.max(abs(r)),design(u,kind,k,mode)@b) if full else loo\\n   opts=[minimize_scalar(fit,bounds=(a,b),method='bounded') for a,b in ((.15,1),(1,2),(2,3.5),(3.5,5))]; k=min(opts,key=lambda o:o.fun).x; l,r,pred=fit(k,True); out.append((l,r,kind,mode,k,pred))\\n for fun in ('tanh','sin','rat'):\\n  pp=[]; errs=[]; loos=[]\\n  H=np.column_stack((np.ones(len(X)),X)); Hu=np.column_stack((np.ones(n),u))\\n  for j,y in enumerate(Y.T):\\n   f=lambda h,b: b[0]+b[1]*feat(h@b[2:7],fun,1)+(h[:,1:]@b[7:] if len(b)>7 else 0)\\n   init=np.linalg.lstsq(H,y,rcond=None)[0]; a=np.r_[0.,1.,init]; o=min([least_squares(lambda b:f(H,b)-y,a*c,max_nfev=300) for c in (.7,1,1.5)],key=lambda o:o.cost)\\n   pp.append(f(Hu,o.x)); errs.extend(o.fun); q=np.linalg.qr(o.jac,mode='reduced')[0]; loos.extend(o.fun/np.maximum(.01,1-(q*q).sum(1)))\\n  out.append((np.mean(abs(np.array(loos))),max(abs(np.array(errs))),fun+'-mix',0,1,np.array(pp).T))\\n return sorted(out,key=lambda v:v[0])\\nD={}\\nfor lab,key in [('b','v'),('c','v1'),('c','v2')]:\\n label=lab+key; opts=panel(s['panel_'+lab],key); print(label,[(round(l,6),round(r,6),k,m,round(v,4)) for l,r,k,m,v,_ in opts[:7]]); D[label]=opts[0][-1]\\nnp.savez('/tmp/panelprobe.npz',**D)\\ny=np.column_stack((s['train']['y'],s['train']['traj'])); rng=np.random.default_rng(15); splits=[(np.arange(52),np.arange(52,n))]+[(np.setdiff1d(np.arange(n),k),k) for k in np.array_split(rng.permutation(n),4)]\\ndef score(g,alpha=.002):\\n out=[]\\n for tr,te in splits:\\n  h=g[tr]; p=alpha*np.eye(h.shape[1]); p[0,0]=0; d=abs(g[te]@np.linalg.solve(h.T@h+p,h.T@y[tr])-y[te]); out.append([d[:,0].mean(),d[:,1:].mean()])\\n return np.round([out[0],np.max(out[1:],axis=0)],5)\\ndef withq(x): return np.column_stack([np.prod(x[:,i],axis=1) for i in combinations_with_replacement(range(x.shape[1]),2)])\\nbase=np.column_stack((np.ones(n),u)); core=np.column_stack((base,*D.values()));\\nfor label,m in [('core',core),('bq',np.column_stack((core,withq(D['bv'])))),('c1q',np.column_stack((core,withq(D['cv1'])))),('c2q',np.column_stack((core,withq(D['cv2'])))),('uq',np.column_stack((core,withq(u)))),('allq',np.column_stack((core,withq(u),*[withq(v) for v in D.values()]))),('fusion',np.column_stack((core,*(v*u for v in D.values()),D['bv']*D['cv1'],D['cv1']*D['cv2'])) )]: print(label,score(m).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panelprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 raw or inverted polynomial features → H2 calibrated panel-response features; the best inverted single-basis worst-fold MAEs were 0.12156 for y and 0.09994 for trajectory, both above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase polynomial degree in the inverted coordinates\",\"rejected_reason\":\"The cubic and richer bases already show poor held-out accuracy; panel measurements can identify features without using outcome labels.\"}],\"rationale\":\"Compare nonlinearities applied before and after channel mixing using panel leave-one-out residuals, then test whether the calibrated responses reduce both outcome errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "65b02a0f68ef704c7fe43a71197422847e7c7347c3f1351fd8ce18a6e60cb5aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40557.65,
+      "usage_known": true,
+      "prompt_tokens": 27205,
+      "cached_tokens": 9344,
+      "completion_tokens": 1530
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b22a1ca1c70940bc900337c05ec3f139",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:28.985714+00:00",
+  "ended_at_utc": "2026-11-28T09:13:13.680478+00:00",
+  "request_sha256": "6f7d615694c2c3a500a817170abb3eed71f08d19ba84b14f17f1a1dc73d7037a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45159,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30858,
+    "cached_tokens": 10880,
+    "completion_tokens": 1845
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('maps=[]')[0])\\nfrom scipy.optimize import minimize_scalar\\n\\ndef panel1(u,v):\\n def phi(x,p):\\n  h=np.abs(x)*np.exp(p[:4]); k=p[4]; a=np.log1p(h)\\n  return np.sign(x)*a*(1+k*a) if len(p)==5 else np.sign(x)*np.expm1(k*a)/k\\n for kind in ('log','logplus','power'):\\n  def G(x,p):\\n   h=np.abs(x)*np.exp(p[:4]); a=np.log1p(h)\\n   if kind=='logplus': a=a*(1+p[4]*a)\\n   if kind=='power': a=np.expm1(p[4]*a)/p[4]\\n   return aug(np.c_[x,np.sign(x)*a])\\n  def fun(p):\\n   g=G(u,p);return (g@fit(g,v)-v).ravel()\\n  extra=[] if kind=='log' else [.1]; r=least_squares(fun,np.r_[np.full(4,.4),extra],bounds=(np.r_[np.full(4,-3),[-3]*len(extra)],np.r_[np.full(4,3),[3]*len(extra)]),ftol=1e-12,gtol=1e-12)\\n  g=G(u,r.x);print('C1 shape',kind,loo(g,v),r.x,'coefs',fit(g,v).round(3),flush=True)\\n  if kind=='logplus':\\n   p=r.x.copy();bb=fit(g,v)\\n   def out(x,p=p,bb=bb):\\n    h=np.log1p(np.abs(x)*np.exp(p[:4]));return aug(np.c_[x,np.sign(x)*h*(1+p[4]*h)])@bb\\n return out\\n\\ndef panel2(u,w):\\n sq=u*u; best=None\\n for name,fn in {'rational':lambda x,a:x*x/(1+a*x*x),'tanh':lambda x,a:np.tanh(a*x*x),'cos':lambda x,a:1-np.cos(a*x),'sqrt':lambda x,a:np.sqrt(1+a*x*x)-1,'log':lambda x,a:np.log1p(a*x*x),'exp':lambda x,a:-np.expm1(-a*x*x),'quartic':lambda x,a:x*x*(1+a*x*x),'cube':lambda x,a:x*x*(1+a*x)}.items():\\n  def G(x,a,fn=fn):return aug(np.c_[x,fn(x,a)])\\n  r=minimize_scalar(lambda a:loo(G(u,a),w)[0],bounds=(.0001,1.8) if name not in ('quartic','cube') else (-.4,.4),method='bounded');g=G(u,r.x);e=loo(g,w);print('C2 shape',name,r.x,e,flush=True)\\n  if best is None or e[1]<best[0]:best=e[1],(lambda x,G=G,a=r.x,b=fit(g,w):G(x,a)@b)\\n return best[1]\\nC=panel1(u,v);D=panel2(u,w)\\nx=s['train']['x'];Y=np.c_[s['train']['y'],s['train']['traj']];t=s['eval_times'];z=Y[:,1:]; print('temporal model')\\nfor f in [lambda t,a:np.log1p(a*t),lambda t,a:-np.expm1(-a*t),lambda t,a:t/(1+a*t),lambda t,a:np.arctan(a*t)]:\\n def gram(p):return np.c_[f(t,p[0]),f(t,p[1])]\\n r=least_squares(lambda p:(gram(p)@fit(gram(p),z.T)-z.T).ravel(),[.5,3],bounds=(.001,50));print(r.x,np.sqrt(np.mean(r.fun**2)))\\n\\nrs=np.random.RandomState(228); folds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(rs.permutation(72),5)]; radial=np.argsort(np.linalg.norm(x,axis=1))[-15:];folds.append((np.setdiff1d(np.arange(72),radial),radial)); results=[]\\nfor name,F in {'B':B(x),'AB':A(B(x)),'BA':B(A(x)),'raw':x}.items():\\n c=C(F);d=D(F); pairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\n parts={'f':F,'c':c,'d':d,'m':(F[:,:,None]*c[:,None,:]).reshape(len(F),-1),'f2':F*F,'c2':c*c,'cc':np.column_stack([c[:,i]*c[:,j] for i,j in pairs]),'ff':np.column_stack([F[:,i]*F[:,j] for i,j in pairs])}\\n for mask in range(1,1<<len(parts)):\\n  keys=[k for i,k in enumerate(parts) if mask>>i&1];G=np.column_stack([parts[k] for k in keys]);\\n  if G.shape[1]>44:continue\\n  for lam in (.00003,.0003,.003,.03):\\n   errs=[]\\n   for tr,va in folds:\\n    H=aug(G[tr]);pen=np.repeat(lam,H.shape[1]);pen[0]=0; e=np.abs(aug(G[va])@np.linalg.solve(H.T@H+np.diag(pen),H.T@Y[tr])-Y[va]);errs.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\n   e=np.array(errs); obj=(e[1:6].mean(0)[0]+e[1:6].mean(0)[1]+.5*(e[-1,0]+e[-1,1]));results.append((obj,name,','.join(keys),lam,e[0],e[1:6].mean(0),e[1:6].max(0),e[-1]))\\nfor row in sorted(results,key=lambda r:r[0])[:18]: print('cv',row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 broad nonlinear readouts → H2 panel-conditioned mixed products; the best prescribed split has y MAE 0.02086, mean trajectory MAE 0.02219, and terminal-state MAE 0.02654.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the readout with the lowest prescribed-split y MAE\",\"rejected_reason\":\"Its basis was screened on that split; it must also predict the trajectory and hold up on other rows and at large input amplitudes.\"}],\"rationale\":\"Test whether compact signed and even panel maps improve leave-one-out panel prediction. Compare readouts across random folds and a high-amplitude holdout to detect extrapolation failures before choosing the solver structure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c1a14167046351cb55fd50b12da3ba17affb015bdc8e9abc085fd7e2e8d3d0ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47375.57,
+      "usage_known": true,
+      "prompt_tokens": 30858,
+      "cached_tokens": 10880,
+      "completion_tokens": 1845
+    }
+  ]
+}

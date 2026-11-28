@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09258870126743fa8462c50fd98c356c",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:31.125373+00:00",
+  "ended_at_utc": "2026-11-28T09:48:13.816997+00:00",
+  "request_sha256": "f593c21339d295d2d23e3d953b9f79613c23314dd1c29b1d5985a0df3882f6fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64193,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37466,
+    "cached_tokens": 9344,
+    "completion_tokens": 1895
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo ====; sed -n '/^def solve_batch/,$p' \\\"$f\\\"; done; cat > /tmp/branch.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.linalg import svd\\nfrom scipy.spatial.distance import cdist\\nc,d=C(x),D(x); H=bias(np.c_[c,d]); T=np.c_[y,z]; R=T-H@fit(H[:52],T[:52]); _,S,V=svd(R[:52],full_matrices=False); G=R@V[:3].T\\nDct={}\\ndef add(name,f):\\n if f.ndim==1:f=f[:,None]\\n Dct[name]=f\\nfor k in ['x','r','c','d','b','j','k','l','m','p','q']:add(k,A[k]);\\nfor k,a in list(Dct.items()):\\n for g,fn in [('cos',np.cos),('sin',np.sin),('tanh',np.tanh),('abs',np.abs),('soft',lambda a:np.logaddexp(0,a)),('rat',lambda a:a/(1+a*a)),('sqrat',lambda a:1/(1+a*a))]:\\n  for w in [.5,1.,1.6,2.4,3.2]:add(f'{g}{w}{k}',fn(w*a))\\nfor w in [-2,-1,-.5,.5,1,2]:\\n for tag,a,b in [('cd',c,d),('xc',x,c),('xd',x,d),('cl',c,A['l']),('dm',d,A['m'])]:\\n  u=a+w*b\\n  for g,fn in [('sq',lambda u:u*u),('cb',lambda u:u**3),('co',lambda u:np.cos(2.4*u)),('si',lambda u:np.sin(2.4*u)),('ta',np.tanh),('ra',lambda u:1/(1+u*u))]:add(f'{g}{tag}{w}',fn(u))\\nfor name,a,b in [('cd',c,d),('xc',x,c),('xd',x,d),('cc',c,c),('dd',d,d),('xx',x,x)]:\\n for j in range(4):\\n  f=np.roll(b,j,axis=1);add(f'{name}mul{j}',a*f);add(f'{name}dot{j}',(a*f).sum(1));add(f'{name}sin{j}',np.sin(2.4*a*f));add(f'{name}cos{j}',np.cos(2.4*a*f))\\n  for w in [.2,1.,3.]:add(f'{name}rat{j}{w}',a/(1+w*f*f));add(f'{name}inv{j}{w}',f/(1+w*a*a))\\nfor name,a in [('x',x),('r',raw),('cd',np.c_[c,d]),('c',c),('d',d)]:\\n for deg in [2,3,4]: add(f'poly{name}{deg}',poly(a,deg)[:,poly(a,deg-1).shape[1]:]);\\nF=np.column_stack(list(Dct.values())); names=[f'{k}:{j}' for k,a in Dct.items() for j in range(a.shape[1])]; F-=H@fit(H[:52],F[:52]);scale=F[:52].std(0);F/=np.where(scale>1e-5,scale,1)\\nfor i,g in enumerate(G.T):\\n ix=np.argsort(abs(F[:52].T@g[:52]))[-14:][::-1];print('mode',i,[(names[j],round(np.corrcoef(F[:52,j],g[:52])[0,1],3)) for j in ix]);\\nscore=[];start=0\\nfor k,a in Dct.items():\\n P=F[:,start:start+a.shape[1]];start+=a.shape[1];\\n if P.shape[1]>25:continue\\n W=fit(P[:52],G[:52]);err=P@W-G;score.append((np.std(err[:52,0]),np.mean(abs(err[52:,0])),k))\\nprint('group',sorted(score)[:25]);print('by gate',sorted(score,key=lambda k:k[1])[:15]);\\nfor shift in [-1,0,1]:\\n K0=np.zeros((len(x),len(x))); kern={};\\n for key,a in [('x',x),('r',raw),('c',c),('d',d),('cd',np.c_[c,d]),('xcd',np.c_[x,c,d])]:\\n  f=a/a[:52].std(0); q=cdist(f,f,'sqeuclidean')/f.shape[1];\\n  for w in [.15,.5,1.5]:kern[key+str(w)]=np.exp(-q*w)\\n for i,j in combinations(kern,2):\\n  if i[0]!=j[0]:kern[i+'+'+j]=(kern[i]+kern[j])*.5\\n scores=[]\\n for k,K in kern.items():\\n  for l in [.0001,.003,.04]:\\n   P=H@fit(H[:52],T[:52]);E=K[:, :52]@np.linalg.solve(K[:52,:52]+l*np.eye(52),T[:52]-P[:52]); M=np.mean(abs((T-P-E)[52:]),0);scores.append((M[0],M[1:].mean(),k,l))\\n print('kernel',sorted(scores)[:8], sorted(scores,key=lambda q:q[1])[:5]);break\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/branch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel-C linear branches → recover the three shared residual modes; best deployable 52/20 MAEs are 0.24993 for y and 0.16805 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each timestamp separately\",\"rejected_reason\":\"The residual spectrum has three modes above the measurement-noise floor, so separate fits discard useful shared structure.\"}],\"rationale\":\"Screen structured products, compositions, and rational terms against the dominant residual on the first 52 rows. Compare them with a regularized kernel baseline to distinguish a missing compact term from general nonlinear interpolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e63d9cfe6ee6d8cfb5e71db4aaf9a0852450d062691660c1754c5023dc0fd98a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47937.96,
+      "usage_known": true,
+      "prompt_tokens": 37466,
+      "cached_tokens": 9344,
+      "completion_tokens": 1895
+    }
+  ]
+}

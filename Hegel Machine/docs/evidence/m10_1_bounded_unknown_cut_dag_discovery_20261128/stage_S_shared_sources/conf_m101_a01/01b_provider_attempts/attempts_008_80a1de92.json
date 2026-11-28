@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "80a1de9255a8413f9e593cf9c80ea965",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:14:15.036931+00:00",
+  "ended_at_utc": "2026-11-28T09:14:58.669940+00:00",
+  "request_sha256": "d9d0a1f7982eb6b7521d7a2ffe98172e36b630b6477fbe02719e7210f0083340",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53437,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34076,
+    "cached_tokens": 10880,
+    "completion_tokens": 1538
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/solver_challenger.py <<'PY'\\nimport numpy as np\\n\\n\\ndef scalar_predict(x, q, y, poly):\\n    a, b = poly(x, 2), poly(q, 2)\\n    def kernel(u, v):\\n        r = (np.sqrt(5.) / 2.4) * np.linalg.norm(u[:, None, :] - v[None, :, :], axis=2)\\n        return (1. + r + r*r/3.) * np.exp(-r)\\n    k = kernel(x, x) + .001 * np.eye(len(x))\\n    w = np.linalg.solve(k, np.column_stack((a, y)))\\n    coef = np.linalg.solve(a.T @ w[:, :-1], a.T @ w[:, -1])\\n    return b @ coef + kernel(q, x) @ (w[:, -1] - w[:, :-1] @ coef)\\n\\n\\ndef state_predict(study, poly, ridge, aff):\\n    a, b = study['panel_a'], study['panel_b']\\n    ua = aff(a['u'])\\n    keep = np.arange(len(ua))\\n    for _ in range(4):\\n        fit = np.linalg.lstsq(ua[keep], a['v'][keep], rcond=None)[0]\\n        keep = np.argsort(np.linalg.norm(ua @ fit - a['v'], axis=1))[:45]\\n    ca = np.linalg.lstsq(ua[keep], a['v'][keep], rcond=None)[0]\\n    cb = np.linalg.lstsq(aff(b['u']), b['v'], rcond=None)[0]\\n    def features(x):\\n        z = aff(aff(x) @ ca) @ cb\\n        d = 1. + .16*z*z\\n        return np.column_stack((poly(z, 2), z**3/d, z*z/d))\\n    tr = study['train']\\n    return ridge(features(tr['x']), features(study['test']['x']), tr['traj'], np.r_[0., [.01]*4, [1.]*18])\\nPY\\ncat >/tmp/solver_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom solver_challenger import scalar_predict, state_predict\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(root+'public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x, y, j = (t[k] for k in ('x','y','traj'))\\nn = len(x); all_rows = np.arange(n)\\nradius = np.linalg.norm(x, axis=1)\\nfolds = [('public', np.arange(52,n))]\\nfolds += [(f'heldout_{i}', v) for i,v in enumerate(np.array_split(np.random.default_rng(37).permutation(n),4))]\\nfolds += [('radius', np.argsort(radius)[-15:])]\\nfolds += [(f'axis_{i}_{sign:+d}', np.argsort(sign*x[:, i])[-12:]) for i in range(x.shape[1]) for sign in (-1,1)]\\nrows = []\\nfor name,v in folds:\\n    it = np.arange(52) if name == 'public' else np.setdiff1d(all_rows, v)\\n    st = dict(s, train=dict(t, x=x[it], y=y[it], traj=j[it]), test={'x':x[v]})\\n    o = m.solve_batch(st)\\n    yp = scalar_predict(x[it], x[v], y[it], m._poly)\\n    sp = state_predict(st, m._poly, m._ridge, m._aff)\\n    old = o['state_pred']\\n    _, _, vt = np.linalg.svd(j[it], full_matrices=False)\\n    blend = (old+sp)/2\\n    sm = [np.mean(abs(z-j[v]), axis=0) for z in (old, sp, blend, (blend@vt[:2].T)@vt[:2])]\\n    row = [np.mean(abs(z-y[v])) for z in (o['y_hat'], yp, .2*o['y_hat']+.8*yp)] + [b for z in sm for b in (z.mean(), z[-1], z.max())]\\n    rows.append(row)\\n    print(name, np.round(row,5))\\nprint('columns: scalar baseline/Matern/blend; state baseline/rational/blend/projected blend, each avg/terminal/worst horizon')\\nprint('worst original slices', np.round(np.max(rows[:6], axis=0),5))\\nprint('worst directional slices', np.round(np.max(rows[6:], axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c 'import sys; sys.path.insert(0,\\\"/tmp\\\"); import solver_audit'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial-only response -> H2 quadratic trend with a Matérn correction for y and bounded rational trajectory features; exploratory worst-slice scalar MAE falls from 0.02550 to 0.01812.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the supervised active-direction kernel for both outputs\",\n      \"rejected_reason\": \"Nested tuning did not improve the worst trajectory slice; the isotropic scalar correction showed a clearer benefit.\"\n    }\n  ],\n  \"rationale\": \"Compare the exact implementations against the saved solver on the prescribed split and directional holdouts. Use the scalar correction only if its gain survives extrapolation, and change the trajectory model only if it improves the terminal and worst-horizon errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4c53281d92e2c5150c73b0e709eea0936d780f816d1a9a03115dbbdaa9b3f2bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46238.36,
+      "usage_known": true,
+      "prompt_tokens": 34076,
+      "cached_tokens": 10880,
+      "completion_tokens": 1538
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e504ea1f7fd46dc867724f4bff1f299",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:00.562852+00:00",
+  "ended_at_utc": "2026-11-28T09:55:22.545870+00:00",
+  "request_sha256": "6fa5118a2ac67785e6ceccb63aba0dcafec762e665f6197e69f6c2c520949469",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 67904,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37475,
+    "cached_tokens": 9344,
+    "completion_tokens": 819
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/b_warp_probe.py <<'PY'\\nexec(open('/tmp/readout_diag.py').read().split('for keys in')[0])\\nfrom scipy.optimize import least_squares\\nu,v=s['panel_b']['u'],s['panel_b']['v']\\n\\ndef warp(a,p):\\n    return a+p[1]*np.sin(p[0]*a)+(p[2]*a*a if len(p)>2 else 0)\\n\\ndef profiled(ix,p):\\n    d=m._affine(warp(u,p)); return d@m._fit(d[ix],v[ix])-v\\n\\nids=np.arange(len(u)); errs={}\\nfor label, start in [('shared_sine',[2.83,-.4]),('shared_quadratic_sine',[2.83,-.4,0.])]:\\n    r=[]\\n    for i in [-1,*ids]:\\n        ix=ids[ids!=i]; p=least_squares(lambda p:profiled(ix,p)[ix].ravel(),start).x\\n        if i<0: print(label,'parameters',p.round(6),'fit RMSE',np.sqrt(np.mean(profiled(ix,p)**2)))\\n        else: r.append(profiled(ix,p)[i])\\n    errs[label]=np.sqrt(np.mean(np.square(r)))\\nprint('refit leave-one-row-out RMSE',errs,'versus 0.008422 for current panel B')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b_warp_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Additive calibration → calibrated polynomial interactions; the saved node passes public CV at 0.033817/0.021933 scalar/trajectory MAE, with worst coordinate-tail MAE of 0.12897/0.06707.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add unconstrained quadratic terms to panel B\",\n      \"rejected_reason\": \"The earlier square and cycle expansions raised refitted leave-one-out error. A shared scalar quadratic tests the reported gain with just one additional parameter.\"\n    }\n  ],\n  \"rationale\": \"The saved artifact passed the isolated evaluator and downstream stress tests. The remaining question is whether the reported quadratic gain is shared across panel B channels and was missed by larger bases. Promote it only if refitted panel holdouts show a material improvement and the frozen DAG still passes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bfa953e5607c5dcf414b6029ae29867692603427115601d0b2d078a6d35b4358",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24559.19,
+      "usage_known": true,
+      "prompt_tokens": 37475,
+      "cached_tokens": 9344,
+      "completion_tokens": 819
+    }
+  ]
+}

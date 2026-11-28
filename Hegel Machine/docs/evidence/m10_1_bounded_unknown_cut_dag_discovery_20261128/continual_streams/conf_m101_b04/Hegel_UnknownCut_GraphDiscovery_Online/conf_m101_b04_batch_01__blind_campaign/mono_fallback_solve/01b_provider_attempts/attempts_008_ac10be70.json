@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac10be702277432199375a572547288e",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:40.802968+00:00",
+  "ended_at_utc": "2026-11-28T09:22:09.266345+00:00",
+  "request_sha256": "1242ee814b0416cca1a718c95ca1e1a46da3406d135269b8f100c3147c643d62",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48186,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31106,
+    "cached_tokens": 9344,
+    "completion_tokens": 1099
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/rational.py <<'PY'\\nexec(open('/tmp/operators.py').read().split('res=[]')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nz0=B(A(x)); tv=Y[:,1:]; rng=np.random.default_rng(228)\\nsplits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(9))]\\nfor name,Z in [('raw',x),('AB',z0)]:\\n for degree in [2,3]:\\n  for typ in ['radial','diagonal','rank1','rank2']:\\n   if degree==3 and typ=='rank2': continue\\n   E=[]\\n   for a,b in splits:\\n    z=(Z-Z[a].mean(0))/Z[a].std(0); p=np.c_[aff(z),*[mono(z,k) for k in range(2,degree+1)]]; pa=p[a]; n=len(a)\\n    _,_,v=np.linalg.svd(tv[a],full_matrices=False); v=v[:2]; ty=np.c_[Y[:,0],tv@v.T]; preds=[]\\n    for j,y in enumerate(ty.T):\\n     if j==2: preds.append(np.zeros(len(b)));continue\\n     ya=y[a]; dim={'radial':1,'diagonal':4,'rank1':4,'rank2':8}[typ]; reg=.025 if degree==3 else .004\\n     G=np.diag(np.r_[np.zeros(5),np.full(10,.002),np.full(pa.shape[1]-15,reg)])**.5\\n     def den(w,z):\\n      if typ=='radial':return 1+w[0]**2*np.sum(z*z,axis=1)\\n      if typ=='diagonal':return 1+(z*z)@(w*w)\\n      return 1+np.sum((z@w.reshape(-1,4).T)**2,axis=1)\\n     def f(w,ret=False):\\n      d=pa/den(w,z[a])[:,None]; c=np.linalg.lstsq(np.r_[d,G],np.r_[ya,np.zeros(len(G))],rcond=None)[0]\\n      if ret:return (p[b]@c)/den(w,z[b]);\\n      return np.r_[d@c-ya,G@c,.024*w]\\n     starts=[np.full(dim,.18)] if typ in ('radial','diagonal') else [.20*np.random.default_rng(i).normal(size=dim) for i in range(3)]\\n     opt=min([least_squares(f,w,max_nfev=55,bounds=(-2,2)) for w in starts],key=lambda r:r.cost)\\n     preds.append(f(opt.x,True))\\n    E.append([abs(preds[0]-Y[b,0]).mean(),abs(np.array(preds[1:]).T@v-tv[b]).mean()]);\\n   E=np.array(E); print(name,degree,typ,np.round(np.r_[E[0],E.mean(0),E.max(0)],5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational.py\\ncat /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Directional kernels → low-rank rational readouts; the AB kernel meets the prescribed response gate at 0.03537, while directional Matérn trajectory MAE reaches 0.00951 on that split and 0.01105 at worst.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the learned Matérn kernel for both readouts\",\n      \"rejected_reason\": \"It improves trajectory accuracy but misses the prescribed response gate at 0.04166.\"\n    }\n  ],\n  \"rationale\": \"Test whether quadratic saturation explains the response without an unrestricted high-order basis. Fit the denominator and trajectory projection inside each fold; keep the validated AB kernel if the rational model does not improve held-out errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "bbe0d57540932ba78bae1cadaed4782bc07a8e70fb86e051da84cb9ab809d430",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31086.09,
+      "usage_known": true,
+      "prompt_tokens": 31106,
+      "cached_tokens": 9344,
+      "completion_tokens": 1099
+    }
+  ]
+}

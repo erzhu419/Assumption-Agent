@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "849cc5bf154041dfa572e5c63eaaecbb",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:56:18.473543+00:00",
+  "ended_at_utc": "2026-11-28T09:56:58.853855+00:00",
+  "request_sha256": "202c9f8eb3b70a92c4e6e7c13f7dd5cfbf4f8340f4d7d2ea7c0a8194de17d813",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79045,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41719,
+    "cached_tokens": 9344,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/kernel6.py\\npython3 - <<'PY'\\np='batch_solver.py'\\ns=open(p).read(); a=s.index('def _operator_b('); b=s.index('from scipy.linalg import cho_factor',a); s=s[:a]+s[b:]; s=s.replace('from scipy.special import erf','from sklearn.linear_model import lars_path'); s=s.replace('from scipy.spatial.distance import cdist\\\\n',''); a=s.index('def solve_batch(');s=s[:a]+'''def _scalar_design(parts):\\n    z = np.column_stack(parts[:3])\\n    i, j = np.triu_indices(z.shape[1])\\n    return np.column_stack((z, z[:, i]*z[:, j]))\\n\\n\\ndef _sparse_readout(design, target, n, terms=25):\\n    d = (design-design[:n].mean(0))/np.maximum(design[:n].std(0), 1e-8)\\n    mean = target.mean()\\n    _, _, path = lars_path(d[:n], target-mean, max_iter=85, method='lasso')\\n    counts = np.count_nonzero(path, axis=0)\\n    weights = np.array([np.interp(terms, counts, row) for row in path])\\n    return mean+d[n:]@weights\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    parts = _branches(study, np.r_[tr['x'], study['test']['x']])\\n    y = _sparse_readout(_scalar_design(parts), tr['y'], n)\\n    q = np.column_stack(parts)\\n    q = (q-q[:n].mean(0))/q[:n].std(0)\\n    g = q @ q.T / q.shape[1]\\n    state = _predict((1+g)**2, tr['traj'], n, .002)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n''';open(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'; sp=importlib.util.spec_from_file_location('solver',p+'batch_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; t=tr['traj'];\\ndef run(i,j):\\n    st={**s,'train':{k:tr[k][i] for k in ('x','y','traj')},'test':{'x':tr['x'][j]}}\\n    a=m.solve_batch(st); e=np.abs(a['y_hat']-y[j]); f=np.abs(a['state_pred']-t[j]); return e.mean(),f.mean(),f.mean(0).max()\\nf=np.array([run(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(611).permutation(72),4)]); print('alternate folds mean, worst',f.mean(0),f.max(0));print('52/20 y, state, worst time',run(np.arange(52),np.arange(52,72)))\\nx=m._branches(s,tr['x']); xx,b,c,r=x; D=m._scalar_design(x)\\nparts={'compact':np.c_[np.ones(len(y)),xx,b,c,xx*np.roll(c,1,axis=1)],'compact+':np.c_[np.ones(len(y)),xx,b,c,xx*np.roll(c,1,axis=1),xx*c,c*c,xx*xx,b*b], 'sparse':D}\\nfolds=[(np.setdiff1d(np.arange(52),j),j) for j in np.array_split(np.random.default_rng(624).permutation(52),4)] + [(np.arange(52),np.arange(52,72))];\\nfor name,d in parts.items():\\n for out in (y,t[:,-1]):\\n    errors=[]\\n    for i,j in folds:\\n        pred=m._sparse_readout(d[np.r_[i,j]],out[i],len(i)) if name=='sparse' else d[j]@np.linalg.lstsq(d[i],out[i],rcond=None)[0]\\n        errors.append(np.mean(np.abs(out[j]-pred)))\\n    print(name, 'y' if out is y else 'terminal',np.mean(errors[:-1]),max(errors[:-1]),errors[-1])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (dense kernel scalar readout) -> H2 (sparse quadratic interactions across calibrated branches); the selected sparse design scored 0.02045 scalar MAE on 52/20 and 0.06236 on inner folds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add panel C's second output to the scalar design\",\n      \"rejected_reason\": \"It raised inner-fold scalar MAE from 0.06236 to 0.07701.\"\n    }\n  ],\n  \"rationale\": \"Install the sparse scalar readout selected on the inner folds and keep the state readout that already passed. Verify the exact artifact on the prescribed split and check alternate folds and individual time points for degradation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "08d3e747723d13c064a061d0fd793f8838fdf21b78d629fb51a6c2ff8af42fce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43008.98,
+      "usage_known": true,
+      "prompt_tokens": 41719,
+      "cached_tokens": 9344,
+      "completion_tokens": 1533
+    }
+  ]
+}

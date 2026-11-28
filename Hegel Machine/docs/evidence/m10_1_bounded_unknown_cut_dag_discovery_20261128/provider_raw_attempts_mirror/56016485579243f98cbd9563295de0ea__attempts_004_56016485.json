@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56016485579243f98cbd9563295de0ea",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:22.594965+00:00",
+  "ended_at_utc": "2026-11-28T09:40:02.977719+00:00",
+  "request_sha256": "5ecb3be14502764884ece4fdf49f2514f356ac21e5eab5c49ae4b7d559892fdc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29740,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21508,
+    "cached_tokens": 9344,
+    "completion_tokens": 1730
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport numpy as np,pickle,runpy,itertools as it\\nfrom scipy.optimize import minimize_scalar,least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']\\nfit=lambda a,b:np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nbias=lambda a:np.c_[np.ones(len(a)),a]\\nrms=lambda a:np.sqrt(np.mean(a*a))\\nmae=lambda a:np.mean(abs(a))\\ncal=runpy.run_path('/tmp/hegel_continual_archive/conf_m101_a04_batch_04_solver.py')['_calibrate']; p=s['panel_a']; off=cal(p,np.zeros((1,4)))[0]; inv=cal(p,np.ones((1,4)))[0]-off\\nprint('calibration offset',-off/inv,'scale',1/inv,'row residuals',np.sort(np.linalg.norm(cal(p,p['v'])-p['u'],axis=1)))\\nx=cal(p,tr['x']); b=s['panel_b']; bc=fit(bias(b['u']),b['v']); print('B coeff',bc); b=bias(x)@bc\\nquad=lambda u:np.column_stack([u[:,i]*u[:,j] for i,j in it.combinations_with_replacement(range(4),2)])\\ncubic=lambda u:np.column_stack([u[:,i]*u[:,j]*u[:,k] for i,j,k in it.combinations_with_replacement(range(4),3)])\\nfor j in ['v1','v2']:\\n p=s['panel_c']; u,v=p['u'],p[j]; print(j)\\n bases={'quad':lambda u:bias(np.c_[u,quad(u)]),'bilin':lambda u:bias(quad(u)[:,[1,3,5,8]]),'cubic_odd':lambda u:bias(np.c_[u,cubic(u)]),'cubic_sep':lambda u:bias(np.c_[u,u**2,u**3]),'pure_quad':lambda u:bias(quad(u))}\\n funs={'sin':lambda u,w:np.sin(w*u),'cos':lambda u,w:np.cos(w*u),'2sin':lambda u,w:np.c_[np.sin(w*u),np.sin(2*w*u)],'sincos':lambda u,w:np.c_[np.sin(w*u),np.cos(w*u)],'tanh':lambda u,w:np.tanh(w*u),'rat':lambda u,w:u/(1+w*u*u),'sin2cos':lambda u,w:np.c_[np.sin(w*u),np.sin(2*w*u),np.cos(w*u)]}\\n for name,fn in funs.items():\\n  for linear in [False,True]:\\n   def design(u,w): return bias(np.c_[u,fn(u,w)] if linear else fn(u,w))\\n   def err(w): a=design(u,w); return rms(v-a@fit(a,v))\\n   ws=np.linspace(.12,10,200); k=np.argmin([err(w) for w in ws]); z=minimize_scalar(err,bounds=(ws[max(0,k-1)],ws[min(k+1,len(ws)-1)]),method='bounded'); print(name,linear,round(z.x,5),round(z.fun,6)); bases[name+str(linear)]=lambda u,w=z.x,fn=fn,linear=linear:bias(np.c_[u,fn(u,w)] if linear else fn(u,w))\\n for name,fn in bases.items():\\n  a=fn(u); e=v-a@fit(a,v); hat=np.linalg.svd(a,full_matrices=False)[0]; h=(hat[:,:np.linalg.matrix_rank(a)]**2).sum(1); print('panel',name,'fit',round(rms(e),6),'LOO',round(rms(e/np.maximum(1-h[:,None],1e-12)),6))\\n print('v1 fits along transformed u?',j, rms(v-bias(bias(u)@bc)@fit(bias(bias(u)@bc),v)))\\nY=tr['traj'][:52]; _,S,V=np.linalg.svd(Y,full_matrices=False)\\nprint('temporal vectors',V[:2]);\\nforms={'exp':lambda t,r:-np.expm1(-r*t),'rat':lambda t,r:t/(1+r*t),'sin':lambda t,r:np.sin(t*r),'decay':lambda t,r:t*np.exp(-r*t),'linear':lambda t,r:t,'cos':lambda t,r:1-np.cos(t*r)}\\nres=[]\\nfor (n1,a),(n2,bf) in it.combinations_with_replacement(forms.items(),2):\\n def mats(r): return np.c_[a(t,r[0]),bf(t,r[1])]\\n def er(r): m=mats(r);return (Y-fit(m,Y.T).T@m.T).ravel()\\n opts=[least_squares(er,q,bounds=([.0001,.0001],[9,9]),max_nfev=120) for q in [[1.8,.4],[.4,1.8],[1,2],[2,1]]]\\n z=min(opts,key=lambda q:q.cost);res.append((rms(z.fun),n1,n2,z.x))\\nprint('temporal basis options',sorted(res,key=lambda q:q[0])[:12])\\nfor name,f in [('x',x),('B',b),('x quad',np.c_[x,quad(x)]),('B quad',np.c_[b,quad(b)]),('x/B',np.c_[x,b])]:\\n a=bias(f); q=np.c_[tr['y'],tr['traj']];e=q[52:]-a[52:]@fit(a[:52],q[:52]);print('direct',name,mae(e[:,0]),mae(e[:,1:]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived graph transfer) → H2 (identify panel operators and a rank-two temporal law); the best archived holdout MAEs were 0.283 for y and 0.192 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An unchanged archived graph supplies an adequate operator and readout basis for this batch.\",\"empirical_witness\":\"All five archived solvers missed 0.038 on both targets; the best reached 0.283 for y and 0.192 for trajectory.\",\"causal_blanket_diagnosis\":\"The archive readouts do not capture this batch's panel-to-target mapping; the trajectory itself is nearly rank two.\",\"sublated_pivot\":\"Keep the calibration method provisionally, identify panel and temporal operators separately, then fit the scalar and temporal readouts.\",\"risk_kind\":\"Structural misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the best archived solver unchanged\",\"rejected_reason\":\"Both holdout errors are several times the tolerance.\"}],\"rationale\":\"Panel leave-one-out residuals will distinguish true operator structure from interpolation, and fitting the trajectory's time basis on the first 52 rows will determine whether its two components can be modeled separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f22c0dfcc90bf464756f6b52b4949b00ff77dca856a3ea0769b569901a32d4d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45672.98,
+      "usage_known": true,
+      "prompt_tokens": 21508,
+      "cached_tokens": 9344,
+      "completion_tokens": 1730
+    }
+  ]
+}

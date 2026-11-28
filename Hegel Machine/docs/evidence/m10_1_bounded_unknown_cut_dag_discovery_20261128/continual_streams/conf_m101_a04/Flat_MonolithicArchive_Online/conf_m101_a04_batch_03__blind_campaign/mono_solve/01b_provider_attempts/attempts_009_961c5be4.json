@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "961c5be479e04f0ca6b3771ea12697eb",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:00.837970+00:00",
+  "ended_at_utc": "2026-11-28T09:32:36.952829+00:00",
+  "request_sha256": "492c319acd7c400c665d571f043343272346a0365b85aa7f1444fdc3fb1f55ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62637,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36745,
+    "cached_tokens": 9344,
+    "completion_tokens": 1537
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('def _trajectory(')\\nend = s.index('\\\\n\\\\ndef solve_batch', start)\\ns = s[:start] + '''def _trajectory(fast, slow, t, targets):\\n    \\\"\\\"\\\"Fit an exponential fast response and a rational slow response jointly.\\\"\\\"\\\"\\n    n, width = len(targets), len(t)\\n    values = targets.ravel()\\n\\n    def design(f, g, rates):\\n        rise = -np.expm1(-rates[0]*t)\\n        tail = t/(1 + rates[1]*t)\\n        return np.column_stack(((f[:, None, :]*rise[None, :, None]).reshape(len(f)*width, f.shape[1]),\\n                                (g[:, None, :]*tail[None, :, None]).reshape(len(g)*width, g.shape[1])))\\n\\n    def residual(rates):\\n        a = design(fast[:n], slow[:n], rates)\\n        return a @ _fit(a, values) - values\\n\\n    rates = least_squares(residual, [1.8, .45], bounds=([.05, .001], [6., 2.]), gtol=1e-10).x\\n    coeff = _fit(design(fast[:n], slow[:n], rates), values)\\n    return (design(fast[n:], slow[n:], rates) @ coeff).reshape(len(fast)-n, width)\\n''' + s[end:]\\np.write_text(s)\\nPY\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']\\nx, y, T = (t[k] for k in ('x', 'y', 'traj'))\\nn = len(x)\\na = s['panel_a']\\ncal = m._calibrate(a, a['v'])\\nkeep = np.linalg.norm(cal-a['u'], axis=1) < .01\\nassert keep.sum() == 45\\ncal_errors, aff_errors = [], []\\nfor i in np.flatnonzero(keep):\\n    mask = np.arange(len(cal)) != i\\n    c = m._calibrate({k:v[mask] for k,v in a.items()}, a['v'][i:i+1])[0]\\n    cal_errors.append(c-a['u'][i])\\n    clean = keep & mask\\n    w = m._fit(m._with_bias(a['v'][clean]), a['u'][clean])\\n    aff_errors.append((m._with_bias(a['v'][i:i+1])@w)[0]-a['u'][i])\\nprint('Panel A inverse LOO RMS (observable clean rows), cyclic vs affine:', np.mean(np.square(cal_errors))**.5, np.mean(np.square(aff_errors))**.5)\\nassert np.mean(np.square(cal_errors))**.5 < .001\\nZ = m._calibrate(a, x)\\nsplits = [('52/20', np.arange(52), np.arange(52,n)), ('56/16', np.arange(56), np.arange(56,n))]\\nfor seed in range(12):\\n    p = np.random.default_rng(seed).permutation(n)\\n    splits.append(('random',p[:56],p[56:]))\\nfor j in range(4):\\n    p = np.argsort(Z[:,j]); splits.extend([('tails',p[:56],p[56:]),('tails',p[16:],p[:16])])\\nmetrics = {}\\nfor label, fit, val in splits:\\n    o = m.solve_batch({**s, 'train':{**t, 'x':x[fit], 'y':y[fit], 'traj':T[fit]}, 'test':{'x':x[val]}})\\n    yh, ph = o['y_hat'], o['state_pred']\\n    assert yh.shape == (len(val),) and ph.shape == (len(val),T.shape[1])\\n    np.testing.assert_allclose(o['diagnostics_vec'], [yh.mean(),yh.std(),ph[:,-1].mean(),ph[:,-1].std()])\\n    e = np.abs(ph-T[val]); metrics.setdefault(label,[]).append([np.abs(yh-y[val]).mean(), e.mean(), e.mean(0).max(), e[:,-1].mean()])\\nfor label, values in metrics.items():\\n    worst = np.max(values,axis=0)\\n    print(label, 'max scalar / overall trajectory / worst time / terminal MAE:', worst.round(6))\\n    assert np.all(worst < .038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent time weights -> shared exponential fast and rational slow profiles; the challenger reduced worst coordinate-tail trajectory MAE from 0.010439 to 0.004628, with scalar tail MAE unchanged at 0.010220.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep unconstrained rank-one time profiles\",\n      \"rejected_reason\": \"Their worst coordinate-tail trajectory MAE was 0.004755 versus 0.004628 for the exponential–rational model, which also lowered worst terminal MAE.\"\n    }\n  ],\n  \"rationale\": \"Promote the temporal model that improves the extrapolation bottleneck. Verify the exported solver on the specified holdout, random splits, and coordinate tails, and use panel leave-one-out inversion to verify the calibration correction independently of the readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d48a83b39a6ffc5697071862ef358309a5d8de9f5e7b2adb27d6a68a51e0e415",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41398.72,
+      "usage_known": true,
+      "prompt_tokens": 36745,
+      "cached_tokens": 9344,
+      "completion_tokens": 1537
+    }
+  ]
+}

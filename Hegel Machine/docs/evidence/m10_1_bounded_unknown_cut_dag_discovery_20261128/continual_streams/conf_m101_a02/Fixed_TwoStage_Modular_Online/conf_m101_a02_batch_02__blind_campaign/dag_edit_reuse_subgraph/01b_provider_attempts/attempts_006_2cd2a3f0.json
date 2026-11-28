@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2cd2a3f0188f4d2588f2af321d9a038c",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:32.666481+00:00",
+  "ended_at_utc": "2026-11-28T09:27:07.812718+00:00",
+  "request_sha256": "1e945939f4d547933683ebf6ce705483ad1d884481382a9a6b9eaff5729a8e03",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50957,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32302,
+    "cached_tokens": 9344,
+    "completion_tokens": 1363
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact_label.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _features(z, shared):\\n    cross = z[:, :2] * z[:, 2:]\\n    if shared:\\n        cross = cross.sum(axis=1, keepdims=True)\\n    return np.column_stack((z, cross))\\n\\n\\ndef _label(z, z_test, y, shared=True, tied=True):\\n    x, xt = _features(z, shared), _features(z_test, shared)\\n    lin = _affine(x)\\n    start = np.linalg.lstsq(lin, y, rcond=None)[0][1:]\\n\\n    def design(x, p):\\n        index = x @ p[:-1] + p[-1]\\n        base = _affine(x) if not tied else np.column_stack((np.ones(len(x)), index))\\n        return np.column_stack((base, np.tanh(index)))\\n\\n    def residual(p):\\n        d = design(x, p)\\n        return d @ np.linalg.lstsq(d, y, rcond=None)[0] - y\\n\\n    fits = [least_squares(residual, np.r_[scale * start, 0.0], max_nfev=100)\\n            for scale in (0.6, 1.0, 1.6)]\\n    p = min(fits, key=lambda r: r.cost).x\\n    b = np.linalg.lstsq(design(x, p), y, rcond=None)[0]\\n    return design(xt, p) @ b\\nPY\\ncat > /tmp/check_compact_label.py <<'PY'\\nimport pickle, runpy, numpy as np\\nP='/holdout_task/'\\ns=pickle.load(open(P+'public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; t=s['train']['traj']\\nz=runpy.run_path(P+'_frozen_nodes/node_00.py')['run_node']({'__input__':s})['z_tr']; old=runpy.run_path(P+'node_01.py'); new=runpy.run_path('/tmp/compact_label.py')\\nrng=np.random.default_rng(9061); ix=np.arange(len(z)); a=np.column_stack((np.ones(len(z)),z)); groups=[ix[-20:]]+[rng.permutation(ix)[:20] for _ in range(24)] + [np.argsort(abs(v))[-12:] for v in z.T] + [np.argsort(v)[-12:] for v in (*z.T, z[:,2]+z[:,3]-z[:,0]-z[:,1])] + [np.argsort(v)[:12] for v in (*z.T, z[:,2]+z[:,3]-z[:,0]-z[:,1])]; folds=[(np.setdiff1d(ix,g),g) for g in groups]\\nfor name, fn in [('baseline',old['_label'])]+[(str((sh,ti)),lambda z,zt,y,sh=sh,ti=ti:new['_label'](z,zt,y,sh,ti)) for sh in (True,False) for ti in (True,False)]:\\n    mae=np.array([np.mean(abs(fn(z[tr],z[te],y[tr])-y[te])) for tr,te in folds]); print(name,'train/public/random_mean/random_max/tail_max:',np.round([np.mean(abs(fn(z,z,y)-y)),mae[0],mae[1:25].mean(),mae[1:25].max(),mae[25:].max()],6))\\nhorizons=np.array([np.mean(abs(a[te]@np.linalg.lstsq(a[tr],t[tr],rcond=None)[0]-t[te]),axis=0) for tr,te in folds]); print('worst trajectory horizon:',horizons.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_compact_label.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (quadratic baseline plus affine-index tanh) -> H2 (two cross-products inside a shared saturating index); the exploratory sparse fits reduced worst measured label slice MAE from 0.02829 to roughly 0.009.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the accepted full-quadratic candidate\",\n      \"rejected_reason\": \"The cross-product challenger substantially reduced held-out errors; test whether its near-equal coefficients support a simpler shared-index form before replacing the verified file.\"\n    }\n  ],\n  \"rationale\": \"Fit each challenger using only its fold's training rows and compare on fresh random splits and signed coordinate tails. If tying the linear and nonlinear paths or sharing the two cross-product coefficients worsens worst-slice error, keep those parameters independent. Measure trajectory error separately by horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cafe5c5812377cf1e2a1f145b7d4a1afd8ef2634bf5eb23cb836715406ace4a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37761.84,
+      "usage_known": true,
+      "prompt_tokens": 32302,
+      "cached_tokens": 9344,
+      "completion_tokens": 1363
+    }
+  ]
+}

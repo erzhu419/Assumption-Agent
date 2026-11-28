@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3c9e851587449acbed332908a153fbc",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:31.492833+00:00",
+  "ended_at_utc": "2026-11-28T09:30:06.429547+00:00",
+  "request_sha256": "2883cd0e416a9dbbf579a71dda018792f3ea29f3775d1096ca21213c75dc9053",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40826,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27421,
+    "cached_tokens": 9344,
+    "completion_tokens": 1399
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -i 's/C1=lambda x:g(x,p)@a/C1=lambda x,g=g,p=p,a=a:g(x,p)@a/;s/C2=lambda x:g(x,p)@a/C2=lambda x,g=g,p=p,a=a:g(x,p)@a/' /tmp/graph.py\\ncat > /tmp/readout.py <<'PY'\\nfrom graph import *\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.model_selection import KFold\\nfrom itertools import combinations\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=13).split(X)]\\nV=np.linalg.svd(T[:52],full_matrices=False)[2][:2]; targets=np.c_[Y,T@V.T]\\nF=PolynomialFeatures(2).fit_transform(X); coef=ls(F[:52],targets[:52]);print('raw quadratic coefficients',coef); print('scalar ranges and correlations with state modes',np.quantile(Y,[0,.25,.5,.75,1]),np.corrcoef(targets.T)[0]);\\nresults=[]\\nfor n,d in routes(X):\\n z,w=C1(d),C2(d)\\n for key,f in [('d',d),('C1',z),('C2',w),('C12',np.c_[z,w]),('dC12',np.c_[d,z,w]),('dC2',np.c_[d,w]),('C1dC2',np.c_[z,d+w]),('d+C1+C2',d+z+w)]:\\n  f=f/f.std(axis=0); D=cdist(f,f)**2/f.shape[1]\\n  P=PolynomialFeatures(2).fit_transform(d)\\n  for ell in [.4,.8,1.6,3.2]:\\n   r=np.sqrt(5*D)/ell; K=(1+r+r*r/3)*np.exp(-r)\\n   for lam in [.0003,.003,.03]:\\n    es=[]\\n    for i,j in splits:\\n     A=np.linalg.solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),np.c_[P[i],Y[i],T[i]]); p=A[:,:P.shape[1]]; b=A[:,P.shape[1]:]; c=ls(P[i].T@p,P[i].T@b); h=P[j]@c+K[np.ix_(j,i)]@(b-p@c); E=abs(h-np.c_[Y,T][j]);es.append([E[:,0].mean(),E[:,1:].mean()]);\\n    results.append((n,key,ell,lam,np.array(es)))\\nfor col in range(2):\\n print('kernel ranking for',col)\\n for n,k,l,lam,e in sorted(results,key=lambda a:np.max(a[4][:,col]))[:10]:print(n,k,l,lam,np.round(e[:,col],5))\\n# Project linear/quadratic models through a single saturating scalar link.\\nfor label,F in [('raw',PolynomialFeatures(2).fit_transform(X))]+[(n+'C',np.c_[PolynomialFeatures(2).fit_transform(d),C1(d),C2(d)]) for n,d in routes(X)]:\\n scores=[]\\n for link in ['identity','tanh','sin','rational','softsign','cubic']:\\n  ee=[]\\n  for i,j in splits:\\n   x=F[i]; y=Y[i]; b0=ls(x,y)\\n   def apply(z,c):\\n    a=np.exp(np.clip(c,-9,3))\\n    if link=='tanh':return np.tanh(a*z)/a\\n    if link=='sin':return np.sin(a*z)/a\\n    if link=='rational':return z/(1+a*z*z)\\n    if link=='softsign':return z/(1+a*abs(z))\\n    if link=='cubic':return z+c*z**3\\n    return z\\n   if link=='identity':pred=F[j]@b0\\n   else:\\n    def err(b):return apply(x@b[:-1],b[-1])-y\\n    r=least_squares(err,np.r_[b0,-1 if link!='cubic' else 0],max_nfev=100);pred=apply(F[j]@r.x[:-1],r.x[-1]);\\n   ee.append(abs(pred-Y[j]).mean());\\n  scores.append((max(ee),link,np.round(ee,4)))\\n print('link',label,sorted(scores,key=lambda a:a[0])[:2])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw quadratic readout -> H2 panel-composed readout or a calibrated residual model; raw quadratic 52/20 y MAE is 0.0792.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Bind the recovered panel operators independently so every route runs. Compare structured scalar links and panel-aware residuals on multiple splits to distinguish a useful operator composition from a split-specific gain, with trajectory errors measured separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0cfde0559e364cc8871b3a0374dc6894be1752cb3372a2f0278c8872ca215ca3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37557.76,
+      "usage_known": true,
+      "prompt_tokens": 27421,
+      "cached_tokens": 9344,
+      "completion_tokens": 1399
+    }
+  ]
+}

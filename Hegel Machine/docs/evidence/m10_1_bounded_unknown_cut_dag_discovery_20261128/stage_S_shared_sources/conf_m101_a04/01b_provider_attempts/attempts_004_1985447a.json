@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1985447ac6e84dffa90be028194fc996",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:11:31.150706+00:00",
+  "ended_at_utc": "2026-11-28T09:12:07.661064+00:00",
+  "request_sha256": "543be5b12fb5e263872f2fc4bda8b51a21d1e3f81ff674e36d380fc7b8da0257",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34398,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26631,
+    "cached_tokens": 10880,
+    "completion_tokens": 1472
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^print('\\\\''t'\\\\''/,$d' /tmp/probe.py >/tmp/basis.py; cat >>/tmp/basis.py <<'PY'\\nfrom scipy.linalg import solve\\nfrom itertools import combinations_with_replacement as cwr\\nprint('times',t,'centered traj singular',np.linalg.svd(z-z.mean(0),compute_uv=False)); print('corr y',np.corrcoef(Y.T)[0].round(3))\\nfor j in range(4):\\n p=s['panel_c']; a=p['u']; b=p['v'+str(1+j//2)]; q=poly(a,2); print('C SVD residual',j,np.linalg.svd(b-poly(a,1)@fit(poly(a,1),b),compute_uv=False).round(6)); print('C quadratic',fit(q,b)[5:].round(5).T); break\\np=s['panel_c']; a=p['u']; b=p['v2']; print('C2 quadratic coefficient',fit(poly(a,2),b)[5:].round(5).T,'sv residual quad',np.linalg.svd(b-poly(a,2)@fit(poly(a,2),b),compute_uv=False));\\nrng=np.random.default_rng(64); splits=[(np.arange(52),np.arange(52,72))]+[(q[:52],q[52:]) for q in (rng.permutation(72) for _ in range(4))];\\ndef scores(K,T=Y,regs=(1e-4,.001,.01,.05,.2)):\\n out=[]\\n for reg in regs:\\n  e=[]\\n  for i,j in splits:\\n   pred=K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+reg*np.eye(len(i)),T[i],assume_a='pos'); e.append(err(pred,T[j]))\\n  e=np.array(e); out.append((reg,e[0],e.mean(0),e.max(0)))\\n return out\\nres=[]\\nfor name in ['x','a+','a-','a-b+','a-b-','a-c']:\\n a=vari[name]\\n kernels={}\\n for d in [2,3,4,5,6]:\\n  F=poly(a,d); std=np.maximum(F.std(0),.07); std[0]=1\\n  for degree_decay in [.20,.5,1]:\\n   ds=np.array([0]+[k for k in range(1,d+1) for _ in cwr(range(a.shape[1]),k)]); W=(degree_decay**np.maximum(ds-2,0))/std; G=F*W; kernels[('poly',d,degree_decay)]=G@G.T\\n if a.shape[1]==4:\\n  for law in ['tanh','sin','asinh','atan','erf','rational']:\\n   from scipy.special import erf\\n   fun={'tanh':np.tanh,'sin':np.sin,'asinh':np.arcsinh,'atan':np.arctan,'erf':erf,'rational':lambda q:q/(1+q*q)}[law]\\n   for k in [.75,1.25,2,3]:\\n    for shift in [-.35,0,.35]:\\n     u=fun(k*(a-shift)); Q=poly(a,2); G=np.c_[Q,u, u*a, np.einsum('ni,nj->nij',u,a).reshape(len(a),-1),u**2]; kernels[(law,k,shift)]=G@G.T\\n  for l in [.5,.85,1.4,2.4]:\\n   for p in [.2,.45,1,2.3]:\\n    dd=cdist(a*[1,p,p,1],a*[1,p,p,1],'sqeuclidean'); K=np.exp(-.5*dd/l**2); Q=poly(a,2); kernels[('rbf',l,p)]=K+Q@Q.T\\n for key,K in kernels.items():\\n  for reg,e,avg,mx in scores(K):res.append((name,key,reg,e,avg,mx))\\nfor j in [0,1]:\\n print('BEST',j)\\n for name,key,reg,e,avg,mx in sorted(res,key=lambda q:q[4][j]+.5*q[5][j])[:18]:print(name,key,reg,e.round(5),avg.round(5),mx.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/basis.py > /tmp/basis.log; grep -E '^times|^corr|^C |^C2|^BEST|^(x|a[+-]) ' /tmp/basis.log\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal calibration with dominant coordinatewise nonlinearities → H2 regularized mixed-term or saturating readouts; best prescribed-split MAEs are 0.07141 for y and 0.04615 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Constrain the scalar to a quadratic readout of observed trajectory\",\n      \"rejected_reason\": \"Even with observed state supplied, the tested readout yields scalar MAE above 0.137.\"\n    }\n  ],\n  \"rationale\": \"The largest cubic coefficients concentrate on coordinates 0 and 3, while trajectory coefficient profiles are nearly rank two. Compare saturating and higher-order bases across several splits to see whether those clues improve prediction beyond the prescribed split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "1fdf2b9f160f7c84961ebb84263476880214cd8c091a88554655c0fbf1624f09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39129.6,
+      "usage_known": true,
+      "prompt_tokens": 26631,
+      "cached_tokens": 10880,
+      "completion_tokens": 1472
+    }
+  ]
+}

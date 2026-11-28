@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5755255e01d0485abef16e5ea787fe9f",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:05.625989+00:00",
+  "ended_at_utc": "2026-11-28T09:15:45.722427+00:00",
+  "request_sha256": "64c6709de04e78cb1d8350e5062474a24e6900aa4095edea20dcb8edbb62c45e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37323,
+    "cached_tokens": 10880,
+    "completion_tokens": 1592
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/separable_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; n=len(x)\\nls=lambda a,b: np.linalg.lstsq(a,b,rcond=None)[0]\\nmono=lambda x,j: np.column_stack([np.prod(x[:,q],1) for q in combinations_with_replacement(range(4),j)])\\nP=np.c_[np.ones(n),x,mono(x,2)]; C=mono(x,3); D=mono(x,4)\\nsplits={'fixed':np.arange(52,72),'radial':np.argsort(np.linalg.norm(x,axis=1))[-18:]}\\nfor j in range(4):\\n order=np.argsort(x[:,j]); splits[f'low{j}']=order[:18]; splits[f'high{j}']=order[-18:]\\nfor i,ix in enumerate(np.array_split(np.random.default_rng(712).permutation(n),4)): splits[f'rand{i}']=ix\\nscores={};\\nfor label,va in splits.items():\\n tr=np.setdiff1d(np.arange(n),va); Z=z[tr].T\\n def bas(k):return -np.expm1(-t[:,None]*k)\\n rates=least_squares(lambda k:(bas(k)@ls(bas(k),Z)-Z).ravel(),[1.5,.25],bounds=([.7,.02],[4,.65])).x\\n U=np.linalg.qr(bas(rates))[0]; Y=np.c_[y[tr],Z.T@U]\\n def add(key,p):\\n  e=np.abs(p[:,1:]@U.T-z[va]); scores.setdefault(key,[]).append([np.mean(abs(p[:,0]-y[va])),e.mean(),e.mean(0).max()])\\n def readout(A,pen):\\n  return A[va]@ls(np.r_[A[tr],np.diag(pen)],np.r_[Y,np.zeros((A.shape[1],3))])\\n # Test smooth extrapolation via global cubic and quartic terms plus interpolated residuals.\\n g=np.exp(-.23*np.sum((x[:,None]-x[None,:])**2,axis=2)); p=P[tr]\\n for trend in ('quad','cubic','quartic'):\\n  for scale in (.05,.25,1.,4.):\\n   k=g.copy()\\n   if trend!='quad': k+=scale*(C@C.T)\\n   if trend=='quartic': k+=scale*.2*(D@D.T)\\n   pp=[]\\n   for j,penalty in enumerate([.001,.006,.006]):\\n    m=k[np.ix_(tr,tr)]+penalty*np.eye(len(tr)); a=np.block([[m,p],[p.T,np.zeros((15,15))]]); pp.append(np.c_[k[np.ix_(va,tr)],P[va]]@np.linalg.solve(a,np.r_[Y[:,j],np.zeros(15)]))\\n   add((trend,scale),np.array(pp).T)\\n for cpen in (.15,.35,.7): add(('global quartic',cpen),readout(np.c_[P,C,D],np.r_[np.zeros(15),np.full(20,cpen),np.full(35,3*cpen)]))\\n # Compare a low-rank quotient and additive ridge terms in projected readouts.\\n for law in ('quotient','ridge_tanh','ridge_sin'):\\n  pred=[]\\n  for j in range(3):\\n   target=Y[:,j]; best=None\\n   for seed in range(7):\\n    rng=np.random.default_rng(seed)\\n    def features(q,idx):\\n     pp=P[idx]; v=pp[:,:5]@q.reshape(2,5).T\\n     if law=='quotient': return np.c_[pp[:,:5],pp/(1+np.sum(v*v,axis=1,keepdims=True))]\\n     f=np.tanh if law=='ridge_tanh' else np.sin\\n     return np.c_[pp,f(v),v*f(v)]\\n    def res(q):\\n     A=features(q,tr); return np.r_[A@ls(A,target)-target,.008*q]\\n    o=least_squares(res,rng.normal(0,.65,10),max_nfev=250,bounds=(-5.,5.))\\n    if best is None or o.cost<best.cost: best=o\\n   pred.append(features(best.x,va)@ls(features(best.x,tr),target))\\n  add(law,np.array(pred).T)\\nfor name,v in scores.items():\\n a=np.array(v); print(name,'fixed',np.round(a[0],5),'tail worst',np.round(a[1:10].max(0),5),'tail mean',np.round(a[1:10].mean(0),5),'random worst',np.round(a[10:].max(0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/separable_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Isotropic quadratic-trend kernel → regularized global cubic terms or low-rank rational readouts; verified fixed scalar MAE is 0.01158, with tail maxima of 0.03907 scalar MAE and 0.04360 worst-horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the learned Matérn metric for both outputs\",\n      \"rejected_reason\": \"It modestly improves the scalar tail but degrades the worst state horizon from 0.04360 to 0.06570.\"\n    }\n  ],\n  \"rationale\": \"The learned metric did not fix the state tail. Test instead whether quadratic-only extrapolation omits transferable cubic interactions or rational structure. Keep the verified artifact unchanged unless a challenger improves the directional tails while retaining the fixed-split margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "67b5cc7c182b188ce18c9b2c4eed9eaca5f73e0021423fb9d03083573f933813",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42737.78,
+      "usage_known": true,
+      "prompt_tokens": 37323,
+      "cached_tokens": 10880,
+      "completion_tokens": 1592
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ff9e4821029465781bf7c838bea4692",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:09:15.151414+00:00",
+  "ended_at_utc": "2026-11-28T10:10:06.310816+00:00",
+  "request_sha256": "abe6cb6ba40b71028095904bbf39f61026aebe23d08c8fb7d6bcb05e565eb18f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38038,
+    "cached_tokens": 9344,
+    "completion_tokens": 2217
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine.py <<'PY'\\nfrom probe import *\\nimport sys,itertools\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nsys.path.insert(0,'/holdout_task'); import node_01 as orig\\nX=np.vstack((s['train']['x'],s['test']['x'])); Z,B=[p[j] for j in ('z','b')]; C,D=orig._panels(u,v1,v2,B); Cz,Dz=orig._panels(u,v1,v2,Z)\\nQ=np.linalg.qr(np.c_[-np.expm1(-1.56*t),-np.expm1(-.38*t),np.ones(len(t))])[0]; Y=np.c_[y,tr@Q]; splits=[np.arange(52,72),*np.array_split(np.random.default_rng(733).permutation(72),3)]\\n\\ndef library(x,z,b,c,d,cz,dz,n,style):\\n k=orig._kernels(x,z,b,c,d,n); groups=[]\\n def norm(a):return (a-a[:n].mean(0))/a[:n].std(0).clip(1.e-8)\\n def add(a):\\n  a=norm(a);groups.append(a@a.T/a.shape[1]);return a\\n P=[x,z,b,c,d,cz,dz]; F=[]\\n for i,a in enumerate(P):\\n  a=norm(a); f=[a, np.tanh(a*1.5),np.sin(a),a/(1+1.5*a*a),a*a];F.append([norm(j) for j in f]);\\n  for mode in range(4):\\n   q=a[:,mode:mode+1];add(np.c_[q,np.sin(q),np.tanh(q),q/(1+q*q),q**3,q**5]);add(np.c_[q*q,np.cos(q),np.cos(2*q),q**4]);\\n for i,(f,g) in enumerate(itertools.combinations_with_replacement(range(len(P)),2)):\\n  if f>=4 or g>=6:continue\\n  a,aa,_,_,a2=F[f]; b,bb,_,_,b2=F[g];\\n  for j in range(4):\\n   for l in range(4):\\n    if f==g and j>=l:continue\\n    A,AA,A2=a[:,j],aa[:,j],a2[:,j]; B,BB,B2=b[:,l],bb[:,l],b2[:,l]\\n    add(np.c_[A*B,AA*B,A*BB,AA*BB]);\\n    if style==2 or f in (2,3) or g==3:add(np.c_[A2*B,A*B2,A2*B2]);\\n for j in range(len(P)):\\n  if j<4:continue\\n  a=norm(P[j]); K=a@a.T/4;groups.extend([(1+K)**2/4,(1+K)**3/8])\\n return np.concatenate((k,np.array(groups)))\\n\\ndef pred(k,Y,noise,pen,method):\\n n=len(Y);m=len(k); mu=Y.mean(0); sd=Y.std(0);y=(Y-mu)/sd\\n a=np.concatenate((np.eye(n)[None],k[:,:n,:n])); R=np.ascontiguousarray(a.reshape(m+1,-1)); ident=np.eye(n); prior=np.log(np.r_[noise,np.full(m,1./m)]); r=y.shape[1]\\n def calc(theta):\\n  v=np.exp(theta); cov=(v@R).reshape(n,n)+1.; cf=cho_factor(cov,check_finite=False); alpha=cho_solve(cf,y,check_finite=False); ic=cho_solve(cf,ident,check_finite=False)\\n  if method=='loo':\\n   h=ic.diagonal(); e=alpha/h[:,None]; ga=-2*ic@(e/h[:,None]); gh=-2*np.mean(e*e,1)/h; g=(ga@alpha.T/r)-(ic*gh)@ic; loss=np.sum(e*e)/r\\n  else:\\n   loss=np.log(cf[0].diagonal()).sum()+.5*np.sum(alpha*y)/r;g=.5*(ic-alpha@alpha.T/r)\\n  d=theta-prior;return loss+pen*(d@d),v*(R@g.ravel())+2*pen*d\\n theta=minimize(calc,prior,jac=True,method='L-BFGS-B',bounds=[(-12.,1.)]+[(-15.,3.)]*m,options={'maxiter':85,'ftol':2.e-7}).x\\n v=np.exp(theta);cf=cho_factor((v@R).reshape(n,n)+1.,check_finite=False); alpha=cho_solve(cf,y,check_finite=False)\\n return ((1+np.einsum('k,kij->ij',v[1:],k[:,n:,:n]))@alpha)*sd+mu\\n\\ndef evaluate(a,j):\\n r=abs(a-Y[j]);return np.r_[r[:,0].mean(),abs((a[:,1:]-Y[j,1:])@Q.T).mean(),r.mean(0)[1:]]\\n\\ndef main():\\n best=[]\\n for jj,j in enumerate(splits):\\n  i=np.setdiff1d(np.arange(72),j); ix=np.r_[i,j]; n=len(i); ps=[]\\n  K0=orig._kernels(*[v[ix] for v in (X,Z,B,C,D)],n); K1=library(*[v[ix] for v in (X,Z,B,C,D,Cz,Dz)],n,1)\\n  for style,k in enumerate((K0,K1)):\\n   for pen,met in ((.008,'ml'),(.035,'ml'),(.12,'ml'),(.003,'loo'),(.03,'loo')):\\n    for joint in (0,1,2):\\n     blocks=([[0],[1],[2],[3]],[[0,1],[2],[3]],[[0,1,2],[3]])[joint]; out=np.zeros((len(j),4))\\n     for cols in blocks:out[:,cols]=pred(k,Y[np.ix_(i,cols)],.004 if cols[0]<3 else .04,pen,met)\\n     key=(style,pen,met,joint);ps.append(out);print(jj,key,*np.round(evaluate(out,j),5),flush=True)\\n  np.save('/tmp/refine'+str(jj),ps)\\nif __name__=='__main__':main()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py >/tmp/refine.log 2>&1; python3 - <<'PY'\\nfor split in range(4):\\n a=[l.split() for l in open('/tmp/refine.log') if l.startswith(f'{split} (')];print('split',split,'count',len(a));print('\\\\n'.join(' '.join(l) for l in sorted(a,key=lambda x:max(float(x[5]),float(x[6])))[:7]))\\nPY\\ntail -2 /tmp/refine.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent additive-kernel readouts → H2 localized cross-panel interactions and shared scalar/trajectory relevance; current public MAEs are 0.042880 scalar and 0.055159 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a cubic v2 calibration\",\"rejected_reason\":\"It worsened the worst leave-one-row-out RMSE from 0.01033 to 0.01586.\"}],\"rationale\":\"Test whether sharing feature relevance with the scalar target and isolating cross-panel interactions reduces trajectory error across splits, not just on the public tail. Preserve the existing artifact until a challenger improves the bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7eb58d6cb7984d8a63e36db7a250d024c16a5c23f2f02e55d5da20636682a1c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56535.7,
+      "usage_known": true,
+      "prompt_tokens": 38038,
+      "cached_tokens": 9344,
+      "completion_tokens": 2217
+    }
+  ]
+}

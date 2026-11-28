@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19c4c4404aaa4272bf492022c49e07a8",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_05__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_05__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:07.772714+00:00",
+  "ended_at_utc": "2026-11-28T09:41:34.930406+00:00",
+  "request_sha256": "385c5b5d8118a94b2e489bdac22d373ab9334dbc86dbd39eb46bb66df61a1e2d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 36119,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25033,
+    "cached_tokens": 9344,
+    "completion_tokens": 1033
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact_readout.py <<'PY'\\nexec(open('/tmp/probe_readout.py').read().split(\\\"print('warp'\\\")[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import product\\nidx=np.arange(n)\\nfolds=[np.arange(52,72)]+list(np.array_split(np.random.default_rng(917).permutation(n),5))+[np.argsort(np.linalg.norm(x,axis=1))[-14:]]\\nu=x[:,1]-x[:,3]; P=np.c_[z[:,0]*z[:,2],z[:,1]*z[:,3]]\\nwarpf,warpa,W=b['_fit_panel'](s['panel_b']['u'],s['panel_b']['v']); print('operator',warpf,warpa,np.round(W,3))\\nfor label,B in [('z',np.c_[np.ones(n),z]),('xz',np.c_[np.ones(n),x,z]),('trajectory',np.c_[np.ones(n),z,T[:,[-1]]])]:\\n for i,j in product(range(2),repeat=2):\\n  A=np.c_[B,P[:,np.array([i,j],bool)]]\\n  for name,fun in [('sin',np.sin),('tanh',np.tanh)]:\\n   E=[]; pars=[]\\n   for v in folds:\\n    t=np.setdiff1d(idx,v)\\n    def calc(f,ret=False):\\n     F=np.c_[A,fun(f*u)]; w=np.linalg.lstsq(F[t],y[t],rcond=None)[0]; r=F@w-y\\n     return (np.mean(abs(r[v])), f, w,np.std(r[t])) if ret else r[t]@r[t]\\n    grid=np.linspace(.25,6,47); j0=np.argmin([calc(f) for f in grid]); f=minimize_scalar(calc,bounds=(grid[max(j0-1,0)],grid[min(j0+1,len(grid)-1)]),method='bounded').x\\n    e,f,w,tr=calc(f,True); E.append(e); pars.append(f)\\n   if i==j or max(E)<.052: print(label,i,j,name,np.round(E,4), 'freq',np.round(pars,2),'coef',np.round(w,3),'train',round(tr,4))\\n# Inspect centered trajectory shapes and whether a quadratic operator correction could matter.\\nprint('traj singular',np.round(np.linalg.svd(T-T.mean(0),compute_uv=False),4))\\nprint('y/terminal correlation',np.corrcoef(y,T[:,-1])[0,1]); print('operator residual scalar',np.std(y-np.c_[np.ones(n),z]@np.linalg.lstsq(np.c_[np.ones(n),z],y,rcond=None)[0]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic sparse dictionary → H2 compact calibrated-coordinate contrast plus operator pair products; the generic cross-stage search reached 0.0743 worst-fold scalar MAE at eight terms, above 0.038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the greedy dictionary directly\",\n      \"rejected_reason\": \"Terms varied across folds and the scalar MAE remained above tolerance. The calibrated contrast and two operator products recurred often enough to test jointly.\"\n    }\n  ],\n  \"rationale\": \"Profile each contrast frequency on training rows only and test the resulting compact readouts on held-out rows, including a high-coordinate-norm slice. The observed terminal trajectory is used only as a diagnostic to distinguish a missing trajectory correction from a scalar-specific interaction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "42d5003b83f7577b02b048839847c461dba981cbd42f5c2eb94f87e916df40cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29836.32,
+      "usage_known": true,
+      "prompt_tokens": 25033,
+      "cached_tokens": 9344,
+      "completion_tokens": 1033
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1df2e1ce13bd424a988b19d4da0f1e3b",
+  "call_seq": 13,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:57:45.701984+00:00",
+  "ended_at_utc": "2026-11-28T09:58:05.702267+00:00",
+  "request_sha256": "b7594e4e1c3184fd8df9871e9810f118bd4cbac00a86b6bf449fe0534cd7b5e2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76011,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40179,
+    "cached_tokens": 9344,
+    "completion_tokens": 709
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_batch.pkl', 'rb') as f:\\n    panel = pickle.load(f)[0]['study']['panel_a']\\nu, v = panel['u'], panel['v']\\nmask = np.linalg.norm(v, axis=1) < 5\\nu, v = u[mask], v[mask]\\nfull = m._calibration_basis(u)\\nquad = np.column_stack([np.ones(len(u)), u, *[u[:, i]*u[:, j] for i in range(4) for j in range(i,4)]])\\nerrors = []\\nfor i in range(len(u)):\\n    tr = np.arange(len(u)) != i\\n    w = np.stack([m._fit(full[tr,j],v[tr,j]) for j in range(4)])\\n    calibrated = np.sum(full[i]*w, axis=1)\\n    quadratic = quad[i] @ m._fit(quad[tr],v[tr])\\n    errors.append([np.linalg.norm(quadratic-v[i]),np.linalg.norm(calibrated-v[i])])\\na = np.array(errors)\\nprint('panel-A leave-one-inlier-out: rows=', len(u), 'median quadratic/cyclic-cubic=', np.median(a, axis=0), 'max=', a.max(axis=0))\\nassert np.median(a[:,1]) < .001 and np.median(a[:,1]) < .05*np.median(a[:,0])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: quadratic calibration → H2: cyclic cubic calibration with a compact interaction covariance; verified 52/20 MAEs are 0.02413 scalar and 0.01259 trajectory, with worst six-split trajectory MAE 0.07197.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the verified solver with a multistart variant\",\"rejected_reason\":\"Every tested variant exceeded the trajectory tolerance on the required split.\"}],\"rationale\":\"Leave the verified artifact unchanged. Test whether the calibration advantage holds on panel rows excluded from fitting; if it does not, leave the calibration finding unresolved rather than treating the schema pass as scientific evidence.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "b350db4c2dd0201eeb6da5c18074ead65563d524ad539ee89d708bb1120edbb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22630.85,
+      "usage_known": true,
+      "prompt_tokens": 40179,
+      "cached_tokens": 9344,
+      "completion_tokens": 709
+    }
+  ]
+}

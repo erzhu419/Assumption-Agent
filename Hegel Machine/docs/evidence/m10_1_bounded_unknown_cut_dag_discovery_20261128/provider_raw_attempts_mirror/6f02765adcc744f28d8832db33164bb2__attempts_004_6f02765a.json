@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f02765adcc744f28d8832db33164bb2",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:09.273386+00:00",
+  "ended_at_utc": "2026-11-28T09:19:52.065861+00:00",
+  "request_sha256": "db9b5209caf305ab3ef40d8638d309b73be26a6def5cc8cf8da19940bd7997cc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31426,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23376,
+    "cached_tokens": 9344,
+    "completion_tokens": 1534
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement, combinations\\nfrom scipy.linalg import solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; u,sv,v=np.linalg.svd(tr,full_matrices=False); z=tr@v[0]*v[0,-1]; Y=np.c_[y,z]\\ndef affine(p,k='v'):\\n d=np.c_[np.ones(len(p['u'])),p['u']]; v=p[k]; keep=np.ones(len(d),bool)\\n for _ in range(5):\\n  f=np.linalg.lstsq(d[keep],v[keep],rcond=None)[0]; r=np.linalg.norm(v-d@f,axis=1); keep=r<max(.001,3*np.median(r))\\n return f\\nA=affine(s['panel_a']); B=affine(s['panel_b']); C=affine(s['panel_c'],'v1')\\ndef forward(q,f):return q@f[1:]+f[0]\\ndef reverse(q,f):return (q-f[0])@np.linalg.inv(f[1:])\\ndef frames(x):\\n o={}\\n for name,q in [('x',x),('a-',reverse(x,A)),('a+',forward(x,A))]:\\n  o[name]=q\\n  for nm,M in [('b',B),('c',C)]:\\n   for sig,fn in [('+',forward),('-',reverse)]:o[name+nm+sig]=fn(q,M)\\n return o\\ndef poly(x,degree):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for d in range(1,degree+1) for j in combinations_with_replacement(range(4),d)])\\ndef kernel(q,ell,kind):\\n r=np.linalg.norm(q[:,None,:]-q[None,:,:],axis=2)/ell\\n if kind=='rbf':return np.exp(-r*r/2)\\n r*=np.sqrt(5);return (1+r+r*r/3)*np.exp(-r)\\nI=np.arange(72); splits=[(I[:52],I[52:])]; rng=np.random.default_rng(36)\\nfor i in range(5):\\n p=rng.permutation(I); splits.append((p[:52],p[52:]))\\ndef scores(K,D=None):\\n out=[]\\n for a,b in splits:\\n  L=K[np.ix_(a,a)]; R=K[np.ix_(b,a)]; co=solve(L,Y[a] if D is None else np.c_[Y[a],D[a]],assume_a='pos'); g=co[:,:2]\\n  if D is not None:\\n   w=co[:,2:]; beta=np.linalg.lstsq(D[a].T@w,D[a].T@g,rcond=1e-10)[0]; pred=R@(g-w@beta)+D[b]@beta\\n  else:pred=R@g\\n  out.append(np.mean(abs(pred-Y[b]),axis=0))\\n return np.array(out)\\nif __name__=='__main__':\\n np.set_printoptions(precision=4,suppress=True,linewidth=150)\\n P=poly(x,2); fit=np.linalg.lstsq(P,Y,rcond=None)[0]; H=np.zeros((2,4,4));\\n for (i,j),v0 in zip(combinations_with_replacement(range(4),2),fit[5:]):H[:,i,j]=H[:,j,i]=v0 if i==j else v0/2\\n print('quad Hess eigensystems',np.linalg.eigh(H)); print('y extreme samples',np.c_[x,y,z][np.argsort(y)[np.r_[0:7,-5:0]]]);\\n for nm,q in frames(x).items():\\n  ca=np.linalg.lstsq(poly(q,2),Y,rcond=None)[0]; print(nm,'quad linear',ca[1:5,0], 'square',ca[[5,9,12,14],0]);\\n  candidates=[]; D=poly(q,2)\\n  for ell in [.45,.85,1.4,2.4,4.]:\\n   for kind in ['rbf','m52']:\\n    K=kernel(q,ell,kind)\\n    for n in [1e-5,.0003,.003,.025]:\\n     for mode in ['iso','add','mix']:\\n      if mode=='iso': Q=K\\n      else:\\n       delta=(q[:,None,:]-q[None,:,:])/ell\\n       Ka=np.exp(-delta**2/2).sum(axis=-1)/4\\n       Q=Ka+(K*.25 if mode=='mix' else 0)\\n      val=scores(Q+n*np.eye(72),D); candidates.append((val,ell,kind,n,mode))\\n  for i in range(2):\\n   best=min(candidates,key=lambda r:.35*r[0][0,i]+.65*np.max(r[0][1:,i])); v0,*cfg=best; print(' target',i,cfg,'required / mean random / worst random',v0[0,i],v0[1:,i].mean(),v0[1:,i].max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (isotropic smoothing) -> H2 (calibrated additive or mixed operator response); archive 52/20 target/trajectory MAE is 0.060792/0.024955.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the archive scalar model\",\"rejected_reason\":\"It exceeds the 0.038 MAE limit on the required split.\"}],\"rationale\":\"Polynomial curvature tests whether a few directions dominate, while comparisons across calibration orders and repeated folds test whether panel-aligned structure improves on isotropic smoothing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "209387b3f0db7ea8db005f4dfcad14b48c86326f50bd4bd7a5d79b50cac24d79",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45449.43,
+      "usage_known": true,
+      "prompt_tokens": 23376,
+      "cached_tokens": 9344,
+      "completion_tokens": 1534
+    }
+  ]
+}

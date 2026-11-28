@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ae8770e942d415d8fd61e3a0f75c1ff",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:33:28.298605+00:00",
+  "ended_at_utc": "2026-11-28T09:34:02.041187+00:00",
+  "request_sha256": "cb524804dea6f66c988599444c8a4f92bac077aab408b8630c7b59ae9c1d6022",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35649,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23064,
+    "cached_tokens": 9344,
+    "completion_tokens": 1390
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cr\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=52\\nx=np.r_[s['train']['x'],s['test']['x']]; tr=s['train']['traj']; y=s['train']['y']; t=s['eval_times']; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\na=lambda z:np.c_[np.ones(len(z)),z]; q=lambda z:np.column_stack((a(z),*(np.prod(z[:,i],axis=1) for i in cr(range(z.shape[1]),2))))\\nbasis=lambda r:-np.expm1(-t[:,None]*r)\\nr=least_squares(lambda r:(basis(r)@fit(basis(r),tr[:n].T)-tr[:n].T).ravel(),[1.8,.41]).x\\nB=np.linalg.qr(basis(r))[0]; Y=np.c_[y,tr@B]\\nu,v=s['panel_a'].values(); keep=np.arange(len(u))\\nfor i in range(4):\\n beta=fit(a(u[keep]),v[keep]); e=np.linalg.norm(a(u)@beta-v,axis=1);keep=np.argsort(e)[:38]\\nprint('A',beta,'sorted residuals',np.sort(e)); print('A diagonal alternative', [fit(a(u[keep,j:j+1]),v[keep,j]) for j in range(4)])\\nbu,bv=s['panel_b'].values(); bb=fit(a(bu),bv); print('B',bb)\\nu,v1,v2=s['panel_c'].values(); maps={}\\nfor j,v in enumerate([v1,v2],1):\\n for name,fn in [('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('sin+cos',lambda w:np.c_[np.sin(w),np.cos(w)]),('rational',lambda w:1/(1+w*w))]:\\n  f=lambda z,r:np.c_[a(z),fn(z*r)]\\n  obj=lambda r:(f(u,r)@fit(f(u,r),v)-v).ravel()\\n  opt=min((least_squares(obj,[p]*4,bounds=(.15,6)) for p in [.8,1.5,2.5]),key=lambda o:np.linalg.norm(o.fun)); rr=opt.x; d=f(u,rr); co=fit(d,v)\\n  loo=np.mean(abs(opt.fun.reshape(-1,4)/(1-np.sum(np.linalg.qr(d)[0]**2,axis=1))[:,None])); print(j,name,rr,np.mean(abs(opt.fun)),loo)\\n  if (j,name) in [(1,'tanh'),(2,'cos'),(2,'sin+cos')]:\\n   print(co);maps[str(j)+name]=lambda z,rr=rr,fn=fn,co=co:np.c_[a(z),fn(z*rr)]@co\\nprint('CV terms: y,traj')\\nz0=a(x)@beta; coords={'x':x,'A':z0,'Bx':a(x)@bb,'BA':a(z0)@bb}\\nfor key,m in maps.items():\\n for label,z in list(coords.items())[:4]:coords[key+label]=m(z)\\ndef cv(p,ker=None):\\n coef=fit(p[:n],Y[:n]) if ker is None else fit(np.linalg.cholesky(ker[:n,:n]+.003*np.eye(n)),np.c_[p[:n],Y[:n]])\\n if ker is None: pred=p[n:72]@coef\\n else:\\n  w=fit(coef[:,:p.shape[1]],coef[:,p.shape[1]:]);pred=p[n:72]@w+ker[n:72,:n]@np.linalg.solve(ker[:n,:n]+.003*np.eye(n),Y[:n]-p[:n]@w)\\n return np.mean(abs(pred[:,0]-y[n:])),np.mean(abs(pred[:,1:]@B.T-tr[n:]))\\nk=np.exp(-.08*cdist(x,x,'sqeuclidean'))\\nfor label,z in coords.items():print(label,cv(a(z)),cv(q(z)),cv(q(z),k));\\nfor label in list(coords)[4:]:\\n for label2 in ('x','A','Bx','BA'):\\n  z=coords[label];w=coords[label2]; pp=np.c_[q(w),z]; print(label,label2,cv(pp),cv(pp,k))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived panel-B graph → H2 retain two relaxation modes and identify the spatial readout; temporal projection MAE is 0.00351, while archive forecast MAE is 0.06189 on both outputs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the relaxation basis\",\n      \"rejected_reason\": \"Its projection error is an order of magnitude below the required forecast tolerance.\"\n    }\n  ],\n  \"rationale\": \"Compare panel laws and compositions on the public split to see which, if any, predicts the spatial amplitudes and scalar readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "69323fc44d8eb0f983ca22cf675f22d3566a314e3c5db09b5d269a50539b269d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39089.69,
+      "usage_known": true,
+      "prompt_tokens": 23064,
+      "cached_tokens": 9344,
+      "completion_tokens": 1390
+    }
+  ]
+}

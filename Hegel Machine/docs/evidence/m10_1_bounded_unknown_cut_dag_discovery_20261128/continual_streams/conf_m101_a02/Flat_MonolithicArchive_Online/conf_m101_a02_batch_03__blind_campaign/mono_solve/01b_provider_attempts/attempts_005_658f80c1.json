@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "658f80c10c0f4c1da6f56a88c74e3f8f",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:35.062777+00:00",
+  "ended_at_utc": "2026-11-28T09:31:07.892978+00:00",
+  "request_sha256": "e8e370140891266e47d84d0045ae8c04f3908dacbf1d2e71e8b5e473e22106c2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38511,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24720,
+    "cached_tokens": 9344,
+    "completion_tokens": 1429
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m101_a02_batch_01_solver.py; cat > /tmp/graph_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nfit=lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef pol(x,d):\\n return np.column_stack([np.prod(x[:,p],axis=1) for k in range(d+1) for p in itertools.combinations_with_replacement(range(4),k)])\\ndef calibration(p):\\n u,v=p['u'],p['v']; a=aff(u); keep=np.ones(len(u),bool)\\n for _ in range(3):\\n  r=np.linalg.norm(a@fit(a[keep],v[keep])-v,axis=1); keep=r<3*np.median(r)\\n j=np.roll(u,-1,axis=1); D=np.stack([np.ones_like(u),u,j,u*j,u**3],2)\\n c=np.column_stack([fit(D[keep,i],v[keep,i]) for i in range(4)])\\n print('calibration',c,'inlier rms',np.std(np.sum(D[keep]*c.T,axis=2)-v[keep])); return c\\ndef invert(x,c):\\n u=(x-c[0])/c[1]; i=np.arange(4); j=(i+1)%4\\n for _ in range(30):\\n  uj=u[:,j]; r=c[0]+c[1]*u+c[2]*uj+c[3]*u*uj+c[4]*u**3-x; J=np.zeros((len(x),4,4)); J[:,i,i]=c[1]+c[3]*uj+3*c[4]*u**2; J[:,i,j]=c[2]+c[3]*u\\n  u-=np.linalg.solve(J,r[...,None])[...,0]\\n print('inverse max residual',np.max(np.abs(r))); return u\\nx=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; m=52\\nc=calibration(s['panel_a']); u=invert(x,c); p=s['panel_b']; b=fit(aff(p['u']),p['v']); z=aff(u)@b\\n\\ndef library(a):\\n a0,a1,a2,a3=a.T; pair=a0*a2+a1*a3; h=a0+a1-a2-a3\\n return np.c_[aff(a),pair,np.sin(.2*h),np.tanh(h),pair/(1+h*h)]\\ndef report(name,D):\\n c=fit(D[:m],np.c_[y,T][:m]); pred=D@c; E=np.abs(pred-np.c_[y,T]); print(name,D.shape[1],'fit',np.round([E[:m,0].mean(),E[:m,1:].mean()],5),'52/20',np.round([E[m:,0].mean(),E[m:,1:].mean()],5))\\nfor n,a in [('raw',x),('cal',u),('mixer',z)]:\\n for d in [1,2,3]: report(n+str(d),pol(a,d))\\n report(n+'archive readout',library(a))\\np=s['panel_c']; a=p['u']\\nfor k in ['v1','v2']:\\n v=p[k]; print('C',k)\\n for tag,D in [('diag quad',np.c_[aff(a),a**2]),('diag cubic',np.c_[aff(a),a**2,a**3]),('odd cubic',np.c_[aff(a),a**3]),('harmonic',np.c_[aff(a),np.sin(1.7*a),np.cos(1.7*a)]),('tanh',np.c_[aff(a),np.tanh(a)])]:\\n  cf=fit(D,v); e=D@cf-v; h=np.sum(D*np.linalg.pinv(D).T,axis=1); print(tag,np.std(e),np.std(e/(1-h[:,None])))\\n for d in [1,2]:\\n  cf=fit(pol(a,d),v)\\n  for tag,q in [('x',x),('u',u),('z',z)]:\\n   w=pol(q,d)@cf; report('C '+k+str(d)+'('+tag+')',np.c_[aff(z),w]); report('C nonlinear '+k+str(d)+'('+tag+')',library(w))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse cyclic cubic calibration → calibrated coordinate and operator comparisons; panel-A cubic leave-one-out RMS is 0.000328 versus 0.202 for trimmed affine calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the full cubic fit\",\n      \"rejected_reason\": \"Only the cyclic neighbor, pair product, and self-cubic terms have substantial coefficients; smaller terms can harm extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Check that the sparse inverse converges on observed inputs, then compare scalar and trajectory errors separately on the prescribed split. Panel-C leave-one-out residuals will show whether its nonlinear fits are reliable enough to include.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c34a309c82bd21ee9fa8cb60a06a6b538cb754680f525e703c517d432b8af8de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38128.71,
+      "usage_known": true,
+      "prompt_tokens": 24720,
+      "cached_tokens": 9344,
+      "completion_tokens": 1429
+    }
+  ]
+}

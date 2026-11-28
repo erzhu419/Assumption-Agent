@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d75587dd2c1c42208aacca5b2f4dab15",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:18.150981+00:00",
+  "ended_at_utc": "2026-11-28T09:45:01.898381+00:00",
+  "request_sha256": "dee54e2b194b8f17754231c9e471fdf030492610107a94426a4911451d66f63c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47948,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30033,
+    "cached_tokens": 9344,
+    "completion_tokens": 1803
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-calibrated rational readout and low-rank trajectory prediction.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(f, y):\\n    return np.linalg.lstsq(f, y, rcond=None)[0]\\n\\n\\ndef _coordinates(panel, x):\\n    u, v = panel['u'], panel['v']\\n    keep = np.arange(len(u))\\n    for step in range(5):\\n        coeff = np.array([_fit(_affine(u[keep, j:j+1]), v[keep, j])\\n                          for j in range(u.shape[1])])\\n        if step < 4:\\n            err = np.linalg.norm(coeff[:, 0] + u * coeff[:, 1] - v, axis=1)\\n            keep = np.argsort(err)[:round(.9375 * len(u))]\\n    return (x - coeff[:, 0]) / coeff[:, 1]\\n\\n\\ndef _operator(panel, z, compact=False):\\n    u, v = panel['u'], panel['v']\\n    if compact:\\n        def design(w, p):\\n            return _affine(w * (p[1] - w*w) / (1 + np.exp(p[0])*w*w))\\n        start = [-.24, .05]\\n    else:\\n        def design(w, p):\\n            return np.column_stack((_affine(w), w / (1 + np.exp(p)*w*w)))\\n        start = [-.24, 0., 0., 0.]\\n\\n    def residual(p):\\n        f = design(u, p)\\n        return (f @ _fit(f, v) - v).ravel()\\n\\n    p = least_squares(residual, start, bounds=(-5, 5), max_nfev=100).x\\n    return design(z, p) @ _fit(design(u, p), v)\\n\\n\\ndef _scalar(b, y, full):\\n    n = len(y)\\n    w = b / b[:n].std(axis=0)\\n    linear = _affine(w)\\n    numerator = np.column_stack((linear, w[:, 0]*w[:, 2], w[:, 1]*w[:, 3]))\\n    base = numerator if full else linear\\n\\n    def design(rows, p):\\n        den = 1 + (linear[rows] @ p)**2\\n        return np.column_stack((base[rows], numerator[rows] / den[:, None]))\\n\\n    def residual(p):\\n        f = design(slice(n), p)\\n        return np.r_[f @ _fit(f, y) - y, 1e-5*p]\\n\\n    k = _fit(linear[:n], y)\\n    starts = [k*.3, k, k*2, *(np.eye(5)[1:] * .7)]\\n    p = min((least_squares(residual, init, bounds=(-8, 8), max_nfev=90)\\n             for init in starts), key=lambda sol: sol.cost).x\\n    return design(slice(n, None), p) @ _fit(design(slice(n), p), y)\\n\\n\\ndef _trajectory(features, observed):\\n    n = len(observed)\\n    center = observed.mean(axis=0)\\n    centered = observed - center\\n    modes = np.linalg.svd(centered, full_matrices=False)[2][:2]\\n    weights = _fit(features[:n], centered @ modes.T)\\n    return center + features[n:] @ weights @ modes\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    z = _coordinates(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    b = _operator(study['panel_b'], z)\\n    compact = _operator(study['panel_b'], z, compact=True)\\n    y = .55*_scalar(b, train['y'], True) + .45*_scalar(b, train['y'], False)\\n    state = .5*_trajectory(np.column_stack((_affine(z), b)), train['traj'])\\n    state += .5*_trajectory(_affine(compact), train['traj'])\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/stress05.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=m._coordinates(s['panel_a'],tr['x']); rng=np.random.default_rng(9026)\\nslices=[('52/20',np.arange(52),np.arange(52,72)),('56/16',np.arange(56),np.arange(56,72))]; slices += [('random'+str(k),p[:56],p[56:]) for k,p in enumerate([rng.permutation(72) for _ in range(12)])]\\nfor name,val in [('norm',np.linalg.norm(z,axis=1)),*[(f'{j}{sign:+}',sign*z[:,j]) for j in range(4) for sign in (-1,1)]]:\\n p=np.argsort(val); slices.append((name,p[:-16],p[-16:]))\\nfor name,i,j in slices:\\n ss=dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':tr['x'][j]}); out=m.solve_batch(ss); ye=np.abs(out['y_hat']-tr['y'][j]); se=np.abs(out['state_pred']-tr['traj'][j]); print(name,*(f'{x:.5f}' for x in (ye.mean(),se.mean(),se[:,-1].mean())))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 flexible panel-B rational readout → H2 blend full and compact numerators with independent low-rank trajectory prediction; compact-numerator scalar MAE was 0.02019 on 52/20 and 0.02502 on the worst ordinary split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use the full operator and full numerator alone\",\"rejected_reason\":\"That combination reached 0.05004 MAE on the high-norm slice; the compact numerator with the unshifted operator achieved 0.02474 there.\"}],\"rationale\":\"Save the passing model and test its exact implementation on fresh splits and coordinate extremes; if the blend loses its margin there, choose a more stable numerator or operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7958bc1f52102be1ba6e1dc8fa3414769d8ae4d89c5bf32ec829542370e02daf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46362.63,
+      "usage_known": true,
+      "prompt_tokens": 30033,
+      "cached_tokens": 9344,
+      "completion_tokens": 1803
+    }
+  ]
+}

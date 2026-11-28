@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b0deb1df9df485c9af28081a9b43133",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:34:38.649109+00:00",
+  "ended_at_utc": "2026-11-28T09:35:14.968407+00:00",
+  "request_sha256": "e759a1140302097933b4e85b885de9bc71e4ef0772e1cabf0806de9c88218f89",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53158,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32696,
+    "cached_tokens": 9344,
+    "completion_tokens": 1400
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/for nm,F in /,$d' /tmp/predict_probe.py > /tmp/readout_probe.py; cat >> /tmp/readout_probe.py <<'PY'\\nfrom sklearn.linear_model import Lasso\\nfrom scipy.optimize import minimize\\nV=c['v1']; U=c['u'];\\nfor tag,init,fn in [('soft', [1.],lambda a,q:a/(1+q[0]*abs(a))),('softpow',[1.,1.1],lambda a,q:a/(1+q[0]*abs(a)**q[1])),('saturate',[1.,1.],lambda a,q:a/(1+q[0]*abs(a))**q[1]),('rat',[1.],lambda a,q:a/(1+q[0]*a*a)),('atan',[2.],lambda a,q:np.arctan(q[0]*a)),('asinh',[2.],lambda a,q:np.arcsinh(q[0]*a)),('tanh_shift',[2.2,0.],lambda a,q:np.tanh(q[0]*a+q[1])),('softlin',[1.,1.1],lambda a,q:np.c_[a,a/(1+q[0]*abs(a)**q[1])]),('softshift',[1.,0.],lambda a,q:(a+q[1])/(1+q[0]*abs(a+q[1]))),('signsqrt',[1.,1.],lambda a,q:a/(1+q[0]*abs(a)**q[1])**.5)]:\\n def res(q):\\n  D=aff(fn(U,q));return (D@fit(D,V)-V).ravel()\\n sol=least_squares(res,init,bounds=([.02]+[-2.]*(len(init)-1),[12.]+[5.]*(len(init)-1)),max_nfev=140); D=aff(fn(U,sol.x)); fp=aff(fn(z,sol.x))@fit(D,V)\\n print('PANEL',tag,sol.x,np.linalg.norm(sol.fun),flush=True); ops[tag]=(fp,None)\\ng=ops['cos'][0]; ii,jj=np.triu_indices(12); labels=['x'+str(i) for i in range(4)]+['f'+str(i) for i in range(4)]+['g'+str(i) for i in range(4)]; labels+= [labels[i]+'*'+labels[j] for i,j in zip(ii,jj)]\\nfor tag in ['soft','softpow','softlin','tanh']:\\n F=quad(np.c_[z,ops[tag][0],g]); print('REG',tag,flush=True)\\n for alpha in [.000015,.00005,.00015,.0005]:\\n  errors=[]; train_res=[]; coefs=[]\\n  for tr,te,E,Y in spl:\\n   mu=F[tr].mean(0); sd=F[tr].std(0); D=(F-mu)/sd; A=D[tr]; W=(Y-Y.mean(0))/Y.std(0)\\n   C=np.stack([ElasticNet(l1_ratio=.94,alpha=alpha,max_iter=60000,tol=3e-7).fit(A,w).coef_ for w in W.T],axis=1)\\n   P=(D[te]@C)*Y.std(0)+Y.mean(0)\\n   errors.append([np.mean(abs(P[:,0]-y[te])),np.mean(abs(P[:,1:]@E.T-T[te]))]); train_res.append(np.sqrt(np.mean((A@C-W)**2,axis=0))); coefs.append(C*Y.std(0)/sd[:,None])\\n  error=np.array(errors); print(alpha,error[0],np.max(error,axis=0),train_res[0],flush=True)\\n  if alpha==.00015:\\n   for j in range(4):\\n    cs=np.stack(coefs)[:,:,j]; inds=np.argsort(abs(np.median(cs,axis=0)))[-14:][::-1];print(j,' '.join('%s:%.3f/%.3f'%(labels[i],np.median(cs[:,i]),np.std(cs[:,i])) for i in inds),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/readout_probe.py | grep -E '^(PANEL|REG|0\\\\.000|[0-3] |1\\\\.5e-05|5e-05)'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 tanh auxiliary map and broad quadratic readout -> H2 rational saturation and stable readout terms; the current 52/20 response and trajectory MAEs are 0.0350 and 0.0570.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the existing LARS supports without changing the features\",\n      \"rejected_reason\": \"The observed supports vary across nearby panel approximations, and the refits still miss the trajectory threshold.\"\n    }\n  ],\n  \"rationale\": \"Fit rational saturation independently on panel C, then inspect term stability across the existing folds. Stable terms will support a compact refit; unstable but accurate fits will favor regularization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0f3bffbd25427896310ec92c031284a371511645d6b0a2d96fc84ddf1d048a1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38976.02,
+      "usage_known": true,
+      "prompt_tokens": 32696,
+      "cached_tokens": 9344,
+      "completion_tokens": 1400
+    }
+  ]
+}

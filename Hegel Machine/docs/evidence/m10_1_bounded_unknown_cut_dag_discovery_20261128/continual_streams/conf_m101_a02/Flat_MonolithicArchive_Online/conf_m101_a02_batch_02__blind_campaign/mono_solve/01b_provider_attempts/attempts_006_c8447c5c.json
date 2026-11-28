@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c8447c5c60e1480c8c79a507e7b55375",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:38.498607+00:00",
+  "ended_at_utc": "2026-11-28T09:25:46.473099+00:00",
+  "request_sha256": "a1a00afceb8c1730dc51b2aebfbefcfffd0ffab6b214f049bb61faeaf1b0a004",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43807,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28131,
+    "cached_tokens": 9344,
+    "completion_tokens": 1054
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/for name,w in/,$d' /tmp/probe.py >/tmp/readout.py; cat >>/tmp/readout.py <<'PY'\\nfrom sklearn.model_selection import KFold\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\nfrom scipy.optimize import least_squares\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+list(KFold(5,shuffle=True,random_state=785).split(y))\\ndef cv(D,ridge=0):\\n vals=[]\\n for i,j in splits:\\n  if ridge:\\n   c=np.linalg.solve(D[i].T@D[i]+ridge*np.diag(np.r_[np.zeros(5),np.ones(D.shape[1]-5)]),D[i].T@y[i]);\\n  else: c=fit(D[i],y[i]);\\n  vals.append(np.mean(np.abs(D[j]@c-y[j])))\\n return np.round([*vals[:2],np.mean(vals[2:]),max(vals[2:])],5)\\nfor name,w in [('a',a),('b',z)]:\\n d=poly(w,3); terms=[''.join(map(str,k)) for j in range(4) for k in combinations_with_replacement(range(4),j)];print(name,'coefficients for degrees 2,3:');print(list(zip(terms[5:],np.round(fit(d[:52],y[:52])[5:],4),np.round(fit(d,y)[5:],4))));\\n for r in [0,.001,.01,.03,.1,.3,1]:print('cubic ridge',r,cv(d,r))\\n for nterm in [2,3,4,5,6,8,10,14,20]:\\n  vals=[]; names=[]\\n  for i,j in splits:\\n   F=d[:,:5]; H=d[:,5:]; H=H-F@fit(F[i],H[i]); Y=y-F@fit(F[i],y[i]); norm=np.linalg.norm(H[i],axis=0); h=H/norm; m=OrthogonalMatchingPursuit(n_nonzero_coefs=nterm,fit_intercept=False).fit(h[i],Y[i]); selected=np.flatnonzero(m.coef_); D=np.c_[F,H[:,selected]]; vals.append(np.mean(abs(D[j]@fit(D[i],y[i])-y[j])));names.append([terms[k+5] for k in selected]);\\n  print('OMP',nterm,np.round([*vals[:2],np.mean(vals[2:]),max(vals[2:])],5),names[0])\\n # Identify quadratic and cubic interaction tensors in the native coordinates.\\n for j in [0,1,2,3]:\\n  e=y-d[:,:5]@fit(d[:,:5],y); print('coordinate',j,'grouped residuals',[(round(float(w[k,j]),3),round(float(e[k]),3)) for k in np.argsort(w[:,j])[::6]])\\nprint('telemetry',s['telemetry_vec'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear auxiliary branches → H2 sparse interactions in the calibrated coordinates; the best tested scalar model gives 0.046811 MAE on 52/20, while affine trajectory MAE is 0.004210.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add the measured panel C outputs as unrestricted covariates\",\n      \"rejected_reason\": \"The tested additive and composed panel C models did not beat the cubic on held-out scalar error.\"\n    }\n  ],\n  \"rationale\": \"Compare cubic coefficients across fitting subsets to identify stable interaction terms. Select sparse terms inside each fold and compare them with ridge; if neither clears the gate, use the coefficient patterns to design a compact nonlinear readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "70aee91c90da4b2916e34586b48799524bdadb05433747f2235bda947cbd8bc0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 75786.66,
+      "usage_known": true,
+      "prompt_tokens": 28131,
+      "cached_tokens": 9344,
+      "completion_tokens": 1054
+    }
+  ]
+}

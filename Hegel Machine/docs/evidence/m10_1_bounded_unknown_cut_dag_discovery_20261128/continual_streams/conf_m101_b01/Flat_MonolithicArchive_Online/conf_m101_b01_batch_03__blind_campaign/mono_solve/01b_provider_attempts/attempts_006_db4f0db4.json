@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db4f0db4505e455e8ad388f8ce9e0899",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:31:58.784612+00:00",
+  "ended_at_utc": "2026-11-28T09:32:46.594403+00:00",
+  "request_sha256": "36bb0c3825c2b04d3ebe02396479de340139f0d50edabb9cd74358ba4941c11a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44348,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28636,
+    "cached_tokens": 9344,
+    "completion_tokens": 2114
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chain03.py <<'PY'\\nfrom discover03 import *\\nfrom scipy.special import hyp2f1,erf\\n\\ndef a_design(q,j):\\n a=q[:,j]; b=q[:,(j+1)%4]; return np.c_[np.ones(len(q)),a,b,a*b,a**3]\\nidx=e<1\\nAA=np.column_stack([L(a_design(u[idx],j),v[idx,j],rcond=None)[0] for j in range(4)])\\ndef calibrate(q):\\n cur=(q-A[0])@np.linalg.inv(A[1:]); j=np.arange(4); k=(j+1)%4\\n for _ in range(20):\\n  J=np.zeros((len(q),4,4)); J[:,j,j]=AA[1]+AA[3]*cur[:,k]+3*AA[4]*cur**2; J[:,j,k]=AA[2]+AA[3]*cur\\n  err=np.column_stack([a_design(cur,i)@AA[:,i] for i in j])-q\\n  step=np.linalg.solve(J,err[:,:,None])[:,:,0];cur-=step/np.maximum(1,np.max(abs(step),axis=1,keepdims=True)/.3)\\n return cur,np.max(abs(err),axis=1)\\nuc=pc['u']; c1=pc['v1']; c2=pc['v2']\\nphis={'atan':lambda q,p:np.arctan(q*np.exp(p[0])), 'asinh':lambda q,p:np.arcsinh(q*np.exp(p[0])), 'tanh':lambda q,p:np.tanh(q*np.exp(p[0])), 'erf':lambda q,p:erf(q*np.exp(p[0])), 'rational':lambda q,p:q/(1+np.exp(p[0])*q*q)**np.exp(p[1]), 'integral':lambda q,p:q*hyp2f1(.5,np.exp(p[1]),1.5,-np.exp(p[0])*q*q), 'softsign':lambda q,p:q/(1+np.exp(p[0])*abs(q))}\\nfits={}\\nfor n,phi in phis.items():\\n def make(p,q):return D(phi(q,p))\\n def fun(p):\\n  m=make(p,uc);return (m@L(m,c1,rcond=None)[0]-c1).ravel()\\n f=least_squares(fun,[0.,0.] if n in ('rational','integral') else [0.],bounds=(-4,4),max_nfev=100)\\n fits[n]=(f.x,L(make(f.x,uc),c1,rcond=None)[0]); print('C1',n,f.x,np.std(f.fun))\\n\\ndef p4(q):return np.c_[D(q),q*q,q**3,q**4]\\nC4=L(p4(uc),c2,rcond=None)[0]; print('A coefs',AA,'A inlier rms',np.sqrt(np.mean((np.column_stack([a_design(u[idx],i)@AA[:,i] for i in range(4)])-v[idx])**2))); print('C2 powers',np.round(C4,4));\\ndef C1(q,n):\\n p,w=fits[n];return D(phis[n](q,p))@w\\n\\ndef c2fit(name,phi,p0):\\n def fun(p):\\n  m=D(phi(uc,p));return (m@L(m,c2,rcond=None)[0]-c2).ravel()\\n f=least_squares(fun,p0,bounds=(-5,5),max_nfev=100)\\n print('C2 sep',name,f.x,np.std(f.fun));return lambda q:D(phi(q,f.x))@L(D(phi(uc,f.x)),c2,rcond=None)[0]\\nC2s={\\n 'poly':c2fit('poly',lambda q,p:q+p[0]*q*q+p[1]*q**3+p[2]*q**4,[.45,0,0]),\\n 'tanh':c2fit('tanh',lambda q,p:np.tanh(np.exp(p[0])*(q+p[1])),[0,-.8]),\\n 'erf':c2fit('erf',lambda q,p:erf(np.exp(p[0])*(q+p[1])),[0,-.8]),\\n 'sqrat':c2fit('sqrat',lambda q,p:(q+p[1])/(1+np.exp(p[0])*(q+p[1])**2)**np.exp(p[2]),[0,-.8,-.6]),\\n 'squared':c2fit('squared',lambda q,p:q+p[0]*q**2+p[1]*(q+p[0]*q**2)**2,[.45,.02]),\\n 'ratquad':c2fit('ratquad',lambda q,p:(q+p[0]*q*q)/(1+np.exp(p[1])*q*q),[.45,-4]),\\n}\\nzz,ee=calibrate(x); print('inverse errors',np.quantile(ee,[0,.9,1]),'bounds',zz.min(0),zz.max(0)); bb=D(zz)@B\\nH=timefit(T[:52],'2exp')[1]; V=np.c_[y,T@np.linalg.pinv(H.T)]\\ncoords={'a':zz,'ab':bb}\\nfor tag,q in list(coords.items()):\\n for n in ('rational','integral','asinh'):coords[tag+'1'+n]=C1(q,n)\\n coords[tag+'2']=p4(q)@C4;coords[tag+'2sep']=C2s['poly'](q)\\n if tag=='ab':\\n  for n,fn in C2s.items():coords[tag+'2'+n]=fn(q)\\nfor key in [k for k in coords if k.startswith('ab1') or k=='ab2']:\\n q=coords[key];coords[key+'2']=p4(q)@C4;coords[key+'1']=C1(q,'rational')\\nres=[]\\nfor k,q in coords.items():\\n for typ,G in [('lin',D(q)),('quad',F(q,2)),('cub',F(q,3)),('tanh',F(np.tanh(q),2)),('sin',F(np.sin(q),2)),('sep3',np.c_[D(q),q**2,q**3]),('pair',np.c_[D(q),q[:,:2]*q[:,2:]]),('quart',p4(q))]:\\n  p=G@L(G[:52],V[:52],rcond=None)[0]; res.append((np.mean(abs(p[52:,0]-y[52:])),np.mean(abs(p[52:,1:]@H.T-T[52:])), k, typ,np.mean(abs(p[:52]-V[:52]),0)))\\nprint('best y',*sorted(res,key=lambda a:a[0])[:12],sep='\\\\n');print('best traj',*sorted(res,key=lambda a:a[1])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chain03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: invert the compact nonlinear calibration before testing auxiliary-panel composition; panel A leave-one-out RMSE fell from 0.07063 with quadratics to 0.000155 with coordinate-wise cubics, while downstream 52/20 MAEs remain unverified under the corrected calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert an unrestricted full cubic calibration\",\n      \"rejected_reason\": \"The compact quadratic-plus-coordinate-cubic basis has lower panel leave-one-out error; the coefficient pattern supports testing an even smaller cyclic basis first.\"\n    }\n  ],\n  \"rationale\": \"The forward calibration can fit closely yet still invert poorly, so the probe measures inversion residuals before attributing downstream errors to the readouts. With the corrected coordinates, held-out readout and trajectory MAEs distinguish active panel chains from panels that merely fit their own observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e714062f782a867c2e9b8ef4dee5c1f192ba447eb7071d7082cab4ccb76c4e84",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53100.12,
+      "usage_known": true,
+      "prompt_tokens": 28636,
+      "cached_tokens": 9344,
+      "completion_tokens": 2114
+    }
+  ]
+}

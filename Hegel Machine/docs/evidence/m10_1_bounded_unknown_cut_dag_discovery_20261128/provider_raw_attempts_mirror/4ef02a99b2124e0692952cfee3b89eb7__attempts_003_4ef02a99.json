@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ef02a99b2124e0692952cfee3b89eb7",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:01.027954+00:00",
+  "ended_at_utc": "2026-11-28T09:28:20.106119+00:00",
+  "request_sha256": "cd692516750a210894248369981033469832d26a5f17f35eea8f8c85f13c883f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21446,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18884,
+    "cached_tokens": 9344,
+    "completion_tokens": 709
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for f in /tmp/hegel_continual_archive/*_0[12]_solver.py; do echo \\\"=== $f ===\\\"; cat \\\"$f\\\"; done; cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\nprint('times, telemetry, summary',s['eval_times'],s['telemetry_vec'],s['train']['summary']); u,v=(s['panel_a'][k] for k in ('u','v')); m=np.ones(len(u),bool)\\nfor it in range(8):\\n q=np.c_[np.ones(len(u)),u]; h=np.linalg.lstsq(q[m],v[m],rcond=None)[0]; r=np.linalg.norm(q@h-v,axis=1); m=r<=5*np.median(r)\\nprint('robust affine',m.sum(),h,'residuals',np.quantile(r[m],[0,.5,1]));\\nfor i in range(4):\\n for d in (1,2,3,4):\\n  q=np.polynomial.polynomial.polyvander(u[:,i],d); c=np.linalg.lstsq(q[m],v[m,i],rcond=None)[0]; print('diag',i,d,'rms',np.std((v[:,i]-q@c)[m]),c)\\nT=s['train']['traj']; x=s['train']['x']; y=s['train']['y']; print('x ranges',x.min(0),x.max(0)); print('correlation y and trajectory',np.corrcoef(np.c_[y,T].T)[0]); print('temporal SVD vectors',np.linalg.svd(T,full_matrices=False)[2][:2]); print('trajectory excerpts',np.c_[y,T][:8]);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived graph transfer -> robust calibration and shared temporal basis; current baseline gate MAE is 0.182398 for scalar and 0.134024 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the untrimmed affine calibration\",\n      \"rejected_reason\": \"Its four residual RMS values are all near 1.5, and the row residuals have a sharp upper tail; isolate contamination before selecting the calibration law.\"\n    }\n  ],\n  \"rationale\": \"Compare trimmed affine and diagonal polynomial fits to determine whether the large calibration residuals require nonlinear inversion or only outlier rejection. Retrieve the untruncated archived operator formulas and identify the leading temporal modes before fitting readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "21ae578b401637798ac96ab3b6121f12ecf2b5edda98b0dec798ff54df2d2a4f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21714.67,
+      "usage_known": true,
+      "prompt_tokens": 18884,
+      "cached_tokens": 9344,
+      "completion_tokens": 709
+    }
+  ]
+}

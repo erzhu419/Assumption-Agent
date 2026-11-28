@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0db5d0fc784b4a7fb32fc5b2fd67ca70",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_01__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:29.855290+00:00",
+  "ended_at_utc": "2026-11-28T09:21:08.077349+00:00",
+  "request_sha256": "e6f1cc629f8714232ba785d04e68b295dec3f2315d5d3041ae8f3ef62715e1ac",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40516,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27077,
+    "cached_tokens": 9344,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/profile_readout.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split(\\\"print('ranges'\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nrng=np.random.default_rng(12)\\nbase=affine(z); quad=poly(z,2)\\nterms={'one':np.ones(len(x)),**{f'x{i}':x[:,i] for i in range(4)},**{f'z{i}':z[:,i] for i in range(4)}}\\nfs={'tanh':np.tanh,'sin':np.sin,'rat':lambda u:u/(1+u*u),'soft':lambda u:u/np.sqrt(1+u*u)}\\nxa=affine(x)\\nseeds=[np.r_[0,v] for v in np.r_[np.eye(4),[[0,1,0,-1],[1,0,0,0],[0,0,1,-1],[0,1,0,1],[1,1,1,1]],rng.normal(size=(8,4))]]\\nseeds+= [np.linalg.lstsq(xa,d,rcond=None)[0] for d in [z[:,2]-z[:,3],z[:,0]+z[:,1],z[:,0]-z[:,1],z[:,2]+z[:,3],z[:,1]]]\\nix=np.arange(52)\\ndef fit(B,spec,pp,ix,maxn=140):\\n def make(p):\\n  F=[B]\\n  for j,(op,am) in enumerate(spec):\\n   u=xa@p[5*j:5*j+5]; F.append((fs[op](u)*terms[am])[:,None])\\n  return np.column_stack(F)\\n def res(p):\\n  F=make(p)[ix]; return y[ix]-F@np.linalg.lstsq(F,y[ix],rcond=None)[0]\\n opt=least_squares(res,np.clip(pp,-5,5),bounds=(-6,6),max_nfev=maxn,ftol=2e-8)\\n F=make(opt.x); c=np.linalg.lstsq(F[ix],y[ix],rcond=None)[0]; return np.linalg.norm(opt.fun),opt.x,F,c\\n\\ndef report(label,res):\\n err,p,F,c=res; print(label,'rmse/official',round(err/np.sqrt(len(ix)),5),round(np.mean(np.abs(y[52:]-F[52:]@c)),5),'p',np.round(p,3),'c',np.round(c,3),'zparams',np.round([np.linalg.lstsq(base,xa@v,rcond=None)[0] for v in p.reshape(-1,5)],3),flush=True)\\nrank=[]\\nfor a in terms:\\n for op in fs:\\n  res=min((fit(quad,[(op,a)],s,ix,maxn=90) for s in seeds),key=lambda r:r[0]); rank.append((res[0],[(op,a)],res))\\nrank.sort(key=lambda r:r[0]);\\nfor _,sp,res in rank[:12]: report(sp,res)\\nfor _,sp,r0 in rank[:3]:\\n rank2=[]\\n for a in terms:\\n  for op in ('tanh','sin','rat'):\\n   sp2=sp+[(op,a)]; res=min((fit(quad,sp2,np.r_[r0[1],s],ix,maxn=110) for s in seeds[:9]),key=lambda r:r[0]);rank2.append((res[0],sp2,res))\\n for _,sp2,res in sorted(rank2,key=lambda r:r[0])[:3]: report(sp2,res)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/profile_readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Greedy fixed atoms → profiled nonlinear projections; the eight-atom scalar readout gave 0.02729 mean and 0.03716 worst-fold MAE with atoms selected on the full public study.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the eight greedy atoms\",\"rejected_reason\":\"Their reported errors reuse data from atom selection, and several atoms may approximate the same underlying projection.\"}],\"rationale\":\"Profile candidate nonlinear directions using only the first 52 labels. Low fit error and recognizable directions would support a compact readout; unstable directions or high reserved-block error would favor a regularized model selected inside each fold.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5f3e2a6c7bf49cad483c356e70d86d33c5eb5b133255b763fa76134b032b2c41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40604.83,
+      "usage_known": true,
+      "prompt_tokens": 27077,
+      "cached_tokens": 9344,
+      "completion_tokens": 1550
+    }
+  ]
+}

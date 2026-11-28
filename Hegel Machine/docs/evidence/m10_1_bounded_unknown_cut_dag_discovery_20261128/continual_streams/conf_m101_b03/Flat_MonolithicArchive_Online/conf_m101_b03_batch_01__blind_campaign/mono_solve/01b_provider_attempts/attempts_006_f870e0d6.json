@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f870e0d649f54223b7705fbf4f82ac71",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:21.352474+00:00",
+  "ended_at_utc": "2026-11-28T09:21:06.573041+00:00",
+  "request_sha256": "3827f5cd460d18f571e541ee203a20c13b5c6497170c938df72c430f29f2a691",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41221,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28357,
+    "cached_tokens": 9344,
+    "completion_tokens": 1866
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/for i in range(4):/,$d' /tmp/probe101.py > /tmp/search101.py; cat >> /tmp/search101.py <<'PY'\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.linear_model import ElasticNet\\nfrom sklearn.model_selection import KFold\\nfrom sklearn.preprocessing import StandardScaler\\nfrom scipy.special import expit\\nfrom scipy.linalg import solve\\nT=S['train']; x=T['x']; t=S['eval_times']; traj=T['traj'];\\ndef am(q):return np.c_[af(q),q*np.roll(q,-1,axis=1),q**3]\\nA=fit(am(u),v); xi=x.copy()\\nfor i in range(4):\\n f=lambda q: np.c_[np.ones(len(q)),q[:,i],q[:,(i+1)%4],q[:,i]*q[:,(i+1)%4],q[:,i]**3]; print('A exact',i,loo(f(u),v[:,i:i+1]))\\nxi=least_squares(lambda z:(am(z.reshape(-1,4))@A-x).ravel(),xi.ravel(),max_nfev=20).x.reshape(-1,4)\\nprint('inverse ranges',xi.min(0),xi.max(0))\\nB=fit(af(S['panel_b']['u']),S['panel_b']['v']); print('B gram',B[1:].T@B[1:]);\\nC=S['panel_c']; cu=C['u']; ck=[]\\nfor j,fn in enumerate([np.tanh,np.cos],1):\\n cv=C['v'+str(j)]; o=minimize_scalar(lambda f: np.mean(proj(np.c_[af(cu),fn(f*cu)],cv)**2),bounds=(.6,4),method='bounded'); ck.append((fn,o.x,fit(np.c_[af(cu),fn(o.x*cu)],cv)))\\ndef Cj(q,j):\\n fn,f,w=ck[j];return np.c_[af(q),fn(f*q)]@w\\nX={'raw':x,'U':xi};\\nfor name,z in list(X.items()):\\n X[name+'B']=af(z)@B; X[name+'Bi']=(z-B[0])@np.linalg.inv(B[1:]); X[name+'C']=Cj(z,0); X[name+'D']=Cj(z,1)\\nfor name in ['UB','UBi']:\\n X[name+'C']=Cj(X[name],0);X[name+'D']=Cj(X[name],1)\\nfor rates in [[.412,1.814]]:\\n H=-np.expm1(-t[:,None]*rates); modes=fit(H,traj.T).T\\nY=np.c_[T['y'],modes]; print('Y mean,std,corr',Y.mean(0),Y.std(0),np.corrcoef(Y.T)); print('linear y~modes',fit(af(modes),Y[:,0]),np.mean(np.abs(proj(af(modes),Y[:,0])))); print('summary',T['summary'])\\nsp=[(np.arange(52),np.arange(52,72)),*list(KFold(4,shuffle=True,random_state=123).split(x))]\\ndef score(F,reg):\\n out=[]\\n for a,b in sp:\\n  sc=StandardScaler().fit(F[a]); q=sc.transform(F); y=Y[a]; ym=y.mean(0); ys=y.std(0); q0=q[a]; z=(y-ym)/ys\\n  if isinstance(reg,float):\\n   zhat=q[b]@(q0.T@solve(q0@q0.T+reg*np.eye(len(a)),z,assume_a='pos'))\\n  else:\\n   zhat=np.column_stack([ElasticNet(alpha=reg[0],l1_ratio=reg[1],max_iter=3500,tol=2e-4).fit(q0,zz).predict(q[b]) for zz in z.T]);\\n  ep=ym+zhat*ys-Y[b]; out.append(np.r_[np.mean(abs(ep),0),np.mean(abs(ep[:,1:]@H.T))]);\\n return np.array(out)\\ndef phi(q,k):\\n ps=[q[:,i]*q[:,j] for i,j in itertools.combinations(range(4),2)];\\n if k==0:return q\\n if k==1:return np.c_[q,q*q,np.array(ps).T]\\n if k==2:return np.c_[phi(q,1),*[np.sin(f*q) for f in [1,2,3]],*[np.cos(f*q) for f in [1,2,3]]]\\n p=np.array([q[:,i]+sg*q[:,j] for i,j in itertools.combinations(range(4),2) for sg in [1,-1]]).T\\n return np.c_[phi(q,2),np.array([np.prod(q[:,ids],axis=1) for ids in itertools.combinations(range(4),3)]).T,*[np.sin(f*p) for f in [1,2,3]],*[np.cos(f*p) for f in [1,2,3]],np.tanh(2*q)]\\nprint('columns: CV52 y, am1, am2, traj; randomized CV means (same)')\\nfor nm,q in X.items():\\n for k in range(4):\\n  F=phi(q,k); regs=[.02,.3,2.,(.003,.8),(.015,.8)]; es=[score(F,r) for r in regs]; e,r=min(zip(es,regs),key=lambda er:np.mean(er[0][1:][:,[0,3]])); print(nm,k,r,np.round(e[0],4),np.round(e[1:].mean(0),4))\\nfor nms in [('U','UB'),('U','UC','UD'),('U','UB','UC','UD'),('U','UB','UBC','UBD'),tuple(X)]:\\n for k in [1,2,3]:\\n  F=np.concatenate([phi(X[nm],k) for nm in nms],1); regs=[.02,.3,2.,(.003,.8),(.015,.8)]; es=[score(F,r) for r in regs]; e,r=min(zip(es,regs),key=lambda er:np.mean(er[0][1:][:,[0,3]])); print(nms,k,r,np.round(e[0],4),np.round(e[1:].mean(0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/search101.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (cyclic calibration alone) -> H2 (exact cubic inverse plus sparse readouts across panel coordinates); the approximate inverse still gave 0.0642 response and 0.0719 trajectory MAE at their best tested 52/20 settings.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the smooth interpolator as the final readout\",\"rejected_reason\":\"The tested variants miss the response gate even in auxiliary coordinates; they do not exploit sparse combinations or shared time amplitudes.\"}],\"rationale\":\"Use the cubic calibration supported by panel LOO error, then compare additive and interaction readouts on the same folds. This distinguishes a missing coordinate map from a missing readout basis and tests whether the response is a direct linear function of the relaxation amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3855557b6d0184745e55b9ca7e96ca2d77ce6fbc6714a85ff3c726c8ba670373",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47604.27,
+      "usage_known": true,
+      "prompt_tokens": 28357,
+      "cached_tokens": 9344,
+      "completion_tokens": 1866
+    }
+  ]
+}

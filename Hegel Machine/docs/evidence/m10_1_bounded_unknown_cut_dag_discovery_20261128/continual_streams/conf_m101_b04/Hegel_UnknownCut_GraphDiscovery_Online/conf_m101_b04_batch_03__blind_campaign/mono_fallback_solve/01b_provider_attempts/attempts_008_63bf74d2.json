@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63bf74d2f7a0472c8f1fe5e37ea3565d",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:17.312048+00:00",
+  "ended_at_utc": "2026-11-28T09:29:54.758614+00:00",
+  "request_sha256": "2f6808671137eb13bcf93eee8240c1a192dd0eb03f506a3f1ca1116527bbc5fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53338,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31537,
+    "cached_tokens": 9344,
+    "completion_tokens": 1535
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/sparse_readout.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nx,y,Y=(s['train'][k] for k in ('x','y','traj')); o,g=m._calibration(s['panel_a']); w=(x-o)/g\\nu,v=(s['panel_b'][k] for k in ('u','v'))\\nops={'baseline':m._operator(s['panel_b'])(w)}\\nfor name,fun,start in [('sin',np.sin,[-.4,2.8]),('erf',erf,[-.66,1.45]),('rational',lambda q:q/(1+q*q),[-1.2,.89]),('exp',lambda q:q*np.exp(-q*q),[-1.1,1.0])]:\\n def design(a,h):return m._affine(a+h[0]*fun(h[1]*a))\\n def res(h):\\n  a=design(u,h); return (a@np.linalg.lstsq(a,v,rcond=None)[0]-v).ravel()\\n h=least_squares(res,start,bounds=([-5,.15],[5,5])).x\\n ops[name]=design(w,h)@np.linalg.lstsq(design(u,h),v,rcond=None)[0]\\nops['blend']=(ops['sin']+ops['erf']+ops['baseline'])/3\\nall_i=np.arange(len(x)); folds=[('public',all_i[52:])]+[(f'random{k}',np.random.default_rng(k).permutation(len(x))[-20:]) for k in range(16)]+[(f'axis{k}{sgn:+}',np.argsort(sgn*x[:,k])[-16:]) for k in range(4) for sgn in (1,-1)]+[('radial',np.argsort(np.linalg.norm(x-x.mean(0),axis=1))[-16:])]\\npairs=list(combinations(range(4),2))\\ntimes=s['eval_times']; B=lambda rates:-np.expm1(-times[:,None]*rates)\\nmode_data=[]\\nfor _,j in folds:\\n i=np.setdiff1d(all_i,j)\\n def res(r):\\n  b=B(r);return (b@np.linalg.lstsq(b,Y[i].T,rcond=None)[0]-Y[i].T).ravel()\\n b=B(least_squares(res,[1.8,.4],bounds=([.7,.03],[5.,.68])).x); mode_data.append(np.linalg.qr(b)[0])\\nfor name,z in ops.items():\\n a=m._affine(z); pr=np.column_stack([z[:,i]*z[:,j] for i,j in pairs]); errors=np.empty((len(folds),5)); selections=[]; te=[]\\n for row,((_,j),b) in enumerate(zip(folds,mode_data)):\\n  i=np.setdiff1d(all_i,j); best=None\\n  for cols in combinations(range(len(pairs)),2):\\n   d=np.c_[a,pr[:,cols]]; c=m._ridge(d[i],y[i],.001); mse=np.mean((d[i]@c-y[i])**2)\\n   if best is None or mse<best[0]: best=(mse,cols,d,c)\\n  _,cols,d,c=best; selections.append(tuple(pairs[k] for k in cols));\\n  for q,D,p in [(0,d,.001),(1,np.c_[a,pr],.001),(2,m._quadratic(z),.01),(3,np.c_[d,w],.008),(4,np.c_[d,d[:,5:]**2],.015)]:\\n   errors[row,q]=np.mean(abs(D[j]@m._ridge(D[i],y[i],p)-y[j]))\\n  e=abs(a[j]@m._ridge(a[i],Y[i]@b,.001)@b.T-Y[j]);te.append([e.mean(),e.mean(0).max()])\\n print(name,'pairs and counts',[(c,selections.count(c)) for c in sorted(set(selections))], 'trajectory public/worst',np.round([te[0],np.max(te,axis=0)],5).tolist())\\n for q,method in enumerate(['two pairs','all pairs','full quadratic','two pairs + input','two pairs + squared interactions']):\\n  e=errors[:,q]; k=e.argmax();print(method, 'public/random-mean/worst',np.round([e[0],e[1:17].mean(),e[k]],5),folds[k][0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/sparse_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unrestricted quadratic readout → H2: sparse pairwise readout; removing squares reduced the worst directional response MAE from 0.05688 to 0.03459 while improving the prescribed split to 0.00766.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Hard-code the two largest interactions from the full training set\",\n      \"rejected_reason\": \"Select the support using only each fold’s fit rows to test whether those interactions are stable rather than a consequence of seeing the held-out labels.\"\n    }\n  ],\n  \"rationale\": \"The fitted quadratic has two cross-terms much larger than the rest, and removing squares improved boundary accuracy. Test whether selecting just two products consistently improves held-out predictions, and assess the trajectory separately before changing its operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f9c49d9a52793069cbc64c32dd6aeb4c5bb977a2c051307de09352585cf97176",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40064.51,
+      "usage_known": true,
+      "prompt_tokens": 31537,
+      "cached_tokens": 9344,
+      "completion_tokens": 1535
+    }
+  ]
+}

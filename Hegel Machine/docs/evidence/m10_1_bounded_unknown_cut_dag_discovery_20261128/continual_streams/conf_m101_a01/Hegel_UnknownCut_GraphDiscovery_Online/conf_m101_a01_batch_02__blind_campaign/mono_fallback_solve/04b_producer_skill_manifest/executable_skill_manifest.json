@@ -1,0 +1,206 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a01_batch_02_a8f727d7beaf",
+    "source_hash": "a8f727d7beaf6b60d6ce7eb00114f5d74c521f0321ca049b753802f7bd316ae1",
+    "parent_ids": [],
+    "source_episode_id": "mono_fallback_solve",
+    "task_id": "conf_m101_a01_batch_02__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/batch_cv.py",
+        "archived_relpath": "producers/tmp__batch_cv.py",
+        "bytes": 771,
+        "sha256": "947b9a0c1117dee3b24f39da0901f259e041de2d6f7699a5b051b009f65bfeda"
+      },
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 1589,
+        "sha256": "87da8411b95d266302387caf9155ea18544407860ba5939e4e642093c006de9b"
+      },
+      {
+        "container_path": "/tmp/grammar.py",
+        "archived_relpath": "producers/tmp__grammar.py",
+        "bytes": 2837,
+        "sha256": "03d2453a646a6fe02cdfe68e6a2bba41d54b077167e1c6715bafc63788674f3e"
+      },
+      {
+        "container_path": "/tmp/link.py",
+        "archived_relpath": "producers/tmp__link.py",
+        "bytes": 2065,
+        "sha256": "0b33ceafe9069a20f57dce489e303376b779600ffeaab512a1c38f23ef312d45"
+      },
+      {
+        "container_path": "/tmp/operators.py",
+        "archived_relpath": "producers/tmp__operators.py",
+        "bytes": 2370,
+        "sha256": "5fd98da544a9fab9426bb0d33b3bd507006cb82e21176ccebe698ddbd33ad1b8"
+      },
+      {
+        "container_path": "/tmp/panel_refine.py",
+        "archived_relpath": "producers/tmp__panel_refine.py",
+        "bytes": 853,
+        "sha256": "329870b71ce1b333cf0e90d7984d6e1639df0711294dc7feca14c101e1ad3603"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 2998,
+        "sha256": "45b49d07dbee8e0713d3a1143c8f69d46d6565fda6d6035233e69a02f922b5cf"
+      },
+      {
+        "container_path": "/tmp/readout.py",
+        "archived_relpath": "producers/tmp__readout.py",
+        "bytes": 2639,
+        "sha256": "647d4a74ac16f0e4db9698b963d517590a0f43fe213c8dfd72652a58b82612b5"
+      },
+      {
+        "container_path": "/tmp/response_check.py",
+        "archived_relpath": "producers/tmp__response_check.py",
+        "bytes": 1257,
+        "sha256": "972f863ae7869c1c2764ddc284468e9f48a397bf431c6b4e16f06648dd5fdaf1"
+      },
+      {
+        "container_path": "/tmp/ridges.py",
+        "archived_relpath": "producers/tmp__ridges.py",
+        "bytes": 1810,
+        "sha256": "e3aa27278f3faa128ad148fb330975d39544847b58a19077d6eb4b57e3eae9df"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a01_batch_00_solver.py",
+        "bytes": 1308,
+        "sha256": "41781f9ef5cd21e348a5e34b16357618c97f9c43b7c9457ac0e6775c2fc6fe90"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a01_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a01_batch_01_solver.py",
+        "bytes": 2881,
+        "sha256": "34991e7e985efcfb3261a4c4bd5d78a5c7b340e03f32d3374a653f709cada055"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; cat public_asset_index.json; cat validate_public_schema.py; ls -lah /tmp/hegel_continual_archive; head -c 6500 /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; echo; head -c 8500 /tmp/hegel_continual_archive/archive_manifest.json; echo; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nfor k,v in s.items():\n for j,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(k,j,a.shape, 'range', a.min(), a.max(), 'head',a[:3])\nPY",
+      "cd /holdout_task; ls -lh /tmp/hegel_continual_archive; head -c 5500 /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; echo; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== \"$f\"; grep -nE '^def |^class |telemetry|panel_[abc]' \"$f\" | head -95; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference panel alignment' 2>&1 | head -20; python3 - <<'PY'\nimport numpy as np,pickle\nfrom sklearn.preprocessing import PolynomialFeatures\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; print('telemetry',s['telemetry_vec']); t=s['train']; y=t['y']; z",
+      "cd /holdout_task; cat /tmp/hegel_continual_archive/*solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 2>&1 | head -12; cat >/tmp/explore.py <<'PY'\nimport numpy as np,pickle,itertools\nfrom sklearn.preprocessing import PolynomialFeatures\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['train']; x,y,z=d['x'],d['y'],d['traj']; t=s['eval_times']; target=np.c_[y,z]\npa,pb,pc=[s['panel_'+j] for j in 'abc']\ndef aff(p,n='v',rob=False):\n a=np.c_[np.ones(len(p['u'])),p['u']]; v=p[n]; w=np.ones(len(a",
+      "cat >/tmp/probe.py <<'PY'\nfrom explore import *\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\nQ=PolynomialFeatures(2)\nfor name in ('v1','v2'):\n u=pc['u']; v=pc[name]; p=Q.fit_transform(u); coef=np.linalg.lstsq(p,v,rcond=None)[0]; print(name,'quadratic coef\\n',coef.T,'resid',np.sqrt(np.mean((p@coef-v)**2,axis=0)))\n print('affine singular values',np.linalg.svd(aff(pc,name)[1:],compute_uv=False))\n for qn,q in [('u',u),('rotated',tf(u,C)),('B',tf(u,B))]:\n  for form in ('p",
+      "cat >/tmp/operators.py <<'PY'\nfrom explore import *\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\n\ndef base(q): return np.c_[np.ones(len(q)),q]\ndef quad(q): return PolynomialFeatures(2).fit_transform(q)\ndef loo(f,v):\n h=f@np.linalg.pinv(f); return np.sqrt(np.mean(((h@v-v)/np.maximum(1-h.diagonal(),1e-9)[:,None])**2))\nu=pc['u']; specs={}\nfor n in ('v1','v2'):\n v=pc[n]; fits=[]\n for mode,g in [('tanh',np.tanh),('sin',np.sin),('rat',lambda x:x/(1+x*x)),('cos',np.cos),('gauss',lambda x:np.exp(-x*x))]:\n",
+      "cat >/tmp/ridges.py <<'PY'\nfrom explore import *\nfrom scipy.optimize import least_squares\nfrom scipy.linalg import lstsq\np=PolynomialFeatures(2).fit_transform(x)\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(26).permutation(72),4)]\nforms={'tanh':np.tanh,'sin':np.sin,'rat':lambda a:a/(1+a*a),'exp':lambda a:np.exp(-a*a),'soft':lambda a:np.logaddexp(0,a)}\ndef run(tr,te,name,kind,nstarts=14):\n rng=np.random.default_rng(4890); h=p[tr]; yy=y[tr]; U=np.linalg.qr(h)[0]; yy0=yy-U@(U.T@yy); gx=x[",
+      "cat >/tmp/readout.py <<'PY'\nfrom explore import *\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nfrom scipy.optimize import least_squares\nfrom sklearn.linear_model import HuberRegressor\nnp.set_printoptions(precision=3,suppress=True,linewidth=160)\nQ=PolynomialFeatures(2); P=Q.fit_transform(x)\nF=z@np.linalg.svd(z,full_matrices=False)[2][:2].T\nprint('telemetry',s['telemetry_vec'],'times',t,'A',A,'B',B)\nfor name,d,v in [('a',pa,pa['v']),('b',pb,pb['v']),('c1',pc,pc['v1']),('c2',pc,pc['v2'])]:\n e=tf(d['u'],aff(d,'v' if name in ('a','b') else 'v'+name[-1], name=='a'))-v;prin",
+      "cat /tmp/hegel_continual_archive/conf_m101_a01_batch_01_solver.py; cat >/tmp/link.py <<'PY'\nfrom explore import *\nfrom scipy.optimize import least_squares\nfrom scipy.linalg import lstsq\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(26).permutation(72),4)]\nforms={'tanh':np.tanh,'asinh':np.arcsinh,'softsign':lambda a:a/(1+abs(a)),'sqrt':lambda a:a/np.sqrt(1+a*a),'atan':np.arctan,'logistic':lambda a:np.logaddexp(0,a),'rational':lambda a:a/(1+a*a),'cubic':lambda a:a-a**3,'exp':lambda a:np.e",
+      "OPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py | grep -E '^sin |^damped|^kernel x'; cat >/tmp/grammar.py <<'PY'\nfrom explore import *\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nexec(open('/tmp/operators.py').read().split(\"if __name__=='__main__':\")[0].replace('print(', 'quiet(').replace('from explore import *','def quiet(*a):pass'))\n\ndef fitpred(K,H,T,tr,te,alpha):\n G=K[np.ix_(tr,tr)]+alpha*np.eye(len(tr)); D=H[tr]; W=solve(G,np.column_stack((D,T[tr])),assume_a='pos'); n=D.shape[1]; b=np.linalg.lstsq(D.T@W[:,:n],D.T@W[:,n:],rcond=1e-10)[0]; return H[te]@b+K[np.ix_(te",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Predict the response and trajectory with separate kernel models.\"\"\"\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve\nfrom scipy.spatial.distance import cdist\n\n\ndef _linear(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _rbf(x, xt, length):\n    return np.exp(-cdist(x, xt, 'sqeuclidean') / (2 * length**2))\n\n\ndef _predict(k, cross, h, ht, target, nugget):\n    k = k.copy()\n    k.flat[::len(k) + 1] += nugget\n    n = h.shape[1]\n    w = cho_solve(cho_factor(k), np.column_stack((h, target)))\n    a, b = w[:, :n], w[:, n:]\n    be",
+      "cat >/tmp/response_check.py <<'PY'\nfrom batch_cv import s,x,y,z,folds\nfrom batch_solver import _linear, _rbf, _predict\nfrom scipy.linalg import cho_factor,cho_solve\nimport numpy as np\n\ndef predictions(tr,te):\n    q=x[tr]/x[tr].std(0); qt=x[te]/x[tr].std(0)\n    h,ht=_linear(q),_linear(qt)\n    ans=[]\n    for length in (1.25,1.55,1.8,2.,2.3,2.65,3.1):\n        k,c=_rbf(q,q,length),_rbf(qt,q,length)\n        for nugget in (1e-5,.0001,.001,.004):\n            cf=cho_factor(k+nugget*np.eye(len(q)))\n            vi=cho_solve(cf,np.eye(len(q))); a=vi@h\n            p=vi-a@np.linalg.solve(h.T@a,a.T)\n       "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe.py",
+      "primary_producer_container_path": "/tmp/probe.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2319,
+        "sha256": "ca73c2c2ed69461751b0dba03683df4e9ca009197a700baf91152db4f48230da",
+        "content_addressed_ref": "content_addressed_blobs/ca73c2c2ed69461751b0dba03683df4e9ca009197a700baf91152db4f48230da.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "aff",
+      "tf",
+      "fitpred",
+      "features",
+      "base",
+      "quad",
+      "loo",
+      "pred"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a8f727d7beaf6b60d6ce7eb00114f5d74c521f0321ca049b753802f7bd316ae1",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat >/tmp/response_check.py <<'PY'\nfrom batch_cv import s,x,y,z,folds\nfrom batch_solver import _linear, _rbf, _predict\nfrom scipy.linalg import cho_factor,cho_solve\nimport numpy as np\n\ndef predictions(tr,te):\n    q=x[tr]/x[tr].std(0); qt=x[",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a8f727d7beaf6b60d6ce7eb00114f5d74c521f0321ca049b753802f7bd316ae1",
+        "expected_candidate_sha256": "a8f727d7beaf6b60d6ce7eb00114f5d74c521f0321ca049b753802f7bd316ae1",
+        "computed_candidate_sha256": "a8f727d7beaf6b60d6ce7eb00114f5d74c521f0321ca049b753802f7bd316ae1",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2319
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_a8f727d7"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "aff",
+        "code": "def aff(p, n='v', rob=False):\n    a = np.c_[np.ones(len(p['u'])), p['u']]\n    v = p[n]\n    w = np.ones(len(a))\n    for i in range(15 if rob else 1):\n        b = np.linalg.lstsq(a * w[:, None], v * w[:, None], rcond=None)[0]\n        e = np.linalg.norm(a @ b - v, axis=1)\n        w = np.minimum(1, 2 * np.median(e) / np.maximum(e, 1e-12))\n    return b"
+      },
+      {
+        "name": "tf",
+        "code": "def tf(x, b):\n    return x @ b[1:] + b[0]"
+      },
+      {
+        "name": "fitpred",
+        "code": "def fitpred(K, H, T, tr, te, alpha):\n    from scipy.linalg import solve\n    G = K[np.ix_(tr, tr)] + alpha * np.eye(len(tr))\n    D = H[tr]\n    W = solve(G, np.column_stack((D, T[tr])), assume_a='pos')\n    n = D.shape[1]\n    b = np.linalg.lstsq(D.T @ W[:, :n], D.T @ W[:, n:], rcond=1e-10)[0]\n    return H[te] @ b + K[np.ix_(te, tr)] @ (W[:, n:] - W[:, :n] @ b)"
+      },
+      {
+        "name": "features",
+        "code": "def features(q, kind, k):\n    m = {'sincos': [np.sin(k * q), np.cos(k * q)], 'tanh': [np.tanh(k * q)], 'ratio': [q / (1 + (k * q) ** 2), 1 / (1 + (k * q) ** 2)], 'squash': [q / np.sqrt(1 + (k * q) ** 2)], 'warp': [q + k * q * q], 'raw': []}[kind]\n    return [q] + m"
+      },
+      {
+        "name": "base",
+        "code": "def base(q):\n    return np.c_[np.ones(len(q)), q]"
+      },
+      {
+        "name": "quad",
+        "code": "def quad(q):\n    from sklearn.preprocessing import PolynomialFeatures\n    return PolynomialFeatures(2).fit_transform(q)"
+      },
+      {
+        "name": "loo",
+        "code": "def loo(f, v):\n    h = f @ np.linalg.pinv(f)\n    return np.sqrt(np.mean(((h @ v - v) / np.maximum(1 - h.diagonal(), 1e-09)[:, None]) ** 2))"
+      },
+      {
+        "name": "pred",
+        "code": "def pred(k, reg, f, ya, tr, te):\n    from scipy.linalg import solve\n    a = k[np.ix_(tr, tr)] + reg * np.eye(len(tr))\n    c = k[np.ix_(te, tr)]\n    h = f[tr]\n    r = solve(a, np.c_[h, ya[tr]], assume_a='pos')\n    (w, v) = (r[:, :h.shape[1]], r[:, h.shape[1]:])\n    b = np.linalg.lstsq(h.T @ w, h.T @ v, rcond=1e-12)[0]\n    return f[te] @ b + c @ (v - w @ b)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3b179f6182045f7ad971ed880aa1cbe",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:55.471135+00:00",
+  "ended_at_utc": "2026-11-28T09:30:27.881641+00:00",
+  "request_sha256": "49b4784c5860e4c9af9b6370602f353b731e83542770c649947e1ad607016194",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53370,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30672,
+    "cached_tokens": 9344,
+    "completion_tokens": 1251
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/tails03.py <<'PY'\\nimport sys, pickle, numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve, solve_triangular\\nfrom scipy.spatial.distance import cdist\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _panel_b,_quadratic,_relaxation,_fit\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; T=tr['traj']; t=s['eval_times']; z=_panel_b(s['panel_b'],x); n=len(x)\\np=_quadratic(z); q=_quadratic(x)[:,1:]; dx=cdist(x,x,'sqeuclidean'); dz=cdist(z,z,'sqeuclidean')\\nxt=s['test']['x']; print('test outside train marginal ranges:', ((xt<x.min(0))|(xt>x.max(0))).sum(0).tolist()); print('test in coordinate tails:', ((xt<np.sort(x,axis=0)[7])|(xt>np.sort(x,axis=0)[-8])).sum(0).tolist())\\nrng=np.random.default_rng(19530); random=[np.arange(n),*(rng.permutation(n) for _ in range(23))]; tails=[]\\nfor j in range(x.shape[1]):\\n ix=x[:,j].argsort()\\n for b in (ix[:8],ix[-8:]): tails.append((np.setdiff1d(np.arange(n),b),b))\\nfolds=[(i[:52],i[52:]) for i in random]+tails\\nspecs=[(0,.075,.0003,np.inf),(0,.035,.0003,np.inf)]+[(w,.035,r,l) for w,r in [(1,.002),(0,.015)] for l in [0,.03,.15,.75,4,20,100]]\\nerrs=[]\\nfor a,b in folds:\\n modes,B=_relaxation(T[a],t,[1.8,.41]); target=np.c_[y[a],modes]; row=[]\\n for w,width,ridge,lam in specs:\\n  d=dx+w*dz; k=np.exp(-width*d[np.ix_(a,a)])+ridge*np.eye(len(a)); kt=np.exp(-width*d[np.ix_(b,a)])\\n  pa,pb=p[a],p[b]\\n  if np.isfinite(lam):\\n   scale=q[a].std(0); pa=np.c_[pa,q[a]/scale]; pb=np.c_[pb,q[b]/scale]\\n  L=cho_factor(k,lower=True); aa=solve_triangular(L[0],pa,lower=True); yy=solve_triangular(L[0],target,lower=True)\\n  if np.isfinite(lam) and lam>0:\\n   pen=np.zeros((q.shape[1],pa.shape[1])); pen[:,p.shape[1]:]=np.sqrt(lam)*np.eye(q.shape[1]); aa=np.vstack((aa,pen)); yy=np.vstack((yy,np.zeros((q.shape[1],3))))\\n  beta=_fit(aa,yy); pred=pb@beta+kt@cho_solve(L,target-pa@beta); e=np.abs(pred[:,1:]@B.T-T[b]); row.append([np.abs(pred[:,0]-y[b]).mean(),e.mean(),e[:,-1].mean()])\\n errs.append(row)\\ne=np.array(errs); print('metrics per row: documented split, random mean, random max, tail mean, tail max; each y/state/terminal')\\nfor j,sp in enumerate(specs): print(sp,np.round([e[0,j],e[:24,j].mean(0),e[:24,j].max(0),e[24:,j].mean(0),e[24:,j].max(0)],5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/tails03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unpenalized joint quadratics → H2 shrink the added raw-coordinate terms; current random-split worst MAEs are 0.03253 for y and 0.03230 for state, versus 0.06968 and 0.05738 on coordinate tails.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Revert to the panel-only trend\",\n      \"rejected_reason\": \"It performs better on coordinate tails but loses accuracy on the documented split and on average. Test whether shrinking the added terms preserves both benefits.\"\n    }\n  ],\n  \"rationale\": \"The joint trend passes the public split but regresses on coordinate tails. Check whether the test inputs reach those tails and whether a penalty on only the added terms reduces extrapolation error without sacrificing the documented split. Leave the verified artifact unchanged during this comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5891bdf842971e7c044d88eccb01d710582e87464b3067ff284bc0184216e2b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34988.05,
+      "usage_known": true,
+      "prompt_tokens": 30672,
+      "cached_tokens": 9344,
+      "completion_tokens": 1251
+    }
+  ]
+}

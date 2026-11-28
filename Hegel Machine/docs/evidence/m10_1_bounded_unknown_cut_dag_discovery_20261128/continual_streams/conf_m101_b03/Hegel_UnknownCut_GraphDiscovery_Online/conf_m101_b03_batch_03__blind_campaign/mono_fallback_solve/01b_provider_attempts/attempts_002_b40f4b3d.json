@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b40f4b3dc85348d8ae583dc0a2016d2e",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:47.724662+00:00",
+  "ended_at_utc": "2026-11-28T09:39:09.695546+00:00",
+  "request_sha256": "900393e6bdbe097982f36da2a0c27bf7e335011ef883675a366d60209deb6a0a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 13016,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15563,
+    "cached_tokens": 9344,
+    "completion_tokens": 817
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"ls -lah /tmp/hegel_continual_archive; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%s %p\\\\n' | head -70; python3 - <<'PY'\\nimport json,os,pickle,numpy as np\\np='/tmp/hegel_continual_archive'; np.set_printoptions(precision=5,suppress=True)\\nfor f in ['archive_manifest.json','pre_llm_gate_diagnostic.json']:\\n if os.path.exists(f):\\n  a=json.load(open(p+'/'+f)); print(f, str(a)[:5200])\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; print('times',t,'trajectory singular values',np.linalg.svd(tr['traj'],compute_uv=False)); print('observed standard summaries',tr['y'].mean(),tr['y'].std(),tr['traj'][:,-1].mean(),tr['traj'][:,-1].std())\\nfor name in ['panel_a','panel_b','panel_c']:\\n p=s[name]; u=p['u']; D=np.c_[u,np.ones(len(u))]; print(name)\\n for k,v in p.items():\\n  if k=='u': continue\\n  keep=np.ones(len(u),bool)\\n  for i in range(5):\\n   W=np.linalg.lstsq(D[keep],v[keep],rcond=None)[0]; e=np.linalg.norm(D@W-v,axis=1); keep=e<=np.quantile(e,.80)\\n  print(k,W,'error quantiles',np.quantile(e,[0,.5,.75,.9,1]))\\ndef report(D,Y):\\n c=np.linalg.lstsq(D[:52],Y[:52],rcond=None)[0]; e=abs(D@c-Y); print('train MAE',np.mean(e[:52],axis=0),'validation MAE',np.mean(e[52:],axis=0),'coefficients',c if c.size<30 else '')\\nx=tr['x']; z=tr['traj']; y=tr['y']; n=len(y)\\nprint('scalar from raw x'); report(np.c_[np.ones(n),x],y)\\nprint('scalar from trajectory'); report(np.c_[np.ones(n),z],y)\\nprint('scalar from trajectory + x'); report(np.c_[np.ones(n),z,x],y)\\nprint('trajectory from x'); report(np.c_[np.ones(n),x],z)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel operators -> H2 low-dimensional trajectory and scalar readouts; the 52/20 MAE is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit one joint nonlinear model immediately\",\n      \"rejected_reason\": \"Separate operator and readout checks can show where nonlinearity is needed and whether the archive already contains a suitable primitive.\"\n    }\n  ],\n  \"rationale\": \"Measure which panels support affine calibration and test the scalar readout with observed trajectories. If that readout generalizes but raw-input regression fails, focus model discovery upstream on the trajectory.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "912d55279cffd87db45d2f4b04e562764abee8c0721eb3d67f17fefbab3dcdf2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24590.92,
+      "usage_known": true,
+      "prompt_tokens": 15563,
+      "cached_tokens": 9344,
+      "completion_tokens": 817
+    }
+  ]
+}

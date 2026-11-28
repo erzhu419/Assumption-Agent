@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af70970d880a452e9149af6a65cc0f91",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:08.449253+00:00",
+  "ended_at_utc": "2026-11-28T09:50:41.700741+00:00",
+  "request_sha256": "2c67f730a57d1930a16adaae3c6e09bb0edc6890a7f50e56b526f0bbf13bba48",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 52494,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30862,
+    "cached_tokens": 9344,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/joint05.py <<'PY'\\nexec(open('/tmp/index05.py').read().split(\\\"for struct in ['linear'\\\")[0])\\nimport importlib.util\\nsp=importlib.util.spec_from_file_location('candidate','/holdout_task/node_01.py'); b=importlib.util.module_from_spec(sp); sp.loader.exec_module(b)\\npanel=s['panel_c']; c=b._readout(panel['u'],panel['v2'],q)\\nd=((q[:,None]-q[None,:])**2).sum(2)+.04*((c[:,None]-c[None,:])**2).sum(2)\\nK=np.exp(-.5*d); Z=Q[:,1:]; W=Q[:,:5]\\n\\ndef joint(i,j,Y,kind,starts=6):\\n    w=W[i]; u=np.linalg.qr(w)[0]; yi=Y[i]; yr=yi-u@(u.T@yi)\\n    f=np.tanh if kind=='tanh' else lambda z:z/np.sqrt(1+z*z)\\n    def loss(p):\\n        h=f(p[0]+Z[i]@p[1:]); h-=u@(u.T@h)\\n        return np.r_[(h[:,None]*(h@yr)/(h@h+1e-10)-yr).ravel(),.002*p]\\n    cov=np.linalg.lstsq(Q[i],yi,rcond=None)[0]; direction=cov[:,0]\\n    rng=np.random.default_rng(15)\\n    init=[direction]+list(rng.normal(0,.8,(starts-1,len(direction))))\\n    p=min((least_squares(loss,g,max_nfev=90) for g in init),key=lambda a:a.cost).x\\n    A=np.c_[W,f(p[0]+Z@p[1:])]; coef=np.linalg.lstsq(A[i],yi,rcond=None)[0]\\n    return A@coef,p\\n\\nrecords={}; params=[]\\nfor name,i,j in splits:\\n    ki=K[np.ix_(i,i)]+.003*np.eye(len(i)); kj=K[np.ix_(j,i)]; ntr=len(i)\\n    def record(key,pred,target): records.setdefault(key,[]).append(np.mean(abs(pred-target)))\\n    X=W[i]; tcoef=np.linalg.lstsq(X,T[i],rcond=None)[0]; tr=T-W@tcoef\\n    U,S,V=np.linalg.svd(tr[i],full_matrices=False); time=V[:2].T\\n    joint_y=np.column_stack((y, tr@time/np.maximum(np.std(U[:,:2]*S[:2],axis=0),1e-6)*.2))\\n    for kind in ('tanh','soft'):\\n        pred,p=joint(i,j,y[:,None],kind,8); base=pred[:,0]; params.append(p)\\n        correction=kj@np.linalg.solve(ki,y[i]-base[i]); kr=y[i].mean()+K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+.0001*np.eye(ntr),y[i]-y[i].mean())\\n        record(kind,base[j],y[j]); record(kind+' residual kernel',base[j]+correction,y[j]); record(kind+' blend',.8*base[j]+.2*kr,y[j]); record(kind+' shared',joint(i,j,joint_y,kind)[0][j,0],y[j]);\\n        tf,_=joint(i,j,T@time,kind); tp=W@tcoef+tf@time.T-(W@tcoef@time)@time.T\\n        record('traj '+kind,tp[j],T[j]); record('traj '+kind+' blend',.5*tp[j]+.5*Q[j]@np.linalg.lstsq(Q[i],T[i],rcond=None)[0],T[j])\\n    record('traj quadratic',Q[j]@np.linalg.lstsq(Q[i],T[i],rcond=None)[0],T[j])\\nfor k,v in records.items():\\n    v=np.array(v); print(k,np.round([v[0],v[1:25].mean(),v[1:25].max(),v[25:].mean(),v[25:].max()],6), 'worst_tail',splits[25+v[25:].argmax()][0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/joint05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cosine-calibrated kernel → H2 saturating quadratic response index with a panel-C residual correction; the tanh index lowers worst random/tail MAE from 0.08394/0.17237 to 0.05508/0.07392 while retaining 0.02922 official-split MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the calibrated kernel with the plain tanh index\",\n      \"rejected_reason\": \"It improves extrapolation but would remove panel C from the response path.\"\n    }\n  ],\n  \"rationale\": \"Compare residual correction and a small calibrated-kernel blend against the plain index with all response and trajectory fits restricted to training rows. Keep the quadratic trajectory unless a nonlinear alternative improves its tail errors without losing official accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d506e80d4749ec29a8765b884325335abea4368e71f7e4186753ca2649bd3d87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38532.8,
+      "usage_known": true,
+      "prompt_tokens": 30862,
+      "cached_tokens": 9344,
+      "completion_tokens": 1451
+    }
+  ]
+}

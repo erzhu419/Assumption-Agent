@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e5ef81e0cd64cc380eba68e015cb4d2",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:09.435870+00:00",
+  "ended_at_utc": "2026-11-28T09:24:33.711926+00:00",
+  "request_sha256": "a194cc2b4b78d60f2f01c566df627152def13b843e573597a2489a0d7b86d5f5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80747,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44192,
+    "cached_tokens": 9344,
+    "completion_tokens": 775
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('    chosen = _selected(q, f[:n]')\\nend = s.index('    k, kt = ', start)\\ns = s[:start] + '''    target = np.column_stack((y, traj[:, -3:].mean(1)))\\n\\n    def predict(chosen):\\n        design = np.column_stack((q, f[:n, chosen]))\\n        design_test = np.column_stack((qt, f[n:, chosen]))\\n        return design_test @ _fit(design, y)\\n\\n    full = predict(_selected(q, f[:n], target, count=8))\\n    rng = np.random.default_rng(62)\\n    predictions = []\\n    for _ in range(63):\\n        rows = rng.choice(n, int(.83*n), replace=False)\\n        chosen = _selected(q[rows], f[rows], target[rows], count=6)\\n        predictions.append(predict(chosen))\\n    # Average across feature sets to reduce sensitivity to the training sample.\\n    yh = .5 * (full + np.mean(predictions, axis=0))\\n''' + s[end:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single sparse fit → blend full-sample and resampled feature selection; the screened blend reached 0.03662 MAE on 52/20, 0.04786 on 56/16, and 0.06594 on the worst additional fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the single 10-term fit\",\n      \"rejected_reason\": \"Its required-split MAE is lower, but both 56/16 and worst-fold MAE are about 0.007 higher.\"\n    }\n  ],\n  \"rationale\": \"Promote the blend because it preserves the required 0.038 margin while improving both stress metrics. Verify that the saved implementation reproduces those gains and leaves trajectory and schema checks unchanged before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1dbdcbc24f5066ef2e9f643e3e7f5dd7057fed473be9132a2aac97d7e1a51d12",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24233.23,
+      "usage_known": true,
+      "prompt_tokens": 44192,
+      "cached_tokens": 9344,
+      "completion_tokens": 775
+    }
+  ]
+}

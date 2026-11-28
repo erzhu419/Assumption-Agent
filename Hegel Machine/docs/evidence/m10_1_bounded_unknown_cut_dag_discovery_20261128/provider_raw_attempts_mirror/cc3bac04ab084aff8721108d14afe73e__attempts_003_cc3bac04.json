@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc3bac04ab084aff8721108d14afe73e",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:18:29.243835+00:00",
+  "ended_at_utc": "2026-11-28T09:19:07.540057+00:00",
+  "request_sha256": "6745a7a11218fe02fe64380389495a057d240d961c534b60a92d50df38982e2b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19089,
+    "cached_tokens": 9344,
+    "completion_tokens": 1128
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; y=s['train']['traj']; np.set_printoptions(precision=5,suppress=True)\\nprint('times telemetry',t,s['telemetry_vec']); print('means',s['train']['summary']);\\ndef design(x):return np.c_[np.ones(len(x)),x]\\npa=s['panel_a']; u,v=pa['u'],pa['v']; a=design(u); w=np.linalg.lstsq(a,v,rcond=None)[0];\\nfor _ in range(35):\\n r=np.linalg.norm(a@w-v,axis=1); q=np.minimum(1,.012/np.maximum(r,1e-12))**.5; w=np.linalg.lstsq(a*q[:,None],v*q[:,None],rcond=None)[0]\\nr=np.linalg.norm(a@w-v,axis=1); keep=r<.12; print('A sorted residual',np.sort(r));\\nfor label,cols in [('linear',[]),('squares',list((u*u).T)),('cubics',list((u**3).T)),('harmonic',list(np.sin(u).T)),('products',[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)])]:\\n m=np.c_[a,np.array(cols).T] if cols else a; z=m[keep]; co=np.linalg.lstsq(z,v[keep],rcond=None)[0]; e=v[keep]-z@co; h=np.sum(np.linalg.qr(z)[0]**2,axis=1); print('A',label,np.sqrt(np.mean(e**2)),np.sqrt(np.mean((e/(1-h[:,None]))**2))); \\n if not cols: print(co)\\nfor k in ['v1','v2']:\\n u=s['panel_c']['u']; v=s['panel_c'][k]; a=design(u)\\n for trig in [np.sin,np.cos]:\\n  def score(f):\\n   z=np.c_[a,trig(f*u)]; r=v-z@np.linalg.lstsq(z,v,rcond=None)[0]; h=np.sum(np.linalg.qr(z)[0]**2,axis=1); return np.sqrt(np.mean((r/(1-h[:,None]))**2))\\n  fs=[.25,.5,.75,1,1.25,1.5,1.75,2,2.5,3]; print('C',k,trig.__name__,[(f,round(score(f),6)) for f in fs]); opt=minimize_scalar(score,bounds=(.2,3),method='bounded');print('opt',opt.x,opt.fun)\\nfor label,fun,x0 in [('relax',lambda p:-np.expm1(-t[:,None]*p),[.5,2]),('offset relax',lambda p:np.c_[np.ones(len(t)),-np.expm1(-t[:,None]*p)],[.5,2]),('decay',lambda p:np.exp(-t[:,None]*p),[.5,2])]:\\n def resid(p):\\n  h=fun(p); return h@np.linalg.lstsq(h,y.T,rcond=None)[0]-y.T\\n fit=least_squares(lambda p:resid(p).ravel(),x0,bounds=(.005,15)); print('time',label,fit.x,'rmse',np.sqrt(np.mean(resid(fit.x)**2)), 'per time',np.sqrt(np.mean(resid(fit.x)**2,axis=1)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived raw-coordinate predictor) -> H2 (robust calibration plus shared relaxation and selected auxiliary operators); archived worst public MAE is 0.083359.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the two auxiliary outputs with unrestricted polynomials\",\"rejected_reason\":\"With only 24 panel rows, a training-residual reduction does not establish a useful operator; compare leave-one-row-out errors first.\"}],\"rationale\":\"Clean-row and leave-one-row-out residuals distinguish sparse contamination from genuine panel nonlinearities. Comparing time bases will establish whether later errors come from the time law or from predicting its amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "a7493c56116fba9c9c19a55454c7120f94f12ae3325ed2b60cbdc7a30d62f39a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40911.71,
+      "usage_known": true,
+      "prompt_tokens": 19089,
+      "cached_tokens": 9344,
+      "completion_tokens": 1128
+    }
+  ]
+}

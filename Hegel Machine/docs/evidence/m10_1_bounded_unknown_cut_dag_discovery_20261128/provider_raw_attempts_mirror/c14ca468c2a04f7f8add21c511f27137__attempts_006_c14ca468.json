@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c14ca468c2a04f7f8add21c511f27137",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:11.734271+00:00",
+  "ended_at_utc": "2026-11-28T09:46:40.882119+00:00",
+  "request_sha256": "e9a8b5e6722c93046da97f732e2b2b0354e7e066cae1eb61858c6a996d1abd53",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31418,
+    "cached_tokens": 9344,
+    "completion_tokens": 971
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/readout.py <<'PY'\\nfrom operators import *\\nfrom itertools import product\\nb=ops['B'](z); c=ops['C'](z); d=ops['D'](z)\\na,f,g,h=b.T; pair=a*g+f*h; contrast=a+f-g-h\\nprint('ARCH GRAMMAR',scores(np.c_[aff(b),pair,np.tanh(contrast),pair/(1+contrast**2)])); print('B affine',scores(aff(b)))\\nfor name,x in [('z',z),('B',b),('C',c),('D',d)]:\\n print('POLY COEFF',name,np.c_[fit(pol(x,2)[:72],Y[:,0]),fit(pol(x,2)[:72],Y[:,-1])].round(4).T)\\nF=[]; names=[]\\ndef add(n,a):\\n names.append(n);F.append(a)\\nfor k,x in [('B',b),('z',z),('C',c),('D',d)]:\\n Q=pol(x,3)\\n for j in range(1,len(mon)):add((k,mon[j]),Q[:,j])\\n for q in product((0,1,-1),repeat=4):\\n  if not any(q) or next(v for v in q if v)!=1:continue\\n  u=x@q\\n  for rate in (.4,.7,1,1.4,1.7,2.4,3.4):\\n   for tag,v in [('tanh',np.tanh(rate*u)),('sin',np.sin(rate*u)),('cos',np.cos(rate*u)-1)]:add((k,q,rate,tag),v)\\n   for i,j in ((0,1),(0,2),(0,3),(1,2),(1,3),(2,3),(-1,-1)):\\n    v=x[:,i]*x[:,j] if i>=0 else x[:,0]*x[:,2]+x[:,1]*x[:,3];add((k,q,rate,'rat',i,j),v/(1+rate*u*u))\\nF=np.array(F).T\\nfor rs in [range(52),range(20,72)]:\\n ix=np.array(rs); jj=np.setdiff1d(np.arange(72),ix)\\n for target in (0,1,-1):\\n  print('GREEDY split/target',ix[0],target); y=Y[:,target]; base=aff(b); picks=[]\\n  for i in range(10):\\n   Q=np.linalg.qr(base[ix])[0]; rem=F[ix]-Q@(Q.T@F[ix]); r=y[ix]-Q@(Q.T@y[ix]); j=np.argmax(abs(r@rem)/np.maximum(np.linalg.norm(rem,axis=0),1e-10)); picks.append(j); base=np.c_[aff(b),F[:,picks]]; co=fit(base[ix],y[ix]); print(names[j],round(co[-1],4),round(np.mean(abs(base[jj]@co-y[jj])),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | grep -A100 'ARCH GRAMMAR'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (auxiliary coordinates with polynomial readouts) -> H2 (paired products and bounded contrasts); best label MAE is 0.0535 on 52/20, with 0.0935 on the reverse split for that model.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel B appears in the strongest label models. Test the archived symmetric readout directly and compare sparse terms selected independently on two training slices to identify which additions generalize.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "57b28f66fc9cb4c262b1e4bcc069fe19520ea5895f81248804b8ee8b9e6a44cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29105.15,
+      "usage_known": true,
+      "prompt_tokens": 31418,
+      "cached_tokens": 9344,
+      "completion_tokens": 971
+    }
+  ]
+}

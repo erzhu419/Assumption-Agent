@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3758bdea177b491fa29f48818d7cf3df",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:32.414000+00:00",
+  "ended_at_utc": "2026-11-28T09:38:15.787713+00:00",
+  "request_sha256": "88ab92ff641751637fc161937c301ff1104de0bcea503a7027933fe6a1ce8fb1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37556,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25462,
+    "cached_tokens": 9344,
+    "completion_tokens": 1779
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/fit5.py <<'PY'\\nfrom explore import *\\nfrom itertools import combinations,product\\nfrom sklearn.linear_model import orthogonal_mp\\nfrom scipy.spatial.distance import cdist\\nnp.set_printoptions(precision=3,suppress=True,linewidth=190)\\nfolds=[np.arange(52,72),np.arange(56,72)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(4)]\\ndef cv(K,target,regs):\\n e=[]\\n for reg in regs:\\n  r=[]\\n  for te in folds:\\n   tr=np.setdiff1d(np.arange(len(y)),te); p=K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+reg*np.eye(len(tr)),target[tr]);r.append(np.mean(abs(target[te]-p)))\\n  e.append([reg,*r[:2],np.mean(r[2:]),max(r)])\\n return np.array(e)\\nspaces={'x':x,'d':d,'b':b,'z(d)':z(d),'z(b)':z(b),'w(d)':w(d),'w(b)':w(b),'h':d+(w(d)-B[0])@Bi}\\nfor k,a in spaces.items():\\n print('\\\\n',k,'poly',ls(aug(old._poly(a,[1,2,3])),y))\\nfor target in [y,T]:\\n res=[]\\n for k,a in list(spaces.items())+[(i+'+'+j,np.c_[spaces[i],spaces[j]]) for i,j in product(['d','b'],['z(d)','z(b)','w(d)','w(b)','h'])]:\\n  a=a-a.mean(0); a/=np.mean(a.std(0)); G=a@a.T/a.shape[1]; D=cdist(a,a,'sqeuclidean')/a.shape[1]\\n  for order in [2,3,4,5,6]:\\n   for gain in [.15,.5,1.5]:\\n    for j in cv((1+gain*G)**order,target,[.00001,.0001,.001,.01]):res.append((j[3],k,('poly',order,gain),j))\\n  for l in [.3,.6,1,2,3]:\\n   R=np.sqrt(5*D)/l; M=(1+R+R**2/3)*np.exp(-R); S=np.exp(-D/(2*l*l))\\n   for nm,K in [('m52',M),('rbf',S),('poly+m52',(1+G)**2+M),('poly+rbf',(1+G)**2+S)]:\\n    for j in cv(K,target,[.00001,.0001,.001,.01]):res.append((j[3],k,(nm,l),j))\\n print('kernel',target.shape,*sorted(res,key=lambda r:r[0])[:13],sep='\\\\n')\\n\\ndef sparse(spaces,target):\\n names=[]; F=[]\\n for k,a in spaces.items():\\n  dirs=[(str(i),a[:,i]) for i in range(4)]+[(f'{i}{sg:+d}{j}',a[:,i]+sg*a[:,j]) for i,j in combinations(range(4),2) for sg in [-1,1]]\\n  for nm,v in dirs:\\n   for nn,f in [('lin',v),('abs',abs(v)),('q',v*v),('cube',v**3),('4',v**4),('5',v**5)]+[(f'{nn}{g}',f) for g in [.5,1,1.7,2.5] for nn,f in [('sin',np.sin(g*v)),('cos',np.cos(g*v)),('tanh',np.tanh(g*v)),('rat',v/(1+g*v*v)),('rqt',v*v/(1+g*v*v)),('fat',v/(1+g*abs(v)))]]:\\n    F.append(f); names.append(k+nm+nn)\\n  for deg in [2,3,4]:\\n   for js in combinations_with_replacement(range(4),deg):\\n    F.append(np.prod(a[:,js],axis=1));names.append(k+str(js))\\n for ka,kb in combinations(spaces,2):\\n  for i,j in product(range(4),repeat=2):\\n   F.append(spaces[ka][:,i]*spaces[kb][:,j]);names.append(f'{ka}{i}*{kb}{j}')\\n F=np.array(F).T\\n for ns in [3,5,8,12,16,20,25,30,35]:\\n  r=[]\\n  for te in folds:\\n   tr=np.setdiff1d(np.arange(len(y)),te); f=(F-F[tr].mean(0))/np.maximum(1e-8,F[tr].std(0)); yy=target[tr]-target[tr].mean(0); cc=orthogonal_mp(f[tr]/np.sqrt(len(tr)),yy,n_nonzero_coefs=ns); p=f[te]@cc/np.sqrt(len(tr))+target[tr].mean(0);r.append(np.mean(abs(target[te]-p)))\\n  print('omp',list(spaces),ns,np.round([*r[:2],np.mean(r[2:]),max(r)],4))\\n f=(F-F.mean(0))/np.maximum(1e-8,F.std(0));cc=orthogonal_mp(f/np.sqrt(len(y)),target-target.mean(),n_nonzero_coefs=12); print('omp full',[(names[i],round(cc[i],3)) for i in np.flatnonzero(cc)])\\nfor kk in [['d'],['b'],['d','b'],['d','b','z(d)','z(b)','w(d)','w(b)','h']]:sparse({k:spaces[k] for k in kk},y)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fit5.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: the inherited downstream dictionary transfers → H2: sparse rotated interactions or regularized nonlinear terms explain the scalar residual; inherited 52/20 scalar MAE is 0.066689.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The inherited downstream dictionary and fitting rule are sufficient with the recovered panel operators.\",\"empirical_witness\":\"Panel C is reconstructed to roughly 0.00015 MAE, but the inherited scalar predictor has 0.066689 MAE versus the 0.038 gate; complete degree-two regression also misses at 0.061972.\",\"causal_blanket_diagnosis\":\"The remaining error is downstream of panel reconstruction; neither inherited sparse feature selection nor an unrestricted quadratic explains it.\",\"sublated_pivot\":\"Test pairwise sums and differences, higher-order products, saturating terms, and smooth priors across calibrated and transformed coordinates.\",\"risk_kind\":\"scientific_generalization\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Unregularized full cubic\",\"rejected_reason\":\"Training MAE drops to 0.0114 while held-out MAE rises to 0.0865.\"}],\"rationale\":\"Compare sparse algebraic and smooth residual models on multiple splits. If a model improves only on the required split, it is not a reliable replacement for the inherited solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "8e5c42ed5d7adabdeaa9b9041a496bb65e824f80683e6c833d9a20074c5fa652",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45970.75,
+      "usage_known": true,
+      "prompt_tokens": 25462,
+      "cached_tokens": 9344,
+      "completion_tokens": 1779
+    }
+  ]
+}

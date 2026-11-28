@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e628c544ece541b7a839dc1947c8f53e",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:13.029446+00:00",
+  "ended_at_utc": "2026-11-28T09:21:54.906975+00:00",
+  "request_sha256": "0901d53b819d63e64d0d4500e79fc395c5d92de21bb18c8a2e614ab7710a6f1b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49347,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31288,
+    "cached_tokens": 9344,
+    "completion_tokens": 1688
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/exactdag.py <<'PY'\\nfrom dag import *\\nfrom bexact import orth\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit\\n\\ndef shrink(z):return np.sign(z)*np.maximum(abs(z)-.35,0)**1.5\\n\\ndef maps(s):\\n a,b=ab(s); fs=make(s);p=s['panel_b']; m,c=orth(shrink(p['u']),p['v']);fs['B']=lambda x:shrink(x)@m+c;fs['S']=shrink\\n return fs\\n\\ndef nodes(fs,x,ak):\\n a=fs[ak](x);b=fs['B'](a);c=fs['oddexp'](b);d=fs['softplus'](b);return a,b,c,d\\n\\ndef dicts(fs,x,ak):\\n a,b,c,d=nodes(fs,x,ak);sh=shrink(a);o=funcs['oddexp'](b,1.8);p=funcs['softplus'](b,2.2)\\n g={'a':a,'b':b,'c':c,'d':d,'s':sh,'o':o,'p':p,'C_a':fs['oddexp'](a),'D_a':fs['softplus'](a),'C_d':fs['oddexp'](d),'D_c':fs['softplus'](c)}\\n out={}\\n for seq in ['ab','abc','abd','abcd','bcd','aop','asop','abcC_a','abdD_a','abcdC_dD_c','ac','ad','abcod','abop','abcD_a']:\\n  keys=list(seq) if '_' not in seq else list(seq.split('C_')[0].split('D_')[0])+([k for k in ('C_a','D_a','C_d','D_c') if k in seq]);z=np.column_stack([g[k] for k in keys]);out[seq]=z;out[seq+'2']=feat(z,2)\\n for base in ('ab','abc','abcd','asop'):\\n  z=out[base];w=z*z\\n  for q in (.25,1.,4.):\\n   for label,f in [('R',z/(1+q*w)),('T',np.tanh(q*z)),('Z',w/(1+q*w)),('Sin',np.sin(q*z))]:out[base+label+str(q)]=np.c_[out[base+'2'],f]\\n  cue=np.column_stack([z[:,i]+z[:,j]*k for i in range(z.shape[1]) for j in range(i+1,z.shape[1]) for k in (-1,1)])\\n  for label,f in [('a',abs(cue)),('e',funcs['oddexp'](cue,1.8)),('s',shrink(cue)),('r',cue/(1+cue*cue))]:out[base+'pair'+label]=np.c_[out[base+'2'],f]\\n for j in ('a','b','c','d','s','o','p'):\\n  z=g[j];out[j+'3']=np.c_[out['abcd2'],feat(z,3)[:,-20:]]\\n return out\\n\\ndef pred(g,i,j,Y,reg):\\n z=g-g[i].mean(0);scale=np.std(z[i],axis=0);z=z/np.where(scale<1e-9,1.,scale);b=z[i];m=Y[i].mean(0);return z[j]@b.T@np.linalg.solve(b@b.T+reg*np.eye(len(i)),Y[i]-m)+m\\n\\nif __name__=='__main__':\\n x=s['train']['x'];traj=s['train']['traj'];y=s['train']['y'];Y=np.c_[y,traj];fs=maps(s);print('A',ab(s),'T',s['eval_times']); print('Y versus T least square',np.mean(abs(np.c_[np.ones(len(y)),traj]@ls(np.c_[np.ones(len(y)),traj],y)-y)))\\n i=np.arange(52);j=np.arange(52,72); ii=np.arange(56);jj=np.arange(56,72);rank=[]; features={}\\n for ak in ('I','X','A'):\\n  for name,g in dicts(fs,x,ak).items():\\n   features[ak,name]=g\\n   for reg in (1e-5,.001,.015,.1,.6):\\n    e=abs(pred(g,i,j,Y,reg)-Y[j]);rank.append((e[:,0].mean(),e[:,1:].mean(),ak,name,reg))\\n for field in (lambda r:r[0],lambda r:r[1],lambda r:r[0]+r[1]):\\n  print('TOP');\\n  for a0,a1,ak,name,reg in sorted(rank,key=field)[:9]:\\n   e=abs(pred(features[ak,name],ii,jj,Y,reg)-Y[jj]);print(round(a0,5),round(a1,5),ak,name,reg,np.round([e[:,0].mean(),e[:,1:].mean()],5))\\n t=s['eval_times'];bt=-np.expm1(-t[:,None]*np.array([1.8,.4]));yt=ls(bt,traj.T).T\\n for ak in ('I','X','A'):\\n  print('LINEAR COEFFICIENT CORRS',ak)\\n  for n,z in zip(('a','b','c','d'),nodes(fs,x,ak)):\\n   print(n,np.round(np.corrcoef(np.c_[y,yt,z].T)[:3,3:],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/exactdag.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 smooth Panel B saturation → H2 signed 3/2-power dead zone followed by orthogonal mixing; panel RMSE is 0.000092 and the previous end-to-end 52/20 MAEs were 0.0696 and 0.0446.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A smooth coordinate transform without a dead zone explains Panel B at the measurement-noise scale.\",\n    \"empirical_witness\": \"The best tested smooth model has RMSE 0.00558; a signed 3/2-power transform with threshold 0.35005 achieves RMSE 0.000092.\",\n    \"causal_blanket_diagnosis\": \"The smooth approximations leak signal through Panel B's dead zone and distort the input to downstream operators.\",\n    \"sublated_pivot\": \"Use the identified dead-zone transform to retest calibration direction, downstream compositions, and readout terms.\",\n    \"risk_kind\": \"algebraic_or_symmetry_gap\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Replacing Panel B first tests whether upstream bias explains the missed prediction gates. Separate scalar and trajectory results and compare both prescribed split sizes before refining the readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ae52f8df0401c8ff3bab132ac26fee175efc7afc3bb2e136a7acf13619ff974f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44456.2,
+      "usage_known": true,
+      "prompt_tokens": 31288,
+      "cached_tokens": 9344,
+      "completion_tokens": 1688
+    }
+  ]
+}

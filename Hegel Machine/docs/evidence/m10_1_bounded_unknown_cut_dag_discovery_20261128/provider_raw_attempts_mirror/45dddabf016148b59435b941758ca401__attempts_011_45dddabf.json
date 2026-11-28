@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45dddabf016148b59435b941758ca401",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:09.720358+00:00",
+  "ended_at_utc": "2026-11-28T09:24:50.102368+00:00",
+  "request_sha256": "fd7a2fc9e989b8a619aaa06780b6be33d9aee21bb7f1a7bf48189c8722d2700b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65894,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37810,
+    "cached_tokens": 9344,
+    "completion_tokens": 1758
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/sparse_graph.py <<'PY'\\nfrom graph_probe import *\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import least_squares\\n\\ndef cfit(p,k):\\n u=p['u']; v=p[k]; fun=(lambda q,a:np.tanh(a*q)) if k=='v1' else (lambda q,a:1/(1+(a*q)**2))\\n def d(q,a):return np.c_[np.ones(len(q)),q,fun(q,a)]\\n def err(a):\\n  h=d(u,a); return (h@np.linalg.lstsq(h,v,rcond=None)[0]-v).ravel()\\n a=least_squares(err,[2.2 if k=='v1' else .4],bounds=(.05,5)).x; c=np.linalg.lstsq(d(u,a),v,rcond=None)[0]\\n return d,c,a\\n\\ndef kernels(st,x):\\n A=affine(st['panel_a']); B=affine(st['panel_b']); q=(x-A[0])/np.diag(A[1:]); b=forward(q,B); c=[]\\n for k in ('v1','v2'):\\n  d,w,a=cfit(st['panel_c'],k); c.append(d(q,a)@w)\\n out={}\\n for nm,h in [('x',x),('a',q),('b',b),('c',c[0]),('d',c[1])]:\\n  if nm=='x':\\n   ds=cdist(h,h,'sqeuclidean')/4\\n   for l in [.75,.9,1.05,1.2,1.4,1.7]:out['rbf'+str(l)]=np.exp(-ds/(2*l*l))\\n  z=h/np.maximum(.3,h.std(0)); G=z@z.T/4\\n  for d in (2,3,4,5,6,8):out[nm+'poly'+str(d)]=(1+.5*G)**d\\n  for tag,g in [('tanh',np.tanh(1.3*h)),('sin',np.sin(1.5*h)),('rat',h/(1+.6*h*h)),('exp',np.exp(.75*h)),('sq',h*h)]:\\n   g=(g-g.mean(0))/np.maximum(.15,g.std(0)); S=g@g.T/4\\n   out[nm+tag]=(1+.5*G+.5*S)**3\\n  if nm not in ('x','a','b'):continue\\n  delta=z[:,None,:]-z[None,:,:]\\n  for l in [.65,1.,1.5]:\\n   fs=np.exp(-delta**2/(2*l*l)); f1=fs.mean(2);f2=sum(fs[:,:,i]*fs[:,:,j] for i,j in combinations(range(4),2))/6;f3=sum(np.prod(fs[:,:,ix],axis=2) for ix in combinations(range(4),3))/4\\n   out[nm+'anova'+str(l)]=.08*f1+.42*f2+.4*f3+.10*np.prod(fs,axis=2)\\n   out[nm+'anova2'+str(l)]=.05*f1+.6*f2+.35*f3\\n return out\\n\\ndef pred(K,D,y,a,b,n,loo=False):\\n Ka=K[np.ix_(a,a)]+n*np.eye(len(a)); L=cho_factor(Ka); w=cho_solve(L,np.c_[D[a],y[a]]); W=w[:,:D.shape[1]]; g=w[:,-1]; F=cho_factor(D[a].T@W); beta=cho_solve(F,D[a].T@g); alpha=g-W@beta; p=D[b]@beta+K[np.ix_(b,a)]@alpha\\n if not loo:return p\\n diag=np.diag(cho_solve(L,np.eye(len(a))))-np.sum(W*cho_solve(F,W.T).T,axis=1); return p,np.mean(abs(alpha/diag)),alpha/diag\\n\\nif __name__=='__main__':\\n D=poly(x,1); K=kernels(s,x); rng=np.random.default_rng(1124); ix=np.arange(len(y)); more=[]\\n for i in range(8):\\n  p=rng.permutation(ix);more.append((p[:56],p[56:]))\\n ss=splits+more; out=[]; pp={}\\n for nm,k in K.items():\\n  for n in [1e-7,1e-5,1e-4,.001,.01]:\\n   for j in [0,1]:\\n    p=[pred(k,D,Y[:,j],a,b,n,True) for a,b in ss]; sc=np.array([np.mean(abs(v[0]-Y[b,j])) for v,(a,b) in zip(p,ss)]); ls=np.array([v[1] for v in p]);out.append((j,nm,n,sc,ls));pp[j,nm,n]=p\\n for j in [0,1]:\\n  print('target',j)\\n  for _,nm,n,v,l in sorted([r for r in out if r[0]==j],key=lambda r:.45*np.mean(r[3])+.25*r[3][0]+.3*np.max(r[3]))[:15]:print(nm,n,np.round(v[:6],5), 'all avg/worst/loo',np.round([v.mean(),v.max(),l.mean()],5))\\n  options=[r for r in out if r[0]==j];\\n  for count in [1,5,15,40]:\\n   e=[]\\n   for i,(a,b) in enumerate(ss):\\n    selected=sorted(options,key=lambda r:r[-1][i])[:count]; p=np.mean([pp[j,nm,n][i][0] for _,nm,n,_,_ in selected],axis=0);e.append(np.mean(abs(p-Y[b,j])));\\n   print('fold LOO ensemble',count,np.round(e,5),'avg/worst',np.mean(e),np.max(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse_graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (stationary kernel with optional trajectory readout) -> H2 (coordinate-wise warped interactions selected by inner leave-one-out); optional trajectory readout achieved 0.04080 required-split MAE but 0.05818 worst repeated-split MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the trajectory-conditioned scalar model\",\"rejected_reason\":\"It still misses the gate and does not reliably improve the repeated splits.\"}],\"rationale\":\"Test whether low-order interactions between nonlinear features improve scalar extrapolation. Compare fixed models against model selection using only the fitting rows of each outer split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3216d274d14d829805bb75da754a4e7d77e75c7deef12b51f381431ed226dfdd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45582.65,
+      "usage_known": true,
+      "prompt_tokens": 37810,
+      "cached_tokens": 9344,
+      "completion_tokens": 1758
+    }
+  ]
+}

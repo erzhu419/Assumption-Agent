@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c57633e848554bdb8135e0a35d6f5b01",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:41.538705+00:00",
+  "ended_at_utc": "2026-11-28T09:25:08.177414+00:00",
+  "request_sha256": "4f7c27983534eb53d58de406f1d59aadf7ae5fbfac16493541127dadcc9cc3b9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75577,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40495,
+    "cached_tokens": 9344,
+    "completion_tokens": 970
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations_with_replacement', 'from scipy.linalg import cho_factor, cho_solve')\\nstart = s.index('def _features(')\\nend = s.index('def solve_batch(', start)\\ns = s[:start] + '''def _features(study, x):\\n    z = _latent(study['panel_a'], x)\\n    panel = study['panel_c']\\n    a, b = (_operator(panel, key, z) for key in ('v1', 'v2'))\\n    paired = a*b\\n    scalar = np.column_stack((np.ones(len(z)), a, b, paired.sum(axis=1)))\\n    state = np.column_stack((scalar[:, :-1], paired))\\n    return scalar, state, b\\n\\n\\ndef _matern(a, b):\\n    d = np.sqrt(5*np.sum((a[:, None, :] - b[None, :, :])**2, axis=2))/1.4\\n    return (1+d+d*d/3)*np.exp(-d)\\n\\n\\ndef _predict_amplitudes(features, coordinates, amplitudes):\\n    n = len(amplitudes)\\n    d = features[:n]\\n    cov = _matern(coordinates[:n], coordinates[:n]) + .001*np.eye(n)\\n    inverse_design, inverse_targets = np.split(\\n        cho_solve(cho_factor(cov), np.column_stack((d, amplitudes))),\\n        [d.shape[1]], axis=1)\\n    coef = np.linalg.solve(d.T @ inverse_design + .0003*np.eye(d.shape[1]),\\n                           d.T @ inverse_targets)\\n    weights = inverse_targets - inverse_design @ coef\\n    return features[n:] @ coef + _matern(coordinates[n:], coordinates[:n]) @ weights\\n\\n\\n''' + s[end:]\\ns = s.replace('scalar, state = _features(', 'scalar, state, coordinates = _features(').replace('state[n:] @ np.linalg.lstsq(state[:n], amplitudes, rcond=None)[0] @ h.T', '_predict_amplitudes(state, coordinates, amplitudes) @ h.T')\\np.write_text(s)\\nf = Path('/tmp/batch_cv.py')\\nf.write_text(f.read_text().replace('scalar, state = m._features(s, x)\\\\n',''))\\nPY\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/batch_cv.py\\npython3 validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense quadratic trajectory fit → paired-panel mean with a Matérn residual, reducing measured worst-slice trajectory MAE from 0.07975 to 0.03038 and worst-horizon MAE from 0.12911 to 0.05331 before integration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the trajectory residual with a shared single-coordinate nonlinear term\",\n      \"rejected_reason\": \"Even the best tested variant had worst-slice trajectory MAE 0.05528, compared with 0.03038 for the residual kernel.\"\n    }\n  ],\n  \"rationale\": \"Promote the trajectory model that improved both the ordered split and coordinate-tail stress tests, leaving the scalar fit unchanged. Run the exact standalone artifact in an isolated process to catch integration regressions, then check the required public schema. The retained cyclic calibration reduced inlier leave-one-out MAE from 0.14662 to 0.000087.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0a15d8c302e5a5feba9163622bc215f081f50e8b2af0c58e05b67fb8ea8010df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29189.3,
+      "usage_known": true,
+      "prompt_tokens": 40495,
+      "cached_tokens": 9344,
+      "completion_tokens": 970
+    }
+  ]
+}

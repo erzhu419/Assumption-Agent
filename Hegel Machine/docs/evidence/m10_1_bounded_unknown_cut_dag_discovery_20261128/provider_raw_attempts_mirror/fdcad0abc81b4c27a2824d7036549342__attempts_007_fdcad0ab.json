@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fdcad0abc81b4c27a2824d7036549342",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:26.616648+00:00",
+  "ended_at_utc": "2026-11-28T09:14:09.566055+00:00",
+  "request_sha256": "889bb69fb5f6fd630a32b5b486fbc0b114366571f74bcaf1272c2d064bf4c35b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50479,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32985,
+    "cached_tokens": 5504,
+    "completion_tokens": 1795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/struct_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x,y,z=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; n=len(x)\\nls=lambda a,b: np.linalg.lstsq(a,b,rcond=None)[0]\\ndef poly(v,d): return np.column_stack([np.ones(len(v))]+[np.prod(v[:,j],1) for k in range(1,d+1) for j in combinations_with_replacement(range(4),k)])\\ndef kern(u,v,M,h):\\n d=(u[:,None]-v[None,:])@M\\n return np.exp(-h*np.sum(d*d,2))\\ndef fitkernel(v,u,Y,M,h,pen):\\n P=poly(v,2); K=kern(v,v,M,h)+pen*np.eye(len(v)); C=np.linalg.solve(np.block([[K,P],[P.T,np.zeros((15,15))]]),np.concatenate((Y,np.zeros((15,)+Y.shape[1:])))); return np.c_[kern(u,v,M,h),poly(u,2)]@C\\np=s['panel_a']; d=(p['v']-np.median(p['v']-p['u'],0)); scale=np.array([np.median((d[:,j]-d[i,j])[(abs(p['u'][:,j]-p['u'][i,j])>.3)]/(p['u'][:,j]-p['u'][i,j])[(abs(p['u'][:,j]-p['u'][i,j])>.3)]) for j in range(4) for i in [0]]); B=ls(poly(s['panel_b']['u'],1),s['panel_b']['v'])[1:]; print('cal scale',scale,'B',B)\\nsplits=[np.arange(52,72),np.argsort(np.linalg.norm(x,axis=1))[-18:]]+[ix for j in range(4) for order in [np.argsort(x[:,j])] for ix in (order[:18],order[-18:])]; splits+=list(np.array_split(np.random.default_rng(903).permutation(n),4))\\nresults={}\\nfor va in splits:\\n tr=np.setdiff1d(np.arange(n),va); Z=z[tr].T; P=poly(x,2)\\n def add(key,p,q): results.setdefault(key,[]).append([np.mean(abs(p-y[va])),np.mean(abs(q-z[va])),np.mean(abs(q-z[va]),0).max()])\\n def fitbasis(mode):\\n  def bas(k):\\n   E=-np.expm1(-t[:,None]*k[:2]); f=t*np.exp(-k[0]*t)\\n   if mode=='deriv': return np.c_[E,f]\\n   if mode=='third': return np.c_[E,-np.expm1(-t*k[2])]\\n   if mode=='sine': return np.c_[E,np.sin(k[2]*t)]\\n   return E\\n  init,lo,hi=[1.5,.25],[.7,.02],[4,.65]\\n  if mode in ('third','sine'): init+=[3.];lo+=[2.];hi+=[8.]\\n  k=least_squares(lambda k:(bas(k)@ls(bas(k),Z)-Z).ravel(),init,bounds=(lo,hi)).x\\n  return bas(k)\\n b=fitbasis('two'); yy=fitkernel(x[tr],x[va],y[tr],np.eye(4),.23,.001); zz=fitkernel(x[tr],x[va],ls(b,Z).T,np.eye(4),.23,.006)@b.T\\n add('baseline',yy,zz)\\n for mode in ['deriv','third','sine']:\\n  c=fitbasis(mode); q=fitkernel(x[tr],x[va],ls(c,Z).T,np.eye(4),.23,.006)@c.T; add('time '+mode,yy,q)\\n # Estimate a single-index saturating scalar link, retaining a free affine component.\\n for law,fun in [('tanh',np.tanh),('sin',np.sin),('soft',lambda w:w/np.sqrt(1+w*w))]:\\n  L=P[:,:5]; Q=P[:,5:]; A=P[tr]; yt=y[tr]; init=ls(A,yt); opts=[]\\n  for amp in [.7,1.5,3.]:\\n   def pred(k,rr):return L[rr]@k[:5]+k[-1]*fun(P[rr]@k[5:-1])\\n   o=least_squares(lambda k:np.r_[pred(k,tr)-yt,.004*k[5:-1]],np.r_[np.zeros(5),init/amp,amp],max_nfev=500)\\n   opts.append(o)\\n  add('link '+law,pred(min(opts,key=lambda o:o.cost).x,va),zz)\\n # Compare raw and operator-induced kernel geometries, including smoother extrapolation.\\n inv=np.diag(1/scale); I=np.eye(4); H=np.c_[I,B]; norm=lambda M: M*np.sqrt(4/np.sum(M*M))\\n for lab,M in [('raw',I),('cal',norm(inv)),('B',norm(inv@B)),('join',norm(inv@H))]:\\n  for width,pen in [(.09,.0002),(.15,.0005),(.23,.001),(.34,.002)]:\\n   yp=fitkernel(x[tr],x[va],y[tr],M,width,pen)\\n   zp=fitkernel(x[tr],x[va],ls(b,Z).T,M,width,pen*6)@b.T\\n   add((lab,width),yp,zp)\\nfor key,res in results.items():\\n a=np.array(res); print(key,'fixed',np.round(a[0],5),'tails max',np.round(a[1:10].max(0),5),'random max',np.round(a[10:].max(0),5),'tail y',np.round(a[1:10,0],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic-trend kernel → saturating readout or panel-informed geometry; the verified baseline has fixed scalar/state MAE of 0.01158/0.01364, but the upper third-coordinate tail reaches 0.03907 scalar MAE and 0.04360 worst-horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified baseline immediately\",\n      \"rejected_reason\": \"It passes the public split, but a reachable coordinate tail narrowly exceeds the scalar target and shows a larger late-horizon error.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified artifact unchanged while testing whether the tail error comes from the scalar link, the kernel geometry, or the temporal basis. Promote a challenger only if it improves the tail without sacrificing the public or random splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "61d3d36217cb6abea17fc391fa8acc0a4c8db9f7b4267fa1049ad43c15b2734c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48203.92,
+      "usage_known": true,
+      "prompt_tokens": 32985,
+      "cached_tokens": 5504,
+      "completion_tokens": 1795
+    }
+  ]
+}

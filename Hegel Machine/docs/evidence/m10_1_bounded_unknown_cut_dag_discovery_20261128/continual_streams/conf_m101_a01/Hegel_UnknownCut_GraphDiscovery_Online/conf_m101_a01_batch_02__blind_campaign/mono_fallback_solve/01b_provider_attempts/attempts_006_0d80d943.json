@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d80d9434d3a47b7a3fdfab92df219d1",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:48.409080+00:00",
+  "ended_at_utc": "2026-11-28T09:30:25.972187+00:00",
+  "request_sha256": "106e8990bd69b811649b511a2086030a8ffb723eb7189ff34f3776b333a9b993",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48806,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32047,
+    "cached_tokens": 9344,
+    "completion_tokens": 1556
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/ridges.py <<'PY'\\nfrom explore import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import lstsq\\np=PolynomialFeatures(2).fit_transform(x)\\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(26).permutation(72),4)]\\nforms={'tanh':np.tanh,'sin':np.sin,'rat':lambda a:a/(1+a*a),'exp':lambda a:np.exp(-a*a),'soft':lambda a:np.logaddexp(0,a)}\\ndef run(tr,te,name,kind,nstarts=14):\\n rng=np.random.default_rng(4890); h=p[tr]; yy=y[tr]; U=np.linalg.qr(h)[0]; yy0=yy-U@(U.T@yy); gx=x[tr]; fun=forms[name]; best=None\\n def features(a,q,pp):\\n  r=fun(q@a[:4]+a[4]);\\n  if kind=='one':return r[:,None]\\n  if kind=='pair':return np.c_[r,fun(q@a[5:9]+a[9])]\\n  if kind=='product':return r[:,None]*np.c_[np.ones(len(q)),q]\\n  return r[:,None]*pp\\n def fit(a):\\n  f=features(a,gx,h); f-=U@(U.T@f); b=lstsq(f,yy0,cond=1e-7)[0]; return yy0-f@b\\n for j in range(nstarts):\\n  a=rng.normal(0,1.1,10 if kind=='pair' else 5)\\n  if j<6:\\n   a[:4]=coords['AiB'][1:5].std() if False else (B[1:,j%4] if j<4 else np.linalg.lstsq(np.c_[np.ones(len(tr)),gx],yy,rcond=None)[0][1:]); a[:4]*= 1.5/np.linalg.norm(a[:4]); a[4]=0 if j<5 else .4\\n  r=least_squares(fit,a,bounds=(-6,6),max_nfev=105,ftol=1e-7)\\n  sc=np.mean(r.fun**2)\\n  if best is None or sc<best[0]: best=sc,r.x\\n sc,a=best; f=np.c_[h,features(a,gx,h)]; b=lstsq(f,yy,cond=1e-7)[0]; pred=np.c_[p[te],features(a,x[te],p[te])]@b\\n return np.sqrt(sc),np.abs(pred-y[te]).mean(),a,b\\nif __name__=='__main__':\\n for n in forms:\\n  for k in ('one','pair','product','quotient'):\\n   if k=='quotient' and n not in ('exp','rat'): continue\\n   results=[run(tr,te,n,k) for tr,te in folds[:2]]\\n   a,b=results[0][2:]; print(n,k,[(round(i,5),round(j,5)) for i,j,*r in results], 'a',a.round(3),'b',b.round(3),flush=True)\\nPY\\ncat >/tmp/panel_refine.py <<'PY'\\nfrom explore import *\\nfrom scipy.optimize import least_squares\\nu=pc['u']; v=pc['v1'];\\nfor name,fn,start in [('tanh',np.tanh,2.3),('sin',np.sin,3.2),('rat',lambda a:a/(1+a*a),1.3)]:\\n for shifts in [False,True]:\\n  def f(a,q): return np.c_[np.ones(len(q)),q,fn(q*a[:4]+(a[4:] if shifts else 0))]\\n  def fit(a,idx):\\n   F=f(a,u[idx]); b=np.linalg.lstsq(F,v[idx],rcond=None)[0]; return F@b-v[idx],b\\n  a0=np.r_[np.full(4,start),np.zeros(4)] if shifts else np.full(4,start); all=np.arange(len(u)); r=least_squares(lambda a:fit(a,all)[0].ravel(),a0,max_nfev=200); b=fit(r.x,all)[1]; errs=[]\\n  for i in all:\\n   ids=all[all!=i]; rr=least_squares(lambda a:fit(a,ids)[0].ravel(),a0,max_nfev=150); errs.append(f(rr.x,u[[i]])@fit(rr.x,ids)[1]-v[i]);\\n  print(name,shifts,'param',r.x.round(4),'rmse',np.mean(r.fun**2)**.5,'loo',np.mean(np.array(errs)**2)**.5,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_refine.py & OPENBLAS_NUM_THREADS=1 python3 /tmp/ridges.py & wait\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: move from fixed panel-feature expansions to nonlinear directions fitted within each training split; the best fixed composition still has worst-slice response MAE 0.05747.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best fixed panel composition as the response model\",\n      \"rejected_reason\": \"Its held-out error remains above 0.038; flexible directions can test whether the missing terms are rotated or multiplicative.\"\n    }\n  ],\n  \"rationale\": \"Profile the linear coefficients while fitting one or two nonlinear directions on each training prefix. Independently test whether per-coordinate scales or offsets explain panel C's residuals before relying on that panel in a forward model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b8d73238419db84adb961a658f51dd54c53322cf6314e50371dc95f11e9f08d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40149.27,
+      "usage_known": true,
+      "prompt_tokens": 32047,
+      "cached_tokens": 9344,
+      "completion_tokens": 1556
+    }
+  ]
+}

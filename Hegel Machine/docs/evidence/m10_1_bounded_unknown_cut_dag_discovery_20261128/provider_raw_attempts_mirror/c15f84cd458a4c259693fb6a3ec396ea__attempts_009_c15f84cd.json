@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c15f84cd458a4c259693fb6a3ec396ea",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:09.745200+00:00",
+  "ended_at_utc": "2026-11-28T09:37:34.553862+00:00",
+  "request_sha256": "b3e665f125396621342f98a79a455f56841350bbff9aa06647184711e723bc13",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26907,
+    "cached_tokens": 9344,
+    "completion_tokens": 944
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nx, y, z = (s['train'][k] for k in ('x', 'y', 'traj'))\\nt = s['eval_times']\\nxc = m._calibrate(s['panel_a'], x)\\nf, g, h = m._features(s, x)\\ni = np.arange(len(x))\\nsplits = [('public', i[52:]), ('large_norm', np.argsort(np.linalg.norm(xc, axis=1))[-16:])]\\nfor j in range(x.shape[1]):\\n    order = np.argsort(xc[:, j])\\n    splits.extend([(f'x{j}_low', order[:16]), (f'x{j}_high', order[-16:])])\\nscores = []\\nfor name, b in splits:\\n    a = np.setdiff1d(i, b)\\n    out = m.solve_batch({**s, 'train': {'x': x[a], 'y': y[a], 'traj': z[a]}, 'test': {'x': x[b]}})\\n    err = [np.mean(abs(out['y_hat']-y[b])), np.mean(abs(out['state_pred']-z[b]))]\\n    scalar = f[:, :-1]\\n    yp = scalar[b] @ m._fit(scalar[a], y[a])\\n    err.append(np.mean(abs(yp-y[b])))\\n    for gg, hh in [(g[:, :-1], h[:, :-1]), (g, h[:, :-1])]:\\n        rates, w = m._fit_trajectory(gg[a], hh[a], t, z[a])\\n        pred = m._temporal_design(gg[b], hh[b], t, rates) @ w\\n        err.append(np.mean(abs(pred-z[b])))\\n    scores.append(err)\\n    print(name, np.round(err, 6))\\nscores = np.asarray(scores)\\nprint('columns: solver_y, solver_traj, additive_y, additive_traj, no_slow_cross_traj')\\nprint('worst MAEs:', np.round(scores.max(0), 6))\\nprint('minimum paired MAE increases:', np.round((scores[:, 2:] - scores[:, [0, 1, 1]]).min(0), 6))\\nassert scores[:, :2].max() <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: additive panel-C readouts give way to matched and cross-branch interactions; the verified solver's worst-split MAEs are 0.00808 for scalar output and 0.00450 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the readout with auxiliary, full-cross, or rational terms\",\n      \"rejected_reason\": \"The completed audit found worse tail errors for the expanded bases and fitted zero rational attenuation on every audited split.\"\n    }\n  ],\n  \"rationale\": \"The schema check establishes delivery, but not which interactions matter. A paired ablation on measured tail slices, with temporal rates refit for each reduced model, tests whether the improvement persists beyond the discovery split. If removing a term does not hurt across these slices, narrow the structural claim.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3b05f008d925a702f8130fd5d1fb164c715d6706c887b9027f177dbe75346801",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27515.38,
+      "usage_known": true,
+      "prompt_tokens": 26907,
+      "cached_tokens": 9344,
+      "completion_tokens": 944
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d949bb63434f4d328fb21fc02fce48f0",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:13.305518+00:00",
+  "ended_at_utc": "2026-11-28T09:26:43.064873+00:00",
+  "request_sha256": "2c0905e097fe51a6d21156e954e8a5354ce98cc542c4d6983336f26d98c6dc8a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31565,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22378,
+    "cached_tokens": 5504,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_readout.py <<'PY'\\nimport itertools\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\nst = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nd = runpy.run_path('/holdout_task/_frozen_nodes/node_00.py')['run_node']({'__input__':st})\\nz, y = d['z_tr'], d['train_y']\\nn = len(y)\\na,b,c,e = z.T\\nq = np.column_stack((a*b,a*e,b*c,c*e))\\nbase = np.c_[np.ones(n),q]\\ncoef = np.linalg.lstsq(base,y,rcond=None)[0]\\nr = y-base@coef\\nfolds = [np.arange(n-20,n), *np.array_split(np.random.default_rng(713).permutation(n),4), np.argsort(np.linalg.norm(q,axis=1))[-n//4:]]\\n\\ndef evaluate(name,X,target=y,inverse=lambda p:p):\\n    errs=[]\\n    for te in folds:\\n        tr=np.setdiff1d(np.arange(n),te)\\n        p=inverse(X[te]@np.linalg.lstsq(X[tr],target[tr],rcond=None)[0])\\n        errs.append(np.mean(np.abs(y[te]-p)))\\n    full=inverse(X@np.linalg.lstsq(X,target,rcond=None)[0]); print(name,X.shape[1], 'fit',round(np.mean(abs(y-full)),6),'slices',np.round(errs,6),'worst',round(max(errs),6))\\n\\ndef monomials(X,k):\\n    return np.column_stack([np.prod(X[:,i],axis=1) for i in itertools.combinations_with_replacement(range(X.shape[1]),k)])\\n\\nprint('response range', y.min(),y.max(),'baseline residual range',r.min(),r.max())\\nevaluate('bilinear',base)\\nevaluate('full quadratic z',np.c_[np.ones(n),z,monomials(z,2)])\\nfor degree in [2,3]:\\n    evaluate(f'polynomial q degree {degree}',np.c_[base,*[monomials(q,k) for k in range(2,degree+1)]])\\nfor freq in [.35,.7,1.,1.4,2.]:\\n    evaluate(f'q sincos {freq}',np.c_[base,np.sin(freq*q),np.cos(freq*q)])\\nfor scale in [1.5,2.,3.,4.,6.,10.,20.]:\\n    if scale>np.max(np.abs(y)):\\n        evaluate(f'scaled tanh {scale}',base,np.arctanh(y/scale),lambda p:scale*np.tanh(p))\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('bilinear coefficients',coef)\\nprint('largest residuals: q, observed, fitted, error')\\nii=np.argsort(abs(r))[-12:];print(np.c_[q,y,y-r,r][ii])\\nprint('quadratic q coefficients',np.linalg.lstsq(np.c_[base,monomials(q,2)],y,rcond=None)[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (bilinear readout and trajectory) → H2 (nonlinear correction to the readout only); the interaction-tail MAEs are 0.062580 for readout and 0.004780 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A readout linear in the four interaction terms stays within 0.038 MAE on the large-interaction slice.\",\n    \"empirical_witness\": \"The interaction tail gives readout MAE 0.062580 versus trajectory MAE 0.004780; another random slice gives readout MAE 0.040136.\",\n    \"causal_blanket_diagnosis\": \"The trajectory fit supports retaining the four interaction coordinates; the readout may require an additional nonlinear term.\",\n    \"sublated_pivot\": \"Compare compact nonlinear readouts on the existing interaction coordinates before changing the sink artifact.\",\n    \"risk_kind\": \"Readout extrapolation\",\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the trajectory model\",\n      \"rejected_reason\": \"Its worst horizon MAE across the stress slices was 0.006580, well within tolerance.\"\n    }\n  ],\n  \"rationale\": \"Compare curvature and saturation candidates on identical splits, with coefficients fit only on training rows. Use the results to select a compact readout for separate validation rather than promoting a model on its in-sample fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ccc03277c338c03db632766100f52279116fa6c7064e54d6af48764371bc69c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32382.94,
+      "usage_known": true,
+      "prompt_tokens": 22378,
+      "cached_tokens": 5504,
+      "completion_tokens": 1151
+    }
+  ]
+}

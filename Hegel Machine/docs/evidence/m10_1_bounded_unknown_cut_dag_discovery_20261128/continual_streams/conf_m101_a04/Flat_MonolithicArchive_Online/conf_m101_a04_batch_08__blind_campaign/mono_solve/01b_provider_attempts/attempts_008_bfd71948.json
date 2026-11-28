@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bfd719484ae647d49c2a37fdc733437a",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:35.788740+00:00",
+  "ended_at_utc": "2026-11-28T09:55:17.699930+00:00",
+  "request_sha256": "085492216894e320f974c1bf9ca77cc12770a5d22ac119f76d602591fa4cf171",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51055,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30499,
+    "cached_tokens": 9344,
+    "completion_tokens": 1166
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; sed -n '67,109p' /tmp/hegel_continual_archive/conf_m101_a04_batch_06_solver.py; cat >/tmp/spatial.py <<'PY'\\nimport temporal as m, numpy as np,itertools\\nfrom scipy.linalg import cho_factor,cho_solve\\nY=np.c_[m.y,m.T]; N=len(Y); S=np.arange(N)<52\\nnames=[];fs=[]\\ndef add(name,z):\\n if z.ndim==1:z=z[:,None]\\n fs.append(z[:N]);names.extend([name+':'+str(i) for i in range(z.shape[1])])\\nraw,x,b,c,d=[getattr(m,k) for k in ('raw','x','b','c','d')]\\nD=dict(raw=raw,x=x,b=b,c=c,d=d)\\nfor k,z in list(D.items()):\\n add(k,z)\\n for p in (2,3,4):add(k+'^'+str(p),np.column_stack([np.prod(z[:,j],1) for j in itertools.combinations_with_replacement(range(4),p)]))\\nfor (k,u),(l,v) in itertools.combinations(D.items(),2):\\n add(k+'*'+l,(u[:,:,None]*v[:,None,:]).reshape(len(x),-1))\\n for sg in (1,-1):\\n  zz=(u[:,:,None]+sg*v[:,None,:]).reshape(len(x),-1);DUMMY=k+('+' if sg==1 else '-')+l\\n  for w in (.5,1.,1.2,1.6,2.,2.4,3.,4.8):\\n   add('cos'+str(w)+DUMMY,np.cos(w*zz));add('sin'+str(w)+DUMMY,np.sin(w*zz))\\nfor k,z in list(D.items())+[('x+b',x+b),('x-b',x-b),('c+d',c+d),('c-d',c-d),('c*d',c*d)]:\\n for w in (.35,.5,.75,1,1.2,1.5,1.6,1.8,2,2.4,3,4.8):\\n  for f,g in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('rat',lambda a:a/(1+a*a)),('absrat',lambda a:a/(1+abs(a)))]:add(f+str(w)+k,g(w*z))\\nfor j,z in enumerate(m.ar._features(m.s,raw,x,c,d)):add('archive'+str(j),z)\\nF=np.column_stack(fs);F=(F-F[S].mean(0))/np.maximum(F[S].std(0),1e-9)\\nU,V,W=np.linalg.svd(m.T[S],full_matrices=False); tar=np.c_[m.y,m.T@W[:3].T];tar=tar-tar[S].mean(0)\\nfor j in range(4):\\n r=tar[S,j].copy(); A=F[S]; J=[];print('OMP',j)\\n for t in range(16):\\n  ij=np.argmax(abs(A.T@r));J.append(ij);w=np.linalg.lstsq(A[:,J],tar[S,j],rcond=None)[0];r=tar[S,j]-A[:,J]@w\\n  if t<9 or t==15:print(t,names[ij],round(np.mean(abs(r)),5),round(np.mean(abs(F[~S][:,J]@w-tar[~S,j])),5))\\nfor i,f in enumerate(fs[-len(m.ar._features(m.s,raw,x,c,d)):]):\\n A=np.c_[np.ones(N),c[:N],d[:N],f]; p=A[~S]@np.linalg.lstsq(A[S],Y[S],rcond=1e-8)[0];e=np.abs(p-Y[~S]); print('archive group',i,round(e[:,0].mean(),4),round(e[:,1:].mean(),4))\\nPY\\npython3 /tmp/spatial.py | awk '/archive group/{if($4<.2||$5<.2)print;next}1'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated branches with a shared residual kernel → H2: identify compact spatial terms for separate readouts; 52/20 archive MAE is 0.02350 scalar and 0.03808 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether explicit algebraic terms explain the dominant trajectory modes better than the archived covariance. If sparse fits do not generalize, retain the archived calibration and tune the readout covariance instead.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2845e579f222e0996ef985fb7f3ea923ff4563f913f95016cf4dc182df4913ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47180.68,
+      "usage_known": true,
+      "prompt_tokens": 30499,
+      "cached_tokens": 9344,
+      "completion_tokens": 1166
+    }
+  ]
+}

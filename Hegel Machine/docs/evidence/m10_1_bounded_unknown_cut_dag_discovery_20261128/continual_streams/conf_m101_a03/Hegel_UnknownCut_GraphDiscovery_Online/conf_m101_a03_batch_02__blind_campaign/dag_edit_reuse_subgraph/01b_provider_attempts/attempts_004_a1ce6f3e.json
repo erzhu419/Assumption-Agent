@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a1ce6f3e66074fcdaec93474398531c8",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:31:26.483320+00:00",
+  "ended_at_utc": "2026-11-28T09:31:49.633308+00:00",
+  "request_sha256": "5c920c9d277f0eac85ebf46d6d83a5db48f58c29fd7540a9027aa18107c89e47",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 29647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21263,
+    "cached_tokens": 9344,
+    "completion_tokens": 869
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\na = runpy.run_path('node_00.py')\\nb = runpy.run_path('_frozen_nodes/node_01.py')['run_node']\\nc = runpy.run_path('_frozen_nodes/node_02.py')['run_node']\\nfit, basis, invert = (a[k] for k in ('_fit_forward', '_basis', '_invert'))\\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\\nresidual = lambda u,v,beta: np.einsum('njk,jk->nj',basis(u),beta)-v\\nbeta = fit(u, v)\\nnorm = np.linalg.norm(residual(u,v,beta),axis=1)\\nclean = np.argsort(norm)[:-3]\\nloo = []\\nfor j in clean:\\n    keep = np.arange(len(u)) != j\\n    loo.append(np.max(np.abs(residual(u[j:j+1],v[j:j+1],fit(u[keep],v[keep])))))\\nx = np.concatenate([s[k]['x'] for k in ('train','test')])\\ninv_max = np.max(np.abs(residual(invert(x,beta),x,beta)))\\nprint('clean calibration row-LOO max absolute error', max(loo), 'inverse max forward residual', inv_max)\\nassert max(loo) < 0.001 and inv_max < 1e-9\\ntr = s['train']; ix = np.arange(len(tr['x']))\\nmaes=[]\\nfor te in np.array_split(ix,4):\\n    keep = ~np.isin(ix,te)\\n    train = {k: tr[k][keep] for k in ('x','y','traj')}\\n    train['summary'] = np.array([train['y'].mean(),train['y'].std(),train['traj'][:,-1].mean(),train['traj'][:,-1].std()])\\n    sub = dict(s,train=train,test={'x':tr['x'][te]})\\n    out = c({'node_01':b({'__input__':sub,'node_00':a['run_node']({'__input__':sub})})})\\n    ye = np.abs(out['y_hat']-tr['y'][te]); se = np.abs(out['state_pred']-tr['traj'][te]); maes.append((ye.mean(),se.mean(),se.mean(axis=0).max()))\\nprint('worst of four blocked folds (y MAE, trajectory MAE, single-horizon MAE):',np.max(maes,axis=0))\\nassert np.max(maes) < 0.038\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine/quadratic → H2 robust cyclic cubic calibration; official held-out MAEs are 0.004918 for y and 0.004027 for trajectories (limit 0.038 each).\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The official split passed. Check whether a clean calibration row controls the fit, whether inversion stalls on observed inputs, and whether a different held-out block or trajectory horizon loses the margin. A failure would identify whether to revise fitting, inversion, or the basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5f3ce70c5e414b9c96da2c32cf2e6006f5fc3d4b58194bbc9430dcaee3359c07",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25740.37,
+      "usage_known": true,
+      "prompt_tokens": 21263,
+      "cached_tokens": 9344,
+      "completion_tokens": 869
+    }
+  ]
+}

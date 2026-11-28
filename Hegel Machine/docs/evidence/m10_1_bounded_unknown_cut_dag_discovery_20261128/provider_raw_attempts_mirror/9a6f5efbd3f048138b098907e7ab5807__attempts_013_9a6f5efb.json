@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a6f5efbd3f048138b098907e7ab5807",
+  "call_seq": 13,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:35.385057+00:00",
+  "ended_at_utc": "2026-11-28T09:51:07.837050+00:00",
+  "request_sha256": "b6d178e52cf6e938376feddfcf8ef4381743023ab21fe6edf4b70dd147ed53b8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82879,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45366,
+    "cached_tokens": 9344,
+    "completion_tokens": 1243
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from scipy.optimize import least_squares', 'from scipy.optimize import least_squares, minimize_scalar')\\ns = s[:s.index('def solve_batch(')] + '''def _shared_amplitude(times, trajectories, coordinates):\\n    # Profile the relaxation rate after removing the linear panel responses.\\n    q = np.linalg.qr(coordinates, mode='reduced')[0]\\n    residual = trajectories - q @ (q.T @ trajectories)\\n\\n    def mode(rate):\\n        return -np.expm1(-rate * times)\\n\\n    def loss(rate):\\n        h = mode(rate)\\n        return np.linalg.norm(residual - np.outer(residual @ h / (h @ h), h))\\n\\n    h = mode(minimize_scalar(loss, bounds=(.1, 4), method='bounded').x)\\n    return trajectories @ h / (h @ h)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['y'])\\n    z, b, c, d = _coords(study)\\n    Z, B, C, D = _grams((z, b, c, d), n)\\n    linear = np.c_[_aff(z[:n]), b[:n], c[:n], d[:n]]\\n    amplitude = _shared_amplitude(study['eval_times'], tr['traj'], linear)\\n\\n    # Fit the common state contribution and a smoother scalar correction.\\n    k_state = 1 + B + .3*B**2 + .3*(Z+C+D) + 2*Z*B\\n    k_amplitude = 1 + B + .3*B**2 + Z + 2*Z*B\\n    k_contrast = 1 + Z + B + .25*(C+D) + .03*B**2\\n    y = (_predict(k_amplitude, amplitude, .0001)\\n         + _predict(k_contrast, tr['y'] - amplitude, .06))\\n    state = _predict(k_state, tr['traj'], .001)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n'''\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nt=s['train']; x,y,p=(t[k] for k in ('x','y','traj')); idx=np.arange(len(y))\\nfor name, i in [('52/20',idx[:52]),('56/16',idx[:56]),('reverse 52/20',idx[20:]),('interleaved',idx[idx%4!=0])]:\\n    j=np.setdiff1d(idx,i)\\n    out=m.solve_batch(dict(s,train=dict(x=x[i],y=y[i],traj=p[i],summary=np.array([y[i].mean(),y[i].std(),p[i,-1].mean(),p[i,-1].std()])),test={'x':x[j]}))\\n    e=np.abs(out['state_pred']-p[j]); print(name, 'label/trajectory/worst-horizon', *(round(float(v),6) for v in (np.mean(abs(out['y_hat']-y[j])),e.mean(),e.mean(0).max())))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent readouts) -> H2 (shared relaxation amplitude plus a regularized label contrast); the prototype's worst label MAE was 0.03435 across three splits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the model with the lowest MAE on the prescribed split alone\",\n      \"rejected_reason\": \"It reached 0.02758 on that split but 0.06061 on the reverse split.\"\n    }\n  ],\n  \"rationale\": \"Promote the shared-amplitude model because it improved all three prototype splits. Verify the exact artifact with training-only scaling and rate estimation, then audit each trajectory horizon and an interleaved split for failures hidden by the aggregate score.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "177a9ccb929bd3fb350bd4323f983167c6a7bea51299033fae24ad3c8f308e00",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35047.0,
+      "usage_known": true,
+      "prompt_tokens": 45366,
+      "cached_tokens": 9344,
+      "completion_tokens": 1243
+    }
+  ]
+}

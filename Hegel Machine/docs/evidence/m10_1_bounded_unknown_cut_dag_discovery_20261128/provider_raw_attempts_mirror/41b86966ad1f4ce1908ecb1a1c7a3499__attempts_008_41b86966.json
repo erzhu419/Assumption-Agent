@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41b86966ad1f4ce1908ecb1a1c7a3499",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:31.574314+00:00",
+  "ended_at_utc": "2026-11-28T09:36:05.687939+00:00",
+  "request_sha256": "71a0a9cfdf30508ba2464bb09c816672c66f9eaa5771f4f7cdf134cfc6978ffa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55355,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33375,
+    "cached_tokens": 9344,
+    "completion_tokens": 1453
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/sparse.py <<'PY'\\nfrom search import *\\nfrom itertools import combinations\\nfrom scipy.linalg import qr\\nfrom sklearn.linear_model import Lasso, ARDRegression\\nu,v=s['panel_a']['u'],s['panel_a']['v']; w=np.roll(u,-1,axis=1); ww=np.roll(x,-1,axis=1)\\na=np.column_stack([np.c_[np.ones(len(x)),x[:,j],ww[:,j],x[:,j]*ww[:,j],x[:,j]**3]@fit(np.c_[np.ones(len(keep)),u[keep,j],w[keep,j],u[keep,j]*w[keep,j],u[keep,j]**3],v[keep,j]) for j in range(4)])\\nzsets={'x':x,'a':a,'b':B(x),'ba':B(a),**{k:v for k,v in zdict.items() if k not in ('x','a')}}\\ndef bank(zsets,grid=(.45,.85,1.3,1.8,2.4,3.2)):\\n fs=[]; names=[]\\n def add(v,n):fs.append(v);names.append(n)\\n for key,z in zsets.items():\\n  for d in (1,2,3):\\n   for ix in cr(range(4),d):add(np.prod(z[:,ix],axis=1),(key,'poly',ix))\\n  dirs=[((j,),z[:,j]) for j in range(4)]\\n  dirs += [((j,k,c),z[:,j]+c*z[:,k]) for j,k in combinations(range(4),2) for c in (-1,-.5,.5,1)]\\n  for ix,w in dirs:\\n   for g in grid:\\n    h=w*g\\n    for fn,v in [('sin',np.sin(h)),('cos',np.cos(h)),('tanh',np.tanh(h)),('rat',1/(1+h*h)),('orat',w/(1+h*h))]:\\n     add(v,(key,fn,ix,g))\\n     if len(ix)==1 and key in ('x','a','b','ba','c','ca'):\\n      for j in range(4):\\n       add(z[:,j]*v,(key,fn,ix,g,j))\\n  if key in ('x','a','b','ba'):\\n   for j,k in product(range(4),repeat=2):\\n    for g in (.3,.7,1.3,2.2):\\n     add(z[:,j]/(1+g*z[:,k]**2),(key,'ratio',j,k,g));add(z[:,j]**2/(1+g*z[:,k]**2),(key,'ratio2',j,k,g))\\n return np.column_stack(fs),names\\nF,names=bank(zsets)\\ndef prep(i,q):\\n h=np.linalg.qr(q[i])[0]; co=fit(q[i],F[i]); rot=F-q@co; scale=np.linalg.norm(rot[i],axis=0);return rot/np.where(scale>1e-6,scale,np.inf)\\ndef trail(i,j,q,Y,count=28,multi=True):\\n g=prep(i,q); G=g[i]; beta=fit(q[i],Y[i]); R=Y[i]-q[i]@beta; D=R.copy(); scale=np.sqrt(np.mean(R**2,axis=0)); active=[]; out=[]\\n for k in range(count):\\n  s=np.sum((G.T@(D/scale))**2,axis=1);s[active]=-1;active.append(int(np.argmax(s))); W=fit(G[:,active],R);D=R-G[:,active]@W;out.append(q[j]@beta+g[j][:,active]@W)\\n return np.array(out),active\\nif __name__=='__main__':\\n traces=[]\\n for qname,q in [('lin',poly(x,1)),('quad',poly(x,2)),('quad+c',np.c_[poly(x,2),zsets['c']])]:\\n  for joint in (True,False):\\n   E=[]\\n   for k,(i,j) in enumerate(fds):\\n    b=bases[tuple(i)];Y=np.c_[y,tr@b];\\n    if joint:p,ac=trail(i,j,q,Y)\\n    else:\\n     pp,ac=zip(*(trail(i,j,q,Y[:,m:m+1]) for m in range(3)));p=np.concatenate(pp,axis=2)\\n    if k==0:print(qname,joint,'first terms',[[names[m] for m in row[:7]] for row in (ac if not joint else [ac])])\\n    E.append(np.c_[np.mean(abs(p[:,:,0]-y[j]),axis=1),np.mean(abs(p[:,:,1:]@b.T-tr[j]),axis=(1,2))])\\n   E=np.array(E); print(qname,joint,[(m+1,E[0,m].round(4).tolist(),E[:,m].mean(0).round(4).tolist(),round(E[:,m].max(),4)) for m in (2,4,6,8,11,15,21,27)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 smooth panel compositions → H2 sparse cross-coordinate rational and nonlinear readouts; best five-split smooth candidate had worst MAE 0.06010.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Broaden the isotropic kernel grid\",\"rejected_reason\":\"The tested kernel families missed the tolerance across splits; sparse readouts test a different explanation for the residuals.\"}],\"rationale\":\"Fit the observed cyclic cubic calibration sparsely and test structured readout terms, selecting them independently inside each split. Compare shared support against separate scalar and trajectory support.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6ed91c23107cbfbea29860680a3ac9adb14c0e36b8c33bf6ed4625ab60edb2e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39439.22,
+      "usage_known": true,
+      "prompt_tokens": 33375,
+      "cached_tokens": 9344,
+      "completion_tokens": 1453
+    }
+  ]
+}

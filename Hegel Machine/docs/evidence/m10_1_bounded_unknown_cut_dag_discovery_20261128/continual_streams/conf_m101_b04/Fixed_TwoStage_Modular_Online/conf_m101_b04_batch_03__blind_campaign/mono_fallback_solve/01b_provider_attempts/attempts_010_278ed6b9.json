@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "278ed6b96f0f4bc6b39d24f395e4f4b6",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:02.351826+00:00",
+  "ended_at_utc": "2026-11-28T09:30:40.270969+00:00",
+  "request_sha256": "1f638ee046d1830c21f01a66c8025649721be0671f1dfd06114b4aa843214c34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66768,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38501,
+    "cached_tokens": 9344,
+    "completion_tokens": 1676
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/joint_b04.py <<'PY'\\nexec(open('/tmp/operators.py').read().split('ops={}')[0])\\nfrom scipy.special import erf, expit\\nu=s['panel_b']['u']; v=s['panel_b']['v']; rng=np.random.default_rng(710)\\nids=[(np.arange(72),52),(np.arange(72),56),*[(rng.permutation(72),56) for _ in range(8)],*[(np.argsort(abs(z[:,j])),52) for j in range(4)]]\\nfuncs={\\n 'erf':(erf,[.68,1.45]),'tanh':(np.tanh,[.75,1.43]),'sin':(np.sin,[.4,2.84]),\\n 'exp':(lambda h:h*np.exp(-h*h),[1.09,1.01]),\\n 'rational2':(lambda h:h/(1+h*h)**2,[1.1,.7]),\\n 'logistic':(lambda h:h*expit(1-h*h),[1.5,1.3]),\\n 'gausscdf':(lambda h:h*(1-erf(h*h)),[1.1,.8]),\\n 'sinc':(lambda h:h*np.sinc(h)**2,[1.75,.5]),\\n}\\ncy=[0,1,2,3,4,7,11]\\nct={'lin':list(range(5)), 'small':[0,1,2,3,4,7,8,11], 'quad':list(range(15))}\\n\\ndef warp(x,p,fun):return lin(x-p[0]*fun(p[1]*x))\\n\\ndef panel(fun,q):\\n def res(p):\\n  D=warp(u,p,fun);return (D@fit(D,v)-v).ravel()\\n o=least_squares(res,q,bounds=([.02,.15],[4.,4.])); return o.x,fit(warp(u,o.x,fun),v),np.std(o.fun)\\n\\ndef basis(T):\\n def B(q):return -np.expm1(-t[:,None]*q)\\n def res(q):\\n  b=B(q);return (b@fit(b,T.T)-T.T).ravel()\\n o=least_squares(res,[1.6,.3],bounds=([.58,.01],[5.,1.2])); return np.linalg.qr(B(o.x))[0],o.x,np.std(o.fun)\\n\\ndef evaluate(kind,mode,w,bmix):\\n fun,q=funcs[kind]; p,C,pr=panel(fun,q); results=[]\\n for ix,n in ids:\\n  i,j=ix[:n],ix[n:]; Q,rt,terr=basis(Y[i,1:]); target=Y[i,1:]@Q\\n  def design(zi,pp,cc):\\n   b=warp(zi,pp,fun)@cc; g=poly(b,2);return g[:,cy],g[:,ct[mode]]\\n  def score(par,ret=False):\\n   pp=par[:2]; cc=par[2:].reshape(5,4) if bmix else C\\n   if not bmix:\\n    au=warp(u,pp,fun);cc=fit(au,v)\\n   A,B=design(z[i],pp,cc); ca=fit(A,Y[i,0]); cb=fit(B,target)\\n   if ret:\\n    Aj,Bj=design(z[j],pp,cc);return np.c_[Aj@ca,Bj@cb@Q.T]\\n   return np.r_[(warp(u,pp,fun)@cc-v).ravel(),w*(A@ca-Y[i,0]),w*(B@cb-target).ravel()/np.sqrt(8)]\\n  p0=np.r_[p,C.ravel()] if bmix else p\\n  if w:\\n   box=([.02,.15]+([-np.inf]*20 if bmix else []),[4.,4.]+([np.inf]*20 if bmix else [])); pp=least_squares(score,p0,bounds=box,max_nfev=45).x\\n  else: pp=p0\\n  E=np.abs(score(pp,True)-Y[j]);results.append([E[:,0].mean(),E[:,1:].mean(),E[:,-1].mean()]);\\n R=np.array(results); print(kind,mode,w,bmix,'panel',np.round([*p,pr],5),'metrics',np.round(np.r_[R[0],R[1],R[2:10].max(0),R[10:].max(0)],5),flush=True)\\nfor kind in funcs:\\n for mode in ('lin','small','quad'):\\n  evaluate(kind,mode,0,False)\\nfor k in ('erf','tanh','exp','logistic','sin'):\\n for w,mix in ((.65,False),(.65,True),(1.65,True)):\\n  evaluate(k,'small',w,mix)\\nQ,rt,terr=basis(Y[:,1:]);print('rates, temporal reconstruction rmse',rt,terr)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint_b04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unrestricted quadratic readout → H2: a shared panel-B warp with sparse cross-products and output-specific trajectory terms; the tied-erf sparse probe has worst shuffled MAEs of 0.01484 for y and 0.01321 for trajectories, and worst edge MAEs of 0.02920 and 0.01373.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep all quadratic terms\",\"rejected_reason\":\"The additional terms worsen coordinate-edge errors relative to the sparse readout in the tied-erf probe.\"}],\"rationale\":\"Test whether the trajectory needs cross-products and whether fitting the panel jointly with training responses improves predictions on untouched rows. Retain the simpler panel-only fit if joint fitting fails to improve the worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "79b28e4bcb3172d749e9021402cac799ef604938fc525bc8b9fba5169c687489",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43164.47,
+      "usage_known": true,
+      "prompt_tokens": 38501,
+      "cached_tokens": 9344,
+      "completion_tokens": 1676
+    }
+  ]
+}

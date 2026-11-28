@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dcbcefe448c94e23a3cf29d39583bbd8",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:04:50.153607+00:00",
+  "ended_at_utc": "2026-11-28T10:05:10.828300+00:00",
+  "request_sha256": "ec8ec40d1799a6f5136757996b91c6cd9cfff8a56fddf0b28698f0ecad2c203b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 12582,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15349,
+    "cached_tokens": 9344,
+    "completion_tokens": 747
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; sed -n '45,170p' test_dag_candidate.py; cat validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True)\\nfor p in ['panel_a','panel_b','panel_c','train','test']:\\n d=s[p]; print(p,[(k,np.min(v),np.max(v),np.mean(v,axis=0),np.std(v,axis=0)) for k,v in d.items()])\\n if 'u' not in d: continue\\n u=d['u']; a=np.column_stack((np.ones(len(u)),u)); q=np.column_stack([u[:,i]*u[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])\\n for k in d.keys()-{'u'}:\\n  y=d[k]; print(k)\\n  for A in (a,np.column_stack((a,q)),np.column_stack((a,np.tanh(u),np.sin(u),np.cos(u))),np.column_stack((np.ones(len(u)),np.tanh(u),np.sin(u),q))):\\n   h=A@np.linalg.pinv(A); r=y-h@y; print(' rmse',np.mean(r*r,axis=0)**.5,'loo',np.mean((r/(1-np.diag(h)[:,None]))**2,axis=0)**.5)\\n  print('linear coefficients',np.linalg.lstsq(a,y,rcond=None)[0]); print('quadratic coefficients',np.linalg.lstsq(np.column_stack((a,q)),y,rcond=None)[0]); print('linear row residual',np.sort(np.linalg.norm(y-a@np.linalg.lstsq(a,y,rcond=None)[0],axis=1)))\\nu=s['train']['x']; t=s['train']['traj']; print('trajectory svd',np.linalg.svd(t,compute_uv=False)); print('correlations',np.corrcoef(np.column_stack((u,s['train']['y'],t[:,[0,-1]])).T))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shifted panel-C v1 assay -> H2: distinguish nonlinear structure from small-panel overfit using assay leave-one-out errors; end-to-end metrics pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Read the exact fold construction and compare linear, quadratic, and bounded assay bases. High leave-one-out error despite a low fit residual would rule out using that basis for calibration transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "f4ec2157d736b294813ab42b149d48cbb4dfb0f507379e601c28d838a53a2266",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23357.49,
+      "usage_known": true,
+      "prompt_tokens": 15349,
+      "cached_tokens": 9344,
+      "completion_tokens": 747
+    }
+  ]
+}

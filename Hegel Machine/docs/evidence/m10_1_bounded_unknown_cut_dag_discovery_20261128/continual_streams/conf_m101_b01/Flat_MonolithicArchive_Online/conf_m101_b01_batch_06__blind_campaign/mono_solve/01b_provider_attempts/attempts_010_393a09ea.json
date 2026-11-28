@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "393a09ea72794cb0aa35ff545de558c1",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:40.336073+00:00",
+  "ended_at_utc": "2026-11-28T09:55:32.245961+00:00",
+  "request_sha256": "f06b73aded16a4a50f277a5c9fa58aa39f15ae4e956876805a9ebfde96a308e4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67706,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36967,
+    "cached_tokens": 9344,
+    "completion_tokens": 2166
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/conf_m101_b01_batch_05_solver.py /holdout_task/batch_solver.py\\nsed -i '/^def solve_batch/,$d' /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _branches(study, raw):\\n    x = _inverse_calibration(raw, _calibration(study['panel_a']))\\n    axle = study['panel_b']\\n    def bdesign(x):\\n        return _affine(x**3 / np.sqrt(1 + .70020846*x**4) - .08899942*x)\\n    b = bdesign(x) @ _fit(bdesign(axle['u']), axle['v'])\\n    c = study['panel_c']\\n    def c1design(v):\\n        return _affine(v * np.roll(v, -1, axis=1))\\n    def c2design(v):\\n        return np.c_[_affine(v), np.cos(1.28247*v)]\\n    return [x, b, c1design(b)@_fit(c1design(c['u']), c['v1']),\\n            c2design(b)@_fit(c2design(c['u']), c['v2'])]\\n\\n\\ndef _predict(g, t, n, penalty):\\n    mu = t.mean(axis=0)\\n    f = cho_factor(g[:n, :n] + penalty*np.eye(n))\\n    return mu + g[n:, :n] @ cho_solve(f, t-mu)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    parts = _branches(study, np.r_[tr['x'], study['test']['x']])\\n    q = np.column_stack(parts)\\n    q = (q-q[:n].mean(0))/q[:n].std(0)\\n    g = q @ q.T / q.shape[1]\\n    d = cdist(q,q,'sqeuclidean') / q.shape[1]\\n    y = _predict(.3*g + 1/(1+d/18), tr['y'], n, 0.0003)\\n    state = _predict((1+g)**2, tr['traj'], n, .002)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat >/tmp/learn6.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nsys.path.insert(0,'/holdout_task'); from batch_solver import _branches\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; Q=_branches(s,tr['x']); b=Q[1]; x=Q[0];\\nfor Z in (x,b):\\n for k in (1,2,3):\\n  v=np.roll(Z,k,axis=1); Q.extend([Z*v,Z/(1+v*v)]);\\nc=s['panel_c']; cw=np.linalg.lstsq(np.c_[np.ones(len(c['u'])),c['u']*np.roll(c['u'],-1,axis=1)],c['v1'],rcond=None)[0]; print('C1',cw.round(3))\\nfolds=[(np.setdiff1d(np.arange(52),j),j) for j in np.array_split(np.random.default_rng(624).permutation(52),4)]+[(np.arange(52),np.arange(52,72))]\\ndef model(i,j,groups,z,typ,individual,reg):\\n xx=np.column_stack(groups); xx=(xx-xx[i].mean(0))/np.maximum(xx[i].std(0),1e-8); n=len(i); nf=xx.shape[1];\\n if individual: group=np.arange(nf)\\n else: group=np.repeat(np.arange(len(groups)),[a.shape[1] for a in groups]);\\n k=group.max()+1; diff=(xx[:,None,:]-xx[None,:,:])**2/nf; dot=xx[:,None,:]*xx[None,:,:]/nf\\n d=np.stack([diff[:,:,group==a].sum(2) for a in range(k)]); dot=np.stack([dot[:,:,group==a].sum(2) for a in range(k)]);\\n ii=np.ix_(i,i); di=d[:,i][:,:,i]; gi=dot[:,i][:,:,i]; m=z[i].mean(); yy=(z[i]-m)/z[i].std(); I=np.eye(n)\\n def kern(params,d,g,jac=False):\\n  w=np.exp(params[:k]); a,l,noise=np.exp(params[k:]); D=np.tensordot(w,d,axes=1); G=np.tensordot(w,g,axes=1);\\n  if typ=='rq': f=1/(1+D); fp=-f*f\\n  elif typ=='rbf': f=np.exp(-D); fp=-f\\n  else: f=(1+G)**2; fp=0\\n  K=a*f+l*G\\n  if not jac:return K\\n  K=K+noise*I\\n  der=(a*fp*d+l*g) if typ!='poly' else (2*a*(1+G)+l)*g\\n  return K,np.concatenate((w[:,None,None]*der,np.stack([a*f,l*G,noise*I])))\\n def nll(p):\\n  K,A=kern(p,di,gi,True); f=cho_factor(K); alpha=cho_solve(f,yy); inv=cho_solve(f,I)-alpha[:,None]*alpha; return .5*yy@alpha+np.log(f[0].diagonal()).sum()+reg*np.sum((p[:k]+1)**2), .5*np.einsum('ij,aij->a',inv,A)+np.r_[2*reg*(p[:k]+1),0,0,0]\\n opt=minimize(nll,np.r_[np.full(k,-1.),0.,-3.,-7.],jac=True,method='L-BFGS-B',bounds=[(-8,4)]*k+[(-8,7),(-10,5),(-13,0)],options={'maxiter':100}); p=opt.x; K=kern(p,d,dot); out=m+z[i].std()*(K[np.ix_(j,i)]@cho_solve(cho_factor(K[ii]+np.exp(p[-1])*I),yy)); return out,p\\nfor gs in [Q[:4],Q[:4]+Q[4:8],Q,Q[:2],[Q[1],Q[2],Q[3]]]:\\n for typ in ('rq','rbf','poly'):\\n  for ix,reg in [(False,.15),(True,.2),(True,.8)]:\\n   rec=[]; params=[]\\n   for out,z in enumerate([y,T[:,-1]]):\\n    e=[]\\n    for i,j in folds:\\n     h,p=model(i,j,gs,z,typ,ix,reg); e.append(np.mean(abs(h-z[j]))); \\n    rec+=list(np.round([np.mean(e[:4]),e[-1]],5)); params.append(np.round(p,1))\\n   print(len(gs),typ,ix,reg,rec, flush=True)\\n   if rec[1]<.040 or rec[0]<.065: print('weights',params,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/learn6.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed nonlinear interactions) -> H2 (learn which calibrated branches and interactions matter for each output); best observed 52/20 MAEs are 0.04848 for y and 0.02912 for state, from separate models.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use one readout model for both outputs\",\"rejected_reason\":\"The quadratic kernel improved state but not y, so the two outputs need independent model selection.\"}],\"rationale\":\"Save a standalone baseline and test branch-weighted kernels. If learned weights improve the internal folds, use them to refine the scalar model; otherwise keep the validated state readout and test more constrained scalar mechanisms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bc4de3d8bac94fc4465b0f3aa7263e5bd2b73639b4fc3605324f8b533527a250",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54487.93,
+      "usage_known": true,
+      "prompt_tokens": 36967,
+      "cached_tokens": 9344,
+      "completion_tokens": 2166
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0fa49382c5b04322b4188d004266a57e",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:20.874253+00:00",
+  "ended_at_utc": "2026-11-28T09:32:51.221594+00:00",
+  "request_sha256": "545b031bbd5900a82505638549e12fc8d3c10ff4aa1e09a1fdc671a824a4b6fc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22577,
+    "cached_tokens": 9344,
+    "completion_tokens": 1169
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py; cat > /tmp/graph_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares,minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; T=s['train']['traj'][:52].T\\nnp.set_printoptions(precision=5,suppress=True)\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,k):return np.column_stack([np.prod(x[:,ij],axis=1) for ij in combinations_with_replacement(range(x.shape[1]),k)])\\ndef cal(x):return np.c_[aff(x),poly(x,2),x**3]\\na=s['panel_a']; u=a['u']; v=a['v']; keep=np.max(abs(v),axis=1)<3\\np=fit(cal(u)[keep],v[keep]); print('cal terms',p); print('clean residual',np.sort(np.linalg.norm(cal(u)@p-v,axis=1)))\\nb=s['panel_b'];print('B affine',fit(aff(b['u']),b['v']))\\nc=s['panel_c']; u=c['u'];\\nfor name in ['v1','v2']:\\n v=c[name];\\n for q,D in [('quad',np.c_[aff(u),poly(u,2)]),('only quad',aff(poly(u,2))),('diagonal',np.c_[aff(u),u**2]),('cycles',np.c_[aff(u),u[:,[0,0,1,2]]*u[:,[1,3,2,3]]])]: print(name,q,np.linalg.norm(D@fit(D,v)-v));\\n for trig in [np.cos,np.sin]:\\n  for add in [False,True]:\\n   def design(f):return aff(np.c_[u,trig(f*u)] if add else trig(f*u))\\n   def loss(f):\\n    D=design(f);return np.linalg.norm(D@fit(D,v)-v)\\n   g=np.linspace(.1,10,300); i=np.argmin([loss(f) for f in g]); r=minimize_scalar(loss,bounds=(g[max(i-1,0)],g[min(i+1,len(g)-1)]),method='bounded');print(name,trig.__name__,add,r.x,r.fun)\\nfor typ in ['exp2','exp3','exp2+linear','exp2+const','cascade']:\\n def basis(q):\\n  E=-np.expm1(-t[:,None]*q); \\n  if typ=='exp2+linear':return np.c_[E,t]\\n  if typ=='exp2+const':return np.c_[E,np.ones_like(t)]\\n  if typ=='cascade':return np.c_[E,t*np.exp(-q[1]*t)]\\n  return E\\n def err(q):\\n  E=basis(q);return (E@fit(E,T)-T).ravel()\\n q=least_squares(err,[.2,.9,2.5] if typ=='exp3' else [.3,1.8],bounds=(.0001,12),max_nfev=300).x;print(typ,q,np.sqrt(np.mean(err(q)**2)))\\nPY\\npython3 /tmp/graph_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived calibration and relaxation -> H2 quadratic-plus-cubic calibration and a third temporal mode; best archived 52/20 MAEs are 0.05990 for response and 0.07877 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Affine or affine-plus-diagonal-cubic terms suffice to represent panel A on its clean rows.\",\n    \"empirical_witness\": \"Clean-row maximum residual falls from 0.587 with diagonal cubics alone and 0.160 with quadratics alone to 0.000256 with both.\",\n    \"causal_blanket_diagnosis\": \"Calibration misspecification changes the coordinates supplied to every downstream operator.\",\n    \"sublated_pivot\": \"Recover the joint polynomial calibration, then test auxiliary operator compositions and three-column temporal bases.\",\n    \"risk_kind\": \"calibration underfit\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the best archived solver unchanged\",\n      \"rejected_reason\": \"It exceeds the 0.038 MAE limit on both required outputs.\"\n    }\n  ],\n  \"rationale\": \"The panel residuals distinguish competing operator bases without using held-out outcomes. Training-only temporal fits will show whether a third mode explains the trajectory structure above the noise floor.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "580559e53aaf60baa286d5e3cbe9ba02e2558a17093dc9928a0a4df9802e6bbc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32974.16,
+      "usage_known": true,
+      "prompt_tokens": 22577,
+      "cached_tokens": 9344,
+      "completion_tokens": 1169
+    }
+  ]
+}

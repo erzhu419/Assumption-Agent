@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2c2c2616ab14f40ad588e22f5824545",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:31.120222+00:00",
+  "ended_at_utc": "2026-11-28T09:25:48.779978+00:00",
+  "request_sha256": "6f398566f19d2ef0963ee6887e019fcc836936defffff28b5b21d70a0eeca917",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 23011,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19778,
+    "cached_tokens": 9344,
+    "completion_tokens": 620
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _features(z):\\n    a, b, c, d = z.T\\n    return np.column_stack((np.ones(len(z)), a*b, a*d, b*c, c*d))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['node_00']\\n    fit = _features(data['z_tr'])\\n    targets = np.column_stack((data['train_y'], data['train_traj']))\\n    coef = np.linalg.lstsq(fit, targets, rcond=None)[0]\\n    pred = _features(data['z_te']) @ coef\\n    y, state = pred[:, 0], pred[:, 1:]\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\n\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (affine sink) → H2 (four bilinear interactions plus intercept); Panel C v1 linear R² is 0.129279, and sink holdout MAE is being measured.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine basis in the frozen coordinates captures the shifted signal.\",\"empirical_witness\":\"Panel C v1's quadratic fit has four large interaction rows, with affine and other quadratic coefficients near zero; the same four interactions dominate the sink fits across time.\",\"causal_blanket_diagnosis\":\"The frozen upstream coordinates retain the inputs needed for the shift, but an affine sink omits their cross-products.\",\"sublated_pivot\":\"Test an intercept and the four products z0*z1, z0*z3, z1*z2, and z2*z3 for both outputs.\",\"risk_kind\":\"Missing interaction basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Full quadratic basis\",\"rejected_reason\":\"The probe shows that only four quadratic terms dominate; test whether those suffice before adding terms.\"}],\"rationale\":\"The public acceptance run will show whether the compact basis meets both MAE targets and the output contract; if only the readout fails, retain the trajectory model and test a nonlinear readout correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "06ff8460758515c609346263738c6035ef00194827e8df96d6dcd63b8a166b65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20292.24,
+      "usage_known": true,
+      "prompt_tokens": 19778,
+      "cached_tokens": 9344,
+      "completion_tokens": 620
+    }
+  ]
+}

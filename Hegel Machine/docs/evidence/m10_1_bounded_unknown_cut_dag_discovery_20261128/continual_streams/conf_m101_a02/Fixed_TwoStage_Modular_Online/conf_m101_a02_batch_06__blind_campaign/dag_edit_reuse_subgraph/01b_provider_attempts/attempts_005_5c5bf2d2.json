@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c5bf2d2f7b8432da4fc29fdf6fcc35c",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:38.627632+00:00",
+  "ended_at_utc": "2026-11-28T09:43:13.493393+00:00",
+  "request_sha256": "8ab8848c2afaf00c86c3ff05ee87bd8355ea0dcca353d1cb1eda1b08a49979ee",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40825,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27578,
+    "cached_tokens": 15488,
+    "completion_tokens": 1455
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/dag_structure.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nL=stack(one(z),z); ZQ=stack(L,Q)\\nprint('linear/pure quadratic fit coefficients by time (and y)',ls(ZQ,Y))\\nprint('y vs final residual and observed',np.corrcoef((Y-ZQ@ls(ZQ,Y)).T)[0]); print('PCA residual singular values',np.linalg.svd(Y-ZQ@ls(ZQ,Y),compute_uv=False)); print('time fits',V[0]);\\nfor name,fn in [('log',lambda k:np.log1p(k*t)),('exp',lambda k:-np.expm1(-k*t)),('pow',lambda k:t**k),('sqrt',lambda k:np.sqrt(1+k*t)-1),('asinh',lambda k:np.arcsinh(k*t))]:\\n k=minimize_scalar(lambda k:fit(fn(k)[:,None],V[0]),bounds=(.02,9),method='bounded').x; print(name,k,fit(fn(k)[:,None],V[0]),fit(stack(fn(k),np.ones_like(t)),V[0]))\\nq0=(z*z)@np.array([1,1,-1,-1]); lin0=z@np.array([-1,-1,1,1]);\\nfor yy in [y,y-tr[:,-1],tr[:,-1]]:\\n print('baseline residual',np.std(yy-ZQ@ls(ZQ,yy)),ls(ZQ,yy))\\nfor nm,base in [('Q',ZQ),('ABQ',stack(ZQ,A)),('Q+A*B',stack(ZQ,A*B)),('Q+A2',stack(ZQ,A*A)),('Q+B2',stack(ZQ,B*B)),('Q+A2+B2',stack(ZQ,A*A,B*B)),('Q+Az',stack(ZQ,A*z)),('Q+Bz',stack(ZQ,B*z)),('Q+tanh',stack(ZQ,np.tanh(1.7*z))),('Q+sin',stack(ZQ,np.sin(3*z))),('Q+A*B+Az+Bz',stack(ZQ,A*B,A*z,B*z))]:\\n for alpha in [0,0.003]:\\n  sc=np.maximum(base[:52].std(0),.01);sc[0]=1; D=base/sc; G=D[:52].T@D[:52]; P=np.diag(np.r_[0,np.repeat(alpha*52,D.shape[1]-1)]); C=np.linalg.lstsq(G+P,D[:52].T@Y[:52],rcond=1e-11)[0]; e=np.abs(D[52:]@C-Y[52:]); print(nm,alpha,e[:,0].mean(),e[:,1:].mean())\\nprint('Single-index nonlinear corrections: quadratic plus smooth or switch ridge in z/A/B/AB')\\nfrom scipy.linalg import qr\\nrng=np.random.default_rng(193)\\nfor regime in ['tanh','sine','relu','rational','softplus']:\\n f={'tanh':np.tanh,'sine':np.sin,'relu':lambda x:np.maximum(x,0),'rational':lambda x:1/(1+x*x),'softplus':lambda x:np.logaddexp(0,x)}[regime]\\n for name,coords in [('z',z),('A',A),('B',B),('AB',stack(A,B))]:\\n  ds=ZQ[:52]; qq=np.linalg.qr(ds)[0]; targets=Y[:52,[0,-1]]; r=targets-qq@(qq.T@targets); best=None\\n  for j in range(20):\\n   def fun(p):\\n    h=f(p[0]+coords[:52]@p[1:]); h-=qq@(qq.T@h); return (h[:,None]*((h@r)/max(h@h,1e-19))-r).ravel()\\n   o=least_squares(fun,rng.normal(0,1,coords.shape[1]+1),max_nfev=90,bounds=(-15,15)); score=np.mean(o.fun**2)\\n   if best is None or score<best[0]:best=score,o.x\\n  d=stack(ZQ,f(best[1][0]+coords@best[1][1:])); e=np.abs(d[52:]@ls(d[:52],Y[:52])-Y[52:]); print(regime,name,round(best[0],6),round(e[:,0].mean(),5),round(e[:,1:].mean(),5),best[1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: additive panel-C readouts → H2: a shared quadratic response plus a compact nonlinear correction; best measured public split MAEs are 0.066949 for y and 0.052302 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a linear combination of panel-C branches as the sink\",\"rejected_reason\":\"The additive readout misses both thresholds, and coordinatewise branch products do not improve it.\"}],\"rationale\":\"Similar quadratic coefficients for y and the final state suggest a shared term. Compare residuals and test compact corrections; their held-out errors will determine whether to keep a common nonlinear term or fit the outputs separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5e045c61b6ae49e1f250c26a970af7058a54bc976ff6b05716bc454fe5d63b62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38532.2,
+      "usage_known": true,
+      "prompt_tokens": 27578,
+      "cached_tokens": 15488,
+      "completion_tokens": 1455
+    }
+  ]
+}

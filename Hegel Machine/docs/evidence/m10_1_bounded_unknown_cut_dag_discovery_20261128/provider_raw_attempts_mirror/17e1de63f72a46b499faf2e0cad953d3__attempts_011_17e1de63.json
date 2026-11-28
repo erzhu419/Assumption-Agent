@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17e1de63f72a46b499faf2e0cad953d3",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:15.685222+00:00",
+  "ended_at_utc": "2026-11-28T09:49:02.772416+00:00",
+  "request_sha256": "64d9dc2c44a0f9e78871a1ba273c060e9f4cbc2447a952e7250cd087715ea699",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70836,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39848,
+    "cached_tokens": 9344,
+    "completion_tokens": 1939
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the inputs and predict both outputs with a shared residual kernel.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=1e-10)[0]\\n\\n\\ndef _bias(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration_basis(x):\\n    return np.stack((np.ones_like(x), x, x**3,\\n                     (x-1)*np.roll(x, -1, axis=1)), axis=2)\\n\\n\\ndef _calibrate(panel, raw):\\n    u, v = panel['u'], panel['v']\\n    keep = np.linalg.norm(v, axis=1) < 5\\n    a = _calibration_basis(u[keep])\\n    w = np.stack([_fit(a[:, i], v[keep, i]) for i in range(4)])\\n    return np.stack([least_squares(lambda x: (_calibration_basis(x[None])*w).sum(2)[0]-r,\\n                                   r, gtol=1e-11).x for r in raw])\\n\\n\\ndef _bilinear(x):\\n    a, b, c, d = x.T\\n    return _bias(np.column_stack((a*b, a*d, b*c, c*d)))\\n\\n\\ndef _branches(panel, x):\\n    u = panel['u']\\n    c = _bilinear(x) @ _fit(_bilinear(u), panel['v1'])\\n    d = _bias(np.cos(2.4*x)) @ _fit(_bias(np.cos(2.4*u)), panel['v2'])\\n    return c, d\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    n = len(train['x'])\\n    raw = np.concatenate((train['x'], study['test']['x']))\\n    x = _calibrate(study['panel_a'], raw)\\n    c, d = _branches(study['panel_c'], x)\\n    h = _bias(np.column_stack((c, d)))\\n    target = np.column_stack((train['y'], train['traj']))\\n    trend = h @ _fit(h[:n], target)\\n    f = raw / raw[:n].std(axis=0)\\n    K = np.exp(-0.125*cdist(f, f[:n], 'sqeuclidean'))\\n    pred = trend[n:] + K[n:] @ np.linalg.solve(K[:n]+0.0001*np.eye(n), target-trend[:n])\\n    y, state = pred[:, 0], pred[:, 1:]\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo ====; sed -n '/^def _design/,/^def solve_batch/p' \\\"$f\\\" | head -42; done\\ncat > /tmp/gp_probe.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nT=np.c_[y,z]; c,d=C(x),D(x);h=bias(np.c_[c,d]);n=52\\n# Profile GP covariance with restricted likelihood rather than tuning on the final slice.\\ndef run(F, h, mode):\\n F=(F-F[:n].mean(0))/F[:n].std(0); Q=(F[:,None]-F[None,:n])**2; I=np.eye(n)\\n P=np.linalg.qr(h[:n],mode='complete')[0][:,h.shape[1]:]; v=P.T@T[:n]; U,S,V=np.linalg.svd(v,full_matrices=False); g=U[:,:3]*np.sqrt(n)\\n def model(p,ret=False):\\n  w=np.exp(p[:-1]); dist=Q@w\\n  if mode==0: K=np.exp(-dist)\\n  if mode==1:\\n   q=np.sqrt(3*dist);K=(1+q)*np.exp(-q)\\n  if mode==2: K=(1+dist)**-2\\n  K0=K[:n]+np.exp(p[-1])*I\\n  if ret:\\n   k=cho_factor(K0); W=_fit(h[:n].T@cho_solve(k,h[:n]),h[:n].T@cho_solve(k,T[:n]));return h[n:]@W+K[n:]@cho_solve(k,T[:n]-h[:n]@W)\\n  L=cho_factor(P.T@K0@P); scale=np.sum(g*cho_solve(L,g),axis=0)/len(P.T);return 2*np.log(np.diag(L[0])).sum()+len(P.T)*np.log(scale).mean()\\n _fit=fit\\n p=min((minimize(model,np.r_[np.full(F.shape[1],u),-7],method='L-BFGS-B',bounds=[(-8,4)]*F.shape[1]+[(-12,-1)]) for u in [-2,0]),key=lambda o:o.fun).x\\n R=model(p,True)-T[n:];return np.round([np.mean(abs(R[:,0])),np.mean(abs(R[:,1:]))],5),np.round(np.exp(p),4)\\nfor k,F in [('raw',raw),('x',x),('cd',np.c_[c,d]),('raw_cd',np.c_[raw,c,d]),('x_cd',np.c_[x,c,d])]:\\n for j in range(3): print('GP',k,j,run(F,h,j))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/gp_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic calibration and panel-C trend → shared residual regression; the best measured 52/20 MAEs are 0.13710 for y and 0.10475 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the lowest training-error polynomial\",\n      \"rejected_reason\": \"It extrapolates poorly on the last 20 rows.\"\n    }\n  ],\n  \"rationale\": \"Save and verify the best deployable baseline now. Estimate residual length scales from the first 52 rows only and inspect archived readouts for compact terms that the previous screens did not cover.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "bc5d042d343811f8db05a3576869efa9eacef021852dd238caac760908662e72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49677.0,
+      "usage_known": true,
+      "prompt_tokens": 39848,
+      "cached_tokens": 9344,
+      "completion_tokens": 1939
+    }
+  ]
+}

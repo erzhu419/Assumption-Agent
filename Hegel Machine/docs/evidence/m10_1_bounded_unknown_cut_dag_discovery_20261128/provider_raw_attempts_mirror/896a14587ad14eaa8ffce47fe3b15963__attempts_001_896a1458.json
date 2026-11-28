@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "896a14587ad14eaa8ffce47fe3b15963",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__init_decomp_conf_m101_a01_batch_05",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:02.943592+00:00",
+  "ended_at_utc": "2026-11-28T09:35:39.566878+00:00",
+  "request_sha256": "9e98c13aebf7f50de9b01c1c4eafff058d857870d35fa7de26f2f33fd8c3c038",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4866,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13183,
+    "cached_tokens": 0,
+    "completion_tokens": 1455
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"The trajectory solver fits and inverts panel A, then applies an affine map fitted on panel B. Extract that calibration chain and keep both kernel readouts and the diagnostics in the sink. The source does not use panel C, so the graph does not add it. The public summaries do not isolate the cause of the target cross-validation failure; this extraction preserves the source computations without attempting a target fix.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"]\n  ],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x, xt = study['train']['x'], study['test']['x']\\n    a = study['panel_a']\\n    scale, bias = [], []\\n    for u, v in zip(a['u'].T, a['v'].T):\\n        i, j = np.triu_indices(len(u), 1)\\n        dx = u[i] - u[j]\\n        keep = np.abs(dx) > 1e-9\\n        slope = np.median((v[i] - v[j])[keep] / dx[keep])\\n        scale.append(slope)\\n        bias.append(np.median(v - slope * u))\\n    b = study['panel_b']\\n    coef = np.linalg.lstsq(_linear(b['u']), b['v'], rcond=None)[0]\\n    q = _linear((x - bias) / scale) @ coef\\n    qt = _linear((xt - bias) / scale) @ coef\\n    return {'q_tr': q, 'q_te': qt}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _rbf(x, xt, length):\\n    return np.exp(-cdist(x, xt, 'sqeuclidean') / (2 * length**2))\\n\\n\\ndef _predict(k, cross, h, ht, target, nugget):\\n    k = k.copy()\\n    k.flat[::len(k) + 1] += nugget\\n    n = h.shape[1]\\n    w = cho_solve(cho_factor(k), np.column_stack((h, target)))\\n    a, b = w[:, :n], w[:, n:]\\n    beta = np.linalg.solve(h.T @ a, h.T @ b)\\n    return ht @ beta + cross @ (b - a @ beta)\\n\\n\\ndef _response(x, xt, y, h, ht):\\n    scale = x.std(axis=0)\\n    q, qt = x / scale, xt / scale\\n    return _predict(_rbf(q, q, 2), _rbf(qt, q, 2), h, ht, y[:, None], .001)[:, 0]\\n\\n\\ndef _trajectory(x, xt, z, h, ht, q, qt):\\n    def features(u):\\n        return np.column_stack((u, np.tanh(.7 * u)))\\n    f, ft = features(q), features(qt)\\n    mu, sd = f.mean(axis=0), f.std(axis=0)\\n    f, ft = (f - mu) / sd, (ft - mu) / sd\\n    def kernel(p, r, u, v):\\n        return .25 * (1 + p @ r.T / f.shape[1])**2 + .2 * _rbf(u, v, 1.35)\\n    basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amplitudes = _predict(kernel(f, f, x, x), kernel(ft, f, xt, x), h, ht, z @ basis.T, .001)\\n    return amplitudes @ basis\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    calibrated = inputs['node_00']\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    h, ht = _linear(x), _linear(xt)\\n    y = _response(x, xt, train['y'], h, ht)\\n    state = _trajectory(x, xt, train['traj'], h, ht, calibrated['q_tr'], calibrated['q_te'])\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "bf7bcf58e059556631323431f8399685563e07a116825812b6ed1181ca8db003",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39261.34,
+      "usage_known": true,
+      "prompt_tokens": 13183,
+      "cached_tokens": 0,
+      "completion_tokens": 1455
+    }
+  ]
+}

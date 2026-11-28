@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3f6844c20ce4cf38db75fb6cb77d70d",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:00:30.422983+00:00",
+  "ended_at_utc": "2026-11-28T10:01:03.230982+00:00",
+  "request_sha256": "35390fe422b8a8c59af557b3ceb80336f7c353c6e29c7476176f689a9c82ecd1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55690,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31098,
+    "cached_tokens": 9344,
+    "completion_tokens": 1427
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_batch.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nx, y, T = (s['train'][k] for k in ('x','y','traj'))\\nt = s['eval_times']\\nprint('study keys', sorted(s), 'train keys', sorted(s['train']), 'times', t)\\na = s['panel_a']; vhat = m._calibrate(a, a['v']); print('calibration inverse row errors', np.quantile(np.linalg.norm(vhat-a['u'],axis=1),[.5,.8,.9,1]))\\nz,b,q,c,h,d,k = m._features(s,x)\\nF,G = m._designs(s,x)\\nbase = np.column_stack((m._affine(q),h,m._dot(b,c,2),m._dot(z,c)))\\ndiag = np.column_stack((base,q*h))\\ncompact_y = F[:, [*range(9),14]]\\npairs = np.column_stack([z[:,i]+sg*z[:,j] for i,j in combinations(range(4),2) for sg in (-1,1)])\\nrat = 0.5\\nys = {'baseline': F, 'compact': compact_y, 'paired': np.c_[compact_y,np.cos(k*pairs),np.sin(k*pairs)], 'rational':np.c_[compact_y,compact_y[:,1:]/(1+rat*m._dot(c,d)[:,None]**2)]}\\ngs = {'baseline': G, 'diagonal': diag, 'paired':np.c_[diag,np.cos(k*pairs),np.sin(k*pairs)], 'rational':np.c_[diag,diag[:,1:]/(1+rat*m._dot(c,d)[:,None]**2)]}\\nrows = np.arange(len(x))\\nouter = [('52/20',rows[52:]),('56/16',rows[56:]),('edge',np.argsort(np.max(abs(z),axis=1))[-16:])]\\nouter += [(f'fold{i}',v) for i,v in enumerate(np.array_split(np.random.default_rng(19).permutation(rows),4))]\\n\\ndef state_error(f, a, b):\\n    def basis(r): return -np.expm1(-t[:,None]*r)\\n    coef = m._fit(f[a], T[a]); pred = f[a] @ coef\\n    def residual(r):\\n        H = basis(r)\\n        return (H @ m._fit(H,pred.T)-pred.T).ravel()\\n    H = basis(least_squares(residual,[.5,2.],bounds=(.01,10.)).x)\\n    amps = m._fit(H,coef.T).T\\n    return abs(f[b]@amps@H.T - T[b])\\n\\ndef scalar_error(f,a,b):\\n    return abs(f[b]@m._fit(f[a],y[a])-y[b])\\n\\nfor label,outer_b in outer:\\n    outer_a=np.setdiff1d(rows,outer_b)\\n    chunks=np.array_split(np.random.default_rng(129).permutation(outer_a),4)\\n    folds=[(np.setdiff1d(outer_a,b),b) for b in chunks]\\n    for name, fs, err in [('scalar',ys,scalar_error),('state',gs,state_error)]:\\n        inner={k:np.mean([err(f,a,b).mean() for a,b in folds]) for k,f in fs.items()}\\n        winner=min(inner,key=inner.get)\\n        tested={k:err(f,outer_a,outer_b) for k,f in fs.items()}\\n        if name=='state':\\n            H=m._time_modes(t,T[outer_a]); A=m._fit(H,T[outer_a].T).T\\n            tested['deployed']=abs(G[outer_b]@m._fit(G[outer_a],A)@H.T-T[outer_b]); print(label,'rate-only reconstruction',round(np.mean(abs(A@H.T-T[outer_a])),6))\\n        print(label,name,'selected',winner,'inner', {k:round(v,6) for k,v in inner.items()},'outer mean/worst-time', {k:(round(v.mean(),6),round(np.max(v.mean(axis=0)),6)) for k,v in tested.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full quadratic–cosine interactions -> H2 test compact contractions and missing pairwise or rational terms; the deployed solver’s worst held-out per-timestamp MAE is 0.008756 against 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, control drifts, or within-batch classification\",\"rejected_reason\":\"The observed task has continuous responses in one study, with no observed relay state, control action, technical-batch label, or classification target.\"}],\"rationale\":\"Fit compact and augmented heads inside the outer holdouts. A consistent gain on the required and high-amplitude splits would justify replacing the current head; a small in-sample gain alone would not. The audit does not modify the verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1906191f65e35f77cfa60d66cff4852092036288f2d599c6d2cfad5bba5685fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38207.94,
+      "usage_known": true,
+      "prompt_tokens": 31098,
+      "cached_tokens": 9344,
+      "completion_tokens": 1427
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a02_batch_00_c6e5ad38dc82",
+    "source_hash": "c6e5ad38dc82c255b7da503daac000612987402ea5140b2cc914b3828a62d1fe",
+    "parent_ids": [],
+    "source_episode_id": "conf_m101_a02",
+    "task_id": "conf_m101_a02_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_grammar.py",
+        "archived_relpath": "producers/tmp__audit_grammar.py",
+        "bytes": 3090,
+        "sha256": "27fa177d5b8f5b46a9decc20587ef1e2e85eb7f4d977c30c4df1aea5dfb1d440"
+      },
+      {
+        "container_path": "/tmp/panel_models.py",
+        "archived_relpath": "producers/tmp__panel_models.py",
+        "bytes": 2513,
+        "sha256": "4a79811f33db5b7bddcdcbe06a82c0c52a140d21d5c9d914d4df2c929a58bd8c"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1942,
+        "sha256": "c08f709831f84404d3fde96eddad62164d4842623e337e915086d1d015cde13a"
+      },
+      {
+        "container_path": "/tmp/structure.py",
+        "archived_relpath": "producers/tmp__structure.py",
+        "bytes": 3393,
+        "sha256": "b09673289cb5a4ade0aa423ca49324c65f28b86ed89b8c65ca1b8497f3be6793"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference panel affine alignment sparse outliers' ; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=130)\nfor k,v in s.items():\n print(k)\n for a,b in (v.items() if isinstance(v,dict) else [('values',v)]):\n  b=np.asarray(b); print(a,b.shape,'range',np.min(b,axis=0),np.max(b,axis=0)); print(b if b.size<20 else b[:5])\nPY",
+      "cd /holdout_task && cat validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'affine panel outlier robust alignment' ; cat >/tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom sklearn.preprocessing import PolynomialFeatures\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; Y=np.c_[tr['y'],tr['traj']]; np.set_printoptions(precision=4,suppress=True,linewidth=150)\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\ndef poly(a,d): return Poly",
+      "cat >/tmp/structure.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; z=tr['traj']; t=s['eval_times']; np.set_printoptions(precision=6,suppress=True,linewidth=130)\nL=lambda x: np.c_[np.ones(len(x)),x]\nix=list(combinations_with_replacement(range(4),2)); Q=lambda x: np.column_stack([x[:,i]*x[:,j] for i,j in ix]); A=lambda x: np.c_[L(x),Q(x)]\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\ndef hessian(c)",
+      "cat >/tmp/panel_models.py <<'PY'\nimport itertools\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\nx, y, z = (s['train'][k] for k in ('x', 'y', 'traj'))\nt = s['eval_times']\ndef fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=None)[0]\ndef lin(a):\n    return np.column_stack((np.ones(len(a)), a))\npa = s['panel_a']; u, v = pa['u'], pa['v']\nbias, gain = [], []\nfor a, b in zip(u.T, v.T):\n    keep = np.arange(len(a))\n    design = lin(a)\n    for _ in range(3):\n        c = fit(design[keep], b[keep])\n  ",
+      "set -e\ncd /holdout_task\ncat > batch_solver.py <<'PY'\n\"\"\"Predict the label and time course from the calibrated mixed coordinates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _fit(design, values):\n    return np.linalg.lstsq(design, values, rcond=None)[0]\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _calibration(panel):\n    \"\"\"Fit each gain and offset after excluding reference-panel outliers.\"\"\"\n    coefficients = []\n    for u, v in zip(panel['u'].T, panel['v'].T):\n        design = _affine(u)\n        keep = np.arange(len(u))\n        for _ in r",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat > /tmp/audit_grammar.py <<'PY'\nimport importlib.util\nimport pickle\nfrom itertools import combinations_with_replacement\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\nx, y, traj = (s['train'][k] for k in ('x', 'y', 'traj'))\noffset, gain = m._calibration(s['panel_a'])\npb = s['panel_b']\nz = m._affine((x-offset)/gain) @ m._fit(m._affine"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__structure.py",
+      "primary_producer_container_path": "/tmp/structure.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2398,
+        "sha256": "875f678e6174901bfd45d8b57a2c9a7bda5d66903f070a515c8ecc7389010fac",
+        "content_addressed_ref": "content_addressed_blobs/875f678e6174901bfd45d8b57a2c9a7bda5d66903f070a515c8ecc7389010fac.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c6e5ad38dc82c255b7da503daac000612987402ea5140b2cc914b3828a62d1fe",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat > /tmp/audit_grammar.py <<'PY'\nimport importlib.util\nimport pickle\nfrom itertools import combinations_with_replacement\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', '",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c6e5ad38dc82c255b7da503daac000612987402ea5140b2cc914b3828a62d1fe",
+        "expected_candidate_sha256": "c6e5ad38dc82c255b7da503daac000612987402ea5140b2cc914b3828a62d1fe",
+        "computed_candidate_sha256": "c6e5ad38dc82c255b7da503daac000612987402ea5140b2cc914b3828a62d1fe",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2398
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c6e5ad38"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

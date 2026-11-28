@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93a03896e2544e76b5c797b8841e7fd2",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:55.207239+00:00",
+  "ended_at_utc": "2026-11-28T09:20:23.199697+00:00",
+  "request_sha256": "41b2cdf0f43c19ae597903ded2eef86d9e78bc66b455fbf14d4fc263667330ce",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42333,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28003,
+    "cached_tokens": 9344,
+    "completion_tokens": 1153
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure.py <<'PY'\\nfrom graph_probe import *\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=3,suppress=True)\\nq=frames(x)['a-']; n=len(q); L=poly(q,1); P=poly(q,2); T=poly(q,3); rng=np.random.default_rng(7)\\nfor k in ('v1','v2'):\\n p=s['panel_c']; u=p['u']; v0=p[k]; J=np.c_[u, u*u, np.column_stack([u[:,i]*u[:,j] for i,j in combinations(range(4),2)]), np.sin(u),np.tanh(u),u**3]; print(k)\\n for j in range(4):\\n  base=np.c_[np.ones(len(u)),u]; r=v0[:,j]-base@np.linalg.lstsq(base,v0[:,j],rcond=None)[0]; selected=[]\\n  for _ in range(4):\\n   rr=[]\\n   for h in range(4,J.shape[1]):\\n    d=np.c_[base,J[:,selected+[h]]]; rr.append((np.std(v0[:,j]-d@np.linalg.lstsq(d,v0[:,j],rcond=None)[0]),h))\\n   score,h=min(rr);selected.append(h);print(j, h,round(score,5),end='; ')\\n  print()\\nfor j,g in enumerate(Y.T):\\n print('target',j,'polynomial coefficients',np.linalg.lstsq(T,g,rcond=None)[0]);\\n for f in ('tanh','sin','rat','soft','exp','tanh2','trig'):\\n  def basis(t,inds):\\n   Z=L[inds]@t.reshape(-1,5).T\\n   if f.startswith('tanh'): h=np.tanh(Z)\\n   elif f=='sin': h=np.sin(Z)\\n   elif f=='trig': h=np.concatenate([np.sin(Z),np.cos(Z)],axis=1)\\n   elif f=='rat': h=1/(1+Z*Z)\\n   elif f=='soft': h=np.logaddexp(Z,-Z)\\n   else: h=np.exp(np.clip(Z,-9,9))\\n   return np.c_[P[inds],h]\\n  results=[]\\n  for a,b in splits[:4]:\\n   def resid(t,ret=False):\\n    d=basis(t,a); c=np.linalg.lstsq(d,g[a],rcond=1e-8)[0]; return (c,basis(t,b)@c) if ret else d@c-g[a]\\n   winner=None\\n   for i in range(12):\\n    ini=rng.normal(0,.8,10 if f=='tanh2' else 5); opt=least_squares(resid,ini,bounds=(-5,5),max_nfev=140); err=np.mean(abs(resid(opt.x))); c,p=resid(opt.x,True)\\n    if winner is None or err<winner[0]:winner=(err,np.mean(abs(p-g[b])),opt.x,c)\\n   results.append(winner)\\n  print(f,[(round(r[0],4),round(r[1],4)) for r in results], 'plane and weights',results[0][2], results[0][3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (calibrated kernel) -> H2 (low-rank quadratic interactions plus ridge nonlinearities); best observed calibrated kernel target MAE 0.05457 on the required split.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Affine panel alignment followed by quadratic trends and isotropic or additive smoothing suffices for the scalar tolerance.\",\"empirical_witness\":\"The best reported calibrated scalar score on the required split was 0.05457 against a limit of 0.038; scalar quadratic curvature concentrates in two opposite-sign directions (−0.314 and +0.329).\",\"causal_blanket_diagnosis\":\"Coordinate alignment and smoothing do not explicitly identify the dominant interaction or isolate a nonlinear readout direction.\",\"sublated_pivot\":\"Keep the calibrated coordinates and compare compact nonlinear ridge terms and auxiliary panel bases across held-out splits.\",\"risk_kind\":\"scalar extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tune the existing kernel grid further\",\"rejected_reason\":\"The tested coordinate frames and kernel families show little scalar improvement; the curvature indicates a more targeted basis to test.\"}],\"rationale\":\"Fit the nonlinear directions within each training fold. In parallel, test whether a sparse basis explains panel C well enough to justify composing it with the readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "113c2d60bc87c53d757a8c62cb2ed4084d6e6edb2e97cfe4e4226bba79b03586",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31762.95,
+      "usage_known": true,
+      "prompt_tokens": 28003,
+      "cached_tokens": 9344,
+      "completion_tokens": 1153
+    }
+  ]
+}

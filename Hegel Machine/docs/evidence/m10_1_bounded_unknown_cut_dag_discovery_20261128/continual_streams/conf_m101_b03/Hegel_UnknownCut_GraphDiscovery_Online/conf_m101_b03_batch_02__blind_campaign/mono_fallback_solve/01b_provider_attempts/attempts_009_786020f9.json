@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "786020f9aa3c4632b955457edddd254f",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:01.569067+00:00",
+  "ended_at_utc": "2026-11-28T09:30:28.472584+00:00",
+  "request_sha256": "5a73ef5462a5d008bb24a014171712f359c1db72fa7264780eae26fbdba184be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51727,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30431,
+    "cached_tokens": 5504,
+    "completion_tokens": 1034
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom sklearn.model_selection import KFold\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nsolve = m['solve_batch']\\nt = s['train']; n = len(t['x'])\\nshift, gain = m['_calibration'](s['panel_a'])\\np = s['panel_a']; error = np.linalg.norm(p['v'] - shift - p['u']*gain, axis=1)\\ninliers = error <= 4*np.median(error)\\nprint('panel A excluded rows:', int((~inliers).sum()), 'inlier coordinate RMS:', float(np.sqrt(np.mean(error[inliers]**2 / p['u'].shape[1]))))\\np = s['panel_c']; a,c = m['_panel_outputs'](p,p['u'])\\nprint('panel C coordinate RMS:', [float(np.sqrt(np.mean((pred-p[key])**2))) for pred,key in [(a,'v1'),(c,'v2')]])\\n\\ndef check(z):\\n    o = solve(z)\\n    y, tr, d = (o[k] for k in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape == (len(z['test']['x']),) and tr.shape == (len(y),len(z['eval_times'])) and d.shape == (4,)\\n    assert all(np.isfinite(v).all() for v in (y,tr,d))\\n    np.testing.assert_allclose(d, [y.mean(), y.std(), tr[:,-1].mean(), tr[:,-1].std()], rtol=0, atol=1e-12)\\n    return y,tr\\n\\nsplits = [(f'{k}/{n-k}',np.arange(k),np.arange(k,n)) for k in (52,56)]\\nsplits += [(f'fold {k+1}',i,j) for k,(i,j) in enumerate(KFold(5,shuffle=True,random_state=19).split(t['x']))]\\nrows = []\\nfor name,i,j in splits:\\n    y,tr = check(dict(s,train={k:t[k][i] for k in ('x','y','traj')} | {'summary':np.array([t['y'][i].mean(),t['y'][i].std(),t['traj'][i,-1].mean(),t['traj'][i,-1].std()])},test={'x':t['x'][j]}))\\n    e = abs(tr-t['traj'][j]); row=(abs(y-t['y'][j]).mean(), e.mean(), e.mean(axis=0).max())\\n    rows.append(row)\\n    print(name, 'y / traj / worst timestamp MAE:', *(f'{v:.6f}' for v in row))\\ncheck(s)\\nworst = np.max(rows,axis=0)\\nprint('Worst split metrics:', *(f'{v:.6f}' for v in worst))\\nassert max(worst[:2]) <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired linear amplitudes → H2 paired readout with a smooth slow-mode residual; the public validator passed and the pilot’s worst trajectory MAE was 0.01680.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the schema receipt alone\",\n      \"rejected_reason\": \"The receipt passes the public gate but does not report worst-fold performance or directly measure the recovered panel operators.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact saved solver in an isolated Python process. Panel residuals test whether the implementation recovered the proposed operators; ordered and shuffled splits test whether either output regresses outside the public split. A failure would isolate which component to revisit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "78ceaac3f9761c73fe1a7e0d913763f727308f1d3c756abdc836972dee205e5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29489.27,
+      "usage_known": true,
+      "prompt_tokens": 30431,
+      "cached_tokens": 5504,
+      "completion_tokens": 1034
+    }
+  ]
+}

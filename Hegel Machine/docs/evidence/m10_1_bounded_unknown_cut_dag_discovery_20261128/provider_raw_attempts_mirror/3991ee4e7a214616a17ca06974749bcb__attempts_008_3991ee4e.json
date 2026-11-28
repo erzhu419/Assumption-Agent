@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3991ee4e7a214616a17ca06974749bcb",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:01.083051+00:00",
+  "ended_at_utc": "2026-11-28T09:37:25.156699+00:00",
+  "request_sha256": "b02a806157a2fc97cfafe8c086a3af0dae075739470e1dd09a1537b0059ec7e9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 53352,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32343,
+    "cached_tokens": 9344,
+    "completion_tokens": 797
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np = '/holdout_task/'\\nstudy = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]['study']\\nd = runpy.run_path(p + '_frozen_nodes/node_00.py')['run_node']({'__input__': study})\\nrun = runpy.run_path(p + 'node_01.py')['run_node']\\nx, y, traj = (d[k] for k in ('z_tr', 'train_y', 'train_traj'))\\nix = np.arange(len(x))\\nrng = np.random.default_rng(791)\\nslices = [(f'random_{i}', rng.choice(ix, 20, replace=False)) for i in range(8)]\\nslices.extend((f'coordinate_{j}_{end}', np.argsort(x[:,j])[:12] if end == 'low' else np.argsort(x[:,j])[-12:]) for j in range(x.shape[1]) for end in ('low', 'high'))\\nslices.append(('outer_radius', np.argsort(np.linalg.norm(x, axis=1))[-16:]))\\nworst = {}\\nfor name, te in slices:\\n    tr = np.setdiff1d(ix, te)\\n    out = run({'node_00': dict(z_tr=x[tr], z_te=x[te], train_y=y[tr], train_traj=traj[tr], eval_times=d['eval_times'])})\\n    a, b, c = (out[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    assert a.shape == y[te].shape and b.shape == traj[te].shape and np.all(np.isfinite(a)) and np.all(np.isfinite(b))\\n    np.testing.assert_allclose(c, [a.mean(), a.std(), b[:, -1].mean(), b[:, -1].std()])\\n    e = np.abs(b - traj[te]); m = (np.mean(abs(a-y[te])), e.mean(), e.mean(axis=0).max())\\n    print(name, *(round(v, 6) for v in m))\\n    for j,v in enumerate(m):\\n        if j not in worst or v > worst[j][0]: worst[j] = (float(v), name)\\nprint('Worst scalar, trajectory, and individual horizon:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Additive saturation → quadratic saturated readout plus a tanh ridge; official holdout MAE is 0.016848 for scalar and 0.007227 for trajectory, with alternate slices pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Refit on random and coordinate-tail splits to detect instability hidden by the accepted public split. A material scalar failure would motivate constraining the readout; a horizon-specific failure would instead point to the trajectory basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5e34a0445cfc70b80bc4195abd2239735f4d8abad67122c32c12d72f2257145d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24031.36,
+      "usage_known": true,
+      "prompt_tokens": 32343,
+      "cached_tokens": 9344,
+      "completion_tokens": 797
+    }
+  ]
+}

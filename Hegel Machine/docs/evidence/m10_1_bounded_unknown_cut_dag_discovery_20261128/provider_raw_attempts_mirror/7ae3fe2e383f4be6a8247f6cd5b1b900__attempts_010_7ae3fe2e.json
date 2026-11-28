@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ae3fe2e383f4be6a8247f6cd5b1b900",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:16.710447+00:00",
+  "ended_at_utc": "2026-11-28T09:23:57.322637+00:00",
+  "request_sha256": "2278aa0475e3467f94af24b126ff13e1a78d08d971e4dde186db3a0686343d56",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56892,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33874,
+    "cached_tokens": 9344,
+    "completion_tokens": 1654
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _smooth(x, y, test, length, nugget):\\n    scale = x.std(axis=0)\\n    x, test = x / scale, test / scale\\n    d = np.column_stack((np.ones(len(x)), x))\\n    dt = np.column_stack((np.ones(len(test)), test))\\n    k = np.exp(-cdist(x, x, 'sqeuclidean') / (2 * x.shape[1] * length**2))\\n    k.flat[::len(x)+1] += nugget\\n    w = cho_solve(cho_factor(k), np.column_stack((d, y)))\\n    wd, wy = w[:, :d.shape[1]], w[:, d.shape[1]:]\\n    beta = np.linalg.solve(d.T @ wd, d.T @ wy)\\n    kr = np.exp(-cdist(test, x, 'sqeuclidean') / (2 * x.shape[1] * length**2))\\n    return dt @ beta + kr @ (wy - wd @ beta)\\n\\n\\ndef solve_batch(study):\\n    tr = study['train']\\n    x, test = tr['x'], study['test']['x']\\n    y = _smooth(x, tr['y'], test, 1., .0001).ravel()\\n    _, _, vt = np.linalg.svd(tr['traj'], full_matrices=False)\\n    pat = vt[0]\\n    state = _smooth(x, tr['traj'] @ pat, test, 1.7, .0001) * pat\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/joint_probe.py <<'PY'\\nfrom graph_probe import *\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.spatial.distance import cdist\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _smooth\\n\\ndef pred(K,D,g,a,b):\\n w=cho_solve(cho_factor(K[np.ix_(a,a)]),np.c_[D[a],g[a]]); W=w[:,:D.shape[1]]; G=w[:,-1]; c=np.linalg.lstsq(D[a].T@W,D[a].T@G,rcond=1e-10)[0]; return D[b]@c+K[np.ix_(b,a)]@(G-W@c)\\n\\nfor a,b in splits:\\n p=_smooth(x[a],z[a],x[b],1.7,.0001).ravel(); print('z predicted',np.mean(abs(z[b]-p)))\\nprint('simple y-z',np.corrcoef(y,z)[0,1]); print('trajectory-conditioned least squares:')\\nfor deg in (1,2,3):\\n for v in (z,np.tanh(z),z*z):\\n  d=np.c_[poly(x,deg),v]; c=np.linalg.lstsq(d,y,rcond=None)[0]; print(deg,np.mean(abs(d@c-y)),c[-1])\\n\\nresults=[]\\nfor zn in ('none','joint','residual','tanh','sqr'):\\n for deg in (1,2):\\n  for ell in (.55,.75,1.,1.3,1.65,2.1,3.):\\n   for nug in (1e-6,1e-4,.001,.008):\\n    for mode in ('iso','product','mixed','polyridge'):\\n     errs=[]; oracles=[]\\n     for a,b in splits:\\n      xp=x/x[a].std(0); zz=z.copy(); zz[b]=_smooth(x[a],z[a],x[b],1.7,.0001).ravel();\\n      for oracle,zz0 in [(False,zz),(True,z)]:\\n       t=zz0/np.std(z[a]); t={'tanh':np.tanh(t),'sqr':t*t}.get(zn,t); q=np.c_[xp,t] if zn=='joint' else xp\\n       d=poly(q,deg); d=np.c_[d,t] if zn not in ('none','joint') else d\\n       delta=q[:,None,:]-q[None,:,:]; dis=np.mean(delta**2,axis=-1); R=np.exp(-dis/(2*ell**2)); add=np.exp(-delta**2/(2*ell**2)).mean(axis=-1)\\n       if mode=='iso':K=R\\n       if mode=='product':K=(R+2*add)/3\\n       if mode=='mixed':K=(R+np.exp(-(t[:,None]-t[None,:])**2/(2*ell**2))*.1) if zn!='none' else (R+.1*add)\\n       if mode=='polyridge':K=(1+q@q.T/q.shape[1]/ell)**4\\n       val=np.mean(abs(pred(K+nug*np.eye(len(q)),d,y,a,b)-y[b])); (oracles if oracle else errs).append(val)\\n     results.append((np.array(errs),np.array(oracles),zn,deg,ell,nug,mode))\\nfor sel in (0,1):\\n print('pred' if sel==0 else 'oracle');\\n for e,o,*cfg in sorted(results,key=lambda r:.5*r[sel][0]+.25*r[sel].mean()+.25*r[sel].max())[:15]:print(cfg,np.round(e,5),np.round(o,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (independent scalar and trajectory) -> H2 (test whether the trajectory amplitude supplies a missing scalar readout feature); best scalar MAE is 0.04416 on the required split and 0.05602 on the worst repeated split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the cubic rational trajectory model\",\"rejected_reason\":\"Its low training error did not translate into a clear gain on held-out trajectory amplitude.\"}],\"rationale\":\"Save the strongest baseline, then test whether observed trajectory amplitude explains scalar residuals. Replace observed amplitude with fold-predicted amplitude on validation rows to measure whether that structure is useful at inference.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "52f5611011e13265631275d1fbc424b12cde123d2933ec5f40ebba3b22ad8e90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43163.96,
+      "usage_known": true,
+      "prompt_tokens": 33874,
+      "cached_tokens": 9344,
+      "completion_tokens": 1654
+    }
+  ]
+}

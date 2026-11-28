@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2addd30429ca44ee985b9fb11e61f34b",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:02.018864+00:00",
+  "ended_at_utc": "2026-11-28T09:21:22.513293+00:00",
+  "request_sha256": "6f30f0f501733cc4c091e2e189c24bc0913c2ca22fb53f7e23074908f373e060",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46366,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30155,
+    "cached_tokens": 9344,
+    "completion_tokens": 719
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -45 /tmp/readout.log; cat /tmp/hegel_continual_archive/conf_m101_b04_batch_00_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys;sys.path.insert(0,'/tmp');from dagprobe import *\\nx=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; a=calibrate(s); B,c,d=panel_maps(s); z=a(x); print('t telemetry summary',t,s['telemetry_vec'],s['train']['summary']); print('x range',x.min(0),x.max(0),'y range',y.min(),y.max()); i=np.arange(52); j=np.arange(52,72); Q=poly(z,2); w=ls(Q[i],np.c_[y[i],T[i]]); print('quad coefs',w[:,[0,3,8]].round(4)); r=np.c_[y,T]-Q@w; print('res correlation',np.corrcoef(r.T)[0]); print('y residual versus raw x'); print(np.c_[x,y,r[:,0]][np.argsort(r[:,0])][::3].round(4));\\nfor mode in [0,1]:\\n def P(p):\\n  rate=np.exp(p[0]+p[1]*a(x[0:1])[:,0]) if mode else np.exp(p[0]); return p[-1]*(-np.expm1(-rate*t))\\n for k in range(5):\\n  F=lambda p:p[1]*(-np.expm1(-np.exp(p[0])*t))-T[k]; f=least_squares(F,[0,1]); print(k,'simple exp',f.x, f.fun.round(4))\\n if not mode:break\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel-feature kernels → identify which nonlinear terms the response and trajectory residuals actually share; the best screened 52/20 response MAE is 0.04075.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep expanding the kernel grid\",\"rejected_reason\":\"The screened kernels have not passed the response gate; inspect the readout results and residual structure before adding more variants.\"}],\"rationale\":\"Read the completed nonlinear fits and inspect quadratic coefficients and cross-output residual correlations. These distinguish missing scalar interactions from a shared latent process, and the single-exponential residuals show whether a simple kinetic readout is adequate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cd148aa12adb48f1062a4b52d24e87fc87d80397fc6562ec08157fa0d4ee989a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23077.86,
+      "usage_known": true,
+      "prompt_tokens": 30155,
+      "cached_tokens": 9344,
+      "completion_tokens": 719
+    }
+  ]
+}

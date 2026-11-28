@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac02cb6fa5874acaba988155f2619b71",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:40.571207+00:00",
+  "ended_at_utc": "2026-11-28T09:39:03.226733+00:00",
+  "request_sha256": "504eef439121ed8783b4cb6b086a3a1f916957810cda83817fc26c271b89d4f8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12805,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15584,
+    "cached_tokens": 9344,
+    "completion_tokens": 794
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"ls -lh /tmp/hegel_continual_archive; python3 - <<'PY'\\nimport json,pathlib\\np=pathlib.Path('/tmp/hegel_continual_archive')\\nfor n in ['archive_manifest','pre_llm_gate_diagnostic']:\\n f=p/(n+'.json')\\n if f.exists():\\n  a=json.loads(f.read_text()); print(n,type(a),str(a)[:4200])\\nfor f in list(p.rglob('*.py'))[:60]: print(f)\\nPY\\npython3 - <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];np.set_printoptions(precision=4,suppress=True)\\nfor p in ('panel_a','panel_b','panel_c'):\\n d=s[p];u=d['u']; A=np.c_[np.ones(len(u)),u]; B=np.column_stack([A]+[u[:,i]*u[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)]);print(p)\\n for key,v in d.items():\\n  if key=='u':continue\\n  ix=np.arange(len(u));\\n  if p=='panel_a':\\n   for _ in range(5):\\n    r=np.linalg.norm(v-A@np.linalg.lstsq(A[ix],v[ix],rcond=None)[0],axis=1);ix=np.argsort(r)[:32]\\n  for X in [A,B]:\\n   c=np.linalg.lstsq(X[ix],v[ix],rcond=None)[0];r=np.linalg.norm(v-X@c,axis=1);print(key,X.shape[1],np.sort(r), 'coef' if X is A else '',c if X is A else '')\\nt=s['train']['traj']; y=s['train']['y'];print('trajectory singular values',np.linalg.svd(t,compute_uv=False));print('trajectory centered with y singular values',np.linalg.svd(np.c_[t-t.mean(0),y-y.mean()],compute_uv=False));print('actual summary', np.array([y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()]));print('time basis',np.linalg.svd(t,full_matrices=False)[2][:4]);print('first trajectory rows',t[:12]);print('y fit trajectory',np.mean(np.abs(np.c_[np.ones(20),t[52:]]@np.linalg.lstsq(np.c_[np.ones(52),t[:52]],y[:52],rcond=None)[0]-y[52:])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic regression -> H2 robust calibration and low-rank trajectory dynamics; held-out MAE not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Estimate panel residuals and trajectory rank to distinguish usable operator structure from distractor panels. Read a compact archive summary to identify previously validated structures worth testing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "8428abcd86832601314b828ad6ad19b336518156908859b5208f24b6fdf04f3e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25283.09,
+      "usage_known": true,
+      "prompt_tokens": 15584,
+      "cached_tokens": 9344,
+      "completion_tokens": 794
+    }
+  ]
+}

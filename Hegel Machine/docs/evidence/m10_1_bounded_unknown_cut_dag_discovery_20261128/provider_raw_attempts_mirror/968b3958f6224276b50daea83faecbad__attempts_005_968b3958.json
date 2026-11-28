@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "968b3958f6224276b50daea83faecbad",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:41.988740+00:00",
+  "ended_at_utc": "2026-11-28T09:26:18.955317+00:00",
+  "request_sha256": "559f067c61161a982c1e259ea98e7861fbd4007bf8df2172b2645a10704b7ca6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34699,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24165,
+    "cached_tokens": 9344,
+    "completion_tokens": 1484
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^for name,w/,$d' /tmp/probe.py > /tmp/search.py\\ncat >> /tmp/search.py <<'PY'\\nfrom itertools import combinations,product\\nnp.set_printoptions(precision=4,suppress=True)\\nbase=np.c_[a(z),z[:,0]*z[:,2]+z[:,1]*z[:,3]]; Q,_=poly(z,2)\\nprint('pooled coefficients',fit(base,y),'errors',score(base))\\nr=y-base@fit(base,y)\\nfor basis in (base,Q):\\n fs=[]; ns=[]\\n def add(n,f): ns.append(n);fs.append(f)\\n w=z.T; L=[(str(i),w[i]) for i in range(4)]+[(f'{i}{sg}{j}',w[i]+sg*w[j]) for i,j in combinations(range(4),2) for sg in (1,-1)]\\n L+= [(f'{i}*{j}',w[i]*w[j]) for i,j in cwr(range(4),2)]\\n L+=[('pool',base[:,-1]),('state',fit(a(z),t)[1:,-1]@w)]\\n for n,g in L:\\n  add(n+'^3',g**3)\\n  for k in [.5,1,1.4,1.7,2,2.5,3]:\\n   for m,f in [('sin',np.sin(k*g)),('cos',np.cos(k*g)),('tanh',np.tanh(k*g)),('rat',g/(1+k*g*g)),('sat',1/(1+k*g*g))]:\\n    add(f'{m}{k}({n})',f)\\n for i,j,k in product(range(4), repeat=3):\\n  for b in (.2,.5,1,1.7):\\n   add(f'{i}*{j}/(1+{b}*{k}^2)',w[i]*w[j]/(1+b*w[k]**2));add(f'{i}*{j}sin({b}*{k})',w[i]*w[j]*np.sin(b*w[k]))\\n F=np.array(fs).T; i,j=splits[0]; F=F-basis@fit(basis[i],F[i]); rr=y-basis@fit(basis[i],y[i]); c=(F[i].T@rr[i])/np.maximum(1e-20,(F[i]**2).sum(0)); er=np.mean(abs(F[j]*c-rr[j,None]),0)\\n for k in np.argsort(er)[:10]: print(basis.shape[1],ns[k],c[k],score(np.c_[basis,F[:,k]]))\\nPY\\ncat > /tmp/ridgefun.py <<'PY'\\nexec(open('/tmp/search.py').read().split('for basis in')[0])\\nfrom scipy.optimize import least_squares\\nrng=np.random.default_rng(1)\\nfor mode in ['sin','cos','tanh','rational','singate','ratgate','sincos']:\\n def feat(w,vals):\\n  q=vals@w[:4]+w[4]; f={'sin':np.sin(q),'cos':np.cos(q),'tanh':np.tanh(q),'rational':q/(1+q*q),'singate':np.sin(q),'ratgate':1/(1+q*q),'sincos':np.sin(q)}[mode]\\n  if mode in ['singate','ratgate']: return a(vals)*f[:,None]\\n  if mode=='sincos':return np.c_[f,np.cos(q)]\\n  return f[:,None]\\n for X in [base,Q]:\\n  i,j=splits[0]; xi=X[i]; pin=np.linalg.pinv(xi); rr=y[i]-xi@(pin@y[i]);\\n  def residual(w):\\n   f=feat(w,z[i]); f-=xi@(pin@f); return rr-f@fit(f,rr)\\n  candidates=[least_squares(residual,np.r_[v,0.1],max_nfev=80) for v in np.r_[np.eye(4)*1.7,rng.normal(0,1.3,(24,4))]]\\n  opt=min(candidates,key=lambda v:v.cost); F=np.c_[X,feat(opt.x,z)]; print(mode,X.shape[1],opt.x,opt.cost,score(F),fit(F[i],y[i])[-(F.shape[1]-X.shape[1]):])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/ridgefun.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pooled quadratic readout) -> H2 (add an identifiable nonlinear branch); a complete cubic still reaches only 0.06009 worst-slice scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A quadratic readout in calibrated linear coordinates spans the scalar mapping.\",\n    \"empirical_witness\": \"Complete quadratic readout has 0.13842 gate MAE; complete cubic reduces it to 0.06009, still above 0.038.\",\n    \"causal_blanket_diagnosis\": \"The affine trajectory law passes while the scalar readout retains systematic higher-order dependence.\",\n    \"sublated_pivot\": \"Retain affine calibration and trajectory prediction; test a compact nonlinear correction before adding an auxiliary panel.\",\n    \"risk_kind\": \"omitted nonlinear scalar basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase polynomial degree\",\n      \"rejected_reason\": \"Quartic fits reduce in-sample error but worsen held-out MAE, especially on the chronological gate.\"\n    }\n  ],\n  \"rationale\": \"Compare pairwise algebraic, rational, and harmonic features against the pooled baseline. Nonlinear parameters are fit on the 52 training rows before measuring the chronological gate; any promising structure will be refit independently inside other folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "942bc69c87a20ed4591cae47540fd08ad2059a2378b13fc49722f0804469d4c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39533.01,
+      "usage_known": true,
+      "prompt_tokens": 24165,
+      "cached_tokens": 9344,
+      "completion_tokens": 1484
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5624da348cfe4b918f05eb02b3d6e473",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:58:20.946172+00:00",
+  "ended_at_utc": "2026-11-28T09:59:03.258490+00:00",
+  "request_sha256": "00cdcedff5d8a45b3ef8f4333c2b8562404056d2d3de5dbcef2b71f636bd4898",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76013,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40834,
+    "cached_tokens": 9344,
+    "completion_tokens": 1814
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed '/^def _grams/,$d' /tmp/hegel_continual_archive/conf_m101_a02_batch_06_solver.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\ndef _blocks(study):\\n    z, b, c, d = _coords(study)\\n    a = np.sum(z * np.roll(b, 1, axis=1), axis=1)\\n    opp = np.sum(b * np.roll(b, 2, axis=1), axis=1)\\n    return z, b, c, d, a, opp\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    n = len(train['y'])\\n    z, b, c, d, a, opp = _blocks(study)\\n    dx = np.sum((d * np.concatenate((train['x'], study['test']['x'])))**2, axis=1)\\n    f = np.c_[_aff(b), d, a, opp, dx, np.sum(c * np.roll(z * np.roll(b,1,axis=1),3,axis=1),axis=1), b[:,3]*np.exp(-1.7*b[:,3]**2), np.sum(b*z*np.roll(b,1,axis=1),axis=1), z[:,2]**3]\\n    y = f[n:] @ _fit(f[:n], train['y'])\\n    g = np.c_[_aff(b), z, a]\\n    state = g[n:] @ _fit(g[:n], train['traj'])\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(),y.std(),state[:,-1].mean(),state[:,-1].std()])}\\nPY\\ncat >/tmp/compact08.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom itertools import combinations\\nfrom scipy.linalg import solve\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['y']); y=tr['y']; X=tr['x']; z,b,c,d,a,opp=[q[:n] for q in m._blocks(s)]; p=z*np.roll(b,1,axis=1); base=np.c_[m._aff(b),a,opp]\\nrg=np.random.default_rng(808); folds=[(np.arange(i),np.arange(i,n)) for i in [52,56]]+[(np.setdiff1d(np.arange(n),i),i) for i in np.array_split(rg.permutation(n),4)]\\nfor it,iv in folds:\\n t={k:(v[it] if k!='summary' else np.zeros(4)) for k,v in tr.items()}; o=m.solve_batch(dict(s,train=t,test={'x':X[iv]})); print('saved',len(it),np.mean(abs(y[iv]-o['y_hat'])),np.mean(abs(tr['traj'][iv]-o['state_pred'])))\\nD={'dx2':np.sum((d*X)**2,1),'dd2':np.sum((d*np.roll(d,2,axis=1))**2,1),'dd':np.sum(d*d,1),'bd1s2':np.sum(b*np.roll(d,1,axis=1),1)**2,'cp3':np.sum(c*np.roll(p,3,axis=1),1),'bp':np.sum(b*p,1),'b3e':b[:,3]*np.exp(-1.7*b[:,3]**2),'z2c':z[:,2]**3,'c1s':np.sin(1.7*c[:,1]),'de0':d[:,0]*np.exp(-1.7*d[:,0]**2),'cross24':b[:,0]*b[:,2]-b[:,1]*b[:,3]}\\nfor tag,g in [('d',d),('c',c),('z',z),('b',b)]:\\n for k in [0,1,2]:\\n  u=g*np.roll(g,k,axis=1)\\n  for q in [.1,.2,.5,1.7]:\\n   D[f'{tag}sq{k}r{q}']=np.sum(u*u/(1+q*u*u),axis=1)\\n   D[f'{tag}a{k}r{q}']=np.sum(u/(1+q*u*u),axis=1)\\nfor tag,g in [('z',z),('b',b),('d',d),('c',c)]:\\n for norm,h in [('norm',np.sum(g*g,1)),('opp',np.sum(g*np.roll(g,2,axis=1),1)),('first',g[:,0]),('last',g[:,-1])]:\\n  for q in [.1,.2,.5,1.7]:\\n   den=1+q*h*h\\n   for label,w in [('a',a),('opp',opp)]: D[tag+norm+label+str(q)]=w/den\\n\\ndef cv(f):\\n return np.array([np.mean(abs(y[j]-f[j]@m._fit(f[i],y[i]))) for i,j in folds])\\n\\ndef rank(e):return np.mean(e[2:])+.3*max(e[2:])\\nfor main in [base,np.c_[base,z],np.c_[base,c],np.c_[base,d]]:\\n tests=[(rank(e:=cv(np.c_[main,v])),k,e) for k,v in D.items()]; top=sorted(tests)[:14]; print('main',main.shape,cv(main));print('top single',[(key,np.round(e,4)) for _,key,e in top[:5]])\\n keys=list(dict.fromkeys([k for _,k,_ in top]+list(D)[:11])); rr=[]\\n for k in [2,3,4]:\\n  for ks in combinations(keys,k):\\n   e=cv(np.c_[main,*[D[j] for j in ks]]); rr.append((rank(e),ks,e))\\n print('top pooled',[(key,np.round(e,4)) for _,key,e in sorted(rr)[:7]])\\n print('passing',[(key,np.round(e,4)) for _,key,e in sorted(r for r in rr if max(r[2][:2])<=.038)[:7]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact08.py\\npython3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: cyclic bilinear amplitude and opposite-channel interaction -> H2: compact scalar correction with a separate trajectory readout; the prior sparse fit scored 0.03259 on 52/20 and 0.03949 on 56/16.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\",\"ng_t06\",\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Keep expanding the feature dictionary without saving a solver\",\"rejected_reason\":\"A working artifact is now the priority; candidate corrections can be compared against it on both chronological and shuffled holdouts.\"}],\"rationale\":\"Save the strongest known sparse candidate, then check whether its scalar terms generalize across folds and whether a simpler correction satisfies the 52/20 gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "39fb3fbcab76582a116b36e94fd960379a9f4ab9f6f606ddf425d9249e3e82a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47649.24,
+      "usage_known": true,
+      "prompt_tokens": 40834,
+      "cached_tokens": 9344,
+      "completion_tokens": 1814
+    }
+  ]
+}

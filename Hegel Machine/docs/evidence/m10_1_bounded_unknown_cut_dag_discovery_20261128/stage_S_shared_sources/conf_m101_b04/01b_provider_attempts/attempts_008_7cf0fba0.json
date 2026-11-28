@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7cf0fba0d82b4677837419de186429a6",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:14:18.339421+00:00",
+  "ended_at_utc": "2026-11-28T09:14:58.427631+00:00",
+  "request_sha256": "1eae16beab565d357fd1b9df0e9afcc43831353f1b8d150f23fcec1365468191",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57290,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35564,
+    "cached_tokens": 10880,
+    "completion_tokens": 1767
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/metric_probe.py <<'PY'\\nimport pickle\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve, qr\\nfrom scipy.optimize import least_squares, minimize\\n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx,y,z=[s['train'][k] for k in ('x','y','traj')]; t=s['eval_times']; n=len(x)\\nls=lambda a,b: np.linalg.lstsq(a,b,rcond=None)[0]\\ndef poly(a,d):\\n return np.column_stack([np.ones(len(a))]+[np.prod(a[:,j],1) for k in range(1,d+1) for j in combinations_with_replacement(range(4),k)])\\ndef kernel(a,b,par,family):\\n dx=(a[:,None,:]-b[None,:,:]); r2=np.einsum('ijk,k,ijk->ij',dx,np.exp(par[:4]),dx)\\n if family=='gauss': return np.exp(-r2)\\n if family=='rq': return 1/(1+r2)\\n if family=='mat52':\\n  r=np.sqrt(r2); return (1+r+r2/3)*np.exp(-r)\\n if family=='mat72':\\n  r=np.sqrt(r2); return (1+r+0.4*r2+r2*r/15)*np.exp(-r)\\n raise ValueError(family)\\ndef predict(a,b,yy,family,degree,param=None):\\n P=poly(a,degree); Q=poly(b,degree); m=P.shape[1]\\n if param is None:\\n  N=qr(P,mode='full')[0][:,m:]; v=N.T@yy\\n  if v.ndim==2:\\n   u,d,_=np.linalg.svd(v,full_matrices=False); v=u[:,:2]*np.sqrt(np.sum(d[:2]**2)/2)\\n  else: v=v[:,None]\\n  def obj(p):\\n   K=N.T@kernel(a,a,p,family)@N+np.exp(p[-1])*np.eye(len(N.T))\\n   f=cho_factor(K); scale=np.sum(v*cho_solve(f,v))/v.size\\n   return np.log(scale)+2*np.log(np.diag(f[0])).mean()\\n  o=minimize(obj,np.log([.24]*4+[.002]),method='L-BFGS-B',bounds=[(-4,1)]*4+[(-12,-1)],options={'maxiter':70}); param=o.x\\n K=kernel(a,a,param,family)+np.exp(param[-1])*np.eye(len(a))\\n f=cho_factor(K); A=cho_solve(f,P); v=cho_solve(f,yy); c=np.linalg.solve(P.T@A,P.T@v)\\n return Q@c+kernel(b,a,param,family)@(v-A@c),np.exp(param)\\nsplits={'fixed':np.arange(52,72),'radial':np.argsort(np.linalg.norm(x,axis=1))[-18:]}\\nfor j in range(4):\\n order=np.argsort(x[:,j]); splits[f'low{j}']=order[:18]; splits[f'high{j}']=order[-18:]\\nfor i,ix in enumerate(np.array_split(np.random.default_rng(712).permutation(n),4)): splits[f'rand{i}']=ix\\nscores={}; picks={}\\nfor label,va in splits.items():\\n tr=np.setdiff1d(np.arange(n),va); Z=z[tr].T\\n def bas(k):return -np.expm1(-t[:,None]*k)\\n b=bas(least_squares(lambda k:(bas(k)@ls(bas(k),Z)-Z).ravel(),[1.5,.25],bounds=([.7,.02],[4,.65])).x)\\n # Learn the state geometry using two orthogonalized modes, not correlated amplitudes.\\n U=np.linalg.qr(b)[0]; H=Z.T@U\\n def add(key,p,q):\\n  e=np.abs(q-z[va]); scores.setdefault(key,[]).append([np.mean(abs(p-y[va])),e.mean(),e.mean(0).max()])\\n def pred(f,d,py,pz): return predict(x[tr],x[va],y[tr],f,d,py),predict(x[tr],x[va],H,f,d,pz)\\n (p,_),(q,_)=pred('gauss',2,np.log([.23]*4+[.001]),np.log([.23]*4+[.006])); q=q@U.T; add('baseline',p,q)\\n for f in ['gauss','rq','mat52','mat72']:\\n  for d in [1,2]:\\n   (pp,wp),(qq,wq)=pred(f,d,None,None); qq=qq@U.T\\n   add((f,d),pp,qq); add((f,d,'blend'),.5*(pp+p),.5*(qq+q)); picks.setdefault((f,d),[]).append(np.r_[wp,wq])\\n for f,h,reg in [('rq',.2,.001),('rq',.4,.001),('mat52',1.,.001),('mat72',1.5,.001)]:\\n  (pp,_),(qq,_)=pred(f,2,np.log([h]*4+[reg]),np.log([h]*4+[reg*4])); add((f,h),pp,qq@U.T)\\nfor key,vals in scores.items():\\n a=np.array(vals); print(key,'fixed',np.round(a[0],5),'tail max',np.round(a[1:10].max(0),5),[list(splits)[1+int(i)] for i in a[1:10].argmax(0)],'rand max',np.round(a[10:].max(0),5),'tail mean',np.round(a[1:10].mean(0),5))\\n if key in picks: print('  median fitted',np.round(np.median(picks[key],axis=0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/metric_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed isotropic geometry → train-only learned readout geometry; baseline fixed scalar/state MAE is 0.01158/0.01364, while the upper third-coordinate tail reaches 0.03907 scalar MAE and 0.04360 worst-horizon MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a third temporal mode or use panel-derived scaling\",\"rejected_reason\":\"Neither improved the worst horizon; panel scaling also increased the worst scalar tail error.\"}],\"rationale\":\"Test whether the bottleneck is the assumption of equal smoothness across inputs. Fit the metric on training rows only within every split, and promote it only if the directional errors improve without eroding the public and random-split margins.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1265b265777e8684009c7155f58b5693e7352c0629b47506b128cdc5823a67e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45326.65,
+      "usage_known": true,
+      "prompt_tokens": 35564,
+      "cached_tokens": 10880,
+      "completion_tokens": 1767
+    }
+  ]
+}

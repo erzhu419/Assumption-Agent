@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "160ff607784d42e4a446fb9bb42f11e3",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:11.970706+00:00",
+  "ended_at_utc": "2026-11-28T09:27:40.009700+00:00",
+  "request_sha256": "57e9580d9c1820f741be4bd0d2b430bdb8b2e04c27a24c040b25856a6de7c0e5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42854,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27681,
+    "cached_tokens": 5504,
+    "completion_tokens": 1096
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout_refine.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split(\\\"print('top single residual features')\\\")[0])\\nfrom scipy.optimize import least_squares\\nbase_c=np.c_[np.ones(n),c]; pair=c[:,1]*c[:,3]; f=np.c_[base_c,pair]\\nprint('interaction',score(f),base(f,y))\\nres=y-f@base(f,y)\\nprint('strongest second terms')\\nprint(*sorted((score(np.c_[f,v]),k,base(np.c_[f,v],y)[-1]) for k,v in zip(names,cols) if np.linalg.norm(v-f@base(f,v))>1e-8)[:16],sep='\\\\n')\\nq=np.column_stack([base_c]+[c[:,i]*c[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])\\nprint('full quadratic',score(q),base(q,y))\\nfor name,extra in [('v2',b),('z',z),('both',np.c_[z,b]),('traj modes',np.linalg.svd(tr,full_matrices=False)[0][:,:2])]:\\n h=np.c_[f,extra]; print(name,score(h),base(h,y))\\nsets=[]\\nfor freq in (.25,.5,1.,1.5,2.,3.):\\n for i,j in itertools.combinations(range(4),2):\\n  a,d=c[:,i],c[:,j]\\n  for tag,w in [('sin+',np.sin(freq*(a+d))),('sin-',np.sin(freq*(a-d))),('cos+',np.cos(freq*(a+d))),('cos-',np.cos(freq*(a-d))),('tanhprod',np.tanh(freq*a*d)),('sinprod',np.sin(freq*a*d)),('ratprod',a*d/(1+freq*(a*d)**2))]:\\n   sets.append((f'{tag}_{i}{j}_{freq}',np.c_[base_c,w]))\\nprint('replace product',*sorted((score(h),key) for key,h in sets)[:10],sep='\\\\n')\\nmodels={'affine':base_c,'product':f,'full quadratic':q,'product + z':np.c_[f,z],'product + v2':np.c_[f,b]}\\nfor name,h in models.items():\\n scores=[]; corners=[]\\n for inds in np.array_split(np.random.default_rng(812).permutation(n),6)+[np.argsort(np.linalg.norm(z,axis=1))[-12:]]:\\n  keep=np.setdiff1d(np.arange(n),inds); e=abs(y[inds]-h[inds]@base(h[keep],y[keep])); scores.append(e.mean()); corners.append(e.max())\\n print('stress',name,np.round(scores,5),'worst row',max(corners))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_refine.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine readout on recovered v1) -> H2 (add the v1 channel 1 × channel 3 interaction); public CV passed at 0.023984 for readout and 0.003983 for trajectory, and the interaction probe reduced readout LOO MAE from 0.02833 to 0.01246.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the accepted affine baseline\",\n      \"rejected_reason\": \"A single observed interaction cuts readout LOO MAE by more than half; test whether the gain holds on block and extrapolation splits.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted sink unchanged while checking whether the interaction generalizes, and inspect its residuals for another compact term. Promote a challenger only if it improves the readout on difficult splits without changing the accurate trajectory path.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d7335eb579a6142e7021c08323ad049fb7ec07daa839ed9e3e44303e9a9d248f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30624.85,
+      "usage_known": true,
+      "prompt_tokens": 27681,
+      "cached_tokens": 5504,
+      "completion_tokens": 1096
+    }
+  ]
+}

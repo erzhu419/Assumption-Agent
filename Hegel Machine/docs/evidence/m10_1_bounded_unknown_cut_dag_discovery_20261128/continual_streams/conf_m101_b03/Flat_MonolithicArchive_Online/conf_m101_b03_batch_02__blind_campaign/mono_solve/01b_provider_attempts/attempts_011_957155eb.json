@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "957155eb78d945f6a989e8db8cf752ac",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:00.449578+00:00",
+  "ended_at_utc": "2026-11-28T09:30:30.628697+00:00",
+  "request_sha256": "9460d91532eaf8d1bfb6a540d382036f0b67203a36940513b13bc5c8fa21a78c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68569,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36849,
+    "cached_tokens": 9344,
+    "completion_tokens": 1180
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\nanchor = '\\\\ndef solve_batch(study):\\\\n'\\nassert s.count(anchor) == 1\\ns = s.replace(anchor, '''\\ndef _slow_correction(design, coordinates, slow, n):\\n    \\\"\\\"\\\"Fit the nonlinear slow-mode residual without altering the shared readout.\\\"\\\"\\\"\\n    train_coord = coordinates[:n]\\n    q = (coordinates - train_coord.mean(axis=0)) / train_coord.std(axis=0)\\n    smooth = np.sqrt(0.25 + q*q)\\n    train_design = design[:n]\\n    residual_features = smooth - design @ _fit(train_design, smooth[:n])\\n    residual_features /= np.maximum(residual_features[:n].std(axis=0), 1e-8)\\n    f = residual_features[:n]\\n    residual = slow - train_design @ _fit(train_design, slow)\\n    coef = np.linalg.solve(f.T @ f + np.eye(f.shape[1]), f.T @ residual)\\n    return residual_features[n:] @ coef\\n\\n\\ndef solve_batch(study):\\n''')\\nanchor = '    y = pred[:, 0]\\\\n'\\nassert s.count(anchor) == 1\\np.write_text(s.replace(anchor, '    pred[:, 1] += _slow_correction(design, z+c, amplitudes[:, 0], n)\\\\n' + anchor))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ntr = s['train']; ix = np.arange(len(tr['x'])); z = m._calibrate(s['panel_a'], tr['x'])\\ndef evaluate(i, j):\\n    study = {**s, 'train': {k: v[i] if k != 'summary' else v for k, v in tr.items()}, 'test': {'x': tr['x'][j]}}\\n    p = m.solve_batch(study)\\n    dy = np.abs(p['y_hat'] - tr['y'][j])\\n    dt = np.abs(p['state_pred'] - tr['traj'][j])\\n    return np.array([dy.mean(), dt.mean(), dt.mean(0).max()])\\nfor n in (52, 56):\\n    e = evaluate(ix[:n], ix[n:]); print(f'{n}/{len(ix)-n}:', e); assert e[0] <= .038\\nq = np.argsort(np.linalg.norm(z, axis=1)); print('high radius:', evaluate(q[:52], q[52:]))\\nslices = [np.argsort(sign*z[:, k]) for sign in (-1, 1) for k in range(4)]\\nprint('directional max:', np.max([evaluate(q[:56], q[56:]) for q in slices], axis=0))\\nrng = np.random.default_rng(22467)\\nslices = [rng.permutation(ix) for _ in range(20)]\\nprint('random max:', np.max([evaluate(q[:52], q[52:]) for q in slices], axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared panel-C readout → H2 a separate regularized slow-mode correction; prototype worst pooled trajectory MAE across directional slices fell from 0.05968 to 0.04292, and ordered 52/20 MAE fell from 0.01896 to 0.01231.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the nonlinear profiled correction\",\n      \"rejected_reason\": \"It improves the random-split maximum but loses most of the ordered-holdout gain and requires a nonlinear fit.\"\n    }\n  ],\n  \"rationale\": \"Promote the four-feature correction that improves ordered and extrapolation slices without changing the scalar or fast-mode readouts. Verify the exact saved artifact in isolated Python to catch implementation regressions, then run the required schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "2e9def7ae7593de82c4bd8eda610d30d8fd376c3febe2a4ddb2bfd136b9c91dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32760.77,
+      "usage_known": true,
+      "prompt_tokens": 36849,
+      "cached_tokens": 9344,
+      "completion_tokens": 1180
+    }
+  ]
+}

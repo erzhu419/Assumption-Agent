@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0ea06acdb35c496db444d033f5ccba42",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:53:39.909963+00:00",
+  "ended_at_utc": "2026-11-28T09:54:18.157906+00:00",
+  "request_sha256": "3c9698b63772f4483f2d7e8e1d22315fa766d9d2719bd31b008e4d20c645d038",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40451,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26089,
+    "cached_tokens": 9344,
+    "completion_tokens": 1548
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/campaign_probe.py <<'PY'\\nimport pickle, numpy as np, sys\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom scipy.linalg import solve\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import conf_m101_a02_batch_06_solver as old\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['y']); times=s['eval_times']; fit=old._fit; aff=old._aff\\n\\ndef cal(panel,x):\\n u,v=panel['u'],panel['v']; a=aff(u); r=np.linalg.norm(v-a@fit(a,v),axis=1); k=np.argsort(r)[:-3]; rough=fit(a[k],v[k]); j=np.arange(4); h=(j+1)%4\\n def des(z):\\n  q=z[:,h]; return np.stack((np.ones_like(z),z,q,q*q,z**3),axis=-1)\\n d=des(u); c=np.array([fit(d[k,i],v[k,i]) for i in j]); z=np.linalg.solve(rough[1:].T,(x-rough[0]).T).T\\n for _ in range(10):\\n  jac=np.zeros((len(z),4,4)); jac[:,j,j]=c[:,1]+3*c[:,4]*z*z; jac[:,j,h]=c[:,2]+2*c[:,3]*z[:,h]; z-=np.linalg.solve(jac,((des(z)*c).sum(-1)-x)[...,None])[...,0]\\n return z\\n\\ndef panel(p,key,z,basis,init,bounds):\\n u,v=p['u'],p[key]\\n def res(p):\\n  f=basis(u,p); return (f@fit(f,v)-v).ravel()\\n q=least_squares(res,init,bounds=bounds,ftol=1e-11,xtol=1e-11,gtol=1e-11).x; f=basis(u,q); print(key,q,np.std(res(q)),flush=True); return basis(z,q)@fit(f,v)\\n\\ndef coords():\\n old._calibrate=cal; old._panel=panel; return old._coords(s)\\n\\ndef cv(f):\\n for l in (52,56):\\n  x=dict(s,train={k:(v[:l] if k!='summary' else v) for k,v in tr.items()},test={'x':tr['x'][l:]}); o=f(x); print('split',l,np.mean(abs(o['y_hat']-tr['y'][l:])),np.mean(abs(o['state_pred']-tr['traj'][l:])))\\n\\nif __name__=='__main__':\\n z,b,c,d=coords(); cv(old.solve_batch); z,b,c,d=(q[:n] for q in (z,b,c,d)); y=tr['y']; state=tr['traj']; np.set_printoptions(precision=3,suppress=True)\\n def prod(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\n def gram(x):\\n  x=(x-x.mean(0))/(x.std(0)+1e-9); return x@x.T/x.shape[1]\\n Z,B,C,D=map(gram,(z,b,c,d)); groups=dict(z=Z,b=B,c=C,d=D,zz=Z**2,bb=B**2,cc=C**2,dd=D**2,zb=Z*B,zc=Z*C,zd=Z*D,bc=B*C,bd=B*D,cd=C*D,zzz=Z**3,bbb=B**3)\\n amp=old._shared_amplitude(times,state,np.c_[aff(z),b,c,d]); print('amp/range',np.std(amp),np.corrcoef(y,amp)[0,1]);\\n for names in ['z','b','c','d','z b','z b c d','z b c d zz bb','z b c d zz bb zb','z b c d zz bb zb zc zd','z b c d zz bb zb bc bd','z b c d zz bb zb cc dd','z b bb zb','z b c d zz bb zb zzz bbb']:\\n  k=1+sum(groups[q] for q in names.split()); a=[]\\n  for l in [52,56]:\\n   rr=[]\\n   for r in [.00001,.001,.03,.15]:\\n    o=old._predict(k,np.c_[y,amp,state][:l],r); rr.append(np.mean(abs(o-np.c_[y,amp,state][l:]),axis=0)[[0,1,9]])\\n   a.append(rr)\\n  print(names,np.array(a))\\n for lab,t in [('y',y),('amp',amp),('y-amp',y-amp),('y+amp',y+amp)]:\\n  for label,f in [('z',aff(z)),('b',aff(b)),('c',aff(c)),('d',aff(d)),('all',np.c_[aff(z),b,c,d])]:\\n   cc=fit(f[:52],t[:52]); print(lab,label,np.mean(abs(f[52:]@cc-t[52:])),cc if f.shape[1]<6 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/campaign_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: replace the calibration cross-product with the squared neighbor -> H2: identify the scalar and trajectory readouts in corrected coordinates; the archived 52/20 target MAE is 0.078829.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The cyclic calibration interaction is the product of the current and next channel.\",\"empirical_witness\":\"The expanded inlier fit achieves RMS 0.0000719 and isolates a next-channel square coefficient of 0.32 in every channel, with negligible cross-product coefficients.\",\"causal_blanket_diagnosis\":\"The three gross outliers are separate from the systematic residual caused by the missing squared-neighbor term.\",\"sublated_pivot\":\"Retain robust row trimming and cyclic inversion, replacing the cross-product with the squared neighbor.\",\"risk_kind\":\"calibration grammar\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the full 19-term calibration polynomial\",\"rejected_reason\":\"Its coefficients isolate a five-term cyclic map; retaining the other terms would fit panel noise.\"}],\"rationale\":\"First quantify the effect of correcting calibration without changing the archived readout. Then compare panel fit residuals and held-out readout errors to locate any remaining bottleneck.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c80c91e1bd83cc386141ba7f574bbb16b6454534f12ee25e39f42b93ecf171a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40859.13,
+      "usage_known": true,
+      "prompt_tokens": 26089,
+      "cached_tokens": 9344,
+      "completion_tokens": 1548
+    }
+  ]
+}

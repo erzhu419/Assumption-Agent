@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd363aa510f146b98ddb62c0af11a878",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:12.860495+00:00",
+  "ended_at_utc": "2026-11-28T09:29:52.527134+00:00",
+  "request_sha256": "f579c895b227c345687c4124a8f6563d660f3bf3cfee541a09597f807f79c140",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30202,
+    "cached_tokens": 9344,
+    "completion_tokens": 1601
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/baseline03.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('    trend = _quadratic(_panel_b(study[\\\\'panel_b\\\\'], np.vstack((x, xt))))\\\\n', '    all_x = np.vstack((x, xt))\\\\n    aligned = _panel_b(study[\\\\'panel_b\\\\'], all_x)\\\\n    trend = np.column_stack((_quadratic(aligned), _quadratic(all_x)[:, 1:]))\\\\n').replace('    y_hat = _forecast(d2, d2_test, p, pt, train[\\\\'y\\\\'], .075, .0003)\\\\n    state_pred = _forecast(d2, d2_test, p, pt, modes, .035, .0003) @ basis.T\\\\n', '    dz, dzt = cdist(aligned[:n], aligned[:n], \\\\'sqeuclidean\\\\'), cdist(aligned[n:], aligned[:n], \\\\'sqeuclidean\\\\')\\\\n    y_hat = _forecast(d2 + dz, d2_test + dzt, p, pt, train[\\\\'y\\\\'], .035, .002)\\\\n    state_pred = _forecast(d2, d2_test, p, pt, modes, .035, .015) @ basis.T\\\\n')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver_check', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.solve_batch\\n\\nnew = load('/holdout_task/batch_solver.py')\\nold = load('/tmp/baseline03.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; x = tr['x']; n = len(x)\\n\\ndef metrics(solver, a, b):\\n    fold = {**s, 'train': {k: tr[k][a] for k in ('x', 'y', 'traj')}, 'test': {'x': x[b]}}\\n    o = solver(fold)\\n    e = np.abs(o['state_pred'] - tr['traj'][b])\\n    return np.array([np.abs(o['y_hat'] - tr['y'][b]).mean(), e.mean(), e[:, -1].mean()])\\n\\nrng = np.random.default_rng(120917)\\norders = [np.arange(n), *(rng.permutation(n) for _ in range(23))]\\nfor label, solver in [('baseline',old),('joint',new)]:\\n    e = np.array([metrics(solver, i[:52], i[52:]) for i in orders])\\n    print(label, '52/20 exact, mean, worst [scalar/state/terminal]:', np.round([e[0], e.mean(0), e.max(0)], 5))\\n    if solver is new:\\n        assert (e[:, :2].max(0) <= .038).all()\\n    e = np.array([metrics(solver, i[:56], i[56:]) for i in orders])\\n    print(label, '56/16 mean, worst:', np.round([e.mean(0), e.max(0)], 5))\\n    for j in range(x.shape[1]):\\n        ix = x[:, j].argsort()\\n        for b in (ix[:8],ix[-8:]):\\n            if j == 0 and np.array_equal(b, ix[:8]): edge = []\\n            edge.append(metrics(solver, np.setdiff1d(np.arange(n), b), b))\\n    print(label, 'coordinate-tail worst:', np.round(np.max(edge, axis=0), 5))\\n\\nout = new(s)\\ny, state = out['y_hat'], out['state_pred']; terminal = state[:, -1]\\nassert y.shape == (36,) and state.shape == (36, 8)\\nassert all(np.isfinite(v).all() for v in out.values())\\nnp.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), terminal.mean(), terminal.std()], rtol=0, atol=0)\\nprint('Isolated full-study output and diagnostic identities verified.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 panel B quadratic alone → H2 joint panel B and raw-coordinate quadratics; the challenger’s 24-split worst MAEs are 0.03253 for y and 0.03230 for state.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select settings by inner CV at runtime\",\n      \"rejected_reason\": \"The nested selector had higher worst-split errors than the fixed joint trend, and sometimes selected the less accurate shared panel warp.\"\n    }\n  ],\n  \"rationale\": \"The joint trend lowers the worst scalar, trajectory, and terminal MAEs relative to the current artifact. Verify the exact edited file on both split sizes and coordinate tails; the tail comparison can reveal extrapolation regressions hidden by random splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2cf9d51fd9e4cb9f25055b77b17e4206021d2a8af8ca51c83a6ccf96c494cf4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42281.21,
+      "usage_known": true,
+      "prompt_tokens": 30202,
+      "cached_tokens": 9344,
+      "completion_tokens": 1601
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b3ff4b6c23d45a2b7160f8527746685",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:18:26.143659+00:00",
+  "ended_at_utc": "2026-11-28T09:18:57.306692+00:00",
+  "request_sha256": "2666e99927864b90d3902a5b2e71a6022bf13916043ffd49a326de2c28513591",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21945,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18942,
+    "cached_tokens": 9344,
+    "completion_tokens": 1257
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; tm=s['eval_times']; np.set_printoptions(precision=5,suppress=True)\\ndef affine(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for j in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef fit(a,b):return a@ls(a,b)\\np=s['panel_a']; a=affine(p['u']); z=p['v']; good=np.linalg.norm(z-fit(a,z),axis=1)<3; A=ls(a[good],z[good]); print('A',A,'resid RMS',np.sqrt(np.mean((a[good]@A-z[good])**2)),'bad',np.where(~good)[0]);\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; g=good if k=='panel_a' else slice(None); u=u[g];\\n for name,z in p.items():\\n  if name=='u':continue\\n  z=z[g]; print(k,name,'range',z.min(0),z.max(0),'resid svals',np.linalg.svd(z-fit(affine(u),z),compute_uv=False));\\n  for d in [1,2,3]:\\n   f=poly(u,d); err=[]\\n   for i in range(len(u)):\\n    ii=np.arange(len(u))!=i;err.append(f[i]@ls(f[ii],z[ii])-z[i]);\\n   print(d,'train',np.mean(abs(fit(f,z)-z),axis=0),'loo',np.mean(abs(err),axis=0));\\nU,S,V=np.linalg.svd(tr,full_matrices=False); v=V[0]/V[0,-1]; h=tr@v/(v@v)\\nprint('times',tm,'telemetry',s['telemetry_vec'],'trajectory basis',v,'amplitude range',h.min(),h.max(),'y range',y.min(),y.max()); print('h/y samples',np.c_[h[:10],y[:10]]);\\nfor name,u in [('x',x),('A',affine(x)@A),('invA',(x-A[0])@np.linalg.inv(A[1:]))]:\\n for d in [1,2,3]:\\n  f=poly(u,d); c=ls(f[:52],np.c_[y,h][:52]); print(name,d,'CV MAE',np.mean(abs(f[52:]@c-np.c_[y,h][52:]),axis=0));\\nfor d in [1,2,3,4]:\\n f=poly(h[:,None],d); print('y from amp',d,'mae',np.mean(abs(f[52:]@ls(f[:52],y[:52])-y[52:])))\\nfor target in [h,y]:\\n w=ls(affine(x[:52]),target[:52]);\\n for name,fun in [('tanh',np.tanh),('sin',np.sin),('exp',lambda v:np.exp(np.clip(v,-30,30)))]:\\n  def pred(p):return p[0]+p[1]*fun(affine(x)@p[2:]);\\n  p=least_squares(lambda p:(pred(p)-target)[:52],np.r_[0,1,w],max_nfev=1000).x; print(name,'fit',np.mean(abs((pred(p)-target)[:52])),'cv',np.mean(abs((pred(p)-target)[52:])),'params',p)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (raw-input kernel) -> H2 (robust panel calibration and a shared trajectory amplitude); prior gate MAE was 0.060792 for y and 0.024955 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit eight independent trajectory models\",\n      \"rejected_reason\": \"The first trajectory singular value is over 150 times the second, so test a shared temporal basis first.\"\n    }\n  ],\n  \"rationale\": \"Trim the three conspicuous calibration outliers and measure the remaining residual to test the affine map. Use panel leave-one-out errors and 52/20 prediction errors to distinguish low-order operators and scalar readouts from in-sample interpolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "885b889b44687c2b694c2ef85ab3dc2b272a96cf011dc1c81c322f7e65179f74",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33765.31,
+      "usage_known": true,
+      "prompt_tokens": 18942,
+      "cached_tokens": 9344,
+      "completion_tokens": 1257
+    }
+  ]
+}

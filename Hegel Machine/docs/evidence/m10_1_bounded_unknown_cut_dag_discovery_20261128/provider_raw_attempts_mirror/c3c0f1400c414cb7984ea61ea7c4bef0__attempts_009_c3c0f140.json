@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3c0f1400c414cb7984ea61ea7c4bef0",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_01__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:24.333641+00:00",
+  "ended_at_utc": "2026-11-28T09:23:57.679620+00:00",
+  "request_sha256": "8ec9a312067dbe43bd7b7da784bc118a2ba9b12feee6ca4ec5d7f4a9bc7ba8a1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62189,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36281,
+    "cached_tokens": 5504,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > node_02.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _interactions(x, z):\\n    products = [z[:, i] * z[:, j] for i in range(z.shape[1])\\n                for j in range(i, z.shape[1])]\\n    return np.column_stack((*products, x[:, 3] * np.cos(2.0 * x[:, 2])))\\n\\n\\ndef _readout(affine, interactions, direction):\\n    score = affine @ direction\\n    return np.column_stack((affine[:, 0], score, np.tanh(score), interactions))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    calibrated = inputs['node_00']\\n    operator = inputs['node_01']\\n    z_train, z_test = operator['z_tr'], operator['z_te']\\n    a_train, a_test = _affine(z_train), _affine(z_test)\\n    q_train = _interactions(calibrated['x_tr_cal'], z_train)\\n    q_test = _interactions(calibrated['x_te_cal'], z_test)\\n    y = operator['y']\\n\\n    def residual(direction):\\n        design = _readout(a_train, q_train, direction)\\n        return design @ _fit(design, y) - y\\n\\n    initial = _fit(a_train, y)\\n    result = min((least_squares(residual, scale * initial, max_nfev=100)\\n                  for scale in (0.65, 1.3)), key=lambda fit: fit.cost)\\n    readout_weights = _fit(_readout(a_train, q_train, result.x), y)\\n    y_hat = _readout(a_test, q_test, result.x) @ readout_weights\\n    state_pred = a_test @ _fit(a_train, operator['traj'])\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport runpy\\nimport numpy as np\\np = '/holdout_task/'\\nd = runpy.run_path('/tmp/readout_probe.py', run_name='probe') if False else {}\\nexec(open('/tmp/readout_probe.py').read().split(\\\"print('ranges'\\\")[0], d)\\na,b,x,z,y,t = (d[k] for k in ('a','b','x','z','y','t'))\\nnode = runpy.run_path(p+'node_02.py')['run_node']\\nslices = [('random', v) for fold in d['folds'] for v in fold]\\nfor name, q in [('calibrated',x),('operator',z)]:\\n    for k in range(q.shape[1]):\\n        i = np.argsort(q[:,k]); slices.extend([(name, i[:12]), (name, i[-12:])])\\nworst = {}\\nfor name, v in slices:\\n    m = np.setdiff1d(np.arange(len(y)), v)\\n    out = node({'node_00': {'x_tr_cal':x[m], 'x_te_cal':x[v]},\\n                'node_01': {'z_tr':z[m], 'z_te':z[v], 'y':y[m], 'traj':t[m]}})\\n    e = np.abs(out['state_pred']-t[v])\\n    row = [np.abs(out['y_hat']-y[v]).mean(), e.mean(), e.mean(axis=0).max()]\\n    worst[name] = np.maximum(worst.get(name, 0), row)\\nprint('Worst MAE (scalar, trajectory overall, individual horizon):', worst)\\nassert max(np.max(row) for row in worst.values()) <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared tanh score plus operator quadratics → calibrated-coordinate correction; probe scalar MAE is 0.01165 on the public block and 0.02590 on the worst coordinate tail.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Omit the calibrated-coordinate correction\",\n      \"rejected_reason\": \"The operator-only model has a higher worst-tail error and leaves the requested edge unused.\"\n    }\n  ],\n  \"rationale\": \"Save the readout with the best observed tail margin, retain the affine trajectory fit, and verify the exact artifact in isolated Python. The public test detects interface and diagnostics failures; the additional splits detect scalar or horizon errors hidden by the official block average.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "abb574083a6866b2261b76e086f4e7420365a4560f6ce6d2524bdebcf3ebd8bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35909.59,
+      "usage_known": true,
+      "prompt_tokens": 36281,
+      "cached_tokens": 5504,
+      "completion_tokens": 1268
+    }
+  ]
+}

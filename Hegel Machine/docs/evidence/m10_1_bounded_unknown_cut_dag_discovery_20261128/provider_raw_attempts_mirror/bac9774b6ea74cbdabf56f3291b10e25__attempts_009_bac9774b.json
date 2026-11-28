@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bac9774b6ea74cbdabf56f3291b10e25",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:16.154661+00:00",
+  "ended_at_utc": "2026-11-28T09:27:46.139733+00:00",
+  "request_sha256": "7d0182a92770628231d7f5fece007188706a383973071c573f8b51e01849cea1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54179,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32566,
+    "cached_tokens": 9344,
+    "completion_tokens": 1180
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/for name,w in/,$d' /tmp/probe.py >/tmp/compact.py; cat >>/tmp/compact.py <<'PY'\\nfrom itertools import product\\nfrom scipy.optimize import least_squares\\nw=z; g,h,j,k=w.T; S=g+h-j-k; P=g*j+h*k; F=aff(w); freq=s['telemetry_vec'][0]\\nfolds=[np.arange(52,72),np.arange(56,72),*np.array_split(np.random.default_rng(813).permutation(n),5)]; splits=[(np.setdiff1d(np.arange(n),v),v) for v in folds]\\ncs=[]\\nfor name,V in [('signed',S),('total',g+h+j+k),('alt',g-h+j-k),('alt2',g-h-j+k),('pair',P),('pairdiff',g*j-h*k),('left',g+h),('right',j+k),('norm',np.sqrt(np.sum(w*w,axis=1)))]:\\n for fun in ['sin','tanh','both','rat']:\\n  G={'sin':np.sin(freq*S)[:,None],'tanh':np.tanh(S)[:,None],'both':np.c_[np.sin(freq*S),np.tanh(S)],'rat':(S/(1+S*S))[:,None]}[fun]\\n  for base in ['lin','quad','pair']:\\n   A={'lin':F,'quad':poly(w,2),'pair':np.c_[F,P]}[base]\\n   for lam in [.1,.2,.5,1,1.7]:\\n    D=np.c_[A,G,P/(1+lam*V**2)]; es=[np.mean(abs(D[v]@fit(D[u],y[u])-y[v])) for u,v in splits]; c0=fit(D,y); cs.append((np.mean(es),max(es),es[:2],name,fun,base,lam,np.std(y-D@c0),c0))\\nfor row in sorted(cs,key=lambda r:r[0])[:12]: print(row)\\nprint('FREE SIGNED GATE')\\nfor kind in ['sin','tanh','both']:\\n for free in [False,True]:\\n  ps=[]; es=[]\\n  for u,v in splits+[(np.arange(n),np.arange(n))]:\\n   def design(p):\\n    v=S if not free else S+w@p[1:5]+p[5]; T={'sin':np.sin(freq*S)[:,None],'tanh':np.tanh(S)[:,None],'both':np.c_[np.sin(freq*S),np.tanh(S)]}[kind]; return np.c_[F,T,P/(1+np.exp(p[0])*v*v)]\\n   def res(p):\\n    D=design(p)[u]; return D@fit(D,y[u])-y[u]\\n   q=least_squares(res,np.r_[np.log(.2),np.zeros(5 if free else 0)],max_nfev=150).x; D=design(q); C=fit(D[u],y[u]); ps.append(q); es.append(np.mean(abs(D[v]@C-y[v])))\\n  print(kind,free,np.round(es,6),'lam',np.exp(ps[-1][0]),'gate',ps[-1][1:],'coef',C)\\nprint('trajectory affine coeffs',fit(F,t)); print('trajectory per horizon rms',np.std(t-F@fit(F,t),axis=0)); print('label y diff from summary',y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse cubic → H2 signed-index oscillation with a rationally gated pair interaction; the two-term quadratic grammar gives 0.0095 MAE on 52/20 and 0.0106 on its worst shuffled fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Ship the unrestricted quadratic grammar now\",\n      \"rejected_reason\": \"It clears the gate, but the selected terms suggest a smaller readout whose extrapolation can be tested directly.\"\n    }\n  ],\n  \"rationale\": \"Compare compact rational gates to identify which signed combination drives the interaction. If the compact models lose held-out accuracy, retain the validated quadratic grammar. Inspect trajectory residuals separately to see whether temporal structure remains beyond observation noise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e98f346d308078d2c86df795fec9e0e4ce0fd5a07670a0c662e5bc07d00e7695",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32574.58,
+      "usage_known": true,
+      "prompt_tokens": 32566,
+      "cached_tokens": 9344,
+      "completion_tokens": 1180
+    }
+  ]
+}

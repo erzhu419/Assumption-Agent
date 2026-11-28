@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0730dafec9c046398208456050949489",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:16.285634+00:00",
+  "ended_at_utc": "2026-11-28T09:20:50.374791+00:00",
+  "request_sha256": "6e9b13a6df03a82e64e1e2ab9d74af622ecaa18848ce083f3999276c2deb4dec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39314,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27485,
+    "cached_tokens": 9344,
+    "completion_tokens": 1309
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rational_probe.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.model_selection import KFold\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom calibrated import calibrate,inverse,time_modes,design\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; q=tr['traj']; z=inverse(tr['x'],calibrate(s['panel_a'])); n=len(z)\\nD=design(z); Q=PolynomialFeatures(2).fit_transform(z); Ys=tr['y']; splits=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=111).split(z))\\nmodels=[]\\nfor i in range(4):\\n for variant in ['whole','affine','quad','scalar','linear','pair','add']:\\n  def basis(k,i=i,variant=variant):\\n   x=z[:,i]; inv=1/(1+k*x*x)\\n   if variant=='whole': return Q*inv[:,None]\\n   if variant=='affine': return np.c_[D,D[:,1:]*inv[:,None]]\\n   if variant=='quad': return np.c_[Q,D*inv[:,None]]\\n   if variant=='scalar': return np.c_[Q,inv,x*inv]\\n   if variant=='linear': return np.c_[D,Q[:,5:]*inv[:,None]]\\n   if variant=='pair': return np.c_[Q,(z[:,[j for j in range(4) if j!=i]]*x[:,None])*inv[:,None]]\\n   return np.c_[Q,np.sin(k*x),np.cos(k*x)]\\n  models.append((f'{i}:{variant}',basis,(.08,4.) if variant!='add' else (.7,5.)))\\nfor i in range(4):\\n for j in range(i):\\n  for sign in [-1,1]:\\n   def basis(k,i=i,j=j,sign=sign):\\n    inv=1/(1+k*(z[:,i]+sign*z[:,j])**2);return np.c_[Q,D*inv[:,None]]\\n   models.append((f'{i},{j},{sign}:quad',basis,(.08,4.)))\\nfor yid in range(3):\\n result=[]\\n for name,basis,bounds in models:\\n  errors=[]; fits=[]; pars=[]\\n  for a,b in splits:\\n   h,m=time_modes(s['eval_times'],q[a],len(a)); y=Ys if yid==0 else (q@np.linalg.pinv(h.T))[:,yid-1]\\n   def fit(k):\\n    F=basis(k); W=np.linalg.lstsq(F[a],y[a],rcond=1e-9)[0]; r=F[a]@W-y[a]; return np.mean(r*r), F@W\\n   o=minimize_scalar(lambda k:fit(k)[0],bounds=bounds,method='bounded'); mse,p=fit(o.x); errors.append(np.mean(abs(p[b]-y[b]))); fits.append(mse**.5);pars.append(o.x)\\n  result.append((name,np.round(errors,4),np.round(fits,4),np.round(pars,3)))\\n print('target',yid)\\n for row in sorted(result,key=lambda r:np.mean(r[1]))[:14]:print(*row)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_probe.py\\npython3 - <<'PY'\\nimport pickle,numpy as np\\nfrom sklearn.preprocessing import PolynomialFeatures\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['panel_c']; P=PolynomialFeatures(2);F=P.fit_transform(p['u']); names=P.get_feature_names_out();\\nfor key in ['v1','v2']:\\n C=np.linalg.lstsq(F,p[key],rcond=None)[0]; print(key);print(list(zip(names,np.round(C,3))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: additive model in calibrated coordinates → H2: sparse rational interactions; the best additive fit has 52/20 MAE of 0.0485 for y and 0.0295 for trajectory across the tested regularizations.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the calibrated additive predictor\",\n      \"rejected_reason\": \"It improves trajectory prediction but still misses the required y MAE of 0.038.\"\n    }\n  ],\n  \"rationale\": \"Fit denominator parameters only on training rows and evaluate each candidate on the prescribed split and four additional folds. The fitted residuals and parameter stability will show whether a sparse interaction explains the remaining error; panel C coefficients will help determine whether its measured operator supplies that interaction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "250724406728f87930921dcf5b9412c6ecf0fae06ce0f9f3dfdd45bda0673652",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36472.81,
+      "usage_known": true,
+      "prompt_tokens": 27485,
+      "cached_tokens": 9344,
+      "completion_tokens": 1309
+    }
+  ]
+}

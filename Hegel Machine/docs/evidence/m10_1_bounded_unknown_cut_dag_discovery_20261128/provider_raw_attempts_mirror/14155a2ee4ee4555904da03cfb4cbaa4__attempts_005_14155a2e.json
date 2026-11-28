@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "14155a2ee4ee4555904da03cfb4cbaa4",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:09.701756+00:00",
+  "ended_at_utc": "2026-11-28T09:38:40.803418+00:00",
+  "request_sha256": "cd4d748d266d896acc94823344105ae73a1f6825e495178677bac74f1fb328be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37257,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24455,
+    "cached_tokens": 9344,
+    "completion_tokens": 1218
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for i in 01 02 03; do echo ==== $i; sed -n '/^def _panel_b_basis/,$p; /^def _coordinates/,$p; /^def _c1_coordinates/,$p' /tmp/hegel_continual_archive/conf_m101_b01_batch_${i}_solver.py; done | head -180; cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; T=tr['traj']; t=s['eval_times']; n=len(y)\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef ls(D,y): return np.linalg.lstsq(D,y,rcond=None)[0]\\ndef poly(x,k=2):\\n return np.column_stack([np.prod(x[:,ii],axis=1) for j in range(k+1) for ii in itertools.combinations_with_replacement(range(x.shape[1]),j)])\\nu,v=[s['panel_a'][k] for k in ('u','v')]; z=u.copy()\\nfor j in range(4):\\n d=aff(u[:,j:j+1]); w=ls(d,v[:,j]);\\n for _ in range(8):\\n  ids=np.argsort(abs(d@w-v[:,j]))[:36]; w=ls(d[ids],v[ids,j]);\\n z[:,j]=u[:,j]*w[1]+w[0]\\ng=np.std(z,axis=0)/np.std(u,axis=0); a=np.mean(z-u*g,axis=0); x=(tr['x']-a)/g\\np=s['panel_b']; W=ls(aff(p['u']),p['v']); b=aff(x)@W\\np=s['panel_c']; u=p['u'];\\nmodels={'x':x,'b':b}\\nfor ky in ('v1','v2'):\\n v=p[ky]; print('panel',ky)\\n for kind,fn in {'q':lambda z:poly(z), 'sin':lambda z:np.c_[aff(z),np.sin(z),np.cos(z)], 'sin2':lambda z:np.c_[aff(z),np.sin(2*z),np.cos(2*z)], 'tanh':lambda z:np.c_[aff(z),np.tanh(z)], 'cubic':lambda z:np.c_[aff(z),z**2,z**3]}.items():\\n  D=fn(u); w=ls(D,v); h=np.sum(D*np.linalg.pinv(D).T,axis=1); print(kind,np.sqrt(np.mean(((D@w-v)/(1-h[:,None]))**2)))\\n  models[ky+kind+'/x']=fn(x)@w; models[ky+kind+'/b']=fn(b)@w\\nscores=[]; ix=np.arange(52); jx=np.arange(52,72); ix2=np.arange(16,72); jx2=np.arange(16)\\ndef add(name,D):\\n scores.append((np.mean(abs(D[jx]@ls(D[ix],y[ix])-y[jx])),np.mean(abs(D[jx2]@ls(D[ix2],y[ix2])-y[jx2])),np.mean(abs(D[jx]@ls(D[ix],T[ix])-T[jx])),name))\\nfor name,z in models.items():\\n for scale in (.3, .6, 1., 1.6, 2.5, 4.):\\n  for fn in (np.arcsinh,np.arctan,np.tanh,np.sin):\\n   h=fn(z*scale); add((name,fn.__name__,scale),poly(h)); add((name,fn.__name__,scale,'+raw'),np.c_[poly(h),z])\\n for k in (1,2,3): add((name,'poly',k),poly(z,k))\\nfor i in sorted(scores)[:24]: print(i)\\nprint('best traj', sorted(scores,key=lambda a:a[2])[:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine calibration and a shared panel-B operator → H2 separate scalar and trajectory feature maps; archived scalar MAE is 0.116113.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a nonlinear calibration for panel A\",\n      \"rejected_reason\": \"The trimmed affine fit recovers a diagonal map with median residual 0.00016; the large residuals are confined to outliers.\"\n    }\n  ],\n  \"rationale\": \"Compare panel-derived coordinates and nonlinear features on two held-out splits. Panel leave-one-out errors will distinguish reproducible auxiliary operators from interpolants before using them in the output model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c0f3448bed1feeb7c37e8e2fd5061a83eecacdc525c06b8236a4bd184e715421",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33722.14,
+      "usage_known": true,
+      "prompt_tokens": 24455,
+      "cached_tokens": 9344,
+      "completion_tokens": 1218
+    }
+  ]
+}

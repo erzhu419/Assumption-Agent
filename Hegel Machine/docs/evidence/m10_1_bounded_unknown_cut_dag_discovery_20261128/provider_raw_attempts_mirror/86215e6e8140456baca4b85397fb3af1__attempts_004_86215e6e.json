@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86215e6e8140456baca4b85397fb3af1",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:36:27.559246+00:00",
+  "ended_at_utc": "2026-11-28T09:36:53.987460+00:00",
+  "request_sha256": "f182852386a50438c676b76f83506581406b9b8df912babc75e4723eb96e830a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22017,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*batch_01_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\nls=lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\nd=lambda *x: np.column_stack((np.ones(len(x[0])),*x))\\nu,v=s['panel_a'].values(); X=d(u)\\nfor j in range(6):\\n m=np.arange(len(u)) if j==0 else np.argsort(np.linalg.norm(X@w-v,axis=1))[:45]; w=ls(X[m],v[m]); print('a',j,np.sort(np.linalg.norm(X@w-v,axis=1))[[0,20,40,44,45,47]])\\nprint('A matrix',w); print('A sv',np.linalg.svd(w[1:],compute_uv=False))\\nfams={'tanh':lambda x,a:np.tanh(a*x),'oddexp':lambda x,a:-np.sign(x)*np.expm1(-a*abs(x)), 'sin':lambda x,a:np.sin(a*x),'soft':lambda x,a:x/np.sqrt(1+a*x*x),'rat':lambda x,a:x/(1+a*x*x),'exp':lambda x,a:np.exp(a*x),'even':lambda x,a:x*x/np.sqrt(1+a*x*x),'evrat':lambda x,a:x*x/(1+a*x*x)}\\nfor p,k in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u,v=s[p]['u'],s[p][k]; print(p,k)\\n X=PolynomialFeatures(2).fit_transform(u); w=ls(X,v); print('poly',w.T)\\n for key,f in fams.items():\\n  for plus in [False,True]:\\n   def loss(a,ret=False):\\n    X=d(u,f(u,a)) if plus else d(f(u,a)); w=ls(X,v); r=X@w-v; h=np.sum(np.linalg.qr(X)[0]**2,axis=1); return (np.linalg.norm(r),np.linalg.norm(r/(1-h[:,None]))) if ret else np.linalg.norm(r)\\n   a=minimize_scalar(loss,bounds=(.001,4),method='bounded').x; print(key,plus,round(a,5),np.round(loss(a,True),6))\\nt=s['eval_times']; tr=s['train']['traj'];\\nfor r in [(0.4,1.8),(.5,2),(.3,1.5),(.45,1.8),(.35,1.6)]:\\n M=-np.expm1(-t[:,None]*r); print('time',r,np.sqrt(np.mean((M@ls(M,tr.T)-tr.T)**2)))\\nfrom scipy.optimize import least_squares\\nfun=lambda r:(lambda M:(M@ls(M,tr.T)-tr.T).ravel())(-np.expm1(-t[:,None]*r)); rr=least_squares(fun,[.4,1.8]).x; print('best rates',rr,np.std(fun(rr)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 prior-campaign saturating auxiliary maps -> H2 campaign-specific quadratic panel C1 with independently identified calibration, auxiliary, and temporal maps; C1 quadratic leave-one-out median residual is 0.000316.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse prior panel C1 saturation unchanged.\",\"rejected_reason\":\"The public panel has a near-exact quadratic fit, so the prior saturation needs direct comparison before reuse.\"}],\"rationale\":\"Use trimmed fitting to separate calibration outliers from genuine nonlinearities, compare panel operators by leave-one-out residual, and estimate the shared time rates before fitting the two prediction outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d29e3d23f49a79f9440c8d879a034f2c24ebc2addc490993242519b9c267789f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29017.39,
+      "usage_known": true,
+      "prompt_tokens": 22017,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

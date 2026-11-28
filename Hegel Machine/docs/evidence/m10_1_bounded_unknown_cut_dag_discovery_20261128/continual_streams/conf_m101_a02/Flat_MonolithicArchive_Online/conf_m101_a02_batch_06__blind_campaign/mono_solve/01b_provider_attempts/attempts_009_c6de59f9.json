@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6de59f9ade84cd6b4472e6ab4885133",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:38.882347+00:00",
+  "ended_at_utc": "2026-11-28T09:48:07.929408+00:00",
+  "request_sha256": "ef84945d0d8b698220f04547937f96b269b563ecfeb3b61d1c255d74034488da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55830,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34478,
+    "cached_tokens": 9344,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/modes.py <<'PY'\\nfrom operators import *\\nfrom scipy.optimize import minimize_scalar\\nb,c,d=[ops[k](z) for k in 'BCD']; cs={'z':z,'b':b,'c':c,'d':d,'cb':ops['C'](b),'db':ops['D'](b),'bc':ops['B'](c),'bd':ops['B'](d)}\\nprint('SUMMARY',s['train']['summary'],'TELEMETRY',s['telemetry_vec'])\\nprint('Y RMS',Y.std(0)); print('TIME V',np.linalg.svd(Y[:,1:],full_matrices=False)[2][:3].round(4))\\nF=np.c_[Y[:,0],Y[:,-1]]\\nfor k,x in cs.items():\\n A=pol(x,2)[:72]; w=fit(A,F); print('Q',k,'fit',np.std(A@w-F,0));\\n for a in w[:,[0,1]].T:\\n  M=np.zeros((4,4));\\n  for (i,j),v in zip(mon[5:15],a[5:]):M[i,j]=M[j,i]=v/(1+(i!=j))\\n  print('matrix',M.round(2),'eig',np.linalg.eigvalsh(M).round(3))\\nA=np.c_[aff(z),b,c,d];\\nfor i,j in folds:\\n L=A[i]; R=Y[i,1:]-L@fit(L,Y[i,1:]); print('modes',np.linalg.svd(R,full_matrices=False)[1]);\\n def bases(q):return -np.expm1(-T[None,:]*np.exp(q[:,None]))\\n q=least_squares(lambda q:(R-(R@np.linalg.pinv(bases(q)))@bases(q)).ravel(),np.log([.6,2]),bounds=(-3,3)).x\\n H=bases(q); amp=Y[:,1:]@np.linalg.pinv(H); w=fit(np.c_[L,amp[i]],Y[i,0]); print('rates',np.exp(q),'contrast',np.mean(abs(np.c_[A[j],amp[j]]@w-Y[j,0])),w[-2:]);\\nfor k,x in cs.items():\\n for mode in ['sq','cos','exp','abs','tanh','sqrat']:\\n  for r in [.3,.7,1,1.3,1.7,2.4]:\\n   f={'sq':lambda x:x*x,'cos':lambda x:np.cos(r*x),'exp':lambda x:np.exp(-r*x*x),'abs':abs,'tanh':lambda x:np.tanh(r*x*x),'sqrat':lambda x:x*x/(1+r*x*x)}[mode]\\n   phi=f(x); contrast=x[:,0]*x[:,2]+x[:,1]*x[:,3]; B=np.c_[A,phi,contrast]; out=scores(B); print('BAS',k,mode,r,*out[:,0].round(4),*out[:,1].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes.py >/tmp/modes.out; grep -A80 SUMMARY /tmp/modes.out | sed '/^BAS/,$d'; grep '^BAS' /tmp/modes.out | sort -gk5 | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic mixed readouts) -> H2 (shared nonlinear state amplitude with distinct linear readouts); best worst-split label MAE is 0.0554, above 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use the shared temporal mode to narrow the search for a compact spatial term. Check quadratic rank, bounded coordinate transforms, and whether a second temporal mode actually improves the label contrast before incorporating it.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b2014253a33e6c5ab04b5adb54fb0bdab3a17a9771ff85ccd923cf290b18b951",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29001.47,
+      "usage_known": true,
+      "prompt_tokens": 34478,
+      "cached_tokens": 9344,
+      "completion_tokens": 1030
+    }
+  ]
+}

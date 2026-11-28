@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f22a9881700f4358b181379a23d8099e",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:21.018339+00:00",
+  "ended_at_utc": "2026-11-28T09:41:59.147190+00:00",
+  "request_sha256": "eb25ff179348e014ffb3ac46667ba8ea6f4394edee08edc409d877ca9d53fa99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40765,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26681,
+    "cached_tokens": 9344,
+    "completion_tokens": 1667
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover calibrated coordinates and predict scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(d, y):\\n    return np.linalg.lstsq(d, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    distance = np.linalg.norm(u - v, axis=1)\\n    keep = distance < 4 * np.median(distance)\\n    offset, gain = np.column_stack([\\n        _fit(_affine(a[keep]), b[keep]) for a, b in zip(u.T, v.T)\\n    ])\\n    return (x - offset) / gain\\n\\n\\ndef _operator_design(x, params):\\n    rate, gain = params\\n    return _affine(x * (1 - gain * np.exp(-rate * x**2)))\\n\\n\\ndef _operator(panel):\\n    u, v = panel['u'], panel['v']\\n\\n    def residual(params):\\n        d = _operator_design(u, params)\\n        return (d @ _fit(d, v) - v).ravel()\\n\\n    q = least_squares(residual, [1., 1.1], bounds=([.15, .2], [4., 3.])).x\\n    return q, _fit(_operator_design(u, q), v)\\n\\n\\ndef _label_design(z, frequency):\\n    a, b, c, d = z.T\\n    pair = a * c + b * d\\n    contrast = a + b - c - d\\n    return np.column_stack((_affine(z), pair, np.sin(frequency * contrast),\\n                            np.tanh(contrast), pair / (1 + contrast**2)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = _calibrate(study['panel_a'], np.concatenate((train['x'], study['test']['x'])))\\n    params, mixer = _operator(study['panel_b'])\\n    z = _operator_design(x, params) @ mixer\\n    label = _label_design(z, study['telemetry_vec'][0])\\n    state = _affine(z)\\n    y_hat = label[n:] @ _fit(label[:n], train['y'])\\n    state_pred = state[n:] @ _fit(state[:n], train['traj'])\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])}\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\ncat > /tmp/refine05.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _affine as A, _fit as fit, _calibrate, _operator, _operator_design as D, _label_design as L\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; freq=s['telemetry_vec'][0]; train=s['train'];x=_calibrate(s['panel_a'],train['x']);y=train['y'];T=train['traj'];u,v=s['panel_b'].values();q,m=_operator(s['panel_b']); z=D(x,q)@m; d=L(z,freq);print('panel',q,m.round(5));print('full label coeff',fit(d,y).round(5));print('state coeff',fit(A(z),T).round(5));\\nfor name, ii in [('52/20',np.arange(52)),('56/16',np.arange(56))]+[(f'random{j}',np.random.default_rng(j).permutation(72)[:52]) for j in range(6)]:\\n jj=np.setdiff1d(np.arange(72),ii);print(name,end=' ')\\n for mode in ['base','fixed','joint_rates','joint_mixer']:\\n  def evaluate(p,output=False):\\n   q0=p[:2];mp=fit(D(u,q0),v) if len(p)==2 else p[2:].reshape(5,4);f=D(x,q0);zz=f@mp; dd=L(zz,freq);tt=A(zz);w=fit(dd[ii],y[ii]);k=fit(tt[ii],T[ii]);yp=dd@w;tp=tt@k\\n   if output:return np.mean(abs(yp[jj]-y[jj])),np.mean(abs(tp[jj]-T[jj]))\\n   return np.r_[(D(u,q0)@mp-v).ravel()/.007,(yp[ii]-y[ii])/.014,(tp[ii]-T[ii]).ravel()/.006]\\n  if mode=='base':p=q\\n  elif mode=='fixed':p=np.array([1.,1.1])\\n  else:\\n   p0=q if mode=='joint_rates' else np.r_[q,m.ravel()];p=least_squares(evaluate,p0,max_nfev=100).x\\n  print(mode, np.round(evaluate(p,True),5),np.round(p[:2],4),end='; ')\\n print()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal reference calibration and nonlinear panel B mixing → H2 structured scalar and affine trajectory readouts; 52/20 MAEs are 0.01361 and 0.00761.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine auxiliary map is sufficient for the trajectory and scalar readouts.\",\"empirical_witness\":\"Affine panel B residual RMS is 0.13486 and trajectory holdout MAE is 0.08716; the coordinatewise exponential correction reduces these to 0.00661 and 0.00761.\",\"causal_blanket_diagnosis\":\"Affine mixing omits a coordinatewise nonlinear operator upstream of both readouts.\",\"sublated_pivot\":\"Retain diagonal calibration and recover the exponential correction before fitting separate readouts.\",\"risk_kind\":\"operator misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use either panel C output as the latent coordinates\",\"rejected_reason\":\"The available fits fail the scalar gate and do not explain the trajectory as well as panel B.\"}],\"rationale\":\"Save the passing structural baseline, then test whether joint estimation or rounded operator parameters improve both deliverables across held-out splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3ae3eea345ee238988c2fd5d16ea7258006002e190a068e39ff5f175e64a8a47",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43492.21,
+      "usage_known": true,
+      "prompt_tokens": 26681,
+      "cached_tokens": 9344,
+      "completion_tokens": 1667
+    }
+  ]
+}

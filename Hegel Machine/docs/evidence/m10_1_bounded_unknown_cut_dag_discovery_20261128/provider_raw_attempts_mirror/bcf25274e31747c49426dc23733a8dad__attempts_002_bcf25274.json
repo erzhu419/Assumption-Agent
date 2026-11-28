@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcf25274e31747c49426dc23733a8dad",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:24.313296+00:00",
+  "ended_at_utc": "2026-11-28T09:10:50.054979+00:00",
+  "request_sha256": "0299e3c6c773cdc68d91d3a0f96d3a32c909387c1ebd788b6955f073f5afc61e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12652,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16876,
+    "cached_tokens": 10880,
+    "completion_tokens": 956
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat validate_public_schema.py && cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=5,suppress=True,linewidth=145)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['eval_times'];tr=s['train'];x=tr['x']; j=tr['traj']; y=tr['y']; ls=lambda X,Y:np.linalg.lstsq(X,Y,rcond=None)[0]; aff=lambda x:np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,k],axis=1) for i in range(1,d+1) for k in combinations_with_replacement(range(x.shape[1]),i)])\\nops={}\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u']; ii=np.arange(len(u)); A=aff(u)\\n for name,v in p.items():\\n  if name=='u':continue\\n  if k=='panel_a':\\n   for _ in range(4):ii=np.argsort(np.linalg.norm(A@ls(A[ii],v[ii])-v,axis=1))[:45]\\n  b=ls(A[ii],v[ii]); ops[k+name]=b;print(k,name,'affine residual quantiles',np.quantile(np.linalg.norm(A@b-v,axis=1),[0,.5,.9,.94,1]),'coef',b)\\n  Q=poly(u,2);coef=ls(Q[ii],v[ii]);print('quadratic RMS',np.sqrt(np.mean((Q[ii]@coef-v[ii])**2)), 'diag/factor',coef[5:])\\nprint('times',t,'summary',tr['summary'],'y distributions',np.quantile(y,[0,.1,.5,.9,1]));print('ranges x',x.min(0),x.max(0),'test',s['test']['x'].min(0),s['test']['x'].max(0));print('first rows x/y/trajectory',np.c_[x,y,j][:10]);print('sv raw center diff',*[np.linalg.svd(a,compute_uv=False) for a in (j,j-j.mean(0),np.diff(j,axis=1))]);print('y corr',np.corrcoef(y,j.T)[0]);print('y from traj MAE',np.mean(abs(aff(j)@ls(aff(j)[:52],y[:52])-y)),ls(aff(j)[:52],y[:52]));\\nfor name,z in [('raw',x)]+[(k,aff(x)@v) for k,v in ops.items()]+[('A->B',aff(aff(x)@ops['panel_av'])@ops['panel_bv'])]:\\n print(name,'stats',z.mean(0),z.std(0));\\n for d in [1,2,3]:\\n  X=poly(z,d); P=X[52:]@ls(X[:52],np.c_[y,j][:52]);print('degree',d,'mae',np.mean(abs(P-np.c_[y,j][52:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine panel operators -> H2 robust calibration plus nonlinear auxiliary terms and low-dimensional trajectories; held-out MAE not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate panel A contamination from panel C nonlinearity, and measure trajectory rank and split errors to determine whether to model the scalar response through the trajectory or as a separate output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "7401f69af50481f1ffe8f6a42153a97932b7e4feb8a8abd9d37655288ccd1974",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28376.2,
+      "usage_known": true,
+      "prompt_tokens": 16876,
+      "cached_tokens": 10880,
+      "completion_tokens": 956
+    }
+  ]
+}

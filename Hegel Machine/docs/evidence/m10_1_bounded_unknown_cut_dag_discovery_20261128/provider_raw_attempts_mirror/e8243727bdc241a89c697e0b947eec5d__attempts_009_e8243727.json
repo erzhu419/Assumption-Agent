@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8243727bdc241a89c697e0b947eec5d",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:37.793817+00:00",
+  "ended_at_utc": "2026-11-28T09:29:11.594992+00:00",
+  "request_sha256": "cae8177e2b33ea61cadb9bde9ae4cb24e93a45d2124261d40730ea60808e0c1d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50932,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29681,
+    "cached_tokens": 9344,
+    "completion_tokens": 1337
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat >/tmp/audit_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s = pickle.load(f)[0]['study']\\nt = s['train']; x,y,tr = (t[k] for k in ('x','y','traj')); times = s['eval_times']\\nprint('study keys', sorted(s), 'train keys', sorted(t), 'telemetry shape', np.shape(s['telemetry_vec']))\\nz,q = m._coordinates(s,x)\\naff,fit = m._affine,m._fit\\np = q[:,:2]*q[:,2:]\\nD = np.c_[aff(q),p]\\nadd = np.c_[aff(z),z*z]\\ni,j = [0,0,1,2],[1,3,2,3]\\nsymmetric = ((z[:,i]+z[:,j])**2-(z[:,i]-z[:,j])**2)/4\\nassert np.allclose(symmetric,m._products(z))\\nr = np.argsort(np.linalg.norm(z,axis=1)); ix = np.arange(len(x))\\nfolds = [('52/20',ix[:52],ix[52:]),('large input',r[:56],r[56:])]\\nfor k,b in enumerate(np.array_split(np.random.default_rng(601).permutation(ix),5)):\\n    folds.append((f'new fold {k}',np.setdiff1d(ix,b),b))\\nfor name,a,b in folds:\\n    st = dict(s,train={**t,**{key:t[key][a] for key in ('x','y','traj')}},test={'x':x[b]})\\n    out=m.solve_batch(st)\\n    diag=np.array([out['y_hat'].mean(),out['y_hat'].std(),out['state_pred'][:,-1].mean(),out['state_pred'][:,-1].std()])\\n    np.testing.assert_allclose(diag,out['diagnostics_vec'])\\n    candidate=np.mean(abs(out['y_hat']-y[b])); state=np.mean(abs(out['state_pred']-tr[b]))\\n    ablation=np.mean(abs(add[b]@fit(add[a],y[a])-y[b])); abl_state=np.mean(abs(m._trajectory(add[a],tr[a],add[b],times)-tr[b]))\\n    # Choose the quotient coordinate and scale using the fitting rows only.\\n    pool=[]\\n    for h in np.c_[q,z,p,q[:,0]-q[:,2],q[:,1]-q[:,3],q[:,0]+q[:,2],q[:,1]+q[:,3]].T:\\n        h2=h*h / np.mean(h[a]**2)\\n        def prof(g):\\n            E=D/(1+g*h2[:,None]); w=fit(E[a],y[a]); return np.mean((E[a]@w-y[a])**2),E[b]@w\\n        opt=minimize_scalar(lambda g:prof(g)[0],bounds=(0,2),method='bounded')\\n        pool.append(prof(opt.x))\\n    rational=np.mean(abs(min(pool,key=lambda p:p[0])[1]-y[b]))\\n    print(name,'candidate scalar/state',round(candidate,6),round(state,6),'additive scalar/state',round(ablation,6),round(abl_state,6),'profiled quotient scalar',round(rational,6))\\n    assert max(candidate,state) <= .038\\n# Delete each calibration row once to test whether a single reference row controls the fit.\\nbase=m.solve_batch(s); maxima=np.zeros(2)\\npa=s['panel_a']\\nfor row in range(len(pa['u'])):\\n    sub=dict(s,panel_a={k:np.delete(v,row,axis=0) for k,v in pa.items()})\\n    out=m.solve_batch(sub)\\n    maxima=np.maximum(maxima,[np.max(abs(out[k]-base[k])) for k in ('y_hat','state_pred')])\\nprint('calibration jackknife max prediction change, scalar/state',maxima)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py && cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"H1 (additive spatial basis) -> H2 (panel-calibrated mixed products with a sparse readout and two shared temporal modes); verified worst-slice scalar/trajectory MAE is 0.00651/0.00461.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\n  \"considered_alternatives\":[{\"option\":\"Test relay initial modes, PDE drift identities, or within-batch classification\",\"rejected_reason\":\"The provided study is continuous regression with a shared telemetry vector and no documented relay states, spatial drift observations, cohort labels, or classes.\"}],\n  \"rationale\":\"Use a held-out additive ablation to measure the contribution of the mixed products. Test train-selected rational quotients for a missing scalar mechanism and jackknife calibration rows to detect undue reference sensitivity. Change the solver only if a challenger improves the limiting holdout errors or reveals a material calibration problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cce70be81fd86fc29b8a972e42cb124e3de9a13832ee58c925d1fd6909200315",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36399.98,
+      "usage_known": true,
+      "prompt_tokens": 29681,
+      "cached_tokens": 9344,
+      "completion_tokens": 1337
+    }
+  ]
+}

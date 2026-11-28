@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ffd4ccec4d74492582bd5f577cff37b2",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:29.268605+00:00",
+  "ended_at_utc": "2026-11-28T09:42:06.895145+00:00",
+  "request_sha256": "b70188d40c64f95f10f9ad8d088ff576346c5a33620d271b9f44dd5a6dea6cbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35320,
+    "cached_tokens": 9344,
+    "completion_tokens": 1505
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/validate_public_schema.py; sed -n '1,90p' /tmp/hegel_continual_archive/conf_m101_b04_batch_04_solver.py; cat > /tmp/b05_refine.py <<'PY'\\nfrom b05_probe import *\\nfrom itertools import combinations\\nu,v=(S['panel_b'][k] for k in ('u','v'))\\n\\ndef warp(x,p,k):\\n f,a=p[:2]; w=x+a*np.sin(f*x)\\n if k=='cube':w+=p[2]*x**3\\n if k=='harmonic':w+=p[2]*np.sin(2*f*x)\\n if k=='rational':w+=p[2]*x/(1+p[3]*x*x)\\n if k=='tanh':w+=p[2]*np.tanh(p[3]*x)\\n if k=='nested':w=x+a*np.sin(f*x+p[2]*x**3)\\n if k=='frequency':w=x+np.sin(x*np.r_[f,p[2:5]])*a\\n if k=='cross':w+=p[2]*x*np.roll(x,-1,axis=1)\\n if k=='after':w+=p[2]*w*np.roll(w,-1,axis=1)\\n if k=='cos':w+=p[2]*(np.cos(f*x)-1.)\\n return np.c_[np.ones(len(x)),w]\\n\\ndef learn(k,p,i):\\n def residual(p):\\n  a=warp(u[i],p,k);return (a@fit(a,v[i])-v[i]).ravel()\\n lo=np.array([1.5,-1]+([-2]*(len(p)-2)));hi=np.array([4.5,-.05]+([4]*(len(p)-2)))\\n if k in ('rational','tanh'):lo[-1]=.1\\n p=least_squares(residual,p,bounds=(lo,hi),max_nfev=100).x\\n return p,fit(warp(u[i],p,k),v[i])\\n\\nt=tr['traj']; y=tr['y']; tt=S['eval_times']; folds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]; rng=np.random.default_rng(148); folds += [(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(rng.permutation(n),4)]; folds += [(np.setdiff1d(np.arange(n),j),j) for j in [np.argsort(np.max(np.abs(za[:n]),axis=1))[-16:]]];\\nfor k,start in [('base',[2.85,-.4]),('cube',[2.85,-.4,0]),('harmonic',[2.85,-.4,0]),('rational',[2.85,-.4,0,1]),('tanh',[2.85,-.4,0,1]),('nested',[2.85,-.4,0]),('frequency',[2.85,-.4,2.85,2.85,2.85]),('cross',[2.85,-.4,0]),('after',[2.85,-.4,0]),('cos',[2.85,-.4,0])]:\\n p,b=learn(k,start,np.arange(24)); pe=[]\\n for j in np.array_split(np.random.default_rng(99).permutation(24),4):\\n  pp,bb=learn(k,start,np.setdiff1d(np.arange(24),j));pe.extend((warp(u[j],pp,k)@bb-v[j]).ravel())\\n z=warp(za,p,k)@b; a=poly(z,1)[0];q=poly(z,2)[0];sparse=np.c_[a,z[:,0]*z[:,2],z[:,1]*z[:,3]]; full=np.c_[sparse,z[:,0]*z[:,3],z[:,2]*z[:,3]]\\n print(k,'p',np.round(p,6),'panel rms/CV',np.std(warp(u,p,k)@b-v),np.std(pe))\\n for label,g in [('sparse',sparse),('full',full),('quad',q)]:\\n  yp=[];tp=[]\\n  for i,j in folds:\\n   yp.append(np.mean(abs(g[j]@fit(g[i],y[i])-y[j])));tp.append(np.mean(abs(a[j]@fit(a[i],t[i])-t[j])))\\n  print(label,np.round(yp,5),np.round(tp,5))\\n if k=='base':\\n  for hz in ([1.7,.2],[1.7,.1],[1.7,.3],[1.8,.2]):\\n   T=-np.expm1(-tt[:,None]*np.array(hz));print('rates',hz,'rms',np.std(T@fit(T,t.T)-t.T))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/b05_refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic calibrated cubic -> H2 inverse panel A, nonlinear panel B, and separate readouts; current 52/20 MAE is 0.01343 for scalar and 0.00926 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the most flexible panel B fit\",\"rejected_reason\":\"Lower in-sample panel residual did not reliably improve trajectory prediction; panel-row holdouts will test whether the added terms transfer.\"}],\"rationale\":\"Compare small corrections to the shared panel B warp on independent panel rows. Test sparse product readouts against full quadratic readouts on the prescribed split and on high-amplitude inputs, where a misspecified warp is most likely to fail.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "66d9069f56040a9e8d563903ccedae92b50f9df5714a01cb376426135f73071b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40277.65,
+      "usage_known": true,
+      "prompt_tokens": 35320,
+      "cached_tokens": 9344,
+      "completion_tokens": 1505
+    }
+  ]
+}

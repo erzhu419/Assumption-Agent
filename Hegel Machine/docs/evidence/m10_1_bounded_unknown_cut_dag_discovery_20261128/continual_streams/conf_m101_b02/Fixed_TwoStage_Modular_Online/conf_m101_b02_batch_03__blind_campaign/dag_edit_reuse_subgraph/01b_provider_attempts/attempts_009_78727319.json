@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78727319df59422fa9db31ae5ef42734",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:08.645412+00:00",
+  "ended_at_utc": "2026-11-28T09:37:43.422971+00:00",
+  "request_sha256": "d252f65ffb83c436f7b8299d7e2c30fdcc678fe931f1021c1e98035d936e9e46",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 61827,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33583,
+    "cached_tokens": 9344,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_links.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfrom sklearn.model_selection import KFold\\nD=np.load('/tmp/readout_arrays.npz'); Z=D['z']; Y=D['Y']; n=len(Z)\\n\\ndef basis(z,k):\\n return np.column_stack([np.ones(len(z)),z]+[np.prod(z[:, j],axis=1) for d in range(2,k+1) for j in combinations_with_replacement(range(4),d)])\\n\\ndef act(h,f):\\n if f=='sin': return np.sin(h)\\n if f=='tanh': return np.tanh(h)\\n if f=='rat': return h/(1+h*h)\\n if f=='soft': return h/np.sqrt(1+h*h)\\n if f=='atan': return np.arctan(h)\\n if f=='exp': return np.exp(-h*h/2)\\n\\ndef train(z,y,f,k,num,seed=2,restarts=10):\\n A=basis(z,k); Q=np.linalg.qr(A,mode='reduced')[0]; P=np.eye(len(z))-Q@Q.T; e=P@y; X=np.c_[z,np.ones(len(z))]; rng=np.random.default_rng(seed)\\n def err(w):\\n  H=P@act(X@w.reshape(num,5).T,f); B=np.linalg.lstsq(H,e,rcond=1e-8)[0]; return (H@B-e).ravel()\\n best=float('inf')\\n for j in range(restarts):\\n  w=rng.normal(size=(num,5))*[1,1,1,1,.5]; w*= [0.5,1.,2.][j%3]; r=least_squares(err,w.ravel(),bounds=(-12,12),max_nfev=150,ftol=1e-7); v=np.linalg.norm(r.fun)\\n  if v<best: best=v; W=r.x.reshape(num,5)\\n def F(t): return np.c_[basis(t,k),act(np.c_[t,np.ones(len(t))]@W.T,f)]\\n C=np.linalg.lstsq(F(z),y,rcond=1e-8)[0]; return F,C,W,best/np.sqrt(e.size)\\n\\ndef score(f,k,num,group):\\n es=[]; rs=[]\\n for a,b in folds:\\n  V=np.linalg.svd(Y[a,1:],full_matrices=False)[2][:2]; T=np.c_[Y[:,0],Y[:,1:]@V.T]; std=T[a].std(0); T/=std\\n  if group=='joint':\\n   F,C,W,r=train(Z[a],T[a],f,k,num); pred=F(Z[b])@C; rr=[r]\\n  else:\\n   ps=[]; rr=[]\\n   for j in range(3):\\n    F,C,W,r=train(Z[a],T[a,j:j+1],f,k,num); ps.append(F(Z[b])@C); rr.append(r)\\n   pred=np.column_stack(ps)\\n  pred*=std; es.append([np.mean(abs(pred[:,0]-Y[b,0])),np.mean(abs(pred[:,1:]@V-Y[b,1:]))]); rs.append(rr)\\n return np.round(es,5).tolist(),np.round(np.mean(rs,0),5).tolist()\\n\\nif __name__=='__main__':\\n V=np.linalg.svd(Y[:,1:],full_matrices=False)[2][:2]; T=np.c_[Y[:,0],Y[:,1:]@V.T]; print('linear and polynomial training RMS',[(k,np.round(np.sqrt(np.mean((T-basis(Z,k)@np.linalg.lstsq(basis(Z,k),T,rcond=None)[0])**2,0)),5)) for k in [1,2,3,4]],flush=True)\\n folds=[(np.arange(52),np.arange(52,n)),next(iter(KFold(4,shuffle=True,random_state=87).split(Z)))];\\n for k,num,group in [(1,1,'separate'),(2,1,'separate'),(1,2,'joint'),(2,2,'joint'),(1,2,'separate')]:\\n  for f in ['sin','tanh','rat','atan','exp']:\\n   print(k,num,group,f,*score(f,k,num,group),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 timeout 150s python3 /tmp/probe_links.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coordinate-wise and isotropic response features -> H2 nonlinear features of learned projections; the saved candidate's worst public MAE is 0.128091.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Continue refining panel maps as the primary fix\",\n      \"rejected_reason\": \"Panel errors and rank-two reconstruction error are much smaller than the end-to-end error; response feature discovery is the bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Fit nonlinear projections inside each training fold and compare shared versus response-specific features on unseen rows. This tests whether nonlinearities act on mixtures of coordinates rather than on each coordinate independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "35a7af0bba6d0e6e1180fc0038aadab69e4dbe85b7280d15e8f476de5784f2c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37475.77,
+      "usage_known": true,
+      "prompt_tokens": 33583,
+      "cached_tokens": 9344,
+      "completion_tokens": 1392
+    }
+  ]
+}

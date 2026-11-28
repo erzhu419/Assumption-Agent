@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c46bc1013fb94a04b4fe13a2c42e93d2",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:56:03.141992+00:00",
+  "ended_at_utc": "2026-11-28T09:56:22.831667+00:00",
+  "request_sha256": "baf03ef6831a81a00f44d14d419343d6fc447ca5b050c2f10a7e0276de3b83cb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56972,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32929,
+    "cached_tokens": 9344,
+    "completion_tokens": 722
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cd /holdout_task; sed -n '1,70p' /tmp/hegel_continual_archive/conf_m101_a04_batch_06_solver.py; cat validate_public_schema.py; python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/conf_m101_a04_batch_06_solver.py').read_text()\\np=p[:p.index('def _baseline')]+p[p.index('def solve_batch'):]\\np=p.replace('K=np.asarray(K)','selected = [0, 1, 2, 3, 4, 39, 44, 52, len(K)-1]\\\\n    K=np.asarray(K)[selected]').replace('Y[:,1:]/=np.sqrt(Y.shape[1]-1)','Y[:,1:]*=2/np.sqrt(Y.shape[1]-1)').replace('prior=np.full(len(K),-6.); prior[:15]=-4; prior[2]=0; prior[-1]=-9','prior=np.full(len(K),-6.); prior[:5]=-4; prior[2]=0; prior[-1]=-9').replace('\\\"\\\"\\\"Calibrate the inputs and predict both outputs with a shared residual kernel.\\\"\\\"\\\"','\\\"\\\"\\\"Cyclic cubic calibration and compact interaction kernel readouts.\\\"\\\"\\\"').replace(\\\"'maxiter':125,'ftol':1e-10\\\",\\\"'maxiter':210,'ftol':1e-11\\\")\\nPath('batch_solver.py').write_text(p)\\nPY\\npython3 -I validate_public_schema.py\\npython3 - <<'PY'\\nimport sys\\nsys.path.insert(0,'/tmp')\\nimport temporal as m,numpy as np\\nfrom kerneltest import splits,trial,F\\nfor i,t in enumerate(splits): print(i,trial(t,[0,1,2,3,4,39,44,52,15+len(F)],6e-5,2))\\nfor i in [39,44,52]: print(i,F[i-15].shape,F[i-15][:1])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: broad shared covariance → H2: compact interaction covariance; 52/20 MAEs are 0.02413 scalar and 0.01259 trajectory, with worst trajectory MAE 0.07197 across six splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Keep the full covariance\",\"rejected_reason\":\"The compact model lowers trajectory MAE on both forward splits and has a better six-split worst case.\"}],\"rationale\":\"Install and verify the passing compact candidate first. Identify the feature groups and failing split so the remaining work can target the observed generalization gap rather than retune a model that already passes the public gate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "624128e6b3efadadd04bb09dc23326bb8990fdd6796933ef9635fbac97ca2124",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22299.41,
+      "usage_known": true,
+      "prompt_tokens": 32929,
+      "cached_tokens": 9344,
+      "completion_tokens": 722
+    }
+  ]
+}

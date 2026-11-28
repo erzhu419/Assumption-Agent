@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "33dbfcdedf09402f8b975ee15aedba82",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:03.971236+00:00",
+  "ended_at_utc": "2026-11-28T09:24:36.960603+00:00",
+  "request_sha256": "613199886284a320d536e199c9612f8104a55079baebb7773e135b38ea22b8e7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40465,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26634,
+    "cached_tokens": 9344,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/for name,w in/,$d' /tmp/probe.py >/tmp/operators.py; cat >>/tmp/operators.py <<'PY'\\nfrom scipy.optimize import least_squares\\npc=s['panel_c']; u=pc['u']; ops=[]\\nfor key,func in [('v1',np.tanh),('v2',np.cos)]:\\n V=pc[key]; candidates=[]\\n for use_linear in [False,True]:\\n  for shifts in [False,True]:\\n   def ds(x,p):\\n    k=p[:4]; h=p[4:] if shifts else 0.; return np.c_[aff(x) if use_linear else np.ones(len(x)),func(x*k+h)]\\n   def res(p):\\n    D=ds(u,p);return (D@fit(D,V)-V).ravel()\\n   lo=[.15]*4+([-2]*4 if shifts else []);hi=[6]*4+([2]*4 if shifts else [])\\n   r=least_squares(res,[2.]*4+([0.]*4 if shifts else []),bounds=(lo,hi),max_nfev=260)\\n   D=ds(u,r.x); W=fit(D,V); print(key,use_linear,shifts,np.std(r.fun),r.x)\\n   candidates.append((np.std(r.fun),use_linear,shifts,r.x,W))\\n err,linear,shift,p,W=min(candidates,key=lambda a:a[0]);\\n def op(x,linear=linear,shift=shift,p=p,W=W,func=func):return np.c_[aff(x) if linear else np.ones(len(x)),func(x*p[:4]+(p[4:] if shift else 0))]@W\\n ops.append(op)\\nprint('LABEL AND TRAJECTORY MODEL COMPARISON'); rows=[]\\na0=a.copy(); b0=z.copy(); worlds={'a':a0,'b':b0}\\nfor name,w in list(worlds.items()):\\n for j,op in enumerate(ops,1):\\n  worlds[f'{name}c{j}']=op(w); worlds[f'{name}c{j}b']=aff(op(w))@B\\nfor name,w in worlds.items():\\n g,h,j,k=w.T\\n for label,D in [('aff',aff(w)),('pair',np.c_[aff(w),g*j,h*k]),('pair3',np.c_[aff(w),g*j,h*k,g*h*j,g*h*k,g*j*k,h*j*k,g*h*j*k]),('quad',poly(w,2)),('cubic',poly(w,3)),('base+op',np.c_[aff(b0),w]),('basequad+op',np.c_[poly(b0,2),w]),('basequad+opsq',np.c_[poly(b0,2),w,w*w])]:\\n  if np.linalg.matrix_rank(D,tol=1e-9)<D.shape[1]:continue\\n  q=metrics(D);rows.append((q[1],q[0],name,label))\\n print(name,'traj',np.round(metrics(aff(w),t)[:2],5))\\nfor r in sorted(rows)[:24]:print(r)\\nprint('Panel C additive branches');\\nfor name,w in [('a',a0),('b',b0)]:\\n for d in [1,2,3]:\\n  for spec in ['direct','square','products','difference','sum']:\\n   v1,v2=[op(w) for op in ops]; extra={'direct':np.c_[v1,v2],'square':np.c_[v1,v2,v1*v1,v2*v2],'products':np.c_[v1,v2,v1*v2],'difference':v1-v2,'sum':v1+v2}[spec]; D=np.c_[poly(w,d),extra];print(name,d,spec,np.round(metrics(D)[:2],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired-product readout → H2 separately calibrated nonlinear branches or higher-order interactions; on 52/20 the paired-product scalar MAE is 0.077682, versus 0.004210 trajectory MAE for the affine model.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine scalar readout plus the archived paired-product sum suffices after calibration and mixing.\",\n    \"empirical_witness\": \"The paired-product model fails the 52/20 split at 0.077682 scalar MAE; a full cubic reduces it to 0.046811, while the affine trajectory clears the gate at 0.004210.\",\n    \"causal_blanket_diagnosis\": \"The unresolved structure is in the scalar readout, not in the input-to-trajectory mapping.\",\n    \"sublated_pivot\": \"Retain the affine trajectory and fit the nonlinear panel branches independently of scalar labels, then test whether their compositions explain the scalar residual.\",\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted fourth-degree polynomial\",\n      \"rejected_reason\": \"It interpolates the fitting rows but raises held-out scalar MAE to 0.109572.\"\n    }\n  ],\n  \"rationale\": \"Fit panel operators from their own measurements before involving scalar labels. The composition test will distinguish a useful calibrated branch from an inactive auxiliary panel; if neither transfers, focus on sparse interactions in the mixed coordinates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3add02a5c61ca0e69daf6942fe7db74dfe9974bb2255521b0d025e3bac0f6507",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35596.54,
+      "usage_known": true,
+      "prompt_tokens": 26634,
+      "cached_tokens": 9344,
+      "completion_tokens": 1326
+    }
+  ]
+}

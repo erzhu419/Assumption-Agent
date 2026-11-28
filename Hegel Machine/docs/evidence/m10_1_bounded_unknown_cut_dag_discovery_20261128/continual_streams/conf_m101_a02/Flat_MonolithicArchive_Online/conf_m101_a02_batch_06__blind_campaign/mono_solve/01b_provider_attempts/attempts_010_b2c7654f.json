@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2c7654f10a1472fa1d7bc9d90b4e7b7",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:09.630995+00:00",
+  "ended_at_utc": "2026-11-28T09:48:39.794395+00:00",
+  "request_sha256": "0e26c0c588acbce97313242668597263d35689e6ed6d4101fb1875fced36eb60",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58560,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36003,
+    "cached_tokens": 9344,
+    "completion_tokens": 1171
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py | head -9; for f in /tmp/hegel_continual_archive/*_solver.py; do echo ====; grep -A13 -E '^def _label|^def _trajectory|^def _state' \\\"$f\\\"; done; cat >/tmp/refine.py <<'PY'\\nfrom operators import *\\nfrom scipy.linalg import solve\\nfrom itertools import product\\nb,c,d=[ops[k](z) for k in 'BCD']; a=z*(1-1.1*np.exp(-z*z)); W=np.c_[aff(z),b,c,d];\\nprint('M B',fit(aff(a)[:len(a)],b).round(4));print('TIMES',T)\\nfor i,j in folds:\\n P=Y[:,1:]; U,S,V=np.linalg.svd(P[i],full_matrices=False); print('TIME SN',S.round(4));\\n for k in (1,2,3):\\n  H=V[:k].T; A=np.c_[W[:72],P@H]; w=fit(A[i],Y[i,0]); print('temporal contrast',k,np.mean(abs(A[j]@w-Y[j,0])),w[-k:]);\\nprint('q raw transformed',fit(pol(a,2)[:72],Y).round(3)[:,[0,-1]].T)\\n# Joint dictionaries: an exact quadratic core plus structured corrections in raw, activated, and mixed coordinates.\\ndef kernel(x,deg):\\n x=x-x[:72].mean(0);x=x/np.sqrt(np.mean(x[:72]**2,axis=0));return (x@x.T/x.shape[1])**deg\\nD=kernel(b,2); L=kernel(b,1); Z=kernel(z,1); C=kernel(c,1); E=kernel(d,1); R=kernel(a,1); I=np.eye(108)\\nextras={'none':0,'quadratic z':Z**2,'cubic b':L**3,'cubic a':R**3,'zb':Z*L,'za':Z*R,'z+zb':Z**2+Z*L,'all cross':Z*L+C*L+E*L+Z*C+Z*E+C*E,'all q':Z**2+C**2+E**2,'rbf':np.exp(-(np.diag(Z)[:,None]+np.diag(Z)[None,:]-2*Z)*2),'squares':kernel(np.c_[z*z,b*b,c*c,d*d],1)}\\nans=[]\\nfor (nm,G), w, lc, lq, lam in product(extras.items(),(.03,.15,.6,2),(.03,.3,1),(.3,1,3),(.0001,.001,.01)):\\n K=1+L+D*lq+lc*(Z+C+E)+w*G+lam*I\\n out=[]\\n for i,j in folds:\\n  pred=K[np.ix_(j,i)]@solve(K[np.ix_(i,i)],Y[i],assume_a='pos'); r=abs(pred-Y[j]);out.append([r[:,0].mean(),r[:,1:].mean()]);\\n ans.append((np.array(out),nm,w,lc,lq,lam))\\nfor k in (0,1):\\n print('BEST',k,[(v.round(4).tolist(),*p) for v,*p in sorted(ans,key=lambda r:r[0][:,k].max())[:10]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py | grep -A30 'M B'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic mixed readout) -> H2 (panel-B quadratic core with structured corrections); best worst-split label MAE is 0.0554.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add an unconstrained second time component\",\"rejected_reason\":\"The second singular value of the residual trajectory is near the noise scale and does not clearly improve the label contrast.\"}],\"rationale\":\"Inspect the quadratic coefficients before and after panel-B mixing to identify the likely spatial coordinates. Test whether structured corrections reduce held-out error without discarding the quadratic core.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e5fdbec93953f30e2ad3748551b838c11270eb8510663696e9a986bfb4f93348",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32729.38,
+      "usage_known": true,
+      "prompt_tokens": 36003,
+      "cached_tokens": 9344,
+      "completion_tokens": 1171
+    }
+  ]
+}

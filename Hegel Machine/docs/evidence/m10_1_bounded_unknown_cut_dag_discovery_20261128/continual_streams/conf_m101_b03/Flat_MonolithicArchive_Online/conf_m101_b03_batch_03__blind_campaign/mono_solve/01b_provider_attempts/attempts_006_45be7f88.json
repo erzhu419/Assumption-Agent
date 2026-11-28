@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45be7f88423f49a69f39c9078b756301",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:34:07.438068+00:00",
+  "ended_at_utc": "2026-11-28T09:34:36.134875+00:00",
+  "request_sha256": "5e8574381820d3e982d7f9568379f69f7ae1cf2a24b8c3acaee64129eb3c3ae4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48022,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29858,
+    "cached_tokens": 9344,
+    "completion_tokens": 1123
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/for nm,F in /,$d' /tmp/predict_probe.py > /tmp/sparse_probe.py; cat >> /tmp/sparse_probe.py <<'PY'\\nfrom sklearn.linear_model import lars_path\\np=c['v1']; p0=c['u'];\\n# Profile the mixing matrix while testing nonlinear operator families.\\nfor name, initial, fn in [\\n ('separate_freq',np.full(4,2.2),lambda x,q:np.c_[x,np.tanh(q*x)]),\\n ('shifted',np.r_[np.full(4,2.2),np.zeros(4)],lambda x,q:np.c_[x,np.tanh(q[:4]*x+q[4:])]),\\n ('common_cubic', [2.2,0],lambda x,q:np.c_[x,np.tanh(q[0]*x+q[1]*x**3)]),\\n ('softsign', [2.,1.],lambda x,q:np.c_[x,x/(1+abs(q[0]*x)**abs(q[1]))]),\\n ('sqrt', [2.],lambda x,q:np.c_[x,x/np.sqrt(1+(q[0]*x)**2)])]:\\n def res(q):\\n  D=aff(fn(p0,q));return (D@fit(D,p)-p).ravel()\\n opt=least_squares(res,initial,max_nfev=200); print('panel1 fit',name,opt.x,np.linalg.norm(opt.fun));\\n D=aff(fn(p0,opt.x)); ops[name]=(aff(fn(z,opt.x))@fit(D,p),None)\\nfor name in ['tanh','separate_freq','shifted','common_cubic']:\\n f,g=ops[name][0],ops['cos'][0]; F=quad(np.c_[z,f,g]);\\n out=[]\\n for tr,te,E,Y in spl:\\n  mu=F[tr].mean(0); sd=F[tr].std(0); D=(F-mu)/sd; A=D[tr]; W=Y-Y.mean(0); pp=[]\\n  for j,w in enumerate(W.T):\\n   _,_,path=lars_path(A,w,method='lasso',max_iter=90)\\n   models=[]\\n   for k in [0,2,4,6,8,10,12,16,20,25,30,40]:\\n    k=min(k,path.shape[1]-1); ids=np.flatnonzero(abs(path[:,k])>1e-10); co=fit(A[:,ids],w); mse=np.mean((w-A[:,ids]@co)**2); models.append((D[te][:,ids]@co+Y[:,j].mean(),len(ids),mse,ids,co))\\n   pp.append(models)\\n  for k in range(len(pp[0])):\\n   P=np.column_stack([m[k][0] for m in pp]); out.append((k,np.mean(abs(P[:,0]-y[te])),np.mean(abs(P[:,1:]@E.T-T[te]))))\\n  if len(out)==len(pp[0]):\\n   for j,m in enumerate(pp):print('support',name,j,[(mi[1],round(mi[2],6)) for mi in m]);print('terms',[(i,round(co,4)) for i,co in zip(m[6][3],m[6][4])]);\\n a=np.array(out).reshape(len(spl),-1,3);print('LARS',name,np.round(np.c_[a[0],a[1,:,1:],a[2:,:,1:].max(0)],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/sparse_probe.py | tail -100\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dense regularized quadratic readout -> H2 exact auxiliary maps and sparse refitted readouts; the best response-passing 52/20 model has MAEs of 0.0350 for response and 0.0570 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Insert panel B before the panel C nonlinearities\",\"rejected_reason\":\"That ordering raised 52/20 response and trajectory errors substantially in the operator comparison.\"}],\"rationale\":\"Panel C's first operator still has a residual far above the second operator's noise floor. Profile candidate nonlinearities on panel measurements, then test whether refitting sparse quadratic supports reduces held-out trajectory error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "32abef718a8ad00c43c2d67d5ce885b04c027ece6fb209c2649bfe99977f3b80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31315.52,
+      "usage_known": true,
+      "prompt_tokens": 29858,
+      "cached_tokens": 9344,
+      "completion_tokens": 1123
+    }
+  ]
+}

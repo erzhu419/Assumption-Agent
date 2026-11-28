@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1fa795188a124ff4a8c48876ede754f2",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:24.837391+00:00",
+  "ended_at_utc": "2026-11-28T09:38:57.554957+00:00",
+  "request_sha256": "614b6ca3518a12c51f06301b8f1153c5a51d1ecd78f0e1099f0b8c7360f41327",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50894,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30582,
+    "cached_tokens": 9344,
+    "completion_tokens": 1312
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact.py <<'PY'\\nimport contextlib,io,runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): g=runpy.run_path('/tmp/discover.py')\\ns=g['s']; fit=g['fit']; design=g['design']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']; n=len(y)\\nw=g['ref'](**s['panel_a']); a=(x-w[0])/np.diag(w[1:]); p=s['panel_b']\\nshrink=lambda z:np.sign(z)*np.maximum(abs(z)-.35,0)**1.5\\nz=shrink(p['u']); v=p['v']; zc=z-z.mean(0); vc=v-v.mean(0); U,S,V=np.linalg.svd(zc.T@vc); W=(U@V)*(S.sum()/np.sum(zc**2)); b=(shrink(a)-z.mean(0))@W+v.mean(0)\\nc=g['c1'](b)@g['wc']; d=g['c2'](b,g['r'])@g['wd']; dot=np.sum(a*c,axis=1); asym=a[:,1]*c[:,0]; diag=a*c\\nX=design(a,c,d,g['cross'](a,c)); P=np.eye(X.shape[1]);P[0,0]=0\\nS0=design(a,c,dot); S1=design(a,c,dot,asym); S2=design(a,c,diag); F0=design(a,asym); F1=design(a,asym,c); L0=design(c,dot); L1=design(a,c,dot); L2=design(c,dot,asym)\\nprint('B constrained panel residual',np.linalg.norm(zc@W-vc))\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]; rng=np.random.default_rng(87)\\nfor iv in [*np.array_split(rng.permutation(n),5), np.argsort(np.linalg.norm(a,axis=1))[-12:], np.argsort(np.max(abs(b),axis=1))[-12:]]: splits.append((np.setdiff1d(np.arange(n),iv),iv))\\nfor k,(it,iv) in enumerate(splits):\\n print('slice',k,'y',*[round(np.mean(abs(D[iv]@fit(D[it],y[it])-y[iv])),5) for D in [S0,S1,S2]])\\n for label,F,L in [('compact',F0,L0),('slow_a',F0,L1),('slow_asym',F0,L2),('fast_c',F1,L0),('both_a_c',F1,L1),('ridge',X,X)]:\\n  def G(ix,r):\\n   m=-np.expm1(-t[:,None]*r); return np.concatenate((F[ix,None,:]*m[None,:,0,None],L[ix,None,:]*m[None,:,1,None]),axis=-1).reshape(len(ix)*len(t),-1)\\n  Y=T[it].ravel()\\n  def beta(A): return np.linalg.solve(A.T@A+np.kron(np.eye(2),P)*.001,A.T@Y) if label=='ridge' else fit(A,Y)\\n  def res(r):\\n   A=G(it,r); return A@beta(A)-Y\\n  r=least_squares(res,[1.8,.4],bounds=([1,.1],[3,.9])).x\\n  pred=(G(iv,r)@beta(G(it,r))).reshape(len(iv),-1); err=np.abs(pred-T[iv]); print(label,np.round(r,4),round(np.std(res(r)),5),round(err.mean(),5),round(err.mean(0).max(),5))\\n  if k==0 and label in ('compact','fast_c','slow_a'): print('weights',np.round(beta(G(it,r)),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic interaction ridge -> H2 a shared diagonal scalar interaction and mode-specific trajectory readouts; ridge worst-slice MAE was 0.0166 for y and 0.0066 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep separately selected sparse features for each trajectory amplitude.\",\n      \"rejected_reason\": \"Those features changed across folds and increased worst-slice trajectory MAE to 0.0111.\"\n    }\n  ],\n  \"rationale\": \"The four scalar diagonal coefficients are nearly equal, and the fast trajectory mode repeatedly selects the same off-diagonal product. Fit both time rates jointly with these compact readouts, then compare scalar, trajectory, and worst-timestamp errors. If the compact trajectory model degrades the high-amplitude slices, retain ridge for that output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f121d2f573931b5da66f906eba50b6f72494f4c7ec0a1b1b7aeb475cf45524dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35336.22,
+      "usage_known": true,
+      "prompt_tokens": 30582,
+      "cached_tokens": 9344,
+      "completion_tokens": 1312
+    }
+  ]
+}

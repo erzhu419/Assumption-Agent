@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de97bd5164b742b7b51c6f161df5871c",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:23.123922+00:00",
+  "ended_at_utc": "2026-11-28T09:47:02.563449+00:00",
+  "request_sha256": "d0cad1f5ac7a0cd2df2bb93e714fb74df09ca56c04523a5fe2423caf5a05db53",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42476,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28138,
+    "cached_tokens": 9344,
+    "completion_tokens": 1601
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated operator readout with a shared two-mode relaxation basis.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _affine(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=1e-10)[0]\\n\\n\\ndef _latent(panel, x):\\n    u, v = panel['u'], panel['v']\\n    clean = np.max(np.abs(v), axis=1) < 3\\n    intercept, slope = np.array([\\n        _fit(_affine(u[clean, j]), v[clean, j]) for j in range(u.shape[1])\\n    ]).T\\n    return (x - intercept) / slope\\n\\n\\ndef _spatial(study, x):\\n    z = _latent(study['panel_a'], x)\\n    panel = study['panel_c']\\n    u = panel['u']\\n\\n    def edges(w):\\n        return _affine(w * np.roll(w, -1, axis=1))\\n\\n    def cosine(w, rate):\\n        return _affine(np.cos(rate * w))\\n\\n    def loss(rate):\\n        d = cosine(u, rate)\\n        return np.sum((d @ _fit(d, panel['v2']) - panel['v2']) ** 2)\\n\\n    rate = minimize_scalar(loss, bounds=(1.5, 3.5), method='bounded').x\\n    f = edges(z) @ _fit(edges(u), panel['v1'])\\n    g = cosine(z, rate) @ _fit(cosine(u, rate), panel['v2'])\\n    q = np.column_stack([z[:, i] * z[:, j] for i, j in combinations_with_replacement(range(z.shape[1]), 2)])\\n    return _affine(z, f, g, q, f*g, f*np.roll(g, 1, axis=1), f*np.roll(g, -1, axis=1))\\n\\n\\ndef _time_basis(t, trajectories):\\n    def basis(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def residual(rates):\\n        h = basis(rates)\\n        return (h @ _fit(h, trajectories.T) - trajectories.T).ravel()\\n\\n    rates = least_squares(residual, [.4, 1.8], bounds=([.05, .65], [.9, 6])).x\\n    return basis(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    design = _spatial(study, np.vstack((train['x'], study['test']['x'])))\\n    h = _time_basis(study['eval_times'], train['traj'])\\n    targets = np.column_stack((train['y'], _fit(h, train['traj'].T).T))\\n    x = design[:n]\\n    weights = np.linalg.solve(x.T @ x + .001 * np.eye(x.shape[1]), x.T @ targets)\\n    pred = design[n:] @ weights\\n    y = pred[:, 0]\\n    state = pred[:, 1:] @ h.T\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/eval6.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _spatial,_time_basis,_fit,solve_batch\\nfrom probe import s,tr,t,np\\nfrom sklearn.model_selection import KFold\\nx=tr['x']; y=tr['y']; traj=tr['traj']; a=_spatial(s,x); h=_time_basis(t,traj); tar=np.c_[y,_fit(h,traj.T).T]\\nlabels=['offset']+[f'{k}{i}' for k in ('z','f','g') for i in range(4)]+[f'z{i}z{j}' for i in range(4) for j in range(i,4)]+[f'fg{roll}:{i}' for roll in (0,1,-1) for i in range(4)]\\nc=np.linalg.solve(a.T@a+.001*np.eye(a.shape[1]),a.T@tar)\\nfor name,k in zip(labels,c): print(name,k.round(4))\\nz=(x-np.median(x,axis=0))/x.std(0); order=np.argsort(np.max(abs(z),axis=1))\\nsplits=[('52/20',np.arange(52),np.arange(52,72)),('56/16',np.arange(56),np.arange(56,72)),('boundary',order[:-16],order[-16:])]+[(f'fold{i}',a,b) for i,(a,b) in enumerate(KFold(5,shuffle=True,random_state=104).split(x))]\\nfor tag,u,v in splits:\\n p=solve_batch(dict(s,train=dict(x=x[u],y=y[u],traj=traj[u]),test=dict(x=x[v]))); e=abs(p['state_pred']-traj[v]);ey=abs(p['y_hat']-y[v]);print(tag,'y',ey.mean(),'traj',e.mean(),'worst_time',e.mean(0).max(),'max y residual',ey.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/eval6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (calibrated polynomial) -> H2 (direct cyclic-quadratic and cosine operators with cross-products); 52/20 probe MAE was 0.0083 for y and 0.0033 for reconstructed trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Route the inputs through panel B first\",\"rejected_reason\":\"The routed second-order model had 0.2492 y MAE and 0.2073 trajectory MAE on the same split.\"}],\"rationale\":\"Implement the smallest tested operator family that clears both gates. Then test whether that result survives alternative folds and the outermost observed inputs; inspect coefficients for a smaller readout if it does not.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0a8d3c32e7c4122f9ff0c51610577b2809a820acd89e3946769a00e240172594",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41977.54,
+      "usage_known": true,
+      "prompt_tokens": 28138,
+      "cached_tokens": 9344,
+      "completion_tokens": 1601
+    }
+  ]
+}

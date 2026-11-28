@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8ad9794baba4edfb1d769668e478316",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:54.943829+00:00",
+  "ended_at_utc": "2026-11-28T09:33:33.013421+00:00",
+  "request_sha256": "ce126134294576e782ae72b4f50be952b23495e16515ba55990661f7a766186f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67235,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38793,
+    "cached_tokens": 9344,
+    "completion_tokens": 1546
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the response and trajectory with separate kernel models.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _rbf(x, xt, length):\\n    return np.exp(-cdist(x, xt, 'sqeuclidean') / (2 * length**2))\\n\\n\\ndef _predict(k, cross, h, ht, target, nugget):\\n    k = k.copy()\\n    k.flat[::len(k) + 1] += nugget\\n    n = h.shape[1]\\n    w = cho_solve(cho_factor(k), np.column_stack((h, target)))\\n    a, b = w[:, :n], w[:, n:]\\n    beta = np.linalg.solve(h.T @ a, h.T @ b)\\n    return ht @ beta + cross @ (b - a @ beta)\\n\\n\\ndef _response(x, xt, y, h, ht):\\n    scale = x.std(axis=0)\\n    q, qt = x / scale, xt / scale\\n    return _predict(_rbf(q, q, 2), _rbf(qt, q, 2), h, ht, y[:, None], .001)[:, 0]\\n\\n\\ndef _trajectory(study, x, xt, z, h, ht):\\n    a = study['panel_a']\\n    # Coordinatewise median slopes/intercepts reject sparse calibration outliers.\\n    scale, bias = [], []\\n    for u, v in zip(a['u'].T, a['v'].T):\\n        i, j = np.triu_indices(len(u), 1)\\n        dx = u[i] - u[j]\\n        keep = np.abs(dx) > 1e-9\\n        slope = np.median((v[i] - v[j])[keep] / dx[keep])\\n        scale.append(slope)\\n        bias.append(np.median(v - slope * u))\\n    b = study['panel_b']\\n    coef = np.linalg.lstsq(_linear(b['u']), b['v'], rcond=None)[0]\\n    q = _linear((x - bias) / scale) @ coef\\n    qt = _linear((xt - bias) / scale) @ coef\\n    def features(u):\\n        return np.column_stack((u, np.tanh(.7 * u)))\\n    f, ft = features(q), features(qt)\\n    mu, sd = f.mean(axis=0), f.std(axis=0)\\n    f, ft = (f - mu) / sd, (ft - mu) / sd\\n    def kernel(p, r, u, v):\\n        return .25 * (1 + p @ r.T / f.shape[1])**2 + .2 * _rbf(u, v, 1.35)\\n    basis = np.linalg.svd(z, full_matrices=False)[2][:2]\\n    amplitudes = _predict(kernel(f, f, x, x), kernel(ft, f, xt, x), h, ht, z @ basis.T, .001)\\n    return amplitudes @ basis\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    h, ht = _linear(x), _linear(xt)\\n    y = _response(x, xt, train['y'], h, ht)\\n    state = _trajectory(study, x, xt, train['traj'], h, ht)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/batch_cv.py <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx,y,z=(s['train'][k] for k in ('x','y','traj'))\\nfolds=[(np.arange(n),np.arange(n,len(x))) for n in (52,56)]+[(np.setdiff1d(np.arange(len(x)),j),j) for j in np.array_split(np.random.default_rng(26).permutation(len(x)),4)]\\nif __name__=='__main__':\\n for tr,te in folds:\\n  sub=dict(s,train=dict(x=x[tr],y=y[tr],traj=z[tr]),test=dict(x=x[te])); p=solve_batch(sub); yerr=abs(p['y_hat']-y[te]); terr=abs(p['state_pred']-z[te]); print(len(tr), 'y MAE', yerr.mean(), 'state MAE', terr.mean(), 'last', terr[:,-1].mean(), 'worst time', terr.mean(0).max()); assert np.all(np.isfinite(p['diagnostics_vec']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch_cv.py && cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: separate the linear-trend response kernel from the two-mode trajectory model; the precursor response passes 52/20 at 0.02808 MAE, with worst-split MAE 0.04091.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the response-optimal kernel for both outputs\",\"rejected_reason\":\"Its trajectory MAE was about 0.017, versus about 0.009 for the calibrated trajectory kernel.\"}],\"rationale\":\"Write the passing response model and stronger trajectory branch. Refit all learned features inside each split to check whether the response margin survives without held-out normalization, and verify the actual output schema.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "466bc4c5b2cf50fef51885e628ae6cd7e1633967ec592c4350d5f8a7d1a6ff17",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40687.44,
+      "usage_known": true,
+      "prompt_tokens": 38793,
+      "cached_tokens": 9344,
+      "completion_tokens": 1546
+    }
+  ]
+}

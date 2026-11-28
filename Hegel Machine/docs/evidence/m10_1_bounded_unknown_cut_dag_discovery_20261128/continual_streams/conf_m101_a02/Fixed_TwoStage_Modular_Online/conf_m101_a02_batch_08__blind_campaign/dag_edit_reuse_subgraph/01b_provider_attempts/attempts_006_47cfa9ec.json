@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47cfa9eccc214cc8a4802250c1323001",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:15.203436+00:00",
+  "ended_at_utc": "2026-11-28T09:52:51.129903+00:00",
+  "request_sha256": "a9da6a48953e2d96bd78dd1e5b3b49f4ce75d3eb6042524e5ea01241af84bb96",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39711,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28241,
+    "cached_tokens": 9344,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/quotient_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('np.set_printoptions')[0])\\nfrom scipy.optimize import least_squares,minimize_scalar\\nB=s['panel_b']; kb,gb=m._fit_b(B['u'],B['v']); c=s['panel_c'];\\nprint('panel B affine and nonlinear matrices',gb.round(3)); print('B fit RMSE',np.sqrt(np.mean((m._b_design(B['u'],kb)@gb-B['v'])**2)))\\ndef crep(j):\\n if j==1:\\n  def D(q,k):return np.c_[poly(q,1),np.tanh(k*q)]\\n  def fun(k):\\n   Q=np.linalg.qr(D(c['u'],k))[0]; return np.mean(((c['v1']-Q@(Q.T@c['v1']))/(1-(Q*Q).sum(1)[:,None]))**2)\\n  k=minimize_scalar(fun,bounds=(.3,4),method='bounded').x\\n else:\\n  def D(q,k):return poly(q,2)\\n  k=0\\n c0=np.linalg.lstsq(D(c['u'],k),c['v'+str(j)],rcond=None)[0]\\n return D(u,k)@c0,D(z,k)@c0\\nfor j in [1,2]:\\n for i,q in enumerate(crep(j)):\\n  print('C transform',j,i,check(poly(q,2)),check(np.c_[poly(z,2),q]))\\n# Compress output to its signal-bearing components, weighting y and mean trajectory equally.\\nT=np.c_[Y[:,0],Y[:,1:]/np.sqrt(8)]\\ndef candidate(q,a,b,name,seed=432):\\n A=poly(q,1); D=poly(q,2); Q=np.linalg.qr(A[a])[0]; V=T[a]-Q@(Q.T@T[a]); rng=np.random.default_rng(seed)\\n if name=='quartic':\\n  d=poly(q,4); P=np.full(d.shape[1],.12);P[:D.shape[1]]=.004\\n  coef=np.linalg.lstsq(np.r_[d[a],np.diag(P)],np.r_[T[a],np.zeros((len(P),T.shape[1]))],rcond=None)[0];e=abs(d[b]@coef-T[b]);return np.linalg.norm(d[a]@coef-T[a]),e[:,0].mean(),e[:,1:].mean()*np.sqrt(8),[]\\n z0=np.linalg.lstsq(D[a],T[a],rcond=None)[0][:,0]\\n def features(ids,p):\\n  if name.startswith('quot'):\\n   h=(A if name=='quot1' else D)[ids]@p\\n   return np.c_[A[ids],D[ids]/(1+h[:,None]**2)]\\n  if name=='gated':\\n   return np.c_[D[ids],(D[ids]@p[:15])*np.tanh(A[ids]@p[15:])]\\n  if name=='hinge':\\n   return np.c_[D[ids],np.maximum(D[ids]@p,0)]\\n  if name=='energy':\\n   h=D[ids]@p;return np.c_[A[ids],h,h*h]\\n def res(p):\\n  d=features(a,p);return (d@np.linalg.lstsq(d,T[a],rcond=1e-8)[0]-T[a]).ravel()\\n n={'quot1':5,'quot2':15,'gated':20,'hinge':15,'energy':15}[name]\\n starts=[rng.normal(0,.4,n) for _ in range(7)]\\n if name in ['hinge','energy']: starts += [z0,-z0]\\n if name=='gated':starts += [np.r_[z0,rng.normal(0,.4,5)] for _ in range(3)]\\n p=min((least_squares(res,p,max_nfev=110) for p in starts),key=lambda p:p.cost)\\n d=features(a,p.x); assert np.isfinite(d).all(); e=abs(features(b,p.x)@np.linalg.lstsq(d,T[a],rcond=1e-8)[0]-T[b]);return np.sqrt(2*p.cost),e[:,0].mean(),e[:,1:].mean()*np.sqrt(8),p.x.round(3)\\nfor qname,q in [('z',z),('u',u)]:\\n for name in ['quot1','quot2','gated','hinge','energy','quartic']:\\n  print(qname,name,*candidate(q,*fs[0],name),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/quotient_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared nonlinear residual → multiplicative, rational, or calibrated-coordinate readout; the encoded quadratic baseline has worst measured MAEs of 0.130 for labels and 0.070 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether a shared gate or denominator accounts for residuals that additive projection models missed. Measure panel fit quality and calibrated-coordinate readouts to distinguish an incomplete basis from a coordinate mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f8de9251d5168e27890b3e3d85dcb9284ec8bc0fba70df944a725ce347cb5c12",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38552.39,
+      "usage_known": true,
+      "prompt_tokens": 28241,
+      "cached_tokens": 9344,
+      "completion_tokens": 1451
+    }
+  ]
+}

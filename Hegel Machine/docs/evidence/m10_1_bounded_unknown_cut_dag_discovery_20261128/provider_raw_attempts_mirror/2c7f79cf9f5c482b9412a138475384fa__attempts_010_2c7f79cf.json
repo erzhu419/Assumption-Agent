@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c7f79cf9f5c482b9412a138475384fa",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:38:04.689072+00:00",
+  "ended_at_utc": "2026-11-28T09:38:44.091281+00:00",
+  "request_sha256": "e9fe0acffa36fa924562c5b8bbd554fa3198a7336049630244944baa104350e9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 68793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36345,
+    "cached_tokens": 9344,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe_final.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom itertools import combinations,combinations_with_replacement\\nD=np.load('/tmp/readout_arrays.npz'); Z=D['z']; Y=D['Y']; n=len(Z); X=np.column_stack([D[k] for k in ['z','v','v1','v2']]); X=(X-X.mean(0))/X.std(0)\\nfolds=[(np.arange(52),np.arange(52,n))]+[(np.setdiff1d(np.arange(n),b),b) for b in np.array_split(np.random.default_rng(13).permutation(n),4)]\\ndef poly(z,d):return np.column_stack([np.ones(len(z))]+[np.prod(z[:,j],axis=1) for k in range(1,d+1) for j in combinations_with_replacement(range(z.shape[1]),k)])\\ndef summary(es):return np.round([*es[0],*np.max(es[1:],axis=0),*np.mean(es[1:],axis=0)],5)\\ndef evaluate(fn):\\n es=[]\\n for a,b in folds:\\n  V=np.linalg.svd(Y[a,1:],full_matrices=False)[2][:2]; T=np.c_[Y[:,0],Y[:,1:]@V.T]; P=fn(a,b,T); es.append([np.mean(abs(P[:,0]-Y[b,0])),np.mean(abs(P[:,1:]@V-Y[b,1:]))])\\n return summary(es)\\nfor group in [Z,X[:,4:8],X[:,:4],X[:,8:12],X[:,12:16]]:\\n for deg in [2,3,4,5]:\\n  F=poly(group,deg)\\n  for l in [.0003,.01,.1,1.]:\\n   def f(a,b,T):\\n    A=F[a]; return F[b]@A.T@np.linalg.solve(A@A.T+l*np.eye(len(a)),T[a])\\n   q=evaluate(f)\\n   if max(q[:2])<.085:print('poly',np.argmax([group is Z,group.base is X]),deg,l,q,flush=True)\\n\\ndef gp(z,a,b,T,k,mean_deg):\\n Q=poly(Z,mean_deg); Q=Q/(np.sqrt(np.mean(Q[a]**2,axis=0))+1e-9); out=[]\\n diff=(z[:,None,:]-z[None,:,:])**2; da=diff[a][:,a]; db=diff[b][:,a]; d=z.shape[1]; G=Q[a]@Q[a].T; H=Q[b]@Q[a].T\\n def ek(dd,h):\\n  L=np.exp(-2*h[:d]); r2=dd@L; r=np.sqrt(np.maximum(r2,1e-30)); s=np.exp(h[d]);\\n  if k=='rbf': A=np.exp(-r2/2); A1=-A/2\\n  elif k=='matern': A=(1+r+r2/3)*np.exp(-r); A1=-(1+r)*np.exp(-r)/6\\n  else:A=1/(1+r2/2); A1=-A*A/2\\n  return s*A,-2*s*A1[:,:,None]*dd*L\\n for y in T.T:\\n  sd=y[a].std(); v=(y[a]-y[a].mean())/sd; I=np.eye(len(a))\\n  def obj(h):\\n   K,J=ek(da,h); g=np.exp(h[-2]); noise=np.exp(h[-1]); C=cho_factor(K+g*G+noise*I,check_finite=False); u=cho_solve(C,v,check_finite=False); M=(cho_solve(C,I,check_finite=False)-np.outer(u,u))/2; pen=.15*np.sum(h[:d]**2); return (v@u/2+np.log(np.diag(C[0])).sum()+pen,np.r_[np.einsum('ij,ijk->k',M,J)+.3*h[:d],np.sum(M*K),g*np.sum(M*G),noise*np.trace(M)])\\n  fits=[minimize(obj,np.r_[np.full(d,st),0.,-2.,-7.],jac=True,bounds=[(-2.5,2.8)]*d+[(-7,4),(-9,3),(-13,-1)],method='L-BFGS-B',options={'maxiter':110}) for st in [-.45,.65]]; h=min(fits,key=lambda p:p.fun).x\\n  W=ek(db,h)[0]+np.exp(h[-2])*H; K=ek(da,h)[0]+np.exp(h[-2])*G+np.exp(h[-1])*I; out.append(y[a].mean()+sd*(W@np.linalg.solve(K,v)))\\n return np.column_stack(out)\\nfor name,z in [('latent',Z),('B',X[:,4:8]),('C1',X[:,8:12]),('all',X),('latent+C',np.c_[Z,X[:,8:]])]:\\n for mf in [1,2]:\\n  for k in ['rbf','matern','rq']:\\n   print('gp',name,mf,k,evaluate(lambda a,b,T:gp(z,a,b,T,k,mf)),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 timeout 150s python3 /tmp/probe_final.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 low-order and single-projection features -> H2 anisotropic nonlinear features with a polynomial trend; the saved node's worst public MAE is 0.128091.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the best single-projection fit\",\"rejected_reason\":\"Its held-out trajectory error remains above 0.10, so it cannot meet the two-metric acceptance requirement.\"}],\"rationale\":\"Compare higher-order regularized bases with anisotropic kernels fitted on training rows only. Report both the official split and the worst shuffled fold to identify any improvement that is not confined to one split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e65c00bce63438165844e7384976f703cc87a78982984443490efef55f580b96",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42018.5,
+      "usage_known": true,
+      "prompt_tokens": 36345,
+      "cached_tokens": 9344,
+      "completion_tokens": 1565
+    }
+  ]
+}

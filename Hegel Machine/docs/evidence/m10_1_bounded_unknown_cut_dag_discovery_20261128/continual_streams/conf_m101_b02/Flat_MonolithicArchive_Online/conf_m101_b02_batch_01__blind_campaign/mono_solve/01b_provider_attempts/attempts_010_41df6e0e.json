@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41df6e0ea9334eca8a0645f96596d421",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:45.132325+00:00",
+  "ended_at_utc": "2026-11-28T09:23:14.472683+00:00",
+  "request_sha256": "13c458994f27e004c5fa98ccfefbb1486e8c2f3a196edf6ebfb35d280f6524c9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36942,
+    "cached_tokens": 9344,
+    "completion_tokens": 1088
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit10.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import _nodes, _features, _odd\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['train']; x=p['x']; y=p['y']; t=p['traj']; Y=np.c_[y,t]; a,b,c=_nodes(s,x); o=_odd(b)\\ndef f(z): return np.c_[a,z,(a[:,:,None]*z[:,None,:]).reshape(len(a),-1)]\\ndef ls(g,v):return np.linalg.lstsq(g,v,rcond=None)[0]\\nG=f(c); d=np.c_[np.ones(len(x)),G]; w=ls(d,Y);print('cross coefficients scalar and trajectory modes per term');print(np.round(w[9:,0].reshape(4,4),3)); _,_,vt=np.linalg.svd(t,full_matrices=False);print(np.round((w[9:,1:]@vt[:2].T).reshape(4,4,2),3));print('full cross residual',np.mean(abs(d@w-Y),axis=0))\\nrng=np.random.default_rng(425); ix=np.arange(len(x)); splits=[('52/20',ix[:52],ix[52:]),('56/16',ix[:56],ix[56:])];splits += [('random',z[:52],z[52:]) for z in [rng.permutation(ix) for _ in range(30)]]; order=np.argsort(np.linalg.norm(a,axis=1)); splits.append(('high-radius',order[:56],order[56:]));order=np.argsort(np.max(abs(a),axis=1));splits.append(('high-coordinate',order[:56],order[56:])); order=np.argsort(np.sum(abs(a)>.35,axis=1));splits.append(('low-active',order[16:],order[:16]))\\nfor name,gs,gt,reg,rank in [('baseline',_features(a,c),_features(a,c),.015,8),('cross',G,G,0,8),('cross rank2',G,G,0,2),('diag/cross rank2',np.c_[a,c,a*c],G,0,2),('diag/cross rank2 ridge',np.c_[a,c,a*c],G,.015,2),('odd cross rank2',f(o),f(o),0,2)]:\\n def predict(g,tar,i,j):\\n  z=(g-g[i].mean(0))/np.maximum(g[i].std(0),1e-12);v=tar-tar[i].mean(0); q=z[i];w=ls(q,v[i]) if not reg else np.linalg.solve(q.T@q+reg*np.eye(q.shape[1]),q.T@v[i]);return z[j]@w+tar[i].mean(0)\\n out=[]\\n for label,i,j in splits:\\n  pp=predict(gt,t,i,j);tp=np.linalg.svd(t[i],full_matrices=False)[2][:rank];e=abs((pp@tp.T)@tp-t[j]);out.append((label,np.mean(abs(predict(gs,y,i,j)-y[j])),e.mean(),e.mean(axis=0).max()))\\n r=np.array([q[1:] for q in out if q[0]=='random']); print(name,'ordered/context',[(q[0],np.round(q[1:],5).tolist()) for q in out if q[0]!='random'],'random worst',np.round(r.max(0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit10.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted quadratic readout → H2 linear terms plus cross-stage products; initial 52/20 MAEs are 0.00544 for y and 0.00556 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use only coordinate-aligned products for both outputs\",\"rejected_reason\":\"That reduction predicts y well but raises 52/20 trajectory MAE to 0.04971, above the 0.038 gate.\"}],\"rationale\":\"Compare the smaller readouts against the passing baseline on randomized and input-edge splits. Use fold-local time modes to test whether trajectory denoising improves the worst timestamp without harming either output.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2d9bc9621f63a0e5b8fddb32209b28bb5a514a55a5c4ec2e32f50592aa59d9cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31903.74,
+      "usage_known": true,
+      "prompt_tokens": 36942,
+      "cached_tokens": 9344,
+      "completion_tokens": 1088
+    }
+  ]
+}

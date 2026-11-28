@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb2144af9dea43c9b3b3bc3ea0886aae",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:43.153914+00:00",
+  "ended_at_utc": "2026-11-28T09:42:02.531197+00:00",
+  "request_sha256": "0ff3ce83c041dd4224b602637f82d75f36faa3e92e428f140fb75e928b30bf2d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12723,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15177,
+    "cached_tokens": 9344,
+    "completion_tokens": 664
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat validate_public_schema.py && wc -l /tmp/hegel_continual_archive/*solver.py && sed -n '1,260p' /tmp/hegel_continual_archive/*solver.py; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nfor k in ('eval_times','telemetry_vec'):print(k,s[k])\\nprint('summary',s['train']['summary']); a=s['train']['traj'];y=s['train']['y'];print('ranges',np.column_stack((a.min(0),a.max(0),a.std(0),np.corrcoef(np.c_[a,y].T)[-1,:-1]))); print('xytraj',np.c_[s['train']['x'],y,a][:10]);print('sv',np.linalg.svd(a-a.mean(0),compute_uv=False)); print('y explained by traj',np.linalg.lstsq(np.c_[np.ones(len(a)),a],y,rcond=None)[0],np.linalg.norm(y-np.c_[np.ones(len(a)),a]@np.linalg.lstsq(np.c_[np.ones(len(a)),a],y,rcond=None)[0]));\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u'];print(p,'u range',u.min(0),u.max(0));X=np.c_[np.ones(len(u)),u];\\n for k,v in s[p].items():\\n  if k=='u':continue\\n  w=np.linalg.lstsq(X,v,rcond=None)[0]; r=np.linalg.norm(v-X@w,axis=1); print(k,'linear',w,'resid quantiles',np.quantile(r,[0,.25,.5,.75,.9,1.]));print('rows',np.c_[u,v][:4])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived fallback → H2 panel-informed low-rank trajectory model; archived CV MAE was 0.161333 for y and 0.157649 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Panel residuals will distinguish affine calibration from nonlinear operators; trajectory rank and the y–trajectory relation will determine whether to fit a shared state model or separate readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "479859801894927155b26aa1d081076383b7667e424e912d25ce7d007f7bf552",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22029.94,
+      "usage_known": true,
+      "prompt_tokens": 15177,
+      "cached_tokens": 9344,
+      "completion_tokens": 664
+    }
+  ]
+}

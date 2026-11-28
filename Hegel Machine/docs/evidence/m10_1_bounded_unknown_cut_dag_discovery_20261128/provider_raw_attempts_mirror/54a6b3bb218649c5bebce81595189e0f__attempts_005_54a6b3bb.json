@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54a6b3bb218649c5bebce81595189e0f",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:39.152782+00:00",
+  "ended_at_utc": "2026-11-28T09:20:16.760854+00:00",
+  "request_sha256": "449c6125cdd2e73e236d4c6d4527d847f731d7942fcf5d50685068b561b5e99a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36350,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25052,
+    "cached_tokens": 9344,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/latent.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom operators import pa,poly\\n\\ndef reverse_a(p,x):\\n u,v=p['u'],p['v']; m=pa(p); u,v=u[m],v[m]; j=[1,2,3,0]\\n b=np.stack([np.linalg.lstsq(np.c_[np.ones(len(u)),u[:,i],u[:,k],u[:,i]*u[:,k],u[:,i]**3],v[:,i],rcond=None)[0] for i,k in enumerate(j)],axis=1)\\n z=(x-b[0])/b[1]\\n for _ in range(20):\\n  f=b[0]+b[1]*z+b[2]*z[:,j]+b[3]*z*z[:,j]+b[4]*z**3-x\\n  J=np.zeros((len(x),4,4)); i=np.arange(4); J[:,i,i]=b[1]+b[3]*z[:,j]+3*b[4]*z*z; J[:,i,j]=b[2]+b[3]*z\\n  z-=np.linalg.solve(J,f[...,None])[...,0]\\n return z\\n\\ndef cx(p):\\n u=p['u']; P=poly(u,1); Q=poly(u,2)[:,5:]; from itertools import combinations_with_replacement\\n ij=list(combinations_with_replacement(range(4),2))\\n ops=[]\\n for label in ['v1','v2']:\\n  vs=p[label]; out=[]\\n  for v in vs.T:\\n   base=np.linalg.lstsq(P,v,rcond=None)[0]; q=np.linalg.lstsq(np.c_[P,Q],v,rcond=None)[0][5:]; M=np.zeros((4,4));\\n   for c,(i,j) in zip(q,ij): M[i,j]=M[j,i]=c/(2 if i!=j else 1)\\n   ev,E=np.linalg.eigh(M); k=np.argmax(abs(ev)); dd=E[:,k]; print(label,'quadratic eig',ev.round(4),'linear',base[1:].round(4))\\n   if label=='v1':\\n    pred=lambda h,x:h[0]+x@h[1:5]+h[5]*(x@h[1:5])**3\\n    r=least_squares(lambda h:pred(h,u)-v,np.r_[base,.15]); print('cubic ridge',r.x.round(5),np.std(r.fun)); out.append((pred,r.x))\\n   else:\\n    pred=lambda h,x:h[0]+x@h[1:5]+h[9]*(x@h[5:9])**2\\n    r=least_squares(lambda h:pred(h,u)-v,np.r_[base,dd,ev[k]]); print('quadratic ridge',r.x.round(5),np.std(r.fun)); out.append((pred,r.x))\\n  ops.append(lambda x,out=out:np.column_stack([f(h,x) for f,h in out]))\\n return ops\\n\\nif __name__=='__main__':\\n import pickle\\n from importlib.machinery import SourceFileLoader\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; z=reverse_a(s['panel_a'],x); print('latent ranges',z.min(0),z.max(0)); p=s['panel_b']; b=np.linalg.lstsq(poly(p['u'],1),p['v'],rcond=None)[0]; print('B singular',np.linalg.svd(b[1:],compute_uv=False)); cb=lambda x:poly(x,1)@b; c1,c2=cx(s['panel_c']); mod=SourceFileLoader('prior','/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py').load_module(); H,m=mod._time_modes(s['eval_times'],tr['traj']); Y=np.c_[tr['y'],m];\\n for tag,w in [('x',x),('z',z),('b(x)',cb(x)),('b(z)',cb(z)),('b^-1(z)',(z-b[0])@np.linalg.inv(b[1:])),('c1(z)',c1(z)),('c2(z)',c2(z)),('c1(b(z))',c1(cb(z))),('c2(b(z))',c2(cb(z)))]:\\n  print('coordinates',tag)\\n  for label,D in [('lin',poly(w,1)),('quadratic',poly(w,2)),('cubic',poly(w,3)),('trig',np.c_[poly(w,2),np.sin(w),np.cos(w)]),('sat',np.c_[poly(w,2),np.tanh(w)])]:\\n   B=np.linalg.lstsq(D[:52],Y[:52],rcond=None)[0]; R=D@B-Y; print(label,'fit/cv',np.mean(abs(R[:52]),axis=0).round(5),np.r_[np.mean(abs(R[52:,0])),np.mean(abs(R[52:,1:]@H.T))].round(5))\\n   if label=='lin': print('coef', B.round(3).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/latent.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense cubic calibration -> sparse cyclic calibration inverse and panel-composed response coordinates; archived public MAEs are 0.075920 for y and 0.083359 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the saturated odd-cubic interpolation of panel C\",\n      \"rejected_reason\": \"It has 25 features for 24 rows; its interpolation residual does not test extrapolation. Fit structured ridge operators and inspect their residuals instead.\"\n    }\n  ],\n  \"rationale\": \"The sparse cyclic terms in panel A give a concrete calibration inverse. Testing low-order response fits in raw, calibrated, and panel-composed coordinates on the same 52/20 split will show which transformations improve prediction and which can be dropped.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3fcf17bbc40c65f7945601a65519629df2de08a48f1933adbcfe7c9b4d99400f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41384.64,
+      "usage_known": true,
+      "prompt_tokens": 25052,
+      "cached_tokens": 9344,
+      "completion_tokens": 1550
+    }
+  ]
+}

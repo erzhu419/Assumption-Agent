@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cc57a8035d145b09448e34687b7672d",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:12:43.974617+00:00",
+  "ended_at_utc": "2026-11-28T10:13:35.948335+00:00",
+  "request_sha256": "b780a373bc3d6edb36010510862b4407312a2cfcc3d7557851c99cdb416504a2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66814,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38567,
+    "cached_tokens": 9344,
+    "completion_tokens": 2084
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ratchet.py <<'PY'\\nfrom compose import *\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations\\nu,v=[s['panel_b'][k] for k in ('u','v')]\\n# Separate channel-specific warps from a single shared warp.\\ndef full(p,x,kind):\\n if kind=='channel': return aff(x+np.sin(x*p[:4])*p[4:])\\n f,a=p[:2]; h=x+a*np.sin(f*x)\\n if kind=='tanh': h=x+a*np.tanh(f*x)\\n if kind=='warp': h=x+a*np.sin(f*x+p[2]*x**3)\\n if kind=='out': return aff(h)\\n if kind=='cross': h=h+p[2]*R(x)*R(R(x))\\n if kind=='bilinear': h=h+p[2]*cycle(x)\\n if kind=='inputshift': h=x+a*np.sin(f*(x+p[2]*R(x)))\\n if kind=='two':h=h+p[2]*np.tanh(p[3]*x)\\n return aff(h)\\ndef fitB(tr,kind,p0):\\n def parts(p):\\n  y=v if kind!='out' else v+p[2]*v**3\\n  d=full(p,u[tr],kind);return d,ls(d,y[tr]),y\\n def residual(p):\\n  d,w,y=parts(p);return (d@w-y[tr]).ravel()\\n p=least_squares(residual,p0,max_nfev=150).x;_,w,_=parts(p)\\n def pred(x):\\n  a=full(p,x,kind)@w\\n  if kind=='out':\\n   for _ in range(5):a-=(a+p[2]*a**3-full(p,x,kind)@w)/(1+3*p[2]*a*a)\\n  return a\\n return pred,p\\nbv=[]\\nfor k,p0 in [('base',[2.8,-.4]),('channel',[2.8]*4+[-.4]*4),('warp',[2.8,-.4,0]),('tanh',[2.8,-.4]),('out',[2.8,-.4,0]),('cross',[2.8,-.4,0]),('bilinear',[2.8,-.4,0]),('inputshift',[2.8,-.4,0]),('two',[3.,-.3,-.05,2.])]:\\n es=[]\\n for i in range(4):\\n  te=np.arange(i*6,(i+1)*6); tr=np.setdiff1d(np.arange(24),te); f,p=fitB(tr,k,p0);es.append(np.mean(abs(f(u[te])-v[te])))\\n f,p=fitB(np.arange(24),k,p0); bv.append((np.mean(es),k,f)); print('B',k,np.round(es,5),np.mean(abs(f(u)-v)),p,flush=True)\\na=afit(s)['diagsecond']; z=inverse(a,s['train']['x']); op=operators(s); op['B']=min(bv,key=lambda r:r[0])[2]; B,C,D=[op[k] for k in 'BCD']; b=B(z);c=C(b);d=D(b); dc=D(c)\\nY=np.c_[s['train']['y'],s['train']['traj']]; folds=[np.arange(52,72)]+[np.random.default_rng(i).permutation(72)[:20] for i in [42,43,44,45,46]]\\nsets={'b':b,'c':c,'d':d,'dc':dc,'z':z,'bcd':np.c_[b,c,d],'cd':np.c_[c,d],'zb':np.c_[z,b],'zcd':np.c_[z,c,d]}\\n# Test a compact additive kernel, second-order interactions, and monotone link on the common branch signals.\\ndef do(tr,te,groups,style,length,lam,link):\\n mats=[]\\n for g in groups:\\n  q=sets[g]; q=(q-q[tr].mean(0))/q[tr].std(0).clip(1e-7); q=q.clip(-8,8); r=cdist(q,q,'sqeuclidean')/q.shape[1]; dot=q@q.T/q.shape[1];\\n  if style=='rbf': K=np.exp(-r/length)\\n  elif style=='matern': R=np.sqrt(r/length);K=(1+R)*np.exp(-R)\\n  elif style=='poly': K=(1+dot/length)**2\\n  elif style=='poly3': K=(1+dot/length)**3\\n  elif style=='hybrid': K=np.exp(-r/length)+.35*dot+.1*dot**2\\n  elif style=='add': K=sum(np.exp(-(p[:,None]-p[None,:])**2/length) for p in q.T)/q.shape[1]+.25*dot**2\\n  mats.append(K)\\n K=np.mean(mats,axis=0); yt=Y[tr].copy(); ctr=yt.mean(0); sc=yt.std(0); yt=(yt-ctr)/sc\\n if link: yt=np.arcsinh(link*yt)/link\\n w=np.linalg.solve(K[np.ix_(tr,tr)]+lam*np.eye(len(tr)),yt); pred=K[np.ix_(te,tr)]@w\\n if link: pred=np.sinh(np.clip(link*pred,-3,3))/link\\n e=abs(pred*sc+ctr-Y[te]); return e[:,0].mean(),e[:,1:].mean()\\nres=[]\\nfor groups in [('bcd',),('cd',),('b',),('c',),('zb',),('zcd',),('b','c','d'),('b','c','d','dc'),('z','c','d')]:\\n for style in ['rbf','matern','poly','poly3','hybrid','add']:\\n  for l in [.5,1.5,5,16]:\\n   for lam in [.005,.04,.2]:\\n    for link in [0,1]:\\n     es=np.array([do(np.setdiff1d(np.arange(72),te),te,groups,style,l,lam,link) for te in folds]);res.append((groups,style,l,lam,link,es))\\nfor i in range(2):\\n for m in ['gate','mean','worst']:\\n  def key(r):\\n   x=r[-1][:,i]; return x[0] if m=='gate' else x.mean() if m=='mean' else x.max()\\n  print(i,m,[(r[:-1],r[-1][0].round(4),r[-1].mean(0).round(4),r[-1].max(0).round(4)) for r in sorted(res,key=key)[:5]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ratchet.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fixed shared panel B warp and polynomial branch readout → H2 panel-held-out warp selection with regularized branch interactions; the best joint branch model has required-split MAEs 0.0787 (y) and 0.0381 (trajectory), with repeated-split maxima 0.0787 and 0.0617.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the single learned projection\",\"rejected_reason\":\"It did not improve repeated held-out error over the quadratic branch model.\"}],\"rationale\":\"Panel B cross-validation will show whether its residual warrants a more flexible warp. Branch kernels then test whether better regularization closes the prediction gap; if not, the next step is to isolate the missing readout structure rather than tune the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "44c79a862a7057a8b914b26df3471ebc50d6571287c0c5f2b702495ef0decc75",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 57327.12,
+      "usage_known": true,
+      "prompt_tokens": 38567,
+      "cached_tokens": 9344,
+      "completion_tokens": 2084
+    }
+  ]
+}

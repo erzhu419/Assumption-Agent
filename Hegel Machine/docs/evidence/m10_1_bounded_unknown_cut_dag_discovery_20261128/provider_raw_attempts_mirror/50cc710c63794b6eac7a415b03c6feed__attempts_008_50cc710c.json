@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50cc710c63794b6eac7a415b03c6feed",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:10.335240+00:00",
+  "ended_at_utc": "2026-11-28T09:21:44.551478+00:00",
+  "request_sha256": "71ba12cefc05af278278bf14848941b5caf8f20099a8b95a3f9052eaeda79884",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54346,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34353,
+    "cached_tokens": 9344,
+    "completion_tokens": 1504
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/saturation.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares,minimize_scalar\\nfrom sklearn.preprocessing import PolynomialFeatures\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=S['train']['x']; y=S['train']['y']\\ndef fit(A,b): return np.linalg.lstsq(A,b,rcond=None)[0]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\npa=S['panel_a']; A=aff(pa['u']); h=fit(A,pa['v']); keep=np.argsort(np.linalg.norm(A@h-pa['v'],axis=1))[:41]; h=fit(A[keep],pa['v'][keep]); Z=(X-h[0])/np.diag(h[1:]); pb=S['panel_b']; B=fit(aff(pb['u']),pb['v']); W=aff(Z)@B\\nA=aff(Z); P=PolynomialFeatures(3).fit_transform(Z); P2=P[:,:15]; rng=np.random.default_rng(451); splits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))];\\nfor _ in range(5):\\n q=rng.permutation(72); splits.append((q[:52],q[52:]))\\ndef models(i,j,verbose=False):\\n a=A[i]; target=y[i]; out={}\\n def record(name,p,pars,b=None):\\n  out[name]=(np.mean(abs(p[j]-y[j])),np.std(p[i]-target));\\n  if verbose: print(name,np.round(out[name],6),np.round(pars,4),'' if b is None else np.round(b,3))\\n d0=fit(a,target)*.2\\n for k in (2,3):\\n  F=P2 if k==2 else P\\n  for shape in ('abs','square','smooth'):\\n   def den(d):\\n    return 1+(abs(d) if shape=='abs' else d*d if shape=='square' else np.sqrt(1+d*d)-1)\\n   def profile(c):\\n    G=F/den(A@c)[:,None]; b=fit(G[i],target); return G@b,b\\n   r=least_squares(lambda c: (profile(c)[0][i]-target),d0 if shape=='abs' else d0*2,max_nfev=200); p,b=profile(r.x); record(f'den-{k}-{shape}',p,r.x,b if k==2 else None)\\n  for shape in ('softsign','sqrt','tanh','atan'):\\n   def link(t,k):\\n    v=t*k\\n    if shape=='softsign': return t/(1+abs(v))\\n    if shape=='sqrt': return t/np.sqrt(1+v*v)\\n    if shape=='atan': return np.arctan(v)/k\\n    return np.tanh(v)/k\\n   def fun(c): return link(F@c[:-1],c[-1])\\n   r=least_squares(lambda c:fun(c)[i]-target,np.r_[fit(F[i],target),.13],bounds=(np.r_[np.full(F.shape[1],-np.inf),.00001],np.r_[np.full(F.shape[1],np.inf),.8]),max_nfev=180); record(f'link-{k}-{shape}',fun(r.x),r.x[-1:],r.x[:-1] if k==2 else None)\\n for shape in ('abs','softsign','tanh','sqrt','sin'):\\n  def profile(c):\\n   v=A@c\\n   g=v*abs(v) if shape=='abs' else v/(1+abs(v)) if shape=='softsign' else np.tanh(v) if shape=='tanh' else v/np.sqrt(1+v*v) if shape=='sqrt' else np.sin(v)\\n   G=np.c_[P2,g]; b=fit(G[i],target); return G@b,b\\n  r=least_squares(lambda c:profile(c)[0][i]-target,d0*(3 if shape!='abs' else 1),max_nfev=200); p,b=profile(r.x); record(f'add-{shape}',p,r.x,b)\\n for k in (2,3):\\n  F=P2 if k==2 else P; D=1+.2*abs(A@fit(a,target)); G=F/D[:,None]; record(f'fixed-{k}',G@fit(G[i],target),[])\\n return out\\nG=[models(i,j,n==0) for n,(i,j) in enumerate(splits)]; print('MAE across splits; worst first:')\\nfor name in sorted(G[0],key=lambda m:max(g[m][0] for g in G)):\\n print(name,np.round([g[name][0] for g in G],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/saturation.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unnormalized cubic readout → H2: a shared saturation law; the fixed absolute denominator lowers 52/20 scalar MAE to 0.01400, with worst timestamp trajectory MAE 0.00482.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an unrestricted fitted rational function\",\n      \"rejected_reason\": \"The cubic rational fit produced a denominator that changed sign and 52/20 MAE of 0.0973.\"\n    }\n  ],\n  \"rationale\": \"The fixed denominator passes the required split. Fit the competing saturation forms using training rows only and test them on multiple splits. If the fitted forms are unstable, retain the fixed denominator; if a simpler form consistently improves worst-split error, use it instead.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "396a6adb09925e62d71d05e246e54017d7da8735152b20a6fb89a50e00eb9c53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39424.77,
+      "usage_known": true,
+      "prompt_tokens": 34353,
+      "cached_tokens": 9344,
+      "completion_tokens": 1504
+    }
+  ]
+}

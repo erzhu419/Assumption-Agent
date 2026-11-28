@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "67844f69d81a43a7a9700080d8a8cc7f",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:34:35.506313+00:00",
+  "ended_at_utc": "2026-11-28T09:35:20.127810+00:00",
+  "request_sha256": "47c7334bde4f8d56f841d6ca0d86797eb52ca5fc714601c4e24057e949f63f0e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45116,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28435,
+    "cached_tokens": 9344,
+    "completion_tokens": 1856
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/search.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as cr,product\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];x=np.r_[s['train']['x'],s['test']['x']]; t=s['eval_times'];y=s['train']['y'];tr=s['train']['traj'];fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in cr(range(x.shape[1]),k)])\\ndef learn(u,v,fn,start,lo,hi):\\n def obj(p):\\n  d=fn(u,p);return (d@fit(d,v)-v).ravel()\\n p=least_squares(obj,start,bounds=(lo,hi)).x;co=fit(fn(u,p),v);return lambda z:fn(z,p)@co\\nu,v=s['panel_a'].values();keep=np.arange(len(u))\\nfor _ in range(5):keep=np.argsort(np.linalg.norm(poly(u,1)@fit(poly(u[keep],1),v[keep])-v,axis=1))[:45]\\nco=fit(poly(u[keep],3),v[keep]); A=lambda z:poly(z,3)@co\\nix=list(i for k in range(4) for i in cr(range(4),k));print('A terms',[(i,np.round(c,4).tolist()) for i,c in zip(ix,co) if np.max(abs(c))>.001]);\\nu,v=s['panel_b'].values();bc=fit(poly(u,1),v); B=lambda z:poly(z,1)@bc\\nu,v1,v2=s['panel_c'].values(); C=learn(u,v1,lambda z,p:np.c_[poly(z,1),np.tanh(z*p)], [2]*4,.2,6); D=learn(u,v2,lambda z,p:np.c_[poly(z,1),np.cos(z*p)],[1.3]*4,.2,6)\\naz=A(x);xr=az; zdict={'x':x,'a':az,'c':C(x),'d':D(x),'ca':C(az),'da':D(az),'cb':C(B(x)),'db':D(B(x)),'cba':C(B(az)),'dba':D(B(az))};print('ranges', [(k,np.max(abs(v),axis=0).round(2)) for k,v in zdict.items()]);\\ndef basis(i):\\n def b(r):return -np.expm1(-t[:,None]*r)\\n def obj(r):return (b(r)@fit(b(r),tr[i].T)-tr[i].T).ravel()\\n return np.linalg.qr(b(least_squares(obj,[1.8,.41],bounds=([.7,.05],[4,.65])).x))[0]\\nfds=[(np.arange(52),np.arange(52,72))];rng=np.random.default_rng(931)\\nfor _ in range(4):\\n ii=rng.permutation(72);fds.append((ii[:52],ii[52:]))\\ndef maes(p,k,reg,folds=fds):\\n out=[]\\n for i,j in folds:\\n  b=bases[tuple(i)];Y=np.c_[y,tr@b]; q=p[i];yt=Y[i]\\n  if k is None:pred=p[j]@fit(q,yt)\\n  else:\\n   ki=k[np.ix_(i,i)]+reg*np.eye(len(i)); fact=cho_factor(ki); kk=k[np.ix_(j,i)];a=cho_solve(fact,np.c_[q,yt]);m=q.shape[1];\\n   beta=fit(q.T@a[:,:m],q.T@a[:,m:]);pred=p[j]@beta+kk@(a[:,m:]-a[:,:m]@beta)\\n  out.append([np.mean(abs(pred[:,0]-y[j])),np.mean(abs(pred[:,1:]@b.T-tr[j]))]);\\n return np.array(out)\\nbases={tuple(i):basis(i) for i,j in fds}\\nif __name__=='__main__':\\n ds={k:cdist(z/z[:72].std(0),z/z[:72].std(0),'sqeuclidean') for k,z in zdict.items()};P={k+str(d):poly(z,d) for k,z in zdict.items() for d in (1,2,3)};P['const']=np.ones((len(x),1));\\n for k,z in zdict.items():\\n  if k in ('x','a'):continue\\n  for base in ('x','a'):\\n   P[base+'2+'+k]=np.c_[P[base+'2'],z]; P[base+'2+'+k+'2']=np.c_[P[base+'2'],P[k+'2'][:,1:]]\\n P['x2+a']=np.c_[P['x2'],az]; P['a2+x']=np.c_[P['a2'],x];\\n for k in ('x','a'):\\n  z=zdict[k];P[k+'23sep']=np.c_[P[k+'2'],z**3]; P[k+'2r']=np.c_[P[k+'2'],1/(1+z*z),z/(1+z*z),np.tanh(1.5*z)]\\n K={'-':None}\\n for d in ('x','a','ca','da','cba','dba','x+a','a+ca','a+da'):\\n  dist=sum(ds[p] for p in d.split('+'))/len(d.split('+'))\\n  for g in (.008,.025,.065,.16,.4):K[d,g]=np.exp(-g*dist)\\n rows=[]\\n for (pn,p),(kn,k),reg in product(P.items(),K.items(),(.0003,.005,.03)):\\n  if k is None and reg!=.005:continue\\n  e=maes(p,k,reg);rows.append((e.mean(0).max(), e.max(),pn,kn,reg,e.round(5).tolist()))\\n for f in [lambda r:r[0],lambda r:r[1],lambda r:max(r[-1][0])]:\\n  print('TOP');print(*sorted(rows,key=f)[:9],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 cubic calibration with composed readouts; cubic panel-A validation MAE is at most 0.0011, but the best verified forecast has not met 0.038 on both outputs.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or quadratic transformation is sufficient for panel A.\",\"empirical_witness\":\"Inlier five-fold panel-A MAE was 0.0374–0.0743 for the quadratic fit versus 0.0004–0.0011 for the cubic fit.\",\"causal_blanket_diagnosis\":\"The three corrupted rows were not the only source of error; missing cubic terms biased the inferred calibration on clean rows.\",\"sublated_pivot\":\"Fit the cubic calibration on clean panel rows and compare forward compositions on five response holdouts.\",\"risk_kind\":\"calibration grammar\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The cubic map predicts unseen calibration rows. Compare predictors with and without that map to determine whether it reduces both response errors or only fits the reference panel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7059de741e6ae31c84a502c34c7311a9caba42815069d034ff7f81dba7493dd1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47274.24,
+      "usage_known": true,
+      "prompt_tokens": 28435,
+      "cached_tokens": 9344,
+      "completion_tokens": 1856
+    }
+  ]
+}

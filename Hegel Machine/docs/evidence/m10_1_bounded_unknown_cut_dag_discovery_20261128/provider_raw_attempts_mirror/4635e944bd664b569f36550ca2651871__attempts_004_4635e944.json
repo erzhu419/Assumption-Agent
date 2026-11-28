@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4635e944bd664b569f36550ca2651871",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:43.493329+00:00",
+  "ended_at_utc": "2026-11-28T09:29:24.317292+00:00",
+  "request_sha256": "34258d5c8476de9e14606ee41dd1e77a027571f71c71e39aadef9e962e33913e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31011,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22744,
+    "cached_tokens": 9344,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(design, values):\\n    return np.linalg.lstsq(design, values, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    # Fit the forward measurement map before using it to correct coordinates.\\n    design = _affine(panel['u'])\\n    values = panel['v']\\n    coef = _fit(design, values)\\n    for _ in range(20):\\n        residual = np.linalg.norm(values - design @ coef, axis=1)\\n        scale = max(np.median(residual), 1e-8)\\n        weight = 1 / np.hypot(1, residual / (2 * scale))\\n        coef = _fit(design * weight[:, None], values * weight[:, None])\\n    return coef\\n\\n\\ndef _cross_terms(x):\\n    a, b, c, d = x.T\\n    return np.column_stack((np.ones(len(x)), a*b, a*d, b*c, c*d))\\n\\n\\ndef _diagonal_quadratic(x):\\n    return np.column_stack((_affine(x), x*x))\\n\\n\\ndef _cubic(x):\\n    columns = [_affine(x)]\\n    for degree in (2, 3):\\n        columns.extend(np.prod(x[:, indices], axis=1)\\n                       for indices in combinations_with_replacement(range(x.shape[1]), degree))\\n    return np.column_stack(columns)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train, test = study['train'], study['test']\\n    measured = np.vstack((train['x'], test['x']))\\n    calibration = _calibration(study['panel_a'])\\n    x = np.linalg.solve(calibration[1:].T, (measured - calibration[0]).T).T\\n\\n    b, c = study['panel_b'], study['panel_c']\\n    fd = _affine(x) @ _fit(_affine(b['u']), b['v'])\\n    v1 = _cross_terms(x) @ _fit(_cross_terms(c['u']), c['v1'])\\n    v2 = _diagonal_quadratic(x) @ _fit(_diagonal_quadratic(c['u']), c['v2'])\\n    return {'g': _cubic(x), 'fd': fd, 'cd': np.column_stack((v1, v2)),\\n            'y': train['y'], 'traj': train['traj']}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\nu=runpy.run_path(p+'node_00.py')['run_node']; v=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']\\nt=s['train']; x=t['x']; y=t['y']; tr=t['traj']; n=len(x)\\nrng=np.random.default_rng(101)\\norders={f'random_{i}':rng.permutation(n) for i in range(80)}\\norders.update({f'row_block_{i}':np.roll(np.arange(n),i) for i in range(0,n,4)})\\nfor j in range(4):\\n    ix=np.argsort(x[:,j]); orders[f'high_{j}']=ix; orders[f'low_{j}']=ix[::-1]\\norders['high_radius']=np.argsort(np.linalg.norm(x-np.median(x,axis=0),axis=1))\\nresults={}\\nfor key,ix in orders.items():\\n    a,b=ix[:-20],ix[-20:]\\n    f=u({'__input__':{**s,'train':{'x':x[a],'y':y[a],'traj':tr[a]},'test':{'x':x[b]}}})\\n    assert set(f)=={'g','fd','cd','y','traj'} and all(isinstance(z,np.ndarray) and np.isfinite(z).all() for z in f.values())\\n    o=v({'node_00':f}); results[key]=(abs(o['y_hat']-y[b]).mean(),abs(o['state_pred']-tr[b]).mean())\\nfor label, keys in [('random',[k for k in results if k.startswith('random')]),('row blocks',[k for k in results if k.startswith('row_block')]),('coordinate tails',[k for k in results if k.startswith(('high_','low_'))])]:\\n    print(label,[(k,round(results[k][j],6)) for j in range(2) for k in [max(keys,key=lambda k:results[k][j])]])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse quadratic C v1 calibration -> calibrated cubic downstream features; the prototype’s worst MAEs across 50 random splits were 0.02270 for y and 0.01233 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use only quadratic features and products of C v1 with the coordinates\",\n      \"rejected_reason\": \"The resulting cubic subspace had rank 27 and public MAEs of 0.05868 and 0.04164, both above the required tolerance.\"\n    }\n  ],\n  \"rationale\": \"Write only the editable node with the inferred v1 cross-products and the cubic feature span that passed prototype validation. Verify the exact artifact through the frozen sink and test coordinate tails separately; large tail errors would justify reducing cubic extrapolation variance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5aa970b8af12ea4ce4bbf6252b63502bf8e53942e3136be55ec7f59ed8441d3b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43419.53,
+      "usage_known": true,
+      "prompt_tokens": 22744,
+      "cached_tokens": 9344,
+      "completion_tokens": 1553
+    }
+  ]
+}

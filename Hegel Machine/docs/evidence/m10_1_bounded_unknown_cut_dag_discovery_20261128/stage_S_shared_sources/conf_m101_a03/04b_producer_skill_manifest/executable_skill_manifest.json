@@ -1,0 +1,122 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a03_batch_00_81919abaa36e",
+    "source_hash": "81919abaa36e827296019d7df51ac94c6a281b98b21feadcc51be8ceacb84159",
+    "parent_ids": [],
+    "source_episode_id": "conf_m101_a03",
+    "task_id": "conf_m101_a03_batch_00__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_batch.py",
+        "archived_relpath": "producers/tmp__audit_batch.py",
+        "bytes": 3214,
+        "sha256": "9589c1ee1822925bdefdb811569b9a72c44195766a6a297d977af898cf8ffccb"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1873,
+        "sha256": "39bf7600b4732984a176a3bd23821418e0aebfe1a6a4990a9025501091e77cbf"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json && cat validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=140)\nfor k,v in s.items():\n for j,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(k,j,a.shape,'min/max',a.min(),a.max());print(a[:6] if a.ndim>0 else a)\nprint('trajectory singular values',np.linalg.svd(s['train']['traj']-s['train']['traj'].mean(0),compute_uv=False))\nPY\nPYTHONPATH=/tmp python3 -m hegel_wo",
+      "cd /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -14; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.linalg import lstsq\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\nprint('times',s['eval_times']); T=s['train']; print('summary test',T['summary'], [T['y'].mean(),T['y'].std(),T['traj'][:,-1].mean(),T['traj'][:,-1].std()]); print('panel A:',s['panel_a']['u'][:4],s['panel_a']['v'][:4]);\nfor k in ['pane",
+      "cat > /tmp/probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\nfrom scipy.linalg import lstsq\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; X=s['train']['x']; Y=s['train']['y']; Q=s['train']['traj']; np.set_printoptions(precision=4,suppress=True,linewidth=155)\ndef ls(x,y): return lstsq(x,y)[0]\ndef aff(x): return np.c_[np.ones(len(x)),x]\na=s['panel_a']; A=aff(a['u']); v=a['v']; b=ls(A,v)\nfor _ in range(15):\n i=np.argsort(np.linalg.norm(A@b-v,axis=1))[:42]; b=ls(A[i],v[i])\na0=b[0]; a1=np.diag(b[1:]); B=s['panel_b']; b=ls(aff(B['",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nexec(open('/tmp/probe.py').read().split('for d in [1,2,3,4]:')[0]); pairs=list(combinations_with_replacement(range(4),2)); print('pairs',pairs)\nfor name in D:\n x=D[name]; beta=ls(poly(x[:52],2),Y[:52]); print(name,'quadratic',beta[5:]);\nx=X; beta=ls(poly(x[:52],2),Y[:52]); H=np.zeros((4,4));\nfor (i,j),w in zip(pairs,beta[5:]): H[i,j]=H[j,i]=w if i==j else w/2\nprint('quadratic eigenvalues/eigenvectors',np.linalg.eigh(H)); print('linear trajectory coefficients rows:'); fq=ls(aff(X[:52]),Q[:52]); print(fq); print('coefficient sv',np.linalg.svd(fq,compute_uv",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nexec(open('/tmp/probe.py').read().split('for d in [1,2,3,4]:')[0]); x=D['calB']; pairs=list(combinations_with_replacement(range(4),2)); P=poly(x,2); zz=aff(x); np.set_printoptions(precision=5,suppress=True)\nfolds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(42).permutation(72),4)]\nfor key in ['norm',*range(4)]:\n d=np.linalg.norm((X-X.mean(0))/X.std(0),axis=1) if key=='norm' else abs(X[:,key]-np.median(X[:,key])); j=np.argsort(d)[-18:]; folds.append((np.setdiff1d(np.arange(72),j),j))\np",
+      "cd /holdout_task && cat > batch_solver.py <<'PY'\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\n\n\ndef _affine(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(x, y):\n    return np.linalg.lstsq(x, y, rcond=None)[0]\n\n\ndef _calibration(panel):\n    u, v = panel['u'], panel['v']\n    i, j = np.triu_indices(len(u), k=1)\n    du = u[j] - u[i]\n    dv = v[j] - v[i]\n    gain = np.array([np.median(dv[du[:, k] != 0, k] / du[du[:, k] != 0, k])\n                     for k in range(u.shape[1])])\n    bias = np.median(v - u * gain, axis=0)\n    error = np.linalg.norm(v - u *",
+      "cat > /tmp/audit_batch.py <<'PY'\nimport importlib.util\nimport pickle\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open(root+'public_batch.pkl', 'rb') as fh:\n    s = pickle.load(fh)[0]['study']\nt = s['train']; x, y, q = (t[k] for k in ('x','y','traj'))\nrows = np.arange(len(x))\nfolds = [('52/20',rows[52:])]\nfolds += [(f'outer_x{k}',np.argsort(abs(x[:,k]-np.median(x[:,k])))[-18:]) for k in r"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_batch.py",
+      "primary_producer_container_path": "/tmp/audit_batch.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2230,
+        "sha256": "014fe3825f091ccd635c89bc124022ce79cccbc383bf45b3b092f86e0a6c1bfc",
+        "content_addressed_ref": "content_addressed_blobs/014fe3825f091ccd635c89bc124022ce79cccbc383bf45b3b092f86e0a6c1bfc.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "ls",
+      "aff",
+      "poly",
+      "cv"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "81919abaa36e827296019d7df51ac94c6a281b98b21feadcc51be8ceacb84159",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /tmp/audit_batch.py <<'PY'\nimport importlib.util\nimport pickle\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_sol",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "81919abaa36e827296019d7df51ac94c6a281b98b21feadcc51be8ceacb84159",
+        "expected_candidate_sha256": "81919abaa36e827296019d7df51ac94c6a281b98b21feadcc51be8ceacb84159",
+        "computed_candidate_sha256": "81919abaa36e827296019d7df51ac94c6a281b98b21feadcc51be8ceacb84159",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2230
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_81919aba"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "ls",
+        "code": "def ls(x, y):\n    from scipy.linalg import lstsq\n    return lstsq(x, y)[0]"
+      },
+      {
+        "name": "aff",
+        "code": "def aff(x):\n    return np.c_[np.ones(len(x)), x]"
+      },
+      {
+        "name": "poly",
+        "code": "def poly(x, d):\n    from itertools import combinations_with_replacement\n    ids = [p for order in range(1, d + 1) for p in combinations_with_replacement(range(4), order)]\n    return aff(np.array([x[:, p].prod(1) for p in ids]).T)"
+      },
+      {
+        "name": "cv",
+        "code": "def cv(z, y, pen=0):\n    out = []\n    for (it, iv) in [(np.arange(52), np.arange(52, 72))] + [(np.setdiff1d(np.arange(72), iv), iv) for iv in np.array_split(np.random.default_rng(42).permutation(72), 4)]:\n        zz = z[it]\n        bb = ls(zz, y[it]) if not pen else np.linalg.solve(zz.T @ zz + pen * np.diag(np.r_[0.0, np.ones(z.shape[1] - 1)]), zz.T @ y[it])\n        out.append(np.mean(abs(z[iv] @ bb - y[iv])))\n    return np.array(out)"
+      }
+    ]
+  }
+}

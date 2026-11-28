@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c9318f4a00e498a898f68dbf6aff666",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:50.283794+00:00",
+  "ended_at_utc": "2026-11-28T09:46:25.772379+00:00",
+  "request_sha256": "3e92274938f3cbcac3efd52ead292bc9a0451d96e01c98b2fa62ce4a1a53f644",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 63132,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36501,
+    "cached_tokens": 9344,
+    "completion_tokens": 1446
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle\\nimport numpy as np\\nfrom pathlib import Path\\ns = pickle.loads(Path('/holdout_task/public_batch.pkl').read_bytes())[0]['study']\\nmods = []\\nfor i in range(2):\\n    p = Path(f'/holdout_task/node_0{i}.py')\\n    ns = {}\\n    exec(compile(p.read_text(), str(p), 'exec'), ns)\\n    mods.append(ns)\\n\\ndef loo(X, Y):\\n    P = np.linalg.pinv(X)\\n    return np.mean(abs((X @ (P @ Y) - Y) / (1 - (X * P.T).sum(axis=1)[:,None])), axis=0).max()\\n\\na = s['panel_a']; u, v = a['u'], a['v']; j = np.arange(u.shape[1]); d = u.shape[1]\\nD = np.zeros((len(u), d, 2+2*d)); D[:,:,0] = np.roll(u,-1,axis=1)*(u-1); D[:,:,1] = u**3; D[:,j,2+j] = 1; D[:,j,2+d+j] = u\\nw = np.ones(len(u))\\nfor _ in range(20):\\n    sw = np.repeat(np.sqrt(w),d)\\n    c = np.linalg.lstsq(D.reshape(len(u)*d,-1)*sw[:,None], v.ravel()*sw,rcond=None)[0]\\n    r = np.linalg.norm(D@c-v,axis=1); w = 1/(1+(r/max(2*np.median(r),1e-8))**2)\\nkeep = np.argsort(r)[:-3]; c = np.linalg.lstsq(D[keep].reshape(-1,D.shape[-1]),v[keep].ravel(),rcond=None)[0]\\nx = np.concatenate((s['train']['x'],s['test']['x'])); z = mods[0]['_align'](a,x)\\ng,k = c[:2]; off,scale = c[2:].reshape(2,d)\\nforward = off+scale*z+g*np.roll(z,-1,axis=1)*(z-1)+k*z**3\\nquad = np.column_stack([np.ones(len(u)),u]+[u[:,i]*u[:,j] for i in range(d) for j in range(i,d)])\\ncu = s['panel_c']['u']; cv = s['panel_c']['v1']; aff = np.column_stack((np.ones(len(cu)),cu)); cyc = mods[1]['_features'](cu,mods[1]['_neighbor_products'](cu))\\nprint('Panel A worst clean LOO MAE: quadratic %.6f, cyclic cubic %.6f; inversion max error %.3g' % (loo(quad[keep],v[keep]),loo(np.column_stack((quad,u**3))[keep],v[keep]),abs(forward-x).max()))\\nprint('Panel C v1 worst LOO MAE: affine %.6f, cyclic pair %.6f' % (loo(aff,cv),loo(cyc,cv)))\\nassert abs(forward-x).max() < 1e-9\\n\\nt = s['train']; n = len(t['x']); inds = np.arange(n)\\nfolds = [('suffix',inds[-20:])] + [(f'interleaved {i}',inds[i::6]) for i in range(6)]\\nfolds += [('latent edge',np.argsort(abs(z[:n]).max(axis=1))[-12:])]\\nmaxima = np.zeros(3)\\nfor name, q in folds:\\n    k = np.setdiff1d(inds,q); st = copy.deepcopy(s)\\n    for key in ('x','y','traj'): st['train'][key] = t[key][k]\\n    st['test']['x'] = t['x'][q]\\n    mid = mods[0]['run_node']({'__input__':st}); assert all(isinstance(v,np.ndarray) and np.isfinite(v).all() for v in mid.values())\\n    out = mods[1]['run_node']({'node_00':mid}); y = out['y_hat']; pred = out['state_pred']; de = abs(pred-t['traj'][q]); end = pred[:,-1]\\n    assert np.allclose(out['diagnostics_vec'],[y.mean(),y.std(),end.mean(),end.std()],rtol=0,atol=1e-12)\\n    metrics = [abs(y-t['y'][q]).mean(),de.mean(),de.mean(axis=0).max()]; maxima = np.maximum(maxima,metrics)\\n    print(name, np.round(metrics,6))\\nprint('Worst: y MAE, trajectory MAE, single-horizon MAE:',np.round(maxima,6))\\nassert np.all(maxima <= .038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial calibration cascade -> H2 cyclic cubic inversion, sinusoidal activation, and pair-product readout; the saved bundle passed the public test at 0.010133 y MAE and 0.006571 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public suffix test alone\",\n      \"rejected_reason\": \"The prototype was tested across folds, but the saved nodes have not yet been tested on the most extreme observed latent inputs or at each trajectory horizon.\"\n    }\n  ],\n  \"rationale\": \"Stress the unchanged artifacts on interleaved and latent-edge holdouts. An error above tolerance would warrant revisiting the readout; a forward reconstruction failure would instead point to the inverse calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "935f14bd2eb684a3c0d49b67cb35274cfeccb42833242e57a98e67b57a78781d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38128.82,
+      "usage_known": true,
+      "prompt_tokens": 36501,
+      "cached_tokens": 9344,
+      "completion_tokens": 1446
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3758d6536d246559d175cbb6e775d31",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:34.953489+00:00",
+  "ended_at_utc": "2026-11-28T09:23:03.765098+00:00",
+  "request_sha256": "7d0ca59a949786adff5e5ec4c72fe2ffd7cc2361be2d44f7d1f2286865391844",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68266,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39264,
+    "cached_tokens": 9344,
+    "completion_tokens": 1141
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/shared_index.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _affine as af,_fit as fit,_coordinates,_polynomial as poly\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; w=_coordinates(s,t['x']); a=af(w); p=poly(w,2)[:,5:]; pairs=np.c_[w[:,0]*w[:,2],w[:,1]*w[:,3]]\\nrng=np.random.default_rng(127); splits=[(np.arange(k),np.arange(k,len(y))) for k in (52,56)]; splits += [(q[:52],q[52:]) for q in [rng.permutation(len(y)) for _ in range(12)]]; splits += [(q[:52],q[52:]) for q in [np.argsort(w[:,k]*d) for k in range(4) for d in (-1,1)]]\\nprint('trajectory coefficients',fit(a,t['traj']).round(3)); print('test ranges',np.max(abs(_coordinates(s,s['test']['x'])),0))\\nfor kind in ('abs','square','sqrt','tanh','atan','asinh'):\\n for mode in ('inside','outside','both','sparse_inside','sparse_outside','sparse_both'):\\n  errs=[]; details=None\\n  for i,j in splits:\\n   initial=fit(a[i],y[i])\\n   def features(c):\\n    v=a@c; av=abs(v); d=1+av if kind=='abs' else 1+v*v if kind=='square' else np.sqrt(1+v*v) if kind=='sqrt' else np.divide(v,np.tanh(v),out=np.ones_like(v),where=av>1e-12) if kind=='tanh' else np.divide(v,np.arctan(v),out=np.ones_like(v),where=av>1e-12) if kind=='atan' else np.divide(v,np.arcsinh(v),out=np.ones_like(v),where=av>1e-12)\\n    q=pairs if mode.startswith('sparse') else p; z=np.c_[a,1/d,v/d]; u=q/d[:,None]; loc=mode.split('_')[-1]; return np.c_[z, u if loc=='inside' else q if loc=='outside' else np.c_[q,u]]\\n   def run(c):\\n    F=features(c); return F@fit(F[i],y[i])\\n   ini=initial*(.2 if kind in ('abs','square') else .8)\\n   res=least_squares(lambda c: (run(c)-y)[i],ini,max_nfev=100); pred=run(res.x); errs.append(np.mean(abs(pred[j]-y[j])))\\n   if details is None: details=(np.std((pred-y)[i]),res.x.round(3))\\n  print(kind,mode,np.round([*errs[:2],np.mean(errs[2:14]),max(errs[2:14]),max(errs[14:])],5),details,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared_index.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: a normalized cubic readout → H2: a shared saturation acting on an affine index and two dominant interactions; the current solver scores 0.01400 on 52/20 but 0.15687 on the worst directional holdout.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the unregularized cubic unchanged\",\"rejected_reason\":\"It passes the required split, but the directional tests reveal avoidable extrapolation error.\"}],\"rationale\":\"The two largest Panel B interaction terms persist across several saturation fits. Test whether they belong inside or outside the shared saturation, fitting each candidate on training rows only. If neither placement improves directional predictions, use the verified regularized cubic or compact additive fit instead.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "37c93aa7abd2321b34a0cc82dfa848c0beb8e7f0dabbc8ee77c82dd9039713e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31393.87,
+      "usage_known": true,
+      "prompt_tokens": 39264,
+      "cached_tokens": 9344,
+      "completion_tokens": 1141
+    }
+  ]
+}

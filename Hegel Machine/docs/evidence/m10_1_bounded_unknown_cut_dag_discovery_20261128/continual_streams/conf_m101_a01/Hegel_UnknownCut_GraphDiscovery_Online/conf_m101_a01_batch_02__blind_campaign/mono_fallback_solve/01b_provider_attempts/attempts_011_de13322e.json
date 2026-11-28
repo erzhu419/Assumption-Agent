@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de13322e20ce4e178cb4a11e8fed8225",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:33:32.886301+00:00",
+  "ended_at_utc": "2026-11-28T09:33:57.940642+00:00",
+  "request_sha256": "0d1c1db8ffbd6c4e5aec7ba8122a5ba7dcb312c68820cf8ac571a120f15c5efb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70420,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38905,
+    "cached_tokens": 9344,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/response_check.py <<'PY'\\nfrom batch_cv import s,x,y,z,folds\\nfrom batch_solver import _linear, _rbf, _predict\\nfrom scipy.linalg import cho_factor,cho_solve\\nimport numpy as np\\n\\ndef predictions(tr,te):\\n    q=x[tr]/x[tr].std(0); qt=x[te]/x[tr].std(0)\\n    h,ht=_linear(q),_linear(qt)\\n    ans=[]\\n    for length in (1.25,1.55,1.8,2.,2.3,2.65,3.1):\\n        k,c=_rbf(q,q,length),_rbf(qt,q,length)\\n        for nugget in (1e-5,.0001,.001,.004):\\n            cf=cho_factor(k+nugget*np.eye(len(q)))\\n            vi=cho_solve(cf,np.eye(len(q))); a=vi@h\\n            p=vi-a@np.linalg.solve(h.T@a,a.T)\\n            press=np.mean(abs((p@y[tr])/p.diagonal()))\\n            yp=_predict(k,c,h,ht,y[tr,None],nugget)[:,0]\\n            ans.append((press,yp,(length,nugget)))\\n    return ans\\n\\nouter=[predictions(tr,te) for tr,te in folds]\\nfor name,choose in [('baseline',lambda a:next(p for _,p,k in a if k==(2.,.001))),('inner LOO winner',lambda a:min(a,key=lambda t:t[0])[1]),('inner LOO blend',lambda a:np.average(np.array([p for _,p,_ in a]),axis=0,weights=np.exp(-np.array([v for v,_,_ in a])/.0025)))]:\\n    e=np.array([np.mean(abs(choose(a)-y[te])) for a,(_,te) in zip(outer,folds)])\\n    print(name,np.round(e,5),'worst',round(e.max(),5))\\nprint('inner winners',[min(a,key=lambda t:t[0])[2] for a in outer])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/response_check.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: compare the verified fixed response kernel with training-only length and noise selection; current 52/20 MAE is 0.02983 and worst stress-split MAE is 0.04336.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retune on the weakest outer split\",\"rejected_reason\":\"That would use the stress slice for model selection and make the reported improvement unreliable.\"}],\"rationale\":\"Check whether the largest response error comes from fixed kernel hyperparameters. Promote training-only selection only if it improves the stress bottleneck while preserving the required 52/20 margin; leave the verified trajectory branch untouched.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "26c47954f0e2ec250a0f141bd65522e6bc2ebf21abdc01ee7d3cc6fb378f35fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25011.62,
+      "usage_known": true,
+      "prompt_tokens": 38905,
+      "cached_tokens": 9344,
+      "completion_tokens": 842
+    }
+  ]
+}

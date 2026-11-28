@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e0c82088cb44dc59f9f7dd6cff50688",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:13.782771+00:00",
+  "ended_at_utc": "2026-11-28T09:21:45.651554+00:00",
+  "request_sha256": "960be20082c3d8d71128a182fe2a7b7dcca6b838f025852e2fc9d59295339a4b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28845,
+    "cached_tokens": 9344,
+    "completion_tokens": 1242
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_tail_node00.py <<'PY'\\nimport pickle, runpy\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nroot = '/holdout_task/'\\nnode = runpy.run_path(root + 'node_00.py')['run_node']\\nsink = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\ns = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\na = s['train']; x = a['x']; y = a['y']; t = a['traj']; n = len(x); rows = np.arange(n)\\nh = node({'__input__': dict(s,test={'x': x[:0]})})['h']; h[:,4:] /= 2\\nfolds = [('official', rows[-20:])]\\nfor j in range(x.shape[1]):\\n    order = np.argsort(x[:,j]); folds += [(f'{j}-',order[:10]),(f'{j}+',order[-10:])]\\nfolds += [('mixed',v) for v in np.array_split(np.random.default_rng(13).permutation(rows),4)]\\ndef evaluate(z, val, fit=None):\\n    if fit is None: fit = np.setdiff1d(rows,val)\\n    out = sink({'node_00': {'h':z[np.r_[fit,val]],'n_train':len(fit),'y':y[fit],'traj':t[fit]}})\\n    dt = abs(out['state_pred']-t[val]); return [abs(out['y_hat']-y[val]).mean(),dt.mean(),dt.mean(axis=0).max()]\\noptions = [('baseline',h*np.r_[np.ones(4),2*np.ones(4)])]\\nfor s1 in (.35,.5,.7,1.,1.4,2.,2.8,4.):\\n    for ratio in (.7,1.,1.4,2.,2.8):\\n        options.append(((s1,ratio),h*np.r_[np.full(4,s1),np.full(4,s1*ratio)]))\\nerrs = np.array([[evaluate(z,val) for _,val in folds] for _,z in options]); tails=errs[:,1:9]\\nprint('baseline per fold',[(f,np.round(e,5)) for (f,_),e in zip(folds,errs[0])]); print('scaling challengers, exploratory only')\\nfor i in sorted(range(len(options)),key=lambda i:tails[i,:,:2].max())[:10]:\\n    print(options[i][0], 'official',np.round(errs[i,0],5),'tails',np.round(tails[i].max(axis=0),5),'mixed',np.round(errs[i,9:].max(axis=0),5))\\n# Assess the scaling selection rule independently, using only outer training rows.\\nfor (name,val),base in zip(folds,errs[0]):\\n    fit=np.setdiff1d(rows,val); inn=[]\\n    for j in range(x.shape[1]):\\n        order=fit[np.argsort(x[fit,j])]; inn.extend((order[:8],order[-8:]))\\n    scores=[np.max([evaluate(z,iv,np.setdiff1d(fit,iv))[:2] for iv in inn]) for _,z in options]\\n    i=int(np.argmin(scores)); print('nested',name,options[i][0],np.round(evaluate(options[i][1],val,fit),5),'base',np.round(base,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe_tail_node00.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed Panel C block weights -> H2 stronger effective regularization may improve extrapolation; official y/trajectory MAEs are 0.012664/0.014823, but coordinate-1 tail MAEs reach 0.090376/0.048735.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select weights directly on the worst public tail\",\n      \"rejected_reason\": \"That would use the stress slice to choose the model. Test whether weights selected inside each training fold transfer to its held-out slice.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged while checking whether the frozen ridge readout is sensitive to feature scale. Promote a challenger only if nested selection improves the tail bottleneck without sacrificing official acceptance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cbc686d5572c9e5d6b8b51a48672d928edf5a7edfafba7436e76e6fcc4dd2c4f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34453.58,
+      "usage_known": true,
+      "prompt_tokens": 28845,
+      "cached_tokens": 9344,
+      "completion_tokens": 1242
+    }
+  ]
+}

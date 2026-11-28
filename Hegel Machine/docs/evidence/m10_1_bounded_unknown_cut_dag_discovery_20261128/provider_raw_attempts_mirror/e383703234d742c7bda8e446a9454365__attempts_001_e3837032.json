@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e383703234d742c7bda8e446a9454365",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__init_decomp_conf_m101_b04_batch_05",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:54.445724+00:00",
+  "ended_at_utc": "2026-11-28T09:36:31.803559+00:00",
+  "request_sha256": "256d74f12976952f1aeaf8c44268a631a80a2eb471c37858d5c7a932915ae964",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 6275,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13537,
+    "cached_tokens": 0,
+    "completion_tokens": 1602
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Extract the panel-A calibration and inversion so it can be revised independently of the panel-B operator and readouts. Panel A is the strongest candidate for the shift: residual cross-channel correlation rises from 0.000057 to 0.324064, and the linear fit R² drops from 1.0 to 0.939716. Panel-B summaries change less, and the solver does not use panel C. The extraction preserves the original numerical operations and output keys; source-batch parity has not been run.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    coefs = []\\n    for u, v in zip(panel['u'].T, panel['v'].T):\\n        a = _affine(u[:, None])\\n        keep = np.arange(len(u))\\n        for _ in range(6):\\n            c = np.linalg.lstsq(a[keep], v[keep], rcond=None)[0]\\n            keep = np.argsort(np.abs(v - a @ c))[:len(u) * 5 // 6]\\n        coefs.append(np.linalg.lstsq(a[keep], v[keep], rcond=None)[0])\\n    return np.asarray(coefs).T\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    offset, gain = _calibration(study['panel_a'])\\n    return {'x_tr': (study['train']['x'] - offset) / gain,\\n            'x_te': (study['test']['x'] - offset) / gain}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"from itertools import combinations\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _operator(panel):\\n    u, v = panel['u'], panel['v']\\n    candidates = []\\n    for fun, start, limits in ((np.sin, 1.6, (.25, 3.5)),\\n                               (np.tanh, 2.5, (.25, 6.0))):\\n        def design(x, rate):\\n            return np.column_stack((_affine(x), fun(x * rate)))\\n\\n        def residual(rate):\\n            a = design(u, rate)\\n            return (a @ np.linalg.lstsq(a, v, rcond=None)[0] - v).ravel()\\n\\n        rate = least_squares(residual, [start], bounds=limits).x[0]\\n        a = design(u, rate)\\n        coef = np.linalg.lstsq(a, v, rcond=None)[0]\\n        q = np.linalg.qr(a)[0]\\n        loo = (v - a @ coef) / (1.0 - np.sum(q*q, axis=1))[:, None]\\n        candidates.append((np.mean(loo**2), fun, rate, coef))\\n    _, fun, rate, coef = min(candidates, key=lambda item: item[0])\\n    return lambda x: np.column_stack((_affine(x), fun(x * rate))) @ coef\\n\\n\\ndef _ridge(a, y, penalty):\\n    extra = np.diag(np.r_[0., np.full(a.shape[1] - 1, np.sqrt(penalty))])\\n    return np.linalg.lstsq(np.vstack((a, extra)),\\n                           np.r_[y, np.zeros((len(extra),) + y.shape[1:])],\\n                           rcond=None)[0]\\n\\n\\ndef _scalar_readout(z, zt, y):\\n    pairs = list(combinations(range(z.shape[1]), 2))\\n    products = np.column_stack([z[:, i] * z[:, j] for i, j in pairs])\\n    linear = _affine(z)\\n\\n    def loss(cols):\\n        design = np.column_stack((linear, products[:, cols]))\\n        residual = design @ _ridge(design, y, .001) - y\\n        return np.mean(residual**2)\\n\\n    cols = min(combinations(range(len(pairs)), 2), key=loss)\\n    pt = np.column_stack([zt[:, pairs[k][0]] * zt[:, pairs[k][1]] for k in cols])\\n    p = products[:, cols]\\n    design = np.column_stack((linear, p, p**2))\\n    test_design = np.column_stack((_affine(zt), pt, pt**2))\\n    return test_design @ _ridge(design, y, .015)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    calibrated = inputs['node_00']\\n    train = study['train']\\n    panel_b = _operator(study['panel_b'])\\n    z, zt = [panel_b(x) for x in (calibrated['x_tr'], calibrated['x_te'])]\\n    y_hat = _scalar_readout(z, zt, train['y'])\\n\\n    times, observed = study['eval_times'], train['traj'].T\\n\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ np.linalg.lstsq(b, observed, rcond=None)[0] - observed).ravel()\\n\\n    rates = least_squares(residual, [1.8, .4], bounds=([.7, .03], [5., .68])).x\\n    modes = np.linalg.qr(basis(rates))[0]\\n    state_pred = _affine(zt) @ _ridge(_affine(z), observed.T @ modes, .001) @ modes.T\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "bce9279c76e79c73adfa0a070f11f8f1649cab6c8d38e12072b58b4162ee794b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42640.43,
+      "usage_known": true,
+      "prompt_tokens": 13537,
+      "cached_tokens": 0,
+      "completion_tokens": 1602
+    }
+  ]
+}

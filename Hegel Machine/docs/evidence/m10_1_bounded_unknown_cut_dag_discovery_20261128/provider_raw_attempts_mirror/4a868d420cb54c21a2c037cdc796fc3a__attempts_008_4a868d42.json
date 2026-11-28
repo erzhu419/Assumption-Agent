@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4a868d420cb54c21a2c037cdc796fc3a",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:41.563603+00:00",
+  "ended_at_utc": "2026-11-28T09:48:22.334782+00:00",
+  "request_sha256": "d1c40e7b0329ef645f5fb2e13ccd2829181db79589baf8eec9e97197dc4d4c3a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47797,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29389,
+    "cached_tokens": 9344,
+    "completion_tokens": 1676
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated operator readouts with two shared relaxation rates.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _affine(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=1e-10)[0]\\n\\n\\ndef _designs(study, x):\\n    panel = study['panel_a']\\n    u, v = panel['u'], panel['v']\\n    clean = np.max(np.abs(v), axis=1) < 3\\n    offset, scale = np.array([\\n        _fit(_affine(u[clean, j]), v[clean, j]) for j in range(u.shape[1])\\n    ]).T\\n    z = (x - offset) / scale\\n\\n    panel = study['panel_c']\\n    u = panel['u']\\n\\n    def edges(w):\\n        return _affine(w * np.roll(w, -1, axis=1))\\n\\n    def cosine(w, rate):\\n        return _affine(np.cos(rate * w))\\n\\n    def loss(rate):\\n        d = cosine(u, rate)\\n        residual = d @ _fit(d, panel['v2']) - panel['v2']\\n        return np.sum(residual**2)\\n\\n    rate = minimize_scalar(loss, bounds=(1.5, 3.5), method='bounded').x\\n    f = edges(z) @ _fit(edges(u), panel['v1'])\\n    g = cosine(z, rate) @ _fit(cosine(u, rate), panel['v2'])\\n    dot = np.sum(f * g, axis=1)\\n    cross = f[:, 0] * g[:, 1]\\n    return _affine(f, g, dot), _affine(g, cross), _affine(f, g, dot, cross)\\n\\n\\ndef _trajectory_design(times, rates, slow, fast):\\n    h = -np.expm1(-times[:, None] * rates)\\n    d = np.concatenate((slow[:, None, :] * h[None, :, 0, None],\\n                        fast[:, None, :] * h[None, :, 1, None]), axis=2)\\n    return d.reshape(len(slow) * len(times), d.shape[2])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    test = study['test']['x']\\n    n = len(train['x'])\\n    y_design, slow, fast = _designs(study, np.vstack((train['x'], test)))\\n    y = y_design[n:] @ _fit(y_design[:n], train['y'])\\n\\n    times = study['eval_times']\\n    target = train['traj'].ravel()\\n\\n    def training_design(rates):\\n        return _trajectory_design(times, rates, slow[:n], fast[:n])\\n\\n    def residual(rates):\\n        d = training_design(rates)\\n        return d @ _fit(d, target) - target\\n\\n    rates = least_squares(residual, [.4, 1.8], bounds=([.05, .65], [.9, 6])).x\\n    weights = _fit(training_design(rates), target)\\n    state = (_trajectory_design(times, rates, slow[n:], fast[n:]) @ weights).reshape(len(test), len(times))\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; x = tr['x']; ids = np.arange(len(x))\\norder = np.argsort(np.max(abs((x - np.median(x, axis=0)) / x.std(0)), axis=1))\\nfolds = np.array_split(np.random.default_rng(104).permutation(ids), 5)\\nsplits = [('52/20', ids[:52], ids[52:]), ('56/16', ids[:56], ids[56:]), ('boundary', order[:-16], order[-16:])] + [(f'fold{i}', np.setdiff1d(ids, v), v) for i, v in enumerate(folds)]\\nfor name, fit, held in splits:\\n    out = m.solve_batch(dict(s, train={k: tr[k][fit] for k in ('x', 'y', 'traj')}, test={'x': x[held]}))\\n    y, state = out['y_hat'], out['state_pred']\\n    ey = np.abs(y - tr['y'][held]); et = np.abs(state - tr['traj'][held]); last = state[:, -1]\\n    np.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), last.mean(), last.std()])\\n    print(f'{name}: y MAE {ey.mean():.6f}; trajectory MAE {et.mean():.6f}; worst timestamp MAE {et.mean(axis=0).max():.6f}')\\n    assert ey.mean() <= .038 and et.mean(axis=0).max() <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (general cross-operator readout) -> H2 (shared dot product and directed interaction with jointly fitted relaxation); the compact probe reduced worst-slice y and trajectory MAE to 0.00642 and 0.00474.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the unconstrained 35-column readout\",\n      \"rejected_reason\": \"The compact readout lowered boundary y MAE from 0.01191 to 0.00642 and boundary trajectory MAE from 0.00701 to 0.00414.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact model. The isolated-process checks will catch errors in translating the probe into the deliverable; if the holdout or boundary gate fails, restore the verified baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a75cd57674abb3880e2850dd68879a17033358fe7b917cb3264448a2ea5d3576",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43346.32,
+      "usage_known": true,
+      "prompt_tokens": 29389,
+      "cached_tokens": 9344,
+      "completion_tokens": 1676
+    }
+  ]
+}

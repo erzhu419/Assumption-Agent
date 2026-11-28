@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1685d5f7737b4949b081cccd26b2b205",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:32:27.383939+00:00",
+  "ended_at_utc": "2026-11-28T09:33:01.602512+00:00",
+  "request_sha256": "d13669a5515c8954653eea3a81c697786ef9e5d64ff1bb0f8cc0a24ab3bc60bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43563,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28326,
+    "cached_tokens": 9344,
+    "completion_tokens": 1384
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/inverse_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('nodes=')[0])\\np=s['panel_a']; U,V=p['u'],p['v']; e=np.linalg.norm(D(U)@L(D(U),V)-V,axis=1); ii=np.argsort(e)[:45]; u,v=U[ii],V[ii]\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\npairs=list(combinations_with_replacement(range(4),2))\\nfor j in range(4):\\n q=np.c_[u,p2(u),u**3]; h=D(q); beta=L(h,v[:,j]); print('A',j,'rmse',np.std(h@beta-v[:,j]),'coef',list(zip(['int']+[f'x{i}' for i in range(4)]+[f'x{i}x{k}' for i,k in pairs]+[f'x{i}^3' for i in range(4)],np.round(beta,5))))\\ndef structured(w):return D(w,w**3,w*np.roll(w,-1,axis=1))\\nAA=L(structured(u),v); print('struct',np.round(AA,5),'rmse',np.std(structured(u)@AA-v));\\ndef inv(fun,w):return np.array([least_squares(lambda t:fun(t[None])[0]-r,np.clip(r,-1.6,1.6),max_nfev=50).x for r in w])\\ncal={'structured':lambda w:structured(w)@AA,'full':a}; F={}\\nfor name,op in cal.items():\\n aa=inv(op,x); print(name,'latent range',aa.min(0),aa.max(0)); F[name]=aa\\n if name=='structured':\\n  at=inv(op,s['test']['x']); print('test range',at.min(0),at.max(0))\\nF['raw']=x\\nG={}\\nfor name,f in F.items():\\n for route,w in [('id',f),('B',b(f)),('BT',(f-B[0])@np.linalg.inv(B[1:]))]:\\n  g,k=c(w),d(w)\\n  base=D(f,w,g,k); G[name+'/'+route+'/linear']=base\\n  G[name+'/'+route+'/dot']=D(f,w,g,k,(f*g).sum(1),(w*g).sum(1),(f*k).sum(1),(w*k).sum(1),(g*k).sum(1));\\n  G[name+'/'+route+'/quad']=D(f,p2(f),g,k)\\n  for gn,ga in [('f',f),('w',w),('g',g),('k',k)]:\\n   for hn,ha in [('g',g),('k',k)]:G[name+'/'+route+'/'+gn+hn]=np.c_[base,cross(ga,ha)]\\n  G[name+'/'+route+'/all']=np.c_[base,p2(f),cross(f,g),cross(f,k),cross(g,k)]\\n  G[name+'/'+route+'/wonly']=D(w,g,k,cross(w,g),cross(w,k),cross(g,k))\\nix=np.arange(72); rng=np.random.default_rng(18); fs=[(ix[:52],ix[52:]),(ix[:56],ix[56:])]+[(q[:52],q[52:]) for q in [rng.permutation(72) for _ in range(5)]]\\nR=[]\\nfor name,g in G.items():\\n for lam in (.000001,.001,.03,.3):\\n  es=[]\\n  for tr,te in fs:\\n   T=g[tr]; Q=np.eye(g.shape[1])*lam;Q[0,0]=0; P=g[te]@np.linalg.solve(T.T@T+Q,T.T@Y[tr]); er=abs(Y[te]-P); es.append([er[:,0].mean(),er[:,1:].mean()])\\n  es=np.array(es);R.append((name,lam,*es[0],*es[1],*es.max(0),*es.mean(0)))\\nfor j in (2,3,6,7):\\n print('SORT',j); print('\\\\n'.join(str((r[0],r[1],*np.round(r[2:],5))) for r in sorted(R,key=lambda r:r[j])[:6]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/inverse_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test whether panel A must be inverted before applying B or C; the forward-route models tested so far had worst-slice MAEs of at least 0.120 for y and 0.152 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Forward application or omission of the reference calibration, with the tested low-order readouts, is sufficient.\",\"empirical_witness\":\"The best 52/20 MAEs across the tested forward-route models were approximately 0.10 for y and 0.126 for trajectories, both above 0.038.\",\"causal_blanket_diagnosis\":\"Panel A may map latent coordinates to measured inputs; the forward-route comparison never tested that coordinate convention.\",\"sublated_pivot\":\"Fit the sparse cyclic calibration, invert it, and repeat the held-out route comparison.\",\"risk_kind\":\"coordinate convention\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase readout complexity in raw coordinates\",\"rejected_reason\":\"The tested full interaction models remain above tolerance, and a missing inverse calibration would make raw-coordinate extrapolation unreliable.\"}],\"rationale\":\"The observed cubic and adjacent-product terms suggest a nonlinear calibration. Testing its inverse on real held-out rows will establish whether calibration direction explains the gap or whether the readout still needs additional terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9a5caf78104436475f29c92b82b913f352d1f23753ec83614540a114deb09b73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36838.16,
+      "usage_known": true,
+      "prompt_tokens": 28326,
+      "cached_tokens": 9344,
+      "completion_tokens": 1384
+    }
+  ]
+}

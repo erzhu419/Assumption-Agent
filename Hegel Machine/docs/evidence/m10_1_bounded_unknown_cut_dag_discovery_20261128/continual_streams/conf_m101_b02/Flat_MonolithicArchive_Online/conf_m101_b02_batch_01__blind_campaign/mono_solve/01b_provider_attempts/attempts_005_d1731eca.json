@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1731eca4a0b45ee9ef91fcb2c2f3c00",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:20.739226+00:00",
+  "ended_at_utc": "2026-11-28T09:19:56.297732+00:00",
+  "request_sha256": "7b383bca3fbf1c1686157cc69afa86ee160ed82ba79220e3e542ca851e724826",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38908,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25137,
+    "cached_tokens": 9344,
+    "completion_tokens": 1448
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/dag.py <<'PY'\\nfrom panels import *\\nfrom scipy.special import erf\\nfrom itertools import product\\nfrom sklearn.preprocessing import PolynomialFeatures\\n\\ndef des0(z):return np.c_[np.ones(len(z)),z]\\ndef fit(z,v):return ls(des0(z),v)\\ndef ab(s):\\n u,v=(s['panel_a'][k] for k in ('u','v')); co=[]\\n for i in range(4):\\n  a=des0(u[:,i]); b=fit(u[:,i],v[:,i]);\\n  for _ in range(8):\\n   idx=np.argsort(abs(a@b-v[:,i]))[:38];b=ls(a[idx],v[idx,i]);\\n  co.append(b)\\n co=np.array(co);return co[:,0],co[:,1]\\ndef make(s):\\n a,b=ab(s);out={'A':lambda x:x*b+a,'I':lambda x:(x-a)/b,'X':lambda x:x}\\n p=s['panel_c']\\n for k,vn,r in [('oddexp','v1',1.8),('softplus','v2',2.2),('sqrteven','v2',.39)]:\\n  f=lambda x,k=k,r=r:des(x,k,r,'L' if k=='sqrteven' else ''); c=ls(f(p['u']),p[vn]);out[k]=lambda x,f=f,c=c:f(x)@c\\n p=s['panel_b'];u=p['u'];v=p['v']\\n for k,r in [('erf',1.414),('tanh',1.375),('sin',2.835)]:\\n  f=lambda x,k=k,r=r:des(x,k,r,'L');c=ls(f(u),v);out[k]=lambda x,f=f,c=c:f(x)@c\\n return out\\n\\ndef score(g,iy,tar,pen):\\n n=len(iy); v=np.setdiff1d(np.arange(len(tar)),iy); scale=np.std(g[iy],axis=0); scale=np.where(scale<1e-9,1,scale); a=(g-g[iy].mean(0))/scale; m=tar[iy].mean(0);b=a[iy]; K=b@b.T; pr=a[v]@b.T@np.linalg.solve(K+pen*np.eye(n),tar[iy]-m)+m; e=np.abs(pr-tar[v]);return np.r_[e[:,0].mean(),e[:,1:].mean()]\\n\\ndef feat(z,d=2):return PolynomialFeatures(d,include_bias=False).fit_transform(z)\\ndef cross(x,y):return (x[:,:,None]*y[:,None,:]).reshape(len(x),-1)\\nif __name__=='__main__':\\n x=s['train']['x']; tar=np.c_[s['train']['y'],s['train']['traj']]; fs=make(s);out=[]\\n for ak,bk in product(('X','A','I'),('X','erf','tanh','sin')):\\n  a=fs[ak](x); b=fs[bk](a)\\n  for tag,z in [('a',a),('b',b)]:\\n   c=fs['oddexp'](z);d=fs['softplus'](z);e=fs['sqrteven'](z)\\n   for name,g in [('b',b),('b2',feat(b)),('bc',np.c_[b,c]),('bd',np.c_[b,d]),('bcd',np.c_[b,c,d]),('bc2',feat(np.c_[b,c])),('bcd_BC',np.c_[b,c,d,cross(b,c)]),('bcd_BD',np.c_[b,c,d,cross(b,d)]),('bcd_CD',np.c_[b,c,d,cross(c,d)]),('bce_CD',np.c_[b,c,e,cross(c,e)]),('bcd2',feat(np.c_[b,c,d])),('bce2',feat(np.c_[b,c,e])),('abce2',feat(np.c_[a,b,c,e])),('abc2',feat(np.c_[a,b,c])),('b2cde',np.c_[feat(b,3),c,d,e]),('ce2',feat(np.c_[c,e]))]:\\n    for pen in (.00003,.001,.03,.3):\\n     er=score(g,np.arange(52),tar,pen);out.append((*er,ak,bk,tag,name,pen))\\n for i in (0,1):print('sorted',i,*sorted(out,key=lambda x:x[i])[:20],sep='\\\\n')\\n print('joint',*sorted(out,key=lambda x:x[0]+x[1])[:15],sep='\\\\n')\\n # B: determine whether the linear and nonlinear coefficient matrices share a mixing matrix.\\n p=s['panel_b']; u,v=p['u'],p['v'];\\n for k,r in [('erf',1.414),('tanh',1.375),('sin',2.835)]:\\n  b=ls(des(u,k,r,'L'),v); print(k, np.round(b,4));res=v-des(u,k,r,'L')@b;print('resid sv',np.linalg.svd(res,compute_uv=False))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine auxiliary maps → H2 compose robust calibration with nonlinear panel maps; Panel C jackknife RMSE is near 0.0001, but the best raw-input scalar MAE is still 0.1453.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Screen plausible operator orders and compact interaction readouts on the designated split. Inspect Panel B’s coefficient structure to distinguish a shared nonlinear transform from independent output nonlinearities.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9012f17ff2ef9d1f6306f4fd982a2293cb6d9c37d3986795063508b7d88c2409",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38212.74,
+      "usage_known": true,
+      "prompt_tokens": 25137,
+      "cached_tokens": 9344,
+      "completion_tokens": 1448
+    }
+  ]
+}

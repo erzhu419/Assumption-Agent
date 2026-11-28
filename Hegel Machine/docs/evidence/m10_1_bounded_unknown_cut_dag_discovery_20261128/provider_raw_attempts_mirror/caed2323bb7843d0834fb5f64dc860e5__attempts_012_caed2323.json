@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "caed2323bb7843d0834fb5f64dc860e5",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:15:31.643621+00:00",
+  "ended_at_utc": "2026-11-28T10:16:04.184122+00:00",
+  "request_sha256": "697593e5c310b2b454c9aa713e9f5836a5a9760028ecd846a015e8d372e01e79",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 84397,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44382,
+    "cached_tokens": 9344,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\nlo = s.index('def _elastic(')\\nhi = s.index('def solve_batch(', lo)\\ns = s[:lo] + '''def _readout(z, c, y, traj):\\n    n = len(y)\\n    # The scalar and trajectory share a cyclic interaction with tied weights.\\n    cyclic = (z * np.roll(c, 1, axis=1)).sum(axis=1)\\n    state_design = _affine(np.column_stack((c, cyclic)))\\n    scalar_design = np.column_stack((state_design, c[:, 0] * c[:, 2]))\\n    yhat = scalar_design[n:] @ _fit(scalar_design[:n], y)\\n    state = state_design[n:] @ _fit(state_design[:n], traj)\\n    return yhat, state\\n\\n\\n''' + s[hi:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\np = study['train']\\nn = len(p['y'])\\nz, c = m._coordinates(study, p['x'])\\nfolds = [np.arange(52, n), *[np.random.default_rng(i).permutation(n)[:20] for i in range(64, 73)], np.argsort(np.linalg.norm(z, axis=1))[-20:]]\\nerrors = []\\nfor te in folds:\\n    tr = np.setdiff1d(np.arange(n), te)\\n    ix = np.r_[tr, te]\\n    y, state = m._readout(z[ix], c[ix], p['y'][tr], p['traj'][tr])\\n    delta = abs(state - p['traj'][te])\\n    errors.append([abs(y-p['y'][te]).mean(), delta.mean(), delta[:, -1].mean()])\\ne = np.array(errors)\\nprint('MAE [scalar, trajectory, terminal]: prescribed', e[0], 'random worst', e[1:-1].max(0), 'outer-radius', e[-1])\\nassert np.all(e.max(0) <= .038), e\\nte = folds[0]\\nsub = dict(study, train=dict(p, x=p['x'][:52], y=p['y'][:52], traj=p['traj'][:52]), test={'x': p['x'][te]})\\nheld = m.solve_batch(sub)\\nnp.testing.assert_allclose([abs(held['y_hat']-p['y'][te]).mean(), abs(held['state_pred']-p['traj'][te]).mean()], e[0, :2], atol=1e-10)\\nr = m.solve_batch(study)\\ny, t = r['y_hat'], r['state_pred']\\nassert y.shape == (36,) and t.shape == (36, 8)\\nassert all(np.isfinite(a).all() for a in r.values())\\nnp.testing.assert_allclose(r['diagnostics_vec'], [y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense cross-term readout → H2 tied cyclic interaction plus one scalar correction; prior candidate test measured prescribed MAEs 0.01243/0.00665 and outer-radius MAEs 0.03422/0.01754 for scalar/trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the dense Elastic Net readout\",\n      \"rejected_reason\": \"Its outer-radius scalar MAE was 0.03821; the compact readout improved that slice and both prescribed-split outputs.\"\n    }\n  ],\n  \"rationale\": \"Promote the validated compact readout, then verify the exact standalone artifact against the prescribed split, the outer-radius slice, and the output contract. A regression in any of those checks would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "bea83dc980b78ee93e4b54d45103c3dee60cf422bd872c22b5dd0cbe6b5c93e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35248.11,
+      "usage_known": true,
+      "prompt_tokens": 44382,
+      "cached_tokens": 9344,
+      "completion_tokens": 1252
+    }
+  ]
+}

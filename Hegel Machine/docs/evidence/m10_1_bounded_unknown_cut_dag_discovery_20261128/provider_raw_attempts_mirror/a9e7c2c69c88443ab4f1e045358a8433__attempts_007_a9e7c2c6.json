@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9e7c2c69c88443ab4f1e045358a8433",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:36.328757+00:00",
+  "ended_at_utc": "2026-11-28T09:31:11.877534+00:00",
+  "request_sha256": "da6d16144c9b14aac86d2f6dd269dd11d0bf9151ef53ffff9d359d665f05c43d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34909,
+    "cached_tokens": 9344,
+    "completion_tokens": 1437
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout.py <<'PY'\\nfrom explore import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom sklearn.linear_model import HuberRegressor\\nnp.set_printoptions(precision=3,suppress=True,linewidth=160)\\nQ=PolynomialFeatures(2); P=Q.fit_transform(x)\\nF=z@np.linalg.svd(z,full_matrices=False)[2][:2].T\\nprint('telemetry',s['telemetry_vec'],'times',t,'A',A,'B',B)\\nfor name,d,v in [('a',pa,pa['v']),('b',pb,pb['v']),('c1',pc,pc['v1']),('c2',pc,pc['v2'])]:\\n e=tf(d['u'],aff(d,'v' if name in ('a','b') else 'v'+name[-1], name=='a'))-v;print(name,'u-range',d['u'].min(),d['u'].max(),'affine err',np.quantile(np.linalg.norm(e,axis=1),[0,.5,.9,1]))\\ndis=cdist(x,x,'sqeuclidean'); K=np.exp(-dis/(2*1.1**2)); KT=np.exp(-dis/(2*1.7**2));\\ndef fitpred(K,p,target,tr,te,reg=.003):\\n h=p[tr]; a=K[np.ix_(tr,tr)]+reg*np.eye(len(tr)); w=solve(a,np.c_[h,target[tr]],assume_a='pos'); b=np.linalg.lstsq(h.T@w[:,:h.shape[1]],h.T@w[:,h.shape[1]:],rcond=1e-10)[0]; return p[te]@b+K[np.ix_(te,tr)]@(w[:,h.shape[1]:]-w[:,:h.shape[1]]@b)\\ntr=np.arange(52); te=np.arange(52,72); yp=fitpred(K,P,y[:,None],tr,te)[:,0]; h=P@np.linalg.pinv(P); e=(y-h@y)/(1-h.diagonal()); print('rows i x y predicted residual ; all-row quadratic LOO residual');print(np.c_[te,x[te],y[te],yp,y[te]-yp,e[te]]); j=np.argsort(abs(e[:52]))[-10:]; print('train large raw residuals',np.c_[j,x[j],y[j],e[j]]);\\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(26).permutation(72),4)]\\nres=[]\\nfor tr,te in folds:\\n basis=np.linalg.svd(z[tr],full_matrices=False)[2][:2].T; f=z@basis; fp=f.copy(); fp[te]=fitpred(KT,P,f,tr,te)\\n def feat(q,kind):\\n  outer=(x[:,:,None]*q[:,None,:]).reshape(len(x),-1)\\n  if kind==0:return np.c_[P,q]\\n  if kind==1:return np.c_[P,q,outer,q*q,q[:,0]*q[:,1]]\\n  if kind==2:return np.c_[P,q,outer]\\n  if kind==3:return np.c_[P,q,(q[:,0,None]*P)[:,1:]]\\n  if kind==4:return np.c_[P,q,(q[:,1,None]*P)[:,1:]]\\n  return PolynomialFeatures(3).fit_transform(np.c_[x,q])\\n result=[]\\n for k in range(6):\\n  for reg in [1e-4,.02,.2,2.]:\\n   f0=feat(f,k); f1=feat(fp,k); mu=f0[tr].mean(0); sd=f0[tr].std(0); sd[sd<1e-8]=1; a=(f0[tr]-mu)/sd; b=np.linalg.solve(a.T@a+reg*np.eye(a.shape[1]),a.T@(y[tr]-y[tr].mean())); result.append([np.abs((f2[te]-mu)/sd@b+y[tr].mean()-y[te]).mean() for f2 in [f0,f1]])\\n res.append(result)\\nr=np.array(res); print('conditional trajectory results: form, ridge, oracle/fitted 52, fitted worst, fitted mean');\\nfor i in np.argsort(r[:,:,1].mean(0))[:12]:print(i//4,[1e-4,.02,.2,2.][i%4],r[0,i],r[:,i,1].max(),r[:,i,1].mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether interaction with a trajectory mode or a concentrated residual regime explains the response gap; best fixed-composition worst-slice MAE remains 0.05747.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the nonlinear ridge with the lowest training residual\",\n      \"rejected_reason\": \"The profiled ridges fit the training prefix closely but did not pass the 52/20 response gate.\"\n    }\n  ],\n  \"rationale\": \"Row-level errors will distinguish a concentrated regime failure from broad underfit. Comparing measured and predicted trajectory modes in the same interaction readout will show whether any gain survives at inference.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "03cd2cc511c15aae24f01ec989e925592d9c670971340a15bf9f8bdce03a6ae6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38190.65,
+      "usage_known": true,
+      "prompt_tokens": 34909,
+      "cached_tokens": 9344,
+      "completion_tokens": 1437
+    }
+  ]
+}

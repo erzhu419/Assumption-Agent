@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afbf43dd285a442e90a15917c1adfeae",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:02.524167+00:00",
+  "ended_at_utc": "2026-11-28T09:22:32.678405+00:00",
+  "request_sha256": "801df6891566bdebd44ecd975303a458464864778a251cff466c92b492093d8f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56754,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34457,
+    "cached_tokens": 9344,
+    "completion_tokens": 1180
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/np.set_printoptions/,$d' /tmp/probe.py > /tmp/lowrank.py; cat >> /tmp/lowrank.py <<'PY'\\nfrom scipy.optimize import least_squares\\nrng=np.random.default_rng(82)\\nsplits=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(p[:52],p[52:]) for p in [rng.permutation(n) for _ in range(4)]]\\nX=aff(x)\\n# An affine input direction can modulate a vector-valued response shared by the two readouts.\\ndef fit(i,j,kind,k,base,pen,solo=False):\\n Y=T[:,:1] if solo else T; D=X if base==1 else quad(x); W=D[i]; U=np.linalg.qr(W)[0]; R=Y[i]-U@(U.T@Y[i]); d=R.std(0); R=R/d\\n def features(h):\\n  q=X@h.reshape(k,5).T\\n  if kind=='gate': f=np.tanh(q)\\n  elif kind=='rat': f=1/(1+q*q)\\n  elif kind=='sin': f=np.sin(q)\\n  elif kind=='gauss': f=np.exp(-q*q/2)\\n  else: f=np.sqrt(1+q*q)\\n  return f if kind=='sqrt' else (f[:,:,None]*X[:,None,:]).reshape(n,-1)\\n def inner(h):\\n  F=features(h)[i]; F=F-U@(U.T@F); P=np.linalg.solve(F.T@F+pen*np.eye(F.shape[1]),F.T@R); return F,P\\n def err(h):\\n  F,P=inner(h); return np.r_[(R-F@P).ravel(),np.sqrt(pen)*P.ravel(),.005*h]\\n best=None\\n for trial in range(6):\\n  h=rng.normal(0,.42,(k,5));\\n  if trial<4: h[0,trial+1]+=1\\n  res=least_squares(err,h.ravel(),bounds=(-4,4),max_nfev=65,ftol=3e-5)\\n  if best is None or res.cost<best.cost:best=res\\n h=best.x; F=features(h); P=inner(h)[1]*d; C=np.linalg.lstsq(W,Y[i]-F[i]@P,rcond=None)[0]; p=D[j]@C+F[j]@P\\n return np.mean(abs(p-Y[j]),axis=0),np.mean(abs(Y[i]-D[i]@C-F[i]@P),axis=0),h.reshape(k,5)\\nfor kind,k,base in [(f,k,b) for f in ('gate','rat','sin','gauss','sqrt') for k,b in [(1,1),(2,1),(1,2),(2,2)]]:\\n for lam in (.003,.06):\\n  out=[fit(i,j,kind,k,base,lam) for i,j in splits[:2]]; print(kind,k,base,lam,np.round([q[0] for q in out],4).tolist(), 'train',out[0][1].round(4),'dir',out[0][2].round(2).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/lowrank.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: learn a compact shared nonlinear modulation of the scalar and trajectory readouts; the best joint anisotropic kernel has 52/20 scalar MAE 0.0429 and worst-split MAE 0.0564.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use measured trajectory amplitude as a scalar predictor\",\n      \"rejected_reason\": \"Amplitude is unavailable at inference, and even the oracle quadratic fit exceeds the scalar threshold.\"\n    }\n  ],\n  \"rationale\": \"The affine residual correlation of 0.799 motivates testing a shared low-rank nonlinear term. The two ordered validation splits distinguish plausible structure from a fit that only improves training error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2e96eca67d1bda123c746cdbed793d5fcbf8cb9ebe0d5db3ffda4d90eb589a1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32768.24,
+      "usage_known": true,
+      "prompt_tokens": 34457,
+      "cached_tokens": 9344,
+      "completion_tokens": 1180
+    }
+  ]
+}

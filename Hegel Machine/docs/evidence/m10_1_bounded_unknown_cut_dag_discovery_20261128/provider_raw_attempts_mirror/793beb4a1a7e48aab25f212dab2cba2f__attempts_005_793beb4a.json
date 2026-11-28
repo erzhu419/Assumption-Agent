@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "793beb4a1a7e48aab25f212dab2cba2f",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:11:48.079196+00:00",
+  "ended_at_utc": "2026-11-28T09:12:13.097531+00:00",
+  "request_sha256": "66efb970dd3d95d34cb635c392fca07ce3537b8cb164ed6262bfc059510878f2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34107,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26064,
+    "cached_tokens": 10880,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nexec(open('/tmp/probe.py').read().split('for d in [1,2,3,4]:')[0]); x=D['calB']; pairs=list(combinations_with_replacement(range(4),2)); P=poly(x,2); zz=aff(x); np.set_printoptions(precision=5,suppress=True)\\nfolds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(42).permutation(72),4)]\\nfor key in ['norm',*range(4)]:\\n d=np.linalg.norm((X-X.mean(0))/X.std(0),axis=1) if key=='norm' else abs(X[:,key]-np.median(X[:,key])); j=np.argsort(d)[-18:]; folds.append((np.setdiff1d(np.arange(72),j),j))\\nprint('calB traj coefficients',ls(zz[:52],Q[:52]),sep='\\\\n'); print('trajectory input dirs',np.linalg.svd(ls(zz[:52],Q[:52])[1:],full_matrices=False)[0][:,:2]); print('scalar fold | top terms | coef | full/sparse/tied MAE | rank2 worst horizon | final MAE')\\nfor i,j in folds:\\n b=ls(P[i],Y[i]); ids=np.argsort(abs(b[5:]))[-2:]+5; w=np.c_[zz,P[:,ids]]; bb=ls(w[i],Y[i]); ws=np.c_[zz,P[:,ids].sum(1)]; q=zz[j]@ls(zz[i],Q[i]); _,_,v=np.linalg.svd(Q[i],full_matrices=False); qe=abs((q@v[:2].T@v[:2])-Q[j]); print([pairs[k-5] for k in ids],bb, *[round(np.mean(abs(f-Y[j])),6) for f in [P[j]@b,w[j]@bb,ws[j]@ls(ws[i],Y[i])]],round(qe.mean(0).max(),6),round(qe.mean(0)[-1],6))\\nPY\\nsed -n '1,180p' /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: full quadratic scalar and rank-two affine trajectory → H2: two dominant cross-products after inverse calibration and the panel B transform; baseline worst-slice scalar MAE is 0.01066 and worst-horizon trajectory MAE is 0.00585.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Force the two cross-products to have equal coefficients\",\n      \"rejected_reason\": \"Their initial estimates are close but not identical; the tied form must improve validation before it replaces the untied form.\"\n    },\n    {\n      \"option\": \"Use one trajectory mode\",\n      \"rejected_reason\": \"It raises worst-horizon MAE from 0.00465 to 0.11694 on the required split.\"\n    }\n  ],\n  \"rationale\": \"Select cross-products using only fit rows in each fold and compare full, sparse, and tied models on the required split, random folds, and large-input slices. Retain the full quadratic if the sparse form does not improve extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "30b19c2ac70ab93d30291de54bdcc2edf3c716604e87e26d0096f09891c2eb80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27631.04,
+      "usage_known": true,
+      "prompt_tokens": 26064,
+      "cached_tokens": 10880,
+      "completion_tokens": 993
+    }
+  ]
+}

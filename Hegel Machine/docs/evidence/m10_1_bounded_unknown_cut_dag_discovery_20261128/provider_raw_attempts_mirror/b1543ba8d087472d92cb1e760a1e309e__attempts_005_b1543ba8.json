@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b1543ba8d087472d92cb1e760a1e309e",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:51:22.025434+00:00",
+  "ended_at_utc": "2026-11-28T09:51:59.316421+00:00",
+  "request_sha256": "ae234aab72edec266e9b6640c7899c0e22e9cbcdf406ba94bc3a6db655227c9a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40459,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27586,
+    "cached_tokens": 9344,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/mechanism.py <<'PY'\\nexec(open('/tmp/readout_diag.py').read().split('for keys in')[0])\\nimport itertools\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import svd\\nu=s['panel_b']['u'];v=s['panel_b']['v'];q=u*u; p=m._cycle(u)\\nfor name,extra in [('none',q[:,:0]),('sq',q),('cycle',p)]:\\n def bfit(f,ix):\\n  d=np.c_[m._affine(u),extra,np.sin(u*f)]; return d@m._fit(d[ix],v[ix])-v\\n for independent in [False,True]:\\n  ds=[]; full=np.arange(len(u));f0=np.full(4 if independent else 1,2.84)\\n  for i in range(-1,len(u)):\\n   ix=full if i<0 else full[full!=i]; f=least_squares(lambda f:bfit(f,ix)[ix].ravel(),f0).x; r=bfit(f,ix)\\n   if i<0: print('B',name,independent,f,'fit',np.std(r),flush=True)\\n   else:ds.extend(r[i]);\\n  print('  nested loo',np.std(ds),flush=True)\\nbase={'z':z,'b':b,'c':c1,'d':c2}; trU,trS,trV=svd(tr,full_matrices=False); target=np.c_[y,trU[:,:2]*trS[:2]]; print('traj basis',trV[:2]);print('target corr',np.corrcoef(target.T)); print('traj avg',tr.mean(0));\\nF={}\\nfor key,A in base.items():\\n for i,a in enumerate(A.T): F[key+str(i)]=a\\n for i,a in enumerate(A.T):\\n  for j,bb in enumerate(A.T):\\n   if i<=j:F[key+str(i)+key+str(j)]=a*bb\\nfor (k,a),(l,bb) in itertools.combinations(base.items(),2):\\n if k=='z' and l=='c' or k in 'bc' and l in 'cd' or k=='z' and l in 'bd':\\n  for i,j in itertools.product(range(4),repeat=2):F[k+str(i)+l+str(j)]=a[:,i]*bb[:,j]\\nfor k,A in base.items():\\n for i,a in enumerate(A.T):\\n  for f in [.5,1,1.5,2,2.5,3,4]:\\n   for n,fn in [('s',np.sin),('o',np.cos),('t',np.tanh)]: F[f'{n}{f}{k}{i}']=fn(f*a)\\nH=np.column_stack(list(F.values()));H-=H.mean(0);H/=np.maximum(1e-10,np.std(H,axis=0)); names=list(F)\\nfor j in range(3):\\n Y=target[:,j];r=Y-Y.mean(); ids=[];print('target',j,np.std(Y));\\n for step in range(16):\\n  D=np.c_[np.ones(len(Y)),H[:,ids]]; Q=np.linalg.qr(D)[0];R=H-Q@(Q.T@H);k=np.argmax(np.abs(R.T@r)/np.maximum(1e-8,np.linalg.norm(R,axis=0)));ids.append(k);D=np.c_[D,H[:,k]];res=Y-D@m._fit(D,Y);r=res; print(names[k],round(np.std(r),5),end='; ')\\n print()\\nfor keys in ['Z','ZBCD','ZBCD+square','ZBCD+square+interaction','Z+polynomial3','Z+polynomial4']:\\n D0=np.c_[z,b,c1,c2]; d={'Z':z,'ZBCD':D0,'ZBCD+square':np.c_[D0,D0**2],'ZBCD+square+interaction':np.c_[D0,H[:,:136]]}.get(keys)\\n if d is None:\\n  deg=int(keys[-1]);d=np.column_stack([np.prod(z[:,inds],axis=1) for k in range(1,deg+1) for inds in itertools.combinations_with_replacement(range(4),k)])\\n D=m._affine(d); scores=[]\\n for it,iv in folds:\\n  ix=np.r_[it,iv];a=sink.run_node({'node_00':{'g':D[ix],'fd':b[ix],'cd':np.c_[c1,c2][ix],'y':y[it],'traj':tr[it]}});scores.append([np.mean(abs(a['y_hat']-y[iv])),np.mean(abs(a['state_pred']-tr[iv]))]);\\n print(keys,'official',np.round(scores[0],4),'worst',np.round(np.max(scores,axis=0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/mechanism.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Additive calibrated features -> nonlinear features built from calibrated responses; public y/trajectory MAE is 0.07921/0.07699, above 0.038 for both.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The frozen ridge readout needs only additive calibrated panel responses.\",\"empirical_witness\":\"The aligned additive features score 0.07921/0.07699 on the official split; using the raw coordinate gives similarly high errors.\",\"causal_blanket_diagnosis\":\"The calibration coordinates alone do not supply a sufficient feature basis for the two target heads.\",\"sublated_pivot\":\"Separate panel-model residuals from downstream errors, then probe compact nonlinear feature compositions against both targets.\",\"risk_kind\":\"missing_basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change frozen ridge penalties\",\"rejected_reason\":\"The sink is frozen; the editable node must supply an adequate feature basis.\"}],\"rationale\":\"Nested panel holdouts will test whether channel-specific frequencies or quadratic terms explain the remaining calibration residual; downstream residual probes will identify which feature terms merit independent validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "07353cd8893aac0e48fa54cf32823d4ceb5b89814cec4242af684976eff93c94",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39815.31,
+      "usage_known": true,
+      "prompt_tokens": 27586,
+      "cached_tokens": 9344,
+      "completion_tokens": 1511
+    }
+  ]
+}

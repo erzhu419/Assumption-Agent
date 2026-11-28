@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "59dcf964d2a349999fb333f513b78130",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:52.741719+00:00",
+  "ended_at_utc": "2026-11-28T09:46:21.592155+00:00",
+  "request_sha256": "78c8bf0f03f588ce4cfa4a3cad1df90c2b8a795bf82b3b791628274719deb6c8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49988,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31080,
+    "cached_tokens": 9344,
+    "completion_tokens": 1115
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/sparse_probe.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.linalg import svd\\nprint('summary',tr['summary'],'y',np.round(y,3)); print('raw/x ranges',[(k,a.min(0),a.max(0)) for k,a in A.items()]);print('x sample',np.round(x[:15],3))\\nprint('C/D weights');u=s['panel_c']['u'];print(np.round(fit(bil(u),s['panel_c']['v1']),3));print(np.round(fit(cos(u,2.4),s['panel_c']['v2']),3))\\nU,S,V=svd(z[:52],full_matrices=False); zz=z@V[:3].T; target=np.c_[y,zz];\\nA.update({'s'+k:np.sin(2.4*a) for k,a in list(A.items())});A.update({'o'+k:np.cos(2.4*a) for k,a in list(A.items()) if not k.startswith('s')});\\nbase={f'{k}{i}':a[:,i] for k,a in A.items() for i in range(4)}\\nF=dict(base)\\nfor k,a in list(A.items()):\\n if not k.startswith(('s','o')):\\n  for fun,fn in [('t',np.tanh),('r',lambda v:v/(1+abs(v))),('q',lambda v:v/(1+v*v))]:\\n   for i in range(4):F[f'{fun}({k}{i})']=fn(a[:,i]);\\nfor (k,a),(l,b) in combinations_with_replacement(base.items(),2):\\n F[k+'*'+l]=a*b\\n F[k+'/(1+'+l+'^2)']=a/(1+b*b)\\nfor (k,a),(l,b) in combinations(A.items(),2):\\n if not k.startswith(('s','o')) and not l.startswith(('s','o')):\\n  F[k+'.'+l]=(a*b).sum(1)\\nlabels=list(F); X=np.column_stack(list(F.values())); X-=X[:52].mean(0); X/=np.maximum(X[:52].std(0),1e-12)\\nfor j,Y in enumerate(target.T):\\n b=Y[:52].mean(); R=Y[:52]-b; selected=[]\\n for it in range(14):\\n  i=np.argmax(abs(X[:52].T@R));selected.append(i);Z=X[:,selected];w=fit(Z[:52],Y[:52]-b);R=Y[:52]-b-Z[:52]@w\\n  if it<5 or it in [7,10,13]: print('OMP',j,it,labels[i],round(w[-1],4),round(np.std(R),5),round(np.mean(abs(Y[52:]-b-Z[52:]@w)),5))\\nprint('univariate correlation')\\nfor a in target.T:\\n ix=np.argsort(abs(X[:52].T@(a[:52]-a[:52].mean())))[-12:][::-1];print([(labels[i],round(np.corrcoef(X[:52,i],a[:52])[0,1],3)) for i in ix]);\\nprint('time vectors',np.round(V[:3],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparse_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Verified cyclic calibration and panel operators → sparse nonlinear spatial readouts; the best exploratory 52/20 MAEs are 0.24993 for y and 0.16805 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select a larger dense polynomial from the first screen\",\"rejected_reason\":\"Several such designs interpolate the training rows yet have held-out MAEs above 0.6.\"}],\"rationale\":\"Screen sparse nonlinear interactions against the scalar and the three trajectory modes using only the first 52 rows for feature selection. Strong isolated terms would narrow the remaining composition search.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4b10c76a061056be35423b1e9b8b4a323d9c35b5191fa2437fadd754b2f27efd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31494.88,
+      "usage_known": true,
+      "prompt_tokens": 31080,
+      "cached_tokens": 9344,
+      "completion_tokens": 1115
+    }
+  ]
+}

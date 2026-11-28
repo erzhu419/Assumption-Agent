@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83fbeccbd9a04235b0a5476bacb0c685",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:38.654626+00:00",
+  "ended_at_utc": "2026-11-28T09:21:10.405502+00:00",
+  "request_sha256": "584ba6ff0d40e069be752b99881e3bebd2221e9b092529b63571880ff8d887db",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44679,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28654,
+    "cached_tokens": 9344,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(design, values):\\n    return np.linalg.lstsq(design, values, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    design = _affine(panel['u'])\\n    values = panel['v']\\n    weights = np.ones(len(design))\\n    for _ in range(20):\\n        coef = _fit(design * weights[:, None], values * weights[:, None])\\n        residual = np.linalg.norm(values - design @ coef, axis=1)\\n        scale = max(np.median(residual), 1e-10)\\n        weights = 1.0 / np.hypot(1.0, residual / scale)\\n    return coef\\n\\n\\ndef _bilinear(x):\\n    pairs = combinations(range(x.shape[1]), 2)\\n    return np.column_stack([np.ones(len(x)), *(x[:, i] * x[:, j] for i, j in pairs)])\\n\\n\\ndef _logcosh_readout(x):\\n    z = 1.1 * x\\n    return np.column_stack((_affine(x), np.logaddexp(z, -z) - np.log(2.0)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    observed = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    coef = _calibration(study['panel_a'])\\n    latent = np.linalg.solve(coef[1:].T, (observed - coef[0]).T).T\\n\\n    panel = study['panel_c']\\n    readout_1 = _bilinear(latent) @ _fit(_bilinear(panel['u']), panel['v1'])\\n    readout_2 = _logcosh_readout(latent) @ _fit(_logcosh_readout(panel['u']), panel['v2'])\\n    # Balance the readout blocks before the frozen quadratic expansion.\\n    h = np.column_stack((readout_1, 2.0 * readout_2))\\n    return {'h': h, 'n_train': len(train['x']), 'y': train['y'], 'traj': train['traj']}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I -B - <<'PY'\\nimport pickle, runpy, numpy as np\\nroot = '/holdout_task/'\\nnode = runpy.run_path(root + 'node_00.py')['run_node']\\nsink = runpy.run_path(root + '_frozen_nodes/node_01.py')['run_node']\\nstudy = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\ndata = study['train']; x = data['x']; rows = np.arange(len(x))\\nfamilies = {'contiguous': np.array_split(rows, 4)}\\nfor j in range(x.shape[1]):\\n    ordered = np.argsort(x[:, j])\\n    families[f'coordinate_{j}_tails'] = [ordered[:10], ordered[-10:]]\\nfor seed in (13, 137, 912):\\n    families[f'shuffled_{seed}'] = np.array_split(np.random.default_rng(seed).permutation(rows), 4)\\nfor family, folds in families.items():\\n    errors = []\\n    for val in folds:\\n        fit = np.setdiff1d(rows, val)\\n        fold = dict(study, train={k: data[k][fit] for k in ('x', 'y', 'traj')}, test={'x': x[val]})\\n        out = sink({'node_00': node({'__input__': fold})})\\n        dy = abs(out['y_hat'] - data['y'][val]); dt = abs(out['state_pred'] - data['traj'][val])\\n        errors.append((dy.mean(), dt.mean(), dt.mean(axis=0).max()))\\n    print(family, 'worst y/traj/horizon:', np.round(np.max(errors, axis=0), 6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 augmented coordinate features -> H2 robust calibration followed by the two Panel C readouts; the selected probe had worst-fold MAE of 0.02161 for y and 0.02129 for trajectory, with worst-horizon MAE of 0.02772.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Append the affine Panel B features\",\n      \"rejected_reason\": \"The tested augmentation worsened worst-fold trajectory MAE from 0.02129 to 0.03854 even with both Panel C blocks scaled up.\"\n    }\n  ],\n  \"rationale\": \"Implement the lowest-error tested composition without changing the frozen sink. The isolated official test checks the exact handoff and acceptance criteria; contiguous, shuffled, and coordinate-tail splits check whether the result depends on the published split or breaks near the edge of the observed range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bfb81b12fcad77bf00d7bf0200e8243412153dcda820033e4847b22703406834",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36750.86,
+      "usage_known": true,
+      "prompt_tokens": 28654,
+      "cached_tokens": 9344,
+      "completion_tokens": 1353
+    }
+  ]
+}

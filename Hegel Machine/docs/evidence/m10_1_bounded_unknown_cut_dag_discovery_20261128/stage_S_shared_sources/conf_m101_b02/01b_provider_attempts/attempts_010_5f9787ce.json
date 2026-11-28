@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f9787ce0acc4ec49f673f40952ded15",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:58.147805+00:00",
+  "ended_at_utc": "2026-11-28T09:16:42.194445+00:00",
+  "request_sha256": "59524b5c677706d9317e8f4a3d340cc1a4a81f95031a374db6396a2028f7ba88",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69777,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39646,
+    "cached_tokens": 10880,
+    "completion_tokens": 1831
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp batch_solver.py /tmp/batch_solver_v01.py\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit panel operators and predict the scalar response and trajectory.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _design(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _least_squares(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _odd(x, rate):\\n    return _design(-np.sign(x) * np.expm1(-rate * np.abs(x)))\\n\\n\\ndef _even(x, rate):\\n    squared = x * x\\n    return _design(x, squared / np.sqrt(1 + rate * squared))\\n\\n\\ndef _fit_operator(u, v, design, bounds):\\n    def loss(rate):\\n        g = design(u, rate)\\n        return np.sum((g @ _least_squares(g, v) - v) ** 2)\\n\\n    rate = minimize_scalar(loss, bounds=bounds, method='bounded').x\\n    coefficients = _least_squares(design(u, rate), v)\\n    return lambda x: design(x, rate) @ coefficients\\n\\n\\ndef _cross(a, b):\\n    return (a[:, :, None] * b[:, None, :]).reshape(len(a), 16)\\n\\n\\ndef _features(study, x):\\n    panel = study['panel_b']\\n    f = _design(x) @ _least_squares(_design(panel['u']), panel['v'])\\n    panel = study['panel_c']\\n    c = _fit_operator(panel['u'], panel['v1'], _odd, (.1, 5))(f)\\n    d = _fit_operator(panel['u'], panel['v2'], _even, (.0001, 2))(f)\\n    return _design(f, c, d, _cross(f, c)), .3 * _cross(f, d), .3 * _cross(c, d)\\n\\n\\ndef _ridge(g, target, penalty):\\n    n = len(target)\\n    training = g[:n]\\n    normal = training.T @ training + penalty * np.eye(g.shape[1])\\n    normal[0, 0] -= penalty\\n    return g[n:] @ np.linalg.solve(normal, training.T @ target)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    g, fd, cd = _features(study, np.vstack((train['x'], study['test']['x'])))\\n    traj = train['traj']\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    target = np.column_stack((train['y'], traj @ basis.T))\\n    base = _ridge(g, target, .0003)\\n    # Average interaction readouts, keeping the base model at half the weight.\\n    prediction = .5 * base + (\\n        _ridge(np.column_stack((g, fd)), target, .003)\\n        + _ridge(np.column_stack((g, cd)), target, .0003)\\n        + _ridge(np.column_stack((g, fd, cd)), target, .001)\\n    ) / 6\\n    y_hat = prediction[:, 0]\\n    state_pred = prediction[:, 1:] @ basis\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\ncat > /tmp/verify_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x = t['x']; y = t['y']; z = t['traj']\\nidx = np.arange(len(x)); rng = np.random.RandomState(228)\\nr = np.argsort(np.linalg.norm(x, axis=1))[-15:]\\nfolds = [('prescribed', idx[52:]), *[(f'fold{i}', j) for i, j in enumerate(np.array_split(rng.permutation(len(x)), 5))], ('high-amplitude', r)]\\nfor path in ('/tmp/batch_solver_v01.py', '/holdout_task/batch_solver.py'):\\n    solve = load(path).solve_batch\\n    results = []\\n    for name, va in folds:\\n        tr = np.setdiff1d(idx, va)\\n        p = solve(dict(s, train=dict(t, x=x[tr], y=y[tr], traj=z[tr]), test={'x': x[va]}))\\n        e = abs(p['state_pred'] - z[va]); m = np.r_[abs(p['y_hat'] - y[va]).mean(), e.mean(), e.mean(0)[-1], e.mean(0).max()]\\n        results.append(m)\\n        print(path, name, np.round(m, 6))\\n    p = solve(s); a = p['y_hat']; b = p['state_pred']; d = p['diagnostics_vec']\\n    assert a.shape == (36,) and b.shape == (36, 8) and d.shape == (4,)\\n    assert all(np.isfinite(q).all() for q in (a,b,d))\\n    np.testing.assert_allclose(d, [a.mean(), a.std(), b[:, -1].mean(), b[:, -1].std()])\\n    assert results[0][0] <= .038\\n    print('worst', np.round(np.max(results, axis=0), 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single mixed readout → H2 baseline-weighted interaction blend; the exploratory four-model blend reduced high-amplitude y MAE from 0.04967 to 0.04005, with prescribed y MAE 0.02435.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the equal-weight blend\",\n      \"rejected_reason\": \"It improved the high-amplitude scalar slice but increased prescribed-split terminal-state MAE from 0.02659 to 0.03463; the baseline-weighted blend tests a smaller tradeoff.\"\n    }\n  ],\n  \"rationale\": \"Compare the exact solver against the archived baseline in an isolated Python process. The prescribed split checks the scalar threshold, the amplitude slice checks extrapolation, and per-time errors reveal whether the blend sacrifices trajectory accuracy. Run the required schema checker on the same artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6e44e0f7d648128531ce397fdceef3aeaf0dac01381eb15cd786c87e566c52b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46642.81,
+      "usage_known": true,
+      "prompt_tokens": 39646,
+      "cached_tokens": 10880,
+      "completion_tokens": 1831
+    }
+  ]
+}

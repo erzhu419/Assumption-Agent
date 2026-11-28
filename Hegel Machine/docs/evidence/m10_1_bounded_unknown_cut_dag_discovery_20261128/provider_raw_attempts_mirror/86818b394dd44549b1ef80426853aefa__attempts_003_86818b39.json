@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86818b394dd44549b1ef80426853aefa",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:21.459968+00:00",
+  "ended_at_utc": "2026-11-28T09:41:48.632807+00:00",
+  "request_sha256": "de461298d55774e5dfd839a85c2a455c0011715c09f21167d3c33deb5303eafa",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 21778,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18493,
+    "cached_tokens": 9344,
+    "completion_tokens": 1059
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '65,135p' test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge variable projection' 2>&1 | head -35; cat >/tmp/scan.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom itertools import combinations,combinations_with_replacement\\nD='/holdout_task/'\\ns=pickle.load(open(D+'public_batch.pkl','rb'))[0]['study']; d=runpy.run_path(D+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); z=d['z']; y=d['y']; T=d['traj']; n=len(y)\\n\\ndef blocks(X):\\n a,b,c,e=X.T\\n p=np.column_stack([X[:,i]*X[:,j] for i,j in combinations_with_replacement(range(4),2)])\\n q=np.column_stack([X[:,i]*X[:,j]*X[:,k] for i,j,k in combinations_with_replacement(range(4),3)])\\n h=np.column_stack([np.sin(X),np.cos(X),np.tanh(X),np.arctan(X),X/(1+X*X)])\\n ratios=np.column_stack([X[:,i]/(1+X[:,j]**2) for i in range(4) for j in range(4)])\\n pairs=np.column_stack([f(X[:,i]+sg*X[:,j]) for f in (np.sin,np.cos,np.tanh,np.arctan) for i,j in combinations(range(4),2) for sg in (-1,1)])\\n return [X,np.c_[X,p],np.c_[X,p,q],np.c_[X,p,h],np.c_[X,p,h,ratios,pairs]]\\n\\ndef splits(n):\\n ids=np.arange(n); rng=np.random.default_rng(92)\\n for vv in [ids[int(n*.7):],*np.array_split(rng.permutation(n),5)]: yield np.setdiff1d(ids,vv),vv\\n\\ndef predict(F,Y,i,j,shrink):\\n A,B=F[i],F[j]; mu=A.mean(0); st=np.maximum(A.std(0),1e-9); A=(A-mu)/st; B=(B-mu)/st; m=Y[i].mean(0); U,S,V=np.linalg.svd(A,full_matrices=False); return m+((B@V.T)*(S/(S*S+shrink)))@(U.T@(Y[i]-m))\\nif __name__=='__main__':\\n for name,Y in [('scalar',y),('trajectory',T)]:\\n  r=[]\\n  for k,Z in z.items():\\n   for b,F in enumerate(blocks(Z)):\\n    for a in ([1e-8,.01,.25,2] if b>1 else [1e-8,.1,1]):\\n     err=np.array([np.mean(abs(predict(F,Y,i,j,a)-Y[j])) for i,j in splits(n)])\\n     r.append((err[1:].mean(),err[0],err.max(),k,b,a))\\n  print(name,'by random CV'); print(*[tuple(round(v,5) if isinstance(v,float) else v for v in q) for q in sorted(r)[:14]],sep='\\\\n'); print(name,'by ordered tail'); print(*[tuple(round(v,5) if isinstance(v,float) else v for v in q) for q in sorted(r,key=lambda q:q[1])[:10]],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed scalar readout → sparse nonlinear readout over frozen panel compositions; reported scalar CV MAE is 0.045840 against 0.038.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit the calibration panels in the sink\",\"rejected_reason\":\"The panels are not part of the sink input, and the task freezes their existing implementation.\"}],\"rationale\":\"Compare nested nonlinear bases across frozen views on both ordered and shuffled splits. If only one split improves, do not promote that basis without testing an adaptive selector on outer holdouts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8de865853b87769597e9e2fd3bacb8268afcb2bc74c758a5e633eebdd556e093",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29833.77,
+      "usage_known": true,
+      "prompt_tokens": 18493,
+      "cached_tokens": 9344,
+      "completion_tokens": 1059
+    }
+  ]
+}

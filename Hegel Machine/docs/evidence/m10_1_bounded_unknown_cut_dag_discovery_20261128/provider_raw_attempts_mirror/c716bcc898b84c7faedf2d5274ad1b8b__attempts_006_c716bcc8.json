@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c716bcc898b84c7faedf2d5274ad1b8b",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:51.145061+00:00",
+  "ended_at_utc": "2026-11-28T09:46:35.531363+00:00",
+  "request_sha256": "ff35fe4d7dfe32319e551f24c906e037c212655b59b59f42818b0e09ba35a610",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27238,
+    "cached_tokens": 9344,
+    "completion_tokens": 1846
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chain.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import root\\nfrom itertools import product\\n\\ndef ap(u,kind,k=0):\\n w=np.roll(u,-1,axis=1)\\n if kind=='cyclic':return np.stack([np.ones_like(u),u,w,u*w],-1)\\n if kind=='extra':return np.stack([np.ones_like(u),u,w,u*w,u*u,w*w,u*u*w,u*w*w,u**3,w**3],-1)\\n g=funcs[kind]\\n return np.stack([np.ones_like(u),u,w,u*w,g(w,k),u*g(w,k)],-1)\\n\\ndef cal():\\n u=s['panel_a']['u']; v=s['panel_a']['v']; d=ap(u,'cyclic'); w=fit(d[:,0],v[:,0]); mask=np.ones(len(u),bool)\\n for _ in range(12):\\n  b=np.column_stack([fit(d[mask,j],v[mask,j]) for j in range(4)]); e=np.linalg.norm(np.einsum('nki,ik->nk',d,b)-v,axis=1); mask=np.isin(np.arange(len(u)),np.argsort(e)[:38]);\\n print('A cyclic',np.round(b,5),'residual quantiles',np.quantile(e,[0,.25,.5,.75,.8,.9,1])); good=e<.40\\n def fit_a(kind,k):\\n  d=ap(u,kind,k); b=np.column_stack([fit(d[good,j],v[good,j]) for j in range(4)]); e=np.einsum('nki,ik->nk',d,b)-v; return np.sqrt(np.mean(e[good]**2)),b\\n print('A polynomial',fit_a('extra',0));\\n for kind in ['sin','tanh','rat','erf','atan']:\\n  o=minimize_scalar(lambda k:fit_a(kind,k)[0],bounds=(.05,4),method='bounded'); print('A',kind,o.fun,o.x,np.round(fit_a(kind,o.x)[1],4))\\n def inverse(x,kind='cyclic',k=0):\\n  b=fit_a(kind,k)[1]; return np.array([root(lambda a:np.einsum('ki,ik->k',ap(a[None],kind,k)[0],b)-row,row).x for row in x])\\n return inverse\\n\\ndef bfit(panel):\\n u,v=panel['u'],panel['v']; models=[]\\n ff=dict(funcs, **{'sqrat':lambda x,k: x/(1+k*x*x)**2,'gaussodd':lambda x,k:x*np.exp(-k*x*x),'sinc':lambda x,k:np.sin(k*x)/k})\\n for name,f in ff.items():\\n  def get(x,k):return np.c_[aff(x),f(x,k)]\\n  def obj(k):return err(get(u,k),v)\\n  grid=np.geomspace(.03,10,55); a=np.argmin([obj(k) for k in grid]); o=minimize_scalar(obj,bounds=(grid[max(0,a-1)],grid[min(len(grid)-1,a+1)]),method='bounded'); k=o.x\\n  b=fit(get(u,k),v); models.append((o.fun,name,k,lambda x,f=f,k=k,b=b:np.c_[aff(x),f(x,k)]@b));\\n  if name in ['erf','rat','sin','gaussodd']:print('B',name,o.fun,k,np.round(b,4))\\n def h(x,k,p):return x/(1+k*x*x)**p\\n def d(x,k,p):return np.c_[aff(x),h(x,k,p)]\\n def resid(a):\\n  z=d(u,*np.exp(a));return (z@fit(z,v)-v).ravel()\\n o=least_squares(resid,[0,0],bounds=(-5,5)); k,p=np.exp(o.x); b=fit(d(u,k,p),v); print('B rational shape',k,p,np.std(o.fun)); models.append((np.std(o.fun),'rational',k,lambda x:d(x,k,p)@b))\\n return sorted(models,key=lambda z:z[0])\\n\\ndef cfit(panel):\\n u=panel['u']; out={}\\n for name,f,g in [('C1',lambda x:np.c_[aff(x),x[:,l]*x[:,r]],'v1'),('C2',lambda x:np.c_[aff(x),np.exp(-.3*x*x)],'v2')]:\\n  b=fit(f(u),panel[g]); print(name,np.round(b,4));out[name]=lambda x,f=f,b=b:f(x)@b\\n return out\\n\\nif __name__=='__main__':\\n inverse=cal(); bm=bfit(s['panel_b']); cm=cfit(s['panel_c']); tr=s['train']; x,y,t=tr['x'],tr['y'],tr['traj']; n=52\\n out=[]\\n for an,a in [('raw',x),('cal',inverse(x)),('calextra',inverse(x,'extra'))]:\\n  for bn,b in [('noB',a)]+[(z[1],z[3](a)) for z in bm]:\\n   for cn,c in [('noC',b)]+[(k,f(b)) for k,f in cm.items()]:\\n    for dn,d in [('aff',aff(c)),('quad',np.c_[aff(c),c[:,i]*c[:,j]])]:\\n     pp=d[n:]@fit(d[:n],np.c_[y,t][:n]); e=np.mean(abs(pp-np.c_[y,t][n:]),axis=0); out.append((e[0],e[1:].mean(),an,bn,cn,dn))\\n print('best by y',sorted(out)[:18]);print('best by trajectory',sorted(out,key=lambda z:z[1])[:22])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chain.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine panel chain → H2 cyclic calibration, nonlinear panel B, and optional C branches; trajectory time-fit RMSE is 0.00433, with end-to-end holdout MAE still unmeasured for the new chain.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine basis is sufficient for panel C1.\",\n    \"empirical_witness\": \"Adding pairwise products lowers C1 panel RMSE from 0.44325 to 0.0000860.\",\n    \"causal_blanket_diagnosis\": \"The affine panel fit omits cross-coordinate products; a good panel fit alone does not establish that C1 is active in the forward law.\",\n    \"sublated_pivot\": \"Use the interaction basis for C1 and compare paths with and without C1 separately for each output.\",\n    \"risk_kind\": \"omitted_interactions\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the forward chain solely by panel reconstruction error\",\n      \"rejected_reason\": \"An inactive panel can still be reconstructed accurately; the scalar and trajectory holdouts must identify the active routes.\"\n    }\n  ],\n  \"rationale\": \"Fit the cyclic terms suggested by panel A and compare the calibrated and raw routes on the prescribed split. If the interaction chain explains only one output, retain it for that output and fit the other separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b59235827c3f1049c51123596055b1d0e5decd30051d413f2838cf0a3a5fc2bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47024.82,
+      "usage_known": true,
+      "prompt_tokens": 27238,
+      "cached_tokens": 9344,
+      "completion_tokens": 1846
+    }
+  ]
+}

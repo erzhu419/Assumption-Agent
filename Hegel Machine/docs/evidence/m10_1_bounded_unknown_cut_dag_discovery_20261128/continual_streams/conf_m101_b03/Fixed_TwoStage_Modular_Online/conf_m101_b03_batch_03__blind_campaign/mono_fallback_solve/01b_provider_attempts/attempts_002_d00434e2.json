@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d00434e275d04dac860fb86d47437f25",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:00.697220+00:00",
+  "ended_at_utc": "2026-11-28T09:41:21.373871+00:00",
+  "request_sha256": "2555a0b4faff24e5900d5e0fdf3c07b23a1568230d4f56afb4f9d6e7f81dd9d0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12741,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15547,
+    "cached_tokens": 9344,
+    "completion_tokens": 631
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat validate_public_schema.py; find /tmp/hegel_continual_archive -maxdepth 4 -type f | head -70; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust regression calibration variable projection' 2>&1 | head -20; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];z=s['train'];t=s['eval_times'];print('telemetry',s['telemetry_vec'],'summary',z['summary']);print('y/traj summary',np.mean(z['y']),np.std(z['y']),np.mean(z['traj'][:,-1]),np.std(z['traj'][:,-1]));print('traj sv',np.linalg.svd(z['traj'],compute_uv=False));print('diff sv',np.linalg.svd(np.diff(z['traj'],axis=1),compute_uv=False));print('y versus final and linear traj',np.mean(abs(z['y']-z['traj'][:,-1])),np.mean(abs(z['y']-np.c_[z['traj'],np.ones(72)]@np.linalg.lstsq(np.c_[z['traj'],np.ones(72)],z['y'],rcond=None)[0]))\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k];u=p['u'];a=np.c_[np.ones(len(u)),u];\\n for name in p.keys()-{'u'}:\\n  v=p[name];good=np.ones(len(u),bool)\\n  for _ in range(4):\\n   b=np.linalg.lstsq(a[good],v[good],rcond=None)[0];err=np.linalg.norm(a@b-v,axis=1);good=err<max(.1,3*np.median(err))\\n  print(k,name,'coef',np.round(b,3),'err pct',np.round(np.percentile(err,[0,25,50,75,90,100]),4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single-stage predictor -> H2 calibrated operators feeding low-rank dynamics and a separate readout; archived 56/16 y MAE is 0.206015.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Check whether the archived approach missed reusable operator structure, and test whether trajectory rank and calibration residuals justify fitting a shared dynamical model rather than regressions at each timestamp.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "0a1c44c9ac7bef7dcedadd907fd19d5490b7c1c774fdb31dec571dabee472ec7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20629.9,
+      "usage_known": true,
+      "prompt_tokens": 15547,
+      "cached_tokens": 9344,
+      "completion_tokens": 631
+    }
+  ]
+}

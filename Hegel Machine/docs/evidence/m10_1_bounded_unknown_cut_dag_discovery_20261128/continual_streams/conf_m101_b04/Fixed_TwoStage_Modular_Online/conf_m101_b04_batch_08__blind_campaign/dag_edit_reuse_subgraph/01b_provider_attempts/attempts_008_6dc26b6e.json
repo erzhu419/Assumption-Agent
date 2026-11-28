@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6dc26b6ea1a440c2b99bf49905bd0f0e",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:36.624974+00:00",
+  "ended_at_utc": "2026-11-28T09:55:44.363423+00:00",
+  "request_sha256": "517715ce99931a022f5f5e69cea23a41433a3ba71d9e80d5693b86a37af5c822",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51787,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30846,
+    "cached_tokens": 0,
+    "completion_tokens": 1466
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_01.py')\\ns = p.read_text().split('def run_node(')[0]\\np.write_text(s + '''def _kernel_predict(x, xt, target, *, gaussian=False):\\n    dist = np.sum((x[:, None] - x[None, :]) ** 2, axis=2)\\n    cross_dist = np.sum((xt[:, None] - x[None, :]) ** 2, axis=2)\\n    scale = 1.3 * np.median(dist[np.triu_indices(len(x), 1)])\\n\\n    def kernel(d):\\n        q = d / scale\\n        return np.exp(-q / 2) if gaussian else (1 + q / 4) ** -2\\n\\n    base = np.column_stack((np.ones(len(x)), x)) if gaussian else np.ones((len(x), 1))\\n    test_base = np.column_stack((np.ones(len(xt)), xt)) if gaussian else np.ones((len(xt), 1))\\n    system = kernel(dist) + 0.0003 * np.eye(len(x))\\n    solved = np.linalg.solve(system, np.column_stack((base, target)))\\n    p, r = np.split(solved, [base.shape[1]], axis=1)\\n    trend = np.linalg.solve(base.T @ p, base.T @ r)\\n    pred = test_base @ trend + kernel(cross_dist) @ (r - p @ trend)\\n    return pred[:, 0] if target.ndim == 1 else pred\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    d = inputs['node_00']\\n    scalar_basis = _predict(d['xa'], d['xat'], d['xab'], d['xabt'], d['y'], 1.8, 0.1)\\n    scalar_kernel = _kernel_predict(d['xa'], d['xat'], d['y'])\\n    y = 0.2 * scalar_basis + 0.8 * scalar_kernel\\n    state = _kernel_predict(d['z'], d['zt'], d['traj'], gaussian=True)\\n    final = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\n''')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nwith open(root+'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nup = runpy.run_path(root+'_frozen_nodes/node_00.py')['run_node']({'__input__': study})\\nsink = runpy.run_path(root+'node_01.py')['run_node']\\nn = len(up['y'])\\nfor name, ids in [('random30', np.random.default_rng(30).permutation(n)), ('random117', np.random.default_rng(117).permutation(n)), ('contiguous', np.arange(n)), ('feature-edge', np.argsort(up['xa'][:, 0]))]:\\n    rows = []\\n    for v in np.array_split(ids, 6):\\n        a = np.setdiff1d(np.arange(n), v)\\n        d = {k: up[k][a] for k in ('xa', 'xab', 'z', 'y', 'traj')}\\n        d.update({k+'t': up[k][v] for k in ('xa', 'xab', 'z')})\\n        out = sink({'node_00': d})\\n        e = abs(out['state_pred'] - up['traj'][v]); y = out['y_hat']; end = out['state_pred'][:, -1]\\n        assert y.shape == (len(v),) and e.shape == up['traj'][v].shape\\n        np.testing.assert_allclose(out['diagnostics_vec'], [y.mean(), y.std(), end.mean(), end.std()])\\n        rows.append([abs(y-up['y'][v]).mean(), e.mean(), e.mean(axis=0).max()])\\n    print(name, 'mean', np.round(np.mean(rows, axis=0), 6), 'worst', np.round(np.max(rows, axis=0), 6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Promote the pairwise–kernel blend and Gaussian trajectory readout; the probe reduced worst auxiliary scalar MAE from 0.06471 to 0.04379 and trajectory MAE from 0.02937 to 0.02086.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the distance kernel alone for the scalar\",\n      \"rejected_reason\": \"Its official-split MAE was 0.04050, above the 0.038 limit.\"\n    }\n  ],\n  \"rationale\": \"The blend preserves the official margin in the probe and reduces worst-fold error. Verify the exact saved implementation in isolation; the feature-edge split probes extrapolation and would favor retaining more of the pairwise trend if the kernel sharply degrades there.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "aafced901b2e9fa2ef27c6f282ecf04a6b277f675bd98f54c54bdc107a67f54e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 75702.65,
+      "usage_known": true,
+      "prompt_tokens": 30846,
+      "cached_tokens": 0,
+      "completion_tokens": 1466
+    }
+  ]
+}

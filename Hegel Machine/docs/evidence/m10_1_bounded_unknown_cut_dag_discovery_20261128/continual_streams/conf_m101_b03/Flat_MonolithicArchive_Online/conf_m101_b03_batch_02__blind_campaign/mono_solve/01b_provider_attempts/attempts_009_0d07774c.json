@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d07774c00b44e55903f3b023a9a7a1a",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:36.045448+00:00",
+  "ended_at_utc": "2026-11-28T09:29:14.574067+00:00",
+  "request_sha256": "0ce27dfc5edd04971a51c31b3d613c157b52dd0fcbde0e5ab42c7a984b556733",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35364,
+    "cached_tokens": 9344,
+    "completion_tokens": 1668
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/refine_slow.py <<'PY'\\nfrom check_batch import m,s,tr,idx\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfit=m._fit\\nz=m._calibrate(s['panel_a'],tr['x']); c,w=m._operators(s['panel_c'],z)\\nB=m._aff(np.c_[m._quadratic(z),c*w]); t=s['eval_times']; u=s['panel_b']['u']; b=m._aff(z)@fit(m._aff(u),s['panel_b']['v'])\\nradius=np.linalg.norm(z,axis=1); rs=np.argsort(radius); rng=np.random.default_rng(771)\\nsplits=[idx,rs]+[rng.permutation(idx) for _ in range(8)]\\nraw={'z':z,'b':b,'z+w':z+w,'z-w':z-w,'z+c':z+c,'z-c':z-c,'edge':m._edges(z),'w':w,'c':c}\\nraw['pair']=np.column_stack([z[:,i]+sg*z[:,j] for i in range(4) for j in range(i+1,4) for sg in (-1,1)])\\n\\ndef variations(i,j,ab):\\n yield 'baseline', B[j]@fit(B[i],ab[i])\\n for name in ('z','b','z+w','z-w','z+c','edge','w','c','pair'):\\n  q=raw[name]; sd=q[i].std(0); x=(q-q[i].mean(0))/sd\\n  for kind,q in [('cubic',x**3),('tanh',np.tanh(x)),('rational',x/(1+x*x)),('cos',np.cos(x)),('smoothabs',np.sqrt(.25+x*x)),('splines',np.column_stack([np.maximum(0,x-k)**2 for k in (-.75,0,.75)]))]:\\n   q=q-B@fit(B[i],q[i]); q=q/np.maximum(q[i].std(0),1e-8)\\n   for lam in (1,8,32):\\n    R=ab[i,0]-B[i]@fit(B[i],ab[i,0]); cc=np.linalg.solve(q[i].T@q[i]+lam*np.eye(q.shape[1]),q[i].T@R)\\n    pred=B[j]@fit(B[i],ab[i]); pred[:,0]+=q[j]@cc\\n    yield f'{name}:{kind}:{lam}',pred\\n # Fit one nonlinear projection after removing all linear design terms.\\n U=np.linalg.qr(B[i],mode='reduced')[0]; y=ab[i,0]; y=y-U@(U.T@y); scale=z[i].std(0); v=z/scale\\n for name,fun in [('tanh',np.tanh),('rational',lambda x:x/(1+x*x)),('cos',np.cos),('smoothabs',lambda x:np.sqrt(1+x*x)),('softplus',lambda x:np.logaddexp(0,x))]:\\n  def obj(p):\\n   f=fun(v[i]@p[1:5]+p[5]); r=f-U@(U.T@f)\\n   return np.r_[p[0]*r-y,.0003*p]\\n  seeds=[np.r_[.3,k,.15] for k in np.vstack((np.eye(4),-np.eye(4),[.8,.6,0,0],[.8,-.6,0,0],[.2,.2,.7,.7]))]\\n  cand=min((least_squares(obj,p,bounds=(-6,6),max_nfev=120) for p in seeds),key=lambda q:q.cost); p=cand.x\\n  f=p[0]*fun(v@p[1:5]+p[5]); pred=B[j]@fit(B[i],ab[i]); pred[:,0]+=f[j]-B[j]@fit(B[i],f[i]); yield 'index:'+name,pred\\n\\nout={}\\nfor k,ids in enumerate(splits):\\n i,j=ids[:52],ids[52:]; D=m._basis(t,m._rates(t,tr['traj'][i])); ab=fit(D,tr['traj'].T).T\\n for name,pred in variations(i,j,ab):\\n  e=abs(pred@D.T-tr['traj'][j]);out.setdefault(name,[]).append([e.mean(),e.mean(0).max()])\\nfor name,rows in sorted(out.items(),key=lambda p:np.asarray(p[1])[:,0].max())[:18]+[(q,out[q]) for q in ('baseline','index:tanh','index:rational','index:cos','index:smoothabs','index:softplus')]:\\n a=np.array(rows);print(name,'ordered',a[0].round(5),'radial',a[1].round(5),'random max',a[2:].max(0).round(5),'random mean',a[2:].mean(0).round(5))\\nprint('train radius',np.quantile(radius,[0,.5,.72,.9,1]),'test radius',np.quantile(np.linalg.norm(m._calibrate(s['panel_a'],s['test']['x']),axis=1),[0,.5,.72,.9,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine_slow.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared panel-C design for both modes → H2 retain the scalar and fast-mode fits while testing a separate slow-mode correction; high-radius trajectory MAE is 0.05030 pooled and 0.07273 at the worst horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the schema-valid baseline\",\n      \"rejected_reason\": \"It passes the requested scalar gate, but the high-radius split exposes a trajectory error that a compact slow-mode correction may reduce.\"\n    }\n  ],\n  \"rationale\": \"Fit each correction using only the training rows in its split. Compare extrapolation and ordinary splits separately, and retain the baseline unless the trajectory improves without materially worsening the ordered holdout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2c809f9ed15cd2cf4d84a6f9276d66cb44890218bc75948b4ada5e2cc3c38467",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43835.55,
+      "usage_known": true,
+      "prompt_tokens": 35364,
+      "cached_tokens": 9344,
+      "completion_tokens": 1668
+    }
+  ]
+}

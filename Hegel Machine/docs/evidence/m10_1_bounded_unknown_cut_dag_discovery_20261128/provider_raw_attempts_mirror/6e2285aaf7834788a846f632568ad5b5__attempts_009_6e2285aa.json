@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e2285aaf7834788a846f632568ad5b5",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:25.111065+00:00",
+  "ended_at_utc": "2026-11-28T09:40:58.067784+00:00",
+  "request_sha256": "1b2d2155e1e9940c2f3fe903f42488b324cc44d1fa9de9d854389365cd7a8a68",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62923,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38044,
+    "cached_tokens": 9344,
+    "completion_tokens": 1413
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Panel-informed scalar prediction and low-rank trajectory regression.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _ls(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _calibration(study):\\n    a, b, c = (study['panel_' + k] for k in 'abc')\\n    u, v = a['u'], a['v']\\n    # The calibration is near identity except for grossly contaminated rows.\\n    coeff = []\\n    for j in range(u.shape[1]):\\n        keep = np.abs(v[:, j] - u[:, j]) < 1.5\\n        coeff.append(_ls(_affine(u[keep, j:j + 1]), v[keep, j]))\\n    bias, gain = np.array(coeff).T\\n    rotation = _ls(_affine(b['u']), b['v'])[1:]\\n\\n    def basis(x, p):\\n        q = x * x\\n        return _affine(np.c_[x / (1 + np.exp(p[0]) * q), q / (1 + np.exp(p[1]) * q)])\\n\\n    def residual(p):\\n        f = basis(c['u'], p)\\n        return (f @ _ls(f, c['v2']) - c['v2']).ravel()\\n\\n    p = least_squares(residual, [-3., -3.], bounds=(-18., 5.)).x\\n    weights = _ls(basis(c['u'], p), c['v2'])\\n\\n    def warp(x):\\n        d = (x - bias) / gain\\n        return d + ((basis(d @ rotation, p)[:, 1:]) @ weights[1:]) @ rotation\\n\\n    return warp\\n\\n\\ndef _predict(coords, targets, length, ridge):\\n    n = len(targets)\\n    a = coords / coords[:n].std(axis=0).mean()\\n    train = a[:n]\\n    k = (1 + a @ train.T / a.shape[1]) ** 2\\n    k += np.exp(-cdist(a, train, 'sqeuclidean') / (2 * a.shape[1] * length**2))\\n    return k[n:] @ np.linalg.solve(k[:n] + ridge * np.eye(n), targets)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    y = _predict(_calibration(study)(x), train['y'], 1.2, 3e-5)\\n    traj = train['traj']\\n    _, _, vh = np.linalg.svd(traj, full_matrices=False)\\n    modes = vh[:2]\\n    state = _predict(x, traj @ modes.T, 1.0, .003) @ modes\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([\\n        y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/check_batch.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; ids=np.arange(len(x))\\nfolds=[('52/20',ids[52:]),('56/16',ids[56:])]+[(f'seed{i}',np.random.default_rng(i).permutation(len(ids))[:20]) for i in range(8,16)]\\nfolds += [('outer shell',np.argsort(np.linalg.norm(x,axis=1))[-16:])]\\nfor label,te in folds:\\n tr=np.setdiff1d(ids,te); o=solve_batch(dict(s, train={**t, **{k:t[k][tr] for k in ['x','y','traj']}}, test={'x':x[te]})); y=o['y_hat']; a=o['state_pred']; err=abs(a-t['traj'][te]); scalar=np.mean(abs(y-t['y'][te])); print(label,*(round(v,6) for v in [scalar,err.mean(),err.mean(0).max(),err[:,-1].mean()])); np.testing.assert_allclose(o['diagnostics_vec'],[y.mean(),y.std(),a[:,-1].mean(),a[:,-1].std()]); assert label!='52/20' or scalar<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: a generic downstream dictionary → H2: a panel-informed scalar warp and separate rank-two state predictor; prototype 52/20 scalar MAE 0.0318, worst tuning split 0.0575.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Implement the strongest average-CV candidate without using held-out rows to scale features. The isolated check will detect a regression at the required gate or a weakness on fresh splits, high-radius inputs, or the terminal state.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bcda331cc465accce74d27f1698a6b6baa113638c686b78a0aeb28cecdbafe11",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38243.97,
+      "usage_known": true,
+      "prompt_tokens": 38044,
+      "cached_tokens": 9344,
+      "completion_tokens": 1413
+    }
+  ]
+}

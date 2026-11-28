@@ -1,0 +1,119 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b03_batch_01_00a974c8944d",
+    "source_hash": "00a974c8944da37f06d4f4aea7bc62bce996d9e2acc350b84b975be382c46d3d",
+    "parent_ids": [],
+    "source_episode_id": "mono_solve",
+    "task_id": "conf_m101_b03_batch_01__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/cross101.py",
+        "archived_relpath": "producers/tmp__cross101.py",
+        "bytes": 2134,
+        "sha256": "9998a93f492a4861a05845b5e31bde06e2f71c7d34870a830643a918ba7dba67"
+      },
+      {
+        "container_path": "/tmp/probe101.py",
+        "archived_relpath": "producers/tmp__probe101.py",
+        "bytes": 3051,
+        "sha256": "507ad8db15744da947c9b65e9495f4553603314b217234420d1c7ed54f663cad"
+      },
+      {
+        "container_path": "/tmp/search101.py",
+        "archived_relpath": "producers/tmp__search101.py",
+        "bytes": 4075,
+        "sha256": "3127a06e0a1aa89c7e81097c1e7601714c0a85c256afa202ad10f0f6358fc5e0"
+      },
+      {
+        "container_path": "/tmp/tune101.py",
+        "archived_relpath": "producers/tmp__tune101.py",
+        "bytes": 1780,
+        "sha256": "d7fdbcb8243b79d5a7921a5a072641516ec35cdf0d54008821417b734ce8aa0f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_00_solver.py",
+        "bytes": 2597,
+        "sha256": "a20eb65292c40ebe6a51afd3a889eddadcddac526aafaf7a82dc0aa854cda796"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cat /tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust IRLS' 2>&1 | head -25; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as n,pickle\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=4,suppress=True)\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec']); print('summary',s['train']['summary']); print('sample x y traj',n.c_[s['train']['x'],s['train']['y'],s['train']['traj']][:10]); print('train/test ranges',[(a['x'].min(0",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares,minimize_scalar\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['eval_times']; y=s['train']['traj']; np.set_printoptions(precision=5,suppress=True)\nprint('times telemetry',t,s['telemetry_vec']); print('means',s['train']['summary']);\ndef design(x):return np.c_[np.ones(len(x)),x]\npa=s['panel_a']; u,v=pa['u'],pa['v']; a=design(u); w=np.linalg.lstsq(a,v,rcond=None)[0];\nfor _ in range(35):\n r=np.linalg.norm(a@w-v,axis=1); q=np.minimum(1,.012/np.maximum(r,1e-12))",
+      "cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.optimize import minimize_scalar\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\ndef aff(x): return np.c_[np.ones(len(x)),x]\ndef proj(a,v):\n w=np.linalg.lstsq(a,v,rcond=None)[0]; r=v-a@w; h=(np.linalg.qr(a)[0]**2).sum(1)\n return np.sqrt(np.mean((r/(1-h[:,None]))**2)),w\nfor p,k in [('panel_a','v'),('panel_c','v1'),('panel_c','v2')]:\n u=s[p]['u'];v=s[p][k]; a=aff(u)\n if p=='panel_a':\n  w=np.linalg.lstsq(a,v,rcond=None)[0]\n ",
+      "cat > /tmp/probe101.py <<'PY'\nimport pickle,numpy as np,itertools\nfrom scipy.optimize import least_squares\nfrom scipy.spatial.distance import cdist\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef af(x):return np.c_[np.ones(len(x)),x]\ndef fit(a,y):return np.linalg.lstsq(a,y,rcond=None)[0]\ndef proj(a,y):return y-a@fit(a,y)\ndef loo(a,y): return np.sqrt(np.mean((proj(a,y)/(1-(np.linalg.qr(a)[0]**2).sum(1))[:,None])**2))\ndef cal(x):return np.c_[af(x),x*np.roll(x,-1,axis=1)]\na=S['panel_a'];u,v=a['u'],a['v'];w=fit(af(u),v)\nfor _ in range(25):\n q=np.minimum(1,.05/np.maximum(",
+      "sed '/for i in range(4):/,$d' /tmp/probe101.py > /tmp/search101.py; cat >> /tmp/search101.py <<'PY'\nfrom scipy.optimize import minimize_scalar\nfrom sklearn.linear_model import ElasticNet\nfrom sklearn.model_selection import KFold\nfrom sklearn.preprocessing import StandardScaler\nfrom scipy.special import expit\nfrom scipy.linalg import solve\nT=S['train']; x=T['x']; t=S['eval_times']; traj=T['traj'];\ndef am(q):return np.c_[af(q),q*np.roll(q,-1,axis=1),q**3]\nA=fit(am(u),v); xi=x.copy()\nfor i in range(4):\n f=lambda q: np.c_[np.ones(len(q)),q[:,i],q[:,(i+1)%4],q[:,i]*q[:,(i+1)%4],q[:,i]**3]; print('A",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Panel-calibrated prediction with a shared two-rate trajectory basis.\"\"\"\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\nfrom sklearn.linear_model import ElasticNet\n\n\ndef _aff(x):\n    return np.column_stack((np.ones(len(x)), x))\n\n\ndef _fit(x,y):\n    return np.linalg.lstsq(x,y,rcond=None)[0]\n\n\ndef _coordinates(study, x):\n    panel = study['panel_a']\n    u,v = panel['u'],panel['v']\n    a = _aff(u)\n    b = _fit(a,v)\n    for _ in range(20):\n        w = np.sqrt(np.minimum(1, 0.05 / np.maximu",
+      "cat > /tmp/cross101.py <<'PY'\nimport sys, pickle, numpy as np\nfrom scipy.optimize import least_squares\nfrom sklearn.model_selection import KFold\nfrom scipy.linalg import solve\nsys.path.insert(0,'/holdout_task'); import batch_solver as m\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; z,c,d=m._coordinates(s,t['x']); p=s['panel_c']; u=p['u']; af=m._aff(u)\nops=[]\nfor key,fun,start in [('v1',np.tanh,2.3),('v2',np.cos,1.27)]:\n y=p[key]; options=[]\n for spec in ['shared','freq','shift','freqshift']:\n  n=1 if spec=='shared' else 4; mshift=0 if spec in ['shared','",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('batch_solver.py')\ns = p.read_text().replace('from itertools import combinations\\n', '').replace('alpha=0.003', 'alpha=0.00045').replace('f = np.column_stack([_quadratic(q) for q in coords])', '# Include products between calibrated and auxiliary coordinates.\\n    f = _quadratic(np.column_stack(coords))')\np.write_text(s)\nPY\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 /holdout_task/validate_public_schema.py\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.model_selection "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__search101.py",
+      "primary_producer_container_path": "/tmp/search101.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 2939,
+        "sha256": "2263bf21f83dbc22e6e3a57164573b6a201f2036dd75efccfd0ff82550afdefb",
+        "content_addressed_ref": "content_addressed_blobs/2263bf21f83dbc22e6e3a57164573b6a201f2036dd75efccfd0ff82550afdefb.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "00a974c8944da37f06d4f4aea7bc62bce996d9e2acc350b84b975be382c46d3d",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('batch_solver.py')\ns = p.read_text().replace('from itertools import combinations\\n', '').replace('alpha=0.003', 'alpha=0.00045').replace('f = np.column_stack([_quadr",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "00a974c8944da37f06d4f4aea7bc62bce996d9e2acc350b84b975be382c46d3d",
+        "expected_candidate_sha256": "00a974c8944da37f06d4f4aea7bc62bce996d9e2acc350b84b975be382c46d3d",
+        "computed_candidate_sha256": "00a974c8944da37f06d4f4aea7bc62bce996d9e2acc350b84b975be382c46d3d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 2939
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_00a974c8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": []
+  }
+}

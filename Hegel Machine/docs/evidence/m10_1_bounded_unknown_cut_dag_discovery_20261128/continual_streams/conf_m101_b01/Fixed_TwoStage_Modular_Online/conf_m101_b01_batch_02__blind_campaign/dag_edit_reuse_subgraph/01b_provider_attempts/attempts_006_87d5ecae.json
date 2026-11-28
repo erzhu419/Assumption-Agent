@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "87d5ecae0ace43eab934e43058746576",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:44.268480+00:00",
+  "ended_at_utc": "2026-11-28T09:27:15.840558+00:00",
+  "request_sha256": "561cf5f00c6a7ae4a067452c37a1f0385173f02d80861b50b671b6a99b81ef28",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 34758,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23711,
+    "cached_tokens": 5504,
+    "completion_tokens": 1248
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/holdout_task/node_01.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _features(z):\\n    a, b, c, d = z.T\\n    return np.column_stack((np.ones(len(z)), a*b, a*d, b*c, c*d))\\n\\n\\ndef _readout_features(base):\\n    q = base[:, 1:]\\n    # q0*q3 and q1*q2 are the same monomial; include it only once.\\n    quadratic = [q[:, i]*q[:, j] for i in range(4) for j in range(i, 4)\\n                 if (i, j) != (1, 2)]\\n    return np.column_stack((base, *quadratic))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['node_00']\\n    train = _features(data['z_tr'])\\n    test = _features(data['z_te'])\\n    y_coef = np.linalg.lstsq(_readout_features(train), data['train_y'], rcond=None)[0]\\n    state_coef = np.linalg.lstsq(train, data['train_traj'], rcond=None)[0]\\n    y = _readout_features(test) @ y_coef\\n    state = test @ state_coef\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nup = runpy.run_path(root + '_frozen_nodes/node_00.py')['run_node']\\nmod = runpy.run_path(root + 'node_01.py')\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    d = up({'__input__': case['study']})\\n    z, y, traj = (d[k] for k in ('z_tr', 'train_y', 'train_traj'))\\n    n = len(z)\\n    q = mod['_features'](z)[:, 1:]\\n    folds = {f'random_{i}': rows for i, rows in enumerate(np.array_split(np.random.default_rng(713).permutation(n), 4))}\\n    folds['interaction_tail'] = np.argsort(np.linalg.norm(q, axis=1))[-(n//4):]\\n    for j in range(q.shape[1]):\\n        order = np.argsort(q[:, j])\\n        folds[f'q{j}_low'] = order[:n//8]\\n        folds[f'q{j}_high'] = order[-(n//8):]\\n    metrics = []\\n    for name, te in folds.items():\\n        tr = np.setdiff1d(np.arange(n), te)\\n        out = mod['run_node']({'node_00': dict(d, z_tr=z[tr], train_y=y[tr], train_traj=traj[tr], z_te=z[te])})\\n        dy = np.mean(np.abs(out['y_hat'] - y[te]))\\n        dt = np.abs(out['state_pred'] - traj[te])\\n        metrics.append((dy, dt.mean(), dt.mean(axis=0).max()))\\n        print(f'{name}: y_mae={dy:.6f}, traj_mae={dt.mean():.6f}, worst_time_mae={dt.mean(axis=0).max():.6f}')\\n    print('Worst stress metrics (readout, trajectory, horizon):', np.max(metrics, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (linear readout in the bilinear coordinates) → H2 (quadratic readout in those coordinates); probe worst-slice readout MAE fell from 0.062580 to 0.011524.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Cubic readout in the interaction coordinates\",\n      \"rejected_reason\": \"It improved training fit but increased the worst held-out readout MAE to 0.041845.\"\n    }\n  ],\n  \"rationale\": \"Promote the quadratic readout, remove its algebraically duplicate term, and retain the accurate trajectory basis. The public test checks the exact artifact and output contract; signed interaction tails test whether the improvement holds when one product extrapolates. A failure there would motivate simplifying the readout rather than changing the trajectory.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c6d961fec9b949d88de1e304a8f43380b83d20f70a4835680794a490ec1ec2de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34093.17,
+      "usage_known": true,
+      "prompt_tokens": 23711,
+      "cached_tokens": 5504,
+      "completion_tokens": 1248
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cca70b7822845dcb0588cc84e934b94",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:09.088793+00:00",
+  "ended_at_utc": "2026-11-28T09:27:44.340444+00:00",
+  "request_sha256": "892bf72928102b85636969e35df0455126bf72353789f218b5aa98df78b2ea5f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 51449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31909,
+    "cached_tokens": 9344,
+    "completion_tokens": 1407
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _label_features(z):\\n    cross = (z[:, :2] * z[:, 2:]).sum(axis=1)\\n    return np.column_stack((z, cross))\\n\\n\\ndef _label(z, z_test, y):\\n    x, x_test = _label_features(z), _label_features(z_test)\\n    initial = np.linalg.lstsq(_affine(x), y, rcond=None)[0][1:]\\n\\n    def design(features, p):\\n        index = features @ p[:-1] + p[-1]\\n        return np.column_stack((np.ones(len(index)), index, np.tanh(index)))\\n\\n    def residual(p):\\n        basis = design(x, p)\\n        return basis @ np.linalg.lstsq(basis, y, rcond=None)[0] - y\\n\\n    fits = (least_squares(residual, np.r_[scale * initial, 0.0], max_nfev=100)\\n            for scale in (0.6, 1.0, 1.6))\\n    p = min(fits, key=lambda fit: fit.cost).x\\n    coef = np.linalg.lstsq(design(x, p), y, rcond=None)[0]\\n    return design(x_test, p) @ coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    z, z_test = (inputs['node_00'][k] for k in ('z_tr', 'z_te'))\\n    y_hat = _label(z, z_test, train['y'])\\n    coef = np.linalg.lstsq(_affine(z), train['traj'], rcond=None)[0]\\n    state_pred = _affine(z_test) @ coef\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\np = '/holdout_task/'\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nz = runpy.run_path(p + '_frozen_nodes/node_00.py')['run_node']({'__input__': study})['z_tr']\\nrun = runpy.run_path(p + 'node_01.py')['run_node']\\ny, state = (study['train'][k] for k in ('y', 'traj'))\\nix = np.arange(len(z)); rng = np.random.default_rng(9061)\\ndirs = (*z.T, z[:, 2] + z[:, 3] - z[:, 0] - z[:, 1])\\nslices = [ix[-20:]] + [rng.permutation(ix)[:20] for _ in range(24)]\\nslices += [np.argsort(abs(v))[-12:] for v in z.T]\\nslices += [g for v in dirs for g in (np.argsort(v)[:12], np.argsort(v)[-12:])]\\nlabel_errors, horizon_errors = [], []\\nfor te in slices:\\n    tr = np.setdiff1d(ix, te)\\n    result = run({'__input__': {'train': {'y': y[tr], 'traj': state[tr]}},\\n                  'node_00': {'z_tr': z[tr], 'z_te': z[te]}})\\n    label_errors.append(np.mean(abs(result['y_hat'] - y[te])))\\n    horizon_errors.append(np.mean(abs(result['state_pred'] - state[te]), axis=0).max())\\nprint(f'{len(slices)} slices | label random max={max(label_errors[1:25]):.6f} | label tail max={max(label_errors[25:]):.6f} | trajectory worst horizon={max(horizon_errors):.6f}')\\nassert max(label_errors) < 0.010 and max(horizon_errors) < 0.008\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full quadratic with affine-index tanh) -> H2 (shared interaction index for both label terms); worst label slice MAE fell from 0.155216 to 0.009049, with worst trajectory horizon MAE 0.007310.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate readouts or separate cross-product coefficients\",\n      \"rejected_reason\": \"The worst-slice gains were below 0.0007, while the shared-index model uses fewer coefficients and fits the public split better than the untied model.\"\n    }\n  ],\n  \"rationale\": \"Promote the shared-index model because it cuts the worst tail error while preserving the affine trajectory fit. Verify the saved node in an isolated process against the official contract and the 39 held-out slices; a regression would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e0b2f5e77ad5e8753b8781ffd9844f9f7fb9a1031f3b0e38448946574dcb5121",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37837.73,
+      "usage_known": true,
+      "prompt_tokens": 31909,
+      "cached_tokens": 9344,
+      "completion_tokens": 1407
+    }
+  ]
+}

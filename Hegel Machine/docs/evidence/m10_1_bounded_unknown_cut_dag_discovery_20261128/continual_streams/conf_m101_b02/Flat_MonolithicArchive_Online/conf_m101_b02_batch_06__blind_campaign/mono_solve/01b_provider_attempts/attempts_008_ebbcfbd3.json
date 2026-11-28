@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ebbcfbd3de034c2d9ba8b60a09417051",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:20.984598+00:00",
+  "ended_at_utc": "2026-11-28T09:50:51.182182+00:00",
+  "request_sha256": "9ea0cfdc089128067702b3a14a9a733c5ec529a0251af5ae6ce4dca4cf4032a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52004,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31236,
+    "cached_tokens": 9344,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection exponential modes' | head -12; cat > /tmp/compact6.py <<'PY'\\nfrom readout6 import *\\nx=s['train']['x']; a,b,c,d=nodes(x); n=len(a); Y=s['train']['y']; T=s['train']['traj']; t=s['eval_times']\\np=a*c; q=a*np.roll(c,1,axis=1)\\nG={'full':D(a,c,(a[:,:,None]*c[:,None,:]).reshape(n,16)), 'cyclic':D(a,c,p,q), 'cyclic1':D(a,c,p,q.sum(1)), 'cyclic2':D(a,c,p.sum(1),q.sum(1)), 'cyclic3':D(a,c,p.sum(1),q), 'cyclic4':D(a,c,(p+1.65*q).sum(1))}\\ndef modes(r): return -np.expm1(-t[:,None]*r)\\ndef tm(T, k):\\n def res(r):\\n  M=modes(r); return (M@fit(M,T.T)-T.T).ravel()\\n q0=[.4,1.8,5.2][:k]; low=[.1,.9,3][:k]; high=[.9,3,10][:k]\\n return modes(least_squares(res,q0,bounds=(low,high),gtol=1e-10).x)\\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.r_[0:i,i+18:72],np.arange(i,i+18)) for i in (0,18,36,54)]\\nstats={}\\nfor I,J in folds:\\n B={k:tm(T[I],k) for k in [2,3]}\\n for key,g in G.items():\\n  cy=fit(g[I],Y[I]); ct=fit(g[I],T[I]); py=g[J]@cy; pt=g[J]@ct\\n  e=[np.mean(abs(py-Y[J])),np.mean(abs(pt-T[J]))]\\n  for k,m in B.items():\\n   v=pt@ (m@fit(m,np.eye(len(t)))).T; e.append(np.mean(abs(v-T[J])))\\n  e.extend([np.mean(abs(pt[:,-1]-T[J,-1])),np.mean(abs((pt@ (B[3]@fit(B[3],np.eye(len(t)))).T)[:,-1]-T[J,-1]))]); stats.setdefault(key,[]).append(e)\\n  if len(stats[key])==1:\\n   print(key,'fit RMSE',np.std(g[I]@cy-Y[I]),np.std(g[I]@ct-T[I]),'scalar coefs',cy.round(4),'three-mode coefficients',(ct@fit(B[3],np.eye(len(t))).T).round(3) if key in ('cyclic','cyclic2') else '')\\nfor k,v in stats.items(): print(k,'52/20, mean, worst: y/free/two/three/free-final/three-final',np.round(np.stack([v[0],np.mean(v,axis=0),np.max(v,axis=0)]),6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted calibrated-coordinate × operator interactions → H2 cyclic interactions with three relaxation modes; the unrestricted model’s six-split worst MAEs were 0.01417 for y and 0.01170 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat all 16 interaction coefficients as independent\",\n      \"rejected_reason\": \"The largest coefficients occur on the diagonal and cyclic predecessor; held-out errors will show whether the others improve prediction.\"\n    }\n  ],\n  \"rationale\": \"Test cyclic sparsity and coefficient sharing, fitting temporal rates within each fold. Compare scalar, trajectory, and terminal-state MAE separately; retain the freer readout wherever a constraint worsens held-out predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f7f2a0db25af9dbcc8e258b3573f4a26669b2dd01a4077aa95865006e046934a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32796.12,
+      "usage_known": true,
+      "prompt_tokens": 31236,
+      "cached_tokens": 9344,
+      "completion_tokens": 1071
+    }
+  ]
+}

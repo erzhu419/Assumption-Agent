@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a36316dcfe3f4d468ebb6a001ff0e11e",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:18:32.459535+00:00",
+  "ended_at_utc": "2026-11-28T09:19:07.952613+00:00",
+  "request_sha256": "ed59404b75c9e788cef2fdb6b79ed85f978abd534238a540534e833aaa49f04c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21939,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18959,
+    "cached_tokens": 9344,
+    "completion_tokens": 976
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np, importlib.util, glob\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['train']; y=t['y']; tr=t['traj']; U,S,V=np.linalg.svd(tr,full_matrices=False); z=U[:,0]*S[0]; print('time,telemetry,summary',s['eval_times'],s['telemetry_vec'],t['summary']); print('trajectory pattern',V[0]/V[0,-1], 'noise MAE',np.mean(abs(tr-z[:,None]*V[0]),axis=0)); print('y quantiles',np.quantile(y,np.linspace(0,1,11)))\\nx=t['x']; ds=[('x',x)];\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; d=np.c_[np.ones(len(p['u'])),p['u']]; v=p.get('v',p.get('v1')); f=np.linalg.lstsq(d,v,rcond=None)[0]; print(k,np.round(f,5), 'row rms quantiles',np.quantile(np.mean((v-d@f)**2,axis=1)**.5,[0,.5,.8,.9,1]));\\n for _ in range(4):\\n  e=np.linalg.norm(v-d@f,axis=1); keep=e<max(.001,3*np.median(e)); f=np.linalg.lstsq(d[keep],v[keep],rcond=None)[0]\\n ds.extend([(k,np.c_[np.ones(len(x)),x]@f),(k+'inv',(x-f[0])@np.linalg.inv(f[1:]))]); print('robust',np.round(f,5))\\nfrom itertools import combinations_with_replacement\\nY=np.c_[y,z]; n=len(y); a=np.arange(52); b=np.arange(52,72)\\nfor name,q in ds:\\n print(name,'correlation',np.round(np.corrcoef(np.c_[q,Y].T)[:4,4:],3).T)\\n for deg in [1,2,3,4]:\\n  A=np.column_stack([np.ones(n)]+[np.prod(q[:,j],axis=1) for d in range(1,deg+1) for j in combinations_with_replacement(range(4),d)]); print(deg,[(r,np.round(np.mean(abs(A[b]@np.linalg.solve(A[a].T@A[a]+r*np.eye(A.shape[1]),A[a].T@Y[a])-Y[b]),axis=0),4)) for r in [.00001,.03,.3]])\\nsp=importlib.util.spec_from_file_location('old',glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); p=m.solve_batch(dict(s,train={k:v[:52] if k!='summary' else v for k,v in t.items()},test={'x':x[52:]})); print('archive target, traj MAE',np.mean(abs(p['y_hat']-y[52:])),np.mean(abs(p['state_pred']-tr[52:])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (general smooth response) -> H2 (near-rank-one trajectory plus separate scalar response in calibrated coordinates); prior gate target/trajectory MAE 0.060792/0.024955.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Predict the scalar from the trajectory alone\",\"rejected_reason\":\"The observed trajectory regression leaves substantial scalar residual variance.\"}],\"rationale\":\"Measure the rank-one trajectory approximation error and compare low-order response models under the required split. Inspect robust panel fits to identify candidate axes for a sparse nonlinear model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "34a81dc442da2b9cb27395fb587a8323f0c1c1d8355daf232d6deb5c929bc4b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38100.64,
+      "usage_known": true,
+      "prompt_tokens": 18959,
+      "cached_tokens": 9344,
+      "completion_tokens": 976
+    }
+  ]
+}

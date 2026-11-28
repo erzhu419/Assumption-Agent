@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "04e2610763b04907ae0e0f5204a1de9d",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:12:52.894597+00:00",
+  "ended_at_utc": "2026-11-28T10:13:37.245938+00:00",
+  "request_sha256": "23e949afb7e091a07d9b1612c5c89e5a230c2c61ae7caff9a0da78d6d93fb080",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 87892,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44973,
+    "cached_tokens": 9344,
+    "completion_tokens": 1892
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\ncp /holdout_task/node_00.py /tmp/node08_final_baseline.py\\npython3 - <<'PY'\\np='/tmp/node08_final_baseline.py'\\ns=open(p).read()\\npos=s.index('    return np.asarray(kernels)')\\ns=s[:pos]+'''        # Coordinate-wise assay coupling: test bounded shifts and gates before B.\\n        for a in (c,d,c+d):\\n            for h in (np.tanh(a), a/(1+a*a), np.sin(a)):\\n                for w in (-.65,.35,.7):\\n                    r = t+w*h\\n                    add(B(r)); add(B(r)-b); add(B(r)*h)\\n            for w in (.35,.9):\\n                add(B(t/(1+w*a*a))); add(b/(1+w*a*a))\\n                add(np.sin(w*a)*b); add(np.sin(t+w*a))\\n        for a in (c,d):\\n            for shift in (1,-1):\\n                h = np.roll(a,shift,axis=1)\\n                add(B(t+.55*h)); add(B(t+.55*np.tanh(h))); add(b*h)\\n        # Projected assay channels can also contribute independently.\\n        for a in (t,b,c,d):\\n            for w in (.65,1.4,2.8):\\n                add(np.tanh(w*a)); add(np.sin(w*a)); add(np.cos(w*a))\\n        for a in (np.c_[t,b,d],np.c_[t,b,c],np.c_[b,d]):\\n            a = (a-a[:n].mean(0))/np.maximum(a[:n].std(0),.05)\\n            h = a@a.T/a.shape[1]\\n            e = np.maximum(np.diag(h)[:,None]+np.diag(h)-2*h,0)\\n            for w in (.08,.25,.7):\\n                k = (1+w*e)**-1\\n                k = k-k[:n].mean(0)-k[:,:n].mean(1)[:,None]+k[:n,:n].mean()\\n                kernels.append(k/np.mean(np.diag(k)[:n]))\\n'''+s[pos:]\\ns=s.replace('    return np.asarray(kernels)','    return np.asarray(kernels)')\\ns=s.replace('from scipy.optimize import least_squares, minimize_scalar','from scipy.optimize import minimize_scalar')\\na=s.index('def _c2('); b=s.index('def _b(',a); s=s[:a]+s[b:]\\nopen('/tmp/node08_final_challenger.py','w').write(s)\\nPY\\ncat >/tmp/final08_validation.py <<'PY'\\nimport importlib.util, numpy as np, pickle, shutil\\nfrom pathlib import Path\\np=Path('/holdout_task')\\ndef load(f):\\n    q=importlib.util.spec_from_file_location('candidate',f); m=importlib.util.module_from_spec(q); q.loader.exec_module(m); return m\\ns=pickle.load(open(p/'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; n=len(x)\\norder=np.argsort(np.linalg.norm(x,axis=1)); rng=np.random.default_rng(810)\\nsplits=[np.arange(n-20,n),*np.array_split(rng.permutation(n),4),order[-12:]]\\nsink=load(p/'_frozen_nodes/node_01.py'); trials=[]\\nfor f in ('/tmp/node08_final_baseline.py','/tmp/node08_final_challenger.py'):\\n    m=load(f); rows=[]\\n    for va in splits:\\n        it=np.setdiff1d(np.arange(n),va); st={**s,'train':{k:tr[k][it] for k in ('x','y','traj')},'test':{'x':x[va]}}\\n        yy,tt=st['train']['y'],st['train']['traj'][:,-1]\\n        st['train']['summary']=np.array([yy.mean(),yy.std(),tt.mean(),tt.std()]); a=m.run_node({'__input__':st}); b=sink.run_node({'node_00':a})\\n        rows.append([np.mean(abs(b['y_hat']-tr['y'][va])),np.mean(abs(b['state_pred']-tr['traj'][va]))])\\n    r=np.array(rows); print(Path(f).stem,'official',r[0].round(6),'worst random',r[1:-1].max(0).round(6),'high radius',r[-1].round(6),flush=True)\\n    trials.append((r,f))\\nbase,challenger=trials\\nr,f=challenger\\nif (r[0].max()<=.038 and base[0][0].max()>.038) or (r.max()<base[0].max() and np.all(r[0]<=base[0][0]+.001)):\\n    shutil.copyfile(f,p/'node_00.py'); print('Retained challenger')\\nelse:\\n    print('Retained baseline')\\nPY\\npython3 -I /tmp/final08_validation.py\\npython3 -I /holdout_task/test_dag_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: learned weighting of simple assay interactions → H2: bounded panel-C gating before panel-B evaluation; the saved candidate has public scalar/trajectory MAEs of 0.087891/0.068346 and worst-slice MAEs of 0.230654/0.122552.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the saved node as complete\",\n      \"rejected_reason\": \"The official validator rejected both accuracy metrics.\"\n    }\n  ],\n  \"rationale\": \"Test whether bounded coordinate coupling improves held-out predictions without changing the frozen readout. Keep the saved node unless the challenger reaches the public tolerance or improves the worst slice without materially worsening either official metric. The isolated official run checks the exact retained file.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "3b344d88aa9fe862193707d0f6d076af312b511fedf795870cd8d751070127e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49703.09,
+      "usage_known": true,
+      "prompt_tokens": 44973,
+      "cached_tokens": 9344,
+      "completion_tokens": 1892
+    }
+  ]
+}

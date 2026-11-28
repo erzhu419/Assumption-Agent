@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3057366bb27045beb799a33a257a59b0",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_07__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_07__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:54.533683+00:00",
+  "ended_at_utc": "2026-11-28T09:50:26.230336+00:00",
+  "request_sha256": "e5ad6af1fa1f4e2f20f09df4af85bde0a66b756078cc8f7a1f9a92ddc4dd0847",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33324,
+    "cached_tokens": 9344,
+    "completion_tokens": 1196
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations_with_replacement\\\\n', '').replace('from scipy.optimize import least_squares, root', 'from scipy.linalg import cho_factor, cho_solve\\\\nfrom scipy.optimize import least_squares, minimize, root')\\ns = s.replace('def _fit(design, target):\\\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\\\n\\\\n', '').replace('_fit(', '_ls(')\\ni = s.index('def solve_batch')\\ns = s[:i] + '''def _scalar_predict(w, wt, a, at, y, terminal):\\n    # Favor directions that change either observed readout, while retaining\\n    # Euclidean distance in the rest of the calibrated operator space.\\n    directions = _ls(a, np.column_stack((y, terminal)))[1:]\\n    directions /= np.where(np.linalg.norm(directions, axis=0) > 0,\\n                           np.linalg.norm(directions, axis=0), 1.0)\\n    metric = np.column_stack((np.eye(w.shape[1]), directions))\\n\\n    def squared_distance(left, right):\\n        return np.sum(((left[:, None, :] - right[None, :, :]) @ metric)**2, axis=-1)\\n\\n    d = squared_distance(w, w)\\n    eye = np.eye(len(w))\\n    rhs = np.column_stack((a, y))\\n    dof = len(w) - a.shape[1]\\n\\n    def profile(p, predict=False):\\n        scale = np.exp(p[0])\\n        factor = cho_factor(np.exp(-0.5 * scale * d) + np.exp(p[1]) * eye)\\n        q = cho_solve(factor, rhs)\\n        gram = a.T @ q[:, :-1]\\n        beta = np.linalg.solve(gram, a.T @ q[:, -1])\\n        alpha = q[:, -1] - q[:, :-1] @ beta\\n        if predict:\\n            return at @ beta + np.exp(-0.5 * scale * squared_distance(wt, w)) @ alpha\\n        variance = max(1e-15, (y - a @ beta) @ alpha / dof)\\n        return (dof * np.log(variance) + 2 * np.log(np.diag(factor[0])).sum()\\n                + np.linalg.slogdet(gram)[1])\\n\\n    opt = minimize(profile, [0., np.log(.005)], method='L-BFGS-B',\\n                   bounds=[(-2.5, 2.5), (-10., -1.)])\\n    return profile(opt.x, predict=True)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'], study['test']['x']), axis=0)\\n    w = _panel_b(study['panel_b'], _calibrate(study['panel_a'], x))\\n    a, at = _affine(w[:n]), _affine(w[n:])\\n    state = at @ _ls(a, train['traj'])\\n    y = _scalar_predict(w[:n], w[n:], a, at, train['y'], train['traj'][:, -1])\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\n'''\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/stress07.py | grep 'runtime scalar'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Isotropic smoothing → a fold-fitted readout distance lowered probe MAE from 0.027265 to 0.021572 on the prescribed split and from 0.045202 to 0.035732 on the worst geometry slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate smoothing scales for the four panel coordinates\",\n      \"rejected_reason\": \"Coordinate-wise fitting raised worst geometry-slice MAE to 0.055317; readout-aligned distances improved every measured split.\"\n    }\n  ],\n  \"rationale\": \"Promote the readout-aligned scalar model without changing the validated trajectory branch. Check that the integrated solver reproduces the probe gains and preserves the output schema; retain the archived candidate if integration regresses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c44ad030622c317b4020f125a02f199b2c5a9011c0d099393663fa958e603016",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34335.47,
+      "usage_known": true,
+      "prompt_tokens": 33324,
+      "cached_tokens": 9344,
+      "completion_tokens": 1196
+    }
+  ]
+}

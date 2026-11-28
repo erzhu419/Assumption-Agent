@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "66a84bcaa5704875979ed9362097923f",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:11:02.345229+00:00",
+  "ended_at_utc": "2026-11-28T09:11:29.860086+00:00",
+  "request_sha256": "30926d831f4a0753ba89e7505a7a0451f5fc9465b55693943b113d6f42300caf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23769,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21895,
+    "cached_tokens": 10880,
+    "completion_tokens": 833
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^print('\\\\''t'\\\\''/,$d' /tmp/probe.py >/tmp/structure.py; cat >>/tmp/structure.py <<'PY'\\nprint('times',t,'sv of centered traj',np.linalg.svd(z-z.mean(0),compute_uv=False));print('summary delta',s['train']['summary']-np.r_[y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]); print('y corr',np.corrcoef(Y.T)[0].round(3));\\nfor name,a in vari.items():\\n if a.shape[1]!=4: continue\\n f=poly(a,3); co=fit(f,Y); labs=['1']+[''.join(map(str,ii)) for k in range(1,4) for ii in combinations_with_replacement(range(4),k)]; print(name,'full fit',err(f@co,Y).round(5));\\n for j in [0,1,3,8]: print(j, sorted(zip(labs,co[:,j].round(4)),key=lambda q:-abs(q[1]))[:13]);\\n print('singular values of coefficients in time',np.linalg.svd(co[:,1:],compute_uv=False).round(4));\\n# Test whether directly accounting for the observed trajectory exposes a simple scalar readout.\\nfor name,a in vari.items():\\n if a.shape[1]!=4: continue\\n for j in [0,3,7]:\\n  for d in [1,2]:\\n   f=poly(np.c_[a,z[:,j]],d); co=fit(f[:52],y[:52]); print('observed state',name,j,d,round(np.mean(abs(f[52:]@co-y[52:])),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py >/tmp/structure.log; sed -n '1,32p' /tmp/structure.log; grep 'observed state' /tmp/structure.log | sort -nk6 | head -14\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration and structured nonlinear operators → H2 sparse trajectory and scalar readout laws; current split MAEs are 0.07141 for the best tested scalar model and 0.04615 for cubic trajectory regression.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A single global quadratic in affine-calibrated coordinates adequately describes both outputs.\",\"empirical_witness\":\"The quadratic split MAEs are 0.14616 for y and 0.13919 for trajectory; adding cubic terms reduces trajectory MAE to 0.04615 but barely changes scalar MAE.\",\"causal_blanket_diagnosis\":\"The two outputs respond differently to cubic terms; they need not share a direct readout basis.\",\"sublated_pivot\":\"Inspect panel nonlinearities and sparse terms in calibrated coordinates, and test whether the scalar readout simplifies when conditioned on observed state.\",\"risk_kind\":\"incomplete nonlinear basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a generic kernel surrogate\",\"rejected_reason\":\"The tested kernels missed the required split threshold; first identify structure that can improve both outputs.\"}],\"rationale\":\"Concentrated cubic coefficients would identify a useful coordinate system. A low-error scalar fit using observed states would justify a composed readout; otherwise, fit the two outputs separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "cf33162804af856d5acb27baab798ccdf55d8c4c7ca3597f6c1555c95ad8ebeb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30140.29,
+      "usage_known": true,
+      "prompt_tokens": 21895,
+      "cached_tokens": 10880,
+      "completion_tokens": 833
+    }
+  ]
+}

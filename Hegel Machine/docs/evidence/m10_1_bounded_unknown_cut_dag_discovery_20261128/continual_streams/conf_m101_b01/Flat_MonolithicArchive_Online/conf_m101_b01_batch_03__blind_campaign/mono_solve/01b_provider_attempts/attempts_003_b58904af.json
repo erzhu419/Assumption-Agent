@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b58904afea5d45bc96cb1e2a579f8e3d",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:35.061722+00:00",
+  "ended_at_utc": "2026-11-28T09:31:09.475744+00:00",
+  "request_sha256": "c378938723fa782ad8f30e32385e11234221aec077998b57929c0e5044745d5c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21564,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19004,
+    "cached_tokens": 9344,
+    "completion_tokens": 1520
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*02_solver.py; cat /holdout_task/validate_public_schema.py; cat >/tmp/discover03.py <<'PY'\\nimport pickle,itertools as it\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,T=tr['x'],tr['y'],tr['traj']; t=s['eval_times']; L=np.linalg.lstsq\\n\\ndef D(x): return np.c_[np.ones(len(x)),x]\\ndef F(x,p): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,a],1) for k in range(1,p+1) for a in it.combinations_with_replacement(range(4),k)])\\ndef robust(A,v):\\n n,p=A.shape; rg=np.random.default_rng(8); best=None\\n for _ in range(400):\\n  i=rg.choice(n,p,replace=False); w=L(A[i],v[i],rcond=None)[0]; e=np.linalg.norm(A@w-v,axis=1); q=np.median(e)\\n  if best is None or q<best[0]: best=(q,e)\\n q,e=best; mask=e<max(0.001,5*q)\\n for _ in range(3):\\n  w=L(A[mask],v[mask],rcond=None)[0]; e=np.linalg.norm(A@w-v,axis=1); mask=e<max(.001,5*np.median(e))\\n return w,e\\npa,pb,pc=[s['panel_'+k] for k in 'abc']; u,v=pa['u'],pa['v']; A,e=robust(D(u),v); B=L(D(pb['u']),pb['v'],rcond=None)[0]; C=L(F(pc['u'],2),pc['v2'],rcond=None)[0];\\nif __name__=='__main__':\\n np.set_printoptions(precision=5,suppress=True); print('times',t,'telemetry',s['telemetry_vec'],'summary',tr['summary']); print('A',A,'err percentiles',np.percentile(e,[0,25,50,75,85,90,95,100])); print('robust quad pct',np.percentile(robust(F(u,2),v)[1],[25,50,75,85])); print('C2 coefficient map',C)\\nz=(x-A[0])@np.linalg.inv(A[1:]); b=D(z)@B; cs={'raw':x,'cal':z,'b':b,'braw':D(x)@B};\\nfor k in ['cal','b']:\\n q=cs[k]; cs[k+'c1']=D(q)@L(D(pc['u']),pc['v1'],rcond=None)[0]; cs[k+'c2']=F(q,2)@C\\n\\ndef projected(q,T): return (q @ L(q,T.T,rcond=None)[0]-T.T).ravel()\\ndef timefit(T,case):\\n def make(p):\\n  r=np.exp(p); h=-np.expm1(-t[:,None]*r)\\n  if case=='2exp':return h\\n  if case=='linear-exp':return np.c_[t,h]\\n  if case=='exp-decay':return np.c_[h[:,0],np.exp(-t*r[1])]\\n  if case=='two-rational':return t[:,None]/(1+t[:,None]*r)\\n  if case=='poly-exp':return np.c_[h,t] \\n  if case=='two-damped':return np.exp(-t[:,None]*r)\\n n=1 if case=='linear-exp' else 2; f=least_squares(lambda p:projected(make(p),T),np.linspace(-1,1,n),bounds=(-8,5)); return np.exp(f.x),make(f.x),np.std(f.fun)\\nif __name__=='__main__':\\n for k in ['2exp','linear-exp','exp-decay','two-rational','two-damped']:\\n  r,H,err=timefit(T[:52],k); print('timefit',k,r,err,np.std(projected(H,T[52:])))\\n r,H,_=timefit(T[:52],'2exp'); W=T@np.linalg.pinv(H.T); V=np.c_[y,W]; print('std targets',V.std(0),'corrcoef',np.corrcoef(V.T)); print('std x cal b',x.std(0),z.std(0),b.std(0));\\n for k,q in cs.items():\\n  for typ,G in [('lin',D(q)),('quad',F(q,2)),('cub',F(q,3)),('tanh',F(np.tanh(q),2)),('sin',F(np.sin(q),2))]:\\n   p=G@L(G[:52],V[:52],rcond=None)[0]; print(k,typ,'fit',np.round(np.mean(abs(p[:52]-V[:52]),0),4),'hold',np.round(np.mean(abs(p[52:]-V[52:]),0),4),'traj',round(np.mean(abs(p[52:,1:]@H.T-T[52:])),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/discover03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test robust affine calibration and shared rank-two dynamics as separate stages; the archived 56/16 MAEs are 0.109309 for the readout and 0.248051 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Predict each timestamp independently\",\n      \"rejected_reason\": \"The first two singular values are 25.90 and 2.16, while the third is 0.050; a shared temporal basis is a stronger starting point.\"\n    }\n  ],\n  \"rationale\": \"The calibration residual percentiles test whether sparse outliers explain the affine fit failure. Held-out temporal projection tests the basis independently of the spatial regressors, and spatial comparisons then test which panel coordinates improve prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "666426e372fe0b29c503e6137b899a2ddef167bb0638bd3b95282c471eb2b849",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39714.63,
+      "usage_known": true,
+      "prompt_tokens": 19004,
+      "cached_tokens": 9344,
+      "completion_tokens": 1520
+    }
+  ]
+}

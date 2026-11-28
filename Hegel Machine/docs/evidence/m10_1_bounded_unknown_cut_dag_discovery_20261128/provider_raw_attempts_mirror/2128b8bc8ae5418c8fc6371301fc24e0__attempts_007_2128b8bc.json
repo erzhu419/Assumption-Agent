@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2128b8bc8ae5418c8fc6371301fc24e0",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:36.786781+00:00",
+  "ended_at_utc": "2026-11-28T09:28:18.624905+00:00",
+  "request_sha256": "ccae1317e5bd7da4a31f72e6b4dd97eab69af29973ce3a606616897d41d7a68c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23434,
+    "cached_tokens": 9344,
+    "completion_tokens": 1835
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_batch.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom itertools import combinations, combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; tr=s['train']['traj']; t=s['eval_times']; z=np.c_[y,tr]; f=m._design(x)\\nprint('Observed fields:', sorted(s), 'train:',sorted(s['train']))\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef affine(u): return np.c_[np.ones(len(u)),u]\\np=s['panel_a']; h=affine(p['u']); keep=np.ones(len(h),bool)\\nfor i in range(8):\\n c=ls(h[keep],p['v'][keep]); e=np.linalg.norm(h@c-p['v'],axis=1); keep=e<max(.004,np.sort(e)[34])\\nc=ls(h[keep],p['v'][keep]); p=s['panel_b']; b=ls(affine(p['u']),p['v'])\\np=s['panel_c']; q=ls(m._design(p['u'])[:,:15],p['v1'])[5:]; terms=list(combinations_with_replacement(range(4),2)); support=[pair for pair,row in zip(terms,q) if np.linalg.norm(row)>.01]; print('Panel C v1 quadratic support:',support)\\ndef forward_a(u): return affine(u)@c\\ndef inverse_a(u): return (u-c[0])@np.linalg.inv(c[1:])\\ndef forward_b(u): return affine(u)@b\\nmodels={}\\nfor name,u in [('raw',x),('A',forward_a(x)),('Ainv',inverse_a(x)),('B',forward_b(x)),('B(A)',forward_b(forward_a(x))),('B(Ainv)',forward_b(inverse_a(x)))]:\\n quad=np.stack([u[:,i]*u[:,j] for i,j in support],axis=1); cubic=(quad[:,:,None]*u[:,None,:]).reshape(len(x),-1)\\n candidates=np.c_[f[:,:15],cubic]; _,sing,v=np.linalg.svd(candidates,full_matrices=False); models[name]=(candidates@v[sing>1e-9].T)\\n# Probe fixed rational denominators including all unit pair sums and differences.\\nrat={}\\nfor i,j in [(i,None) for i in range(4)]+list(combinations(range(4),2)):\\n for sign in ([1] if j is None else [-1,1]):\\n  w=x[:,i] if j is None else (x[:,i]+sign*x[:,j])/np.sqrt(2)\\n  for a in (.025,.1,.4): rat[str((i,j,sign,a))]=f/(1+a*w[:,None]**2)\\nf4=np.c_[f,np.column_stack([x[:,p].prod(1) for p in combinations_with_replacement(range(4),4)])]\\ndef coordinates(a,mode):\\n if mode=='exp':\\n  def basis(r): return -np.expm1(-np.outer(t,r))\\n  def resid(r):\\n   d=basis(r); return (d@ls(d,tr[a].T)-tr[a].T).ravel()\\n  d=basis(least_squares(resid,[1.8,.4],bounds=([.8,.05],[5,.79])).x); v=np.linalg.qr(d)[0].T\\n else: v=np.linalg.svd(tr[a],full_matrices=False)[2][:2]\\n return np.c_[y[a],tr[a]@v.T],v\\ndef pred(g,a,b,mode='svd'):\\n zz,v=coordinates(a,mode); h=g[b]@ls(g[a],zz); return np.c_[h[:,0],h[:,1:]@v]\\ndef metric(p,b):\\n e=np.abs(p-z[b]); return np.r_[e[:,0].mean(),e[:,1:].mean(),e[:,1:].mean(0).max()]\\ndef select(pool,a):\\n inner=[(np.setdiff1d(a,v),v) for v in np.array_split(np.random.default_rng(101).permutation(a),3)]\\n def score(g):\\n  return np.mean([metric(pred(g,j,k),k)[:2].mean() for j,k in inner])\\n return min(pool,key=lambda key:score(pool[key]))\\nr=np.argsort(np.linalg.norm(x,axis=1)); folds=[('tail52',np.arange(52),np.arange(52,72)),('radial',r[:52],r[52:])];\\nfor i,v in enumerate(np.array_split(np.random.default_rng(2027).permutation(72),4)): folds.append((f'fold{i}',np.setdiff1d(np.arange(72),v),v))\\nfor name,a,b in folds:\\n print(name,'scalar / trajectory / worst horizon MAE'); out=m.solve_batch(dict(s, train=dict(x=x[a],y=y[a],traj=tr[a]),test=dict(x=x[b]))); print('artifact',np.round(metric(np.c_[out['y_hat'],out['state_pred']],b),5)); print('quadratic',np.round(metric(pred(f[:,:15],a,b),b),5)); print('cubic + exponential modes',np.round(metric(pred(f,a,b,'exp'),b),5))\\n for label,pool in [('panel support',models),('rational',rat)]:\\n  k=select(pool,a); print(label,k,np.round(metric(pred(pool[k],a,b),b),5))\\n if name in ('tail52','radial'):\\n  print('panel candidates',[(k,np.round(metric(pred(g,a,b),b),5).tolist()) for k,g in models.items()]); h=np.linalg.lstsq(f[a], f[b].T.T if False else z[a],rcond=None)[0]; err=z[b]-f[b]@h; print('cubic fit held-out mean residual by channel',np.round(err.mean(0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (quadratic response) -> H2 (cubic response with two temporal modes): verified outer-radius MAEs are 0.02015 for the scalar and 0.01672 at the worst trajectory horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Simpson's-paradox or relay-mode testing\",\"rejected_reason\":\"The documented study is a single regression cohort with no batch labels, relay modes, or switching observations; telemetry is one study-level vector.\"}],\"rationale\":\"Compare the exact artifact against the quadratic restriction, panel-supported cubics, fixed rational quotients, and a two-exponential time basis. Select panel and rational candidates inside each outer split. A consistent reduction in boundary error would justify changing the artifact; isolated schema validation alone does not establish that the missing cubic terms were addressed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bbf7c41fa06da41d4bf3b26c64775f1b797b5b428d2446352bdf38293a44f5f1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47104.97,
+      "usage_known": true,
+      "prompt_tokens": 23434,
+      "cached_tokens": 9344,
+      "completion_tokens": 1835
+    }
+  ]
+}

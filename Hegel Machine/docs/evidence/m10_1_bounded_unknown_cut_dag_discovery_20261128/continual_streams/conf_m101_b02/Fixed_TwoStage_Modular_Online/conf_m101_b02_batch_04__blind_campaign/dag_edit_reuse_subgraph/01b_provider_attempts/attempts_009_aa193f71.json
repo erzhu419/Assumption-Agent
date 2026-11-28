@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa193f7129634df6a9ae90e91de51185",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:19.919877+00:00",
+  "ended_at_utc": "2026-11-28T09:54:56.710289+00:00",
+  "request_sha256": "12331b8ea0e9e156436890701d64d8d8f38c184e08f72db2b8cccad01cb0ca01",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62194,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35729,
+    "cached_tokens": 9344,
+    "completion_tokens": 1503
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /holdout_task/node_00.py /tmp/additive_node.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/node_00.py')\\ns=p.read_text().replace('def _panel_b(panel, x):','def _panel_b(panel, x, unmix=False):').replace('    return _b_basis(x, f) @ _fit(_b_basis(u, f), v)','    coef = _fit(_b_basis(u, f), v)\\\\n    b = _b_basis(x, f) @ coef\\\\n    if unmix:\\\\n        h = np.linalg.solve(coef[1:5].T, (b - coef[0]).T).T\\\\n        return b, h\\\\n    return b').replace('def _features(s, x):','def _features(s, x, unmix=False):').replace(\\\"    b = _panel_b(s['panel_b'], z)\\\",\\\"    b = _panel_b(s['panel_b'], z, unmix)\\\")\\ns=s[:s.index('def run_node')]+'''def _polynomial_features(blocks, n, degree=4, rate=.15, scale=3.):\\n    # Factor the centered polynomial kernel in the training-row span.\\n    design = []\\n    for x, weight in zip(blocks, (.25, .50, .25)):\\n        x = x - x[:n].mean(axis=0)\\n        energy = np.sum(x[:n] ** 2) / n\\n        design.append(x * np.sqrt(weight / max(energy, np.finfo(float).eps)))\\n    x = np.column_stack(design)\\n    k = (1 + rate * (x @ x[:n].T)) ** degree\\n    row_mean = k.mean(axis=1)\\n    train_mean = row_mean[:n]\\n    k = k - row_mean[:, None] - train_mean[None, :] + train_mean.mean()\\n    value, vector = np.linalg.eigh(k[:n])\\n    keep = value > value[-1] * 1e-12\\n    mapped = k @ (vector[:, keep] * np.sqrt(scale / value[keep]))\\n    return np.column_stack((np.ones(len(x)), mapped))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    s = inputs['__input__']\\n    train = s['train']\\n    x = np.vstack((train['x'], s['test']['x']))\\n    z, (b, h), c1, c2 = _features(s, x, unmix=True)\\n    return {'g': _polynomial_features((z, b, h), len(train['x'])),\\n            'fd': b, 'cd': np.column_stack((c1, c2)),\\n            'y': train['y'], 'traj': train['traj']}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/frozen_stress.py <<'PY'\\nexec(open('/tmp/readout_diag.py').read().split('for keys in')[0])\\n_,(b,h),_,_=m._features(s,x,unmix=True)\\nfolds += [(np.argsort(sign*z[:,j])[:-10],np.argsort(sign*z[:,j])[-10:]) for j in range(4) for sign in (1,-1)]\\nfor config in [(4,.15,3),(4,.15,1),(4,.15,8),(3,.4,1),(3,.4,3),(3,.15,15),(5,.05,20)]:\\n errors=[]\\n for it,iv in folds:\\n  ix=np.r_[it,iv]; D=m._polynomial_features(tuple(k[ix] for k in (z,b,h)),len(it),*config)\\n  a=sink.run_node({'node_00':{'g':D,'fd':b[ix],'cd':np.c_[c1,c2][ix],'y':y[it],'traj':tr[it]}})\\n  errors.append([np.mean(abs(a['y_hat']-y[iv])),np.mean(abs(a['state_pred']-tr[iv]))])\\n E=np.array(errors); print(config,'official',E[0].round(5),'random max',E[:5].max(0).round(5),'tail max',E[5:].max(0).round(5),'tail mean',E[5:].mean(0).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/frozen_stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Anisotropic radial similarity → polynomial products of aligned and unmixed panel-B coordinates; the degree-four diagnostic gave official MAE 0.03008/0.01850, worst random MAE 0.04172/0.03099, and worst upper-tail MAE 0.09986/0.07606.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the standalone kernel predictor\",\"rejected_reason\":\"The deliverable must preserve the frozen ridge readout; a training-span feature factorization lets the readout operate unchanged.\"}],\"rationale\":\"The product kernel clears both official thresholds in the diagnostic. Verify that improvement survives the frozen four-branch ridge ensemble, then measure both tails of each coordinate to expose remaining extrapolation errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "db7ec510c37e7526363a647ad0c18381b9fb742d35925f9c7bf5e883e76c1733",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39442.8,
+      "usage_known": true,
+      "prompt_tokens": 35729,
+      "cached_tokens": 9344,
+      "completion_tokens": 1503
+    }
+  ]
+}

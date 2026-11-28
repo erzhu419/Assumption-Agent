@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "479ca120a4a04a4aa491a8723123256f",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:29.845872+00:00",
+  "ended_at_utc": "2026-11-28T09:21:09.348725+00:00",
+  "request_sha256": "63e54a0ea4c49fe960702b80509f4e7ac5dc944e52f7d75b238c88776d5c4cf1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39361,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26286,
+    "cached_tokens": 9344,
+    "completion_tokens": 1599
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; sed '/np.set_printoptions/,$d' /tmp/probe.py > /tmp/search.py; cat >> /tmp/search.py <<'PY'\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom sklearn.linear_model import lars_path\\nrng=np.random.default_rng(39); splits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [rng.permutation(n) for _ in range(7)]]\\ncoords={'x':x,'A':ai(x),'a':a(x),'b':b(x),'bA':b(ai(x)),'ba':b(a(x)),'B':bi(x),'BA':bi(ai(x))}\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('quad coefficients',np.linalg.lstsq(quad(x),T,rcond=None)[0].T)\\nprint('linear residuals: x and y,z'); lr=aff(x)@np.linalg.lstsq(aff(x),T,rcond=None)[0]; print(np.c_[x,T-lr][np.argsort(np.abs(y-lr[:,0]))[-12:]])\\ndef test(K,D,lam):\\n out=[]\\n for i,j in splits:\\n  H=solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),np.c_[T[i],D[i]],assume_a='pos'); F=H[:,2:]; C=np.linalg.lstsq(D[i].T@F,D[i].T@H[:,:2],rcond=1e-10)[0]; pred=D[j]@C+K[np.ix_(j,i)]@(H[:,:2]-F@C); out.append(np.mean(abs(pred-T[j]),axis=0))\\n return np.array(out)\\nout=[]\\nfor k,u in coords.items():\\n for mode in ('isotropic','component','pairs'):\\n  v=u if mode!='pairs' else np.c_[u,*[(u[:,i]+sg*u[:,j])/2**.5 for i,j in itertools.combinations(range(4),2) for sg in (-1,1)]]\\n  ds=abs(v[:,None,:]-v[None,:,:]) if mode!='isotropic' else cdist(v,v)[:,:,None];\\n  for kf in ('m32','m52','sq','rq'):\\n   for scale in (.35,.65,1.1,1.8,3.0):\\n    d=ds/scale; K={'m32':lambda:(1+d)*np.exp(-d),'m52':lambda:(1+d+d*d/3)*np.exp(-d),'sq':lambda:np.exp(-d*d/2),'rq':lambda:1/(1+d*d/2)}[kf]().mean(2)\\n    for trend,D in [('aff',aff(x)),('quad',quad(x)),('full3',np.c_[quad(x),*[np.prod(x[:,j],axis=1) for j in itertools.combinations_with_replacement(range(4),3)]] )]:\\n     for lam in (.0002,.003,.03):\\n      e=test(K,D,lam);out.append((e.mean(0),e.max(0),e[0],(k,mode,kf,scale,trend,lam)))\\nfor l in range(2):print('kernel',l,*sorted(out,key=lambda q:q[0][l])[:9],sep='\\\\n')\\n# Projected sparse dictionary: sum/difference, multiplicative, and rational terms.\\nF=[]; labels=[]\\nfor k,u in coords.items():\\n for nm,v in [(str(i),u[:,i]) for i in range(4)]+[(f'{i}{sg:+}*{j}',(u[:,i]+sg*u[:,j])/2**.5) for i,j in itertools.combinations(range(4),2) for sg in (-1,1)]:\\n  for op,w in [('abs',abs(v)), ('cube',v**3),('soft',v/np.sqrt(1+v*v)),('evenrat',1/(1+v*v)),('sin',np.sin(1.6*v)),('cos',np.cos(1.6*v)),('tanh',np.tanh(1.6*v))]:\\n   F.append(w); labels.append(f'{k} {nm} {op}')\\n for i,j in itertools.permutations(range(4),2):\\n  for op,w in [('rat',u[:,i]/(1+u[:,j]**2)),('sat',u[:,i]*np.tanh(u[:,j]))]:F.append(w);labels.append(f'{k} {i} {j} {op}')\\nF=np.array(F).T\\nfor l in range(2):\\n for name,D in [('aff',aff(x)),('quad',quad(x))]:\\n  es=[]; sel=[]\\n  for i,j in splits:\\n   coef=np.linalg.lstsq(D[i],np.c_[T[i,l],F[i]],rcond=None)[0]; G=np.c_[T[:,l],F]-D@coef; scale=np.linalg.norm(G[i,1:],axis=0); G[:,1:]/=scale; al,act,path=lars_path(G[i,1:],G[i,0],method='lasso',max_iter=35); es.append([np.mean(abs(G[j,1:]@c-G[j,0])) for c in path.T]);sel.append([labels[v] for v in act[:9]])\\n  E=np.array([v[:min(map(len,es))] for v in es]); p=np.argmin(E.mean(0));print('sparse',l,name,p,E.mean(0)[p],E.max(0)[p],E[0,p],sel[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test additive and pairwise nonlinear structure against smooth interpolation; the latest panel-composition sweep reached 52/20 MAE 0.0678 for y and 0.0668 for amplitude in separate models.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The previous sweep tested panel C as a vector feature but not cross-coordinate quotients or sum/difference projections. Repeated splits test whether those terms improve generalization and whether an additive kernel is a useful fallback.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "771bc081363c6d324645bbf34f6de1771d43b4aa4b31066276290cffb416e5df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41884.36,
+      "usage_known": true,
+      "prompt_tokens": 26286,
+      "cached_tokens": 9344,
+      "completion_tokens": 1599
+    }
+  ]
+}

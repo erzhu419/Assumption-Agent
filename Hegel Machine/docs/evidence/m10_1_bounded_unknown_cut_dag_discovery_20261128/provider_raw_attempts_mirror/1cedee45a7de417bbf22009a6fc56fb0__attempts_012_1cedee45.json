@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1cedee45a7de417bbf22009a6fc56fb0",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:19.900655+00:00",
+  "ended_at_utc": "2026-11-28T09:25:01.517674+00:00",
+  "request_sha256": "8f2235ba52e81221a5ae69e5f0a6371d30b18dbe85838b40df691059fccbcd4c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73490,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39600,
+    "cached_tokens": 9344,
+    "completion_tokens": 1710
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/joint.py <<'PY'\\nfrom features import *\\nfrom scipy.linalg import solve, cholesky, solve_triangular\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import minimize\\nimport io,contextlib\\nwith contextlib.redirect_stdout(io.StringIO()):\\n ns={}; exec(open('/tmp/compose.py').read().split(\\\"print('temporal residual'\\\")[0],ns); c,d=ns['c'],ns['d']\\nidx=np.arange(n)\\ndef err(e):return np.round([e[0],np.median(e[1:]),np.max(e[1:])],6)\\nfor deg in range(1,4):\\n for name,W in [('x',x),('ad',d(coords['a'])),('abc',c(coords['ab']))]:\\n  H=pol(np.c_[W,h],deg); print('ORACLE',deg,name,err([np.mean(abs(H[j]@ls(H[i],y[i])-y[j])) for i,j in splits]))\\n# Compare smoothness and directional scaling with training-only restricted likelihood.\\nfrom sys import path\\npath.insert(0,'/holdout_task')\\nfrom batch_solver import _gp\\nU={'x':x,'ab':coords['ab'],'ad':d(coords['a']),'abc':c(coords['ab'])}\\n\\ndef model(i,j,y0,kind,coord='x',mean=2,amp=None):\\n w=U[coord]; w=w/w[i].std(0); a=w[i]; b=w[j]; H=pol(x,mean); f,g=H[i],H[j]\\n if amp is not None:\\n  hi,hj=amp; f=np.c_[f,hi,hi**2,hi[:,None]*x[i]];g=np.c_[g,hj,hj**2,hj[:,None]*x[j]]\\n N=np.linalg.qr(f,mode='complete')[0][:,f.shape[1]:]; Y0=N.T@y0[i]; E=np.eye(len(i)); D=(a[:,None,:]-a[None,:,:])**2\\n def make(D,p):\\n  z=D@np.exp(-2*p[:-1]);\\n  if kind in ('e','iso'): return np.exp(-z/2)\\n  if kind=='m':\\n   r=np.sqrt(5*z);return (1+r+r*r/3)*np.exp(-r)\\n  return (1+z/2)**-2\\n def loss(p):\\n  k=make(D,p)+np.exp(p[-1])*E; K=N.T@k@N; L=cholesky(K,lower=True); v=solve_triangular(L,Y0,lower=True); return np.log(np.diag(L)).sum()+len(v)*.5*np.log(v@v/len(v))+.02*np.sum(p[:-1]**2)\\n def pp(p):return np.r_[np.repeat(p[0],4),p[-1]] if kind=='iso' else p\\n opt=minimize(lambda p:loss(pp(p)),np.r_[np.full(1 if kind=='iso' else 4,.6),-8.],bounds=[(-1.5,2.6)]*(1 if kind=='iso' else 4)+[(-15,-1)],method='L-BFGS-B',options={'maxiter':80}); p=pp(opt.x)\\n k=make(D,p)+np.exp(p[-1])*E; K=make((b[:,None,:]-a[None,:,:])**2,p); L=cholesky(k,lower=True); v=solve_triangular(L,np.c_[f,y0[i]],lower=True); cf=ls(v[:,:-1],v[:,-1]); return g@cf+K@solve_triangular(L.T,v[:,-1]-v[:,:-1]@cf)\\nif __name__=='__main__':\\n preds={}\\n for kind in ['iso','e','m','r']:\\n  for coord in U:\\n   for mean in [1,2]:\\n    for joint in ([False,True] if coord=='x' else [False]):\\n     ps=[]\\n     for i,j in splits:\\n      amp=(h[i],_gp(x[i],x[j],h[i],2.4,.001,True)) if joint else None\\n      ps.append(model(i,j,y,kind,coord,mean,amp))\\n     k=(kind,coord,mean,joint);preds[k]=ps\\n     print(k,err([np.mean(abs(a-y[j])) for a,(i,j) in zip(ps,splits)]),flush=True)\\n for name,keys in [('plain',[k for k in preds if not k[-1]]),('joint',[k for k in preds if k[-1]]),('raw',[k for k in preds if k[1]=='x' and not k[-1]])]:\\n  p=np.mean([preds[k] for k in keys],0);print('ensemble',name,err([np.mean(abs(a-y[j])) for a,(i,j) in zip(p,splits)]),flush=True)\\n # Localize baseline failures to see whether a separate branch or extrapolation dominates.\\n g=_gp(x[:52],x[52:],y[:52],1.5,.0001); q=np.argsort(abs(g-y[52:]))[-8:]; print('largest baseline residuals',np.round(np.c_[x[52:][q],h[52:][q],y[52:][q],g[q]],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (independent readout and amplitude) -> H2 (test amplitude-conditioned readout and directional smoothness); the saved solver's 52/20 y MAE is 0.057302.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the signed projection fit\",\"rejected_reason\":\"Its best 52/20 MAE was 0.0563, still above 0.038.\"}],\"rationale\":\"Amplitude alone failed, but its interactions with input coordinates were not tested. An oracle-amplitude comparison can separate structural benefit from amplitude forecast error; training-only likelihood fits test whether directional smoothness improves the independent readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "88b0809526e581a71bddee0fdea45fcbcb093674f187e34c4b0181cf624af6b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44159.37,
+      "usage_known": true,
+      "prompt_tokens": 39600,
+      "cached_tokens": 9344,
+      "completion_tokens": 1710
+    }
+  ]
+}

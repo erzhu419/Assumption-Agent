@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aca96a44ddae41a5b91cd9aeeea39786",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:39.752078+00:00",
+  "ended_at_utc": "2026-11-28T09:20:27.594763+00:00",
+  "request_sha256": "e66ab8569374c1f7944664a426940edd86fb8bc80f9a1c5f21f0ce8f7a9ed54b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41729,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28229,
+    "cached_tokens": 9344,
+    "completion_tokens": 2064
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/dagprobe.py <<'PY'\\nimport itertools as it,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef ls(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef poly(x,d): return np.column_stack([np.prod(x[:,p],axis=1) for k in range(d+1) for p in it.combinations_with_replacement(range(x.shape[1]),k)])\\ndef calibrate(s):\\n a=s['panel_a']; u,v=a['u'],a['v']; beta=np.array([ls(aff(u[:,[j]]),v[:,j]) for j in range(4)]); r=np.linalg.norm(v-(beta[:,0]+u*beta[:,1]),axis=1); keep=np.argsort(r)[:int(.8*len(r))]; beta=np.array([ls(aff(u[keep][:,[j]]),v[keep,j]) for j in range(4)]); r=np.linalg.norm(v-(beta[:,0]+u*beta[:,1]),axis=1); keep=r<max(.001,8*np.median(r)); beta=np.array([ls(aff(u[keep][:,[j]]),v[keep,j]) for j in range(4)]); return lambda x:beta[:,0]+x*beta[:,1]\\ndef panel_maps(s):\\n d=s['panel_c']; u=d['u']; b=s['panel_b']; B=ls(aff(b['u']),b['v']); maps=[]\\n def forms(x,p,op,base):\\n  f=op(x*p[:4]+p[4:]); return np.c_[aff(x),f] if base else aff(f)\\n for name,ops,ini in [('v1',[np.tanh,np.sin,lambda x:x/(1+x*x)],1.8),('v2',[np.cos,np.sin],1.0)]:\\n  v=d[name]; cand=[]\\n  for op in ops:\\n   for base in [False,True]:\\n    def fit(i):\\n     def fun(p):\\n      f=forms(u[i],p,op,base); return (f@ls(f,v[i])-v[i]).ravel()\\n     p=least_squares(fun,np.r_[np.ones(4)*ini,np.ones(4)*.05],bounds=(np.r_[np.ones(4)*.12,np.ones(4)*-2],np.r_[np.ones(4)*5,np.ones(4)*2]),max_nfev=180).x\\n     return p,ls(forms(u[i],p,op,base),v[i])\\n    i=np.arange(19); p,w=fit(i); err=np.sqrt(np.mean((forms(u[19:],p,op,base)@w-v[19:])**2)); p,w=fit(np.arange(len(u))); rms=np.sqrt(np.mean((forms(u,p,op,base)@w-v)**2)); print('panel',name,op.__name__,base,'hold',round(err,6),'full',round(rms,6),'p',p.round(3)); cand.append((err,lambda x,p=p,w=w,op=op,base=base:forms(x,p,op,base)@w))\\n  maps.append(min(cand,key=lambda r:r[0])[1]);\\n return (lambda x:aff(x)@B),*maps\\n\\ndef blocks(x,s):\\n a=calibrate(s); b,c,d=panel_maps(s); z=a(x); w=b(z); return {'x':x,'a':z,'b':w,'cx':c(x),'dx':d(x),'ca':c(z),'da':d(z),'cb':c(w),'db':d(w),'bca':b(c(z)),'bda':b(d(z))}\\nif __name__=='__main__':\\n x=s['train']['x']; Y=np.c_[s['train']['y'],s['train']['traj']]; n=len(x); D=blocks(x,s); Q=poly(x,2); splits=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(n),j),j) for j in np.array_split(np.random.default_rng(13).permutation(n),4)]\\n def calc(K,pen):\\n  es=[]\\n  for i,j in splits:\\n   N=np.linalg.qr(Q[i],mode='complete')[0][:,15:]; k=K[np.ix_(i,i)]; w=N@solve(N.T@k@N+pen*np.eye(N.shape[1]),N.T@Y[i],assume_a='pos'); b=ls(Q[i],Y[i]-k@w); e=abs(Q[j]@b+K[np.ix_(j,i)]@w-Y[j]); es.append([e[:,0].mean(),e[:,1:].mean()]);\\n  return np.array(es)\\n Fs={}; Ks={}\\n for key,z in D.items():\\n  for kind,f in [('lin',z),('sq',poly(z,2)[:,1:]),('cube',poly(z,3)[:,1:]),('nonlin',np.c_[np.sin(2*z),np.tanh(2*z),np.cos(2*z),z/(1+z*z)]),('cross',np.einsum('ni,nj->nij',D['a'],z).reshape(n,-1))]:\\n   f=f-f.mean(0); f=f/np.maximum(f.std(0),1e-8); Fs[key,kind]=f@f.T/f.shape[1];\\n  zz=z/np.maximum(z.std(0),.15); r=cdist(zz,zz,'sqeuclidean'); Ks[key]=np.exp(-.19*r);\\n K0=np.exp(-.23*cdist(x,x,'sqeuclidean'))\\n allk={**Fs,**{(k,'rbf'):v for k,v in Ks.items()}}\\n allk['mixed','all']=np.mean(list(allk.values()),axis=0)\\n allk['mixed','panel']=np.mean([v for (k,t),v in Fs.items() if k in ('ca','da','cb','db')],axis=0)\\n rows=[]\\n for key,k in allk.items():\\n  for g in [0,.1,1]:\\n   for p in [.0001,.001,.01,.1]:\\n    e=calc(k+g*K0,p); rows.append((e[0,0],e[1:,0].max(),e[0,1],e[1:,1].max(),key,g,p,e[:,0].round(4)))\\n for label,rank in [('public',lambda r:r[0]),('worst',lambda r:max(r[0],r[1])),('traj',lambda r:max(r[2],r[3]))]:\\n  print(label)\\n  for r in sorted(rows,key=rank)[:10]: print(np.round(r[:4],5),*r[4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dagprobe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine-only panel C → separable nonlinear panel C operators; archived 52/20 MAEs remain 0.051373 for response and 0.016532 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or unrestricted quadratic basis is sufficient to represent panel C's first output.\",\n    \"empirical_witness\": \"Panel C v1 holdout RMSE fell from 0.16349 for affine and 0.41452 for quadratic to 0.00866 for affine plus coordinatewise tanh.\",\n    \"causal_blanket_diagnosis\": \"The low-order polynomial basis misses coordinatewise saturation; whether that operator contributes to the prediction law remains unverified.\",\n    \"sublated_pivot\": \"Fit separable saturating and periodic operators on panel C alone, then test their outputs and interactions in downstream cross-validation.\",\n    \"risk_kind\": \"basis_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use panel C only through unconstrained quadratic interpolation\",\n      \"rejected_reason\": \"It generalizes poorly on the panel itself, especially for v1.\"\n    }\n  ],\n  \"rationale\": \"Measure whether compact panel fits improve downstream prediction over the archived baseline. If panel features help only on the required split and not the additional folds, do not treat that as evidence for the inferred graph.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "be6e837b9248b2793ee0a2a2e5e5b00515af7c5db889c4cee9b7ebd0807e2957",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51618.82,
+      "usage_known": true,
+      "prompt_tokens": 28229,
+      "cached_tokens": 9344,
+      "completion_tokens": 2064
+    }
+  ]
+}

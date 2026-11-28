@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43894f4ca6dc4af3bec236716d98fd50",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:30.684445+00:00",
+  "ended_at_utc": "2026-11-28T09:36:22.288255+00:00",
+  "request_sha256": "3d7175d2f6ddf79ce61dbb33070e186ffe6b19d4eb16d538f88f868ee1711c7d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66349,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38986,
+    "cached_tokens": 9344,
+    "completion_tokens": 2280
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _quad(x):\\n    return np.column_stack([_aff(x)] + [x[:, i] * x[:, j] for i, j in combinations_with_replacement(range(x.shape[1]), 2)])\\n\\n\\ndef _ols(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\n\\n\\ndef _panels(study, x):\\n    a, b, c = (study[k] for k in ('panel_a', 'panel_b', 'panel_c'))\\n    au, av = _aff(a['u']), a['v']\\n    good = np.ones(len(au), dtype=bool)\\n    for _ in range(8):\\n        w = _ols(au[good], av[good]); r = np.linalg.norm(au @ w - av, axis=1)\\n        good = r < max(3 * np.median(r), .001)\\n    shift, scale = w[0], np.diag(w[1:])\\n    bw = _ols(_aff(b['u']), b['v'])\\n    bf = lambda z: _aff(z) @ bw\\n    bi = lambda z: np.linalg.solve(bw[1:].T, (z-bw[0]).T).T\\n    roots = dict(x=x, a=x*scale+shift, i=(x-shift)/scale, b=bf(x), j=bi(x), ib=bf((x-shift)/scale), ij=bi((x-shift)/scale), bi=(bf(x)-shift)/scale, ji=(bi(x)-shift)/scale)\\n    z = roots.copy()\\n    for key, func, start in [('v1', np.arctan, 2.4), ('v2', np.cos, 1.)]:\\n        u, v = c['u'], c[key]\\n        def design(d, p):\\n            return np.column_stack((_aff(d), func(d*p)))\\n        def residual(p):\\n            f = design(u, p)\\n            return (f @ _ols(f, v)-v).ravel()\\n        p = least_squares(residual, np.full(4, start), bounds=(.25, 5)).x\\n        cv = _ols(design(u, p), v)\\n        for k, d in roots.items():\\n            op = design(d, p) @ cv\\n            z[k+key[-1]] = op\\n            z[k+key[-1]+'b'] = bf(op)\\n            z[k+key[-1]+'j'] = bi(op)\\n    return z\\n\\n\\ndef _ridge(f, target, lam):\\n    n = len(target)\\n    scale = np.maximum(f[:n].std(0), .08); scale[0] = 1.\\n    g = f / scale\\n    a = g[:n]; b = g[n:]\\n    return b @ np.linalg.solve(a.T@a + lam*np.eye(a.shape[1]), a.T@target)\\n\\n\\ndef _scalar_parts(z, y):\\n    x = z['x']; n = len(y); q = _quad(x); result = []\\n    for key, p in [('bi1', 1.), ('i2j', 2.3), ('bi1', 1.6)]:\\n        d = z[key]\\n        v = np.sin(p*d)/p if p == 1.6 else d/(1+(p*d)**2)\\n        f = np.c_[q,v,(d[:,:,None]*v[:,None,:]).reshape(-1,16)]\\n        result.append(_ridge(f, y, .07))\\n    d = np.c_[z['bi1'], z['bi2']]\\n    result.append(np.arcsinh(_ridge(_quad(np.c_[x,d]), np.sinh(y), .3)))\\n    tar = 1.65*np.arctanh(np.clip(y/1.65,-.999,.999))\\n    a = _aff(x)\\n    r = z['x1'] - a @ _ols(a[:n],z['x1'][:n]); f = np.c_[a,r]\\n    h = np.zeros((4,4)); h[np.triu_indices(4)] = _ols(q[:n],y)[5:]; h=(h+h.T)/2\\n    ev,ve=np.linalg.eigh(h); u=ve[:,-1]*np.sqrt(abs(ev[-1])); v=ve[:,0]*np.sqrt(abs(ev[0]));\\n    def design(p):\\n        a,b=x@p[:4],x@p[4:]\\n        return np.c_[f,a*b]\\n    def res(p):\\n        d=design(p)[:n]\\n        return np.r_[d@_ols(d,tar)-tar,.03*(np.linalg.norm(p.reshape(2,4),axis=1)-1)]\\n    opt=least_squares(res,np.r_[u+v,u-v],max_nfev=90)\\n    d=design(opt.x)\\n    result.append(1.65*np.tanh((d[n:]@_ols(d[:n],tar))/1.65))\\n    return np.array(result)\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    x = np.concatenate((train['x'],study['test']['x']))\\n    z = _panels(study,x)\\n    y = _scalar_parts(z, train['y']).mean(0)\\n    preds=[]\\n    for k in ('ib2j','b2j','i2j'):\\n        d=z[k]; f=np.c_[_quad(x),_quad(d)[:,1:]]\\n        preds.append(_ridge(f,train['traj'],.01))\\n    state = np.mean(preds,axis=0)\\n    end = state[:,-1]\\n    return {'y_hat':y,'state_pred':state,'diagnostics_vec':np.array([y.mean(),y.std(),end.mean(),end.std()])}\\nPY\\ncat > /tmp/check11.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task');from batch_solver import *;from batch_solver import _panels,_scalar_parts\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x,y,tr=t['x'],t['y'],t['traj'];\\nI=[np.arange(52),np.arange(16,72),np.r_[0:27,43:72],np.r_[0:40,56:72]]\\nfor i in I:\\n j=np.setdiff1d(np.arange(72),i); d={**s,'train':{k:t[k][i] for k in ('x','y','traj')},'test':{'x':x[j]}}; p=solve_batch(d); vs=_scalar_parts(_panels(s,x[np.r_[i,j]]),y[i]);print('CV',np.mean(abs(p['y_hat']-y[j])),np.mean(abs(p['state_pred']-tr[j])),np.mean(abs(vs-y[j]),axis=1));\\n if len(i)==52:print('largest',np.c_[x[j],y[j],p['y_hat']][np.argsort(abs(p['y_hat']-y[j]))[-8:]])\\nprint('x train slices/test mean',x[:52].mean(0),x[52:].mean(0),s['test']['x'].mean(0));print('y slice scale',np.std(y[:52]),np.std(y[52:]));\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 /tmp/check11.py; python3 /holdout_task/validate_public_schema.py; grep -A17 '^best across' /tmp/scalar7.log | head -12; python3 /tmp/probe.py | grep -A7 '^raw traj'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 single low-rank readout → H2 complementary scalar readouts plus a separate trajectory model; the best individual scalar model measured so far has worst-slice MAE 0.04499.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save a standalone candidate and measure whether complementary readout errors cancel. Inspect the remaining large errors to distinguish extrapolation from a missing nonlinear term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b68260bc1fe8d2dda130cabeea5e41039dcb5e82a890e97cb2a9f822ed72705c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56931.62,
+      "usage_known": true,
+      "prompt_tokens": 38986,
+      "cached_tokens": 9344,
+      "completion_tokens": 2280
+    }
+  ]
+}

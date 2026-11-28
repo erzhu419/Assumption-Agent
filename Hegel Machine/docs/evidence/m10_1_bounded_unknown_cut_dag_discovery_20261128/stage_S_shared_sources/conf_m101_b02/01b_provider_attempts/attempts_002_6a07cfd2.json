@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a07cfd21792454fa774b7e3b3bb204a",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:28.484267+00:00",
+  "ended_at_utc": "2026-11-28T09:11:01.283915+00:00",
+  "request_sha256": "702be5fca192f7bfee6bcde0f56aeb844659717c230fa9656ebc928b5a97cbde",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12595,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17244,
+    "cached_tokens": 10880,
+    "completion_tokens": 1149
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust calibration reference panel trimmed regression' 2>/dev/null; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,itertools as it\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; print('times',t); print('train ranges',x.min(0),x.max(0),'y',y.min(),y.max())\\nU,S,V=np.linalg.svd(z[:52],full_matrices=False); print('temporal basis',V[:2]); print('trajectory projected samples',np.c_[x[:10],(z@V[:2].T)[:10],y[:10]])\\ndef poly(x,d): return np.column_stack([np.ones(len(x))]+[np.prod(x[:,c],axis=1) for k in range(1,d+1) for c in it.combinations_with_replacement(range(x.shape[1]),k)])\\nops={}\\nfor p in ('panel_a','panel_b','panel_c'):\\n u=s[p]['u']; print(p,'u range',u.min(0),u.max(0))\\n for j,v in s[p].items():\\n  if j=='u': continue\\n  a=poly(u,1); e=np.linalg.norm(v-a@np.linalg.lstsq(a,v,rcond=None)[0],axis=1); m=e<3 if p=='panel_a' else np.ones(len(u),bool); u0,v0=u[m],v[m]; print(j,'v range',v0.min(0),v0.max(0),'discarded',np.where(~m)[0]);\\n  for tag,f in [('aff',lambda x:poly(x,1)),('quad',lambda x:poly(x,2)),('sin',lambda x:np.c_[poly(x,1),np.sin(x)]),('tanh',lambda x:np.c_[poly(x,1),np.tanh(x)]),('sq and cross',lambda x:np.c_[poly(x,1),x*x,x*np.roll(x,-1,axis=1)])]:\\n   a=f(u0); b=np.linalg.lstsq(a,v0,rcond=None)[0]; h=np.sum(np.linalg.qr(a,mode='reduced')[0]**2,axis=1); e=(v0-a@b)/(1-h[:,None]); print(tag,'LOO RMS',np.sqrt(np.mean(e**2,axis=0))); \\n   if tag=='aff': ops[p+j]=lambda x,b=b:poly(x,1)@b; print('affine',b)\\nY=np.c_[y,z@V[:2].T]; A=ops['panel_av']; B=ops['panel_bv']; C=ops['panel_cv1']; D=ops['panel_cv2']; a=A(x); candidates={'raw':x,'A':a,'B':B(x),'BA':B(a),'CA':C(a),'DA':D(a),'CBA':C(B(a)),'DBA':D(B(a))};\\nfor key,a in candidates.items():\\n for d in (1,2,3):\\n  G=poly(a,d); P=G[52:]@np.linalg.lstsq(G[:52],Y[:52],rcond=None)[0]; print(key,d,np.mean(abs(P-Y[52:]),axis=0))\\nprint('y alignment with trajectory',np.corrcoef(Y.T))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct regression -> H2 robust panel calibration and a rank-two temporal model; the two leading trajectory singular values are 27.93 and 2.20, versus 0.050 for the third, and held-out MAE is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit eight independent trajectory regressions\",\n      \"rejected_reason\": \"The singular spectrum supports fitting two temporal coefficients first, while still scoring the reconstructed trajectory at all eight times.\"\n    }\n  ],\n  \"rationale\": \"Compare leave-one-row-out panel residuals to distinguish outlier contamination from systematic nonlinearity. Use the prescribed split to establish direct-regression baselines and check whether panel-coordinate nonlinearities improve prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "d0e03b91eb53b66173d0dc97586b76e2f3729dd7878eb1eb01596260c1693954",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35436.02,
+      "usage_known": true,
+      "prompt_tokens": 17244,
+      "cached_tokens": 10880,
+      "completion_tokens": 1149
+    }
+  ]
+}

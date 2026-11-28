@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2007a913f9f2404788f91250e9faa552",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:24.700507+00:00",
+  "ended_at_utc": "2026-11-28T09:48:45.686938+00:00",
+  "request_sha256": "95508c5bd9e65c561822d1769f5d2fb506a7ebaf59e373609fa15979fc9073f4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75622,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40503,
+    "cached_tokens": 9344,
+    "completion_tokens": 770
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; calibrate=m._calibrate\\n\\ndef affine(panel, x):\\n    u,v=panel['u'],panel['v']; a=m._design(u)\\n    keep=np.argsort(np.linalg.norm(a@m._ls(a,v)-v,axis=1))[:45]\\n    return m._design(x)@m._ls(m._design(v[keep]),u[keep])\\n\\nfor name,i,j in [('52/20',np.arange(52),np.arange(52,72)),('56/16',np.arange(56),np.arange(56,72))]:\\n    study=dict(s,train=dict(tr,**{k:tr[k][i] for k in ('x','y','traj')}),test={'x':x[j]})\\n    z=calibrate(s['panel_a'],x); dist=np.min(np.linalg.norm((z[j,None]-z[None,i])/z[i].std(0),axis=2),axis=1); far=np.argsort(dist)[-len(j)//2:]\\n    for label,method in [('cyclic_cubic',calibrate),('trimmed_affine',affine)]:\\n        m._calibrate=method; out=m.solve_batch(study)\\n        ey=np.abs(out['y_hat']-tr['y'][j]); et=np.abs(out['state_pred']-tr['traj'][j]); print(name,label,'scalar',round(ey.mean(),5),'trajectory',round(et.mean(),5),'far_scalar',round(ey[far].mean(),5),'far_trajectory',round(et[far].mean(),5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Trimmed affine calibration → cyclic cubic inversion with sparse readouts; final-artifact 52/20 MAEs are 0.01222 scalar and 0.01090 trajectory, and the worst shuffled result is 0.03192 scalar or 0.03146 for an individual timestamp.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"The artifact already passes the schema and prescribed holdout. A matched calibration ablation tests whether the improvement comes from cubic inversion rather than the changed readout, and the distant-point slice checks whether that benefit persists away from nearby training samples. If affine matches cubic there, narrow the structural claim without changing the passing artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5f48f312579cfdf5f99feb8fc567db2577ead7a361274ff52d379385ff11a36d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23575.48,
+      "usage_known": true,
+      "prompt_tokens": 40503,
+      "cached_tokens": 9344,
+      "completion_tokens": 770
+    }
+  ]
+}

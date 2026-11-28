@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd16b7f85fdf4040a04c93c60bfbb36c",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:31.016064+00:00",
+  "ended_at_utc": "2026-11-28T09:47:59.691203+00:00",
+  "request_sha256": "dd1c0d01e4b84798e1ffaefa109c7f88bba2dea5f3b5a69904ad1c9c7092e154",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54476,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32368,
+    "cached_tokens": 9344,
+    "completion_tokens": 1082
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout_cv.py <<'PY'\\nfrom chain import *\\nfrom contextlib import redirect_stdout\\nfrom io import StringIO\\nfrom scipy.optimize import least_squares\\nwith redirect_stdout(StringIO()):\\n a=cal()(s['train']['x'],'extra'); bmods=bfit(s['panel_b']); c=cfit(s['panel_c'])['C1']\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; t=s['eval_times']; target=np.c_[y,z]; n=len(y)\\nix=np.arange(n); rsort=np.argsort(np.linalg.norm(a,axis=1)); splits=[('52/20',ix[:52],ix[52:]),('radius',rsort[:-14],rsort[-14:])]\\nfor j in range(4):\\n order=np.argsort(a[:,j]); va=np.r_[order[:6],order[-6:]]; splits.append((f'edge{j}',np.setdiff1d(ix,va),va))\\nfor v in np.array_split(np.random.default_rng(7).permutation(n),4): splits.append(('random',np.setdiff1d(ix,v),v))\\nfour=np.array([0,0,1,2]); other=np.array([1,3,2,3]); scores=[]\\nfor _,bn,_,f in bmods:\\n if bn not in ('sin','erf','gaussodd','tanh','rat','rational','sqrt','atan'):continue\\n b=f(a); ct=c(b)\\n bases={'C1':aff(ct),'cycle':np.c_[np.ones(n),b[:,four]*b[:,other]],'allpair':np.c_[np.ones(n),b[:,l]*b[:,r]],'quadratic':np.c_[aff(b),b[:,i]*b[:,j]],'C1+B':np.c_[aff(ct),b]}\\n for key,d in bases.items():\\n  es=[]; coeff=[]\\n  for tag,tr,va in splits:\\n   coef=fit(d[tr],target[tr]); es.append(np.abs(d[va]@coef-target[va]).mean(axis=0)); coeff.append(coef)\\n  e=np.array(es); scores.append((e[:,0].mean()+e[:,1:].mean(),bn,key,np.round(e[0,[0,1,8]],5),np.round([e[:,0].max(),e[:,1:].mean(1).max(),e[:,1:].max(),e[:,0].mean(),e[:,1:].mean()],5)))\\nfor row in sorted(scores):print(row)\\nfor _,bn,_,f in bmods:\\n if bn not in ('sin','erf','gaussodd','tanh'):continue\\n b=f(a); d=np.c_[aff(b),b[:,i]*b[:,j]]; co=fit(d,target)\\n print('coeff',bn,np.round(co[:,[0,1,8]],4).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 approximate B plus unrestricted quadratic readout → H2 test whether C1’s four cyclic products suffice at the boundary; paired prescribed-split MAE is 0.00962 scalar and 0.00763 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more terms to panel B solely to lower its training residual\",\"rejected_reason\":\"The added terms tested so far do not approach the panel noise floor, and panel fit alone does not establish better extrapolation.\"}],\"rationale\":\"Compare C1, its four cyclic products, and unrestricted quadratic readouts on held-out coordinate tails, radial tails, and ordinary folds. If the unrestricted quadratic breaks at the boundary, use the constrained readout in the deliverable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5703fdf3ee2ccfd1dfbd1c9893c1ad116fdda3a613fda1695af862ad180c0a28",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31296.18,
+      "usage_known": true,
+      "prompt_tokens": 32368,
+      "cached_tokens": 9344,
+      "completion_tokens": 1082
+    }
+  ]
+}

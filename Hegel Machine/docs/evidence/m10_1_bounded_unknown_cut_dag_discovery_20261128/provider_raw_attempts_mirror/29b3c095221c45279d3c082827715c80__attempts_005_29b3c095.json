@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "29b3c095221c45279d3c082827715c80",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:31.959420+00:00",
+  "ended_at_utc": "2026-11-28T09:53:16.803720+00:00",
+  "request_sha256": "8d311211ec60ca9632905c289058c9bd3b7742ace8398d03447cadf1cb50e717",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41557,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27731,
+    "cached_tokens": 9344,
+    "completion_tokens": 1982
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_01.py <<'PY'\\nfrom itertools import combinations, combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _pair_basis(x, frequency):\\n    pair = np.column_stack([x[:, i] + sign * x[:, j]\\n                            for i, j in combinations(range(4), 2)\\n                            for sign in (-1, 1)])\\n    return np.column_stack((np.tanh(frequency * x),\\n                            np.tanh(frequency * pair), np.cos(frequency * pair)))\\n\\n\\ndef _basis(x, w, frequency):\\n    quadratic = [x[:, i] * x[:, j]\\n                 for i, j in combinations_with_replacement(range(4), 2)]\\n    return np.column_stack((np.ones(len(x)), x, *quadratic,\\n                            _pair_basis(x, frequency), _pair_basis(w, frequency)))\\n\\n\\ndef _predict(x, xt, w, wt, target, frequency, penalty):\\n    design = _basis(x, w, frequency)\\n    scale = np.maximum(design.std(axis=0), 0.1)\\n    design /= scale\\n    reg = np.full(design.shape[1], penalty)\\n    reg[:15] *= 0.05\\n    reg[0] = 0\\n    coef = np.linalg.solve(design.T @ design + np.diag(reg), design.T @ target)\\n    return (_basis(xt, wt, frequency) / scale) @ coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    d = inputs['node_00']\\n    y = _predict(d['xa'], d['xat'], d['xab'], d['xabt'], d['y'], 1.8, 0.1)\\n    state = _predict(d['z'], d['zt'], d['xab'], d['xabt'], d['traj'], 0.6, 0.01)\\n    final = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/probe2.py <<'PY'\\nfrom sink_probe import *\\nfrom scipy.optimize import least_squares\\n\\nfolds=[np.arange(52,72)]+list(np.array_split(np.random.default_rng(30).permutation(N),6))\\n\\ndef stats(F,reg=None):\\n    out=[]\\n    for v in folds:\\n        a=np.setdiff1d(np.arange(N),v); X=F[a]; scale=np.maximum(X.std(0),0.1); X=X/scale\\n        c=np.linalg.lstsq(X,Y[a],rcond=1e-9)[0] if reg is None else np.linalg.solve(X.T@X+np.diag(reg),X.T@Y[a]);out.append(np.mean(abs(F[v]/scale@c-Y[v]),0))\\n    return np.array(out)\\n\\nrows=[]\\nfor k in ('xa','xab','z','raw'):\\n x=d.get(k,s['train']['x']); B=poly(x,1); Q=poly(x,2)\\n for freq in (0.8,1.2,1.33,1.6,2.,2.45,3.,4.):\\n  T=np.tanh(freq*x); C=np.cos(freq*x); S=np.sin(freq*x)\\n  for name,F in [('T/C lin',np.c_[B,T,C]),('T/C quad',np.c_[Q,T,C]),('T quadratic',np.c_[B,poly(T,2)[:,1:]]),('S quadratic',np.c_[B,poly(S,2)[:,1:]]),('T mixed',np.c_[B,poly(T,2)[:,1:],*[T[:,i]*x[:,j] for i in range(4) for j in range(4)]]),('S mixed',np.c_[B,poly(S,2)[:,1:],*[S[:,i]*x[:,j] for i in range(4) for j in range(4)]])]:\\n   for l in (.0001,.005,.05):\\n    m=stats(F,np.r_[np.full(5,l*.05),np.full(F.shape[1]-5,l)]); score=m[1:,0].mean()+.35*m[1:,0].max(); rows.append((score,k,freq,name,l,m[0,0],m[1:,0].mean(),m[1:,0].max(),m[0,1:].mean(),m[1:,1:].mean(),m[1:,1:].mean(1).max()))\\nfor row in sorted(rows)[:10]: print('scalar',row[:5],np.round(row[5:],5))\\nfor row in sorted(rows,key=lambda a:a[-2]+.35*a[-1])[:6]: print('traj',row[1:5],np.round(row[5:],5))\\n\\n# Inspect the residual spectrum and fit a small number of free-direction waves\\n# against the scalar on training rows only.\\nx=s['train']['x']; B=poly(x,2); n=52; rng=np.random.default_rng(3)\\nfor deg in (1,2):\\n B=poly(x,deg)\\n for family in ('tanh','cos','sin'):\\n  f={'tanh':np.tanh,'cos':np.cos,'sin':np.sin}[family]\\n  for m in (1,2,3):\\n   def matrix(q):\\n    q=q.reshape(m,5); return np.c_[B,f(x@q[:,:4].T+q[:,4])]\\n   def obj(q):\\n    F=matrix(q)[:n]; return F@np.linalg.lstsq(F,Y[:n,0],rcond=1e-8)[0]-Y[:n,0]\\n   ans=min((least_squares(obj,rng.normal(0,1.25,5*m),bounds=(-8.,8.),max_nfev=85) for _ in range(8)),key=lambda fit: np.mean(fit.fun**2)); F=matrix(ans.x); c=np.linalg.lstsq(F[:n],Y[:n,0],rcond=1e-8)[0]; print('free',deg,family,m,round(np.std(ans.fun),4),round(abs(F[n:]@c-Y[n:,0]).mean(),4),np.round(ans.x.reshape(m,5),2),np.round(c[-m:],3))\\nprint('traj mode geometry',np.round(np.linalg.svd(Y[:,1:],full_matrices=False)[1],4),np.round(np.linalg.svd(Y[:,1:],full_matrices=False)[2][:2],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe2.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Use paired calibrated-coordinate features as a passing baseline, then test more compact nonlinear readouts; the matching scalar probe had official MAE 0.03223 and worst random-fold MAE 0.06356.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Stop with the best official-split probe\",\"rejected_reason\":\"The worst random fold is still above 0.038, so the official split alone does not establish robustness.\"}],\"rationale\":\"Save and verify the working baseline, then test whether transformed products or a few free-direction nonlinear terms explain the remaining errors on held-out measurements.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "08258d933c6b5ec88407e888123643ba1d1f349278dc1440fd1f71a4844cd58d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50121.78,
+      "usage_known": true,
+      "prompt_tokens": 27731,
+      "cached_tokens": 9344,
+      "completion_tokens": 1982
+    }
+  ]
+}

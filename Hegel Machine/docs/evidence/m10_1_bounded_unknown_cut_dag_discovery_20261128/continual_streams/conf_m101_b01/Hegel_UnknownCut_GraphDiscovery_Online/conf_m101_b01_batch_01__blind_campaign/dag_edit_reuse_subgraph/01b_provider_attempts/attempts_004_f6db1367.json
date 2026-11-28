@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6db136799fb4d828a8d35b5ecf77db4",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:14.533812+00:00",
+  "ended_at_utc": "2026-11-28T09:20:40.746075+00:00",
+  "request_sha256": "92248f19155e1cc96ad9c5d792a253c288c58208c280b31f670fea9563892917",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 30594,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22725,
+    "cached_tokens": 9344,
+    "completion_tokens": 1016
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'nonlinear variable projection ridge separable regression' 2>/dev/null || true; cat > /tmp/pbfit.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf,expit\\nfrom itertools import product\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_b'][k] for k in ('u','v')); n,d=u.shape\\nfuncs={'sine':np.sin,'tanh':np.tanh,'atan':np.arctan,'erf':erf,'softsign':lambda z:z/(1+np.abs(z)),'asinh':np.arcsinh,'rat':lambda z:z/(1+z*z),'sqrt':lambda z:z/np.sqrt(1+z*z),'cube':lambda z:z**3,'logistic_deriv':lambda z:expit(z)*expit(-z),'relu':lambda z:np.maximum(z,0)}\\nrng=np.random.default_rng(971)\\nfor name,f in funcs.items():\\n for linear in (0,1):\\n  def design(p,x):\\n   g=f(x*np.exp(p[:4])+p[4:]); return np.c_[np.ones(len(x)),x,g] if linear else np.c_[np.ones(len(x)),g]\\n  def solve(p,tr):\\n   A=design(p,u[tr]); return np.linalg.lstsq(A,v[tr],rcond=None)[0]\\n  def fun(p,tr):return (design(p,u[tr])@solve(p,tr)-v[tr]).ravel()\\n  tr=np.arange(n); lo=np.r_[[-2.]*4,[-8.]*4];hi=np.r_[[2.7]*4,[8.]*4]; starts=[np.r_[[np.log(k)]*4,[0.]*4] for k in [0.5,1,2,3,4,5,6,8,11]]+[np.r_[rng.uniform(0,2.1,4),rng.uniform(-2.,2.,4)] for _ in range(12)]\\n  best=min((least_squares(fun,p,args=(tr,),bounds=(lo,hi),max_nfev=90) for p in starts),key=lambda o:o.cost)\\n  rms=(2*best.cost/v.size)**.5\\n  if rms<.045:\\n   errs=[]\\n   for k in range(4):\\n    te=tr[tr%4==k]; tt=tr[tr%4!=k]; fit=min((least_squares(fun,p,args=(tt,),bounds=(lo,hi),max_nfev=90) for p in starts),key=lambda o:o.cost); errs.extend((design(fit.x,u[te])@solve(fit.x,tt)-v[te]).ravel())\\n   print(name,linear,rms,'fold MAE/max',np.mean(np.abs(errs)),np.max(np.abs(errs)),'scale',np.exp(best.x[:4]),'shift',best.x[4:],flush=True)\\n   if rms<.005:print(solve(best.x,tr),flush=True)\\n  else: print(name,linear,rms,flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pbfit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Single nonlinear projection → independently warped input coordinates with shared output mixing; the full quadratic’s worst held-out error was 0.8755.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate flexible model for each output\",\"rejected_reason\":\"It discards potentially shared coordinate structure and consumes too many degrees of freedom on 24 rows.\"}],\"rationale\":\"Coordinatewise tanh improved the fit more than adding a single nonlinear projection. Fit the scales and shifts jointly across outputs, then refit inside panel folds to distinguish a recoverable operator from an overfit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f03c53f8f9532e8b3a07333ead0be39b1f8fadb005067f78c6994d21ce33c9bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28596.07,
+      "usage_known": true,
+      "prompt_tokens": 22725,
+      "cached_tokens": 9344,
+      "completion_tokens": 1016
+    }
+  ]
+}

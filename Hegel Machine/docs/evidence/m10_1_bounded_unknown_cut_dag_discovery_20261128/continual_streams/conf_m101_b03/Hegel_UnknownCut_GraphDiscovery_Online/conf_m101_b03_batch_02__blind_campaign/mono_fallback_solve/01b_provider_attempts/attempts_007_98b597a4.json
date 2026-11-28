@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "98b597a4aea64a878f6ce658963c26d1",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:30.613355+00:00",
+  "ended_at_utc": "2026-11-28T09:29:08.433036+00:00",
+  "request_sha256": "71af2d5883c8614205a153acc306d6968bf8fadf672e92945977dc234c3c4a58",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44568,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27798,
+    "cached_tokens": 9344,
+    "completion_tokens": 1651
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_slow.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe_state import *\\nfrom scipy.linalg import cho_factor,cho_solve\\n# Compare parsimonious saturation laws with a smooth residual on the paired readout.\\nD=np.c_[base,paired]\\nDs=np.c_[d(c),paired.sum(1)]\\nI0=np.arange(52)\\nQ=poly(np.c_[a,c],2)\\nperts={'a':a,'c':c,'z':z,'a+c':np.c_[a,c]}\\nfor k,w in perts.items():\\n perts[k]=w/np.sqrt(np.mean(w*w,axis=0))\\n\\ndef sat(F, A, I, kind, w=None):\\n x=F@fit(F[I],A[I]); h0=x.std()\\n if kind=='single':\\n  def predict(p):return np.tanh(F@p[:-1])*np.exp(p[-1])\\n  p=np.r_[fit(F[I],A[I])/(2*h0),np.log(2*h0)]\\n elif kind=='radial':\\n  v=(w*w).sum(1)/w.shape[1]\\n  def predict(p):\\n   G=F/(1+p[0]*v[:,None]); return G @ fit(G[I],A[I])\\n  p=[.05]\\n elif kind=='component':\\n  def predict(p):\\n   G=np.c_[D[:,:5],np.tanh(p[0]*c)/p[0],paired]; return G@fit(G[I],A[I])\\n  p=[.4]\\n elif kind=='mixed':\\n  def predict(p):\\n   G=F.copy();G[:,5:9]=c/(1+p[0]*c*c);return G@fit(G[I],A[I])\\n  p=[.06]\\n bounds=(0,10) if kind in ('radial','mixed') else ((.001,5) if kind=='component' else (-np.inf,np.inf))\\n p=least_squares(lambda p:predict(p)[I]-A[I],p,bounds=bounds,max_nfev=150).x\\n return predict(p),p\\n\\ndef resid_gp(A,I,w,length,ridge):\\n dist=np.sum((w[:,None]-w[None,:])**2,axis=-1)/w.shape[1]\\n R=np.sqrt(5*dist)/length; K=(1+R+R*R/3)*np.exp(-R)\\n F=cho_factor(K[np.ix_(I,I)]+ridge*np.eye(len(I)))\\n DI=D[I]; P=cho_solve(F,DI); V=cho_solve(F,A[I]); beta=fit(DI.T@P,DI.T@V)\\n return D@beta+K[:,I]@(V-P@beta)\\n\\nsettings={'paired':lambda A,I:(D@fit(D[I],A[I]),[]),'singleC2':lambda A,I:sat(Ds,A,I,'single'),'singlePair':lambda A,I:sat(D,A,I,'single'),'tanhC2':lambda A,I:sat(D,A,I,'component'),'rationalC2':lambda A,I:sat(D,A,I,'mixed')}\\nfor nm,w in perts.items():\\n settings['radial '+nm]=lambda A,I,w=w:sat(D,A,I,'radial',w)\\n for le in (.6,1.25,2.5):\\n  for reg in (.003,.04):\\n   settings[f'GP {nm} {le} {reg}']=lambda A,I,w=w,le=le,reg=reg:(resid_gp(A,I,w,le,reg),[])\\nresults={k:[] for k in settings}\\nfor I,J in splits:\\n rates=least_squares(lambda l:(H(l)@fit(H(l),T[I].T)-T[I].T).ravel(),np.log([.4,2.]),bounds=(-5,3)).x\\n h=H(rates); A=fit(h,T.T).T; fast=D @ fit(D[I],A[I,1]);\\n for k,method in settings.items():\\n  slow,pv=method(A[:,0],I); pred=np.c_[slow,fast]@h.T\\n  results[k].append((np.mean(abs(pred[J]-T[J])),np.mean(abs(slow[I]-A[I,0])),pv))\\nfor k,res in sorted(results.items(),key=lambda kv:max(r[0] for r in kv[1]))[:20]:\\n print(k,np.round([r[0] for r in res],5),round(res[0][1],5),np.round(res[0][2],3))\\nprint('slow baseline and nonlinear candidates')\\nfor k in list(settings)[:9]:print(k,[round(r[0],5) for r in results[k]],np.round(results[k][0][2],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_slow.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 paired spatial readout for both relaxation modes → H2 distinct slow-mode nonlinearity; the paired baseline has worst shuffled-fold trajectory MAE 0.02460 and 52/20 target MAE 0.00657.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an unrestricted quadratic readout\",\"rejected_reason\":\"Its low training error did not carry over to the ordered splits, and it produced unstable estimates of the individual mode amplitudes.\"}],\"rationale\":\"The slow mode has roughly four times the held-out amplitude error of the fast mode. Compare compact saturation laws and smooth residuals against the paired baseline; retain the baseline unless the improvement survives both ordered and shuffled splits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9ef431e6a475ef2dc4794326ce8e5935db01ef98151f924d5e337645918eecee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43125.18,
+      "usage_known": true,
+      "prompt_tokens": 27798,
+      "cached_tokens": 9344,
+      "completion_tokens": 1651
+    }
+  ]
+}

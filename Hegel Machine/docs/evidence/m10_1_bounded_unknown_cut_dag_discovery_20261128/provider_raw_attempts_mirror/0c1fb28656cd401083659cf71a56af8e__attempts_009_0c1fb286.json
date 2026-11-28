@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c1fb28656cd401083659cf71a56af8e",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:59.326009+00:00",
+  "ended_at_utc": "2026-11-28T09:47:25.644617+00:00",
+  "request_sha256": "f0ac3bb69407755a4e54ea8124773632f47a512c9dd97e8e7f983a5e987e4bc4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59487,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35401,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/modes.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.linalg import svd\\nfrom scipy.optimize import least_squares\\nc,d=C(x),D(x); H=bias(np.c_[c,d]); W=fit(H[:52],np.c_[y,z][:52]); R=np.c_[y,z]-H@W; U,S,V=svd(R[:52],full_matrices=False); print('linear readout coefficients',np.round(W,4)); print('residual spectrum',S,'directions',np.round(V[:4],5));print('orig spectrum',svd(z[:52],compute_uv=False));\\nfor i in range(4):\\n g=R@V[i]; print('mode',i,'most extreme',[(k,np.round(x[k],3),round(g[k],4)) for k in np.argsort(abs(g[:52]))[-5:]])\\nfor l,G in [('c',bias(c)),('d',bias(d)),('cd',H),('x',bias(x))]:\\n W=fit(G[:52],z[:52]); T=z-G@W;print(l,'sv',svd(T[:52],compute_uv=False),'traj linear coefficients',np.round(W,3))\\nfam={'e':lambda k:-np.expm1(-k*t),'r':lambda k:t/(1+k*t),'d':lambda k:t*np.exp(-k*t),'s':lambda k:np.sin(k*t),'q':lambda k:t/(1+k*t*t),'h':lambda k:np.tanh(k*t),'p':lambda k:t**k,'l':lambda k:np.log1p(k*t),'g':lambda k:-np.expm1(-k*t*t),'u':lambda k:t*t/(1+k*t*t)}\\nfor label,T in [('orig',z[:52]),('cdres',R[:52,1:])]:\\n for L in [1,2,3]:\\n  ls=[]\\n  for keys in combinations_with_replacement(fam,L):\\n   def Q(p):return np.array([fam[k](v) for k,v in zip(keys,p)]).T\\n   def res(p):\\n    a=Q(p);return (a@fit(a,T.T)-T.T).ravel()\\n   p=least_squares(res,np.linspace(.4,1.7,L),bounds=(.001,8),max_nfev=70).x;ls.append((round(np.std(res(p)),7),''.join(keys),p))\\n  print(label,L,sorted(ls,key=lambda a:a[0])[:7])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modes.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel-C linear branches → isolate a shared nonlinear readout; the best deployable exploratory 52/20 MAEs are 0.24993 for y and 0.16805 for trajectory, while supplying observed trajectories reduces the scalar MAE to 0.03794.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use observed trajectories to predict held-out y\",\"rejected_reason\":\"Test trajectories are unavailable; this result is useful only for identifying shared structure.\"}],\"rationale\":\"Project both outputs off the fitted panel-C branches. The residual spectrum will show whether one missing spatial interaction explains both outputs; fitting time laws to those residuals tests this without using held-out trajectories.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "19f335c981342be313fcad4a1148e942e4a4363add0365521d6256eb66be5ffb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28881.16,
+      "usage_known": true,
+      "prompt_tokens": 35401,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

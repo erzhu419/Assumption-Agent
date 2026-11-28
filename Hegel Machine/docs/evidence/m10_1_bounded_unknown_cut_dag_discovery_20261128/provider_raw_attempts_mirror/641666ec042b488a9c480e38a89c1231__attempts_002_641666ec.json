@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "641666ec042b488a9c480e38a89c1231",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:08.233966+00:00",
+  "ended_at_utc": "2026-11-28T09:25:28.430087+00:00",
+  "request_sha256": "771d106b01ee4129a557aca904b6f632054f3154d3eb4d23b8e627252a6513e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12566,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15337,
+    "cached_tokens": 9344,
+    "completion_tokens": 610
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=120)\\nprint('times, telemetry',s['eval_times'],s['telemetry_vec']); print('x,y,traj examples',s['train']['x'][:6],s['train']['y'][:6],s['train']['traj'][:6],sep='\\\\n')\\nfor k in ['panel_a','panel_b','panel_c']:\\n p=s[k]; u=p['u']; X=np.c_[np.ones(len(u)),u]; print(k,'input range',u.min(0),u.max(0))\\n for n,v in p.items():\\n  if n=='u':continue\\n  c=np.linalg.lstsq(X,v,rcond=None)[0]; e=v-X@c; print(n,'affine rmse',np.mean(e**2,0)**.5,'residual norm quantiles',np.quantile(np.linalg.norm(e,axis=1),[0,.5,.85,1])); print(c)\\nprint('traj sv',np.linalg.svd(s['train']['traj']-s['train']['traj'].mean(0),compute_uv=False))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust regression' 2>&1 | head -40\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived solver transfers unchanged) -> H2 (reuse only panel and trajectory stages supported by this batch); prior 52/20 gate MAE was 0.057490 for y and 0.390122 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the archived solver without inspecting its stages\",\n      \"rejected_reason\": \"The prior gate failed both targets, and the trajectory error is large enough to warrant identifying which stages changed.\"\n    }\n  ],\n  \"rationale\": \"Inspect archived equations, panel residuals, and trajectory rank to distinguish a changed panel operator from a changed temporal law before fitting a candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "db81b597d57f1d893d7be6b7a02e64b9b8f8d45eb02a20cb5a7eac2c3e8d1b51",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20148.46,
+      "usage_known": true,
+      "prompt_tokens": 15337,
+      "cached_tokens": 9344,
+      "completion_tokens": 610
+    }
+  ]
+}

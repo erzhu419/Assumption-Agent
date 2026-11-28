@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff6c403d8cf54da1a283796caf7abe1f",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:19.962526+00:00",
+  "ended_at_utc": "2026-11-28T09:44:51.297209+00:00",
+  "request_sha256": "c8219c00741622997a3aae9b3549f8ec425ec4352bd2f6252e8e2ff3cde2c47f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46043,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29138,
+    "cached_tokens": 9344,
+    "completion_tokens": 1101
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/check_scalar_grammar.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nD='/holdout_task/'\\ns=pickle.load(open(D+'public_batch.pkl','rb'))[0]['study']; d=runpy.run_path(D+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); node=runpy.run_path(D+'node_01.py')['_scalar']; y=d['y']; z=d['z']; ids=np.arange(len(y)); seeds=(92,741,1157)\\nfolds=[ids[52:]]+[j for seed in seeds for j in np.array_split(np.random.default_rng(seed).permutation(len(y)),5)]\\nviews=('x','i','a','b','ib','ij','i1','i2','i2b','x2b','a2')\\ndef pred(K,y,n,noise):\\n return y.mean()+K[n:,:n]@cho_solve(cho_factor(K[:n,:n]+noise*np.eye(n)),y-y.mean())\\nrows={}\\nfor j in folds:\\n i=np.setdiff1d(ids,j); n=len(i); zz={k:v[np.r_[i,j]] for k,v in z.items()}; v={k:(zz[k]-zz[k][:n].mean(0))/zz[k][:n].std(0) for k in views}; x=v['x']; Q=1+x@x.T/4; g=Q**2\\n w=v['i2b']; d=((w[:,None,:]-w[None,:,:])/1.5)**2; base=g+np.exp(-d.sum(2)/2)+np.exp(-d/2).mean(2)**2\\n def rec(k,p):rows.setdefault(k,[]).append(np.mean(abs(p-y[j])))\\n p0=node(zz,y[i]); rec(('baseline',),p0)\\n for k,w in v.items():\\n  R=w@w.T/4; mods=(R,(1+R)**2,Q*R,Q**2*R,(1+R)**3)\\n  for a,C in enumerate(mods):\\n   for wt in (.1,.4,1.):\\n    p=pred(base+wt*C,y[i],n,.008); rec((k,a,wt),p)\\n for wt in (.1,.4,1.):\\n  C=np.mean([Q*(v[k]@v[k].T/4) for k in ('i1','i2','i2b','x2b','a2')],axis=0); rec(('panel_aggregate',wt),pred(base+wt*C,y[i],n,.008))\\nprint('key; official; shuffled mean; worst; repeated-seed mean/worst')\\ndef stats(e):return np.r_[e[0],np.mean(e[1:]),max(e),*[f(x) for x in np.array(e[1:]).reshape(3,5) for f in (np.mean,np.max)]]\\nprint(('baseline',),stats(rows[('baseline',)]).round(6))\\nfor k,e in sorted(rows.items(),key=lambda kv:max(kv[1][1:]))[:12]:print(k,stats(e).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_scalar_grammar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Single panel-view kernel → test explicit cross-view interactions; official scalar MAE is 0.033130 and the worst additional split is 0.043821.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool kernels using inner-fold scores\",\"rejected_reason\":\"The tested pooling rules worsened both official scalar MAE and worst-split scalar MAE.\"}],\"rationale\":\"Test whether explicit products between raw and nonlinear panel coordinates improve scalar predictions across repeated splits. Keep the accepted artifact unless the challenger materially improves the worst slices while preserving official acceptance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "13c898a174326f7c84e83056d80af2f1ea6a42de63df12facf42cbc556124006",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33940.12,
+      "usage_known": true,
+      "prompt_tokens": 29138,
+      "cached_tokens": 9344,
+      "completion_tokens": 1101
+    }
+  ]
+}

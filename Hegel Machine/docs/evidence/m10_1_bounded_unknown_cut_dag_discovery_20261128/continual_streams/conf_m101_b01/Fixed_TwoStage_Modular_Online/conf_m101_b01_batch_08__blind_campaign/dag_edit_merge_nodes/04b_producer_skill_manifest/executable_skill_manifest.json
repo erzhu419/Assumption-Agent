@@ -1,0 +1,139 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b01_batch_08_528b747c3309",
+    "source_hash": "528b747c3309497cff45a9eb3b25429fe017b9317154fcc5948494a7dee16f99",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_merge_nodes",
+    "task_id": "conf_m101_b01_batch_08__blind_campaign__merge_nodes",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/calibration_base.py",
+        "archived_relpath": "producers/tmp__calibration_base.py",
+        "bytes": 2174,
+        "sha256": "3162327645c56a9829392ba39f7e21537a351b9f3d791cc89108c184bdb4c0ba"
+      },
+      {
+        "container_path": "/tmp/compact_laws.py",
+        "archived_relpath": "producers/tmp__compact_laws.py",
+        "bytes": 2163,
+        "sha256": "9f771c0f630fe929fb660ac536c218fbc4cca837338ff220b9653969c62319d3"
+      },
+      {
+        "container_path": "/tmp/merged_probe.py",
+        "archived_relpath": "producers/tmp__merged_probe.py",
+        "bytes": 3359,
+        "sha256": "77ff6ecba2fce7e7559d767ef1fb1e552f948f8cdef3f015ec8af7b668b31775"
+      },
+      {
+        "container_path": "/tmp/panel_probe.py",
+        "archived_relpath": "producers/tmp__panel_probe.py",
+        "bytes": 1653,
+        "sha256": "a34a2cbc55fb5127fe25e21cf06bec6ecea72be3674f743249dbe1be4e3340ca"
+      },
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 3433,
+        "sha256": "7a5e42c90a22fe422ccc7dc3fe72736fa2fd31c63599de395e918ebdf939b662"
+      },
+      {
+        "container_path": "/tmp/sink_probe.py",
+        "archived_relpath": "producers/tmp__sink_probe.py",
+        "bytes": 2503,
+        "sha256": "f683ef8a53210bbc3538ba2ac516170daa4b35e874fe9f8b03838077059bedea"
+      },
+      {
+        "container_path": "/tmp/stress_merge.py",
+        "archived_relpath": "producers/tmp__stress_merge.py",
+        "bytes": 673,
+        "sha256": "dce3725257278db5ad923d2d5158973d2024f576a6ec2f3c0c08a276d3bfdf81"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b01_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b01_batch_00_solver.py",
+        "bytes": 3608,
+        "sha256": "0cbb42d85432832ef1e9dcf0cd540b499b5190d632aff141f5b011996b2f855c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json public_asset_index.json validate_public_schema.py test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy'",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\nb=pickle.load(open('public_batch.pkl','rb')); print('studies',len(b)); s=b[0]['study']\nfor k,v in s.items():\n print(k)\n for q,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(q,a.shape,a.dtype); print(a[:4] if a.ndim>1 else a[:12]); print('min/max',a.min(axis=0),a.max(axis=0))\n if k.startswith('panel'):\n  u,v=s[k]['u'],s[k]['v']; n=len(u); X=np.c_[np.ones(n),u]; coef=np.linalg.lstsq(X,v,rcond=None)[0]; print('Affine coefs',coef); print('Row r",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\nfor k in ['train','test']:\n print(k)\n for q,a in s[k].items():\n  a=np.asarray(a); print(q,a.shape,'sample',a[:6]); print('range',a.min(axis=0),a.max(axis=0))\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; X=np.c_[np.ones(len(x)),x]; C=np.linalg.lstsq(X,np.c_[y,t],rcond=None)[0]; print('Raw affine MAE',np.mean(abs(X@C-np.c_[y,t]),axis=0)); print('Trajectory singulars',np.linalg.svd(t-t.mean(0),compute_uv",
+      "cat > /tmp/panel_probe.py <<'PY'\nimport pickle,itertools\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef terms(u):\n return np.array([u[:,i]*u[:,j] for i,j in [(0,1),(0,3),(1,2),(2,3)]]).T\ndef scores(X,y):\n P=np.linalg.pinv(X); c=P@y; e=y-X@c; h=np.sum(X*P.T,axis=1); return np.mean(abs(e/(1-h[:,None]))),c,np.mean(abs(e))\nfunc={'sin':np.sin,'tanh':np.tanh,'quad':lambda x:x*x,'cos':lambda x:1-np.cos(x),'rat':lambda x:x/(1+x*x),'cubic':lambda x:x**3}\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)",
+      "cat > /tmp/compact_laws.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.optimize import minimize_scalar\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\ndef fit(X,y):\n return np.linalg.lstsq(X,y,rcond=None)[0]\ndef err(X,y):\n c=fit(X,y); return np.sqrt(np.mean((X@c-y)**2))\np=s['panel_a']; u=p['u']; z=p['v']; j=[1,2,3,0]; v=u[:,j]; X=np.c_[np.ones(len(u)),u,u*v]; w=np.ones(len(u))\nfor _ in range(15):\n c=fit(X*w[:,None],z*w[:,None]); r=np.linalg.norm(z-X@c,axis=1); w=1/np.sqrt(1+(r/.12)**2)\ng=np.argsort(r)",
+      "cat /holdout_task/test_dag_candidate.py; cat > /tmp/merged_probe.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import minimize_scalar,least_squares\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nJ=[1,2,3,0]\ndef ls(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\ndef ones(u): return np.ones(len(u))\ndef a_fit(p):\n u=p['u']; v=p['v']; z=u[:,J]; X=np.stack([np.ones_like(u),u,z,u*z,u**3],axis=-1); W=np.ones(len(u));\n for _ in range(20):\n  c=np.stack([ls(X[:,j]*W[:,None],v[:,j]*W) for j in range(4)]); r=np.linalg.norm(np.einsum('nij,ij->ni',X,c)-v,axis=1); W=1/np.sqr",
+      "sed -n '55,116p' /holdout_task/test_dag_candidate.py; cat > /tmp/sink_probe.py <<'PY'\nfrom merged_probe import *\nfrom scipy.spatial.distance import cdist\nfrom sklearn.model_selection import KFold\nx=S['train']['x']; y=S['train']['y']; t=S['train']['traj']; Y=np.c_[y,t]; u,_=a_inv(x,a_fit(S['panel_a'])); b=b_fit(S['panel_b']); c,d=c_fit(S['panel_c']); P,Q,R=b(u),c(u),d(u)\nfor i in [0,10,20,30,40,50,60,70]: print('row',i,np.round(u[i],3),np.round(P[i],3),np.round(Q[i],3),np.round(R[i],3),np.round(Y[i,[0,1,3,8]],3))\nN=len(u); splits=[(np.arange(54),np.arange(54,72))]+list(KFold(4,shuffle=True,rand",
+      "cat > /tmp/readout_probe.py <<'PY'\nfrom merged_probe import *\nfrom scipy.special import erf\nfrom sklearn.linear_model import MultiTaskLasso\nfrom sklearn.model_selection import KFold\nfrom itertools import combinations\nU=S['panel_b']['u']; V=S['panel_b']['v'];\ndef bench(fun,initial,lb,ub):\n def res(t):\n  ff=np.c_[ones(U),fun(U,t)]; return (ff@ls(ff,V)-V).ravel()\n z=least_squares(res,initial,bounds=(lb,ub),max_nfev=150); return np.std(z.fun), z.x\nbest=[]\nfor name,g in {'tanh':lambda x,k:np.tanh(k*x),'rat':lambda x,k:x/(1+k*x*x),'exp':lambda x,k:x*np.exp(-k*x*x),'sin':lambda x,k:np.sin(k*x),'erf':",
+      "sed '/^if __name__/,$d' /tmp/merged_probe.py | grep -v '^import pickle\\|^S=pickle\\|for e,n,t,f in sorted\\|print.*C2 law' > /tmp/calibration_base.py\nsed -i '/^ u=p\\[.u.\\]; v1=/!b' /tmp/calibration_base.py\n# Keep the compact C2 frequency fit while dropping probe output.\nsed -i '/^ c1=ls(f1(u),v1)/i\\ t=least_squares(res,[.35,.06,2.5],max_nfev=300).x' /tmp/calibration_base.py\n{ cat /tmp/calibration_base.py; cat <<'PY'\n\nfrom scipy.optimize import minimize\nfrom scipy.linalg import cho_factor, cho_solve\n\n\ndef _features(x, a, b, c, d):\n u, _ = a_inv(x, a)\n p, q, r = b(u), c(u), d(u)\n return [u, p, q, ",
+      "sed -i '1i import numpy as np' /holdout_task/node_00.py\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\ncat > /tmp/stress_merge.py <<'PY'\nimport os,pickle,runpy,numpy as np\nfrom sklearn.model_selection import KFold\nn=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; N=len(tr['x']); splits=[(np.arange(N-20),np.arange(N-20,N))]+list(KFold(4,shuffle=True,random_state=17).split(tr['x']))\na=n['a_fit'](s['panel_a']); b=n['b_fit'](s['panel_b']); c,d=n['c_fit'](s['panel_c']); F=n['_features'](tr['x']"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_b01_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_b01_batch_00_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 4621,
+        "sha256": "68bbb4c27a3b3afdbca201dc1e099a39ca18c42575d9dc439834bddf0fed8429",
+        "content_addressed_ref": "content_addressed_blobs/68bbb4c27a3b3afdbca201dc1e099a39ca18c42575d9dc439834bddf0fed8429.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "528b747c3309497cff45a9eb3b25429fe017b9317154fcc5948494a7dee16f99",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "sed -i '1i import numpy as np' /holdout_task/node_00.py\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\ncat > /tmp/stress_merge.py <<'PY'\nimport os,pickle,runpy,numpy as np\nfrom sklearn.model_selection import KFold\nn=r",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "528b747c3309497cff45a9eb3b25429fe017b9317154fcc5948494a7dee16f99",
+        "expected_candidate_sha256": "528b747c3309497cff45a9eb3b25429fe017b9317154fcc5948494a7dee16f99",
+        "computed_candidate_sha256": "528b747c3309497cff45a9eb3b25429fe017b9317154fcc5948494a7dee16f99",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 4621
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_528b747c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": []
+  }
+}

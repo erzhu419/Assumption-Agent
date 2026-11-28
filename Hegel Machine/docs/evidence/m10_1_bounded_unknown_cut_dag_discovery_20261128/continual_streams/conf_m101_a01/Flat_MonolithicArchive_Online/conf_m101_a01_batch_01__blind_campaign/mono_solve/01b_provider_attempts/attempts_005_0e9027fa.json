@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0e9027fafe8c4c3c9f2993e7f4f7656d",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:16.572932+00:00",
+  "ended_at_utc": "2026-11-28T09:19:55.135238+00:00",
+  "request_sha256": "3db29b0c89efb2a4709438571a93761ccdbc08c07e52fe50d5f00fffb685853f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33033,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23334,
+    "cached_tokens": 9344,
+    "completion_tokens": 1574
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/features.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['train']; x=t['x']; y=t['y']; tr=t['traj']; tm=s['eval_times']\\ndef af(x):return np.c_[np.ones(len(x)),x]\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef pol(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for j in range(1,d+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\np=s['panel_a']; a=af(p['u']); z=p['v']; good=np.linalg.norm(z-a@ls(a,z),axis=1)<3; A=ls(a[good],z[good]); p=s['panel_b']; B=ls(af(p['u']),p['v']); p=s['panel_c']; C=ls(af(p['u']),p['v1']); D=ls(pol(p['u'],2),p['v2'])\\nV=np.linalg.svd(tr[:52],full_matrices=False)[2]; v=V[0]/V[0,-1]; h=tr@v/(v@v); Y=np.c_[y,h]; n=len(y)\\ncoords={'x':x,'a':af(x)@A,'ai':(x-A[0])@np.linalg.inv(A[1:])}\\nfor k,u in list(coords.items()):\\n for k2,M in [('b',B),('c',C)]:coords[k+k2]=af(u)@M\\nfor k,u in list(coords.items()):\\n if len(k)<=2:coords[k+'2']=pol(u,2)@D\\nsplits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in [np.random.default_rng(i).permutation(n) for i in range(10)]]\\ndef cv(F,reg=0,base=None):\\n if base is None:base=af(x)\\n r=[]\\n for i,j in splits:\\n  m=ls(base[i],F[i]); G=F-base@m; scale=np.sqrt(np.mean(G[i]**2,axis=0)); G=G/np.maximum(scale,1e-10); H=np.c_[base,G]; P=np.r_[np.zeros(base.shape[1]),np.full(F.shape[1],reg)]; w=ls(np.r_[H[i],np.diag(np.sqrt(P))],np.r_[Y[i],np.zeros((len(P),2))]); r.append(np.mean(abs(H[j]@w-Y[j]),0))\\n r=np.array(r);return r[0],np.median(r[1:],0),np.max(r[1:],0)\\nif __name__=='__main__':\\n np.set_printoptions(precision=5,suppress=True); print('B',B,'C',C,'D',D,sep='\\\\n'); print('x ranges',x.min(0),x.max(0),'test',s['test']['x'].min(0),s['test']['x'].max(0)); print('Y quantile',np.quantile(Y,[0,.05,.25,.5,.75,.95,1],axis=0)); print('y cubic coeff',ls(pol(x,3),y))\\n results=[]\\n base=pol(x,2)\\n for name,u in coords.items():\\n  for f,F in [('cube',u**3),('powers',np.c_[u**3,u**4,u**5]),('all3',pol(u,3)[:,15:]),('s2',np.sin(2*u)),('s3',np.sin(3*u)),('tanh',np.tanh(u)),('tanh2',np.tanh(2*u)),('exp',np.exp(u)),('rat',u/(1+u*u)),('har',np.c_[np.sin(1.6*u),np.cos(1.6*u)]),('poly2',pol(u,2)[:,5:]),('har3',np.c_[np.sin(3*u),np.cos(3*u)])]:\\n   for reg in [.01,.3,3]:\\n    m=cv(F,reg,base); results.append((m,name,f,reg))\\n for j in range(2):\\n  print('best column',j)\\n  for m,*key in sorted(results,key=lambda a:a[0][0][j]+a[0][1][j])[:14]:print(key,np.array(m))\\n print('relaxation')\\n for typ in range(4):\\n  def basis(p):\\n   r=np.exp(p[0]); f= (1-np.exp(-r*tm)) if typ<2 else tm/(tm+r)\\n   if typ%2:f=f+p[1]*tm\\n   return f/f[-1]\\n  q=least_squares(lambda p:basis(p)-v,[0,0][:1+typ%2]);print(typ,q.x,q.fun)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/features.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (quadratic trend and amplitude-only readout) -> H2 (coordinate-dependent higher-order terms); quadratic 52/20 MAE is 0.08430 for y and 0.08895 for trajectory amplitude.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Trajectory amplitude alone suffices for the scalar readout.\",\"empirical_witness\":\"Degree-one through degree-four amplitude-only readouts give 52/20 y MAE 0.464–0.503, versus 0.0843 with raw-input quadratics.\",\"causal_blanket_diagnosis\":\"The dominant trajectory mode does not encode the input variation needed for y.\",\"sublated_pivot\":\"Keep the shared trajectory mode, and test separate input and panel-derived readout features.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an unrestricted cubic directly\",\"rejected_reason\":\"It worsens 52/20 y MAE to 0.22407; test regularized or structurally restricted higher-order terms instead.\"}],\"rationale\":\"Compare panel-coordinate hypotheses on the required split and repeated held-outs. A consistent gain would justify including that feature family; a gain confined to one split would not.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d95aad0411a2f2ded3fcef348e16038842b7214231f239da8d37db5911b67be3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41210.13,
+      "usage_known": true,
+      "prompt_tokens": 23334,
+      "cached_tokens": 9344,
+      "completion_tokens": 1574
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8a2bff2071e54e32a338de25602fcd11",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:05.679889+00:00",
+  "ended_at_utc": "2026-11-28T09:49:40.357336+00:00",
+  "request_sha256": "b4e923b4a02bae219291f445cd85f5b44392246583f2e772a333dbf0d365e6d5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72878,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39549,
+    "cached_tokens": 9344,
+    "completion_tokens": 1479
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/final_probe.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nT=np.c_[y,z]; n=52\\np=s['panel_a'];u,v=p['u'],p['v'];keep=np.linalg.norm(v,axis=1)<5\\nbasis=lambda x:np.stack([np.ones_like(x),x,x**3,(x-1)*np.roll(x,-1,axis=1)],axis=2)\\na=basis(u[keep]);w=np.stack([fit(a[:,i],v[keep,i]) for i in range(4)]);print('calibration weights',w,'cal residual',np.std((a*w).sum(2)-v[keep]));f=(basis(raw)*w).sum(2)\\nu=s['panel_c']['u']; print('C1 error',np.std(bil(u)@fit(bil(u),s['panel_c']['v1'])-s['panel_c']['v1']));print('C2 weights',np.round(fit(cos(u,2.4),s['panel_c']['v2']),4))\\nDct={'raw':raw,'inverse':x,'forward':f}\\nfor tag,g in list(Dct.items()):\\n Dct[tag+'B']=B(g)\\nfor tag,g in list(Dct.items()):\\n c,d=C(g),D(g); h=bias(np.c_[c,d]); p=c*d\\n for k,H in [('linear',h),('matched',np.c_[h,p]),('full',np.c_[h,(c[:,:,None]*d[:,None,:]).reshape(len(g),-1)]),('cross',np.c_[h,g*np.roll(c,1,axis=1)]),('poly',np.c_[h,poly(g,3)[:,5:]])]:\\n  R=H@fit(H[:n],T[:n])-T;print(tag,k,np.round([np.std(R[:n]),np.mean(abs(R[n:,0])),np.mean(abs(R[n:,1:]))],5))\\ndef gp(F,H,mode,nt,idx=None,te=None):\\n if idx is None: idx=np.arange(nt);te=np.arange(nt,len(F))\\n F=F/F[idx].std(0); Q=(F[:,None]-F[None,idx])**2; I=np.eye(nt)\\n X=H[idx]; P=np.linalg.svd(X,full_matrices=True)[0][:,np.linalg.matrix_rank(X):]; v=P.T@T[idx]; U,S,V=np.linalg.svd(v,full_matrices=False); G=U[:,:3]*np.sqrt(nt)\\n def model(p,ret=False):\\n  dist=Q@np.exp(p[:-1]);\\n  if mode==0: K=np.exp(-dist)\\n  if mode==1:\\n   q=np.sqrt(3*dist);K=(1+q)*np.exp(-q)\\n  if mode==2: K=(1+dist)**-2\\n  K0=K[idx]+np.exp(p[-1])*I\\n  if ret:\\n   L=cho_factor(K0); Z=cho_solve(L,X); W=fit(X.T@Z,Z.T@T[idx]);return H[te]@W+K[te]@cho_solve(L,T[idx]-X@W)\\n  L=cho_factor(P.T@K0@P);scale=np.sum(G*cho_solve(L,G),axis=0)/len(P.T);return 2*np.log(np.diag(L[0])).sum()+len(P.T)*np.log(scale).mean()\\n p=min((minimize(model,np.r_[np.full(F.shape[1],g),-7],method='L-BFGS-B',bounds=[(-9,4)]*F.shape[1]+[(-13,-1)],options={'maxiter':100}) for g in [-2,0]),key=lambda r:r.fun).x\\n R=model(p,True)-T[te];return np.array([np.mean(abs(R[:,0])),np.mean(abs(R[:,1:]))]),np.exp(p)\\nif __name__=='__main__':\\n folds=[(np.arange(n),np.arange(n,72))]+[(p[:n],p[n:]) for p in [np.random.default_rng(k).permutation(52) for k in range(2)]]\\n for k,F in Dct.items():\\n  for tag,g in [('self',F),('inverse',x)]:\\n   if tag=='inverse' and k=='inverse':continue\\n   for mode in range(3):\\n    H=bias(np.c_[C(g),D(g)]);scores=[]\\n    for j,(idx,te) in enumerate(folds):\\n     if j:idx,te=idx[:40],idx[40:]\\n     e,p=gp(F,H,mode,len(idx),idx,te);scores.append(e)\\n    print('GP',k,tag,mode,np.round(scores,5).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/final_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Inverse calibration with a raw-coordinate residual kernel → compare calibration direction and train-profiled covariance; current 52/20 MAEs are 0.137105 for y and 0.104751 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the saved baseline\",\"rejected_reason\":\"The public validator rejected both prediction metrics.\"}],\"rationale\":\"The saved model uses different coordinates for its trend and residual. Testing the forward map, inverse map, and panel-B compositions can expose a coordinate error; inner splits distinguish a repeatable covariance improvement from a gain specific to the public split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "936a02768cf6e331e78de1e4f342267c5fb4f33994437aa976af2e12f2abff61",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39937.62,
+      "usage_known": true,
+      "prompt_tokens": 39549,
+      "cached_tokens": 9344,
+      "completion_tokens": 1479
+    }
+  ]
+}

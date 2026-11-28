@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6796a6931e8f4cb0ad559b70029341c6",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:11.290830+00:00",
+  "ended_at_utc": "2026-11-28T09:47:42.612631+00:00",
+  "request_sha256": "043ef951b7ea3709e98994568f6afe817cd99394994079e20d17e910cf49fc3f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75113,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42471,
+    "cached_tokens": 9344,
+    "completion_tokens": 1239
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations\\\\n', '')\\na = s.index('def _predict(')\\nb = s.index('\\\\n\\\\ndef solve_batch', a)\\ns = s[:a] + '''def _kernel(x, y):\\n    i, j = np.triu_indices(x.shape[1])\\n    px, py = x[:, i]*x[:, j], y[:, i]*y[:, j]\\n    return (1 + x@y.T + .1*(px@py.T)\\n            + .4*np.exp(-cdist(x, y, metric='sqeuclidean')/60))\\n\\n\\ndef _predict(v, n, y, state):\\n    # The second auxiliary output is useful, but its quadratic products\\n    # extrapolate less reliably than those of the primary and odd branches.\\n    weights = np.repeat([2., 2., .35], 4)\\n    z = v * (weights / np.maximum(v[:n].std(0), .001))\\n    train = z[:n]\\n    alpha = solve(_kernel(train, train) + .004*np.eye(n),\\n                  np.column_stack((y, state)), assume_a='pos')\\n    pred = _kernel(z[n:], train) @ alpha\\n    return pred[:, 0], pred[:, 1:]\\n''' + s[b:]\\np.write_text(s)\\nPY\\ncat >/tmp/check_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']\\nn = len(tr['x'])\\nidx = np.arange(n)\\nfolds = [('fixed52', idx[:52], idx[52:])]\\nfor seed in range(10, 30):\\n    p = np.random.default_rng(seed).permutation(n)\\n    folds.append((f'random{seed}', p[:56], p[56:]))\\nr = np.linalg.norm(tr['x'], axis=1)\\np = np.argsort(r)\\nfolds.append(('extreme_norm', p[:-12], p[-12:]))\\nerrors = []\\nfor name, a, b in folds:\\n    split = dict(s, train=dict(tr, **{k:tr[k][a] for k in ('x','y','traj')}), test={'x':tr['x'][b]})\\n    out = m.solve_batch(split)\\n    dy = abs(out['y_hat'] - tr['y'][b])\\n    dt = abs(out['state_pred'] - tr['traj'][b])\\n    e = np.r_[dy.mean(), dt.mean(), dt.mean(0)]\\n    assert np.isfinite(e).all()\\n    errors.append(e)\\n    if name in ('fixed52', 'extreme_norm'):\\n        print(name, np.round(e, 5), flush=True)\\nerrors = np.array(errors)\\nprint('random56 worst per metric', np.round(errors[1:-1].max(0), 5))\\nprint('random56 worst y fold', folds[1+errors[1:-1, 0].argmax()][0])\\nassert errors[0, 0] <= .038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unweighted readouts → H2 branch-weighted quadratic plus smooth residual kernel; worst MAE across the 11 comparison splits was 0.0185 for y, 0.0152 for trajectories, and 0.0182 at the final timestamp.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use stronger regularization at 0.015\",\n      \"rejected_reason\": \"It improved the fixed split slightly but worsened the maximum error on all three reported metrics.\"\n    }\n  ],\n  \"rationale\": \"The weighted kernel improves both outputs without changing the recovered operators. Verify the installed solver on disjoint random splits and a high-norm extrapolation slice to detect whether that gain depends on the comparison splits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "355edacaa8a7ee4112b85d1993fe61120abf303ebb242d43e5e3d645d9a40502",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33948.63,
+      "usage_known": true,
+      "prompt_tokens": 42471,
+      "cached_tokens": 9344,
+      "completion_tokens": 1239
+    }
+  ]
+}

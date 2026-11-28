@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "148145c8125e43fea8221b72ab9cda60",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_06__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:37.306994+00:00",
+  "ended_at_utc": "2026-11-28T09:55:42.448518+00:00",
+  "request_sha256": "7b707c0e5b4503f28a717e0092b71a246050043b6fca023c5931978f472b5ff3",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 44880,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29862,
+    "cached_tokens": 5504,
+    "completion_tokens": 1761
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > node_00.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(a, y):\\n    return np.linalg.lstsq(a, y, rcond=1e-10)[0]\\n\\n\\ndef _adjacent(x):\\n    return x * np.roll(x, -1, axis=1)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    panel_a, panel_c = study['panel_a'], study['panel_c']\\n    a = _affine(panel_a['u'])\\n    v = panel_a['v']\\n    beta = _fit(a, v)\\n    # Estimate the forward map before inversion so response outliers do not\\n    # become high-leverage calibration inputs.\\n    for _ in range(12):\\n        residual = np.linalg.norm(v - a @ beta, axis=1)\\n        scale = max(3 * np.median(residual), 1e-6)\\n        root_weight = (1 + (residual / scale) ** 2) ** -0.5\\n        beta = _fit(a * root_weight[:, None], v * root_weight[:, None])\\n    residual = np.linalg.norm(v - a @ beta, axis=1)\\n    inlier = residual < max(8 * np.median(residual), 1e-4)\\n    beta = _fit(a[inlier], v[inlier])\\n\\n    x = np.concatenate((study['train']['x'], study['test']['x']))\\n    z = np.linalg.solve(beta[1:].T, (x - beta[0]).T).T\\n    u = panel_c['u']\\n    c = _affine(_adjacent(z)) @ _fit(_affine(_adjacent(u)), panel_c['v1'])\\n    return {'u': u, 'z': z, 'v2': panel_c['v2'], 'c': c}\\nPY\\ncat > node_03.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _fit(a, y):\\n    return np.linalg.lstsq(a, y, rcond=1e-10)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    data = inputs['node_00']\\n    z, c, d = data['z'], data['c'], inputs['node_02']['d']\\n    n = len(train['x'])\\n    base = np.column_stack((np.ones(len(z)), z, c, d, c * d))\\n    design = base[:n]\\n    y_hat = base[n:] @ _fit(design, train['y'])\\n\\n    # The trajectory needs a cross-coordinate readout product as well.\\n    # Select it from training residuals after removing the baseline span.\\n    i, j = np.where(~np.eye(c.shape[1], dtype=bool))\\n    products = c[:, i] * d[:, j]\\n    orth = products[:n] - design @ _fit(design, products[:n])\\n    traj = train['traj']\\n    residual = traj - design @ _fit(design, traj)\\n    norms = np.linalg.norm(orth, axis=0)\\n    gain = np.linalg.norm(orth.T @ residual, axis=1) / np.maximum(norms, 1e-12)\\n    trajectory_design = np.column_stack((base, products[:, np.argmax(gain)]))\\n    state_pred = trajectory_design[n:] @ _fit(trajectory_design[:n], traj)\\n    final = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, runpy\\nimport numpy as np\\nh = runpy.run_path('/holdout_task/test_dag_candidate.py')\\ns, run = h['st'], h['run_dag']\\ntrain = s['train']\\nx, y, tr = (train[k] for k in ('x', 'y', 'traj'))\\n# Row blocks test interaction selection with changed training rows; the\\n# radial tail checks extrapolation where cross-products are largest.\\nfolds = {'public': np.arange(52,72), 'first': np.arange(20), 'middle': np.arange(20,40), 'late': np.arange(40,52), 'radial_tail': np.argsort(np.linalg.norm(x, axis=1))[-16:]}\\nfor label, val in folds.items():\\n    keep = np.setdiff1d(np.arange(len(x)), val)\\n    case = copy.deepcopy(s)\\n    case['train'] = dict(x=x[keep], y=y[keep], traj=tr[keep], summary=np.array([y[keep].mean(), y[keep].std(), tr[keep,-1].mean(), tr[keep,-1].std()]))\\n    case['test'] = {'x': x[val]}\\n    pred, counts = run(case)\\n    p, q = pred['y_hat'], pred['state_pred']\\n    a = float(np.abs(p-y[val]).mean())\\n    b = float(np.abs(q-tr[val]).mean())\\n    c = float(np.abs(q-tr[val]).mean(axis=0).max())\\n    np.testing.assert_allclose(pred['diagnostics_vec'], [p.mean(),p.std(),q[:,-1].mean(),q[:,-1].std()])\\n    print(f'{label}: y={a:.6f} trajectory={b:.6f} worst_horizon={c:.6f}')\\n    assert set(counts.values()) == {1} and max(a,b,c) < 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal-only readout products → H2 diagonal products plus one cross-coordinate trajectory term; probe worst-block MAE was 0.0056 for y and 0.00644 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit all cross-coordinate products\",\n      \"rejected_reason\": \"The full outer-product basis had worse worst-block trajectory MAE (0.0084 versus 0.00644) than selecting one term.\"\n    }\n  ],\n  \"rationale\": \"Implement the sparse interaction selected consistently in all four probe folds, without fixing its index from validation rows. Verify the exact artifacts on the public contract, then check whether the interaction remains predictive across row blocks, extrapolation to larger input norms, and every trajectory horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "889768e1167a3de3a1061d7835dcfd55fd8dd33780c57bfb908081a064e4a6ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 73107.72,
+      "usage_known": true,
+      "prompt_tokens": 29862,
+      "cached_tokens": 5504,
+      "completion_tokens": 1761
+    }
+  ]
+}

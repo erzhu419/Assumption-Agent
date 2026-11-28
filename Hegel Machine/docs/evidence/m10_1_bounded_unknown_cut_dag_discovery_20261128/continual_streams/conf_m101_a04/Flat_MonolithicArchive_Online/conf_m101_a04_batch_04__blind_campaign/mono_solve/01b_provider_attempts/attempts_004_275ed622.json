@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "275ed6229b654a6182dc5aedc4cc3c61",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:34:26.750440+00:00",
+  "ended_at_utc": "2026-11-28T09:34:53.981202+00:00",
+  "request_sha256": "b3701e823ee8a4a39d54cb896287dfac3536a8d6c5bb7ea73f882ad5fef72250",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 27712,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20305,
+    "cached_tokens": 9344,
+    "completion_tokens": 1036
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,115p' /tmp/hegel_continual_archive/*_01_solver.py; sed -n '1,115p' /tmp/hegel_continual_archive/*_02_solver.py; sed -n '1,20p' /tmp/hegel_continual_archive/*_03_solver.py; cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; fit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\np=s['panel_a'];u,v=p['u'],p['v'];base=np.ones(len(u));nx=np.roll(u,-1,axis=1)\\nkeep=np.ones(len(u),bool)\\nfor i in range(8):\\n f=np.stack([np.ones_like(u),u,u**3,(u-1)*nx],axis=-1); h=np.column_stack([f[:,j]@fit(f[keep,j],v[keep,j]) for j in range(4)]);r=np.linalg.norm(v-h,axis=1);keep=r<max(.001,5*np.median(r))\\nprint('cal cubic',keep.sum(),np.round(np.quantile(r[keep],[0,.5,1]),6));print('cal coeff',np.array([fit(f[keep,j],v[keep,j]) for j in range(4)]))\\nfor tag in ['panel_b','panel_c']:\\n u=s[tag]['u']; base=np.ones(len(u));\\n for name,v in s[tag].items():\\n  if name=='u':continue\\n  def check(parts):\\n   f=np.column_stack(parts);return '%.5g'%np.sqrt(np.mean((f@fit(f,v)-v)**2))\\n  print(tag,name,[(k,check([base,u]+z)) for k,z in [('linear',[]),('cube',[u**3]),('square',[u**2]),('poly3',[u**2,u**3]),('full2',[[u[:,i]*u[:,j] for i,j in []],np.column_stack([u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)])][1:]),('sin31',[np.sin(3.1*u),np.sin(6.2*u)]),('cos',[np.cos(1.1*u),np.cos(3.9*u)]),('ratSin',[u/(1+.8*abs(u)),np.sin(4.5*u)])]])\\nt=s['eval_times']; z=s['train']['traj']; print('svd',np.linalg.svd(z,full_matrices=False)[1]); print('svd centered',np.linalg.svd(z-z.mean(0),full_matrices=False)[1]);print('y-tr corr',np.corrcoef(np.c_[s['train']['y'],z].T)[0]);\\nfor family in range(4):\\n def tb(p):\\n  e=-np.expm1(-p[0]*t); b=[t/(1+p[1]*t),-np.expm1(-p[1]*t),np.sin(p[1]*t),t*np.exp(-p[1]*t)][family];return np.array([e,b]).T\\n def res(p):\\n  a=tb(p);return (a@fit(a,z.T)-z.T).ravel()\\n q=least_squares(res,[1.5,.5],bounds=([.01,.001],[10,5]));print('time',family,q.x,np.sqrt(np.mean(q.fun**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: separate calibration, auxiliary operators, and temporal dynamics before building the readouts; prior gate MAEs were 0.415742 and 0.380069.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel residuals will distinguish transferable operator bases from family changes; trajectory rank and temporal residuals will determine whether a two-mode readout is appropriate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7709d62fa70cea34a0f01f71e125e23e89ab0929061c5e9d43a960f423646cac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29853.45,
+      "usage_known": true,
+      "prompt_tokens": 20305,
+      "cached_tokens": 9344,
+      "completion_tokens": 1036
+    }
+  ]
+}

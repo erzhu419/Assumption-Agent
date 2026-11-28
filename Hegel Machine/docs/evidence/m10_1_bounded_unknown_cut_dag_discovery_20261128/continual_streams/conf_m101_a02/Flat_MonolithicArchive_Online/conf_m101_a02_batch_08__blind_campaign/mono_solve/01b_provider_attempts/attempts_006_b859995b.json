@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b859995b284a4334aadf5d5b2f67b386",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:19.741457+00:00",
+  "ended_at_utc": "2026-11-28T09:55:44.533239+00:00",
+  "request_sha256": "dfa98eb7cf46b7f9bec0f71384ba48bc198253b6dd93056f8587fe9e4827f6a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45936,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28883,
+    "cached_tokens": 9344,
+    "completion_tokens": 1461
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/readout_probe.py <<'PY'\\nfrom campaign_probe import *\\nfrom itertools import combinations\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\ndef analyze(label,z,b,c,d):\\n y=tr['y']; T=tr['traj']; S=np.linalg.svd(T,full_matrices=False); h=S[2][0]; amp=T@h; M=np.c_[y,amp,T@S[2][1],T@S[2][2]]\\n def score(L,l=52):\\n  return np.mean(abs(L[l:]@fit(L[:l],M[:l])-M[l:]),axis=0)\\n blocks={'x':tr['x'],'z':z,'b':b,'c':c,'d':d,'all':np.c_[z,b,c,d]}; print('\\\\n',label)\\n for k,L in blocks.items(): print(k,'linear',score(aff(L)))\\n for pair in [('z','b'),('z','c'),('b','c'),('z','d'),('b','d'),('c','d')]:\\n  a,g=[blocks[k] for k in pair]; print(pair,'lin',score(np.c_[aff(a),g]),'diag',score(np.c_[aff(a),g,a*g]),'full',score(np.c_[aff(a),g,(a[:,:,None]*g[:,None,:]).reshape(n,-1)]))\\n X=np.c_[tr['x'],z,b,c,d]; names=[k+str(j) for k in ('x','z','b','c','d') for j in range(4)]; F={k:x for k,x in zip(names,X.T)}\\n for i,a in enumerate(names):\\n  x=F[a]; F['tanh '+a]=np.tanh(x); F['sin '+a]=np.sin(x); F['exp '+a]=np.expm1(-1.7*x*x); F['cube '+a]=x**3; F['rational '+a]=x/(1+.2*x*x)\\n  for b in names[i:]: F[a+'*'+b]=x*F[b]\\n FN=list(F); A=np.column_stack(list(F.values())); A=(A-A[:52].mean(0))/A[:52].std(0)\\n for j in range(4):\\n  for base in [[],list(range(4,8)),list(range(8,12))]:\\n   ix=base.copy(); target=M[:,j]; print('target/base',j,base)\\n   for step in range(11):\\n    L=aff(A[:,ix]); proj=L[:52]@fit(L[:52],A[:52]); G=A[:52]-proj; r=target[:52]-L[:52]@fit(L[:52],target[:52]); metric=abs(G.T@r)/np.maximum(1e-8,np.linalg.norm(G,axis=0)); metric[ix]=0\\n    if step in (0,2,4,6,10):print(step,round(np.std(r),5),round(np.mean(abs(L[52:]@fit(L[:52],target[:52])-target[52:])),5),[FN[i] for i in ix])\\n    ix.append(np.argmax(metric))\\nz0,b0,c0,d0=old._coords(s); z,b,c,d=coords(); analyze('archive coordinates',*[q[:n] for q in (z0,b0,c0,d0)]); analyze('measured calibration',*[q[:n] for q in (z,b,c,d)])\\nU,S,V=np.linalg.svd(tr['traj'],full_matrices=False); print('time modes'); print(V[:3]);\\nfor name,f in [('log',lambda p:np.log1p(p*times)),('exp',lambda p:-np.expm1(-p*times)),('power',lambda p:times**p),('sqrt',lambda p:np.sqrt(1+p*times)-1)]:\\n for size in [1,2]:\\n  def fun(p):\\n   F=np.column_stack([f(p[0])]+([np.ones_like(times)] if size==2 else [])); return np.linalg.norm(V[0]-F@fit(F,V[0]));\\n  q=minimize_scalar(fun,bounds=(.001,15),method='bounded'); print(name,size,q.x,q.fun)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: distinguish reference calibration from forward-law coordinates -> H2: identify sparse scalar and temporal readouts; correcting calibration alone worsened 52/20 target MAE from 0.078829 to 0.248139.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The measured reference-panel inverse can be substituted directly into the archived forward readout.\",\n    \"empirical_witness\": \"With only the calibration substitution, 52/20 target MAE rises from 0.078829 to 0.248139 and trajectory MAE from 0.016128 to 0.074893.\",\n    \"causal_blanket_diagnosis\": \"The reference map is identified on its own panel, but this does not identify the coordinate convention or operator inputs used by the archived forward readout.\",\n    \"sublated_pivot\": \"Keep the measured reference map separate and compare sparse downstream structures in both coordinate systems.\",\n    \"risk_kind\": \"operator composition\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the corrected-coordinate kernel\",\n      \"rejected_reason\": \"The magnitude and consistency of the error increase make it more useful to check downstream coordinate and feature structure first.\"\n    }\n  ],\n  \"rationale\": \"Sparse interaction and temporal-mode fits can show whether one coordinate system yields a simpler readout and reveal which missing terms to test next.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "21d9831103ac85b9e86f666a7cadf3fe0f062920104f48373ef4e7d3c5be7acd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 92756.51,
+      "usage_known": true,
+      "prompt_tokens": 28883,
+      "cached_tokens": 9344,
+      "completion_tokens": 1461
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e74f892000c4be2a8e06cb134e8ce36",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:01.922280+00:00",
+  "ended_at_utc": "2026-11-28T09:40:32.327247+00:00",
+  "request_sha256": "d918926e77dfc69c5f759bf3a198c70cb3aa437e72b80e1cab0228cd1a9b280d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 56140,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32411,
+    "cached_tokens": 9344,
+    "completion_tokens": 1191
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/calibration_probe01.py <<'PY'\\nexec(open('/tmp/profile01.py').read().split('ids=np.arange')[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import product\\np=s['panel_b']; u=p['u']; w=p['v']; print('panel B linear LOO',loo(affine(u),w)); print('panel B quad LOO',loo(base(u),w)); print('panel B residual std',np.std(w-affine(u)@fit(affine(u),w),axis=0))\\na=s['panel_a']; aa=[]; bb=[]\\nfor k,l in zip(a['u'].T,a['v'].T):\\n i,j=np.triu_indices(len(k),1); d=k[i]-k[j]; keep=abs(d)>1e-9; m=np.median((l[i]-l[j])[keep]/d[keep]); aa.append(m);bb.append(np.median(l-m*k))\\nraw=(s['train']['x']-bb)/aa\\nfamilies={'lin':(lambda x,k:affine(x),(.1,3)), 'quad':(lambda x,k:base(x),(.1,3)), 'diag2':(lambda x,k:F(x,x,x*x),(.1,3)), 'diag3':(lambda x,k:F(x,x,x**3),(.1,3)), 'tanh':(lambda x,k:F(x,x,np.tanh(k*x)),(.1,4)), 'atan':(lambda x,k:F(x,x,np.arctan(k*x)),(.1,4)), 'log':(lambda x,k:F(x,x,np.log1p(k*x*x)),(.02,4)), 'rat':(lambda x,k:F(x,x,x*x/(1+k*x*x)),(.02,4)), 'sin':(lambda x,k:F(x,x,np.sin(k*x)),(.1,4)), 'cos':(lambda x,k:F(x,x,np.cos(k*x)),(.1,4))}\\nids=np.arange(len(y)); splits=[(ids[:52],ids[52:])]+[(ids[~np.isin(ids,v)],v) for v in np.array_split(np.random.default_rng(24).permutation(len(y)),6)]\\nfor key in ['panel_b','panel_c/v1','panel_c/v2']:\\n if key!='panel_b':u=c['u'];w=c[key.split('/')[1]]\\n scores=[]\\n for name,(fn,bounds) in families.items():\\n  def loss(k):\\n   U=fn(u,k); return np.mean((U@fit(U,w)-w)**2)\\n  k=minimize_scalar(loss,bounds=bounds,method='bounded').x; U=fn(u,k); scores.append((float(np.mean(loo(U,w))),name,k,loss(k)**.5))\\n print(key,sorted(scores),flush=True)\\n for _,name,k,_ in sorted(scores)[:3]:\\n  if name=='lin':continue\\n  fn=families[name][0]; X=fn(raw if key=='panel_b' else q,k)@fit(fn(u,k),w)\\n  for label,W in [('map',X),('delta_half',q+.5*(X-q))] if key=='panel_b' else [('map',X)]:\\n   es=[]\\n   for t,v in splits:\\n    _,g=train(W[t],y[t],'gate'); A=design(W,g,'gate'); es.append(np.mean(abs(A[v]@fit(A[t],y[t])-y[v])))\\n   print(key,name,label,'gate',np.round(es,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/calibration_probe01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether response-only nonlinear calibration improves on the verified frozen-coordinate gate, whose public response MAE is 0.028746 and worst shuffled-fold MAE is 0.051270.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the gate with a factorized cubic\",\n      \"rejected_reason\": \"The best tested factorized polynomial missed the public response threshold and worsened the worst shuffled fold.\"\n    }\n  ],\n  \"rationale\": \"Panel leave-one-out error tests whether the affine calibration drops a reproducible nonlinear term. Compare the resulting response fits across the same folds, leaving the verified candidate and trajectory path untouched unless the challenger improves held-out error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5f377f0727139c8866f9aebf244468dbd9c6a63cbc4440cbd70ab543122a9ec6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33016.74,
+      "usage_known": true,
+      "prompt_tokens": 32411,
+      "cached_tokens": 9344,
+      "completion_tokens": 1191
+    }
+  ]
+}

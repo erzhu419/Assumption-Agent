@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "275f7b64738e4472bd7a683d01a9646c",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:53:13.015259+00:00",
+  "ended_at_utc": "2026-11-28T09:53:35.689242+00:00",
+  "request_sha256": "6cc736e53ca109bafeef6dfc1f642b870608bd8ffc3a35213586ce08158f86b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39502,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25415,
+    "cached_tokens": 9344,
+    "completion_tokens": 852
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat /tmp/hegel_continual_archive/conf_m101_a04_batch_06_solver.py; cat >/tmp/calprobe.py <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];p=s['panel_a'];u,v=p['u'],p['v'];n=len(u); rng=np.random.default_rng(0)\\ndef robust(f,v):\\n d=f.shape[1];best=np.inf\\n for _ in range(2200):\\n  ix=rng.choice(n,min(d+2,n),replace=False);w=np.linalg.lstsq(f[ix],v[ix],rcond=None)[0];e=np.linalg.norm(f@w-v,axis=1); val=np.sort(e)[37]\\n  if val<best:best=val;keep=np.argsort(e)[:39]\\n for _ in range(8):\\n  w=np.linalg.lstsq(f[keep],v[keep],rcond=None)[0];e=np.linalg.norm(f@w-v,axis=1); keep=np.where(e<max(5*np.median(e),.0006))[0]\\n return w,e\\nnp.set_printoptions(precision=4,suppress=True)\\nfor name,f in [('aff',u),('sep2',np.c_[u,u**2]),('sep3',np.c_[u,u**2,u**3]),('poly2',np.column_stack([np.prod(u[:,ix],axis=1) for j in (1,2) for ix in itertools.combinations_with_replacement(range(4),j)])),('poly2sep3',np.column_stack([np.prod(u[:,ix],axis=1) for j in (1,2) for ix in itertools.combinations_with_replacement(range(4),j)]+[a**3 for a in u.T])),('cyclic',np.c_[u,u**2,u**3,u*np.roll(u,1,axis=1),u*np.roll(u,2,axis=1)[:,:2].mean(1,keepdims=True)])]:\\n w,e=robust(np.c_[np.ones(n),f],v);print(name,np.quantile(e,[0,.25,.5,.75,.85,.9,.95,1]),np.sort(e)[39:]);print(w)\\nfor k in ('v1','v2'):\\n p=s['panel_c'];u=p['u'];f=np.c_[np.ones(len(u)),u,np.column_stack([np.prod(u[:,ix],axis=1) for ix in itertools.combinations_with_replacement(range(4),2)])] if k=='v1' else np.c_[np.ones(len(u)),np.cos(2.4*u)];w=np.linalg.lstsq(f,p[k],rcond=None)[0];print(k,w)\\nPY\\npython3 /tmp/calprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived multikernel fit with approximate calibration → H2: recover the sparse calibration law; archive 52/20 MAE is 0.02350 scalar and 0.03808 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit robust affine and low-order nonlinear panel laws and compare their inlier residuals. If a sparse law explains the panel at measurement noise, use its inverse instead of compensating for calibration error in the prediction model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e98cf5b41c868b125d7b32886524f957e791e7012644af906c6dff0e1f17c62b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25283.0,
+      "usage_known": true,
+      "prompt_tokens": 25415,
+      "cached_tokens": 9344,
+      "completion_tokens": 852
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "35ebfdd88d7441f482af0a46a9dbde06",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:18.518322+00:00",
+  "ended_at_utc": "2026-11-28T09:12:57.485359+00:00",
+  "request_sha256": "274dddf0ea387691dce8ebd1d1cc0e6246377421157579e5531275e198db2f79",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44249,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31206,
+    "cached_tokens": 10880,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _poly(x, degree):\\n    return np.column_stack([np.ones(len(x))] + [np.prod(x[:, ix], axis=1)\\n        for k in range(1, degree + 1)\\n        for ix in combinations_with_replacement(range(x.shape[1]), k)])\\n\\n\\ndef _ridge(f, q, target, penalty):\\n    scale = f.std(axis=0)\\n    scale[scale == 0] = 1\\n    a = f / scale\\n    return (q / scale) @ np.linalg.solve(a.T @ a + np.diag(penalty), a.T @ target)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    x, q = tr['x'], study['test']['x']\\n    degree = x.shape[1]\\n    penalty = np.array([0.] + [.001]*degree + [.1]*10 + [.1]*20 + [1.]*35 + [10.]*56)\\n    y = _ridge(_poly(x, 5), _poly(q, 5), tr['y'], penalty)\\n    a, b = study['panel_a'], study['panel_b']\\n    ua = _aff(a['u'])\\n    keep = np.arange(len(ua))\\n    for _ in range(4):\\n        fit = np.linalg.lstsq(ua[keep], a['v'][keep], rcond=None)[0]\\n        keep = np.argsort(np.linalg.norm(ua @ fit - a['v'], axis=1))[:45]\\n    ca = np.linalg.lstsq(ua[keep], a['v'][keep], rcond=None)[0]\\n    cb = np.linalg.lstsq(_aff(b['u']), b['v'], rcond=None)[0]\\n    def features(z):\\n        z = _aff(_aff(z) @ cb) @ ca\\n        return np.column_stack((_poly(z, 2), z**3))\\n    state = _ridge(features(x), features(q), tr['traj'], np.r_[0., [.01]*4, [1.]*14])\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/panelc.py <<'PY'\\nfrom contextlib import redirect_stdout\\nfrom io import StringIO\\nwith redirect_stdout(StringIO()):\\n from cvprobe import *\\nfrom scipy.optimize import least_squares\\np=s['panel_c']; u=p['u']; perm=np.random.default_rng(19).permutation(len(u)); splits=[(np.arange(len(u)),np.arange(len(u)))]+[(np.setdiff1d(np.arange(len(u)),v),v) for v in np.array_split(perm,4)]\\nP=poly(u,2); links={'sin':np.sin,'tanh':np.tanh,'cos':np.cos,'atan':np.arctan,'sqrat':lambda q:q*q/(1+q*q),'sincos':lambda q:np.c_[np.sin(q),np.cos(q)]}\\nfor k in ('v1','v2'):\\n res=[]; target=p[k]\\n for base in ('1','aff','diag'):\\n  for name,g in links.items():\\n   for npar in (1,4):\\n    if g==links['sincos'] and base=='diag': continue\\n    def features(z,f):\\n     a={'1':np.ones((len(z),1)),'aff':aff(z),'diag':np.c_[aff(z),z*z]}[base]\\n     return np.c_[a,g(z*f)]\\n    errors=[]; params=[]\\n    for it,iv in splits:\\n     def err(f):\\n      a=features(u[it],f); return (a@ls(a,target[it])-target[it]).ravel()\\n     opt=min([least_squares(err,np.full(npar,h),bounds=(.12,8),max_nfev=100) for h in (.65,1.8,3.,5.)],key=lambda o:o.cost)\\n     a=features(u,opt.x);errors.append(np.mean((a[iv]@ls(a[it],target[it])-target[iv])**2)**.5);params.append(opt.x)\\n    res.append((max(errors[1:]),base,name,npar,np.round(errors,6),np.round(params[0],5)))\\n print(k)\\n for r in sorted(res)[:12]:print(r)\\nprint('panel inputs ranges',*[np.quantile(s[k]['u'],[0,.5,1],axis=0) for k in ('panel_a','panel_b','panel_c')]);print('panel C v1 / v2 covariance',np.corrcoef(np.c_[p['v1'],p['v2']].T)[:4,4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panelc.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic polynomial curvature -> H2 separable nonlinear panel features; the baseline worst-slice MAEs are 0.02550 for y and 0.01857 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use an independently fitted nonlinear ridge per panel C output\",\n      \"rejected_reason\": \"Those fits had large held-out errors; sharing coordinate-wise nonlinear features across outputs tests a simpler explanation.\"\n    }\n  ],\n  \"rationale\": \"Save and validate the working nonlinear baseline first. Then use held-out panel rows to determine whether a shared separable operator is accurate enough to test as a forward-model feature.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b939eb0a3151b1b3dba5ff9a2e11a45bb71a780e71cc02d71f6c6c1539b5d6ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41567.31,
+      "usage_known": true,
+      "prompt_tokens": 31206,
+      "cached_tokens": 10880,
+      "completion_tokens": 1553
+    }
+  ]
+}

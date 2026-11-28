@@ -1,0 +1,178 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b02_batch_03_95d6dce8c70c",
+    "source_hash": "95d6dce8c70cb83055a1dbb0b2b5f5ad7e88b011f951bc9f1b0e3ee9af834b89",
+    "parent_ids": [],
+    "source_episode_id": "mono_solve",
+    "task_id": "conf_m101_b02_batch_03__blind_campaign",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/inverse_probe.py",
+        "archived_relpath": "producers/tmp__inverse_probe.py",
+        "bytes": 2352,
+        "sha256": "0e2a1b0596e046329ece2cbae8fe5ebc77aea139839f3a4b5576f34d23c1c693"
+      },
+      {
+        "container_path": "/tmp/panel_probe.py",
+        "archived_relpath": "producers/tmp__panel_probe.py",
+        "bytes": 1928,
+        "sha256": "3e70b6222d5030e0f23ad6d07118ee6e904dacee2e6f7025929e37725012a641"
+      },
+      {
+        "container_path": "/tmp/readout_probe.py",
+        "archived_relpath": "producers/tmp__readout_probe.py",
+        "bytes": 2118,
+        "sha256": "c7262ed6011287888535fb4697f7f859ed96b603014dbdb04f52d508fcd6ccc7"
+      },
+      {
+        "container_path": "/tmp/verify_batch03.py",
+        "archived_relpath": "producers/tmp__verify_batch03.py",
+        "bytes": 1488,
+        "sha256": "ecded635ebd7f69b2c869fa86131b6a78a14fd2bd916dc435b4abdf274876355"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b02_batch_00_solver.py",
+        "bytes": 2417,
+        "sha256": "c54fa74b6eefd21ade55b363b62a9b0ce5743cb145ec9eb12239dde75f0e31cb"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b02_batch_01_solver.py",
+        "bytes": 2345,
+        "sha256": "f972e4c5b6d568d559aa8b17f77e4474d51e278f6fedc6223ff943a3d670a2c2"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b02_batch_02_solver.py",
+        "bytes": 2078,
+        "sha256": "273ae6ae8f566b2c9adce5b66b753003a169adb306b618b3efa4b45b7cf2c1dc"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/public_asset_index.json /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport json, pathlib, pickle, numpy as np\np=pathlib.Path('/tmp/hegel_continual_archive')\nfor k in ('archive_manifest.json','pre_llm_gate_diagnostic.json'):\n f=p/k\n if f.exists(): print(k, f.read_text()[:8200])\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nfor k,v in s.items():\n for j,a in (v.items() if isinstance(v,dict) else [('',v)]):\n  a=np.asarray(a); print(k,j,a.shape,'range',float(a.min()),float(a.max()),'head',a[",
+      "cat /tmp/hegel_continual_archive/*_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust reference panel alignment' 2>&1 | head -25; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; print('telemetry',s['telemetry_vec']);\nfor k in ('panel_a','panel_b','panel_c'):\n d=s[k]; x=d['u']; f=np.c_[x,np.ones(len(x))];\n for j in set(d)-{'u'}:\n  y=d[j]; keep=np.arange(len(x));\n  for _ in range(12):\n   c=np.linalg.lstsq(f[keep],y[keep],rcond=None)[0]; err=np.linalg.norm(f@c-y,axis=1); keep=np.argsort(err)[:(38 if k=='p",
+      "for f in /tmp/hegel_continual_archive/*_solver.py; do echo ==== \"$f\"; grep -A45 -E '^def (_features|solve_batch)' \"$f\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 2>&1 | head -16; cat > /tmp/panel_probe.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import minimize_scalar, least_squares\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\ndef D(x): return np.c_[np.ones(len(x)),x]\ndef L(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\nde",
+      "sed -n '1,100p' /tmp/hegel_continual_archive/conf_m101_b02_batch_01_solver.py; sed -n '1,100p' /tmp/hegel_continual_archive/conf_m101_b02_batch_02_solver.py; sed -n '1,160p' /holdout_task/validate_public_schema.py; cat >/tmp/readout_probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; Y=np.c_[y,z]\ndef D(*a): return np.column_stack((np.ones(len(a[0])),*a))\ndef L(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\ndef p2(a): retur",
+      "cat >/tmp/inverse_probe.py <<'PY'\nexec(open('/tmp/readout_probe.py').read().split('nodes=')[0])\np=s['panel_a']; U,V=p['u'],p['v']; e=np.linalg.norm(D(U)@L(D(U),V)-V,axis=1); ii=np.argsort(e)[:45]; u,v=U[ii],V[ii]\nfrom scipy.optimize import least_squares\nfrom itertools import product\npairs=list(combinations_with_replacement(range(4),2))\nfor j in range(4):\n q=np.c_[u,p2(u),u**3]; h=D(q); beta=L(h,v[:,j]); print('A',j,'rmse',np.std(h@beta-v[:,j]),'coef',list(zip(['int']+[f'x{i}' for i in range(4)]+[f'x{i}x{k}' for i,k in pairs]+[f'x{i}^3' for i in range(4)],np.round(beta,5))))\ndef structured(w):r",
+      "sed -i 's/; h=D(q); beta=L(h,v\\[:,j\\]);/; design=D(q); beta=L(design,v[:,j]);/; s/np.std(h@beta-v\\[:,j\\])/np.std(design@beta-v[:,j])/' /tmp/inverse_probe.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/inverse_probe.py | tail -32",
+      "sed -i '/^def structured/i j=lambda a:D(a,a*a/np.sqrt(1+.39*a*a))' /tmp/inverse_probe.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/inverse_probe.py | tail -28; cat /tmp/hegel_continual_archive/conf_m101_b02_batch_02_solver.py; cat /holdout_task/public_asset_index.json",
+      "set -e\ncat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Predict scalar and trajectory readouts in inverse-calibrated coordinates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\n\n\ndef _design(*blocks):\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\n\n\ndef _fit(design, target):\n    return np.linalg.lstsq(design, target, rcond=None)[0]\n\n\ndef _reference(panel, measured):\n    u, v = panel['u'], panel['v']\n    affine = _design(u)\n    residual = np.linalg.norm(affine @ _fit(affine, v) - v, axis=1)\n    keep = np.argsort(residual)[:45]\n\n    def columns(x):\n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_b02_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_00_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 3217,
+        "sha256": "5ecd48233168234f189b71bb5089cd5ed9ed6fb7c4175ef73a2b0b41135bf47b",
+        "content_addressed_ref": "content_addressed_blobs/5ecd48233168234f189b71bb5089cd5ed9ed6fb7c4175ef73a2b0b41135bf47b.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_design",
+      "_least_squares",
+      "_odd",
+      "_even",
+      "_fit_operator",
+      "_cross",
+      "_features",
+      "_ridge",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "95d6dce8c70cb83055a1dbb0b2b5f5ad7e88b011f951bc9f1b0e3ee9af834b89",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\ncat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Predict scalar and trajectory readouts in inverse-calibrated coordinates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares, minimize_scalar\n\n\ndef _design(*blocks):\n    retu",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "95d6dce8c70cb83055a1dbb0b2b5f5ad7e88b011f951bc9f1b0e3ee9af834b89",
+        "expected_candidate_sha256": "95d6dce8c70cb83055a1dbb0b2b5f5ad7e88b011f951bc9f1b0e3ee9af834b89",
+        "computed_candidate_sha256": "95d6dce8c70cb83055a1dbb0b2b5f5ad7e88b011f951bc9f1b0e3ee9af834b89",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 3217
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_95d6dce8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_design",
+        "code": "def _design(*blocks):\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))"
+      },
+      {
+        "name": "_least_squares",
+        "code": "def _least_squares(x, y):\n    return np.linalg.lstsq(x, y, rcond=None)[0]"
+      },
+      {
+        "name": "_odd",
+        "code": "def _odd(x, rate):\n    return _design(-np.sign(x) * np.expm1(-rate * np.abs(x)))"
+      },
+      {
+        "name": "_even",
+        "code": "def _even(x, rate):\n    squared = x * x\n    return _design(x, squared / np.sqrt(1 + rate * squared))"
+      },
+      {
+        "name": "_fit_operator",
+        "code": "def _fit_operator(u, v, design, bounds):\n    from scipy.optimize import minimize_scalar\n\n    def loss(rate):\n        g = design(u, rate)\n        return np.sum((g @ _least_squares(g, v) - v) ** 2)\n    rate = minimize_scalar(loss, bounds=bounds, method='bounded').x\n    coefficients = _least_squares(design(u, rate), v)\n    return lambda x: design(x, rate) @ coefficients"
+      },
+      {
+        "name": "_cross",
+        "code": "def _cross(a, b):\n    return (a[:, :, None] * b[:, None, :]).reshape(len(a), 16)"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(study, x):\n    panel = study['panel_b']\n    f = _design(x) @ _least_squares(_design(panel['u']), panel['v'])\n    panel = study['panel_c']\n    c = _fit_operator(panel['u'], panel['v1'], _odd, (0.1, 5))(f)\n    d = _fit_operator(panel['u'], panel['v2'], _even, (0.0001, 2))(f)\n    return (_design(f, c, d, _cross(f, c)), 0.3 * _cross(f, d), 0.3 * _cross(c, d))"
+      },
+      {
+        "name": "_ridge",
+        "code": "def _ridge(g, target, penalty):\n    n = len(target)\n    training = g[:n]\n    normal = training.T @ training + penalty * np.eye(g.shape[1])\n    normal[0, 0] -= penalty\n    return g[n:] @ np.linalg.solve(normal, training.T @ target)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(study: dict) -> dict:\n    train = study['train']\n    (g, fd, cd) = _features(study, np.vstack((train['x'], study['test']['x'])))\n    traj = train['traj']\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\n    target = np.column_stack((train['y'], traj @ basis.T))\n    base = _ridge(g, target, 0.0003)\n    prediction = 0.5 * base + (_ridge(np.column_stack((g, fd)), target, 0.003) + _ridge(np.column_stack((g, cd)), target, 0.0003) + _ridge(np.column_stack((g, fd, cd)), target, 0.001)) / 6\n    y_hat = prediction[:, 0]\n    state_pred = prediction[:, 1:] @ basis\n    terminal = state_pred[:, -1]\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])}"
+      }
+    ]
+  }
+}

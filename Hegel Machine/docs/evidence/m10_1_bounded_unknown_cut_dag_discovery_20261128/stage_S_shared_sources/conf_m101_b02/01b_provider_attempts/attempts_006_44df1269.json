@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "44df1269dd6d428fa92cc7bc484ea2ce",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:16.781645+00:00",
+  "ended_at_utc": "2026-11-28T09:13:57.298192+00:00",
+  "request_sha256": "fc3db4ddd70a828c50fe08fc30e26e807394cfd14882aa75230b013dc571d8ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51192,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33571,
+    "cached_tokens": 10880,
+    "completion_tokens": 1625
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the scalar readout and time course from panel-calibrated inputs.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _design(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _odd_basis(x, parameters):\\n    h = np.log1p(np.abs(x) * np.exp(parameters[:4]))\\n    return _design(x, np.sign(x) * h * (1 + parameters[4] * h))\\n\\n\\ndef _even_basis(x, rate):\\n    return _design(x, np.sqrt(1 + rate * x**2) - 1)\\n\\n\\ndef _features(study, x):\\n    b = study['panel_b']\\n    f = _design(x) @ _fit(_design(b['u']), b['v'])\\n    panel = study['panel_c']\\n    u, v, w = (panel[k] for k in ('u', 'v1', 'v2'))\\n\\n    def odd_residual(parameters):\\n        g = _odd_basis(u, parameters)\\n        return (g @ _fit(g, v) - v).ravel()\\n\\n    p = least_squares(odd_residual, [.4] * 4 + [.1], bounds=(-3, 3),\\n                      ftol=1e-12, gtol=1e-12).x\\n    c = _odd_basis(f, p) @ _fit(_odd_basis(u, p), v)\\n\\n    def even_error(rate):\\n        g = _even_basis(u, rate)\\n        return np.linalg.norm(g @ _fit(g, w) - w)\\n\\n    q = minimize_scalar(even_error, bounds=(.0001, 1.8), method='bounded').x\\n    d = _even_basis(f, q) @ _fit(_even_basis(u, q), w)\\n    mixed = (f[:, :, None] * c[:, None, :]).reshape(len(f), 16)\\n    return _design(f, c, d, mixed)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    design = _features(study, np.row_stack((train['x'], study['test']['x'])))\\n    x = design[:n]\\n    traj = train['traj']\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    target = np.column_stack((train['y'], traj @ basis.T))\\n    penalty = np.full(x.shape[1], .0003)\\n    penalty[0] = 0\\n    beta = np.linalg.solve(x.T @ x + np.diag(penalty), x.T @ target)\\n    prediction = design[n:] @ beta\\n    y_hat = prediction[:, 0]\\n    state_pred = prediction[:, 1:] @ basis\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling separable nonlinear variable projection' | head -8\\ncat > /tmp/panel_next.py <<'PY'\\nexec(open('/tmp/discover.py').read().split('maps=[]')[0])\\nfrom scipy.special import erf\\nodd={\\n 'softsign_abs':lambda x,a:x/(1+a*abs(x)),\\n 'sqrt_abs':lambda x,a:x/np.sqrt(1+a*abs(x)),\\n 'exp_abs':lambda x,a:np.sign(x)*(-np.expm1(-a*abs(x))),\\n 'sqrt_subtract':lambda x,a:np.sign(x)*(np.sqrt(1+a*abs(x))-1),\\n 'log_square':lambda x,a:x*np.log1p(a*x*x),\\n 'tanh':lambda x,a:np.tanh(a*x),\\n}\\neven={\\n 'sqrt_subtract':lambda x,a:np.sqrt(1+a*x*x)-1,\\n 'log':lambda x,a:np.log1p(a*x*x),\\n 'rat':lambda x,a:x*x/(1+a*x*x),\\n 'sqrt_rat':lambda x,a:x*x/np.sqrt(1+a*x*x),\\n}\\nfor entries,Y in ((odd,v),(even,w)):\\n for name,f in entries.items():\\n  for add in ((False, True) if Y is v else (True,)):\\n   for dim in (1,4):\\n    def gr(x,p):\\n     h=f(x,np.exp(p)); return aug(np.c_[x,h] if add else h)\\n    def res(p):\\n     g=gr(u,p);return (g@fit(g,Y)-Y).ravel()\\n    r=least_squares(res,np.zeros(dim),bounds=(-5,5),ftol=1e-12,gtol=1e-12); print('odd' if Y is v else 'even',name,add,dim,loo(gr(u,r.x),Y),np.exp(r.x))\\nprint('summary',s['train']['summary'],'telemetry',s['telemetry_vec'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_next.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic mixed readout → H2 compact panel maps with a rank-two trajectory model; the selected baseline gives prescribed y MAE 0.02276 and worst stress-slice y MAE 0.04933.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more unconstrained mixed features\",\"rejected_reason\":\"The high-amplitude slice is the bottleneck, and the tested larger feature sets generally made it worse.\"}],\"rationale\":\"Save the passing baseline, then test absolute-value saturation and per-axis curvature against panel data. If a smaller panel model reaches the measurement-noise floor, carry it forward and test whether it reduces high-amplitude prediction error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ae2f2a52cbf30065a55ae25e57d2a9e0b0415f086998585645ed1bb1ca8d2f55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43085.66,
+      "usage_known": true,
+      "prompt_tokens": 33571,
+      "cached_tokens": 10880,
+      "completion_tokens": 1625
+    }
+  ]
+}

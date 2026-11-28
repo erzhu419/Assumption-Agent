@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "afd8043a50734b07b5b14c6221a56a7e",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:30.437717+00:00",
+  "ended_at_utc": "2026-11-28T09:29:10.888395+00:00",
+  "request_sha256": "4074f74a0bf3717ca94c2266ae931c108161c197ddbff1c4f2c9189e2f7c4d4a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33566,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24006,
+    "cached_tokens": 9344,
+    "completion_tokens": 1733
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe.py <<'PY'\\nfrom explore import *\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nQ=PolynomialFeatures(2)\\nfor name in ('v1','v2'):\\n u=pc['u']; v=pc[name]; p=Q.fit_transform(u); coef=np.linalg.lstsq(p,v,rcond=None)[0]; print(name,'quadratic coef\\\\n',coef.T,'resid',np.sqrt(np.mean((p@coef-v)**2,axis=0)))\\n print('affine singular values',np.linalg.svd(aff(pc,name)[1:],compute_uv=False))\\n for qn,q in [('u',u),('rotated',tf(u,C)),('B',tf(u,B))]:\\n  for form in ('powers','harmonics','saturation'):\\n   if form=='powers': features=[q**3,q**4,q**5]\\n   if form=='harmonics': features=[np.sin(1.7*q),np.cos(1.7*q),np.sin(3.4*q),np.cos(3.4*q)]\\n   if form=='saturation': features=[np.tanh(1.7*q),q/(1+q*q),np.tanh(q)]\\n   for k,g in enumerate(features):\\n    f=np.c_[p,g]; h=f@np.linalg.pinv(f); e=(h@v-v)/(1-h.diagonal())[:,None]; print(qn,form,k,np.sqrt(np.mean(e*e,axis=0)))\\n U,S,V=np.linalg.svd(v-p@coef,full_matrices=False); print('resid sv',S)\\n_,_,V=np.linalg.svd(z,full_matrices=False); W=V[:2].T\\nfor name,profile,guess in [('sin exp pair',lambda a: np.c_[np.exp(-a[0]*t)*np.sin(a[1]*t),np.exp(-a[2]*t)*np.sin(a[3]*t)],[.2,1.4,.3,.7]),('sin cos',lambda a: np.c_[np.exp(-a[0]*t)*np.sin(a[1]*t),np.exp(-a[2]*t)*(1-np.cos(a[3]*t))],[.2,1.4,.3,.7]),('sin growth',lambda a: np.c_[np.exp(-a[0]*t)*np.sin(a[1]*t),1-np.exp(-a[2]*t)],[.2,1.4,.7]),('damped sin forcing',lambda a: np.c_[np.exp(-a[0]*t)*np.sin(a[1]*t),1-np.exp(-a[0]*t)*np.cos(a[1]*t)],[.2,1.4])]:\\n def err(a):\\n  p=profile(a); return (p@np.linalg.lstsq(p,W,rcond=None)[0]-W).ravel()\\n fit=least_squares(err,guess,max_nfev=1000); p=profile(fit.x); print(name,fit.x,np.linalg.norm(fit.fun),np.sqrt(np.mean((z-z@p@np.linalg.pinv(p))**2)))\\nF=z@W\\nprint('traj quadratic in B isolated coeff',np.linalg.lstsq(Q.fit_transform(coords['AiB']),F,rcond=None)[0].T)\\nsets=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(26).permutation(72),4)]\\ndef pred(k,reg,f,ya,tr,te):\\n a=k[np.ix_(tr,tr)]+reg*np.eye(len(tr)); c=k[np.ix_(te,tr)]; h=f[tr]; r=solve(a,np.c_[h,ya[tr]],assume_a='pos'); w,v=r[:,:h.shape[1]],r[:,h.shape[1]:]; b=np.linalg.lstsq(h.T@w,h.T@v,rcond=1e-12)[0]; return f[te]@b+c@(v-w@b)\\nfor name,q in coords.items():\\n if name not in ('x','Ai','AB','AiB','AiC'):continue\\n f=Q.fit_transform(q); dist=cdist(q,q,'sqeuclidean'); scores=[]\\n for ker in ('rbf','m52'):\\n  for l in (.45,.75,1.1,1.7,2.5,4):\\n   r=np.sqrt(dist)/l; K=np.exp(-.5*r*r) if ker=='rbf' else (1+np.sqrt(5)*r+5*r*r/3)*np.exp(-np.sqrt(5)*r)\\n   for reg in (1e-6,1e-4,.003,.02):\\n    e=np.array([np.abs(pred(K,reg,f,target,tr,te)-target[te]).mean(0) for tr,te in sets]); scores.append((round(e[:,0].mean(),5),round(e[:,0].max(),5),round(e[0,0],5),round(e[:,1:].mean(),5),ker,l,reg))\\n print('kernel',name,'best y',sorted(scores)[:4],'best traj',sorted(scores,key=lambda a:a[3])[:2])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace a raw quadratic with calibrated nonlinear features and two shared temporal profiles; the raw quadratic's 52/20 response MAE is 0.0792.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume the nonlinear auxiliary panel is active\",\n      \"rejected_reason\": \"Panel nonlinearity alone does not establish an effect on either target; identify its terms before testing transfer.\"\n    }\n  ],\n  \"rationale\": \"Panel leave-one-out residuals will determine which nonlinear feature families are worth transferring. Temporal projection error will show whether a shared analytic time basis improves on the empirical two-mode basis; multiple held-out splits will establish a kernel benchmark for the response.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "813abe6ac4c3c7fd7cc3813eb48324744a2b24f2d2ded596b938a46e0dfeba19",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45749.66,
+      "usage_known": true,
+      "prompt_tokens": 24006,
+      "cached_tokens": 9344,
+      "completion_tokens": 1733
+    }
+  ]
+}

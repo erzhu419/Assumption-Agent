@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "daf9b0b4789444d395f87129266ea318",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:27.143202+00:00",
+  "ended_at_utc": "2026-11-28T09:26:56.722592+00:00",
+  "request_sha256": "b9ee23915a0a111a1b3e47f4dd05a7ce65967d530392ee754cac6f434ddbe992",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42586,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27985,
+    "cached_tokens": 9344,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/from scipy.special import erf/,$d' /tmp/probe.py >/tmp/structure.py; cat >>/tmp/structure.py <<'PY'\\nfrom scipy.special import erf\\nc=s['panel_c']; u=c['u']; v=c['v2']; i,j=np.array([(0,1),(0,3),(1,2),(2,3)]).T\\nmix=lambda a:a[:,i]*a[:,j]\\nz=coords['AB forward']; W=ls(aff(mix(u)),c['v1']); q=aff(mix(z))@W\\nprint('sparse c1 panel RMSE',np.std(aff(mix(u))@W-c['v1'],0)); print('q ranges',q.min(0),q.max(0)); print('quadratic q scalar coeffs',ls(poly(q[:52],2),y[:52])); print('traj direct q fit RMSE',np.std(aff(q)@ls(aff(q),tr)-tr,0))\\nfor name,fun in [('sin',np.sin),('tanh',np.tanh),('erf',erf),('atan',np.arctan),('cos',np.cos),('exp',np.exp),('rational',lambda a:1/(1+a*a))]:\\n for base in [False,True]:\\n  def d(a,p):return np.c_[aff(a) if base else np.ones(len(a)),fun(p[0]*a+p[1:])]\\n  fit=least_squares(lambda p:(d(u,p)@ls(d(u,p),v)-v).ravel(),[1.,.2,.2,.2,.2],bounds=([.08,-4,-4,-4,-4],[6,4,4,4,4]),max_nfev=100)\\n  print('v2',name,base,np.std(fit.fun),fit.x)\\nfolds=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(234).permutation(72),5)]\\ndef cv(d):\\n scores=[np.mean(abs(d[b]@ls(d[a],y[a])-y[b])) for a,b in folds]; return np.r_[scores[0],np.mean(scores[1:]),np.max(scores[1:])]\\nfor name,d in [('q affine',aff(q)),('q pure curvature',np.c_[aff(q),q*q]),('q quad',poly(q,2)),('q diag cubic',poly(q,3,False)),('q quad+diag cubic',np.c_[poly(q,2),q**3]),('q all cubic',poly(q,3)),('z quad',poly(z,2)),('q quad plus z',np.c_[poly(q,2),z]),('q quad plus square z',np.c_[poly(q,2),z*z])]:\\n print('scalar',name,cv(d),'fit MAE',np.mean(abs(d@ls(d,y)-y)))\\nfor fun in [np.sin,np.tanh,np.arctan]:\\n for scale in [.25,.5,1.,2.]:\\n  print('scalar transform',fun.__name__,scale,cv(aff(fun(scale*q))),cv(poly(fun(scale*q),2)),cv(np.c_[aff(q),fun(scale*q)]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (unrestricted pairwise quadratic) -> H2 (inverse A, affine B, and four mixed products measured by C v1); the preliminary C v1 model gives 52/20 MAE 0.0063 for y and 0.0038 for trajectories using separate readouts.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the unrestricted quadratic as the final model\",\"rejected_reason\":\"The measured C v1 interactions already reduce scalar holdout error and allow a more constrained model.\"}],\"rationale\":\"Test whether the four supported C v1 products suffice and whether the remaining scalar residual calls for another operator or just a simpler nonlinear readout. If the additional features do not improve repeated holdouts, omit them.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4841551b5c7d79422e92d3baa94434680618fa14f93992e51a4bdd7514936954",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32196.4,
+      "usage_known": true,
+      "prompt_tokens": 27985,
+      "cached_tokens": 9344,
+      "completion_tokens": 1102
+    }
+  ]
+}

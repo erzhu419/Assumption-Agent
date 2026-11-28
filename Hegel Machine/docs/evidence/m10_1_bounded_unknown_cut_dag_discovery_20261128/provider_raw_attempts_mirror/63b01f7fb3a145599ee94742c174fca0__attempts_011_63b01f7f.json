@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63b01f7fb3a145599ee94742c174fca0",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:19.964061+00:00",
+  "ended_at_utc": "2026-11-28T09:23:52.100376+00:00",
+  "request_sha256": "124918be5d3e1da1522d1cfa31e36ef93e13f1e68c1129afc9fd583d7549ed5d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69851,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38577,
+    "cached_tokens": 9344,
+    "completion_tokens": 1229
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit11.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import _nodes\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\np = s['train']; a, b, c = _nodes(s, p['x']); y, tr = p['y'], p['traj']; t = s['eval_times']; n = len(y)\\nz = a*c; base = np.c_[np.ones(n), a, c]; off = a[:,1]*c[:,0]\\nS = [np.c_[base,z], np.c_[base,z.sum(1)]]\\nT = [np.c_[base,(a[:,:,None]*c[:,None,:]).reshape(n,-1)], np.c_[base,z,off], np.c_[base,z.sum(1),off]]\\ndef fit(g,i,j,v):\\n    return g[j] @ np.linalg.lstsq(g[i],v[i],rcond=None)[0]\\ndef basis(r):\\n    return -np.expm1(-t[:,None]*np.asarray(r))\\ndef prof(v):\\n    def res(r):\\n        u=basis(r); return (u @ np.linalg.lstsq(u,v.T,rcond=None)[0]-v.T).ravel()\\n    return least_squares(res,[1.8,.4],bounds=([1.,.1],[3.,.9])).x\\nidx=np.arange(n); rng=np.random.default_rng(425)\\nsplits=[('52/20',idx[:52],idx[52:]),('56/16',idx[:56],idx[56:])]\\nfor key,q in [('radius',np.linalg.norm(a,axis=1)),('coordinate',abs(a).max(1))]:\\n    o=np.argsort(q); splits.append((key,o[:56],o[56:]))\\no=np.argsort(np.sum(abs(a)>.35,axis=1)); splits.append(('low-active',o[16:],o[:16]))\\nsplits += [('random',o[:52],o[52:]) for o in (rng.permutation(idx) for _ in range(30))]\\nresults={}; rates=[]\\nfor label,i,j in splits:\\n    r=prof(tr[i]); rates.append(r)\\n    P=[np.linalg.svd(tr[i],full_matrices=False)[2][:2], np.linalg.qr(basis(r))[0].T, np.linalg.qr(basis([1.8,.4]))[0].T]\\n    for k,g in enumerate(S):\\n        e=abs(fit(g,i,j,y)-y[j]); results.setdefault(('scalar',k),[]).append([e.mean()])\\n    for k,g in enumerate(T):\\n        pred=fit(g,i,j,tr)\\n        for d,u in enumerate(P):\\n            e=abs(pred@u.T@u-tr[j]); results.setdefault(('traj',k,d),[]).append([e.mean(), e.mean(0).max()])\\nprint('projection rates overall',prof(tr),'fold range',np.min(rates,0),np.max(rates,0))\\nprint('rows: 52/20, 56/16, high radius, high coordinate, low active, random worst; trajectory columns: overall, worst timestamp')\\nfor k,v in results.items():\\n    v=np.array(v); print(k,np.round(np.vstack([v[:5],v[5:].max(0)]),6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit11.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full cross-stage products → H2 tied diagonal products plus one trajectory-specific off-diagonal term; the reference model's worst tested MAEs are 0.00631 for y, 0.00538 for trajectories, and 0.00644 at any single timestamp.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all 16 cross-stage terms for the trajectory\",\n      \"rejected_reason\": \"Only one off-diagonal coefficient is clearly above the noise floor; retain the full basis only if the compact model worsens held-out error.\"\n    }\n  ],\n  \"rationale\": \"The four diagonal coefficients are nearly equal, and only the trajectory shows a substantial off-diagonal coefficient. Test that symmetry and compare fold-local temporal projections before replacing the verified baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "af6208440f76085522aa19c10c97785eb3baf7942590ff9ac145d6d328799b31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34701.88,
+      "usage_known": true,
+      "prompt_tokens": 38577,
+      "cached_tokens": 9344,
+      "completion_tokens": 1229
+    }
+  ]
+}

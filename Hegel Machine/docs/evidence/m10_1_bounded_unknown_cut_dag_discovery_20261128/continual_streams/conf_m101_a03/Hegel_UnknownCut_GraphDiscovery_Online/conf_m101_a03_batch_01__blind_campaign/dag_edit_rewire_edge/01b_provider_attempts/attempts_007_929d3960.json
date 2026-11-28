@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "929d39602b7e45a0a7ac0dd78cc8a3ba",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_01__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:25.448954+00:00",
+  "ended_at_utc": "2026-11-28T09:23:03.325392+00:00",
+  "request_sha256": "694a744533cb4476de6160e18b5e5e7f4cd7b8002a309abbe71dcb86e9a07aa4",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50590,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32373,
+    "cached_tokens": 5504,
+    "completion_tokens": 1506
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cross_stage.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split(\\\"print('ranges'\\\")[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nA=affine(z); inds=np.arange(n); ix=inds[:52]; v=inds[52:]; fs=[v]+list(folds[0])+[np.argsort(q[:,i])[sl] for q in (x,z) for i in range(4) for sl in (slice(0,12),slice(-12,None))]\\npairs=list(combinations_with_replacement(range(4),2)); U=np.column_stack([z[:,i]*z[:,j] for i,j in pairs]); B=U[:,[2,6]]\\nD={f'{s}{i}':q[:,i] for s,q in [('x',x),('z',z)] for i in range(4)}\\ndef fit(m,Q,op=np.tanh):\\n p0=np.linalg.lstsq(A[m],y[m],rcond=None)[0]\\n def design(p,I):\\n  u=A[I]@p; return np.column_stack([np.ones(len(I)),u,op(u),Q[I]])\\n def cost(p):\\n  F=design(p,m);return y[m]-F@np.linalg.lstsq(F,y[m],rcond=None)[0]\\n r=min((least_squares(cost,p0*s,max_nfev=100) for s in [.65,1.3]),key=lambda r:r.cost)\\n F=design(r.x,inds);c=np.linalg.lstsq(F[m],y[m],rcond=None)[0];return F@c,r.x,c,F\\npred,p,c,F=fit(ix,B)\\nJ=np.column_stack([F,A*(c[1]+c[2]/np.cosh(A@p)**2)[:,None]])\\nproj=A@p\\natoms={}\\nfor i in range(4):\\n for j in range(4):\\n  xx=x[:,i];zz=z[:,j];atoms[f'x{i}*z{j}']=xx*zz; atoms[f'x{i}*x{j}']=xx*x[:,j]\\n  for s in [.5,1.,1.5,2.]:\\n   for f in [np.sin,np.tanh,np.cos]:\\n    atoms[f'x{i}*{f.__name__}({s}*z{j})']=xx*f(s*zz)\\n    atoms[f'x{i}*{f.__name__}({s}*x{j})']=xx*f(s*x[:,j])\\n    for k in range(j+1,4):\\n     for sig in [-1,1]:\\n      atoms[f'x{i}*{f.__name__}({s}*(z{j}+{sig}z{k}))']=xx*f(s*(zz+sig*z[:,k]))\\n for s in [.5,1.,1.5,2.]:\\n  for f in [np.sin,np.tanh,np.cos]: atoms[f'x{i}*{f.__name__}({s}*score)']=x[:,i]*f(s*proj)\\nnames=list(atoms); E=np.column_stack(list(atoms.values())); R=E[ix]-J[ix]@np.linalg.lstsq(J[ix],E[ix],rcond=1e-9)[0]; score=np.abs((y-pred)[ix]@R)/np.maximum(np.linalg.norm(R,axis=0),1e-10)\\nprint('best atoms:',[(names[j],round(score[j],5)) for j in np.argsort(score)[-16:][::-1]])\\nfor nm,Q in [('full',U),('pair',B)]+[(names[j],np.column_stack([B,E[:,j]])) for j in np.argsort(score)[-16:][::-1]]+[(f'full plus {names[j]}',np.column_stack([U,E[:,j]])) for j in np.argsort(score)[-5:][::-1]]:\\n out,p,c,_=fit(ix,Q); errs=[]\\n for val in fs:\\n  po,*_=fit(np.setdiff1d(inds,val),Q);errs.append(np.mean(abs(po[val]-y[val])))\\n print(nm,np.round([np.mean(abs(out[ix]-y[ix])),errs[0],max(errs[1:7]),max(errs[7:])],5),np.round(c,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cross_stage.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared saturating score plus operator quadratics → explicit calibrated-coordinate interaction; the shared tanh model has 0.01172 reserved-block scalar MAE and 0.03036 worst operator-tail MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use only the operator-quadratic model\",\n      \"rejected_reason\": \"It clears the public scalar tolerance but does not use the new input edge or test whether calibrated coordinates explain the remaining residual.\"\n    }\n  ],\n  \"rationale\": \"Rank explicit calibrated-coordinate interactions against the residual of the shared-score model, using only the first 52 labels for ranking. If no compact term improves the reserved block and coordinate tails, retain the shared-score structure rather than add a second free nonlinear projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "780599df5c51102e875d405e542b96e9370d3f6b70886989bdd2c346990fefff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40463.5,
+      "usage_known": true,
+      "prompt_tokens": 32373,
+      "cached_tokens": 5504,
+      "completion_tokens": 1506
+    }
+  ]
+}

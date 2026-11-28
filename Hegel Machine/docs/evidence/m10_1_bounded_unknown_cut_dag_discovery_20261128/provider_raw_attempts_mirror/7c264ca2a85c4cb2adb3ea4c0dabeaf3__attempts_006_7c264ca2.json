@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7c264ca2a85c4cb2adb3ea4c0dabeaf3",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:07.437904+00:00",
+  "ended_at_utc": "2026-11-28T09:40:37.942314+00:00",
+  "request_sha256": "9a9020a1db9e80bdcc19215f1b8888ddcfc3882116073c91f0752770c999309c",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 34775,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22991,
+    "cached_tokens": 9344,
+    "completion_tokens": 1133
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nnode = load('candidate', root / 'node_00.py')\\nsink = load('frozen_sink', root / '_frozen_nodes/node_01.py')\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    study = pickle.load(f)[0]['study']\\na = study['panel_a']\\nu, v = a['u'], a['v']\\nx = np.concatenate((study['train']['x'], study['test']['x']))\\ndef forward(z, c):\\n    d = z.shape[1]\\n    neighbor = np.roll(z, -1, axis=1)\\n    return c[:d] + c[d:2*d]*z + c[-3]*neighbor + c[-2]*z*neighbor + c[-1]*z**3\\n\\nc = node._fit_panel(a)\\nresidual = np.linalg.norm(forward(u, c) - v, axis=1)\\nclean = np.argsort(residual)[:-3]\\nworst_loo = 0.\\nworst_roundtrip = 0.\\nfor i in clean:\\n    keep = np.arange(len(u)) != i\\n    ci = node._fit_panel({'u': u[keep], 'v': v[keep]})\\n    worst_loo = max(worst_loo, np.max(np.abs(forward(u[i:i+1], ci) - v[i])))\\n    z = node._invert(x, ci)\\n    assert np.all(np.isfinite(z))\\n    worst_roundtrip = max(worst_roundtrip, np.max(np.abs(forward(z, ci) - x)))\\nprint(f'Clean-row calibration jackknife: worst coordinate residual={worst_loo:.6g}; worst inverse round-trip={worst_roundtrip:.6g}')\\nassert worst_loo < 0.001 and worst_roundtrip < 1e-9\\n\\ntrain = study['train']\\nn = len(train['x'])\\nworst = np.zeros(2)\\nfor idx in np.array_split(np.random.default_rng(42).permutation(n), 5):\\n    keep = np.ones(n, dtype=bool)\\n    keep[idx] = False\\n    sub = dict(study, train={k: train[k][keep] for k in ('x', 'y', 'traj')}, test={'x': train['x'][idx]})\\n    pred = sink.run_node({'node_00': node.run_node({'__input__': sub})})\\n    errors = [np.mean(np.abs(pred['y_hat'] - train['y'][idx])), np.mean(np.abs(pred['state_pred'] - train['traj'][idx]))]\\n    assert np.all(np.isfinite(errors))\\n    worst = np.maximum(worst, errors)\\nprint(f'Five-fold worst MAE: y={worst[0]:.6f}; trajectory={worst[1]:.6f}')\\nassert np.all(worst <= 0.038)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic calibration → shared cyclic cubic with robust forward fitting and Newton inversion; official public CV passed at 0.010454 scalar MAE and 0.008622 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the official split alone\",\n      \"rejected_reason\": \"That split does not test sensitivity to calibration-row leverage or to a different readout holdout.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in an isolated Python process. The calibration jackknife would expose unstable coefficients or inversion, and the additional readout folds would expose a pass dependent on the official split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d4e03d108d0a6502237596036eba84a4586519a6f126cda51065384b3fadc334",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33162.35,
+      "usage_known": true,
+      "prompt_tokens": 22991,
+      "cached_tokens": 9344,
+      "completion_tokens": 1133
+    }
+  ]
+}

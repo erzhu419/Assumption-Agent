@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "59bc98da88e448908bdbe3d9c7d45c86",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_07__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_07__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:02.713344+00:00",
+  "ended_at_utc": "2026-11-28T09:46:48.922931+00:00",
+  "request_sha256": "91da2500100cf0f36c9debe6fdb310ec0ad96ef99998b2f324ad43e5f241634c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37177,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24795,
+    "cached_tokens": 9344,
+    "completion_tokens": 2023
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout07.py <<'PY'\\nimport runpy\\nimport numpy as np\\nfrom itertools import combinations, combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nm=runpy.run_path('/tmp/probe07.py'); s,x,y,z,w,ls,aff=[m[k] for k in ('s','x','y','z','w','ls','aff')]\\nu=s['panel_b']['u']; v=s['panel_b']['v']\\nprint('B fit residual comparisons')\\nfor mode in ('locked','free','colfreq','quadratic','cyclic','cub'):\\n def design(x,p):\\n  if mode=='locked':return aff(x+p[1]*np.sin(p[0]*x))\\n  if mode=='colfreq':return np.c_[aff(x),np.sin(p*x)]\\n  a=np.c_[aff(x),np.sin(p[0]*x)]\\n  if mode=='quadratic':a=np.c_[a,*[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2)]]\\n  if mode=='cyclic':a=np.c_[a,x*np.roll(x,-1,axis=1)]\\n  if mode=='cub':a=np.c_[a,x**3]\\n  return a\\n def res(p, ids):\\n  a=design(u,p); return (a[ids]@ls(a[ids],v[ids])-v[ids]).ravel()\\n errs=[]\\n for ids in [np.arange(24),*np.array_split(np.random.default_rng(1).permutation(24),4)]:\\n  ii=ids if len(ids)==24 else np.setdiff1d(np.arange(24),ids)\\n  p=least_squares(res,{'locked':[2.85,-.4],'colfreq':[2.85]*4}.get(mode,[2.85]),args=(ii,)).x\\n  a=design(u,p); errs.append(np.mean(abs(a[ids]@ls(a[ii],v[ii])-v[ids])))\\n  if len(ids)==24: print(mode,'p',p, end=' ')\\n print(np.round(errs,6))\\nbase=aff(w); old=m['m']['_scalar_features'](w)\\nbanks={}\\nfor name,q in [('w',w),('z',z)]:\\n cols={}\\n for d in range(2,5):\\n  for i in combinations_with_replacement(range(4),d):cols[name+''.join(map(str,i))]=np.prod(q[:,i],axis=1)\\n banks[name+' poly']=cols.copy()\\n dirs={str(i):q[:,i] for i in range(4)}\\n dirs.update({f'{i}+{c}*{j}':q[:,i]+c*q[:,j] for i,j in combinations(range(4),2) for c in (-1,-.5,.5,1)})\\n for k,r in dirs.items():\\n  for c in (.5,1.,1.5,2.,3.):\\n   for namef,f in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('rat',lambda a:a/(1+a*a)),('inv',lambda a:1/(1+a*a))]:\\n    a=f(c*r); cols[f'{name}{namef}({c},{k})']=a\\n    if len(k)==1:\\n     for j in range(4): cols[f'{name}{j}*{namef}({c},{k})']=q[:,j]*a\\n banks[name+' extended']=cols\\n\\ndef splits():\\n yield np.arange(52),np.arange(52,72)\\n for ix in np.array_split(np.random.default_rng(17).permutation(72),4): yield np.setdiff1d(np.arange(72),ix),ix\\nfor bname,b in [('affine',base),('old',old)]:\\n for name,cols in banks.items():\\n  names=list(cols); a=np.column_stack(list(cols.values())); errs=[]; sels=[]\\n  for it,iv in splits():\\n   q=np.linalg.qr(b[it])[0]; ar=a[it]-q@(q.T@a[it]); factor=np.linalg.norm(ar,axis=0); ar/=np.where(factor>1e-8,factor,np.inf); r=y[it]-q@(q.T@y[it]); sel=[]; e=[]\\n   for j in range(7):\\n    score=abs(ar.T@r); score[sel]=-1; sel.append(np.argmax(score)); d=np.c_[b,a[:,sel]]; beta=ls(d[it],y[it]); r=y[it]-d[it]@beta; e.append(np.mean(abs(d[iv]@beta-y[iv])))\\n   sels.append([names[k] for k in sel]); errs.append(e)\\n  print(bname,name,'gate',np.round(errs[0],4),'worst4',np.round(np.max(errs[1:],axis=0),4),'chosen',sels[0], 'replicated', [i[0] for i in sels[1:]])\\nfor name,b in [('affine',base),('old',old),('quadratic',np.c_[base,*[w[:,i]*w[:,j] for i,j in combinations_with_replacement(range(4),2)]])]:\\n for space in (w,z,np.c_[z,w]):\\n  d=cdist(space,space,'sqeuclidean'); vals=[]\\n  for length in (.25,.5,1.,2.,4.):\\n   k=np.exp(-d/(2*length**2));\\n   for reg in (.0001,.001,.01,.1):\\n    e=[]\\n    for it,iv in splits():\\n     mat=k[np.ix_(it,it)]+reg*np.eye(len(it)); a=solve(mat,np.c_[b[it],y[it]],assume_a='pos'); co=ls(b[it].T@a[:,:-1],b[it].T@a[:,-1]); pr=b[iv]@co + k[np.ix_(iv,it)]@(a[:,-1]-a[:,:-1]@co); e.append(np.mean(abs(pr-y[iv])))\\n    vals.append((max(e[1:]),e[0],length,reg))\\n  print('kernel',name,space.shape[1],space is w, sorted(vals)[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout07.py | sed -n '/B fit residual comparisons/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Panel A → panel B → scalar readout: the archived readout misses the 52/20 gate at 0.047783 MAE, while trajectory MAE is 0.009912.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived affine readout plus two pairwise products is sufficient to meet both public accuracy gates.\",\n    \"empirical_witness\": \"Its scalar MAE is 0.047783 versus the 0.038 limit, while the trajectory from the same transformed coordinates reaches 0.009912 MAE.\",\n    \"causal_blanket_diagnosis\": \"The failure is concentrated in the scalar branch; a smaller panel B approximation error remains a competing explanation.\",\n    \"sublated_pivot\": \"Keep the panel A inversion and trajectory branch; test panel B residuals and broaden the scalar readout with structured terms before adopting a smooth correction.\",\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace both branches with cubic regression\",\n      \"rejected_reason\": \"The panel B cubic fit still misses the scalar gate at 0.039212 and raises trajectory MAE from 0.009912 to 0.028424.\"\n    }\n  ],\n  \"rationale\": \"Panel A's cyclic calibration fits the uncontaminated rows to roughly 0.0002 residual. Panel-only folds will determine whether to revise panel B, and fold-local scalar feature selection will test which additional terms generalize.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "cb60d12febba5505fbc9f8312afc729a56a435fbb55195571d35a9eaca30d00f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51442.16,
+      "usage_known": true,
+      "prompt_tokens": 24795,
+      "cached_tokens": 9344,
+      "completion_tokens": 2023
+    }
+  ]
+}

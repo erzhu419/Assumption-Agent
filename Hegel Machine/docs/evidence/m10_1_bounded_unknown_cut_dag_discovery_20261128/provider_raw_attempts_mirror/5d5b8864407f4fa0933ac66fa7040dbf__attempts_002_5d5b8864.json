@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d5b8864407f4fa0933ac66fa7040dbf",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:52.690005+00:00",
+  "ended_at_utc": "2026-11-28T09:51:16.696131+00:00",
+  "request_sha256": "fa028d6c82e382c234b769a04dd84026cbe473585035db51542a8d7745171600",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 12719,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15545,
+    "cached_tokens": 9344,
+    "completion_tokens": 903
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '35,170p' test_dag_candidate.py && cat validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'_frozen_nodes'); from node_00 import run_node\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; d=run_node({'__input__':s}); y=d['y']; t=d['traj']; Y=np.c_[y,t]\\nprint('summary, telemetry',s['train']['summary'],s['telemetry_vec']); print('train traj singular values',np.linalg.svd(t-t.mean(0),compute_uv=False)); print('traj regression on y',np.linalg.lstsq(np.c_[np.ones(len(y)),y],t,rcond=None)[0]); print('target corr',np.corrcoef(Y.T)[0]); print('feature correlations');\\nfor k in ('xa','xab','z','xs'):\\n X=d[k]; print(k,np.round(np.corrcoef(np.c_[X,Y].T)[:4,4:],3))\\nrng=np.random.default_rng(30); folds=np.array_split(rng.permutation(len(y)),6)\\ndef report(name,F,Q=Y):\\n errs=[]\\n for v in folds:\\n  a=np.setdiff1d(np.arange(len(y)),v); C=np.linalg.lstsq(F[a],Q[a],rcond=1e-9)[0]; e=abs(F[v]@C-Q[v]); errs.append([e[:,0].mean(),e[:,1:].mean()]);\\n print(name,F.shape[1],np.round(np.mean(errs,0),5),np.round(np.max(errs,0),5))\\nfor k in ('xa','xab','z','xs'):\\n X=d[k]; base=[np.ones(len(y))]+list(X.T); B=base[:];\\n for deg in (1,2,3,4):\\n  if deg>1: B += [np.prod(X[:,j],axis=1) for j in itertools.combinations_with_replacement(range(4),deg)]\\n  if k=='xs': report(k+str(deg),np.array(B).T)\\n report(k+' additive trig',np.c_[np.array(base).T,np.sin(X),np.cos(X),np.sin(2*X),np.cos(2*X)])\\n report(k+' quad+trig',np.c_[np.array(B[:15]).T,np.sin(X),np.cos(X)])\\n report(k+' lin + pairwise',np.c_[np.array(base).T,np.column_stack([f(X[:,i]+m*X[:,j]) for i,j in itertools.combinations(range(4),2) for m in (1,-1) for f in (np.sin,np.cos)])])\\nprint('trajectory rows sorted by y:'); ii=np.argsort(y)[::6]; print(np.round(np.c_[y[ii],t[ii]],3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Compare polynomial and structured nonlinear readouts and test for shared temporal modes; no held-out metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fold errors distinguish useful nonlinear features from in-sample fits, while the trajectory spectrum tests whether the eight horizons can share a compact representation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "0c817f3d7973f39e68f42f1a8cb618d5979ad650f9b3b117950d650c21f28ce1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26630.48,
+      "usage_known": true,
+      "prompt_tokens": 15545,
+      "cached_tokens": 9344,
+      "completion_tokens": 903
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf2cf0ab5d084c8ea64a72ce647f3c2a",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:35.732268+00:00",
+  "ended_at_utc": "2026-11-28T09:14:17.460377+00:00",
+  "request_sha256": "7b747879dee4c81bc56cc8158f4725b2e17f4382014cca4b1149a38e60b05e19",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53012,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35141,
+    "cached_tokens": 5504,
+    "completion_tokens": 1687
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/refine.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar,least_squares\\nfrom itertools import combinations_with_replacement as pairs\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _calibrate,_features\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; off,sc=_calibrate(s['panel_a']); a=(tr['x']-off)/sc; y=tr['y']; z=tr['traj']; t=s['eval_times']; Y=np.c_[y,z]; u=s['panel_c']['u']; v1=s['panel_c']['v1']; v2=s['panel_c']['v2'];\\ndef ls(f,v):return np.linalg.lstsq(f,v,rcond=None)[0]\\ndef lin(a):return np.c_[np.ones(len(a)),a]\\ndef quad(a):return np.column_stack([a[:,i]*a[:,j] for i,j in pairs(range(a.shape[1]),2)])\\ndef basis(a,k,mode):\\n h=np.sin(k*a); c=np.cos(k*a)\\n return {'s':lambda:np.c_[lin(a),h], 'sc':lambda:np.c_[lin(a),h,c], 'sq':lambda:np.c_[lin(a),h,quad(a)], 'c':lambda:np.c_[lin(a),c], 's3':lambda:np.c_[lin(a),h,np.sin(2*k*a)],'spre':lambda:np.c_[lin(a),np.sin(k*a), a*np.cos(k*a)]}[mode]()\\nmodels={}\\nfor num,v,modes,bd in [(1,v1,['s','sc','sq','s3','spre'],(2.7,3.8)),(2,v2,['c'],(1.,1.5))]:\\n for m in modes:\\n  def obj(k):\\n   f=basis(u,k,m); r=f@ls(f,v)-v; return np.mean(r*r)\\n  k=minimize_scalar(obj,bounds=bd,method='bounded').x; f=basis(u,k,m); co=ls(f,v); res=v-f@co; lev=np.sum((f@np.linalg.pinv(f))*np.eye(len(u)),axis=1); print('PANEL',num,m,round(k,6),round(np.std(res),6),round(np.std(res/(1-lev[:,None])),6)); models[num,m]=basis(a,k,m)@co\\n  if m in ['s','c','sq']:\\n   print('coef',co.round(4).T)\\n# Identify fixed time shapes by variable projection, without imposing input readout.\\nfor name,fn,x0,bd in [('two exp',lambda k:np.array([-np.expm1(-k[0]*t),-np.expm1(-k[1]*t)]),[1.8,.4],([.8,.02],[4.,1.])),('exp and shifted exp',lambda k:np.array([-np.expm1(-k[0]*t),t*np.exp(-k[1]*t)]),[1.8,.1],([.8,-.8],[4.,1.])),('exp and sin',lambda k:np.array([-np.expm1(-k[0]*t),np.sin(k[1]*t)]),[1.8,.4],([.8,.02],[4.,1.3]))]:\\n def r(k):\\n  f=fn(k);return (z@np.linalg.pinv(f)@f-z).ravel()\\n q=least_squares(r,x0,bounds=bd); print('TIME',name,q.x,np.std(q.fun))\\nrng=np.random.default_rng(312); splits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(12))]; base=_features(a); out=[]\\nfor m in ['s','sc','sq','s3','spre']:\\n b,c=models[1,m],models[2,'c']; g=np.c_[b,c];\\n for tag,f in [('pair',np.c_[lin(g),.4*quad(g)]),('pair+r',np.c_[lin(g),.4*quad(g),.4*b/(1+b*b),.4*c/(1+c*c)]),('pair+base',np.c_[lin(g),.4*quad(g),.18*base]),('pair+direct',np.c_[lin(g),.4*quad(g),.2*a]),('separate',np.c_[lin(g),.4*quad(b),.4*quad(c)]),('bonly',np.c_[lin(b),.4*quad(b)]),('base',base)]:\\n  K=f@f.T\\n  for reg in [.0003,.001,.003,.006,.01]:\\n   vals=[]\\n   for i,j in splits:\\n    yp=K[np.ix_(j,i)]@np.linalg.solve(K[np.ix_(i,i)]+reg*np.eye(len(i)),Y[i]); e=abs(yp-Y[j]); vals.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()]);\\n   E=np.array(vals);out.append((m,tag,reg,E[0],E.mean(0),E.max(0)))\\nfor j in [0,1]:\\n print('BEST',j)\\n for m,tag,reg,e,avg,mx in sorted(out,key=lambda q:q[4][j]+.6*q[5][j])[:13]:print(m,tag,reg,e.round(5),avg.round(5),mx.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 inverse diagonal calibration → H2 dual-panel nonlinear composition; the panel-pair quadratic challenger reaches prescribed-split MAEs of 0.02546 for y and 0.02670 for trajectory, with five-split worst MAEs of 0.03594 and 0.02775.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the panel-pair ridge model immediately\",\"rejected_reason\":\"The first panel-C operator still has residuals well above its second output, and the five splits were used to screen models.\"}],\"rationale\":\"Use panel leave-one-out residuals to distinguish missing operator terms from overfitting. Compare dual-panel, single-panel, and direct bases on fresh splits, and test whether a compact temporal law reproduces the measured rank-two trajectories.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "313ee8520bcd7204059df328c7ad0245ae916d1b0a4c5dc4ccd8c78f2781c4bb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44380.04,
+      "usage_known": true,
+      "prompt_tokens": 35141,
+      "cached_tokens": 5504,
+      "completion_tokens": 1687
+    }
+  ]
+}

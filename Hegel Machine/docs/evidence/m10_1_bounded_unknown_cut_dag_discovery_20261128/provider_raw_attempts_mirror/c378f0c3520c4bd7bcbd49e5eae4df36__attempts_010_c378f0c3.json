@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c378f0c3520c4bd7bcbd49e5eae4df36",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:16:41.318941+00:00",
+  "ended_at_utc": "2026-11-28T09:17:17.427574+00:00",
+  "request_sha256": "7e1014216a76820c4d85d12971386f30a3af2390366d657bc4b5c83fa3845d30",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37897,
+    "cached_tokens": 10880,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cp batch_solver.py /tmp/solver_baseline.py; cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit separate nonlinear scalar and trajectory readouts from the study.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve, qr\\nfrom scipy.optimize import least_squares, minimize\\n\\n\\ndef _monomials(x, degree):\\n    return np.column_stack([np.prod(x[:, cols], axis=1) for cols in\\n                            combinations_with_replacement(range(x.shape[1]), degree)])\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack((np.ones(len(x)), x, _monomials(x, 2)))\\n\\n\\ndef _gaussian(x, z):\\n    return np.exp(-0.23 * np.sum((x[:, None] - z[None, :]) ** 2, axis=2))\\n\\n\\ndef _predict(p, pt, k, kt, target, penalty):\\n    f = cho_factor(k + penalty * np.eye(len(k)))\\n    a = cho_solve(f, p)\\n    v = cho_solve(f, target)\\n    trend = np.linalg.solve(p.T @ a, p.T @ v)\\n    return pt @ trend + kt @ (v - a @ trend)\\n\\n\\ndef _matern_readout(x, xt, p, pt, y):\\n    # Profile out the quadratic mean before fitting the input length scales.\\n    n = qr(p, mode='full')[0][:, p.shape[1]:]\\n    v = n.T @ y\\n    delta = (x[:, None] - x[None, :]) ** 2\\n    delta_test = (xt[:, None] - x[None, :]) ** 2\\n\\n    def kernel(distance_sq, par):\\n        r2 = distance_sq @ np.exp(par[:x.shape[1]])\\n        r = np.sqrt(r2)\\n        return (1 + r + 0.4 * r2 + r2 * r / 15) * np.exp(-r)\\n\\n    def objective(par):\\n        k = n.T @ kernel(delta, par) @ n + np.exp(par[-1]) * np.eye(len(v))\\n        f = cho_factor(k)\\n        return np.log(v @ cho_solve(f, v) / len(v)) + 2 * np.log(np.diag(f[0])).mean()\\n\\n    par = minimize(objective, np.log([0.24] * x.shape[1] + [0.002]),\\n                   method='L-BFGS-B', bounds=[(-4, 1)] * x.shape[1] + [(-12, -1)],\\n                   options={'maxiter': 70}).x\\n    return _predict(p, pt, kernel(delta, par), kernel(delta_test, par), y, np.exp(par[-1]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    t = study['eval_times']\\n    trajectories = train['traj'].T\\n\\n    def basis(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        amplitudes = np.linalg.lstsq(b, trajectories, rcond=None)[0]\\n        return (b @ amplitudes - trajectories).ravel()\\n\\n    rates = least_squares(residual, [1.5, 0.25],\\n                          bounds=([0.7, 0.02], [4.0, 0.65])).x\\n    modes = np.linalg.qr(basis(rates))[0]\\n    p, pt = _quadratic(x), _quadratic(xt)\\n    k, kt = _gaussian(x, x), _gaussian(xt, x)\\n    y = train['y']\\n    y_hat = 0.5 * (_predict(p, pt, k, kt, y, 0.001)\\n                   + _matern_readout(x, xt, p, pt, y))\\n    c, ct = _monomials(x, 3), _monomials(xt, 3)\\n    amplitudes = _predict(p, pt, k + 0.05 * (c @ c.T),\\n                          kt + 0.05 * (ct @ c.T), trajectories.T @ modes, 0.006)\\n    state_pred = amplitudes @ modes.T\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py && python3 -I /holdout_task/validate_public_schema.py && python3 -I /tmp/stress_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared isotropic readouts → a scalar Matérn blend and regularized cubic trajectory features; separate probes reduced worst-tail scalar MAE to 0.03767 and worst-horizon MAE to 0.04029.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the cubic extension for both readouts\",\n      \"rejected_reason\": \"It improves the worst state slice but raises fixed and worst-tail scalar MAE.\"\n    }\n  ],\n  \"rationale\": \"Combine the independently supported changes and verify the exact artifact. The same stress harness will detect whether the combined solver preserves the fixed-split margin and improves both tail bottlenecks; retain the baseline if those gains do not survive.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "62d7a50a47dfbdb372920a0a9e43bb0367ee94b40568be28ed946c8bb529c26b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38707.97,
+      "usage_known": true,
+      "prompt_tokens": 37897,
+      "cached_tokens": 10880,
+      "completion_tokens": 1457
+    }
+  ]
+}

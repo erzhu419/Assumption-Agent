@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bc7044228ae4d109a70b7c3402a4891",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:11.011463+00:00",
+  "ended_at_utc": "2026-11-28T09:28:41.432422+00:00",
+  "request_sha256": "648f4f70749c5cd7a537e2383ff86b651e9fb3b2355197bbdfdbc2f2fae59c4a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58684,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35358,
+    "cached_tokens": 9344,
+    "completion_tokens": 1200
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/compact.py <<'PY'\\nfrom measure import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nz=z[:n]; p=s['panel_c']; u=p['u']; V=p['v1']; A=lambda q:np.c_[np.ones(len(q)),q]; Q=lambda q:np.column_stack([A(q)]+[q[:,i]*q[:,j] for i,j in combinations_with_replacement(range(4),2)])\\nfor fixed in [lambda q:np.ones((len(q),1)), A, lambda q:np.c_[A(q),q*q], Q]:\\n for func in [np.tanh,np.sin,lambda a:a/np.sqrt(1+a*a)]:\\n  def features(q,c): return np.c_[fixed(q),func(q*np.exp(c[:4])+c[4:])]\\n  def resid(c):\\n   f=features(u,c); return (f@m._fit(f,V)-V).ravel()\\n  r=least_squares(resid,np.zeros(8),bounds=(np.r_[[-2]*4,[-2]*4],np.r_[[2]*4,[2]*4]),max_nfev=120)\\n  f=features(u,r.x); h=features(z,r.x)@m._fit(f,V)\\n  cv=evaluate(np.c_[Q(z),h]); print('C1',fixed(u).shape[1],func.__name__,np.std(r.fun),r.x,'y/traj required and worst',cv[0,:2],cv.max(0))\\nT=Y[:,1:]; _,_,vt=np.linalg.svd(T[:52],full_matrices=False); f=m._basis(z); print('residual-y vs trajectory',np.corrcoef((Y-f@m._fit(f[:52],Y[:52])).T)[0]); print('required/worst scores:')\\nfor name,g in [('base',f),('no-square',np.c_[A(z),np.tanh(z)]),('sparse-square',np.c_[A(z),np.tanh(z),z[:,0]*z[:,3]]),('tanh focus',np.c_[Q(z),np.tanh(z[:,[1,3]])]),('tanh scaled .5',np.c_[Q(z),np.tanh(.5*z)]),('tanh scaled 1.5',np.c_[Q(z),np.tanh(1.5*z)])]:\\n ans=evaluate(g); print(name,ans[0],ans.max(0))\\nfor alpha in [.001,.01,.1,1]:\\n out=[]\\n for a,b in splits:\\n  G=np.c_[Q(z),np.tanh(z)-z]; G=G/G[a].std(0,where=np.broadcast_to(np.arange(G.shape[1])!=0,G[a].shape)).clip(1e-8) if False else G\\n  H=np.diag(np.r_[np.zeros(5),np.ones(10),np.full(4,4.)]); beta=np.linalg.solve(G[a].T@G[a]+alpha*H,G[a].T@Y[a]); pr=G[b]@beta; vb=np.linalg.svd(T[a],full_matrices=False)[2][:2]; pr[:,1:]=pr[:,1:]@vb.T@vb; e=np.abs(Y[b]-pr); out.append([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean(),e[:,1:].mean(0).max()])\\n out=np.array(out); print('ridge + rank2',alpha,out[0],out.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated quadratic-plus-tanh regression → H2 compact panel-aligned readout or rank-two trajectory fit; current worst-slice MAEs are 0.02638 for y and 0.02356 for trajectories, with worst horizon 0.02976.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the verified baseline with a more flexible cubic surface\",\"rejected_reason\":\"The full cubic performed worse on both required outputs; any replacement should improve the high-radius slice.\"}],\"rationale\":\"Test whether panel C supplies a compact downstream basis and whether rank-two projection reduces late-horizon error. If neither materially improves the high-radius slice without sacrificing the required split, keep the verified baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "615c864be76bc57d6bb35471f3f64ea017d9f080da68e0dc72ace36c0f967701",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33075.59,
+      "usage_known": true,
+      "prompt_tokens": 35358,
+      "cached_tokens": 9344,
+      "completion_tokens": 1200
+    }
+  ]
+}

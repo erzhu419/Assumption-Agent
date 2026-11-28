@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e377df7e21b414c8b20bd24afbc5d7f",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:35.972464+00:00",
+  "ended_at_utc": "2026-11-28T09:26:06.190491+00:00",
+  "request_sha256": "921eb0554cfc54bc33d5d5930df85ae6c16cf801e18dfe6901599259cb065744",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 79273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42247,
+    "cached_tokens": 0,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('node_01.py')\\ns = p.read_text()\\na = s.index('    x = np.concatenate(groups, axis=1)', s.index('def _kernel'))\\nb = s.index('\\\\n\\\\ndef run_node', a)\\ns = s[:a] + '''    # Keep the latent coordinates, the B output, and the two B-to-C routes.\\n    grams = []\\n    for x in (groups[0], groups[1], groups[3], groups[5]):\\n        x = (x-x[train].mean(0))/np.maximum(x[train].std(0), 1e-9)\\n        grams.append(x @ x.T / x.shape[1])\\n    route = sum(grams[1:])\\n    p = (2*grams[0]+route)/4\\n    return 1+p+grams[0]*route/4+.3*p**2\\n''' + s[b:]\\ns = s.replace('groups, errors = _features(s, prev)', 'groups, _ = _features(s, prev)')\\ns = s.replace('K[:n, :n]+1e-6*np.eye(n)', 'K[:n, :n]+.003*np.eye(n)')\\na = s.index(\\\"    return {'y_hat':\\\", s.index('def run_node'))\\ns = s[:a] + '''    y_hat = pred[:, 0]\\n    state_pred = pred[:, 1:] @ h.T\\n    final = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])}\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name):\\n    spec = importlib.util.spec_from_file_location(name, f'/holdout_task/{name}.py')\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\na, b = load('node_00'), load('node_01')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nbase = study['train']\\nids = np.arange(len(base['x']))\\nslices = [ids[-18:], ids[-20:], ids[-24:], *np.array_split(np.random.default_rng(81).permutation(len(ids)), 4)]\\nresults = []\\nfor held in slices:\\n    fit = np.setdiff1d(ids, held)\\n    s = copy.deepcopy(study)\\n    s['train'] = {k: base[k][fit] for k in ('x','y','traj')}\\n    last = s['train']['traj'][:, -1]\\n    y = s['train']['y']\\n    s['train']['summary'] = np.array([y.mean(), y.std(), last.mean(), last.std()])\\n    s['test'] = {'x': base['x'][held]}\\n    mid = a.run_node({'__input__': s})\\n    out = b.run_node({'__input__': s, 'node_00': mid})\\n    yh, sp = out['y_hat'], out['state_pred']\\n    assert yh.shape == (len(held),) and sp.shape == (len(held), len(s['eval_times']))\\n    assert all(np.isfinite(v).all() for v in out.values())\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yh.mean(), yh.std(), sp[:,-1].mean(), sp[:,-1].std()])\\n    results.append([abs(yh-base['y'][held]).mean(), abs(sp-base['traj'][held]).mean()])\\nprint('Stress-slice MAEs [y, trajectory]:', np.round(results, 6).tolist())\\nprint('Worst stress-slice MAEs:', np.round(np.max(results, axis=0), 6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the route RBF with latent-by-route interactions; the prototype reached public-tail MAEs of 0.03257 and 0.02255 and worst-slice MAEs of 0.04588 and 0.04430.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep direct C outputs in the response kernel\",\n      \"rejected_reason\": \"Adding direct C outputs raised both public-tail errors and worsened the worst scalar fold.\"\n    }\n  ],\n  \"rationale\": \"The measured route-interaction prototype clears both official tail thresholds. Compute diagnostics from the predictions as required, then verify the saved artifacts in isolation and refit on each stress slice to measure the remaining generalization gap.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3dcdf03856a34d3c4aecd083badef2539010b1b4b660faceed5e9c59f760a892",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35453.41,
+      "usage_known": true,
+      "prompt_tokens": 42247,
+      "cached_tokens": 0,
+      "completion_tokens": 1326
+    }
+  ]
+}

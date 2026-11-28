@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1f746f415d004536b5c75a8c338fb753",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:40.174556+00:00",
+  "ended_at_utc": "2026-11-28T09:56:14.535819+00:00",
+  "request_sha256": "dd479aed26b8d71883eb89ec2f6aff9fca653389b3bda433096398e830b71436",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39571,
+    "cached_tokens": 9344,
+    "completion_tokens": 1363
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/sparse6.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); from batch_solver import _branches,_predict\\nfrom sklearn.linear_model import lars_path\\nfrom scipy.linalg import solve\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; Y=np.c_[tr['y'],tr['traj']]; Q=_branches(s,tr['x']); folds=[(np.setdiff1d(np.arange(52),j),j) for j in np.array_split(np.random.default_rng(624).permutation(52),4)]+[(np.arange(52),np.arange(52,72))]\\ndef dictionary(Q,variant):\\n Z=np.column_stack(Q); n,m=Z.shape; i,j=np.triu_indices(m); a,b=Z[:,i],Z[:,j]; nms=[f'x{k}' for k in range(m)]; blocks=[Z,a*b]; names=nms+[f'x{k}*x{l}' for k,l in zip(i,j)];\\n if variant>=1:\\n  for t in [.3,1,3]:\\n   for name,F in [('rat',lambda v:v/(1+t*v*v)),('tanh',lambda v:np.tanh(t*v)),('cos',lambda v:np.cos(t*v))]:\\n    blocks += [F(Z),F(a+b),F(a-b)]; names += [f'{name}{t}({v})' for v in nms]+[f'{name}{t}(x{k}+x{l})' for k,l in zip(i,j)]+[f'{name}{t}(x{k}-x{l})' for k,l in zip(i,j)]\\n   blocks += [a/(1+t*b*b),b/(1+t*a*a)]; names += [f'x{k}/({t}x{l})' for k,l in zip(i,j)]+[f'x{l}/({t}x{k})' for k,l in zip(i,j)]\\n if variant>=2:\\n  if m<24:\\n   ijk=list(combinations(range(m),3)); blocks +=[np.prod(Z[:,ijk],axis=2)]; names += [str(k) for k in ijk]\\n  for x in Q:\\n   blocks +=[x*np.roll(x,1,1)*np.roll(x,2,1)];names+=['cycle3']*x.shape[1]\\n return np.column_stack(blocks),np.array(names)\\nif __name__=='__main__':\\n for k,z in enumerate(Q): print('branch',k,'range',z.min(0),z.max(0));\\n print('cal cov',np.corrcoef(np.c_[*Q,Y[:,0]].T)[-1].round(2));\\n out=[]\\n for group,parts in [('base',Q),('noC2',Q[:3]),('C',Q[2:]),('B',Q[1:2]),('x',Q[:1])]:\\n  for v in range(3):\\n   D,names=dictionary(parts,v); rec=[]; coeff=[]\\n   for i,j in folds:\\n    x=(D-D[i].mean(0))/np.maximum(D[i].std(0),1e-8); err=[]; co=[]\\n    for y in [Y[:,0],Y[:,-1]]:\\n     mu=y[i].mean(); _,_,w=lars_path(x[i],y[i]-mu,max_iter=85,method='lasso');\\n     outp=x[j]@w+mu; e=np.mean(abs(outp-y[j,None]),axis=0); err.append(np.interp(np.arange(1,41),np.count_nonzero(w,axis=0),e)); co.append(w)\\n    rec.append(err); coeff.append(co)\\n   a=np.array(rec); ii=a[:4].mean(0).argmin(1); print(group,v,[(int(k+1),round(a[:4,l,k].mean(),5),round(a[-1,l,k],5)) for l,k in enumerate(ii)],flush=True); k=ii[0]; w=coeff[-1][0]; sel=np.argmin(abs(np.count_nonzero(w,axis=0)-k-1)); idx=np.argsort(abs(w[:,sel]))[-7:]; print(list(zip(names[idx],w[idx,sel].round(3))),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/sparse6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (dense branch-weighted kernels) -> H2 (sparse algebraic readouts); the saved candidate has 52/20 scalar MAE 0.05054 and passes the state gate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a learned branch-weighted kernel\",\"rejected_reason\":\"The tested kernels did not clear the scalar gate.\"}],\"rationale\":\"Fit sparse combinations of pairwise sums, differences, products, rational terms and triple products. Internal folds will show whether a compact readout improves on the dense kernels and which terms merit a constrained refit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6542baa0179045aceccd46397335b4227d826a4e5ddfede4c3258844c6533775",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36970.27,
+      "usage_known": true,
+      "prompt_tokens": 39571,
+      "cached_tokens": 9344,
+      "completion_tokens": 1363
+    }
+  ]
+}

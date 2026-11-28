@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9b1fa6029e4498b901ca3331a1e490b",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:10.885744+00:00",
+  "ended_at_utc": "2026-11-28T09:42:57.959483+00:00",
+  "request_sha256": "8873bbb48f5261c605ce4217e0e90154ea16d486606b4906d9dd277851f393bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68766,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37897,
+    "cached_tokens": 9344,
+    "completion_tokens": 1959
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the two readouts of the calibrated panel-B / panel-C1 path.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    result = np.empty_like(x, dtype=float)\\n    for j in range(u.shape[1]):\\n        a = _affine(u[:, j:j+1])\\n        w = _fit(a, v[:, j])\\n        for _ in range(8):\\n            keep = np.argsort(abs(a @ w - v[:, j]))[:3*len(u)//4]\\n            w = _fit(a[keep], v[keep, j])\\n        result[:, j] = (x[:, j] - w[0]) / w[1]\\n    return result\\n\\n\\ndef _coordinates(study, x):\\n    z = _calibrate(study['panel_a'], x)\\n    b, c = study['panel_b'], study['panel_c']\\n    z = _affine(z) @ _fit(_affine(b['u']), b['v'])\\n\\n    def design(a, k):\\n        return _affine(a / (1 + k*abs(a))**2)\\n\\n    def objective(k):\\n        d = design(c['u'], k)\\n        return np.mean((d @ _fit(d, c['v1']) - c['v1'])**2)\\n\\n    k = minimize_scalar(objective, bounds=(0.01, 5), method='bounded').x\\n    return design(z, k) @ _fit(design(c['u'], k), c['v1'])\\n\\n\\ndef _scalar(q, y, n):\\n    z = (q - q[:n].mean(axis=0)) / q[:n].std(axis=0)\\n    i, j = np.triu_indices(z.shape[1])\\n    design = np.column_stack((_affine(z), z[:, i]*z[:, j]))\\n    a = design[:n]\\n    penalty = 0.045*np.maximum(a.std(axis=0), 0.06)\\n    penalty[0] = 0\\n    # Project out the regularized quadratic block while fitting the tanh direction.\\n    basis = np.linalg.qr(np.vstack((a, np.diag(penalty))), mode='reduced')[0]\\n    target = np.r_[y, np.zeros(len(penalty))]\\n    residual = target - basis @ (basis.T @ target)\\n\\n    def objective(p):\\n        col = np.r_[np.tanh(z[:n] @ p[:-1] + p[-1]), np.zeros(len(penalty))]\\n        col -= basis @ (basis.T @ col)\\n        return np.r_[residual - col*((col @ residual)/(col @ col + 0.03**2)), 0.005*p]\\n\\n    d = z.shape[1]\\n    rng = np.random.default_rng(123)\\n    starts = [np.r_[1.2*e, 0.] for e in np.eye(d)]\\n    starts += [np.r_[rng.normal(0, 0.7, d), rng.normal(0, 0.2)] for _ in range(6)]\\n    fits = (least_squares(objective, p, bounds=(-5, 5), max_nfev=70) for p in starts)\\n    p = min(fits, key=lambda f: f.cost).x\\n    matrix = np.column_stack((design, np.tanh(z @ p[:-1] + p[-1])))\\n    coeff = _fit(np.vstack((matrix[:n], np.diag(np.r_[penalty, 0.03]))), np.r_[target, 0.])\\n    return matrix[n:] @ coeff\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    q = _coordinates(study, np.concatenate((train['x'], study['test']['x'])))\\n    y = _scalar(q, train['y'], n)\\n    d = _affine(q)\\n    state = d[n:] @ _fit(d[:n], train['traj'])\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/verify_batch04.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(p+'public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']\\nx = t['x']\\nids = np.arange(len(x))\\nrng = np.random.default_rng(420)\\nslices = [('52/20', ids[52:]), ('first20', ids[:20]), ('middle20', ids[24:44]), ('56/16', ids[56:])]\\nslices += [(f'random{k}', rng.choice(ids, 20, replace=False)) for k in range(6)]\\nq = m._coordinates(s, x)\\nd = ((q-q.mean(0))/q.std(0))\\nslices += [('outer12', np.argsort(np.linalg.norm(d,axis=1))[-12:])]\\nfor name, j in slices:\\n    i = np.setdiff1d(ids, j)\\n    study = {**s, 'train': {**t, **{k:t[k][i] for k in ('x','y','traj')}}, 'test': {'x':x[j]}}\\n    out = m.solve_batch(study)\\n    y, state = out['y_hat'], out['state_pred']\\n    a = abs(y-t['y'][j]).mean(); e = abs(state-t['traj'][j]).mean(); term = abs(state[:,-1]-t['traj'][j,-1]).mean()\\n    print(f'{name:10s} y={a:.6f} state={e:.6f} terminal={term:.6f}')\\n    if name=='52/20': assert a <= .038\\nout = m.solve_batch(s)\\ny, state = out['y_hat'], out['state_pred']\\nassert np.allclose(out['diagnostics_vec'], [y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])\\nPY\\ncd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 /holdout_task/validate_public_schema.py && python3 -I /tmp/verify_batch04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse cubic readout → H2 panel-C1 quadratic plus a fitted tanh projection; the prototype reached worst-split scalar MAE 0.01900 and the affine trajectory branch reached 0.00430.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the rational projection instead of tanh\",\n      \"rejected_reason\": \"It gave nearly identical error but no improvement on the tested splits; retain the slightly better bounded tanh readout.\"\n    }\n  ],\n  \"rationale\": \"Save the passing structure now. Verify the exact artifact with training-only normalization and withheld high-leverage rows; failure there would identify an extrapolation bottleneck before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8521cf05f20147c3ef3c40d51bc4e720997c85631e0b3f9faae6415ec5981488",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49685.9,
+      "usage_known": true,
+      "prompt_tokens": 37897,
+      "cached_tokens": 9344,
+      "completion_tokens": 1959
+    }
+  ]
+}

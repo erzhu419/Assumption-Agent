@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7399bc559f7f4608a5bffc4dbcb7f2e8",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:58.441223+00:00",
+  "ended_at_utc": "2026-11-28T09:11:41.330392+00:00",
+  "request_sha256": "a37f31a1ce5685ccf0acf52f40fdbfe34e9ff7291a96378bcd469cfd24d592bc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23532,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22032,
+    "cached_tokens": 10880,
+    "completion_tokens": 1847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; T=s['train']; x,y,z=[T[k] for k in ('x','y','traj')]; t=s['eval_times']; np.set_printoptions(precision=5,suppress=True,linewidth=120)\\ndef aff(p,k):\\n u=s[p]['u']; return np.linalg.lstsq(np.c_[np.ones(len(u)),u],s[p][k],rcond=None)[0]\\ndef amap(u,w):return w[0]+u@w[1:]\\nA=np.load('/tmp/align.npy'); B=aff('panel_b','v'); print('A',A,'B singular',np.linalg.svd(B[1:],compute_uv=False)); print('summary candidates',np.array([y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std()]),T['summary'])\\nfor name,f,init in [('two saturation',lambda p:np.array([-np.expm1(-np.exp(p[0])*t),-np.expm1(-np.exp(p[1])*t)]),[-1,1]),('sat & exp',lambda p:np.array([-np.expm1(-np.exp(p[0])*t),np.exp(-np.exp(p[1])*t)]),[0,0]),('sat & time',lambda p:np.array([-np.expm1(-np.exp(p[0])*t),t]),[0]),('sat & t-exp',lambda p:np.array([-np.expm1(-np.exp(p[0])*t),t*np.exp(-np.exp(p[1])*t)]),[0,0]),('two exp',lambda p:np.array([np.exp(-np.exp(p[0])*t),np.exp(-np.exp(p[1])*t)]),[-1,1]),('ODE initial and forced decay',lambda p:np.array([np.exp(-np.exp(p[0])*t),-np.expm1(-np.exp(p[0])*t)]),[0])]:\\n def e(p,z):\\n  F=f(p); return z@np.linalg.pinv(F)@F-z\\n r=least_squares(lambda p:e(p,z[:52]).ravel(),init,bounds=(-8,4)); print(name,'rates',np.exp(r.x),'rmse fit/heldout',np.sqrt(np.mean(e(r.x,z[:52])**2)),np.sqrt(np.mean(e(r.x,z[52:])**2)))\\n if name=='two saturation':F=f(r.x); np.save('/tmp/time_initial.npy',F)\\n# Compare observable linear residuals and smooth nonlinear features in candidate panel coordinates.\\ncal=amap(x,A); spaces={'raw':x,'cal':cal,'Ainv':(x-A[0])/np.diag(A[1:]),'Bcal':amap(cal,B),'Braw':amap(x,B),'BinvCal':(cal-B[0])@np.linalg.inv(B[1:]),'C1cal':amap(cal,aff('panel_c','v1'))}\\nfor k in ('v1','v2'):\\n u=s['panel_c']['u']; v=s['panel_c'][k]; base=np.c_[np.ones(len(u)),u]; L=np.linalg.lstsq(base,v,rcond=None)[0];R=v-base@L; print('C',k,'raw residual samples',np.c_[u,R][:10]);\\n def score(F):\\n  P=F@np.linalg.pinv(F); return np.sqrt(np.mean(((P@v-v)/(1-np.diag(P))[:,None])**2))\\n cand={}\\n axes=[u[:,j] for j in range(4)]+[u[:,j]+sign*u[:,l] for j,l in itertools.combinations(range(4),2) for sign in (1,-1)]+[v[:,j] for j in range(4)]\\n for nam,g in [('square',lambda a:a*a),('abs',np.abs),('cube',lambda a:a**3),('sin',lambda a:np.sin(2*a)),('cos',lambda a:np.cos(2*a)),('tanh',lambda a:np.tanh(2*a)),('saturate',lambda a:a*a/(1+a*a))]:\\n  cand[nam]=score(np.column_stack([base]+[g(a) for a in axes[:4]]));\\n  print(nam,'all raw axes',cand[nam], 'best one',sorted((score(np.c_[base,g(a)]),i) for i,a in enumerate(axes[:16]))[:3])\\nfor name,u in spaces.items():\\n for kind,F2 in [('lin',[]),('axis2',[u**2]),('axis2+3',[u**2,u**3]),('sin',[np.sin(u),np.cos(u)]),('tanh',[np.tanh(1.5*u),np.tanh(u)**2])]:\\n  D=np.column_stack([np.ones(len(u)),u]+F2); target=np.c_[y,z@np.linalg.pinv(F),z[:,-1]]; E=D[52:]@np.linalg.lstsq(D[:52],target[:52],rcond=None)[0]-target[52:]; print(name,kind,np.mean(abs(E),axis=0))\\nfor kind,D in [('x+trajectory',np.c_[np.ones(len(x)),x,z@np.linalg.pinv(F)]),('x+first+last',np.c_[np.ones(len(x)),x,z[:,0],z[:,-1]])]:\\n w=np.linalg.lstsq(D[:52],y[:52],rcond=None)[0]; print(kind,'y MAE',np.mean(abs(D[52:]@w-y[52:])), 'w',w)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Direct affine or polynomial response → shared two-mode dynamics plus nonlinear spatial and readout operators; the best direct 52/20 baseline has y MAE 0.12692 and terminal-state MAE 0.20752.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A dense affine-to-cubic map of the raw or calibrated coordinates is adequate for prediction.\",\n    \"empirical_witness\": \"All six fits miss the 0.038 scalar MAE target, with y MAE ranging from 0.12692 to 0.16536; the first two trajectory singular values are 24.89 and 2.36, with the third only 0.0504.\",\n    \"causal_blanket_diagnosis\": \"The direct regressions ignore the shared temporal modes and cannot identify calibration from affine reparameterization alone.\",\n    \"sublated_pivot\": \"Fit shared temporal modes and test nonlinear basis terms in candidate operator coordinates, separating state prediction from the scalar readout.\",\n    \"risk_kind\": \"Incomplete response basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Raise the degree of the dense polynomial\",\n      \"rejected_reason\": \"Quadratic and cubic expansions already degrade held-out performance and do not exploit the measured trajectory rank.\"\n    }\n  ],\n  \"rationale\": \"Compare candidate time laws on held-out trajectories to identify which modes should be predicted, then compare panel-coordinate features and observed-state readouts to locate the remaining nonlinear error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8d424a594bec69a868a377522b5d1ec503dc6e01eca87ab4a875efc36aa07468",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48138.72,
+      "usage_known": true,
+      "prompt_tokens": 22032,
+      "cached_tokens": 10880,
+      "completion_tokens": 1847
+    }
+  ]
+}

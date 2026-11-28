@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02ca8d321ce044668feb253af6d0f1ed",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:26.195238+00:00",
+  "ended_at_utc": "2026-11-28T09:19:57.743313+00:00",
+  "request_sha256": "101bb73dd0ed6e17927a0c7ec2d4942a904936f96a759c358cd49621b11f6b89",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25306,
+    "cached_tokens": 9344,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_readout.py <<'PY'\\nfrom probe_graph import *\\nfrom sklearn.linear_model import Lasso, MultiTaskLasso\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nz=ops(S,T['x']); c,d=z['c'],z['d']; X=np.c_[c,d]; F=poly(X,2); names=['1']+[a+str(i) for a in 'cd' for i in range(4)]; names += [a+'*'+b for a,b in itertools.combinations_with_replacement(names[1:],2)]\\nsplits=[(np.arange(52),np.arange(52,72))]+[(p[:56],p[56:]) for p in [np.random.default_rng(k).permutation(72) for k in range(6)]]\\nblocks=[list(range(1,5)),list(range(5,9)),[i for i,n in enumerate(names) if '*c' in n and n.startswith('c')],[i for i,n in enumerate(names) if '*d' in n and n.startswith('c')],[i for i,n in enumerate(names) if '*d' in n and n.startswith('d')]]\\ndef out(p,v):return np.array([np.mean(abs(p[:,0]-Y[v,0])),np.mean(abs(p[:,1:]-Y[v,1:]))])\\nfor select in itertools.product([0,1],repeat=3):\\n ids=[0]+sum(blocks[:2]+[b for use,b in zip(select,blocks[2:]) if use],[]);G=F[:,ids]\\n scores=[]\\n for a,b in splits:\\n  sc=np.maximum(.1,G[a].std(0));sc[0]=1;A=G/sc;scores.append(out(ridge(A[b],A[a],Y[a],.0003),b))\\n print('blocks cc/cd/dd',select,'fixed',scores[0],'worst',np.max(scores,0),'mean',np.mean(scores,0))\\na,b=splits[0]; V=np.linalg.svd(T['traj'][a],full_matrices=False)[2][:2];Q=np.c_[T['y'],T['traj']@V.T]; sc=F[a].std(0);sc[0]=1; A=F/sc\\nfor j in range(3):\\n print('target',j)\\n for alpha in [.01,.003,.001,.0003,.0001]:\\n  m=Lasso(alpha=alpha,max_iter=30000,tol=1e-7).fit(A[a,1:],Q[a,j]); ix=np.r_[0,np.where(abs(m.coef_)>1e-8)[0]+1];p=A[:,ix]@ls(A[a][:,ix],Q[a,j]);print(alpha,len(ix),np.mean(abs(p[b]-Q[b,j])),np.sqrt(np.mean((p[a]-Q[a,j])**2)),[(names[i],round(m.coef_[i-1],4)) for i in ix[1:] if abs(m.coef_[i-1])>.015])\\ncoef=ls(F[a],Q[a]); print('full quad training RMS',np.sqrt(np.mean((F[a]@coef-Q[a])**2,axis=0)));print('shared temporal vectors',V)\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 /tmp/probe_readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense generic readout -> H2 structured quadratic readout of both panel-C branches; best observed 52/20 MAE is 0.0199 for y and 0.0094 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the dense quadratic fit based on the prescribed split\",\n      \"rejected_reason\": \"It passes that split, but block ablation and alternate splits can identify unnecessary interaction terms and expose unstable extrapolation.\"\n    }\n  ],\n  \"rationale\": \"Fit each interaction-block candidate independently within each split. Compare errors on both outputs, and use sparse fits to distinguish missing readout structure from coefficient instability.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dbdedf277d1c794ffefcb8212c91510b9254747fb7b26c96df333292a37eb004",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31510.65,
+      "usage_known": true,
+      "prompt_tokens": 25306,
+      "cached_tokens": 9344,
+      "completion_tokens": 1102
+    }
+  ]
+}

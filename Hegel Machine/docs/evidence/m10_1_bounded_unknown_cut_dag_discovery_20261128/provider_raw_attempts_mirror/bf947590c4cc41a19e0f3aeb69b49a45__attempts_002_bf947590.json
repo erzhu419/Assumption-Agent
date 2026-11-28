@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf947590c4cc41a19e0f3aeb69b49a45",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:37.093361+00:00",
+  "ended_at_utc": "2026-11-28T09:25:58.565643+00:00",
+  "request_sha256": "83f05e164cb7c5f2d624d981d39ba14ee758edd184ba00c86b0d06ee41c0b3e6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12735,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15174,
+    "cached_tokens": 9344,
+    "completion_tokens": 701
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\ncat validate_public_schema.py\\nls -lh /tmp/hegel_continual_archive\\nfor s in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $s\\\"; wc -l \\\"$s\\\"; grep -nE '^def |^class |^import |^from ' \\\"$s\\\"; done\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec'],'summary',s['train']['summary'])\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; u=p['u']; b=np.c_[np.ones(len(u)),u]; print(k, 'u range',u.min(0),u.max(0))\\n for v in p.keys()-{'u'}:\\n  c=np.linalg.lstsq(b,p[v],rcond=None)[0]; r=np.linalg.norm(b@c-p[v],axis=1); print(v,'affine',c,'row residual quantiles',np.quantile(r,[0,.5,.8,.9,1]))\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; print('train x range',x.min(0),x.max(0),'test',s['test']['x'].min(0),s['test']['x'].max(0)); print('first rows',np.c_[x,y,t][:8]); print('y/traj scales',np.c_[y,t].std(0)); print('trajectory singular values',np.linalg.svd(t-t.mean(0),compute_uv=False)); print('y/traj corr',np.corrcoef(y,t.T)[0,1:])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived graph reuse) -> H2 (panel and trajectory signatures identify reusable branches); archived 56/16 MAE is 0.18615 for y and 0.15716 for trajectories, with the requested 52/20 split not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the archived solver unchanged\",\n      \"rejected_reason\": \"The archived gate missed both targets; inspect its component operators rather than trusting its full graph.\"\n    }\n  ],\n  \"rationale\": \"Panel residuals distinguish affine maps with sparse outliers from nonlinear operators, while temporal rank and y–trajectory correlations determine whether to test a shared latent state or separate output branches.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "2df4fe6a0a27ea8d8acbcfd93ab18bb48ebb8cb74ca7151e6f08ec576309a3df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21426.23,
+      "usage_known": true,
+      "prompt_tokens": 15174,
+      "cached_tokens": 9344,
+      "completion_tokens": 701
+    }
+  ]
+}

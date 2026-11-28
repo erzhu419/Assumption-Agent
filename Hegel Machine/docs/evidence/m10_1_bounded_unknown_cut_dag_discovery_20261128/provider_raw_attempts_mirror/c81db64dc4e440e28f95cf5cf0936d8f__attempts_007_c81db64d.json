@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c81db64dc4e440e28f95cf5cf0936d8f",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:05.274977+00:00",
+  "ended_at_utc": "2026-11-28T09:22:41.686850+00:00",
+  "request_sha256": "aa8036fb2d11f2321e0296c7d2370d2cefc54f2222ff3d73e179e19d75e9e77b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 48197,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29187,
+    "cached_tokens": 9344,
+    "completion_tokens": 1593
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\ndef load(name,path):\\n spec=importlib.util.spec_from_file_location(name,path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod.run_node\\ncal=load('cal','_frozen_nodes/node_00.py'); base=load('base','node_01.py'); sink=load('sink','_frozen_nodes/node_02.py')\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; u,v=(s['panel_b'][k] for k in ('u','v')); ix=np.arange(len(u))\\nmodels={\\n'erf':(lambda x,p:x+p[1]*erf(p[0]*x),[1.46,-.65],[.5,-1.5],[3.,-.1]),\\n'gaussian':(lambda x,p:x*(1+p[1]*np.exp(-p[0]*x*x)),[1.,-1.1],[.1,-2.],[6.,-.1]),\\n'generalized gaussian':(lambda x,p:x*(1+p[1]*np.exp(-p[0]*abs(x)**p[2])),[1.,-1.1,2.],[.1,-2.,.7],[6.,-.1,5.]),\\n'rational':(lambda x,p:x*(1+p[1]/(1+p[0]*x*x)**p[2]),[.7,-1.1,1.4],[.01,-2.,.1],[8.,-.1,10.]),\\n'squared tanh':(lambda x,p:x*(1+p[1]*(1-np.tanh(p[0]*x*x))),[1.,-1.1],[.1,-2.],[6.,-.1]),\\n'sine':(lambda x,p:x+p[1]*np.sin(p[0]*x),[2.87,-.4],[2.,-.65],[3.6,-.15])}\\n\\ndef fit(model,tr):\\n f,start,lo,hi=model\\n def design(x,p):return np.c_[np.ones(len(x)),f(x,p)]\\n def solve(p):\\n  A=design(u[tr],p); w=np.linalg.lstsq(A,v[tr],rcond=None)[0]; return w,A@w-v[tr]\\n p=least_squares(lambda p:solve(p)[1].ravel(),start,bounds=(lo,hi),ftol=1e-11).x\\n w,e=solve(p); return p,w,e,lambda x:design(x,p)@w\\n\\npreds={'verified':base}\\nfor name,model in models.items():\\n p,w,e,pred=fit(model,ix); loo=np.array([fit(model,ix[ix!=i])[3](u[i:i+1])[0]-v[i] for i in ix]); print(name,'parameters',np.round(p,6),'panel RMS, LOO mean/max',np.sqrt(np.mean(e**2)),np.mean(abs(loo)),np.max(abs(loo)))\\n preds[name]=lambda inp,pred=pred:{'x':pred(inp['node_00']['calibrated_x'])}\\n\\nrows=np.arange(len(s['train']['x'])); xall=cal({'__input__':s})['calibrated_x'][:len(rows)]; dist=np.linalg.norm(np.maximum(u.min(0)-xall,0)+np.maximum(xall-u.max(0),0),axis=1)\\nslices={'official':rows[-20:],'outer-range':np.argsort(dist)[-18:],'interleaved-0':rows[::4],'interleaved-1':rows[1::4],'interleaved-2':rows[2::4],'interleaved-3':rows[3::4]}\\nerrs={n:[] for n in preds}\\nfor label,te in slices.items():\\n tr=np.setdiff1d(rows,te); train={k:s['train'][k][tr] for k in ('x','y','traj')}; y=train['y']; z=train['traj'][:,-1]; train['summary']=np.array([y.mean(),y.std(),z.mean(),z.std()]); st={**s,'train':train,'test':{'x':s['train']['x'][te]}}; a={'node_00':cal({'__input__':st})}\\n for n,pred in preds.items():\\n  q=sink({'__input__':st,'node_01':pred(a)}); errs[n].append([np.mean(abs(q['y_hat']-s['train']['y'][te])),np.mean(abs(q['state_pred']-s['train']['traj'][te]))])\\nprint('slice order',list(slices))\\nfor n,e in errs.items():print(n,np.round(e,6).tolist(),'worst',np.round(np.max(e,axis=0),6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separate linear and nonlinear mixing → one shared odd warp followed by affine mixing; the tied erf form reduced worst Panel B leave-one-out error from 0.02749 to 0.02073, while the saved candidate passes both official MAE thresholds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the saved model based on panel error alone\",\n      \"rejected_reason\": \"The study queries extend beyond the calibration panel, where similar panel fits can produce different downstream errors.\"\n    }\n  ],\n  \"rationale\": \"Compare the saved node against tied warp models on the official split and on study rows farthest outside the panel range. Promote a challenger only if its panel improvement also holds up in downstream y and trajectory predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1689ef3d0382b4a5aae1c78341e64e594d8e6d55ea4b8bc3d40e266633c3f3ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41658.86,
+      "usage_known": true,
+      "prompt_tokens": 29187,
+      "cached_tokens": 9344,
+      "completion_tokens": 1593
+    }
+  ]
+}

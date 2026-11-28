@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "342a490073cd400783bc4873bdbe31e8",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a04_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:17.603417+00:00",
+  "ended_at_utc": "2026-11-28T09:24:44.921661+00:00",
+  "request_sha256": "9ca7328218d689df4060257999469f16a76b5374868897595207e2016b67d8a0",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27917,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20825,
+    "cached_tokens": 5504,
+    "completion_tokens": 1061
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\n\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nn0, n1, n2, n3 = [load(f'node_{i:02}', f'{\\\"_frozen_nodes/\\\" if i != 2 else \\\"\\\"}node_{i:02}.py') for i in range(4)]\\np = n0({'__input__': s})\\nu, v = p['u'], p['v2']\\nloo = []\\nfor i in range(len(u)):\\n    keep = np.arange(len(u)) != i\\n    d = n2({'node_00': {'u': u[keep], 'v2': v[keep], 'x': u[i:i+1]}})['d']\\n    loo.append(np.mean(np.abs(d[0] - v[i])))\\nprint(f'Fixed-basis Panel C leave-one-row-out worst MAE: {max(loo):.8f}')\\nt = s['train']\\nrows = np.arange(len(t['x']))\\nslices = [(f'block_{j}', v) for j, v in enumerate(np.array_split(rows, 4))]\\nslices += [(f'interleaved_{j}', rows[j::4]) for j in range(4)]\\noutcomes = []\\nfor name, val in slices:\\n    fit = np.setdiff1d(rows, val)\\n    y, traj = t['y'][fit], t['traj'][fit]\\n    study = dict(s, train=dict(x=t['x'][fit], y=y, traj=traj, summary=np.array([y.mean(), y.std(), traj[:, -1].mean(), traj[:, -1].std()])), test={'x': t['x'][val]})\\n    panel = {'node_00': n0({'__input__': study})}\\n    out = n3({'__input__': study, 'node_01': n1(panel), 'node_02': n2(panel)})\\n    y_mae = np.mean(np.abs(out['y_hat'] - t['y'][val]))\\n    time_mae = np.mean(np.abs(out['state_pred'] - t['traj'][val]), axis=0)\\n    outcomes.append((y_mae, time_mae.mean(), time_mae.max()))\\n    print(f'{name}: y={y_mae:.6f} traj={time_mae.mean():.6f} worst_horizon={time_mae.max():.6f}')\\nprint('Worst supplemental y/traj/horizon MAE:', np.max(outcomes, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial readout → H2 affine plus coordinatewise cosine at 2.4; the official held-out y and trajectory MAEs are 0.021233 and 0.030664, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the basis against end-to-end labels\",\n      \"rejected_reason\": \"The Panel C mapping already fits near the measurement noise floor, and the verified artifact passes both official MAE thresholds.\"\n    }\n  ],\n  \"rationale\": \"The official split passes. This read-only stress test checks whether that pass hides dependence on a single Panel C row, validation block, or trajectory horizon. If a slice is weak, use the panel and horizon errors to distinguish node misspecification from sensitivity in the frozen sink.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e01d09bdf5c2e39b036699a258f814dad49bbf4cc1485d943bce48065ed08d63",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29856.77,
+      "usage_known": true,
+      "prompt_tokens": 20825,
+      "cached_tokens": 5504,
+      "completion_tokens": 1061
+    }
+  ]
+}

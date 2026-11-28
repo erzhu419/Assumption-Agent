@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19c6ba2be89347de89ef8a15bbd68dec",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:42.605980+00:00",
+  "ended_at_utc": "2026-11-28T09:14:12.795142+00:00",
+  "request_sha256": "b86be1c48ef7857038ac23179fcfabf9cda7491de056eb601cfca9756e1f719a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51796,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33970,
+    "cached_tokens": 10880,
+    "completion_tokens": 1188
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/active_cv.py <<'PY'\\nfrom contextlib import redirect_stdout\\nfrom io import StringIO\\nwith redirect_stdout(StringIO()):\\n from cvprobe import *\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\nQ=poly(x,2)\\n\\ndef active(it,T,alpha):\\n b=ls(Q[it],T)\\n H=np.zeros((4,4,T.shape[1]))\\n for (i,j),v in zip(combinations_with_replacement(range(4),2),b[5:]):\\n  H[i,j]+=v; H[j,i]+=v\\n G=b[1:5][None,:,:]+np.einsum('ni,ijk->njk',x[it],H)\\n G=G.reshape(-1,4) if T.shape[1]==1 else G.transpose(0,2,1).reshape(-1,4)\\n M=G.T@G/len(G); return (1-alpha)*np.eye(4)+alpha*4*M/np.trace(M)\\n\\ndef run(it,iv,T,conf):\\n alpha,l,noise,kind=conf\\n M=active(it,T,alpha); eig,V=np.linalg.eigh(M); z=x@(V*np.sqrt(np.maximum(eig,0)))\\n D=cdist(z,z,'sqeuclidean'); r=np.sqrt(D)/l\\n K=np.exp(-r*r/2) if kind=='rbf' else (1+np.sqrt(5)*r+5*r*r/3)*np.exp(-np.sqrt(5)*r)\\n A=Q[it]; K0=K[np.ix_(it,it)]+noise*np.eye(len(it)); Ka=K[np.ix_(iv,it)]\\n Wi=np.linalg.solve(K0,np.c_[A,T]); p=ls(A.T@Wi[:,:15],A.T@Wi[:,15:]);return Q[iv]@p+Ka@(Wi[:,15:]-Wi[:,:15]@p)\\n\\nfrom itertools import product\\nconfigs=list(product((0,.6,.95),(0.6,1.2,2.4),(.00001,.001,.03),('rbf','m52')))\\nfor label,T in [('scalar',Y[:,:1]),('state',Y[:,1:])]:\\n scores=[]\\n for c in configs:\\n  allerr=[abs(run(it,iv,T[it],c)-T[iv]) for it,iv in folds]\\n  a=np.array([[e.mean(),e[:,-1].mean()] for e in allerr]); scores.append((c,a))\\n print(label,'strongest fixed candidates')\\n for c,a in sorted(scores,key=lambda m:m[1][:,1].max())[:5]:print(c,np.round(a.T,5))\\n nested=[]\\n for it,iv in folds:\\n  inner=[(np.setdiff1d(it,v),v) for v in np.array_split(np.random.default_rng(183).permutation(it),3)]\\n  w=min(configs,key=lambda c:np.mean([np.mean(abs(run(a,b,T[a],c)-T[b])) for a,b in inner]));e=abs(run(it,iv,T[it],w)-T[iv]);nested.append([e.mean(),e[:,-1].mean()]);\\n print('nested',np.round(np.array(nested).T,5))\\nprint('trajectory singular values',np.linalg.svd(j,compute_uv=False))\\nprint('scalar target summary mean/std',y.mean(),y.std(),'state final',j[:,-1].mean(),j[:,-1].std())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/active_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed polynomial curvature -> H2 smooth corrections along supervised active directions; the baseline worst-slice MAEs remain 0.02550 for y and 0.01857 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add panel C features to both outputs\",\n      \"rejected_reason\": \"The tested compositions did not improve the worst scalar slice, although rational features modestly improved the terminal-state slice.\"\n    }\n  ],\n  \"rationale\": \"Test whether polynomial residuals have learnable directional structure without using outer validation labels to select the direction or smoothing parameters. Keep the existing solver where the correction does not improve held-out error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d4be4988b080541157dab298921aff76e6138ec6aa5a973d13fe1bfce88c425a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32841.12,
+      "usage_known": true,
+      "prompt_tokens": 33970,
+      "cached_tokens": 10880,
+      "completion_tokens": 1188
+    }
+  ]
+}

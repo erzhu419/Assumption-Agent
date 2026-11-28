@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08ee784cc6304d1381b8e3cee179ecca",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__init_decomp_conf_m101_b04_batch_05",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:18.352598+00:00",
+  "ended_at_utc": "2026-11-28T09:37:56.869040+00:00",
+  "request_sha256": "db224c5f1246d2528a36b7c54d6c36eb04ea908957cb49d400ba29ceb9e1e168",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 5362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13174,
+    "cached_tokens": 0,
+    "completion_tokens": 1453
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The solver composes two distinct stages: it fits and inverts the panel-A calibration, then fits the panel-B warp and uses it for scalar and trajectory prediction. Split at the calibrated coordinates. Panel A shows the clearest shift: linear R² falls from 1.000 to 0.940 and cross-correlation rises from near zero to 0.324. That makes calibration the first stage to investigate, not a proven cause of the validation failure. The split preserves the source formulas and fit settings; panel C remains unused, as in the source.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    u, target = panel['u'], panel['v']\\n    design = np.column_stack((np.ones(len(u)), u))\\n    initial = _fit(design, target)\\n    robust = least_squares(\\n        lambda b: (design @ b.reshape(initial.shape) - target).ravel(),\\n        initial.ravel(), loss='cauchy', f_scale=.02,\\n    ).x.reshape(initial.shape)\\n    residual = np.linalg.norm(design @ robust - target, axis=1)\\n    keep = residual <= 10 * np.median(residual)\\n    return _fit(design[keep], target[keep])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    calibration = _calibration(study['panel_a'])\\n\\n    def calibrate(raw):\\n        return np.linalg.solve(calibration[1:].T,\\n                               (raw - calibration[0]).T).T\\n\\n    return dict(z_tr=calibrate(train['x']),\\n                z_te=calibrate(study['test']['x']),\\n                panel_b=study['panel_b'], y=train['y'],\\n                traj=train['traj'], eval_times=study['eval_times'])\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _warp(x, parameters):\\n    strength, scale = parameters\\n    return _linear(x - strength * erf(scale * x))\\n\\n\\ndef _panel_operator(panel):\\n    u, v = panel['u'], panel['v']\\n\\n    def residual(parameters):\\n        design = _warp(u, parameters)\\n        return (design @ _fit(design, v) - v).ravel()\\n\\n    parameters = least_squares(residual, [.68, 1.45],\\n                               bounds=([.02, .15], [4., 4.])).x\\n    return parameters, _fit(_warp(u, parameters), v)\\n\\n\\ndef _readouts(b):\\n    b0, b1, b2, b3 = b.T\\n    scalar = np.column_stack((_linear(b), b0 * b2, b1 * b3))\\n    trajectory = np.column_stack((scalar, b0 * b3))\\n    return scalar, trajectory\\n\\n\\ndef _time_basis(times, trajectory):\\n    def basis(rates):\\n        return -np.expm1(-times[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ _fit(b, trajectory.T) - trajectory.T).ravel()\\n\\n    rates = least_squares(residual, [1.6, .3],\\n                          bounds=([.58, .01], [5., 1.2])).x\\n    return np.linalg.qr(basis(rates), mode='reduced')[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['node_00']\\n    parameters, mixing = _panel_operator(data['panel_b'])\\n    scalar, trajectory = _readouts(_warp(data['z_tr'], parameters) @ mixing)\\n    scalar_test, trajectory_test = _readouts(_warp(data['z_te'], parameters) @ mixing)\\n    time_basis = _time_basis(data['eval_times'], data['traj'])\\n    y_hat = scalar_test @ _fit(scalar, data['y'])\\n    state_pred = trajectory_test @ _fit(trajectory, data['traj'] @ time_basis) @ time_basis.T\\n    final = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return dict(y_hat=y_hat, state_pred=state_pred, diagnostics_vec=diagnostics)\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "c1aa3bab2280e52bb2aed89cb0baa35ffcd53efba32a3e8e42c25814d945d2e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41221.22,
+      "usage_known": true,
+      "prompt_tokens": 13174,
+      "cached_tokens": 0,
+      "completion_tokens": 1453
+    }
+  ]
+}

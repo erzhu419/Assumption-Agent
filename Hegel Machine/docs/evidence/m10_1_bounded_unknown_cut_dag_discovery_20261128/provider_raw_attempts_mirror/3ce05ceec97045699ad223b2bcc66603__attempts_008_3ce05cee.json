@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ce05ceec97045699ad223b2bcc66603",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_04__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:34:28.744550+00:00",
+  "ended_at_utc": "2026-11-28T09:35:02.442868+00:00",
+  "request_sha256": "2e477b36e569f7d90167b6cb609e92158a430df00e5417fc994ee0c03d4548f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50224,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29512,
+    "cached_tokens": 9344,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/calibration_witness04.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec = importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\np = s['panel_a']; u,v = p['u'],p['v']; a=m._calibration(p)\\nprint('study fields:',sorted(s),'; train fields:',sorted(s['train']))\\nU=np.roll(u,-1,axis=1)\\ndef cal(w,x):\\n    b=np.roll(x,-1,axis=1)\\n    return w[:,0]+w[:,1]*x+w[:,2]*b+w[:,3]*x*b+w[:,4]*x**3\\nclean=np.abs(cal(a,u)-v)<0.001\\nprint('clean counts by channel:',clean.sum(0),'smallest excluded absolute residual:',np.min(np.abs(cal(a,u)-v)[~clean]))\\nfor name,features in [('cyclic cubic',lambda x,b:np.c_[np.ones(len(x)),x,b,x*b,x**3]),('affine',lambda x,b:np.c_[np.ones(len(x)),x,b]),('cyclic quadratic',lambda x,b:np.c_[np.ones(len(x)),x,b,x*b])]:\\n    errors=[]\\n    for j in range(4):\\n        k=clean[:,j]; F=features(u[k,j],U[k,j]); y=v[k,j]; h=(np.linalg.qr(F)[0]**2).sum(1)\\n        errors.append(np.sqrt(np.mean(((y-F@m._fit(F,y))/(1-h))**2)))\\n    print('clean-panel leave-one-out RMSE',name,errors)\\nx=np.r_[s['train']['x'],s['test']['x']]; z=m._decode(x,a); b=np.roll(z,-1,axis=1); j=np.zeros((len(z),4,4)); k=np.arange(4)\\nj[:,k,k]=a[:,1]+a[:,3]*b+3*a[:,4]*z*z; j[:,k,(k+1)%4]=a[:,2]+a[:,3]*z\\nprint('inverse: max absolute round-trip error',np.max(np.abs(cal(a,z)-x)), 'min Jacobian singular value',np.linalg.svd(j,compute_uv=False).min())\\np=s['panel_b']; W=m._fit(m._affine(p['u']),p['v']); print('panel B affine RMSE',np.mean((m._affine(p['u'])@W-p['v'])**2)**.5)\\nz=m._affine(z[:72])@W; y=s['train']['y']; t=s['train']['traj']; F=m._scalar_design(z)\\nD=np.array([z[:,0]-z[:,2],z[:,1]-z[:,3],z[:,0]+z[:,2],z[:,1]+z[:,3]]).T\\n# Compare structured residual challengers on the preregistered split and a large-difference slice.\\nfor name,hold in [('52/20',np.arange(52,72)),('large channel differences',np.argsort(np.linalg.norm(D[:,:2],axis=1))[-20:])]:\\n    train=np.setdiff1d(np.arange(72),hold)\\n    def score(P): return np.abs(y[hold]-P[hold]@m._fit(P[train],y[train])).mean()\\n    print(name,'scalar MAE compact / pair sum-difference squares:',score(F),score(np.c_[F,D**2]))\\n    # Profile one common positive denominator on fitting rows only.\\n    best=None\\n    for d in D.T:\\n        for c in (0.03,0.1,0.3,1.0):\\n            P=F/(1+c*d[:,None]**2); r=np.mean((P[train]@m._fit(P[train],y[train])-y[train])**2)\\n            if best is None or r<best[0]:best=(r,P)\\n    print(name,'best training-profiled rational MAE:',score(best[1]))\\n    state=m._trajectory(s['eval_times'],t[train],z[train],z[hold]); E=np.abs(state-t[hold]); print(name,'trajectory overall / worst timestamp MAE',E.mean(),E.mean(0).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/calibration_witness04.py && python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration → H2 cyclic cubic calibration and a compact readout; prior worst split MAEs were 0.00530 scalar and 0.00460 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Relay modes, drift operators, and batch-centered classification\",\"rejected_reason\":\"The public contract describes one study with continuous readouts, no relay or spatial field, and no cohort or class labels.\"}],\"rationale\":\"Measure clean-panel leave-one-out errors to test whether the cubic correction generalizes, and check whether inversion instability or omitted rational and pairwise terms worsen errors on the large-difference slice. Change the solver only if the audit shows a material accuracy or stability gain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f27ac828128062cd09ff0186fe9178f602418f3c6ca852e69d818e72e466af54",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36311.48,
+      "usage_known": true,
+      "prompt_tokens": 29512,
+      "cached_tokens": 9344,
+      "completion_tokens": 1354
+    }
+  ]
+}

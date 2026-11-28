@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a8c298d312234765b911c83ff49adb46",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:49.249644+00:00",
+  "ended_at_utc": "2026-11-28T09:13:24.314073+00:00",
+  "request_sha256": "6b4e3a4adb611e4a46dc762e0984e493d0afae451865928392f0e57c681bb6fc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47517,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32844,
+    "cached_tokens": 10880,
+    "completion_tokens": 1329
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit a nonlinear scalar readout and a shared two-mode trajectory.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack([np.ones(len(x)), x] +\\n                           [x[:, i] * x[:, j] for i, j in\\n                            combinations_with_replacement(range(x.shape[1]), 2)])\\n\\n\\ndef _kernel(x, z):\\n    return np.exp(-0.23 * np.sum((x[:, None] - z[None, :]) ** 2, axis=2))\\n\\n\\ndef _readout(x, xt, target, penalty):\\n    p, pt = _quadratic(x), _quadratic(xt)\\n    k = _kernel(x, x) + penalty * np.eye(len(x))\\n    system = np.block([[k, p], [p.T, np.zeros((p.shape[1], p.shape[1]))]])\\n    rhs = np.concatenate((target, np.zeros((p.shape[1],) + target.shape[1:])))\\n    coef = np.linalg.solve(system, rhs)\\n    return np.column_stack((_kernel(xt, x), pt)) @ coef\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    t = study['eval_times']\\n    trajectories = train['traj'].T\\n\\n    def basis(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def project(b):\\n        return np.linalg.lstsq(b, trajectories, rcond=None)[0]\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ project(b) - trajectories).ravel()\\n\\n    rates = least_squares(residual, [1.5, 0.25],\\n                          bounds=([0.7, 0.02], [4.0, 0.65])).x\\n    b = basis(rates)\\n    y_hat = _readout(x, xt, train['y'], 0.001)\\n    state_pred = _readout(x, xt, project(b).T, 0.006) @ b.T\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/stress_solver.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport sys\\nimport numpy as np\\np=sys.argv[1] if len(sys.argv)>1 else '/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx,y,z=(st['train'][k] for k in ('x','y','traj'))\\ndef score(idx):\\n    tr=np.setdiff1d(np.arange(len(x)),idx)\\n    subset=dict(st,train={'x':x[tr],'y':y[tr],'traj':z[tr]},test={'x':x[idx]})\\n    q=m.solve_batch(subset)\\n    a=np.abs(q['y_hat']-y[idx]); b=np.abs(q['state_pred']-z[idx])\\n    return [a.mean(),b.mean(),b.mean(0).max()]\\nrng=np.random.default_rng(395)\\nslices={'fixed':np.arange(52,72),'radial':np.argsort(np.linalg.norm(x,axis=1))[-18:]}\\nfor j in range(4):\\n    order=np.argsort(x[:,j]); slices[f'low{j}']=order[:18]; slices[f'high{j}']=order[-18:]\\nfor label,idx in slices.items(): print(label,np.round(score(idx),6))\\nr=np.array([score(idx) for _ in range(4) for idx in np.array_split(rng.permutation(len(x)),4)])\\nprint('random mean',r.mean(0),'random worst',r.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Unrestricted cubic → two-rate variable projection with quadratic-trend kernel readouts; the prior kernel probe reached 0.0133 worst scalar MAE and 0.0229 worst horizon MAE across six splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the unregularized cubic\",\"rejected_reason\":\"Its high-radius scalar MAE was 0.0515, over the 0.038 target.\"}],\"rationale\":\"Write the passing model and test the exact entry point. Coordinate-tail slices will reveal whether the radial result hides directional extrapolation failures; if they do, prioritize a compact forward law over further kernel tuning.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d12b33abd71ff34206e6a81bc7f4db8edfec78ede43ea78ee4a283a833762499",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37748.9,
+      "usage_known": true,
+      "prompt_tokens": 32844,
+      "cached_tokens": 10880,
+      "completion_tokens": 1329
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b378661f0fa4bd593168e86c77feca9",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:56.209411+00:00",
+  "ended_at_utc": "2026-11-28T09:53:15.604634+00:00",
+  "request_sha256": "57ec7e83cede9840eb0f47d459947b3ad3512698d090bd0311d43deea7349120",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21772,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18744,
+    "cached_tokens": 9344,
+    "completion_tokens": 666
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat /tmp/hegel_continual_archive/*batch_0{3,4,5,6}_solver.py; python3 - <<'PY'\\nimport glob,importlib.util,pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; t=s['train']; p=s['panel_a']; u=p['u']; v=p['v']; a=np.c_[np.ones(len(u)),u]; print('A ranges',u.min(0),u.max(0),v.min(0),v.max(0));\\nfor d in [a,np.c_[a,u**3],np.c_[a,u**2,u**3]]:\\n w=np.ones(len(a),bool)\\n for _ in range(8):\\n  r=np.linalg.norm(v-d@np.linalg.lstsq(d[w],v[w],rcond=None)[0],axis=1); w=np.argsort(r)[:38]\\n print('A trimmed residual percentiles',np.percentile(r,[0,25,50,75,85,90,95,100]))\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n sp=importlib.util.spec_from_file_location('old',f); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\n for n in [52,56]:\\n  z=dict(s,train={k:(q[:n] if k!='summary' else q) for k,q in t.items()},test={'x':t['x'][n:]}); z['train']['summary']=np.array([t['y'][:n].mean(),t['y'][:n].std(),t['traj'][:n,-1].mean(),t['traj'][:n,-1].std()]); r=m.solve_batch(z); print(f.split('/')[-1],n,np.mean(abs(r['y_hat']-t['y'][n:])),np.mean(abs(r['state_pred']-t['traj'][n:])))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: robustly reconstruct the calibration map -> H2: calibrate the archived operator composition on the two public holdouts; prior 56/16 target MAE was 0.078829.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a larger polynomial directly to the calibration panel\",\"rejected_reason\":\"The unusually large residuals could be driven by a few corrupted rows; inspect trimmed residuals before increasing model complexity.\"}],\"rationale\":\"Compare archived solvers on both splits to locate reusable components, and use trimmed calibration residuals to distinguish outliers from missing nonlinear terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "72052bf9bb051e351f4f1925da1fb5564296d9684723771f6613faa0d22a6716",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21999.46,
+      "usage_known": true,
+      "prompt_tokens": 18744,
+      "cached_tokens": 9344,
+      "completion_tokens": 666
+    }
+  ]
+}

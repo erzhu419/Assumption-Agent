@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "438cbd0a4b2947c4af00855f1e79daf8",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:50:44.285119+00:00",
+  "ended_at_utc": "2026-11-28T09:51:16.701589+00:00",
+  "request_sha256": "d6b6b6ffc1ab4dd29b3563c4ba46f2fb3f1920c98c1aba2e7e1c65b42dc804e7",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 27449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22220,
+    "cached_tokens": 9344,
+    "completion_tokens": 1294
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection ridge nonlinear least squares' || true\\ncat >/tmp/ridge_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('np.set_printoptions')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nnp.set_printoptions(precision=4,suppress=True)\\nD=poly(z,2); C=np.linalg.lstsq(D,Y,rcond=None)[0]; E=Y-D@C\\nprint('quadratic coefficients label/final',C[:,[0,-1]].T)\\nprint('singulars after affine, quadratic',np.linalg.svd(Y-poly(z,1)@np.linalg.lstsq(poly(z,1),Y,rcond=None)[0],compute_uv=False),np.linalg.svd(E,compute_uv=False))\\nfor j in [0,-1]:\\n H=np.zeros((4,4));\\n for c,(a,b) in zip(C[5:,j],itertools.combinations_with_replacement(range(4),2)):\\n  H[a,b]=H[b,a]=c if a==b else c/2\\n print('quadratic eigensystem',np.linalg.eigh(H))\\nprint('contrast',check(poly(z,1),(Y[:,0]-Y[:,-1])[:,None]) if False else np.std(np.linalg.lstsq(poly(z,1),Y[:,0]-Y[:,-1],rcond=None)[0]@poly(z,1).T-(Y[:,0]-Y[:,-1])))\\nF={'sin':np.sin,'tanh':np.tanh,'gauss':lambda t:np.exp(-t*t),'logcosh':lambda t:np.logaddexp(t,-t),'rational':lambda t:1/(1+t*t),'atan':np.arctan,'cubic':lambda t:t**3,'exp':lambda t:np.exp(np.clip(t,-20,20))}\\ndef fit(z,Y,names,starts=8,degree=1):\\n D=poly(z,degree); Q=np.linalg.qr(D)[0]; B=Y-Q@(Q.T@Y)\\n rng=np.random.default_rng(42)\\n def feats(z,p):return np.column_stack([F[n](q[4]+z@q[:4]) for q,n in zip(p.reshape(-1,5),names)])\\n def res(p):\\n  N=feats(z,p); N-=Q@(Q.T@N);return (B-N@np.linalg.lstsq(N,B,rcond=1e-9)[0]).ravel()\\n best=None\\n for _ in range(starts):\\n  p=least_squares(res,rng.normal(0,0.9,5*len(names)),bounds=(-8,8),max_nfev=130)\\n  if best is None or p.cost<best.cost:best=p\\n p=best.x; return best.cost,p,lambda v:np.c_[poly(v,degree),feats(v,p)]@np.linalg.lstsq(np.c_[D,feats(z,p)],Y,rcond=1e-9)[0]\\nif __name__=='__main__':\\n a,b=fs[0]; models=[]\\n for d in [1,2]:\\n  for n in list((f,) for f in F)+list(itertools.combinations_with_replacement(['sin','tanh','gauss','logcosh','rational','atan'],2)):\\n   cost,p,pred=fit(z[a],Y[a],n,8,d);e=np.mean(abs(pred(z[b])-Y[b]),axis=0);models.append((cost,d,n,p,e[0],e[1:].mean()))\\n for cost,d,n,p,ey,et in sorted(models,key=lambda x:x[0])[:20]:print('fit',round(cost,5),d,n,p,'cv',round(ey,5),round(et,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Generic polynomial readouts → shared nonlinear projection readouts; the encoded quadratic baseline reached 0.130 label MAE and 0.070 trajectory MAE on the worst measured splits.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An unrestricted low-degree polynomial on the frozen representation is sufficient for both readouts.\",\"empirical_witness\":\"Quadratic official MAEs were 0.12975 and 0.05089; adding all cubic terms increased worst-fold MAEs to 0.44982 and 0.31916.\",\"causal_blanket_diagnosis\":\"Aligned label and final-state coefficients suggest a shared nonlinear term that dense polynomial fits do not estimate reliably.\",\"sublated_pivot\":\"Test directional nonlinear basis terms fitted jointly across outputs while preserving the frozen encoder.\",\"risk_kind\":\"Off-split extrapolation\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase polynomial degree\",\"rejected_reason\":\"Cubic and quartic models already worsened held-out errors substantially.\"}],\"rationale\":\"Inspect the residual rank and quadratic eigensystem, then test whether a small shared projection basis can explain both readouts on withheld rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ba073c968fc888048515ea818f9d4c873443328f2b1fa04706d0fbf5966624d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35039.49,
+      "usage_known": true,
+      "prompt_tokens": 22220,
+      "cached_tokens": 9344,
+      "completion_tokens": 1294
+    }
+  ]
+}

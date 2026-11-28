@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82fa8cc6bcc24e4d88a6f17890246e0b",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:20:12.287741+00:00",
+  "ended_at_utc": "2026-11-28T10:20:29.494119+00:00",
+  "request_sha256": "d14c1823bd96c7a1bc64ccf59aeb2bff910bfd7d48c4d2bb3b50b7ae0e3a123e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73577,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39163,
+    "cached_tokens": 9344,
+    "completion_tokens": 608
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '    pred = np.mean([_readout(f, targets, n, .001) for f in _features(study, x)], axis=0)'\\nnew = '''    # The scalar readout is more sensitive to high-leverage interactions.\\n    features = list(_features(study, x))\\n    scalar = np.mean([_readout(f, targets[:, :1], n, .03) for f in features], axis=0)\\n    trajectory = np.mean([_readout(f, targets[:, 1:], n, .003) for f in features], axis=0)\\n    pred = np.column_stack((scalar, trajectory))'''\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\npython3 -I /tmp/validate9.py\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared ridge → H2 output-specific ridge on the same panel chain; expanded-fold probes predict worst-fold MAEs of 0.03718 for y and 0.02226 for trajectory, versus 0.04658 and 0.02251 for the verified baseline.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the fitted bridge with an odd polynomial or rational bridge\",\n      \"rejected_reason\": \"None improved both worst-fold scalar and trajectory error over the output-specific ridge choices.\"\n    }\n  ],\n  \"rationale\": \"Use stronger regularization only where it reduces the scalar extrapolation error. The probe puts required-split scalar MAE at 0.02337, below the 0.038 gate, and trajectory MAE at 0.00891. Verify the edited artifact in a clean process and rerun the public schema validator before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1e558ce6cd92992755ff711ee8282e0f9e2b6ff4ef25d070afb298e29db55a31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19963.7,
+      "usage_known": true,
+      "prompt_tokens": 39163,
+      "cached_tokens": 9344,
+      "completion_tokens": 608
+    }
+  ]
+}

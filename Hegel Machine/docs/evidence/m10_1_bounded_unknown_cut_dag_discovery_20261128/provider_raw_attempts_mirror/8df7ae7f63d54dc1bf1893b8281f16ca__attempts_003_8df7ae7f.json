@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8df7ae7f63d54dc1bf1893b8281f16ca",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:51.547379+00:00",
+  "ended_at_utc": "2026-11-28T09:11:32.167945+00:00",
+  "request_sha256": "7ab793179b123030ad8874e8038ac291b149ce1d7d14e6578c7f9f572017ad81",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 20403,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20852,
+    "cached_tokens": 10880,
+    "completion_tokens": 1642
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\nfrom itertools import combinations\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=160)\\nls=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\none=lambda a:np.c_[np.ones(len(a)),a]\\nz=s['train']['traj']; t=s['eval_times']; x=s['train']['x']; y=s['train']['y']; p=s['panel_c']; u=p['u']; a=one(u)\\nfor gram in ('exp+t','exp+exp','exp+t2','exp+t+constant'):\\n def basis(k):\\n  f=-np.expm1(-k[0]*t)\\n  return np.array({'exp+t':[f,t], 'exp+exp':[f,-np.expm1(-k[-1]*t)],'exp+t2':[f,t*t], 'exp+t+constant':[f,t,np.ones(len(t))]}[gram]).T\\n def res(k):\\n  b=basis(k); return (b@ls(b,z[:52].T)-z[:52].T).ravel()\\n o=least_squares(res,[1.,.15] if gram=='exp+exp' else [1.],bounds=(.00001,30.)); b=basis(o.x); r=z[52:].T-b@ls(b,z[52:].T); print('time',gram,o.x,'fit rmse',np.std(o.fun),'validation rmse',np.std(r),'horizon',np.sqrt(np.mean(r*r,axis=1)))\\nfor key in ('v1','v2'):\\n v=p[key]\\n for name,f in [('tanh',np.tanh),('sin',np.sin),('cubic',lambda q:q**3),('square',lambda q:q*q),('rat',lambda q:q/(1+q*q)),('softsign',lambda q:q/np.sqrt(1+q*q))]:\\n  scores=[]; coeff=[]\\n  for j in range(4):\\n   yy=v[:,j]; l=ls(a[:18],yy[:18]); best=None\\n   for scale in (.4,1.,2.):\\n    q=np.r_[l*scale,1/scale,0.]\\n    o=least_squares(lambda k:(k[5]*f(a@k[:5])+k[6]-yy)[:18],q,max_nfev=250)\\n    if best is None or np.linalg.norm(o.fun)<np.linalg.norm(best.fun):best=o\\n   k=best.x; scores.append([np.std(best.fun),np.sqrt(np.mean((k[5]*f(a[18:]@k[:5])+k[6]-yy[18:])**2))]); coeff.append(k)\\n  print('operator',key,name,np.array(scores).T, 'coef' if np.max(np.array(scores)[:,1])<.03 else '', np.array(coeff) if np.max(np.array(scores)[:,1])<.03 else '')\\nb=np.array([-np.expm1(-1.5*t),t]).T; target=np.c_[y,ls(b,z.T).T]\\npa=s['panel_a']; ua=pa['u']; va=pa['v']; q=one(ua); mask=np.ones(len(q),bool)\\nfor _ in range(5):\\n c=ls(q[mask],va[mask]); r=np.linalg.norm(q@c-va,axis=1); mask=r<max(.003,4*np.median(r))\\npb=s['panel_b']; d=ls(one(pb['u']),pb['v']); e=ls(a,p['v1']); h=ls(a,p['v2'])\\nfor lab,xx in [('raw',x),('cal',one(x)@c),('invcal',(x-c[0])/c[1:].diagonal()),('Braw',one(x)@d),('Bcal',one(one(x)@c)@d),('Binvcal',one((x-c[0])/c[1:].diagonal())@d),('C1raw',one(x)@e),('C1Bcal',one(one(one(x)@c)@d)@e),('C2Bcal',one(one(one(x)@c)@d)@h)]:\\n mats=[one(xx),np.c_[one(xx),xx**2],np.c_[one(xx),xx**2,xx**3],np.c_[one(xx),xx**2,xx**3,xx**4],np.c_[one(xx),xx**2,*[xx[:,i]*xx[:,j] for i,j in combinations(range(4),2)]]]; print('features',lab,[np.round(np.mean(abs(q[52:]@ls(q[:52],target[:52])-target[52:]),axis=0),5).tolist() for q in mats]);\\n if lab in ('raw','Bcal'): print('cubic add coeff',ls(mats[2][:52],target[:52])); print('quad coeff',ls(mats[-1][:52],target[:52]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration and mixing → nonlinear readouts and shared trajectory modes; cubic baseline scalar MAE is 0.01900 and worst-horizon MAE is 0.01663 on the fixed split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A raw affine map is sufficient for predicting both outputs.\",\n    \"empirical_witness\": \"Fixed-split scalar MAE falls from 0.17037 to 0.03171 when squares and pairwise interactions are added, while affine state MAE reaches 0.10444.\",\n    \"causal_blanket_diagnosis\": \"The raw affine span omits material nonlinear dependence; trajectory SVD separately suggests that this dependence enters mainly through two temporal modes.\",\n    \"sublated_pivot\": \"Retain affine panel fits where supported, and test low-dimensional nonlinear readouts and shared temporal basis laws.\",\n    \"risk_kind\": \"omitted nonlinear basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Finalize the passing full cubic baseline\",\n      \"rejected_reason\": \"The fit uses 35 coefficients per output from 52 rows and does not yet exploit the measured low-rank temporal structure.\"\n    }\n  ],\n  \"rationale\": \"Fit temporal parameters on the first 52 rows and test whether the same basis reconstructs the remaining trajectories. Compare compact panel and readout models to decide whether recovered operators improve on the passing cubic baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c4592daf4e0082403ceb52f3392eeeeb5a0e94bef58bdafeec3c10583632f577",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45871.1,
+      "usage_known": true,
+      "prompt_tokens": 20852,
+      "cached_tokens": 10880,
+      "completion_tokens": 1642
+    }
+  ]
+}

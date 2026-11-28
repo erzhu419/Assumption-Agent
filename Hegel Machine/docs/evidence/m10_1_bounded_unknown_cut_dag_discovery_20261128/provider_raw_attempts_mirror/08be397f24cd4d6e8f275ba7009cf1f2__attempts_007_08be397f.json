@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08be397f24cd4d6e8f275ba7009cf1f2",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:49.563021+00:00",
+  "ended_at_utc": "2026-11-28T09:22:21.140213+00:00",
+  "request_sha256": "cd2cd2c91cfeb684f5c5e2719088015877f48de411af92a2f702101f9a489841",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49145,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29235,
+    "cached_tokens": 9344,
+    "completion_tokens": 1263
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _frozen_nodes/node_01.py && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle, runpy\\nfrom itertools import combinations\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/node_00.py'); s=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['panel_c']; x=c['u']; a=s['panel_a']; b=s['panel_b']\\ndef report(tag,F,Y):\\n q=np.linalg.svd(F,full_matrices=False)[0]; coef=np.linalg.lstsq(F,Y,rcond=None)[0]; r=Y-F@coef; loo=r/(1-(q*q).sum(1))[:,None]; print(tag,'RMSE',np.round(np.sqrt((r*r).mean(0)),6),'LOO MAE',np.round(abs(loo).mean(0),6)); return coef\\nF=m['_bilinear'](x); G=m['_logcosh_readout'](x); print('v1 product coefficients',np.round(report('v1 pairs',F,c['v1']),4)); report('v1 pairs plus linear and squares',np.c_[F,x,x*x],c['v1']); D=report('v2 logcosh',G,c['v2']); print('v2 linear/even',np.round(D[1:5],4),np.round(D[5:],4)); ratio=(D[1:5]*D[5:]).sum()/(D[1:5]**2).sum(); print('v2 shared ratio',ratio); report('v2 tied',np.c_[G[:,0],G[:,1:5]+ratio*G[:,5:]],c['v2']); print('B affine coefficient',np.round(report('B affine',m['_affine'](b['u']),b['v']),5)); print('A diagonal',np.round(np.diag(m['_calibration'](a)[1:]),5))\\n# Check the fixed representation with only the downstream ridge strength changed.\\n# If the tail is insensitive to ridge, look at the feature basis rather than tuning it again.\\nsink=runpy.run_path('_frozen_nodes/node_01.py'); basis=sink['_readout_basis']; a=s['train']; rows=np.arange(len(a['x'])); h=m['run_node']({'__input__':dict(s,test={'x':a['x'][:0]})})['h']; H=basis(h)\\nfor l in (.0003,.00001,.0000001,0.):\\n errors=[]\\n for val in [rows[-20:]]+[v for j in range(4) for v in (np.argsort(a['x'][:,j])[:10],np.argsort(a['x'][:,j])[-10:])]:\\n  tr=np.setdiff1d(rows,val); X=H[tr]; y=np.c_[a['y'],a['traj']]; v,d,w=np.linalg.svd(X,full_matrices=False); coef=w.T@((d/(d*d+l))[:,None]*(v.T@y[tr])) if l else np.linalg.lstsq(X,y[tr],rcond=1e-8)[0]; err=abs(H[val]@coef-y[val]); errors.append([err[:,0].mean(),err[:,1:].mean(),err[:,1:].mean(0).max()])\\n print('ridge probe',l,'official',np.round(errors[0],6),'tail maxima',np.round(np.max(errors[1:],axis=0),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 block-scale tuning fixes extrapolation -> H2 distinguish calibration-basis error from frozen-readout regularization; nested scale selection left the worst tail y MAE at 0.090376, while official y/trajectory MAEs remain 0.012664/0.014823.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the best fixed weights from the tail sweep\",\n      \"rejected_reason\": \"The weights were selected on the reported tails, and nested selection did not improve the worst tail.\"\n    }\n  ],\n  \"rationale\": \"Keep the accepted artifact unchanged. Check whether the implemented pairwise basis reaches the calibration noise floor and whether v2 supports coefficient tying. A diagnostic ridge sweep will distinguish an extrapolation problem in the representation from one that feature rescaling could address.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f48a79c1500811be043b9f2bb8319d779f4908cfc0fa5e02f1ec4ae83e8b3d76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34192.05,
+      "usage_known": true,
+      "prompt_tokens": 29235,
+      "cached_tokens": 9344,
+      "completion_tokens": 1263
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bfe3af779a454e408fe9a5add90c242c",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:07.573223+00:00",
+  "ended_at_utc": "2026-11-28T09:49:49.338365+00:00",
+  "request_sha256": "ca59018a5ddcd66a9fa68d8caa8fc869254612cddbe30cb4b0ef7ee55489185d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40444,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25419,
+    "cached_tokens": 9344,
+    "completion_tokens": 1718
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/readout6.py <<'PY'\\nfrom probe6 import *\\nfrom scipy.optimize import least_squares\\n\\ndef nodes(x):\\n p=s['panel_a']; _,coef=calfit('cross'); u,v=p['u'],p['v']; g=calbasis(u,'cross'); keep=np.linalg.norm(g@coef-v,axis=1)<.002\\n for j in range(4):\\n  k=abs(coef[:,j])>.001; coef[~k,j]=0; coef[k,j]=fit(g[keep][:,k],v[keep,j])\\n init=np.linalg.solve(coef[1:5].T,(x-coef[0]).T).T\\n a=np.array([least_squares(lambda z:calbasis(z[None,:],'cross')[0]@coef-row,z).x for z,row in zip(init,x)])\\n def op(p,k,f,x,q):\\n  p=s[p]; fun=fs[f]; return fun(x,q)@fit(fun(p['u'],q),p[k])\\n b=op('panel_b','v','shrink',a,.35)\\n return a,b,op('panel_c','v1','archpair',b,0),op('panel_c','v2','evenrat',b,.39)\\n\\ndef design(ns, recipe):\\n g=[]; names=[]\\n def add(z,n):\\n  g.append(np.asarray(z).reshape(len(ns['a']),-1)); names.extend(n)\\n for term in recipe.split():\\n  if len(term)==1: add(ns[term],[term+str(i) for i in range(4)]); continue\\n  if term[0]=='@': add((ns[term[1]]*ns[term[2]]).sum(1),[term]); continue\\n  a,b=term; z,w=ns[a],ns[b]; ij=list(combinations_with_replacement(range(4),2)) if a==b else [(i,j) for i in range(4) for j in range(4)]\\n  add(np.column_stack([z[:,i]*w[:,j] for i,j in ij]),[f'{a}{i}{b}{j}' for i,j in ij])\\n return D(*g),['1']+names\\n\\ndef run():\\n x=s['train']['x']; ns=dict(zip('abcd',nodes(x))); ns['x']=x\\n Y=np.c_[s['train']['y'],s['train']['traj']]; folds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]; folds += [(np.r_[0:i,i+18:72],np.arange(i,i+18)) for i in (0,18,36,54)]\\n recipes=['a','a b','a c','a d','a c @ac','a c @ac @bc @ad @cd','a c d @ac @ad @cd','a b c d @ac @bc @ad @cd @ab @bd','a b c d','a b c d aa','a b c d ac','a b c d ad','a b c d bc','a b c d cd','a c d ac','a c d ad','a c d ac ad','a b c d ac ad cd','x xx']\\n def score(g,lam):\\n  errs=[]\\n  for I,J in folds:\\n   if lam:\\n    sc=np.maximum(g[I].std(0),1e-9); sc[0]=1; h=g/sc; R=np.eye(g.shape[1])*lam; R[0,0]=0; co=np.linalg.solve(h[I].T@h[I]+R,h[I].T@Y[I]); p=h[J]@co\\n   else: p=g[J]@fit(g[I],Y[I])\\n   e=abs(p-Y[J]); errs.append([e[:,0].mean(), e[:,1:].mean()])\\n  e=np.array(errs); return np.r_[e[0],e[1],e.max(0)]\\n for r in recipes:\\n  g,names=design(ns,r); out=[score(g,l) for l in (0,.001,.03,.3)]; print(r, np.round(out,5).tolist())\\n  if r in ('a c @ac','a b c d @ac @bc @ad @cd @ab @bd'):\\n   co=fit(g[:52],Y[:52]); print('coefs',list(zip(names,co[:,[0,1,-1]].round(4).tolist())))\\n for other in ('a','x'):\\n  a=ns[other]; b=D(a,pairs(a),a*a,a**3)\\n  print('poly',other,[score(b,l).round(5).tolist() for l in (0,.001,.03,.3)])\\n t=s['eval_times']; T=Y[:52,1:].T\\n def res(q):\\n  g=-np.expm1(-t[:,None]*q); return (g@fit(g,T)-T).ravel()\\n q=least_squares(res,[.4,2],bounds=([.01,.01],[8,8]),gtol=1e-11).x\\n print('rates',q,'rms',np.mean(res(q)**2)**.5,'singular',np.linalg.svd(T,compute_uv=False))\\n print('node ranges',[(k,v.min(0).round(3),v.max(0).round(3)) for k,v in ns.items()])\\nif __name__=='__main__': run()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and generic readout -> H2 cyclic polynomial calibration with threshold and dual-output operators; auxiliary leave-one-row-out RMSE is at most 0.000112, and downstream held-out MAE is not yet established.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The reference map can be explained by an affine or quadratic calibration after rejecting three gross outliers.\",\n    \"empirical_witness\": \"On 45 retained rows, calibration RMSE was 0.19032 for affine and 0.03981 for quadratic, versus 0.0000839 when cyclic pair terms and coordinate cubes were included.\",\n    \"causal_blanket_diagnosis\": \"Omitted calibration terms contaminate the latent coordinates before any downstream operator is applied.\",\n    \"sublated_pivot\": \"Invert the sparse cyclic polynomial map, then test which auxiliary outputs and interactions improve held-out predictions.\",\n    \"risk_kind\": \"omitted_calibration_terms\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume both accurately fitted auxiliary outputs are active\",\n      \"rejected_reason\": \"A panel fit establishes its operator, not that the operator is used in either target; downstream ablations distinguish those cases.\"\n    }\n  ],\n  \"rationale\": \"Compare scalar and trajectory errors independently on the required split and additional blocked splits. The interaction ablations determine which readout terms to retain, while the temporal residual identifies whether two fixed relaxation modes are adequate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ef2d5ef3c5f601e26affae4a8ff1bf5a13b68dcaec294214abbbbc7fc3f9a607",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44340.53,
+      "usage_known": true,
+      "prompt_tokens": 25419,
+      "cached_tokens": 9344,
+      "completion_tokens": 1718
+    }
+  ]
+}

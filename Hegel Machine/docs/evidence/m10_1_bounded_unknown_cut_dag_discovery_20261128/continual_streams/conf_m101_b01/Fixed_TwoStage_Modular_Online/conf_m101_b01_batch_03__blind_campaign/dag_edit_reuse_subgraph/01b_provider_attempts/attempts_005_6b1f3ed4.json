@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b1f3ed4880f487db047b1982055dcbd",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:20.386819+00:00",
+  "ended_at_utc": "2026-11-28T09:30:48.352973+00:00",
+  "request_sha256": "dc642844ad1385bb4b3b0ffff8e9dc9ca6864be1587eecca77b342231b52943b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 38312,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25063,
+    "cached_tokens": 9344,
+    "completion_tokens": 1076
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\ncp /tmp/hegel_calibration.py node_00.py\\ncat >>node_00.py <<'PY'\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    a = _fit_a(study['panel_a'])\\n    b = _fit_b(study['panel_b'])\\n\\n    def calibrate(x):\\n        return _inverse_a(x, a) @ b[1:] + b[0]\\n\\n    return {\\n        'z_tr': calibrate(train['x']),\\n        'z_te': calibrate(study['test']['x']),\\n        'train_y': train['y'],\\n        'train_traj': train['traj'],\\n        'eval_times': study['eval_times'],\\n    }\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/test_dag_candidate.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\na = runpy.run_path('/holdout_task/node_00.py')\\nsink = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']\\nt = s['train']\\nrows = np.arange(len(t['x']))\\norder = np.argsort(np.linalg.norm(t['x'], axis=1))\\nsplits = [(f'interleaved_{i}', rows[i::4]) for i in range(4)]\\nsplits.append(('largest_input_norm', order[-18:]))\\nmetrics = []\\nfor name, valid in splits:\\n    fit = np.setdiff1d(rows, valid)\\n    sub = dict(s, train={k: t[k][fit] for k in ('x', 'y', 'traj')}, test={'x': t['x'][valid]})\\n    d = a['run_node']({'__input__': sub})\\n    out = sink({'node_00': d})\\n    e = np.abs(out['y_hat']-t['y'][valid]).mean(), np.abs(out['state_pred']-t['traj'][valid]).mean()\\n    metrics.append(e)\\n    print(name, 'y/traj MAE', *(round(v, 6) for v in e))\\nprint('worst slice y/traj MAE', *np.max(metrics, axis=0))\\np = s['panel_a']\\nx = np.vstack((t['x'], s['test']['x']))\\nfull = a['_inverse_a'](x, a['_fit_a'](p))\\nmax_change = max(np.max(np.abs(full - a['_inverse_a'](x, a['_fit_a']({k: np.delete(v, i, axis=0) for k, v in p.items()})))) for i in range(len(p['u'])))\\nprint('Panel A worst leave-one-row-out inverse change', max_change)\\nassert np.all(np.isfinite(metrics)) and np.all(np.max(metrics, axis=0) <= .038)\\nassert max_change < .005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: invert the cyclic cubic Panel A map, then apply affine Panel B forward; public split MAE is 0.009790 for readout and 0.008260 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert Panel A without applying Panel B\",\n      \"rejected_reason\": \"Its public split MAE was 0.203368 for readout and 0.311949 for trajectory, both above tolerance.\"\n    }\n  ],\n  \"rationale\": \"Save the only composition that passed both metrics and verify the exact artifact in an isolated process. Interleaved and high-norm holdouts test split sensitivity and extrapolation; deleting calibration rows tests whether a single row drives the inverse. A failure would distinguish calibration instability from downstream generalization error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "247ed54cb64e0497110c9091575e021a045fc019f96ceb23a455259912a6cfde",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30586.51,
+      "usage_known": true,
+      "prompt_tokens": 25063,
+      "cached_tokens": 9344,
+      "completion_tokens": 1076
+    }
+  ]
+}

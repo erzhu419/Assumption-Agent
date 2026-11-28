@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8286e87a8e8b4f5eb19bfd1a760dd7db",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:12:10.341416+00:00",
+  "ended_at_utc": "2026-11-28T09:12:54.005024+00:00",
+  "request_sha256": "80fe7f1d605bbb8de5ea130a0eaefe3d5594713459c338dd8da871262dd2dfaa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43096,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30845,
+    "cached_tokens": 10880,
+    "completion_tokens": 1790
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > batch_solver.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        a, b = u[mask], v[mask]\\n        ac, bc = a-a.mean(0), b-b.mean(0)\\n        scale = (ac*bc).sum(0)/(ac*ac).sum(0)\\n        shift = b.mean(0)-a.mean(0)*scale\\n        r = np.linalg.norm(u*scale+shift-v, axis=1)\\n        mask = r <= max(5*np.median(r), .0006)\\n    return shift, scale\\n\\n\\ndef _features(a):\\n    h = np.sin(2*(a-.35))\\n    q = np.column_stack([a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(a.shape[1]), 2)])\\n    return np.column_stack([np.ones(len(a)), a, q, h, h*a, (h[:,:,None]*a[:,None,:]).reshape(len(a),-1), h*h])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    offset, scale = _calibrate(study['panel_a'])\\n    x = _features((train['x']-offset)/scale)\\n    xt = _features((study['test']['x']-offset)/scale)\\n    gram = x@x.T\\n    eye = np.eye(len(x))\\n    cross = xt@x.T\\n    yh = cross@np.linalg.solve(gram+.01*eye, train['y'])\\n    state = cross@np.linalg.solve(gram+.001*eye, train['traj'])\\n    end = state[:,-1]\\n    return {'y_hat':yh, 'state_pred':state, 'diagnostics_vec':np.array([yh.mean(),yh.std(),end.mean(),end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nsed '/^print('\\\"'\\\"'t'\\\"'\\\"'/,$d' /tmp/probe.py >/tmp/separate.py\\ncat >>/tmp/separate.py <<'PY'\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\na=vari['a-']; print('t',t,'sv traj',np.linalg.svd(z,compute_uv=False)); U,S,V=np.linalg.svd(z,full_matrices=False);print('time modes',V[:4]); print('trajectory rank 2 mae',np.mean(abs((U[:,:2]*S[:2])@V[:2]-z),axis=0))\\nD=poly(a,3); co=fit(D,np.c_[y,U[:,:3]*S[:3]]); names=['const']+[''.join(map(str,ii)) for k in range(1,4) for ii in combinations_with_replacement(range(4),k)];print('latent coefficients:');print('\\\\n'.join(f'{i:>6} {v}' for i,v in zip(names,co)))\\np=s['panel_c']; u=p['u']; Q=poly(u,1)\\nfor k in ['v1','v2']:\\n v=p[k]\\n for law,fun in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('rational',lambda g:g/(1+g*g))]:\\n  for mode in ['diag','rotated']:\\n   lin=fit(Q,v)[1:]; gu=u if mode=='diag' else u@lin/np.linalg.norm(lin,axis=0)\\n   def ff(th):return np.c_[Q,fun(gu*th[:4]+th[4:])]\\n   def rr(th):\\n    m=ff(th);return (m@fit(m,v)-v).ravel()\\n   b=least_squares(rr,np.r_[np.ones(4)*2,np.zeros(4)],max_nfev=90);print('C',k,law,mode,np.std(b.fun),b.x.round(3))\\n# Test whether a separate coordinatewise nonlinear feature for 0 and 3 resolves the dominant cubic terms.\\nfor j,T in enumerate([y,z]):\\n for law,fun in [('sin',np.sin),('tanh',np.tanh),('rational',lambda g:g/(1+g*g))]:\\n  for mode in ['add','interaction']:\\n   def ff(th,a):\\n    h=fun(a[:,[0,3]]*th[:2]+th[2:]); q=poly(a,2)\\n    return np.c_[q,h] if mode=='add' else np.c_[q,h,(h[:,:,None]*a[:,None,:]).reshape(len(a),8)]\\n   def rr(th):\\n    m=ff(th,a[:52]);return (m@fit(m,T[:52])-T[:52]).ravel()\\n   for init in [1,2,3]:\\n    b=least_squares(rr,[init,init,0,0],max_nfev=120,bounds=([.15,.15,-3,-3],[5,5,3,3])); m=ff(b.x,a); er=np.mean(abs(m[52:]@fit(m[:52],T[:52])-T[52:])); print('sep',j,law,mode,init,b.x.round(3),round(np.std(b.fun),6),round(er,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/separate.py >/tmp/separate.log; sed -n '/^t /,$p' /tmp/separate.log\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 inverse diagonal calibration → H2 separate nonlinear readouts; the sine-basis candidates reach prescribed-split MAEs of 0.02233 for y and 0.02894 for trajectory, with worst MAEs of 0.04538 and 0.02937 across five splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Stop at the sine-basis fit\",\"rejected_reason\":\"One scalar validation split still exceeds 0.038, and the calibrated coefficients suggest a smaller model may generalize better.\"}],\"rationale\":\"Save and validate the current baseline. Test whether the dominant coordinate terms and temporal modes support a smaller model; compare panel C nonlinear fits before treating it as part of the forward law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "63d9617562bfa9a346c619a07956f699fac5fee6e12af8f53da9d578c30b1a70",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46260.76,
+      "usage_known": true,
+      "prompt_tokens": 30845,
+      "cached_tokens": 10880,
+      "completion_tokens": 1790
+    }
+  ]
+}

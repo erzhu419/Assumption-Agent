@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f481726af70442859cb30e22e8f9d942",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:07.225100+00:00",
+  "ended_at_utc": "2026-11-28T09:39:46.560645+00:00",
+  "request_sha256": "bc75cbeef0f3f4504242381fa1a94908dde6985a24567041e5bdd04d01d3d0b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50231,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32065,
+    "cached_tokens": 9344,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/struct7.py <<'PY'\\nfrom explore import *\\nfrom itertools import product\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=4,suppress=True,linewidth=160)\\nfolds=[np.arange(52,72),np.arange(56,72)]+[np.random.default_rng(i).permutation(72)[:20] for i in range(8)]\\nsplits=[(np.setdiff1d(np.arange(72),v),v) for v in folds]\\nF={}\\nfor key,a in [('x',x),('invA',d),('fwdA',x*gain+bias)]:\\n for key2,c in [('',a),('B',aug(a)@B),('iB',(a-B[0])@Bi)]:\\n  F[key+key2]=c\\n  if key2=='iB':continue\\n  for name,fn in [('v1',z),('v2',w)]:\\n   q=fn(c); J= np.vstack([(fn(np.eye(4)[j:j+1]*1e-4)-fn(-np.eye(4)[j:j+1]*1e-4))[0]/2e-4 for j in range(4)])\\n   for nm,back in [('id',np.eye(4)),('B',B[1:]),('iB',Bi),('jac',np.linalg.inv(J))]:\\n    for m in [-1.,-.5,-.25,.25,.5,1.,1.5,2.]:F[(key+key2,name,nm,m)]=a+m*(q-fn(np.zeros((1,4))))@back\\n\\ndef run(target):\\n res=[]\\n for nm,h in F.items():\\n  h=h/np.mean(h.std(0)); G=h@h.T/4; D=cdist(h,h,'sqeuclidean')/4\\n  for label,K in [('cubic005',(1+G)**2+.05*G**3),('cubic05',(1+G)**2+.5*G**3),('cubic',(1+G)**3),('quartic',(1+.3*G)**4),('rbf2',np.exp(-D/8)),('rbf1',np.exp(-D/2)),('resid',(1+G)**2+np.exp(-D/2))]:\\n   for r in [1e-5,3e-4,.003]:\\n    es=[]\\n    for tr,te in splits:\\n     p=K[np.ix_(te,tr)]@np.linalg.solve(K[np.ix_(tr,tr)]+r*np.eye(len(tr)),target[tr]);es.append(np.mean(abs(p-target[te])))\\n    res.append((np.mean(es),max(es),*es[:2],nm,label,r))\\n print('target',target.shape,'best mean',*sorted(res)[:12],sep='\\\\n');print('best 52',*sorted(res,key=lambda r:r[2])[:8],sep='\\\\n')\\nif __name__=='__main__':\\n run(y);run(T)\\n tt=s['eval_times']; U,S,V=np.linalg.svd(T,full_matrices=False); vs=V[:2].T\\n def trytime(p):\\n  decay,omega=p\\n  f=np.exp(-decay*tt)[:,None]*np.c_[np.sin(omega*tt),np.cos(omega*tt)];return f\\n for start in [[.2,1.7],[.2,1.],[.2,2.5]]:\\n  p=least_squares(lambda p:(trytime(p)@ls(trytime(p),vs)-vs).ravel(),start).x; print('time',p,np.linalg.norm(trytime(p)@ls(trytime(p),vs)-vs))\\n print('calibrated poly h eigensystems')\\n for nm,h in [('x',x),('d',d),('h',d+w(d)@Bi),('B',b)]:\\n  f=aug(old._poly(h,[1,2,3])); xx=ls(f,np.c_[y,U[:,:2]*S[:2]]); print(nm,np.sqrt(((f@xx-np.c_[y,U[:,:2]*S[:2]])**2).mean(0)),xx[:15].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/struct7.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the inverse-B correction is the right warp → H2: calibration direction and branch placement determine whether its low-order structure generalizes; current scalar MAE is 0.046 on 52/20 and 0.068 on the worst reported split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the current inverse-B correction more finely\",\n      \"rejected_reason\": \"Fitting its mixing coefficient on training data did not improve held-out error, so test operator placement and direction before tuning further.\"\n    }\n  ],\n  \"rationale\": \"Compare forward and inverse calibration with both auxiliary branches under the same regularized predictors. Also test whether a damped sinusoidal basis matches the trajectory subspace; if it does not, retain the empirical rank-two basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "81554cfb2af43e8491270f99e89a7d24ed0ed193079fd1ebf41629e26833c7ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41962.48,
+      "usage_known": true,
+      "prompt_tokens": 32065,
+      "cached_tokens": 9344,
+      "completion_tokens": 1511
+    }
+  ]
+}

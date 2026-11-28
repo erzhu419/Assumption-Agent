@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e32a9857e8794e9f8ee28a8f4fcf005a",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:39.859309+00:00",
+  "ended_at_utc": "2026-11-28T09:22:13.944068+00:00",
+  "request_sha256": "95619b480d2460023723b001afbee3c783da78eb6456ce417504a1a0ed28a775",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53349,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34097,
+    "cached_tokens": 9344,
+    "completion_tokens": 1500
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/refine.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom importlib.machinery import SourceFileLoader\\nfrom latent import reverse_a\\nfrom operators import poly\\nfrom compact_c import recover\\n\\ndef panel(p, k, mode):\\n u=p['u']; v=p[k]; fit=np.linalg.lstsq\\n def design(x,h):\\n  a=poly(x,1)\\n  if k=='v1':\\n   w=h[0]; f=np.tanh(w*x)\\n   if mode==1: f=f+h[1]*x**3\\n   if mode==2: f=f+h[1]*np.sin(h[2]*x)\\n   if mode==3: f=f+h[1]*x/(1+(h[2]*x)**2)\\n   if mode==4: f=f+h[1]*x*x\\n   if mode==5: f=f+h[1]*np.cos(h[2]*x)\\n  else:\\n   w=h[0]; f=x*x+h[1]*(np.cos(w*x)-1) if mode==0 else x*x+h[1]*(1/(1+(w*x)**2)-1)\\n  return np.c_[a,f]\\n def residual(h,loo=False):\\n  d=design(u,h); q,_=np.linalg.qr(d); r=v-q@(q.T@v)\\n  return r/(1-(q*q).sum(1,keepdims=True)) if loo else r\\n if k=='v1':\\n  starts={0:[[2.3]],1:[[2.3,0]],2:[[w,c,j] for w in [1,2.3,3] for c in [-.3,.3] for j in [1.5,3]],3:[[w,c,j] for w in [1,2.3,3] for c in [-.3,.3] for j in [.8,2]],4:[[2.3,0]],5:[[2.3,.05,j] for j in [1,2,3]]}[mode]\\n else: starts=[[w,-.2] for w in [1,2.3,3]] if mode==0 else [[w,-1] for w in [.5,1,2]]\\n opts=[least_squares(lambda h:residual(h).ravel(),start,max_nfev=300) for start in starts]\\n r=min(opts,key=lambda r:np.mean(residual(r.x,True)**2)); d=design(u,r.x); b=fit(d,v,rcond=None)[0]; e=np.sqrt(np.mean(residual(r.x,True)**2)); print(k,mode,r.x.round(5),round(e,7)); return e, lambda x:design(x,r.x)@b\\n\\nif __name__=='__main__':\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; z=reverse_a(s['panel_a'],tr['x']); p=s['panel_c'];\\n c1=min([panel(p,'v1',i) for i in range(6)],key=lambda t:t[0]); c2=min([panel(p,'v2',i) for i in range(2)],key=lambda t:t[0]);\\n v,w=c1[1](z),c2[1](z); D=np.c_[poly(z,1),v,w,v*w,v*v,w*w]; prior=SourceFileLoader('prior','/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py').load_module();\\n for n in [52,56]:\\n  H,M=prior._time_modes(s['eval_times'],tr['traj'][:n]);Y=np.c_[tr['y'][:n],M]; b=np.linalg.lstsq(D[:n],Y,rcond=None)[0]; O=D[n:]@b; print(n,'MAE',np.mean(abs(O[:,0]-tr['y'][n:])),np.mean(abs(O[:,1:]@H.T-tr['traj'][n:])), 'train',np.mean(abs(D[:n]@b-Y),0));print('coefs',b.T.round(4))\\n  for name,F in [('add1',D[:,:13]),('cross',D[:,:17]),('products',D),('poly+C',np.c_[poly(z,2),D[:,5:]]),('mixed',np.c_[D,z*v,z*w])]:\\n   for lam in [0,.0003,.003,.03]:\\n    a=F[:n]; bb=np.linalg.solve(a.T@a+lam*np.eye(a.shape[1]),a.T@Y); O=F[n:]@bb; print(name,lam,np.round([np.mean(abs(O[:,0]-tr['y'][n:])),np.mean(abs(O[:,1:]@H.T-tr['traj'][n:])),np.mean(abs(O[:,1:]@H[-1]-tr['traj'][n:,-1]))],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated GP → paired panel C products; across the 52/20 and 56/16 splits, worst response and trajectory MAEs are 0.00872 and 0.01852.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Retain panel B in the response graph\",\"rejected_reason\":\"Applying its affine map before panel C substantially worsens both held-out predictions.\"}],\"rationale\":\"Paired panel products sharply improve response prediction. Test shared panel nonlinearities against leave-one-out panel residuals, then check whether the refined operators and product terms also improve the trajectory endpoint.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ad692acfc8a8b5eff4682a06072595266e7f81ec2ab6e237821e7d81a257143c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39328.96,
+      "usage_known": true,
+      "prompt_tokens": 34097,
+      "cached_tokens": 9344,
+      "completion_tokens": 1500
+    }
+  ]
+}

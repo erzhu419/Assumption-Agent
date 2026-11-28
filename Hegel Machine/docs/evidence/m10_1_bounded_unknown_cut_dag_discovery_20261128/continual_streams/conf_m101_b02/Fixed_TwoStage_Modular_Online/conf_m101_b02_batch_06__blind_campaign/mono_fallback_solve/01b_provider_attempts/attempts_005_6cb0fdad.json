@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6cb0fdadac224e92abc2568e5c1d7e39",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:15:23.209209+00:00",
+  "ended_at_utc": "2026-11-28T10:16:03.892171+00:00",
+  "request_sha256": "d48e4fa76df19d99029f8e7952cffc226ddf98b2a38d80578589e9285c59366c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42522,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27436,
+    "cached_tokens": 9344,
+    "completion_tokens": 1701
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/inverse_probe.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('print(\\\\'A RMSE')[0])\\nfrom scipy.optimize import root,least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\nxx=np.vstack((x,s['test']['x'])); sol=[root(lambda z:A(z[None])[0]-v,v) for v in xx]; ai=np.array([r.x for r in sol]); print('inverse errors', np.sort(np.linalg.norm(A(ai)-xx,axis=1))[-10:]); print('latent ranges',ai.min(0),ai.max(0));\\nu=s['panel_b']['u']; v=s['panel_b']['v'];\\nfuncs={'tanh':np.tanh,'sin':np.sin,'erf':__import__('scipy').special.erf,'exp':lambda z:-np.sign(z)*np.expm1(-abs(z)),'rootrat':lambda z:z/np.sqrt(1+z*z),'atan':np.arctan}\\nbs={}\\nfor name,f in funcs.items():\\n for lin in (False,True):\\n  def g(z,k):return np.c_[des(z) if lin else np.ones(len(z)), f(z*k)]\\n  def loss(k):\\n   z=g(u,k);return (z@ls(z,v)-v).ravel()\\n  r=min((least_squares(loss,np.full(4,k),bounds=(.05,6)) for k in (.5,1.25,2,3,4.5)),key=lambda r:sum(r.fun**2)); print('B basis',name,lin,r.x,np.mean(r.fun**2)**.5)\\n  b=ls(g(u,r.x),v); bs[name+str(lin)]=(np.mean(r.fun**2)**.5, g(ai,r.x)@b)\\n# An affine map inside a saturating output, possibly with a linear skip.\\nfor name,f in funcs.items():\\n for skip in (False,True):\\n  X=des(u); Z=des(ai); preds=[]; errs=[]\\n  for y in v.T:\\n   w=ls(X,y)\\n   def pred(X,p):return p[0]+p[1]*f(X@p[2:7])+(X[:,1:]@p[7:] if skip else 0)\\n   r=min((least_squares(lambda p:pred(X,p)-y,np.r_[0.,1.,w*k,np.zeros(4) if skip else []],max_nfev=400) for k in (.5,1.5,3)),key=lambda r:sum(r.fun**2));preds.append(pred(Z,r.x)); errs.extend(r.fun)\\n  e=np.mean(np.square(errs))**.5;print('B mixed',name,skip,e);bs['mix'+name+str(skip)]=(e,np.array(preds).T)\\nd=s['panel_c']; k=minimize_scalar(lambda k:np.linalg.norm((lambda z:z@ls(z,d['v2'])-d['v2'])(des(d['u'],d['u']**2/np.sqrt(1+k*d['u']**2)))),bounds=(.01,2),method='bounded').x;D=fit(lambda u:des(u,u**2/np.sqrt(1+k*u*u)),'panel_c','v2')\\ndef err(z,Y=Y):\\n mt=z[:52].mean(0);sd=np.maximum(.00001,z[:52].std(0)); z=(z-mt)/sd; a,w,b=np.linalg.svd(z[:52],full_matrices=False); E=[]\\n for reg in (1e-7,.001,.03,.3):\\n  p=Y[:52].mean(0)+((z[52:72]@b.T)*(w/(w*w+reg)))@(a.T@(Y[:52]-Y[:52].mean(0))); e=np.abs(p-Y[52:]);E.append(np.round([e[:,0].mean(),e[:,1:].mean()],4))\\n return np.array(E).tolist()\\nfor key,z in [('inverse',ai)]+[(n,z) for n,(e,z) in sorted(bs.items(),key=lambda p:p[1][0])[:6]]:\\n if np.max(np.abs(z))>20:continue\\n c=C(z); d=D(z); cd=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\n for n,F in [('lin', z),('poly',np.c_[z,q(z),z**3]),('panels',np.c_[z,c,d]),('cross',np.c_[z,c,d,cd(z,c),cd(z,d)]),('branch',np.c_[z,c,d,cd(c,d)]),('pre/post',np.c_[ai,z,C(ai),D(ai),c,d])]:print(key,n,err(F))\\nt=s['train']['traj']; times=s['eval_times']; rates=[]; amps=[]\\nfor row in t:\\n def prof(k):\\n  z=np.c_[np.ones(len(times)),-np.expm1(-times*k)];b=ls(z,row);return np.linalg.norm(z@b-row),b\\n k=minimize_scalar(lambda k:prof(k)[0],bounds=(.01,4),method='bounded').x; rates.append(k);amps.append(prof(k)[1]);\\nprint('exp rate quantiles',np.quantile(rates,[0,.1,.25,.5,.75,.9,1]));print('mean exp fit',np.mean([np.linalg.norm(np.c_[np.ones(len(times)),-np.expm1(-times*k)]@a-row) for k,a,row in zip(rates,amps,t)])); print('trajectory extremes by norm',t[np.argsort(np.linalg.norm(t,axis=1))[[0,12,36,60,71]]]); print('rate correlations',np.corrcoef(np.c_[rates,ai[:72],Y[:,0]].T)[0]);print('amp quantiles',np.quantile(amps,[0,.25,.5,.75,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/inverse_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 forward calibration of train inputs → H2 inverse calibration and nonlinear auxiliary operators; the best separate 52/20 probe MAEs so far are 0.1212 for y and 0.0841 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply the calibration in the forward direction\",\n      \"rejected_reason\": \"Forward-calibrated polynomial features worsened trajectory MAE to at least 0.3236; inversion tests whether the input is already in measured coordinates.\"\n    }\n  ],\n  \"rationale\": \"Check whether panel A can be inverted at the supplied inputs, whether panel B saturates before or after mixing, and whether a relaxation fit isolates a simpler trajectory readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "71120157b4b275325ff9e88dd986f0f6eef841ea0e75eb9eb335add006ca3cf0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46131.42,
+      "usage_known": true,
+      "prompt_tokens": 27436,
+      "cached_tokens": 9344,
+      "completion_tokens": 1701
+    }
+  ]
+}

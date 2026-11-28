@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ecfbf564d24f4dc39586f70095622b9d",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:09.849889+00:00",
+  "ended_at_utc": "2026-11-28T09:28:00.084292+00:00",
+  "request_sha256": "374ca40c9704a0fd7df43def0782ac788bb6331e247a3795c3c0b7560f179cb0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24661,
+    "cached_tokens": 9344,
+    "completion_tokens": 1620
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nX,Y,T=(S['train'][k] for k in ('x','y','traj'))\\ndef d(x):return np.c_[np.ones(len(x)),x]\\ndef fit(A,B):return np.linalg.lstsq(A,B,rcond=None)[0]\\ndef poly(x,k):return np.column_stack([np.prod(x[:,i],axis=1) for j in range(k+1) for i in combinations_with_replacement(range(x.shape[1]),j)])\\nu,v=(S['panel_a'][k] for k in ('u','v')); keep=np.ones(len(u),bool)\\nfor i in range(5):\\n co=fit(d(u[keep]),v[keep]); r=np.linalg.norm(d(u)@co-v,axis=1);keep=r<3*np.median(r)\\nshift=co[0]; gain=np.diag(co[1:]); z=(X-shift)/gain\\np=S['panel_b']; cb=fit(d(p['u']),p['v']); b=d(z)@cb\\np=S['panel_c']; u=p['u']; D=lambda x:np.c_[d(x),x*x,x**3,x*np.roll(x,1,axis=1)]\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('C1',fit(D(u),p['v1']));print('C2',fit(D(u),p['v2']));print('B',cb)\\ndef operator(k):\\n v=p[k]; models={'poly':lambda x,h:D(x),'quad':lambda x,h:poly(x,2),'Qcos':lambda x,h:np.c_[d(x),x*x,np.cos(h[0]*x)-1],'sin':lambda x,h:np.c_[d(x),np.sin(h[0]*x)],'cos':lambda x,h:np.c_[d(x),np.cos(h[0]*x)],'diagQcos':lambda x,h:np.c_[d(x),x*x+h[1]*(np.cos(h[0]*x)-1)]}\\n scores={}\\n for key,fun in models.items():\\n  def res(h,loo=False):\\n   a=fun(u,h); q=np.linalg.svd(a,full_matrices=False)[0]; r=a@fit(a,v)-v;return (r/(1-(q*q).sum(1)[:,None]) if loo else r).ravel()\\n  hs=[[1.5,.2],[2.8,-.3],[4,.3]]; h=min((least_squares(res,h,max_nfev=100).x for h in hs),key=lambda h:np.mean(res(h,True)**2));scores[key]=(np.sqrt(np.mean(res(h,True)**2)),np.sqrt(np.mean(res(h)**2)),h)\\n print(k,scores)\\n key=min(scores,key=lambda k:scores[k][0]);fun=models[key];h=scores[key][2];coef=fit(fun(u,h),v);return lambda x:fun(x,h)@coef\\nf,g=operator('v1'),operator('v2')\\nt=S['eval_times']; H=lambda l:-np.expm1(-t[:,None]*np.exp(l)); result=least_squares(lambda l:(H(l)@fit(H(l),T[:52].T)-T[:52].T).ravel(),np.log([.4,2.]),bounds=(-5,3)); h=H(result.x); amp=fit(h,T.T).T; print('rates',np.exp(result.x),'mode projection MAE',abs(amp@h.T-T).mean(0),'amplitude std',amp.std(0))\\nlat={'x':X,'z':z,'b':b,'z+b':z+b,'z-b':z-b,'b(x)':d(X)@cb}\\nres=[]\\nfor k,q in lat.items():\\n a,c=f(q),g(q)\\n for name,F in {'affine':d(q),'poly2':poly(q,2),'poly3':poly(q,3),'C1':d(a),'C2':d(c),'C12':np.c_[d(a),c],'C12s':np.c_[d(a),c,(a*c).sum(1)],'C12p':np.c_[d(a),c,a*c],'C12qs':np.c_[d(a),c,(a*c).sum(1),(a*a).sum(1),(c*c).sum(1)],'C1poly':poly(a,2),'C2poly':poly(c,2),'C12raw':np.c_[d(q),a,c,a*c],'C12all':poly(np.c_[a,c],2)}.items():\\n  y=F@fit(F[:52],Y[:52]);s=F@fit(F[:52],amp[:52])@h.T; res.append((np.mean(abs(Y[52:]-y[52:])),np.mean(abs(T[52:]-s[52:])),np.mean(abs(Y[:52]-y[:52])),np.mean(abs(T[:52]-s[:52])),k,name))\\nprint('best y');print(*sorted(res)[:15],sep='\\\\n');print('best trajectory');print(*sorted(res,key=lambda r:r[1])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived paired-output map → H2 recover this study’s polynomial and harmonic operator composition; archived 52/20 MAEs were 0.06484 for y and 0.03623 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The previous batch’s nonlinear calibration and dual-output operator basis transfers unchanged.\",\"empirical_witness\":\"Panel A is diagonal affine to about 0.0001 RMS after removing three gross outliers, and panel C v1 is reproduced at the same scale by the extended polynomial basis; the transferred solver has 52/20 y MAE 0.58249.\",\"causal_blanket_diagnosis\":\"The archived solver applies a different panel C v1 basis and does not test whether panel B routes its input.\",\"sublated_pivot\":\"Retain the calibrated coordinates and shared relaxation hypothesis, but recover panel C’s basis and test panel B routing independently.\",\"risk_kind\":\"operator grammar mismatch\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Optimize the raw-coordinate Gaussian process\",\"rejected_reason\":\"The panels expose structured operators, while the raw-coordinate baseline misses the target gate.\"}],\"rationale\":\"Compare explicit panel bases and candidate routes on held-out targets. Fit the time basis only on the fitting split so projection error can distinguish temporal mismatch from missing spatial features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "99d04d52d01de20b30db73eb7a3bd474cfa4dc3dc078e5d6762003430a5b5cca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52817.92,
+      "usage_known": true,
+      "prompt_tokens": 24661,
+      "cached_tokens": 9344,
+      "completion_tokens": 1620
+    }
+  ]
+}

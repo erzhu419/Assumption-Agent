@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "87cb47dcac534faea35f65f684108e39",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:06.623210+00:00",
+  "ended_at_utc": "2026-11-28T09:46:42.181718+00:00",
+  "request_sha256": "a0ca28337245646d9404b2dec408b65ce8240cda11870014205afbcf7d67f443",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53069,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32209,
+    "cached_tokens": 9344,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,60p' /tmp/cubic.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/cubic.py | head -8; cat > /tmp/readout.py <<'PY'\\nexec(open('/tmp/cubic.py').read().split('def cross')[0])\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.model_selection import KFold\\nf=B(Ai(x)); p=s['panel_c']; u=p['u']\\ndef odd(z,a):return -np.sign(z)*np.expm1(-a*abs(z))\\ndef even(z,a):return z*z/np.sqrt(1+a*z*z)\\ndef op(v,fun,linear,approx):\\n def g(z,a):return design(*([z] if linear else []),fun(z,a))\\n def loss(a):\\n  h=g(u,a);return np.linalg.norm(h@ls(h,v)-v)\\n o=minimize_scalar(loss,bounds=(approx*.5,approx*1.5),method='bounded'); a=o.x; w=ls(g(u,a),v);print('panel',a,o.fun,'coef',np.round(w,4));return g(f,a)@w,fun(f,a)\\nc,o=op(p['v1'],odd,False,1.8); d,e=op(p['v2'],even,True,.389)\\ndef interaction(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef quad(a): i,j=np.triu_indices(a.shape[1]);return a[:,i]*a[:,j]\\ntr=np.arange(52);te=np.arange(52,72); folds=[(tr,te),*KFold(4,shuffle=True,random_state=123).split(x)]\\nbase=design(f,o,e); feat={'base':base,'all':design(f,o,e,quad(f),quad(o),quad(e),interaction(f,o),interaction(f,e),interaction(o,e)),'samedim':design(f,o,e,f*f,o*o,e*e,f*o,f*e,o*e),'dictionary':design(f,o,e,quad(f),quad(c),quad(d),interaction(f,o),interaction(f,e),interaction(o,e),np.sin(f),np.cos(f),np.tanh(f),np.sin(c),np.cos(c),np.sin(d),np.cos(d))}\\nfor k in (-1,1):\\n for a in (.4,.8,1.2,1.6):\\n  q=np.roll(f,k,axis=1)*a; feat[f'pair{k},{a}']=np.c_[base,odd(f+q,1.8),odd(f-q,1.8),even(f+q,.389),even(f-q,.389),f*q]\\nres=[]\\nfor name,h in feat.items():\\n for mode in ('raw','atanh','asinh'):\\n  for scale in ([1] if mode=='raw' else ([1.25,1.5,2] if mode=='atanh' else [.4,.8,1.5])):\\n   Y=T.copy(); pred=lambda z:z\\n   if mode=='atanh':Y[:,0]=np.arctanh(Y[:,0]/scale);pred=lambda z:scale*np.tanh(z)\\n   if mode=='asinh':Y[:,0]=np.arcsinh(Y[:,0]/scale);pred=lambda z:scale*np.sinh(np.clip(z,-6,6))\\n   for l in (1e-7,1e-5,1e-4,.001,.01):\\n    errors=[]\\n    for i,j in folds:\\n     a=h[i]; norms=np.maximum(np.linalg.norm(a,axis=0),1e-12);a=a/norms;b=h[j]/norms;w=np.linalg.solve(a.T@a+l*np.diag(np.r_[0,np.ones(a.shape[1]-1)]),a.T@Y[i]); val=b@w;val[:,0]=pred(val[:,0]);delta=abs(val-T[j]);errors.append([delta[:,0].mean(),delta[:,1:].mean()])\\n    err=np.array(errors);res.append((name,mode,scale,l,*err[0],*err[1:].mean(0),*err[1:].max(0)))\\nfor m in (4,5,6,7):\\n print('LEADER',m); print(*sorted(res,key=lambda z:z[m])[:9],sep='\\\\n')\\n# An eigenvalue fit separates shared temporal profiles from input nonlinearities.\\ntt=s['eval_times']; from scipy.optimize import least_squares\\nfor name,ff in {'twoexp': lambda a:np.array([-np.expm1(-tt*a[0]),-np.expm1(-tt*a[1])]),'exp_linear':lambda a:np.array([-np.expm1(-tt*a[0]),tt]),'exp_t_exp':lambda a:np.array([-np.expm1(-tt*a[0]),tt*np.exp(-tt*a[1])]),'exp_log':lambda a:np.array([-np.expm1(-tt*a[0]),np.log1p(tt*a[1])]),'log_linear':lambda a:np.array([np.log1p(tt*a[0]),tt])}.items():\\n def err(a):h=ff(a);return (ls(h.T,t.T).T@h-t).ravel()\\n opt=least_squares(err,[1.,.3],bounds=(.001,15));print('time',name,opt.x,np.mean(abs(opt.fun)))\\nnp.savez('/tmp/latent.npz',f=f,c=c,d=d,o=o,e=e,x=x,T=T,times=tt)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | tail -55\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse cubic calibration → invert A, apply B, and compact the operator readouts; the current 52/20 MAEs are 0.03799 scalar and 0.03456 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the first passing configuration\",\"rejected_reason\":\"Its scalar margin is only 0.000015 and its sensitivity to the split has not been checked.\"}],\"rationale\":\"The correct calibration direction materially improves both outputs. Fit the panel rates directly and compare compact readout grammars on shuffled splits to see whether the improvement generalizes or depends on the prescribed split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5c5aec01430b6176f40c061febc44a0372a79757f324329fdeeb4f03ec5297d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40791.41,
+      "usage_known": true,
+      "prompt_tokens": 32209,
+      "cached_tokens": 9344,
+      "completion_tokens": 1553
+    }
+  ]
+}

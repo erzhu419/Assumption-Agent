@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7d96b11a90b0441db34c3e79197a7951",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:28.585081+00:00",
+  "ended_at_utc": "2026-11-28T09:20:12.220416+00:00",
+  "request_sha256": "0508e6db0caf4bb380ec8110ddca4bfb2bbdb0a0dfd0057f297a05ef6fa30ef4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38573,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25994,
+    "cached_tokens": 9344,
+    "completion_tokens": 1666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/graph_probe.py <<'PY'\\nfrom operators import *\\nfrom itertools import combinations\\nfrom scipy.optimize import minimize_scalar\\n\\ndef fit_op(p,key,f,lo,hi):\\n u,v=p['u'],p[key]\\n def loss(k):\\n  a=f(u,k); return np.mean((a@fit(a,v)-v)**2)\\n k=minimize_scalar(loss,bounds=(lo,hi),method='bounded').x\\n a=f(u,k); b=fit(a,v); h=np.sum(a*np.linalg.pinv(a).T,axis=1)\\n return (lambda z:f(z,k)@b),k,np.sqrt(loss(k)),np.sqrt(np.mean(((a@b-v)/(1-h[:,None]))**2))\\nfs={'tanh':(lambda z,k:np.c_[aff(z),np.tanh(k*z)],.3,3.5),'sin':(lambda z,k:np.c_[aff(z),np.sin(k*z)],.3,4.5),'tanh2':(lambda z,k:np.c_[aff(z),np.tanh(k*z),np.tanh(k*z)**2],.3,3.5),'rat':(lambda z,k:np.c_[aff(z),z*z/(1+k*z*z)],.05,1.8),'ratodd':(lambda z,k:np.c_[aff(z),z/(1+k*z*z)],.05,4)}\\nP={}\\nfor name,p,key in [('B','b','v'),('C','c','v1'),('D','c','v2')]:\\n for f,args in fs.items():\\n  op,*m=fit_op(s['panel_'+p],key,*args); P[name+f]=op\\n  print(name,f,np.round(m,7))\\ntr=s['train']; x=coords(tr['x']); Y=np.c_[tr['y'],tr['traj']]; idx=np.arange(len(x)); rng=np.random.default_rng(801)\\nfolds=[(idx[:52],idx[52:]),(idx[:56],idx[56:])]\\nfor group in np.array_split(rng.permutation(idx),4):folds.append((np.setdiff1d(idx,group),group))\\nlarge=np.argsort(np.linalg.norm(x,axis=1))[-16:]; folds.append((np.setdiff1d(idx,large),large))\\n\\ndef score(a):\\n errors=[]\\n for it,iv in folds:\\n  e=np.abs(a[iv]@fit(a[it],Y[it])-Y[iv]); errors.append([e[:,0].mean(),e[:,1:].mean()])\\n return np.array(errors)\\n\\ndef show(a,n):\\n e=score(a); out.append((n,a.shape[1],*e[0],*e[1],*e[2:6].mean(0),*e[2:6].max(0),*e[-1]))\\n\\nout=[]\\nshow(pol(x,3),'raw cubic'); show(np.c_[aff(x),*[np.prod(x[:,j],axis=1) for j in combinations(range(4),3)],x**3,*[x[:,i]**2*x[:,j] for i in range(4) for j in range(4) if i!=j]],'odd cubic'); show(np.c_[aff(x),x**3],'diag cubic')\\nfor name,args in fs.items():\\n for k in ([.8,1.2,1.5,1.8,2.2,2.6] if name in ('tanh','sin') else [1.5]): show(args[0](x,k),f'raw {name} {k}')\\nfor key,p in P.items():\\n z=p(x); show(aff(z),key); show(np.c_[aff(x),z],f'x+{key}'); show(pol(z,2),f'quad {key}'); show(np.c_[aff(z),z**3],f'cubic diag {key}')\\nfor bk in ('Btanh','Btanh2','Bsin'):\\n for ck in ('Ctanh','Ctanh2','Cratodd','Drat'):\\n  b,c=P[bk](x),P[ck](x)\\n  for name,z,w in [(bk+'>'+ck,b,P[ck](b)),(ck+'>'+bk,c,P[bk](c)),(bk+'|'+ck,b,c)]:\\n   show(aff(w),name); show(np.c_[aff(z),w],name+'+prev'); show(np.c_[aff(z),w,z*w],name+'+prod'); show(np.c_[aff(x),w],name+'+x')\\nfor name,b,c in [('BCD',P['Btanh'](x),P['Ctanh'](x)),('CD',P['Ctanh'](x),P['Drat'](x)),('C(B)D(B)',P['Ctanh'](P['Btanh'](x)),P['Drat'](P['Btanh'](x)))]:\\n for feat,label in [(np.c_[aff(b),c],'join'),(np.c_[aff(b),c,b*c],'join-prod'),(np.c_[aff(x),b,c],'join+x'),(np.c_[aff(b),c,P['Drat'](x)],'join+D')]:show(feat,name+' '+label)\\nprint('model, width, public y/tr, 56/16 y/tr, random mean y/tr, random worst y/tr, radial y/tr');\\nfor r in sorted(out,key=lambda r:max(r[8:10]))[:24]:print(r[:2],np.round(r[2:],5))\\nfor r in sorted(out,key=lambda r:max(r[2:4]))[:14]:print('pub',r[:2],np.round(r[2:],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (direct cubic) -> H2 (calibrated, potentially composed nonlinear operators); direct cubic 52/20 MAEs are 0.02954 for labels and 0.03393 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the operator graph by panel fit alone\",\n      \"rejected_reason\": \"A panel can be modeled accurately without participating in either downstream output.\"\n    }\n  ],\n  \"rationale\": \"Test whether operator outputs or their compositions improve prediction of both observables over the direct cubic. Random folds and a high-radius holdout distinguish transferable structure from a fit that works only on the prescribed split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fb51160e0776acec61cd79c7e8b1a3c347d454fe9e92d6f3396c1b4f46da1dfc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43600.13,
+      "usage_known": true,
+      "prompt_tokens": 25994,
+      "cached_tokens": 9344,
+      "completion_tokens": 1666
+    }
+  ]
+}

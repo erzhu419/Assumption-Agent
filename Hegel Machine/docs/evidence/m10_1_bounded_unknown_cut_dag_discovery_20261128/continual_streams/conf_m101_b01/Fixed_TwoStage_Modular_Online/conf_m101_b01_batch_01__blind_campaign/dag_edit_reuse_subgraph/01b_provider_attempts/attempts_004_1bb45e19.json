@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1bb45e1951784dbfbaa9c168987572db",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_01__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_01__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:20:11.018998+00:00",
+  "ended_at_utc": "2026-11-28T09:20:47.078995+00:00",
+  "request_sha256": "6e137691a0841361ea64484c714f23b02489ca77aa08676509caf46975a430ec",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 33265,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24297,
+    "cached_tokens": 9344,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_b.py <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nsink=runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['run_node']\\na=s['panel_a']; u=a['u']; v=a['v']; D=np.c_[np.ones(len(u)),u]; W=np.linalg.lstsq(D,v,rcond=None)[0]\\nfor _ in range(20):\\n r=np.linalg.norm(D@W-v,axis=1); w=1/np.hypot(1,r/max(np.median(r),1e-9)); W=np.linalg.lstsq(D*w[:,None],v*w[:,None],rcond=None)[0]\\nprint('A residual top',np.sort(np.linalg.norm(D@W-v,axis=1))[-8:])\\ndef undo(x): return np.linalg.solve(W[1:].T,(x-W[0]).T).T\\np=s['panel_b']; x,y=p['u'],p['v']; x0=undo(s['train']['x']); ref=np.c_[np.ones(len(x)),x]; pair=np.array(list(combinations(range(4),2)))\\ndef downstream(f):\\n z=f(x0); res=[]; n=len(z)\\n for ti,vi in [(np.arange(n-20),np.arange(n-20,n)),(np.arange(20,n),np.arange(20)),(np.arange(n)[np.arange(n)%4!=0],np.arange(n)[np.arange(n)%4==0])]:\\n  o=sink({'node_00':dict(z_tr=z[ti],z_te=z[vi],train_y=s['train']['y'][ti],train_traj=s['train']['traj'][ti],eval_times=s['eval_times'])}); res.append([np.mean(abs(o['y_hat']-s['train']['y'][vi])),np.mean(abs(o['state_pred']-s['train']['traj'][vi]))])\\n return np.round(res,5).tolist()\\ndef linear(f,x,y,reg=0):\\n D=f(x); R=np.diag([0]+[reg]*(D.shape[1]-1)); W=np.linalg.lstsq(np.r_[D,R],np.r_[y,np.zeros((len(R),y.shape[1]))],rcond=None)[0]; return lambda q:f(q)@W\\nbase=lambda q:np.c_[np.ones(len(q)),q]\\nfeatures={'affine':base,'square':lambda q:np.c_[base(q),q*q], 'cube':lambda q:np.c_[base(q),q**3], 'power':lambda q:np.c_[base(q),q*q,q**3], 'quad':lambda q:np.c_[base(q),q*q,q[:,pair[:,0]]*q[:,pair[:,1]]], 'asinh':lambda q:np.c_[np.ones(len(q)),np.arcsinh(2*q)],'tanh':lambda q:np.c_[np.ones(len(q)),np.tanh(2*q)]}\\nfor k,f in {'identity':lambda q:q,'raw':lambda q:q@W[1:]+W[0]}.items(): print(k,downstream(f),flush=True)\\nfor k,F in features.items():\\n f=linear(F,x,y); loo=np.array([linear(F,np.delete(x,j,0),np.delete(y,j,0))(x[j:j+1])[0] for j in range(len(x))]); print(k,np.sqrt(np.mean((f(x)-y)**2,0)).round(6),np.sqrt(np.mean((loo-y)**2,0)).round(6),downstream(f),flush=True)\\n# Test whether nonlinearity occurs after an affine mixing, and whether one mixed direction per output suffices.\\nfuncs={'tanh':np.tanh,'asinh':np.arcsinh,'atan':np.arctan,'cube':lambda t:t**3,'rational':lambda t:t/(1+t*t),'sin':np.sin}\\nfor name,g in funcs.items():\\n for direct in [True,False]:\\n  ff=[]; ps=[]\\n  for j in range(4):\\n   w=np.linalg.lstsq(ref,y[:,j],rcond=None)[0]; direction=w[1:]/np.linalg.norm(w[1:]); best=None\\n   def pred(q,p):\\n    D=base(q); return (p[5]+p[6]*g(D@p[:5])) if direct else (D@p[5:10]+p[10]*g(D@p[:5]))\\n   for d in [direction,*np.eye(4)]:\\n    for scale in [.6,1.5,3.]:\\n     p0=np.r_[0,d*scale,y[:,j].mean(),.7] if direct else np.r_[0,d*scale,w,.3]; fit=least_squares(lambda p:pred(x,p)-y[:,j],p0,max_nfev=160); err=np.linalg.norm(fit.fun)\\n     if best is None or err<best[0]:best=(err,fit.x)\\n   ps.append(best[1]); ff.append(best[0]/np.sqrt(len(x)))\\n  f=lambda q:np.column_stack([pred(q,P) for P in ps]); print(name,direct,np.round(ff,6),downstream(f),np.round(ps,3).tolist() if max(ff)<.02 else '',flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_b.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine Panel B -> H2 compact separable or mixed-axis nonlinear calibration; unrestricted quadratic worst calibration LOO RMS is 0.357 versus 0.184 for affine.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the strongest single cubic term per coordinate\",\"rejected_reason\":\"Correlations can arise from saturation; direct fits and held-out downstream predictions can distinguish the alternatives.\"}],\"rationale\":\"Compare compact bases after the robust forward Panel A inverse, measuring both calibration prediction and three downstream validation slices. These checks distinguish an input-side nonlinearity from a nonlinearity applied after affine mixing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "caa83a150916504b32b24a702c96d625159f28ed848c6af3aafb10afea54b77c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42256.61,
+      "usage_known": true,
+      "prompt_tokens": 24297,
+      "cached_tokens": 9344,
+      "completion_tokens": 1533
+    }
+  ]
+}

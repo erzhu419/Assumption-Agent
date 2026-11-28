@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "39e3d52e4c0a496586bd294bfadd9293",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:24.027434+00:00",
+  "ended_at_utc": "2026-11-28T09:21:59.786507+00:00",
+  "request_sha256": "a874c0f4c8fc2d47ed1a80a08c1ec121a678f12aaf48ac306131dc167eb16f68",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31310,
+    "cached_tokens": 9344,
+    "completion_tokens": 1410
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -42 /tmp/readout.log; cat >/tmp/sparseprobe.py <<'PY'\\nfrom dagprobe import *\\nfrom scipy.linalg import qr\\nx=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; n=len(x); D=blocks(x,s); Q=poly(x,2); Y=np.c_[y,T[:,-3:].mean(1)]; ix=np.arange(n); splits=[(ix[:52],ix[52:])]+[(np.setdiff1d(ix,j),j) for j in np.array_split(np.random.default_rng(13).permutation(n),4)]; dd={}\\ndef add(key,f):\\n if np.std(f)>1e-8: dd[key]=f\\nfor key in ('x','a','b','ca','da','cb','db'):\\n z=D[key]; w=z/np.maximum(z.std(0),.1)\\n dirs=[(str(i),z[:,i]) for i in range(4)]; dirs += [(f'{i}:{c}:{j}',z[:,i]+c*z[:,j]) for i,j in it.combinations(range(4),2) for c in [-2,-1,-.5,.5,1,2]]\\n for a0,v in dirs:\\n  for k in [.6,1,1.6,2.2,3.2]:\\n   for label,f in [('sin',np.sin(k*v)),('cos',np.cos(k*v)),('tanh',np.tanh(k*v)),('rat',1/(1+(k*v)**2)),('odd',v/(1+(k*v)**2))]:\\n    add((key,a0,k,label),f)\\n    if len(a0)==1:\\n     for j in range(4):\\n      add((key,a0,k,label,j), f*z[:,j]); add((key,a0,k,label,'a',j),f*D['a'][:,j])\\n for deg in [2,3,4]:\\n  for ids in it.combinations_with_replacement(range(4),deg): add((key,'poly',ids),np.prod(z[:,ids],axis=1))\\n for j in range(4):\\n  for k in range(4):\\n   add((key,'crossa',j,k),z[:,j]*D['a'][:,k]);add((key,'crossb',j,k),z[:,j]*D['b'][:,k])\\nF=np.column_stack(list(dd.values())); names=list(dd); results={};\\nfor i,j in splits:\\n qi=qr(Q[i],mode='economic')[0]; G=F[i]-qi@(qi.T@F[i]); scale=np.linalg.norm(G,axis=0); scale=np.where(scale>1e-6,scale,1e20); G=G/scale; R=Y[i]-qi@(qi.T@Y[i]);\\n for w in [0,.25,1,4,16]:\\n  for pool in [('x','a','b'),('a','b','ca','da','cb','db'),tuple(D)]:\\n   mask=np.array([k[0] in pool for k in names]); selected=[]; rr=R.copy()\\n   for k in range(1,13):\\n    d=G.T@rr; score=d[:,0]**2+w*d[:,1]**2; score[~mask]=-1; score[selected]=-1; selected.append(np.argmax(score)); A=G[:,selected]; rr=R-A@ls(A,R);\\n    if k in [1,2,3,4,5,6,8,10,12]:\\n     B=np.c_[Q,F[:,selected]]; b=ls(B[i],Y[i]); p=B[j]@b; results.setdefault((w,pool,k),[]).append((np.mean(abs(p-Y[j]),0),np.std(rr,0),[names[l] for l in selected]))\\nfor kind in (0,1,2):\\n print('ranking',kind)\\n for key,v in sorted(results.items(),key=lambda it: [it[1][0][0][0],max(r[0][0] for r in it[1]),it[1][0][0][1]][kind])[:6]: print(key,np.array([r[0] for r in v]).round(4),v[0][1].round(4),v[0][2])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/sparseprobe.py | tail -96\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent readout residuals → test a shared sparse nonlinear basis; the best screened 52/20 response MAE is 0.04075.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the panel kernel with the lowest required-split error\",\n      \"rejected_reason\": \"It misses the gate and reaches 0.06548 on another fold.\"\n    }\n  ],\n  \"rationale\": \"The quadratic residuals for response and trajectory correlate around 0.58. Compare response-only and joint feature selection inside each fold to see whether that shared structure improves prediction or just adds fit flexibility.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3f917b386708f77e8403031a5e2a0cee79bf2e3fb21ebda2e31690765f04a86f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38345.05,
+      "usage_known": true,
+      "prompt_tokens": 31310,
+      "cached_tokens": 9344,
+      "completion_tokens": 1410
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a8aa63ecd0fe4f8187f0ad666b7081e1",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:00:54.286889+00:00",
+  "ended_at_utc": "2026-11-28T10:01:11.918586+00:00",
+  "request_sha256": "541c944ef6fd8d2c4986feb5c38a523b92fb8810048a57f3d8d2aaac7ed612f1",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 12250,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14919,
+    "cached_tokens": 9344,
+    "completion_tokens": 588
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nb=pickle.load(open('public_batch.pkl','rb')); print('studies',len(b)); s=b[0]['study']\\nfor k,v in s.items():\\n print(k)\\n for q,a in (v.items() if isinstance(v,dict) else [('',v)]):\\n  a=np.asarray(a); print(q,a.shape,a.dtype); print(a[:4] if a.ndim>1 else a[:12]); print('min/max',a.min(axis=0),a.max(axis=0))\\n if k.startswith('panel'):\\n  u,v=s[k]['u'],s[k]['v']; n=len(u); X=np.c_[np.ones(n),u]; coef=np.linalg.lstsq(X,v,rcond=None)[0]; print('Affine coefs',coef); print('Row residuals',np.sort(np.linalg.norm(v-X@coef,axis=1)))\\nx=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; X=np.c_[np.ones(len(x)),x]; C=np.linalg.lstsq(X,np.c_[y,t],rcond=None)[0]; print('Raw affine MAE',np.mean(abs(X@C-np.c_[y,t]),axis=0)); print('Trajectory centered singulars',np.linalg.svd(t-t.mean(0),compute_uv=False)); print('Time differences example',np.diff(t[:7],axis=1)); print('corr inputs outputs',np.corrcoef(np.c_[x,y,t].T)[:x.shape[1],x.shape[1]:])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: identify each panel’s forward map -> H2: combine calibrated readouts for both predictions; public CV not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Inspect panel ranges and affine residuals to distinguish outliers from systematic curvature; examine trajectory rank and time differences to determine whether the state readout shares a low-dimensional time law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "ac379074f4a4a4791862b1875ae00721cdeff6d4cc7f58c6e19096dced5739c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20346.3,
+      "usage_known": true,
+      "prompt_tokens": 14919,
+      "cached_tokens": 9344,
+      "completion_tokens": 588
+    }
+  ]
+}

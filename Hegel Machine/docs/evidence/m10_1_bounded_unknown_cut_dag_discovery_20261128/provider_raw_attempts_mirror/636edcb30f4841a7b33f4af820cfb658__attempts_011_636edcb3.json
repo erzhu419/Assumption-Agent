@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "636edcb30f4841a7b33f4af820cfb658",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:05.909914+00:00",
+  "ended_at_utc": "2026-11-28T09:24:36.931171+00:00",
+  "request_sha256": "0e13ccd1642ace7061bb4dc16bf6664dce177aac3ea7d01fc439f5bd801b6b42",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68654,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37855,
+    "cached_tokens": 9344,
+    "completion_tokens": 1194
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/state_structure.py <<'PY'\\nexec(open('/tmp/state_probe.py').read().split('results=[]')[0].replace('for name,f in funcs.items():','for name,f in []:'))\\nfrom scipy.optimize import minimize_scalar\\nP=np.c_[one,a,b,pair]; times=s['eval_times'];\\ndef evaluate(fn):\\n e=[]\\n for j,k,h,y in folds:\\n  F,lam=fn(j,y); d=F[j]; coef=np.linalg.lstsq(d,y,rcond=None)[0] if lam==0 else np.linalg.solve(d.T@d+lam*np.eye(d.shape[1]),d.T@y)\\n  r=abs(F[k]@coef@h.T-T[k]); e.append([r.mean(),r.mean(0).max()]);\\n return np.asarray(e)\\nres=[]\\nfor label,w in [('b',b),('a',a),('z',z)]:\\n fns={'sin':np.sin,'tanh':np.tanh,'soft':lambda x:x/np.sqrt(1+x*x),'cos':np.cos,'exp':lambda x:np.exp(np.clip(x,-20,20)),'rat':lambda x:1/(1+x*x)}\\n for name,f in fns.items():\\n  for quadratic in [False,True]:\\n   for reg in [0,.0003,.003]:\\n    def fn(j,y):\\n     D=P if not quadratic else np.c_[P,w*w];\\n     def design(c): return np.c_[D,f(c*w)]\\n     def loss(c):\\n      d=design(c)[j]; r=y[:,0]-d@np.linalg.lstsq(d,y[:,0],rcond=None)[0]; return r@r\\n     ws=np.linspace(.3,4,26); i=np.argmin([loss(c) for c in ws]); c=minimize_scalar(loss,bounds=(ws[max(i-1,0)],ws[min(i+1,len(ws)-1)]),method='bounded').x\\n     return design(c),reg\\n    E=evaluate(fn); res.append((E[:,1].max(),E[:,0].max(),E[0,0],E[:,0].mean(),label,name,quadratic,reg))\\nfor d in sorted(res)[:15]: print('structured',d)\\nfor name,w in [('a',a),('b',b),('z',z)]:\\n A=np.c_[P,w*w,w**3,w**4,w**5]; coef=np.linalg.lstsq(A,Y,rcond=None)[0];print('poly',name,np.round(coef.T,3),np.mean(abs(A@coef-Y),0))\\np=s['panel_a'];u,v=p['u'],p['v']; i=np.arange(4);j=(i+1)%4; L=np.c_[one[:len(u)],u]; mask=np.ones(len(u),bool)\\nfor _ in range(8):\\n e=np.max(abs(L@np.linalg.lstsq(L[mask],v[mask],rcond=None)[0]-v),axis=1); mask=e<max(.001,3*np.median(e))\\nfor lab in ['affine','cyclic']:\\n errors=[]\\n for c in i:\\n  D=L if lab=='affine' else np.c_[np.ones(len(u)),u[:,c],u[:,j[c]],u[:,c]*u[:,j[c]],u[:,c]**3]; D=D[mask]; Q,_=np.linalg.qr(D); yy=v[mask,c];errors.extend(abs((yy-Q@(Q.T@yy))/(1-(Q*Q).sum(1))))\\n print('calibration inlier LOO',lab,len(errors)//4,np.mean(errors),np.max(errors))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/state_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Dense quadratic state fit → paired-panel mean plus smooth residual reduces worst trajectory MAE from 0.07975 to 0.03038, but worst-horizon MAE remains 0.05331.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Promote the paired-panel residual kernel immediately\",\"rejected_reason\":\"It meets the trajectory-average tolerance on all tested slices, but a shared nonlinear term could reduce the remaining worst-horizon error without relying on extrapolating a smooth residual.\"}],\"rationale\":\"Check whether a shared nonlinear transform explains the slow-mode residual, fitting its scale independently inside every fold. If it does not improve extrapolation, promote the measured residual-kernel challenger. Compare affine and cyclic calibration on the same inlier leave-one-out predictions to verify the calibration correction separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b02d1865402876825ddef519f9690438953b49e88ffeb3705b2496cea8ae599a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33635.31,
+      "usage_known": true,
+      "prompt_tokens": 37855,
+      "cached_tokens": 9344,
+      "completion_tokens": 1194
+    }
+  ]
+}

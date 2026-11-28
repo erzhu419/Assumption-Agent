@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6077c5e3c88b4030a4eee264cd5bad95",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:31:52.547483+00:00",
+  "ended_at_utc": "2026-11-28T09:32:26.007294+00:00",
+  "request_sha256": "f7c2ada65748336db6ee1769c1df91312c265d22d34a35a81d530ad5c1ed1392",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23525,
+    "cached_tokens": 9344,
+    "completion_tokens": 1277
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,100p' /tmp/hegel_continual_archive/conf_m101_b02_batch_01_solver.py; sed -n '1,100p' /tmp/hegel_continual_archive/conf_m101_b02_batch_02_solver.py; sed -n '1,160p' /holdout_task/validate_public_schema.py; cat >/tmp/readout_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx=s['train']['x']; y=s['train']['y']; z=s['train']['traj']; Y=np.c_[y,z]\\ndef D(*a): return np.column_stack((np.ones(len(a[0])),*a))\\ndef L(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef p2(a): return np.array([a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(a.shape[1]),2)]).T\\ndef cross(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\np=s['panel_b']; B=L(D(p['u']),p['v']); b=lambda a:D(a)@B\\np=s['panel_c']; h=lambda a:-np.sign(a)*np.expm1(-1.8*abs(a)); j=lambda a:D(a,a*a/np.sqrt(1+.39*a*a)); C=L(D(h(p['u'])),p['v1']); E=L(j(p['u']),p['v2']); c=lambda a:D(h(a))@C; d=lambda a:j(a)@E\\np=s['panel_a']; u,v=p['u'],p['v']; keep=np.argsort(np.linalg.norm(D(u)@L(D(u),v)-v,axis=1))[:45]; u,v=u[keep],v[keep]; qa=lambda a:D(a,p2(a),a**3); A=L(qa(u),v); print('A poly residual',np.sqrt(np.mean((qa(u)@A-v)**2))); a=lambda t:qa(t)@A\\nnodes={'x':x,'b':b(x),'a':a(x),'ab':b(a(x)),'ba':a(b(x))}; G={}\\nfor name,f in nodes.items():\\n g,k=c(f),d(f)\\n G.update({name+'/f':D(f),name+'/quad':D(f,p2(f)),name+'/fc':D(f,g),name+'/fd':D(f,k),name+'/fcd':D(f,g,k),name+'/dot':D(f,g,k,(f*g).sum(1),(f*k).sum(1),(g*k).sum(1)),name+'/FC':D(f,g,cross(f,g)),name+'/FD':D(f,k,cross(f,k)),name+'/CD':D(g,k,cross(g,k)),name+'/all':D(f,g,k,cross(f,g),cross(f,k),cross(g,k)),name+'/fcdq':D(f,g,k,p2(f)),name+'/fcdfull':D(f,g,k,p2(np.c_[f,g,k]))})\\nrng=np.random.default_rng(882); ix=np.arange(72); folds=[(ix[:52],ix[52:]),(ix[:56],ix[56:])]+[(q[:52],q[52:]) for q in [rng.permutation(72) for _ in range(5)]]\\nR=[]\\nfor name,g in G.items():\\n for lam in (1e-7,1e-4,.003,.03,.3):\\n  es=[]\\n  for tr,te in folds:\\n   f=g[tr]; diag=np.eye(g.shape[1])*lam;diag[0,0]=0\\n   pt=g[te]@np.linalg.solve(f.T@f+diag,f.T@Y[tr]); er=abs(Y[te]-pt);es.append([er[:,0].mean(),er[:,1:].mean()])\\n  es=np.array(es); R.append((name,lam,*es[0],*es[1],*es.max(0),*es.mean(0)))\\nfor i in (2,3,6,7):\\n print('SORT',i); print(*[(q[0],q[1],*np.round(q[2:],5)) for q in sorted(R,key=lambda q:q[i])[:10]],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: retain the nonlinear C operators and compare panel routes using both readouts; the archived 56/16 MAEs were 0.126423 for y and 0.156896 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Infer the active route from panel recovery alone\",\"rejected_reason\":\"A panel can be reconstructed to measurement noise and still be inactive in the forward law.\"}],\"rationale\":\"The C nonlinearities fit to about 0.0001 RMS and the shared two-mode basis reconstructs trajectories to 0.0044 RMS. Comparing candidate routes across held-out rows will show which components actually improve each prediction and whether interaction terms are missing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "92a4dd15bb09b3bc45e42c943370334b31e72f23bce52487f15583ad167560e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36077.67,
+      "usage_known": true,
+      "prompt_tokens": 23525,
+      "cached_tokens": 9344,
+      "completion_tokens": 1277
+    }
+  ]
+}

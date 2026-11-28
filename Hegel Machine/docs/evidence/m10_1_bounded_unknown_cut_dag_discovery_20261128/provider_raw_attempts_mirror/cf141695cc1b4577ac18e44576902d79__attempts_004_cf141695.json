@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf141695cc1b4577ac18e44576902d79",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:06.836585+00:00",
+  "ended_at_utc": "2026-11-28T09:19:37.699746+00:00",
+  "request_sha256": "25a6b63d42d866970262daa8b46c8c4d334ce99615cf18939f8b68864acea90f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 25882,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20095,
+    "cached_tokens": 9344,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/operators.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\n\\ndef poly(x,d):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,i],axis=1) for k in range(1,d+1) for i in combinations_with_replacement(range(4),k)])\\ndef fit(A,v,mask): return np.linalg.lstsq(A[mask],v[mask],rcond=None)[0]\\ndef pa(p):\\n u,v=p['u'],p['v']; A=poly(u,1); m=np.ones(len(u),bool)\\n for _ in range(8):\\n  r=np.max(abs(A@fit(A,v,m)-v),axis=1);m=r<max(.001,3*np.median(r))\\n return m\\nif __name__=='__main__':\\n import pickle\\n s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; p=s['panel_a'];m=pa(p); u=p['u'][m];v=p['v'][m]\\n for d in [1,2,3,4]:\\n  A=poly(u,d);b=np.linalg.lstsq(A,v,rcond=None)[0]; E=A@b-v; h=np.sum(np.linalg.svd(A,full_matrices=False)[0]**2,axis=1);print('A',d,np.std(E,0),'loo',np.mean(abs(E/np.maximum(1-h[:,None],1e-10))));\\n  if d<=3: print(b.round(4).T)\\n print('pA raw data moments',u.mean(0),u.std(0),v.mean(0),v.std(0),v.min(0),v.max(0)); print('train x moments',s['train']['x'].mean(0),s['train']['x'].std(0));\\n p=s['panel_c'];u=p['u'];\\n for k in ['v1','v2']:\\n  v=p[k]\\n  for label,A in [('poly2',poly(u,2)),('odd3',np.c_[poly(u,1),poly(u,3)[:,15:]]),('add3',np.c_[poly(u,1),u**2,u**3]),('diag2',np.c_[poly(u,1),u**2]),('coupled2',np.c_[poly(u,1),u*u[:,[1,2,3,0]]])]:\\n   B=np.linalg.lstsq(A,v,rcond=None)[0];E=A@B-v;h=np.sum(np.linalg.svd(A,full_matrices=False)[0]**2,axis=1);print('C',k,label,np.std(E,0),'loo',np.mean(abs(E/np.maximum(1-h[:,None],1e-10))));\\n   if label in ('diag2','coupled2'): print(B[5:].round(3).T)\\n from importlib.machinery import SourceFileLoader\\n mod=SourceFileLoader('prior','/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py').load_module(); H,modes=mod._time_modes(s['eval_times'],s['train']['traj']); print('rates',-np.log1p(-H[0])/s['eval_times'][0], 'trajectory fit MAE',np.mean(abs(modes@H.T-s['train']['traj'])), 'mode correlation',np.corrcoef(np.c_[s['train']['x'],s['train']['y'],modes].T).round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine-with-outliers calibration -> nonlinear calibration plus shared relaxation; fallback public MAEs are 0.075920 for y and 0.083359 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Sparse gross outliers alone explain panel A's departure from an affine map.\",\"empirical_witness\":\"Removing the three rows with residuals above 6 leaves 45 rows, with inlier residuals still reaching 0.494 versus panel B residuals below 0.00027.\",\"causal_blanket_diagnosis\":\"The sparse contamination and the systematic calibration nonlinearity are separate effects.\",\"sublated_pivot\":\"Retain the inlier mask and compare polynomial and coupled terms using panel leave-one-out residuals.\",\"risk_kind\":\"calibration misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase smooth-regressor complexity immediately\",\"rejected_reason\":\"A recoverable calibration could give better extrapolation with fewer fitted response terms.\"}],\"rationale\":\"Use panel leave-one-out residuals to distinguish a recoverable operator from an interpolating polynomial, and quantify the error floor of the two-mode temporal fit before modeling its amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "bf5ab80f41c071e57fef24a4e3d93be63490413b9b405b9d511f8d0bc817af5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33513.77,
+      "usage_known": true,
+      "prompt_tokens": 20095,
+      "cached_tokens": 9344,
+      "completion_tokens": 1172
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d34e963a04c4c74bedcbb0ca735cc6d",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:36.059139+00:00",
+  "ended_at_utc": "2026-11-28T09:27:10.209132+00:00",
+  "request_sha256": "d156167ed843437e7922cbfeb82c293924be831570f504bb12b4f8a3b11e9b65",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46857,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29454,
+    "cached_tokens": 9344,
+    "completion_tokens": 1398
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/grammar.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import minimize_scalar\\nfrom sklearn.linear_model import Ridge\\nfrom itertools import combinations\\nz,b,_,w=coords(T['x']); p=S['panel_c']; edges=[(0,1),(0,3),(1,2),(2,3)]\\ndef E(x):return np.column_stack([x[:,i]*x[:,j] for i,j in edges])\\nc=aff(E(z))@fit(aff(E(p['u'])),p['v1'])\\nH,A,r=modes(T['traj'][:52]);A=fit(H,T['traj'].T).T;Y=np.c_[T['y'],A]\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\nlin=z; quad=power(z,2); edge=E(z); cyc=np.roll(z,-1,axis=1)\\nF={'z':z,'b':b,'c':c,'w':w,'cosz':np.cos(1.2825*z),'sinz':np.sin(z),'tanhz':np.tanh(z),'ratz':z/(1+z*z),'ratb':b/(1+b*b),'ratw':w/(1+w*w),'sqz':z*z,'edge':edge,'edgecos':np.cos(edge),'edgesin':np.sin(edge),'tanhc':np.tanh(c),'sinc':np.sin(c),'cosc':np.cos(c),'ratc':c/(1+c*c),'pair+':z+cyc,'pair-':z-cyc}\\nG={}\\ndef add(k,f): G[k]=f\\nfor k,f in F.items():\\n add(k,f); add('E*'+k,cross(edge,f)); add('z*'+k,cross(z,f)); add('Cdiag*'+k,c*f)\\nfor k in ('z','b','w','c','pair+','pair-'):\\n q=F[k]\\n for a in (.1,.2,.5,1.,2.):\\n  add(f'E/(1+{a}{k}^2)',cross(edge,1/(1+a*q*q)))\\n  add(f'z/(1+{a}{k}^2)',cross(z,1/(1+a*q*q)))\\n  add(f'Cdiag/(1+{a}{k}^2)',c/(1+a*q*q))\\nadd('cubic',power(z,3)[:,14:]);add('quartic',power(z,4)[:,34:]);add('Wquad',power(w,2)[:,4:]);add('W*C',cross(w,c));add('W*B',cross(w,b));add('C*B',cross(c,b));add('C*Wdiag',c*w)\\nfor base in [np.c_[quad,w],quad]:\\n res=[]\\n for k,f in G.items():\\n  X=aff(np.c_[base,f]); co=fit(X[:52],Y[:52]); yh=X@co; tr=np.mean(abs(yh[:52]-Y[:52]),axis=0);te=np.mean(abs(yh[52:]-Y[52:]),axis=0)\\n  h=np.sum(X[:52]*np.linalg.pinv(X[:52]).T,axis=1);loo=np.mean(abs((yh[:52]-Y[:52])/np.maximum(1-h,1e-8)[:,None]),axis=0)\\n  res.append((k,tr,te,loo))\\n print('base size',base.shape[1]);\\n for j in range(3):\\n  for k,tr,te,loo in sorted(res,key=lambda v:v[3][j])[:10]: print(j,k,np.round([tr[j],loo[j],te[j]],5))\\n# Check the shared nonlinear component by removing the quadratic part on training rows.\\nfor base in (quad,np.c_[quad,w],np.c_[quad,w,z*w]):\\n X=aff(base); ee=Y-X@fit(X[:52],Y[:52]);print('residual std',ee[:52].std(0), 'residual correlation',np.corrcoef(ee[:52].T).round(4))\\n for a,b in [(0,2),(1,2),(0,1)]:\\n  X=aff(np.c_[base,Y[:,b]]); e=X@fit(X[:52],Y[:52,a])-Y[:,a]; print('oracle',a,b,np.mean(abs(e[:52])),np.mean(abs(e[52:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/grammar.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate sparse polynomials → H2 a shared nonlinear readout component and two relaxation modes; current 52/20 MAEs are 0.02972 for y and 0.03652 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more unrestricted polynomial terms\",\n      \"rejected_reason\": \"The scalar and fast-mode fits repeat several of the same interaction terms. Testing a shared component is more informative than adding unrelated coefficients.\"\n    }\n  ],\n  \"rationale\": \"Panel C’s first output is reconstructed by four cycle-edge products. Test those products with calibrated trigonometric operators and rational gates, ranking candidates by training-side leave-one-out error. Use observed modes only to diagnose shared structure, not as test-time inputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "568a3b7e54d0393043b9552b59c2d514b160fb10e5fd557bbb239ca3464699b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39436.47,
+      "usage_known": true,
+      "prompt_tokens": 29454,
+      "cached_tokens": 9344,
+      "completion_tokens": 1398
+    }
+  ]
+}

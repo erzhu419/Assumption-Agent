@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac8a950eb0dd407a8455e812015a698e",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:44.454270+00:00",
+  "ended_at_utc": "2026-11-28T09:41:19.145891+00:00",
+  "request_sha256": "6e65e2f1122df02fe8a277b17b5a01f8c0941ed37c8dfd0e776b476bb4c47a76",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36397,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24087,
+    "cached_tokens": 9344,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe05.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef A(x):return np.c_[np.ones(len(x)),x]\\ndef fit(x,y):return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef e(x,y):return np.sqrt(np.mean((A(x)@fit(A(x),y)-y)**2))\\nu,v=s['panel_a'].values(); good=np.linalg.norm(u-v,axis=1)<4*np.median(np.linalg.norm(u-v,axis=1)); ab=np.array([fit(A(a[good]),b[good]) for a,b in zip(u.T,v.T)]).T\\nx=(s['train']['x']-ab[0])/ab[1];Y=s['train']['y'];T=s['train']['traj']; Z={}\\ntrans={ 'dog':(lambda x,k,a:x*(1-a*np.exp(-k*x*x)),[1,1]),'sin':(lambda x,k:np.sin(k*x),[1]),'tanh':(lambda x,k:np.tanh(k*x),[1]),'sinh':(lambda x,k:np.sinh(k*x),[1]),'rational':(lambda x,k:x/(1+k*x*x),[1]),'cubic':(lambda x,k:x+k*x**3,[.3]),'quad':(lambda x,k:x+k*x*x,[.3]),'x+sin':(lambda x,k,a:x+a*np.sin(k*x),[2,.5]),'x+tanh':(lambda x,k,a:x+a*np.tanh(k*x),[1,.5]),'x+rational':(lambda x,k,a:x+a*x/(1+k*x*x),[1,.5]),'x2+cubic':(lambda x,k,a:x+k*x*x+a*x**3,[.3,.3])}\\nfor pn,vn in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n u=s[pn]['u'];v=s[pn][vn]; L=[]; print('\\\\n',pn,vn,'v range',v.min(),v.max())\\n for name,(f,start) in trans.items():\\n  def proj(q):\\n   d=A(f(u,*q));return d@fit(d,v)-v\\n  q=least_squares(lambda q:proj(q).ravel(),start,max_nfev=300).x\\n  L.append((np.std(proj(q)),name,q));Z[pn[-1]+vn+name]=lambda x,f=f,q=q,c=fit(A(f(u,*q)),v):A(f(x,*q))@c\\n for name,d in [('linear',A(u)),('linear+sq',np.c_[A(u),u**2]),('linear+cube',np.c_[A(u),u**3]),('linear+sq+cube',np.c_[A(u),u**2,u**3])]:\\n  c=fit(d,v);print(name,np.std(d@c-v),c[5:].round(4));\\n for item in sorted(L)[:6]: print(item)\\nZ['raw']=lambda a:a\\nfrom itertools import combinations_with_replacement,product\\ndef scores(z):\\n ans=[]\\n for names in ['aff','poly2','poly3','pair','archive','sin','rich']:\\n  a,b,c,d=z.T; pair=a*c+b*d; contrast=a+b-c-d\\n  if names=='aff': D=A(z)\\n  if names=='poly2':D=np.column_stack([np.ones(len(z))]+[z[:,j].prod(1) for k in [1,2] for j in combinations_with_replacement(range(4),k)])\\n  if names=='poly3':D=np.column_stack([np.ones(len(z))]+[z[:,j].prod(1) for k in [1,2,3] for j in combinations_with_replacement(range(4),k)])\\n  if names=='pair':D=np.c_[A(z),pair]\\n  if names=='archive':D=np.c_[A(z),pair,np.sin(1.7*contrast),np.tanh(contrast),pair/(1+contrast**2)]\\n  if names=='sin':D=np.c_[A(z),pair,np.sin(1.7*z)]\\n  if names=='rich':D=np.c_[A(z),pair,np.sin(1.7*z),np.sin(1.7*contrast),np.tanh(contrast),pair/(1+contrast**2)]\\n  ans.append((np.mean(abs(D[52:]@fit(D[:52],Y[:52])-Y[52:])),names))\\n return sorted(ans)[:2],np.mean(abs(A(z)[52:]@fit(A(z)[:52],T[:52])-T[52:]))\\nfor k,f in Z.items():\\n z=f(x); r,t=scores(z); print(k,[(round(v,5),n) for v,n in r],round(t,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 diagonal reference calibration → H2 compact nonlinear operator and separate readouts; reference affine leave-one-out MAE is 0.000092, and the prior prediction gate MAEs were 0.214320/0.087164.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Profile simple operator families against the panel measurements, then check whether each recovered coordinate system actually improves held-out scalar or trajectory prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4aa9de7390989b544c763b51489c07af368dc697f784afaebf0352bd5ae11b62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37282.27,
+      "usage_known": true,
+      "prompt_tokens": 24087,
+      "cached_tokens": 9344,
+      "completion_tokens": 1392
+    }
+  ]
+}

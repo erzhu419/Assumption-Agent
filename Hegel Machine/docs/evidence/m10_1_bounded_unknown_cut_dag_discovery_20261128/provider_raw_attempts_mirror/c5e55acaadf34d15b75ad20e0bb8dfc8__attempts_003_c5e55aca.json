@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c5e55acaadf34d15b75ad20e0bb8dfc8",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Fixed_TwoStage_Modular_Online__conf_m101_b01_batch_08__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:07:25.254718+00:00",
+  "ended_at_utc": "2026-11-28T10:07:56.307638+00:00",
+  "request_sha256": "a55a0101f1b3307d1250c14918f36762d29031e8970bd8d44c3d37a8037ae8a7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21545,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18963,
+    "cached_tokens": 9344,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as n,pickle\\nfrom scipy.spatial.distance import cdist\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study'];n.set_printoptions(precision=5,suppress=True)\\ndef aff(x):return n.c_[n.ones(len(x)),x]\\ndef poly(x):\\n i,j=n.triu_indices(4); return n.c_[aff(x),x[:,i]*x[:,j]]\\ndef fit(p,fn,key):return n.linalg.lstsq(fn(p['u']),p[key],rcond=None)[0]\\na=s['panel_a']; u=a['u'];v=a['v'];cs=aff(u); keep=n.ones(len(u),bool)\\nfor _ in range(6):\\n w=n.linalg.lstsq(cs[keep],v[keep],rcond=None)[0];r=n.linalg.norm(cs@w-v,axis=1);keep=r<=max(.002,3*n.median(r))\\nprint('calibration',w,'residual quantiles',n.quantile(r,[0,.25,.5,.75,.85,.9,.95,1]),'kept',sum(keep));print('time/tel/summary',s['eval_times'],s['telemetry_vec'],s['train']['summary']);\\nx=s['train']['x']; z=(x-w[0])@n.linalg.inv(w[1:]); y=n.c_[s['train']['y'],s['train']['traj']];\\nfreqs=[.5,.75,1,1.25,1.5,2,2.5,3]\\nfs={'aff':aff,'poly':poly,'aff+cubic':lambda u:n.c_[aff(u),u**3],'poly+cubic':lambda u:n.c_[poly(u),u**3],'separate cubic':lambda u:n.c_[aff(u),u*u,u**3],'tanh':lambda u:aff(n.tanh(u)),'tanh+poly':lambda u:n.c_[poly(u),n.tanh(u)]}\\nfor f in freqs:fs[f'harm {f}']=lambda u,f=f:n.c_[aff(u),n.sin(f*u),n.cos(f*u)]\\nzs={'raw':x,'cal':z,'direct':aff(x)@w};outputs={}\\nfor pk in ['panel_a','panel_b','panel_c']:\\n p=s[pk]; u=p['u'];print(pk,'input/output ranges',u.min(),u.max(),[(k, v.min(),v.max()) for k,v in p.items() if k!='u']);\\n if pk=='panel_a':continue\\n for key in p:\\n  if key=='u':continue\\n  v=p[key]; scores={}\\n  for name,f in fs.items():\\n   d=f(u);h=d@n.linalg.pinv(d);e=(v-h@v)/n.maximum(.00001,1-n.diag(h))[:,None];scores[name]=(n.mean(abs(e)),n.mean(abs(v-h@v)))\\n  top=sorted(scores,key=scores.get)[:6];print(pk,key,[(k,scores[k]) for k in top]);\\n  for fn in ['aff',*top[:2]]:\\n   f=fs[fn];q=fit(p,f,key);zs[pk+key+fn]=f(z)@q\\n\\ndef cv(d,kernel=False):\\n vals=[]\\n for it in range(4):\\n  te=n.arange(52,72) if it==0 else n.random.default_rng(it).permutation(72)[:20];tr=n.setdiff1d(n.arange(72),te)\\n  if kernel:pred=d[n.ix_(te,tr)]@n.linalg.solve(d[n.ix_(tr,tr)]+.01*n.eye(len(tr)),y[tr]-y[tr].mean(0))+y[tr].mean(0)\\n  else:pred=d[te]@n.linalg.solve(d[tr].T@d[tr]+.02*n.eye(d.shape[1]),d[tr].T@y[tr]);\\n  e=abs(pred-y[te]); vals.append([e[:,0].mean(),e[:,1:].mean()]);\\n return n.array(vals)\\nfor k,u in zs.items():\\n r=cdist(u/u.std(0),u/u.std(0),'sqeuclidean'); sc=[cv(aff(u)),cv(poly(u)),cv(n.exp(-r/8),True),cv(n.exp(-r/25),True)];print(k,'CV 52 & mean',[(a[0].round(4).tolist(),a.mean(0).round(4).tolist()) for a in sc]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine auxiliary panel transfer → H2 identify nonlinear panel operators and evaluate downstream fingerprints; prior gate y/traj MAE 0.141765/0.053418.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Separate calibration outliers from operator curvature, and compare recovered coordinates on common held-out rows. This identifies which operators warrant exact reconstruction and whether an input-only baseline can meet either tolerance.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6e1c130b6a4453a41a7bb80171781bfe792ffc235c24ed8d9c6083f2cb11409d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33768.77,
+      "usage_known": true,
+      "prompt_tokens": 18963,
+      "cached_tokens": 9344,
+      "completion_tokens": 1252
+    }
+  ]
+}

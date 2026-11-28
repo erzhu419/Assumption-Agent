@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1903e6098e4e45ff9aae8378a3234436",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:45.309868+00:00",
+  "ended_at_utc": "2026-11-28T09:43:10.850636+00:00",
+  "request_sha256": "0306eeeb234e4e6b96ea4a98321b86303b1c68c0fa5042f056b17e887a1b45a6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70248,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39071,
+    "cached_tokens": 9344,
+    "completion_tokens": 1020
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/b05_verify.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x,y,t=(tr[k] for k in ('x','y','traj')); tm=s['eval_times']; ids=np.arange(len(x)); cal=m._calibrate(s['panel_a'],x)\\nhigh=np.argsort(np.max(abs(cal),axis=1))[-16:]; rng=np.random.default_rng(148)\\nfolds=[('52/20',ids[52:]),('56/16',ids[56:]),('high-amplitude',high)]+[(f'random-{k}',j) for k,j in enumerate(np.array_split(rng.permutation(len(x)),4))]\\nmetrics=[]\\nfor name,j in folds:\\n i=np.setdiff1d(ids,j); sub=dict(s,train={'x':x[i],'y':y[i],'traj':t[i],'summary':np.array([y[i].mean(),y[i].std(),t[i,-1].mean(),t[i,-1].std()])},test={'x':x[j]}); pred=m.solve_batch(sub)\\n ym=np.mean(abs(pred['y_hat']-y[j])); err=abs(pred['state_pred']-t[j]); met=[ym,err.mean(),err.mean(0).max(),err[:,-1].mean()]; metrics.append(met)\\n def basis(r): return -np.expm1(-tm[:,None]*r)\\n def residual(r):\\n  b=basis(r); return (b@m._ls(b,t[i].T)-t[i].T).ravel()\\n r=least_squares(residual,[1.8,.4],bounds=([.7,.05],[4.,.65])).x; b=np.linalg.qr(basis(r))[0]; err2=abs(pred['state_pred']@b@b.T-t[j]); print(name,'scalar, trajectory, worst horizon, endpoint MAE',np.round(met,6),'projected trajectory/worst horizon',np.round([err2.mean(),err2.mean(0).max()],6))\\nprint('WORST scalar, trajectory, horizon, endpoint MAE',np.round(np.max(metrics,axis=0),6)); assert np.max(metrics)<.038\\nq=m.solve_batch(s); assert all(isinstance(v,np.ndarray) for v in q.values()); assert np.allclose(q['diagnostics_vec'],[q['y_hat'].mean(),q['y_hat'].std(),q['state_pred'][:,-1].mean(),q['state_pred'][:,-1].std()],atol=1e-12,rtol=0)\\nPY\\npython3 -I /tmp/b05_verify.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated quadratic → H2 inverse panel A, shared sinusoidal panel B, and two scalar cross-products; exploratory worst-slice MAE was 0.01127 scalar and 0.01070 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Constrain the trajectory to two fitted exponential modes\",\n      \"rejected_reason\": \"Do not promote on in-sample fit alone; compare held-out trajectory and worst-horizon errors first.\"\n    }\n  ],\n  \"rationale\": \"Test the exact delivered module in isolation on the required split, shuffled folds, and high-amplitude inputs. Measure horizon and endpoint errors separately so an aggregate pass cannot hide a trajectory failure; change the time model only if the fold-fitted projection improves the bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "193e06203565e5d132365ed46911eb316e2026c670bc9a475688ae5b8553d015",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29207.02,
+      "usage_known": true,
+      "prompt_tokens": 39071,
+      "cached_tokens": 9344,
+      "completion_tokens": 1020
+    }
+  ]
+}

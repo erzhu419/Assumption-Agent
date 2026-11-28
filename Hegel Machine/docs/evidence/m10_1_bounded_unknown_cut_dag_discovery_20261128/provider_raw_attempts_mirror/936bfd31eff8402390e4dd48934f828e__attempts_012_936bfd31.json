@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "936bfd31eff8402390e4dd48934f828e",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:59:20.666838+00:00",
+  "ended_at_utc": "2026-11-28T09:59:53.549461+00:00",
+  "request_sha256": "f4b09028d4799b541e1d35c120cc34dd00402b852c37e1866dd508f7c402dce7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 90371,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46810,
+    "cached_tokens": 9344,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/confirm08.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; y=tr['y']; t=tr['traj']; n=len(y); X=tr['x']; z,b,c,d,a,opp=[q[:n] for q in m._blocks(s)]; p=z*np.roll(b,1,axis=1); dd=(d*d).sum(1); cp=(c*np.roll(p,3,axis=1)).sum(1); bp=(b*p).sum(1); dx=((d*X)**2).sum(1)\\nbase=np.c_[m._aff(b),a,opp]; saved=np.c_[base,d,dx,cp,b[:,3]*np.exp(-1.7*b[:,3]**2),bp,z[:,2]**3]\\nmods={'saved':saved,'rat_simple':np.c_[m._aff(b),a,opp/(1+.2*dd**2)],'rat_d':np.c_[base,d,opp/(1+.2*dd**2),dd,cp,bp],'rat_d05':np.c_[base,d,opp/(1+.5*dd**2),dd,cp,bp],'rat_d01':np.c_[base,d,opp/(1+.1*dd**2),dd,cp,bp],'rat_c':np.c_[base,c,opp/(1+.5*dd**2),cp,bp,z[:,2]**3],'rat_small':np.c_[base,opp/(1+.5*dd**2),np.sin(1.7*c[:,1]),bp,z[:,2]**3]}\\ng=np.c_[m._aff(b),z,a]; gs={'saved':g,'with_d':np.c_[g,d],'with_c':np.c_[g,c],'with_cd':np.c_[g,c,d],'cyclic_terms':np.c_[g,p[:,:3]],'minimal':np.c_[m._aff(b),a],'cyclic_dd':np.c_[g,d,dd]}\\nrng=np.random.default_rng(18403); ids=np.arange(n); chronological=[(ids[:i],ids[i:]) for i in (52,56)]; shuffled=[(np.setdiff1d(ids,j),j) for k in range(5) for j in np.array_split(rng.permutation(n),4)]; out=np.argsort(np.linalg.norm(z,axis=1)); edge=[(out[:-12],out[-12:])]; folds=chronological+shuffled+edge\\nfor targets,models in [(y,mods),(t,gs),(t[:,-1],gs)]:\\n for key,f in models.items():\\n  e=np.array([np.mean(abs(f[iv]@m._fit(f[it],targets[it])-targets[iv])) for it,iv in folds]); print(key,'ordered',e[:2].round(5),'shuffled mean/max',np.round([e[2:-1].mean(),e[2:-1].max()],5),'boundary',round(e[-1],5))\\nu,v=(s['panel_a'][k] for k in ('u','v')); r=m._aff(u); ix=np.argsort(np.linalg.norm(v-r@m._fit(r,v),axis=1))[:-3]; uu=u[ix]; vv=v[ix]; cc=np.roll(uu,-1,axis=1); ds=lambda k:np.stack([np.ones_like(uu),uu,cc,k,uu**3],axis=-1)\\nfor label,k in [('cyclic_product',uu*cc),('neighbor_square',cc**2)]:\\n f=ds(k); pred=np.column_stack([f[:,j]@m._fit(f[:,j],vv[:,j]) for j in range(4)]); print('calibration',label,'inlier RMS',np.sqrt(np.mean((pred-vv)**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/confirm08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated cyclic interactions → H2: use a rational scalar correction if it improves fresh shuffled and boundary slices; the saved solver scores 0.03259 on 52/20 and 0.03626 on its worst tested slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the rational correction on chronological scores alone\",\n      \"rejected_reason\": \"Those splits helped identify the correction; fresh shuffled splits and a high-amplitude slice will show whether the change is worth making.\"\n    }\n  ],\n  \"rationale\": \"Compare a short list of fixed corrections on fresh splits to test whether the improved scalar margin survives resampling. Evaluate trajectory and terminal-state errors separately, and check the labeled calibration bases directly rather than relying on schema validation to resolve the earlier indexing mistake.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b2da76a6598a67ccfb5a2dc9a2deebb06418960267d64a59d9b5a0f81e2396a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35516.6,
+      "usage_known": true,
+      "prompt_tokens": 46810,
+      "cached_tokens": 9344,
+      "completion_tokens": 1297
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a21dd59189e94c1290d3042964039fc5",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:12.238501+00:00",
+  "ended_at_utc": "2026-11-28T09:44:40.423779+00:00",
+  "request_sha256": "6dac1e29a2273c8b10cab7a61e948ec980c72e6f68317001e07eb710ed602546",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31916,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22734,
+    "cached_tokens": 9344,
+    "completion_tokens": 1194
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/scan.py <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef design(*xs): return np.column_stack([np.ones(len(xs[0])),*xs])\\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef fit(u,v,f,robust=False):\\n a=f(u); w=np.ones(len(u));\\n for _ in range(12 if robust else 1):\\n  b=ls(a*w[:,None],v*w[:,None]); d=np.linalg.norm(a@b-v,axis=1); w=np.sqrt(np.minimum(1,2.5*np.median(d)/np.maximum(d,1e-12)))\\n return lambda x:f(x)@b\\np=s['panel_a']; print('A matrix',ls(design(p['u']),p['v'])); print('A residual',np.round(np.sort(np.linalg.norm(design(p['u'])@ls(design(p['u']),p['v'])-p['v'],axis=1)),5))\\nA=fit(p['u'],p['v'],design,True); Ai=fit(p['v'],p['u'],design,True)\\np=s['panel_b'];B=fit(p['u'],p['v'],design);Bi=fit(p['v'],p['u'],design)\\np=s['panel_c'];C=fit(p['u'],p['v1'],lambda x: design(np.sign(x)*(-np.expm1(-1.8*abs(x)))));D=fit(p['u'],p['v2'],lambda x:design(x,x*x/np.sqrt(1+.389*x*x)))\\nx=s['train']['x']; t=s['train']['traj']; y=s['train']['y']; T=np.c_[y,t]\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef quad(a): i,j=np.triu_indices(a.shape[1]);return a[:,i]*a[:,j]\\ndef score(g, ridge):\\n h=g[:52];d=np.linalg.norm(h,axis=0);d=np.where(d>1e-10,d,1);g=g/d; h=g[:52]; w=np.linalg.solve(h.T@h+np.diag(np.r_[1e-10,np.full(h.shape[1]-1,ridge)]),h.T@T[:52]); r=abs(g[52:]@w-T[52:]);return r[:,0].mean(),r[:,1:].mean()\\nroots={'x':x,'A':A(x),'Ai':Ai(x),'B':B(x),'Bi':Bi(x),'BA':B(A(x)),'BAi':B(Ai(x)),'BiA':Bi(A(x)),'BiAi':Bi(Ai(x)),'AB':A(B(x)),'AiB':Ai(B(x))}; out=[]\\nfor nm,a in roots.items():\\n c,d=C(a),D(a)\\n opts={'lin':design(x),'poly':design(x,quad(a)), 'c':design(x,c),'d':design(x,d),'cd':design(x,c,d),'qc':design(x,c,quad(c)), 'qd':design(x,d,quad(d)), 'cdX':design(x,c,d,cross(c,d)),'cX':design(x,c,cross(a,c)), 'dX':design(x,d,cross(a,d)), 'cdQ':design(x,c,d,quad(a),quad(c),quad(d)), 'all':design(x,c,d,quad(a),quad(c),quad(d),cross(a,c),cross(a,d),cross(c,d)),'cD':design(x,c,D(c),cross(c,D(c))), 'dC':design(x,d,C(d),cross(d,C(d)))}\\n for name,g in opts.items():\\n  for r in (1e-7,1e-4,.003,.03):out.append((*score(g,r),nm,name,r))\\nfor idx in (0,1,2):\\n print('leaders',idx);print('\\\\n'.join(str(a) for a in sorted(out,key=lambda v:v[idx] if idx<2 else max(v[:2]))[:18]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/scan.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived operator order -> compare calibrated panel compositions and quadratic readouts; archived 56/16 MAEs were 0.161630 scalar and 0.159361 trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use trajectory alone to infer the scalar\",\"rejected_reason\":\"Terminal-state polynomials gave scalar MAE above 0.42 on the 52/20 split.\"}],\"rationale\":\"Test whether calibration direction and operator order explain the error before adding a nonmechanistic surrogate. Rank scalar and trajectory fits separately so a strong result in one cannot mask a failed fit in the other.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ccae999411fa621ce0cc7137d92e330189110d1afef9d195dffb255000e79561",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33402.71,
+      "usage_known": true,
+      "prompt_tokens": 22734,
+      "cached_tokens": 9344,
+      "completion_tokens": 1194
+    }
+  ]
+}

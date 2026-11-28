@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "883d0e37808b431bb41d4f789e18f5f0",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_07__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_07__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:13.963846+00:00",
+  "ended_at_utc": "2026-11-28T09:45:34.942957+00:00",
+  "request_sha256": "fbf24a5b164c86867713490fb6f75af59d856b25ae930294361defd542b12682",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21483,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18584,
+    "cached_tokens": 9344,
+    "completion_tokens": 658
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; for i in 01 03 04 05; do echo ==== $i; sed -n '1,130p' /tmp/hegel_continual_archive/conf_m101_b04_batch_${i}_solver.py; done; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,glob,runpy\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; q=s['train']; u=s['panel_a']['u']; v=s['panel_a']['v']; A=np.c_[u,np.ones(len(u))]; ids=np.arange(len(u));\\nfor _ in range(5):\\n b=np.linalg.lstsq(A[ids],v[ids],rcond=None)[0]; r=np.linalg.norm(A@b-v,axis=1); ids=np.argsort(r)[:40]\\nprint('panel A trimmed coefficients and sorted residuals',b,np.sort(r)); print('trajectory singular values',np.linalg.svd(q['traj'],compute_uv=False)); print('input ranges',q['x'].min(0),q['x'].max(0),s['test']['x'].min(0),s['test']['x'].max(0));\\ns['train']={k:(v[:52] if k!='summary' else np.array([q['y'][:52].mean(),q['y'][:52].std(),q['traj'][:52,-1].mean(),q['traj'][:52,-1].std()])) for k,v in q.items()}; s['test']={'x':q['x'][52:]};\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  p=runpy.run_path(f)['solve_batch'](s); print(f.split('/')[-1],*[np.abs(p[k]-q[t][52:]).mean() for k,t in [('y_hat','y'),('state_pred','traj')]])\\n except Exception as e: print(f,repr(e))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Contaminated calibration and smooth trajectories → test trimmed affine calibration, trajectory rank, and archived operators on the 52/20 split; MAE not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit all eight horizons independently\",\"rejected_reason\":\"The trajectories appear highly correlated; singular values will show whether a shared temporal representation is justified.\"}],\"rationale\":\"Trimmed residuals distinguish sparse panel contamination from missing nonlinear terms. Running the archived operators on the prescribed split tests whether any transfer as written or only supply reusable components.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "cf320b13dc3edb5294a8bd918882496f3eb9c92c29fb2e0f645c2593340ffb41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20941.02,
+      "usage_known": true,
+      "prompt_tokens": 18584,
+      "cached_tokens": 9344,
+      "completion_tokens": 658
+    }
+  ]
+}

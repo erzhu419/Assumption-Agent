@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c95177a2037944dabd91306d533e0c90",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:25.527492+00:00",
+  "ended_at_utc": "2026-11-28T09:29:57.225216+00:00",
+  "request_sha256": "83d05a655bca8388e6774f4408192ca2b67211b1c3d5463ad822fe09d7b07260",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60330,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32979,
+    "cached_tokens": 9344,
+    "completion_tokens": 1223
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']\\nidx = np.arange(len(tr['x']))\\n\\ndef predict(study):\\n    p = solver.solve_batch(study)\\n    n = len(study['test']['x'])\\n    y, t, d = (p[k] for k in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    for a, shape in [(y, (n,)), (t, (n, len(s['eval_times']))), (d, (4,))]:\\n        assert isinstance(a, np.ndarray) and a.shape == shape and np.isfinite(a).all(), shape\\n    np.testing.assert_array_equal(d, [y.mean(), y.std(), t[:, -1].mean(), t[:, -1].std()])\\n    return y, t\\n\\npredict(s)\\nz = solver._calibrate(s['panel_a'], tr['x'])\\nhigh = np.argsort(np.linalg.norm(z, axis=1))[-16:]\\nsplits = [('52/20', idx[:52], idx[52:]), ('56/16', idx[:56], idx[56:])]\\nfor i, hold in enumerate(np.array_split(np.random.default_rng(51).permutation(idx), 4)):\\n    splits.append((f'fold-{i+1}', np.setdiff1d(idx, hold), hold))\\nsplits.append(('high-radius', np.setdiff1d(idx, high), high))\\nmetrics = []\\nfor label, a, b in splits:\\n    y, t = predict(dict(s, train=dict(tr, **{k: tr[k][a] for k in ('x', 'y', 'traj')}), test={'x': tr['x'][b]}))\\n    e = np.abs(t - tr['traj'][b])\\n    g = [np.abs(y - tr['y'][b]).mean(), e.mean(), e[:, -1].mean(), e.mean(0).max()]\\n    metrics.append(g)\\n    print(label, 'MAE y / trajectory / final / worst horizon:', np.round(g, 6))\\nassert np.max(metrics) <= 0.038, metrics\\n\\nu, v = (s['panel_a'][k] for k in ('u', 'v'))\\na = np.c_[np.ones(len(u)), u]\\nr = np.roll(u, -1, axis=1)\\nterms = np.stack((np.ones_like(u), u, r, u*r, r**3), axis=1)\\nkeep = np.arange(len(u))\\nfor _ in range(3):\\n    err = v - a @ solver._fit(a[keep], v[keep])\\n    keep = np.argsort(np.linalg.norm(err, axis=1))[:45]\\nfor _ in range(3):\\n    c = np.column_stack([solver._fit(terms[keep, :, i], v[keep, i]) for i in range(4)])\\n    err = v - np.einsum('nki,ki->ni', terms, c)\\n    keep = np.argsort(np.linalg.norm(err, axis=1))[:45]\\naffine_err = v[keep] - a[keep] @ solver._fit(a[keep], v[keep])\\nrms = lambda x: np.sqrt(np.mean(x*x))\\nprint('Same 45 panel-A rows: affine RMS', rms(affine_err), 'cyclic RMS', rms(err[keep]))\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 trimmed affine calibration → H2 cyclic bilinear–cubic calibration with a quadratic–tanh readout; measured worst-slice MAEs are 0.02638 for y and 0.02356 for trajectories, with worst-horizon MAE 0.02976.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the saved solver with a panel-C or ridge model.\",\n      \"rejected_reason\": \"Neither alternative improved the worst trajectory slice and worst horizon together.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved solver through its public entry point in isolated Python. A contract or MAE failure would require a fix before submission. Compare affine and cyclic residuals on the same panel rows to determine whether the calibration improvement comes from the nonlinear basis rather than a different inlier set.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "44d231b268f6b548af9205b781186ae5a89f81766ba469049f715684682a284c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34310.15,
+      "usage_known": true,
+      "prompt_tokens": 32979,
+      "cached_tokens": 9344,
+      "completion_tokens": 1223
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48315698453b429ab1744200d8a05fb3",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:15.226340+00:00",
+  "ended_at_utc": "2026-11-28T09:29:52.941434+00:00",
+  "request_sha256": "01898fd5dadc7477dc611a89497f4757a5c94777c1b365511800b8341bd54893",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51173,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28682,
+    "cached_tokens": 9344,
+    "completion_tokens": 1546
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict responses using calibrated coordinates and panel-supported interactions.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _affine(u):\\n    return np.column_stack((np.ones(len(u)), u))\\n\\n\\ndef _fit(d, v):\\n    return np.linalg.lstsq(d, v, rcond=None)[0]\\n\\n\\ndef _design(u, terms):\\n    return np.column_stack([u[:, term].prod(axis=1) for term in terms])\\n\\n\\ndef _calibration(study):\\n    a, b = study['panel_a'], study['panel_b']\\n    d, v = _affine(a['u']), a['v']\\n    keep = np.ones(len(d), dtype=bool)\\n    # Trim high-residual rows while retaining enough points for the initial fits.\\n    for _ in range(8):\\n        residual = np.linalg.norm(d @ _fit(d[keep], v[keep]) - v, axis=1)\\n        keep = residual < max(0.004, np.partition(residual, 34)[34])\\n    return _fit(d[keep], v[keep]), _fit(_affine(b['u']), b['v'])\\n\\n\\ndef _latent(x, a, b):\\n    return _affine(np.linalg.solve(a[1:].T, (x - a[0]).T).T) @ b\\n\\n\\ndef _terms(panel):\\n    dim = panel['u'].shape[1]\\n    linear = [()] + [(i,) for i in range(dim)]\\n    pairs = list(combinations_with_replacement(range(dim), 2))\\n    weights = _fit(_design(panel['u'], linear + pairs), panel['v1'])[len(linear):]\\n    support = [p for p, w in zip(pairs, weights) if np.linalg.norm(w) > 0.01]\\n    cubic = sorted({tuple(sorted((*p, i))) for p in support for i in range(dim)})\\n    return linear + support + cubic\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    a, b = _calibration(study)\\n    terms = _terms(study['panel_c'])\\n    basis = np.linalg.svd(train['traj'], full_matrices=False)[2][:2]\\n    targets = np.column_stack((train['y'], train['traj'] @ basis.T))\\n    coef = _fit(_design(_latent(train['x'], a, b), terms), targets)\\n    pred = _design(_latent(study['test']['x'], a, b), terms) @ coef\\n    y_hat = pred[:, 0]\\n    state_pred = pred[:, 1:] @ basis\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\ntr = s['train']; x = tr['x']; idx = np.arange(len(x))\\nu = m._latent(x, *m._calibration(s))\\nradial = np.argsort(np.linalg.norm(x, axis=1))\\naxes = np.argsort(np.max(np.abs((u-u.mean(0))/u.std(0)), axis=1))\\nsplits = [('tail52', idx[:52], idx[52:]), ('tail56', idx[:56], idx[56:]), ('radial', radial[:52], radial[52:]), ('latent_axes', axes[:52], axes[52:])]\\nfor i, held in enumerate(np.array_split(np.random.default_rng(2027).permutation(idx), 4)):\\n    splits.append((f'fold{i}', np.setdiff1d(idx, held), held))\\nmetrics = []\\nfor name, fit, held in splits:\\n    sub = dict(s, train={k: tr[k][fit] for k in ('x','y','traj')}, test={'x':x[held]})\\n    o = m.solve_batch(sub)\\n    state = abs(o['state_pred']-tr['traj'][held])\\n    scores = (abs(o['y_hat']-tr['y'][held]).mean(), state.mean(), state.mean(axis=0).max())\\n    print(name, 'scalar / trajectory / worst horizon MAE:', *(f'{v:.8f}' for v in scores))\\n    metrics.append(scores)\\nassert np.all(np.asarray(metrics) <= 0.038), metrics\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted raw cubic) -> H2 (calibrated, panel-supported cubic with two temporal modes): the challenger achieved 0.01059 worst-slice scalar MAE and 0.00792 worst-horizon MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep unrestricted quadratic terms in calibrated coordinates\",\n      \"rejected_reason\": \"Their estimated coefficients were near the noise floor, and retaining them more than doubled radial worst-horizon error.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact model because it improved both boundary metrics and reduced maximum test leverage from 3.44 to 1.84. Run the public validator and the measured holdouts against the exact new artifact in isolated Python; a discrepancy would catch a transcription or integration error before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6038c869e2a84e7ae92c895bcc84d6f5099dbf4a9e45a4c6aaec5e9bb8c2ee9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40328.34,
+      "usage_known": true,
+      "prompt_tokens": 28682,
+      "cached_tokens": 9344,
+      "completion_tokens": 1546
+    }
+  ]
+}

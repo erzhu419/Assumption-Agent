@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ccead09f9c24c9a88229fe44180060b",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:44.253519+00:00",
+  "ended_at_utc": "2026-11-28T09:53:11.055858+00:00",
+  "request_sha256": "78b44bfdee3e40f820c31348f66f2a7fa2bdef459de597efd9d9d38c24e32834",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 29157,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21398,
+    "cached_tokens": 9344,
+    "completion_tokens": 1031
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat /tmp/hegel_continual_archive/conf_m101_a04_batch_0{4,5}_solver.py; cat >/tmp/probe.py <<'PY'\\nimport numpy as np,pickle,itertools,glob,importlib.util\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=52\\nbias=lambda u:np.c_[np.ones(len(u)),u]\\ndef poly(u,d): return np.column_stack([np.prod(u[:,p],axis=1) for j in range(d+1) for p in itertools.combinations_with_replacement(range(u.shape[1]),j)])\\ndef fit(a,b):return np.linalg.lstsq(a,b,rcond=1e-10)[0]\\nfor pn in ('panel_a','panel_b','panel_c'):\\n p=s[pn];u=p['u'];\\n for k,v in p.items():\\n  if k=='u':continue\\n  print(pn,k)\\n  for d in (1,2,3):\\n   f=poly(u,d); pred=np.array([f[i]@fit(np.delete(f,i,0),np.delete(v,i,0)) for i in range(len(u))]);print('poly',d,np.sqrt(np.mean((pred-v)**2,axis=0)))\\n  for name,fn in [('sin',lambda u,w:np.sin(w*u)),('cos',lambda u,w:np.cos(w*u)),('sincos',lambda u,w:np.c_[np.sin(w*u),np.cos(w*u)]),('tanh',lambda u,w:np.tanh(w*u)),('rational',lambda u,w:u/(1+w*u*u)),('sin2',lambda u,w:np.c_[np.sin(w*u),np.sin(2*w*u)])]:\\n   for base in (False,True):\\n    def calc(w):\\n     f=bias(np.c_[u,fn(u,w)] if base else fn(u,w));return np.mean((f@fit(f,v)-v)**2)\\n    ws=np.linspace(.1,8,80);i=np.argmin([calc(w) for w in ws]);r=minimize_scalar(calc,bounds=(ws[max(i-1,0)],ws[min(i+1,79)]),method='bounded'); print(name,base,round(r.x,5),round(r.fun**.5,6))\\n  if pn=='panel_a':\\n   mask=np.ones(len(u),bool)\\n   for _ in range(8):\\n    coef=fit(bias(u[mask]),v[mask]);e=np.linalg.norm(bias(u)@coef-v,axis=1);mask=e<max(5*np.median(e),.0006)\\n   print('robust',coef,'inlier count',sum(mask),'median',np.median(e));\\nt=s['train']; ss=dict(s,train={k:v[:n] if k!='summary' else v for k,v in t.items()},test={'x':t['x'][n:]});\\nfor fn in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n spec=importlib.util.spec_from_file_location('a',fn);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\n try:\\n  p=m.solve_batch(ss);print(fn[-12:],np.mean(abs(p['y_hat']-t['y'][n:])),np.mean(abs(p['state_pred']-t['traj'][n:])))\\n except Exception as e:print(str(e))\\nprint('traj sv',np.linalg.svd(t['traj'],compute_uv=False))\\nPY\\npython3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: robust calibration -> H2: identify active operators by panel fits and archived-model transfer; held-out MAE is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Panel residuals distinguish affine from nonlinear operators; archive transfer and trajectory singular values determine whether to reuse an existing mapping or fit a new low-dimensional mechanism.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a1f01c596003f40c5e92c4325619f94370781303735a2de9d3e893333cc7a58c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29405.1,
+      "usage_known": true,
+      "prompt_tokens": 21398,
+      "cached_tokens": 9344,
+      "completion_tokens": 1031
+    }
+  ]
+}

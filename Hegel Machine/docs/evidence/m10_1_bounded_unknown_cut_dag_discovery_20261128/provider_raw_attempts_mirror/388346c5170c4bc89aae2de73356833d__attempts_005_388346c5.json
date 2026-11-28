@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "388346c5170c4bc89aae2de73356833d",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:33.627420+00:00",
+  "ended_at_utc": "2026-11-28T09:49:08.260062+00:00",
+  "request_sha256": "0f09ff407602587f2c1ac8a195d175f4f7979b6691c24b8254d2381696c0bf23",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24002,
+    "cached_tokens": 9344,
+    "completion_tokens": 1371
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe6.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nfrom itertools import combinations, combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef D(*a): return np.column_stack((np.ones(len(a[0])),*a))\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef pairs(x): return np.column_stack([x[:,i]*x[:,j] for i,j in combinations(range(4),2)])\\ndef calbasis(x,kind):\\n if kind=='affine': return D(x)\\n if kind=='cubic': return D(x,x**3)\\n if kind=='cross': return D(x,pairs(x),x**3)\\n if kind=='quadratic': return D(x,pairs(x),x**2)\\n return D(x,pairs(x),x**2,x**3)\\ndef calfit(kind):\\n p=s['panel_a']; u,v=p['u'],p['v']; g=calbasis(u,kind); ix=np.arange(len(u)); rng=np.random.default_rng(6); best=(np.inf,None)\\n for it in range(64):\\n  k=ix if it==0 else rng.choice(len(u),len(u)-10,replace=False)\\n  for j in range(6):\\n   c=fit(g[k],v[k]); r=np.sum((g@c-v)**2,axis=1); k=np.argsort(r)[:45]\\n  c=fit(g[k],v[k]); loss=np.mean((g[k]@c-v[k])**2)**.5\\n  if loss<best[0]: best=(loss,c)\\n return best\\nfs={'linear':lambda u,k:D(u),'quadratic':lambda u,k:D(u,pairs(u),u*u),'pairs':lambda u,k:D(pairs(u)),'archpair':lambda u,k:D(pairs(u)[:,[0,2,3,5]]),'square':lambda u,k:D(u,u*u),'cubic':lambda u,k:D(u,u**3),'sin':lambda u,k:D(np.sin(k*u)),'lin_sin':lambda u,k:D(u,np.sin(k*u)),'lin_cos':lambda u,k:D(u,np.cos(k*u)),'cos':lambda u,k:D(np.cos(k*u)),'tanh':lambda u,k:D(np.tanh(k*u)),'oddexp':lambda u,k:D(-np.sign(u)*np.expm1(-k*abs(u))),'shrink':lambda u,k:D(np.sign(u)*np.maximum(abs(u)-k,0)**1.5),'shrink_lin':lambda u,k:D(u,np.sign(u)*np.maximum(abs(u)-k,0)**1.5),'evenrat':lambda u,k:D(u,u*u/np.sqrt(1+k*u*u)),'evenrat2':lambda u,k:D(u,u*u/(1+k*u*u)),'oddrat':lambda u,k:D(u/(1+k*u*u)),'oddroot':lambda u,k:D(u/np.sqrt(1+k*u*u)),'lin_abs':lambda u,k:D(u,abs(u)),'lin_pairs':lambda u,k:D(u,pairs(u)),'pairrat':lambda u,k:D(pairs(u)/(1+k*pairs(u)**2)),'linsat':lambda u,k:D(u,np.tanh(k*u)),'lin_oddexp':lambda u,k:D(u,-np.sign(u)*np.expm1(-k*abs(u)))}\\ndef rank(u,v):\\n out=[]\\n for name,f in fs.items():\\n  def loss(k,what=0):\\n   a=f(u,k); U,S,V=np.linalg.svd(a,full_matrices=False); U=U[:,S>S[0]*1e-11]; r=v-U@(U.T@v); return np.mean((r/(1-(U*U).sum(axis=1))[:,None])**2)**.5 if what==0 else np.mean(r*r)**.5\\n  grid=np.linspace(.01,.65,25) if 'shrink' in name else np.geomspace(.01,7,32); j=np.argmin([loss(k) for k in grid]); k=minimize_scalar(loss,bounds=(grid[max(0,j-1)],grid[min(len(grid)-1,j+1)]),method='bounded').x\\n  out.append((loss(k),loss(k,1),name,k))\\n return sorted(out)\\nif __name__=='__main__':\\n for kind in ['affine','cubic','quadratic','cross','full']:\\n  e,c=calfit(kind); print('cal',kind,e); print(np.round(c,4)) if kind=='full' else None\\n for pname,key in [('panel_b','v'),('panel_c','v1'),('panel_c','v2')]:\\n  p=s[pname]; print(pname,key,rank(p['u'],p[key])[:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived operator families → H2 identify this batch’s active calibration and auxiliary maps; prior held-out MAE was 0.155371 for y and 0.122255 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the latest archived graph wholesale\",\"rejected_reason\":\"Its operator forms have not been established for the current panels.\"}],\"rationale\":\"Compare robust calibration residuals and leave-one-row-out panel errors to distinguish reusable operator forms from bases that only interpolate. If no family reaches the measurement noise, use the residuals to expand the search before fitting the downstream readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "33cf0459b8606c7ea25fcbc0f97760c8a39aea8778c0807e27e8d367a05d895d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37212.88,
+      "usage_known": true,
+      "prompt_tokens": 24002,
+      "cached_tokens": 9344,
+      "completion_tokens": 1371
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2257f9d233b743a9a92fd0b7c358d311",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Fixed_TwoStage_Modular_Online__conf_m101_a03_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:19.756325+00:00",
+  "ended_at_utc": "2026-11-28T09:25:04.238038+00:00",
+  "request_sha256": "a45be279aa6b7553f1c3409d1dee06489f4e1f797bbbc185de105104417b8055",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 33685,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23397,
+    "cached_tokens": 9344,
+    "completion_tokens": 1851
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/panel_calibration.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _parameters(panel):\\n    u, v = panel['u'], panel['v']\\n    successor = np.roll(u, -1, axis=1)\\n    design = np.stack((np.ones_like(u), u, successor, u * successor, u**3), axis=2).transpose(1, 0, 2)\\n    weights = np.ones(len(u))\\n    for _ in range(30):\\n        coef = np.array([np.linalg.lstsq(d * weights[:, None], col * weights, rcond=None)[0] for d, col in zip(design, v.T)])\\n        residual = np.linalg.norm(v.T - np.einsum('cnp,cp->cn', design, coef), axis=0)\\n        scale = max(1e-12, 2 * np.median(residual))\\n        weights = np.sqrt(np.minimum(1, scale / np.maximum(residual, 1e-12)))\\n    good = np.argsort(residual)[:len(u)-3]\\n    return np.array([np.linalg.lstsq(d[good], col[good], rcond=None)[0] for d, col in zip(design, v.T)]).T\\n\\n\\ndef _forward(u, coef):\\n    offset, linear, cross, pair, cubic = coef\\n    successor = np.roll(u, -1, axis=1)\\n    return offset + linear*u + cross*successor + pair*u*successor + cubic*u**3\\n\\n\\ndef _invert(v, coef):\\n    offset, linear, cross, pair, cubic = coef\\n    i = np.arange(v.shape[1]); j = (i + 1) % len(i)\\n    affine = np.diag(linear); affine[i, j] = cross\\n    u = np.linalg.solve(affine, (v-offset).T).T\\n    jac = np.zeros((len(v), len(i), len(i)))\\n    for _ in range(30):\\n        r = _forward(u, coef) - v\\n        if np.max(np.abs(r)) < 1e-11:\\n            break\\n        jac[:, i, i] = linear + pair*u[:, j] + 3*cubic*u*u\\n        jac[:, i, j] = cross + pair*u\\n        step = np.linalg.solve(jac, r[..., None])[..., 0]\\n        alpha = np.ones((len(u), 1))\\n        trial = u - step\\n        for _ in range(16):\\n            worse = np.linalg.norm(_forward(trial, coef) - v, axis=1) > np.linalg.norm(r, axis=1)\\n            if not worse.any():\\n                break\\n            alpha[worse] *= .5\\n            trial = u - alpha*step\\n        u = trial\\n    return u\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -16\\nPYTHONPATH=/tmp python3 - <<'PY'\\nimport itertools,pickle,runpy\\nimport numpy as np\\nfrom panel_calibration import _affine,_parameters,_forward,_invert\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; b=s['panel_b']; ac=_parameters(a); print('Panel A coefficients',ac.round(6)); print('Largest row residuals',np.sort(np.linalg.norm(_forward(a['u'],ac)-a['v'],axis=1))[-6:]); print('Panel A leave-one-out median/max clean row error',end=' ')\\nerrs=[]\\nfor i in range(len(a['u'])):\\n m=np.arange(len(a['u']))!=i; cf=_parameters({k:v[m] for k,v in a.items()}); errs.append(np.linalg.norm(_forward(a['u'][i:i+1],cf)-a['v'][i:i+1]))\\nprint(np.median(errs),np.sort(errs)[-4]); bc=np.linalg.lstsq(_affine(b['u']),b['v'],rcond=None)[0]; print('B forward max residual',np.max(abs(_affine(b['u'])@bc-b['v']))); run=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; xall=np.vstack([x,s['test']['x']]); ops={'A-':lambda x:_invert(x,ac),'A+':lambda x:_forward(x,ac),'B-':lambda x:np.linalg.solve(bc[1:].T,(x-bc[0]).T).T,'B+':lambda x:_affine(x)@bc}; idx=np.arange(len(x)); folds=[idx[52:]]+list(np.array_split(np.random.default_rng(810).permutation(idx),6)); res=[]\\nfor keys in [()]+[(k,) for k in ops]+[k for k in itertools.permutations(ops,2) if k[0][0]!=k[1][0]]:\\n zall=xall; roundtrip=0\\n for k in keys:\\n  nex=ops[k](zall)\\n  if k=='A-': roundtrip=np.max(abs(_forward(nex,ac)-zall))\\n  zall=nex\\n z=zall[:len(x)]; metrics=[]\\n for va in folds:\\n  tr=np.setdiff1d(idx,va); o=run({'node_00':{'z':z[tr],'z_test':z[va],'y':y[tr],'traj':t[tr]}}); metrics.append([np.mean(abs(o['y_hat']-y[va])),np.mean(abs(o['state_pred']-t[va]))])\\n metrics=np.array(metrics); res.append((max(metrics.max(0)),keys,metrics[0],metrics[1:].max(0),roundtrip))\\nfor _,keys,pub,worst,rt in sorted(res): print(keys,'public',pub.round(6),'worst CV',worst.round(6),'A inverse roundtrip',rt)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense mixed-degree calibration → H2 cyclic adjacent-coordinate interaction plus diagonal cubes; the dense fit’s maximum inlier component residual is 0.000136, with sparse-fit CV pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the dense cubic basis\",\n      \"rejected_reason\": \"Most coefficients are at the noise scale, and the dense fit previously misclassified a high-leverage outlier.\"\n    },\n    {\n      \"option\": \"Assume a calibration order\",\n      \"rejected_reason\": \"The frozen sink specifies the handoff keys but not the coordinate convention; the wrong ordering is detectable on both held-out targets.\"\n    }\n  ],\n  \"rationale\": \"The fitted coefficients identify one adjacent-coordinate linear term, one adjacent product, and one diagonal cubic per output. Test that compact basis with outlier rejection and leave-one-out calibration; compare forward and inverse compositions through the unchanged sink before writing the target file.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "98e1355003b66eb9c73d274415a85029f4c4ed963a10273740e290bca11ef18a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47028.66,
+      "usage_known": true,
+      "prompt_tokens": 23397,
+      "cached_tokens": 9344,
+      "completion_tokens": 1851
+    }
+  ]
+}

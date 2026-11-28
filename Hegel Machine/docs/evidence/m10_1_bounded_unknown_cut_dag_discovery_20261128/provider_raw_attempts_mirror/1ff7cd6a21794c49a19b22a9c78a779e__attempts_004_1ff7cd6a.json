@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1ff7cd6a21794c49a19b22a9c78a779e",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a02_batch_05__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_05__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:19.679329+00:00",
+  "ended_at_utc": "2026-11-28T09:35:52.650906+00:00",
+  "request_sha256": "892fe5d899b461a776c1ed485d7515a781d7b54932007a45229bbc8440727465",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 31614,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22810,
+    "cached_tokens": 5504,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -25\\ncat > /tmp/label_probe.py <<'PY'\\nexec(open('/tmp/sink_probe.py').read().split('for label,A in')[0])\\ny=Y[:,0]\\nB=poly(z,1)\\ndef cv(D):\\n return np.array([np.mean(abs(D[j]@np.linalg.lstsq(D[i],y[i],rcond=1e-9)[0]-y[j])) for i,j in folds])\\nF={}\\nfor key,A in [('x',x),('z',z)]:\\n for i,u in enumerate(A.T):\\n  for lab,v in [('sq',u*u),('cub',u**3),('sin',np.sin(2*u)),('cos',np.cos(2*u)),('tanh',np.tanh(2*u)),('sat',u/(1+u*u)),('abs',abs(u))]:F[f'{lab}({key}{i})']=v\\nfor i,u in enumerate(x.T):\\n for j,v in enumerate(z.T):\\n  for lab,f in [('prod',u*v),('sinprod',np.sin(2*u*v)),('tanhprod',np.tanh(2*u*v)),('u*v2',u*v*v),('u2*v',u*u*v),('u*sinv',u*np.sin(2*v)),('v*sinu',v*np.sin(2*u)),('u*cosv',u*np.cos(2*v)),('v*cosu',v*np.cos(2*u))]:F[f'{lab}(x{i},z{j})']=f\\nfor key,A in [('x',x),('z',z)]:\\n for i,j in it.combinations(range(4),2):\\n  u,v=A[:,i],A[:,j]\\n  for lab,f in [('prod',u*v),('u*v2',u*v*v),('u2*v',u*u*v),('sin+',np.sin(2*(u+v))),('sin-',np.sin(2*(u-v))),('cos+',np.cos(2*(u+v))),('cos-',np.cos(2*(u-v)))]:F[f'{lab}({key}{i},{key}{j})']=f\\nM=np.column_stack(list(F.values())); names=list(F)\\nfor base in [B,np.c_[B,x],poly(z,2)]:\\n D=base.copy(); print('BASE',D.shape,np.round(cv(D),4));\\n for step in range(6):\\n  # Select only on the official training prefix by partial regression.\\n  i,j=folds[0]; Q=np.linalg.svd(D[i],full_matrices=False)[0]; R=M[i]-Q@(Q.T@M[i]); score=abs(R.T@y[i])/np.maximum(np.linalg.norm(R,axis=0),1e-12); order=np.argsort(score)[::-1]; k=order[0]; D=np.c_[D,M[:,k]]; print(step,[(names[k],round(score[k],4)) for k in order[:3]],np.round(cv(D),4))\\nprint('single candidates'); scored=[(cv(np.c_[B,v]),k) for k,v in F.items()]; print([(k,np.round(e,4)) for e,k in sorted(scored,key=lambda q:max(q[0]))[:12]])\\n# Time-shape diagnostic: a common single time curve versus a low-rank two-curve trajectory.\\nu,sv,v=np.linalg.svd(Y[:,1:],full_matrices=False); print('time rank-1 reconstruction MAE',np.mean(abs(Y[:,1:]-np.outer(u[:,0]*sv[0],v[0])),axis=0)); print('time shape (unit terminal)',v[0]/v[0,-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/label_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Mixed-only cubic and unrestricted bilinear fits -> sparse nonlinear cross-stage terms; their worst tested label MAEs were 0.07564 and 0.04692, respectively.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An unrestricted bilinear cross-stage basis is sufficient to meet the label tolerance.\",\"empirical_witness\":\"Linear mixed coordinates plus all 16 cross products yielded official label MAE 0.04448 and worst shuffled-fold MAE 0.04668, above 0.038.\",\"causal_blanket_diagnosis\":\"The calibrated edge is available, but raw bilinear terms do not capture all of the label structure; trajectory prediction already has substantial margin.\",\"sublated_pivot\":\"Retain the independent trajectory model and test sparse nonlinear transforms of individual coordinates and cross-stage terms.\",\"risk_kind\":\"algebraic_basis_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the mixed-coordinate cubic that passes the official split\",\"rejected_reason\":\"Its worst shuffled-fold label MAE is 0.07564, almost twice the tolerance.\"}],\"rationale\":\"Training-only partial regression will show whether a few nonlinear terms explain the remaining label error. If no sparse terms stand out, test nonlinear projected interactions instead. The rank-one trajectory residual indicates whether imposing a shared time curve would help or discard useful signal.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "352d621b168d57ff772b604562e8eeffd4336ebe747e5d2f3654f6ec2ebb49b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35606.45,
+      "usage_known": true,
+      "prompt_tokens": 22810,
+      "cached_tokens": 5504,
+      "completion_tokens": 1275
+    }
+  ]
+}

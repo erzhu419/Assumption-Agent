@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83e3c83d98434d328e71e3bda9a0c95a",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:41.243434+00:00",
+  "ended_at_utc": "2026-11-28T09:46:19.106205+00:00",
+  "request_sha256": "2f008f1157d5ecd34204c7b7b1d753bd13cf237b034f86dd695cb8a6c0017818",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38219,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25739,
+    "cached_tokens": 9344,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/graph.py <<'PY'\\nfrom probe import *\\nfrom itertools import combinations, product\\nfrom sklearn.linear_model import OrthogonalMatchingPursuit, ElasticNet, Ridge\\nfrom sklearn.model_selection import KFold\\n\\ndef features(s,x):\\n p=s['panel_a'];u,v=p['u'],p['v'];a=np.stack((np.ones_like(u),u),axis=-1);mask=np.max(abs(v),axis=1)<3\\n c=np.stack([fit(a[mask,i],v[mask,i]) for i in range(4)]);z=(x-c[:,0])/c[:,1]\\n p=s['panel_b'];B=fit(aff(p['u']),p['v'])\\n p=s['panel_c'];u=p['u'];edges=lambda w:w*np.roll(w,-1,axis=1);C=fit(aff(edges(u)),p['v1']);cos=lambda w:np.cos(2.4*w);D=fit(aff(cos(u)),p['v2'])\\n f=lambda w:aff(edges(w))@C;g=lambda w:aff(cos(w))@D;b=lambda w:aff(w)@B\\n if __name__=='__main__':print('v2 cos coefficients',D.round(4))\\n V={'z':z,'x':x,'b':b(z),'f':f(z),'g':g(z),'fb':f(b(z)),'gb':g(b(z)),'bf':b(f(z)),'bg':b(g(z)),'gf':g(f(z)),'fg':f(g(z)),'fx':f(x),'gx':g(x)}\\n return V\\n\\ndef dictionary(V,keys):\\n W={};N=len(next(iter(V.values())))\\n def add(name,a):\\n  a=np.asarray(a).reshape(N,-1)\\n  for j,col in enumerate(a.T): W[name+str(j)]=col\\n for k in keys:\\n  a=V[k];add(k,a);add(k+'cube',a**3);add(k+'tanh',np.tanh(a));add(k+'sin',np.sin(2.4*a));add(k+'cos',np.cos(2.4*a))\\n for i,k in enumerate(keys):\\n  a=V[k]\\n  for l in keys[i:]:\\n   b=V[l];P=a[:,:,None]*b[:,None,:];add(k+'*'+l,P.reshape(N,-1));add(k+'dot'+l,np.sum(a*b,axis=1));add(k+'roll'+l,np.sum(a*np.roll(b,-1,axis=1),axis=1))\\n return W\\n\\nif __name__=='__main__':\\n V=features(s,tr['x']);h=times(t,tr['traj']);Y=np.c_[tr['y'],fit(h,tr['traj'].T).T];S=np.arange(52);T=np.arange(52,72)\\n def err(p):\\n  r=p-Y[T];return np.r_[np.mean(abs(r),axis=0),np.mean(abs(r[:,1:]@h.T))].round(4)\\n for keys in [('z','f','g'),('z','b','fb','gb'),('z','b','f','g','fb','gb'),tuple(V)]:\\n  print('KEYS',keys);W=dictionary(V,keys);ns=np.array(list(W));A=np.column_stack(list(W.values()));As=(A-A[S].mean(0))/np.maximum(A[S].std(0),1e-9)\\n  for k in [5,10,16,24,35]:\\n   model=OrthogonalMatchingPursuit(n_nonzero_coefs=k).fit(As[S],Y[S]);print('OMP',k,err(model.predict(As[T])),[ns[np.argsort(abs(w))[-5:]].tolist() for w in model.coef_] if k==10 else '')\\n  for alpha in [.0001,.001,.004,.012,.035]:\\n   p=[]\\n   for y in Y.T:\\n    model=ElasticNet(alpha=alpha*y[S].std(),l1_ratio=.9,max_iter=5000,tol=1e-5).fit(As[S],y[S]);p.append(model.predict(As[T]))\\n   print('EN',alpha,err(np.column_stack(p)))\\n for keys in [('z','f','g'),('z','fb','gb'),('z','gx','fx'),('z','g','fb'),('z','f','gb'),('z','gf','fg'),('z','g'),('z','fb'),('z','f')]:\\n  a=np.column_stack([V[k] for k in keys]);f,g=[V[k] for k in keys[-2:]];z=V['z'];\\n  for name,d in [('linear',aff(a)),('basic2',aff(a,quad(z),f*g,f*np.roll(g,1,axis=1),f*np.roll(g,-1,axis=1))),('full2',aff(a,quad(a)))]:\\n   model=Ridge(alpha=.001,fit_intercept=False).fit(d[S],Y[S]);print(keys,name,err(model.predict(d[T])))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (calibrated polynomial) -> H2 (cross-operator readout); calibrated polynomial holdout MAE is 0.233 for y and 0.202 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Low-degree polynomials of the calibrated inputs alone are sufficient.\",\"empirical_witness\":\"The degree-2-plus-cubic model misses the 0.038 gate for both readouts (0.233 and 0.202 MAE).\",\"causal_blanket_diagnosis\":\"The recovered calibration is diagonal affine, and the readouts need nonlinear structure beyond the tested polynomials.\",\"sublated_pivot\":\"Keep diagonal calibration and two relaxation modes; test cyclic-quadratic and cosine operators, affine routing, and cross-operator products.\",\"risk_kind\":\"numerical_model_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived cyclic nonlinear calibration\",\"rejected_reason\":\"On the 45 clean rows, the extra terms are at the panel noise level.\"}],\"rationale\":\"The panels identify compact operator candidates. Compare direct application with affine routing and check whether explicit cross-operator products explain held-out predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "97c0ebd192028380cb840c9463cbf1f2f013fa7a03a3c49f8d2038b511ec6e31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40501.42,
+      "usage_known": true,
+      "prompt_tokens": 25739,
+      "cached_tokens": 9344,
+      "completion_tokens": 1543
+    }
+  ]
+}

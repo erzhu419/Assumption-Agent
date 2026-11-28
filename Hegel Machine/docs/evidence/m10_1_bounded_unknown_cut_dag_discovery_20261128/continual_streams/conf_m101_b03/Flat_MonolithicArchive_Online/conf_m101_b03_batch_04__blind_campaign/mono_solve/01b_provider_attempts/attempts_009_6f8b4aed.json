@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f8b4aed46aa4645a11d21c85ed0bfff",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:22.264450+00:00",
+  "ended_at_utc": "2026-11-28T09:42:45.806931+00:00",
+  "request_sha256": "d2e46b4776d64a00525d1faf1ea511954958d2c69322bffaa5a6b956c956c406",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56512,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32444,
+    "cached_tokens": 9344,
+    "completion_tokens": 899
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\nold = '    b = _aff(z, q, (f[:, :, None]*g[:, None, :]).reshape(len(z), 16))'\\nnew = '    # Keep individual nearest-neighbor products around the four-channel ring.\\\\n    b = _aff(z, q, f*g, f*np.roll(g, -1, axis=1), f*np.roll(g, 1, axis=1))'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nexec(open('/tmp/check_batch.py').read().split('for name,a,b in splits:')[0])\\nrows = []\\nfor name,a,b in splits:\\n    fold = dict(s, train=dict(x=x[a], y=y[a], traj=t[a], summary=np.array([y[a].mean(), y[a].std(), t[a,-1].mean(), t[a,-1].std()])), test=dict(x=x[b]))\\n    out = m.solve_batch(fold)\\n    se = np.abs(out['y_hat'] - y[b])\\n    te = np.abs(out['state_pred'] - t[b])\\n    row = [se.mean(), te.mean(), te[:,-1].mean(), te.mean(axis=0).max()]\\n    rows.append(row)\\n    print(name, 'MAE (scalar, trajectory, terminal, worst timestamp)', np.round(row, 6))\\nworst = np.max(rows, axis=0)\\nprint('worst across folds', np.round(worst, 6))\\nassert max(rows[0][:2]) <= .038 and worst.max() <= .038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (all trajectory cross-products) → H2 (individual cyclic-neighbor products); the prototype reduced worst stressed time-slice MAE from 0.032091 to 0.021223 and improved 52/20 trajectory MAE from 0.007308 to 0.00712.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Sum products by cyclic shift\",\n      \"rejected_reason\": \"This removes useful channel-specific information and raised worst-time MAE to 0.133721.\"\n    }\n  ],\n  \"rationale\": \"The cyclic readout improves the worst stressed slice without sacrificing the required split. Verify the saved artifact, rather than the prototype, on the public schema and the same holdouts; retain the previous verified candidate if the change does not reproduce the improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2f27a2d349d8d8e30f724de7a68f992274131306eb671f34941db2492565654b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26168.85,
+      "usage_known": true,
+      "prompt_tokens": 32444,
+      "cached_tokens": 9344,
+      "completion_tokens": 899
+    }
+  ]
+}

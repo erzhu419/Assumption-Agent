@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76f68404f15a4e4489adb5c73981aa87",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:37.738720+00:00",
+  "ended_at_utc": "2026-11-28T09:26:25.236593+00:00",
+  "request_sha256": "6337581359e5ade6fe09318809ab361064fbb0f41f2ccb54c12632a7183f8035",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27797,
+    "cached_tokens": 0,
+    "completion_tokens": 1882
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection nonlinear least squares' || true\\ncat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _affine(z):\\n    return np.column_stack((np.ones(len(z)), z))\\n\\n\\ndef _quadratic(z):\\n    i, j = np.triu_indices(z.shape[1])\\n    return np.column_stack((_affine(z), z[:, i] * z[:, j]))\\n\\n\\ndef _label(z, z_test, y):\\n    q, qt = _quadratic(z), _quadratic(z_test)\\n    linear = np.linalg.lstsq(_affine(z), y, rcond=None)[0][1:]\\n\\n    def design(base, x, p):\\n        return np.column_stack((base, np.tanh(x @ p[:-1] + p[-1])))\\n\\n    def residual(p):\\n        d = design(q, z, p)\\n        return d @ np.linalg.lstsq(d, y, rcond=None)[0] - y\\n\\n    fits = [least_squares(residual, np.r_[a * linear, 0.0], max_nfev=100)\\n            for a in (0.6, 1.0, 1.6)]\\n    p = min(fits, key=lambda r: r.cost).x\\n    coef = np.linalg.lstsq(design(q, z, p), y, rcond=None)[0]\\n    return design(qt, z_test, p) @ coef\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    z, z_test = (inputs['node_00'][k] for k in ('z_tr', 'z_te'))\\n    train = study['train']\\n    y_hat = _label(z, z_test, train['y'])\\n    coef = np.linalg.lstsq(_affine(z), train['traj'], rcond=None)[0]\\n    state_pred = _affine(z_test) @ coef\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat > /tmp/probe_exact.py <<'PY'\\nimport numpy as np, pickle, runpy\\nfrom scipy.optimize import least_squares\\nP='/holdout_task/'\\ns=pickle.load(open(P+'public_batch.pkl','rb'))[0]['study']; y=s['train']['y']; frozen=runpy.run_path(P+'_frozen_nodes/node_00.py')['run_node']; z=frozen({'__input__':s})['z_tr']; c=runpy.run_path(P+'node_01.py'); L=c['_affine'](z); Q=c['_quadratic'](z); C=Q[:,[5+2,5+6]]; Zs=np.column_stack((z,C)); ls=np.linalg.lstsq(L,y,rcond=None)[0][1:]\\nrng=np.random.default_rng(133); ix=np.arange(len(y)); groups=[ix[-20:]]+[rng.permutation(ix)[:20] for _ in range(16)]+[np.argsort(abs(v))[-12:] for v in z.T]\\nfuncs={'tanh':np.tanh,'atan':np.arctan,'rat':lambda u:u/(1+u*u),'sqrt':lambda u:u/np.sqrt(1+u*u),'sin':np.sin,'asinh':np.arcsinh}\\ndef experiment(base, X, kind, tr, te):\\n    proj=funcs[kind]; U=base[tr]; Xt=X[tr]; Y=y[tr]; O=np.linalg.qr(U,mode='reduced')[0]; Y0=Y-O@(O.T@Y)\\n    def res(p):\\n        v=proj(Xt@p[:-1]+p[-1]); v=v-O@(O.T@v); return v*(v@Y0/max(v@v,1e-25))-Y0\\n    starts=[np.r_[a*ls,np.zeros(X.shape[1]-4),0.] for a in (.5,1.,1.6)]\\n    r=min((least_squares(res,p,max_nfev=90) for p in starts),key=lambda r:r.cost)\\n    H=np.column_stack((base,proj(X@r.x[:-1]+r.x[-1]))); b=np.linalg.lstsq(H[tr],Y,rcond=None)[0]\\n    return abs(H[te]@b-y[te]).mean(),r.x,b\\nfor bn,B in [('full',Q),('cross',np.column_stack((L,C))),('pairs',Q[:,[0,1,2,3,4,6,7,8,10,11,13]])]:\\n for xn,X in [('z',z), ('zC',Zs)]:\\n  for k in funcs:\\n   train,p,b=experiment(B,X,k,ix,ix); e=[experiment(B,X,k,np.setdiff1d(ix,g),g)[0] for g in groups]\\n   print(bn,xn,k,np.round([train,e[0],np.mean(e[1:17]),max(e[1:17]),max(e[17:])],5),'p',p.round(3),'b',b.round(3),flush=True)\\nprint('candidate split scores',np.round([np.mean(abs(c['_label'](z[tr],z[g],y[tr])-y[g])) for g in groups for tr in [np.setdiff1d(ix,g)]],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_exact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (global cubic label model) -> H2 (quadratic interactions and a saturating one-dimensional readout); tanh reached 0.01233 public-split MAE and 0.02829 worst coordinate-tail MAE.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An unrestricted cubic in the frozen coordinates is an adequate label basis.\",\"empirical_witness\":\"Cubic label MAE was 0.04681 on the public split and 0.09081 on the worst coordinate-tail split; quadratic plus tanh reduced these to 0.01233 and 0.02829.\",\"causal_blanket_diagnosis\":\"The failure is confined to the label basis: an affine trajectory fit already gives leave-one-out horizon MAEs below 0.00484.\",\"sublated_pivot\":\"Keep the frozen coordinates and affine trajectory fit; use a bounded single-index label term and test whether a smaller interaction basis explains the remaining residual.\",\"risk_kind\":\"Label extrapolation on coordinate tails\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add higher-order polynomial terms\",\"rejected_reason\":\"They worsened held-out errors; a saturating term captured the dominant residual with fewer parameters.\"}],\"rationale\":\"Save the first model with margin against the public threshold and verify the node contract. Compare simpler interaction sets and saturation functions on held-out rows to see whether a more exact label law improves the worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "57c673d35b0317505c866ae9c1a067a40565f1374802c31c755a82fd7abee76e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50052.14,
+      "usage_known": true,
+      "prompt_tokens": 27797,
+      "cached_tokens": 0,
+      "completion_tokens": 1882
+    }
+  ]
+}

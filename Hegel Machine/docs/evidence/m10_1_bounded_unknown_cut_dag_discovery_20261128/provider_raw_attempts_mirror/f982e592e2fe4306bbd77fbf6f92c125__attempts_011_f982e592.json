@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f982e592e2fe4306bbd77fbf6f92c125",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:23.707034+00:00",
+  "ended_at_utc": "2026-11-28T09:24:10.371294+00:00",
+  "request_sha256": "7e7bdb7a4bc0a8d6110fdac542d0a3ecb35eeaca781dd7331235d49e66eefaea",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62820,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35492,
+    "cached_tokens": 9344,
+    "completion_tokens": 2060
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import cholesky, solve_triangular\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _quadratic(x):\\n    return np.column_stack([np.ones(len(x)), x] + [x[:, i] * x[:, j] for i in range(4) for j in range(i, 4)])\\n\\n\\ndef _gp(x, z, y, length, nugget, matern=False):\\n    scale = x.std(axis=0)\\n    x, z = x / scale, z / scale\\n    def kernel(a, b):\\n        d = cdist(a, b, 'sqeuclidean') / length**2\\n        if not matern:\\n            return np.exp(-0.5 * d)\\n        r = np.sqrt(5 * d)\\n        return (1 + r + r*r/3) * np.exp(-r)\\n    f, g = _quadratic(x), _quadratic(z)\\n    K = kernel(x, x)\\n    K.flat[::len(x)+1] += nugget\\n    L = cholesky(K, lower=True)\\n    w = solve_triangular(L, np.column_stack([f, y]), lower=True)\\n    c = np.linalg.lstsq(w[:, :-1], w[:, -1], rcond=None)[0]\\n    return g @ c + kernel(z, x) @ solve_triangular(L.T, w[:, -1] - w[:, :-1] @ c)\\n\\n\\ndef solve_batch(study):\\n    train = study['train']\\n    x, z = train['x'], study['test']['x']\\n    tr = train['traj']\\n    mode = np.linalg.svd(tr, full_matrices=False)[2][0]\\n    y = _gp(x, z, train['y'], 1.5, 0.0001)\\n    amp = _gp(x, z, tr @ mode, 2.4, 0.001, matern=True)\\n    state = amp[:, None] * mode\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat >/tmp/lowrank.py <<'PY'\\nfrom features import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\nfrom sys import path\\npath.insert(0,'/holdout_task')\\nfrom batch_solver import _gp\\n\\ndef readout(x,z,y,kind):\\n    aa=af(x); az=af(z); fq=pol(x,2)\\n    co=ls(fq,y); Q=np.zeros((4,4))\\n    for w,(i,j) in zip(co[5:],combinations_with_replacement(range(4),2)):Q[i,j]=Q[j,i]=w if i==j else w/2\\n    e,V=np.linalg.eigh(Q); a=V[:,-1]*np.sqrt(max(e[-1],.01)); b=V[:,0]*np.sqrt(max(-e[0],.01))\\n    u=a+b; v=a-b\\n    def sat(q,k):\\n        if k=='t':return np.tanh(q)\\n        if k=='s':return np.sin(q)\\n        if k=='r':return q/np.sqrt(1+q*q)\\n        return q\\n    def des(A,p):\\n        P=A@p[:5]; R=A@p[5:10]; X=A[:,1:]; C=[A]\\n        if kind[0]=='p':\\n            C.extend([sat(P,kind[1])*sat(R,kind[2])])\\n            if kind.endswith('d'): C.extend([sat(P,kind[1]),sat(R,kind[2])])\\n        elif kind[0]=='q':\\n            C.extend([sat(P,kind[1])**2,sat(R,kind[2])**2]);\\n            if kind.endswith('d'):C.extend([sat(P,kind[1]),sat(R,kind[2])])\\n        elif kind[0]=='m':\\n            C.extend([P*R,sat(A@p[10:15],kind[1])]);\\n        elif kind[0]=='n':\\n            C=[pol(X,2),sat(P,kind[1])];\\n            if kind.endswith('d'): C.extend([sat(R,kind[2])]);\\n        elif kind[0]=='h':\\n            C.extend([P*R, np.tanh(P),np.tanh(R),np.tanh(A@p[10:15])]);\\n        elif kind[0]=='f':\\n            T=P*R; W=A@p[10:15]; C.extend([T/(1+W*W)]);\\n        return np.column_stack(C)\\n    def res(p):\\n        t=des(aa,p);return t@ls(t,y)-y\\n    seed=np.random.default_rng(235); starts=[]\\n    for i in range(5):\\n        j1,j2=(a,b) if kind[0]=='q' else (u,v)\\n        first=np.r_[0,j1,0,j2]*[.3,.65,1.,1.4,2.][i]\\n        if kind[0] in 'mhf': first=np.r_[first,0,co[1:5]*([.15,.4,.7,1.,1.3][i])];\\n        if i: first+=seed.normal(0,.13,len(first))\\n        starts.append(first)\\n    best=None\\n    for start in starts:\\n        p=least_squares(res,start,bounds=(-4,4),max_nfev=150,ftol=3e-6).x\\n        g=des(aa,p); w=ls(g,y); loss=np.mean((g@w-y)**2)\\n        if best is None or loss<best[0]:best=loss,des(az,p)@w,p,w\\n    return best\\nif __name__=='__main__':\\n    for t in [0,1]:\\n        yy=Y[:,t]; rows=[]\\n        for kind in ['p'+a+b+c for a,b in product('itsr',repeat=2) if a+b!='ii' for c in ['','d']]+['qtt','qssd','qt​​td'.replace('\\\\u200b',''),'qtrd','mt','ms','mr','nt','ns','nr','nttd','ht','ft']:\\n            q,w,p,co=readout(x[:52],x[52:],yy[:52],kind); rows.append((np.sqrt(q),np.mean(abs(w-yy[52:])),kind,p,co));\\n        for r in sorted(rows,key=lambda r:r[1])[:8]:print(t,'val sorted',r,flush=True)\\n        for r in sorted(rows,key=lambda r:r[0])[:6]:print(t,'fit sorted',r[:3],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/lowrank.py >/tmp/lowrank.results & job=$!; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py; wait \\\"$job\\\"; cat /tmp/lowrank.results\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (full quadratic plus smooth residual) -> H2 (compact signed pair of nonlinear projections); best measured 52/20 y MAE is 0.05393, with repeated-split worst MAE 0.09397 for that candidate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep expanding the panel feature dictionary\",\"rejected_reason\":\"The screened panel compositions still miss the target; the two large quadratic eigenvalues of opposite sign give a more specific readout hypothesis.\"}],\"rationale\":\"Save the quadratic-plus-kernel baseline now, then test whether the near-rank-two quadratic is the local expansion of a product or difference of saturating projections. Select optimizer restarts by training loss and use held-out errors to decide whether to replace the baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ad2e16e516222d6bb255eb7bb8a991792b2206df51859489f29442e303516747",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51892.06,
+      "usage_known": true,
+      "prompt_tokens": 35492,
+      "cached_tokens": 9344,
+      "completion_tokens": 2060
+    }
+  ]
+}

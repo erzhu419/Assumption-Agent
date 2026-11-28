@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a69a4c1c4c84891bc031e023774c1bf",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_02__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:29.232000+00:00",
+  "ended_at_utc": "2026-11-28T09:30:58.237060+00:00",
+  "request_sha256": "603ff22ae9b5750177fad31091a658141cd8797a3625f111f30b683f66ac2138",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42324,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26122,
+    "cached_tokens": 9344,
+    "completion_tokens": 1137
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/dag_regularization.py <<'PY'\\nimport itertools as it, pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\nm=runpy.run_path(p+'node_00.py'); sink=runpy.run_path(p+'_frozen_nodes/node_01.py')['run_node']\\nt=s['train']; x=t['x']; y=t['y']; tr=t['traj']; n=len(x)\\nf=m['run_node']({'__input__':{**s,'test':{'x':x[:0]}}}); g=f['g']\\nc=m['_calibration'](s['panel_a']); z=np.linalg.solve(c[1:].T,(x-c[0]).T).T\\ncub=list(it.combinations_with_replacement(range(4),3))\\npure=np.array([15+i for i,k in enumerate(cub) if len(set(k))==1]); mixed=np.array([15+i for i,k in enumerate(cub) if len(set(k))>1]); quartic=np.column_stack([np.prod(z[:,k],axis=1) for k in it.combinations_with_replacement(range(4),4)])\\nrng=np.random.default_rng(7009)\\norders={'public':np.arange(n), **{f'random_{i}':rng.permutation(n) for i in range(160)}, **{f'block_{i}':np.roll(np.arange(n),i) for i in range(0,n,4)}}\\nfor j in range(4):\\n    ix=np.argsort(x[:,j]); orders[f'tail_hi{j}']=ix; orders[f'tail_lo{j}']=ix[::-1]\\norders['tail_radius']=np.argsort(np.linalg.norm(x-np.median(x,axis=0),axis=1))\\nmodels={'baseline':g}\\nfor a in (.03,.06,.12,.25,.5):\\n    h=g.copy(); h[:,pure]*=a; models[f'pure_{a}']=h\\nfor a in (.1,.25,.5,2.0):\\n    h=g.copy(); h[:,mixed]*=a; models[f'mixed_{a}']=h\\nfor a in (.002,.005,.01,.02,.05): models[f'quartic_{a}']=np.column_stack([g,a*quartic])\\nfor name,h in models.items():\\n    e={}\\n    for key,ix in orders.items():\\n        a,b=ix[:-20],ix[-20:]; o=sink({'node_00':{'g':h[ix],'fd':f['fd'][ix],'cd':f['cd'][ix],'y':y[a],'traj':tr[a]}})\\n        e[key]=np.array([abs(o['y_hat']-y[b]).mean(),abs(o['state_pred']-tr[b]).mean()])\\n    print(name, 'public', e['public'].round(6), *[(group,np.max([v for k,v in e.items() if k.startswith(group)],axis=0).round(6)) for group in ('random','block','tail')], 'tail4low',e['tail_lo3'].round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/dag_regularization.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Retain the full cubic span → test degree- and symmetry-specific regularization; the accepted baseline’s worst tail MAEs are 0.046126 for y and 0.013980 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop entire cubic interaction classes\",\n      \"rejected_reason\": \"Every tested reduced basis exceeded the public tolerance by a wide margin.\"\n    }\n  ],\n  \"rationale\": \"The tail fit gave the fourth pure cubic a substantially different coefficient from the full fit. Test whether shrinking all pure cubics equally reduces extrapolation error without deleting necessary terms, and use strongly penalized quartics as a comparator. Keep the accepted artifact unless the challenger improves the tail without materially worsening the other slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1b5766fc70f87de5b849f8998a67cf50bd489b0e0ff075eaa481ef50968a1dae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31621.99,
+      "usage_known": true,
+      "prompt_tokens": 26122,
+      "cached_tokens": 9344,
+      "completion_tokens": 1137
+    }
+  ]
+}

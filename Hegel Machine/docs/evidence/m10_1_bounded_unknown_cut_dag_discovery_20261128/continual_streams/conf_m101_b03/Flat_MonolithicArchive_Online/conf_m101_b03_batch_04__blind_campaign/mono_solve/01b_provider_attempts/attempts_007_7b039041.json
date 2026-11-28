@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7b039041035b4071add41de5ae58763e",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:00.968878+00:00",
+  "ended_at_utc": "2026-11-28T09:41:49.905850+00:00",
+  "request_sha256": "37e3b6b9d56d1154fed156a02bb483ad5a998ba2cf495c123a57eae433b42a4f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49549,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29493,
+    "cached_tokens": 9344,
+    "completion_tokens": 2046
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the input coordinates and fit separate scalar and time readouts.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _fit(a, y):\\n    return np.linalg.lstsq(a, y, rcond=1e-10)[0]\\n\\n\\ndef _aff(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _calibration_features(x):\\n    adj = np.roll(x, -1, axis=1)\\n    return np.stack((np.ones_like(x), x, adj, x * adj, x**3), axis=-1)\\n\\n\\ndef _coordinates(panel, x):\\n    u, v = panel['u'], panel['v']\\n    features = _calibration_features(u)\\n    clean = np.max(np.abs(v), axis=1) < 3\\n    for _ in range(2):\\n        c = np.stack([_fit(features[clean, j], v[clean, j]) for j in range(4)])\\n        clean = np.max(np.abs((features * c).sum(axis=-1) - v), axis=1) < .01\\n    z = (x - c[:, 0]) / c[:, 1]\\n    j = np.arange(4)\\n    for _ in range(16):\\n        r = (_calibration_features(z) * c).sum(axis=-1) - x\\n        if np.max(np.abs(r), initial=0.) < 1e-12:\\n            break\\n        jac = np.zeros((len(z), 4, 4))\\n        jac[:, j, j] = c[:, 1] + c[:, 3] * np.roll(z, -1, axis=1) + 3 * c[:, 4] * z*z\\n        jac[:, j, (j+1) % 4] = c[:, 2] + c[:, 3] * z\\n        z -= np.linalg.solve(jac, r[..., None])[..., 0]\\n    return z\\n\\n\\ndef _operators(panel, z):\\n    u = panel['u']\\n\\n    def edges(w):\\n        return _aff(w[:, [0, 0, 1, 2]] * w[:, [1, 3, 2, 3]])\\n\\n    f = edges(z) @ _fit(edges(u), panel['v1'])\\n    v = panel['v2']\\n\\n    def design(w, rate):\\n        return _aff(w, np.log1p(rate*w*w))\\n\\n    def loss(rate):\\n        a = design(u, rate)\\n        return np.sum((a @ _fit(a, v) - v)**2)\\n\\n    rate = minimize_scalar(loss, bounds=(.001, 2.), method='bounded').x\\n    g = design(z, rate) @ _fit(design(u, rate), v)\\n    return f, g\\n\\n\\ndef _spatial(study, x):\\n    z = _coordinates(study['panel_a'], x)\\n    f, g = _operators(study['panel_c'], z)\\n    q = np.column_stack([z[:, i]*z[:, j] for i, j in combinations_with_replacement(range(4), 2)])\\n    return z, f, g, q\\n\\n\\ndef _ridge(a, y, n, penalty):\\n    a = a[:, 1:] - a[:n, 1:].mean(axis=0)\\n    a /= np.maximum(a[:n].std(axis=0), 1e-12)\\n    u, s, vt = np.linalg.svd(a[:n], full_matrices=False)\\n    return y.mean(axis=0) + (a @ vt.T * (s / (s*s + penalty))) @ (u.T @ y)\\n\\n\\ndef _time_fit(t, trajectories):\\n    def basis(rates):\\n        return -np.expm1(-t[:, None]*rates)\\n\\n    def residual(rates):\\n        a = basis(rates)\\n        return (a @ _fit(a, trajectories.T) - trajectories.T).ravel()\\n\\n    rates = least_squares(residual, [.4, 1.8], bounds=([.05, .8], [.8, 5.])).x\\n    return basis(rates)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    n = len(tr['x'])\\n    z, f, g, q = _spatial(study, np.vstack((tr['x'], study['test']['x'])))\\n    a = _aff(z, q, f*g)\\n    b = _aff(z, q, (f[:, :, None]*g[:, None, :]).reshape(len(z), 16))\\n    y = _ridge(a, tr['y'], n, .0001)[n:]\\n    h = _time_fit(study['eval_times'], tr['traj'])\\n    modes = _fit(h, tr['traj'].T).T\\n    state = _ridge(b, modes, n, .01)[n:] @ h.T\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/check_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; t=tr['traj']; n=len(x)\\nrng=np.random.default_rng(2718)\\nix=np.arange(n); extent=np.linalg.norm(m._coordinates(s['panel_a'],x),axis=1)\\nsplits=[('52/20',ix[:52],ix[52:]),('56/16',ix[:56],ix[56:])]\\nfor i in range(5):\\n j=rng.permutation(n);splits.append((f'random {i}',j[:52],j[52:]))\\nj=np.argsort(extent);splits.append(('largest radii',j[:56],j[56:]))\\nfor name,a,b in splits:\\n ss=dict(s,train=dict(x=x[a],y=y[a],traj=t[a]),test=dict(x=x[b])); v=m.solve_batch(ss); ye=abs(v['y_hat']-y[b]);te=abs(v['state_pred']-t[b]); print(name,'MAE',np.round([ye.mean(),te.mean(),te[:,-1].mean(),te.mean(axis=0).max()],6))\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared spatial readout) → H2 (diagonal products for the scalar and full cross-products for the trajectory); 52/20 prototype MAEs were 0.00676 and 0.00731, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use only diagonal operator products for both outputs\",\n      \"rejected_reason\": \"The trajectory MAE was about 0.038 with diagonal products and fell to 0.00731 with the full cross-products.\"\n    }\n  ],\n  \"rationale\": \"Save the self-contained candidate and test whether its gains survive independent row splits and a high-radius holdout. Report terminal and worst-time errors separately so a good average cannot hide a failed time slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d358b038dacd15d05d1a127f7c74cbf1078e088ffdca5c0de2cd8af499042712",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51602.16,
+      "usage_known": true,
+      "prompt_tokens": 29493,
+      "cached_tokens": 9344,
+      "completion_tokens": 2046
+    }
+  ]
+}

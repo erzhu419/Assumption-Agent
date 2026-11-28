@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a557665f42a34f36814b5d0f8c1602f0",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_07__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_07__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:40.558745+00:00",
+  "ended_at_utc": "2026-11-28T09:48:15.232444+00:00",
+  "request_sha256": "f36a2a0ad8d1b1afeb7154975b121b790b0ddc0117cc4b420a5bd0f0a00ef05d",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 65492,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36215,
+    "cached_tokens": 9344,
+    "completion_tokens": 1529
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nexport OPENBLAS_NUM_THREADS=1\\ncp /holdout_task/node_01.py /tmp/node01_verified_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_01.py')\\ns = p.read_text()\\na, e = s.index('def _scalar'), s.index('def run_node')\\ns = s[:a] + '''def _scalar(b, bt, y):\\n    n = len(b)\\n    coords = np.vstack((b, bt))\\n    trend = np.column_stack((np.ones(len(coords)), coords))\\n    train = trend[:n]\\n    # Use the fitted linear score as the argument of bounded link corrections.\\n    beta = np.linalg.lstsq(train, y, rcond=None)[0]\\n    h = (trend @ beta - y.mean()) / y.std()\\n    links = (\\n        np.column_stack((np.tanh(h), np.exp(-h*h), h*h/(1+h*h))),\\n        np.column_stack((np.sin(h), np.cos(h), np.sin(2*h), np.cos(2*h))),\\n    )\\n    pair = (coords[:, 1] * coords[:, 3])[:, None]\\n    quadratic = np.column_stack(\\n        [coords[:, i] * coords[:, j] for i in range(4) for j in range(i+1, 4)]\\n        + [coords**2]\\n    )\\n    scaled = coords / (np.sqrt(b.shape[1]) * b.std(axis=0))\\n    base = np.exp(-0.5 * cdist(scaled, scaled[:n], 'sqeuclidean'))\\n    rhs = np.column_stack((y, train))\\n    predictions = []\\n    for link in links:\\n        for interaction in (pair, quadratic):\\n            features = np.column_stack((link, interaction))\\n            features /= np.maximum(features[:n].std(axis=0), 0.01)\\n            kernel = base + 0.1 * features @ features[:n].T\\n            for penalty in (0.01, 0.03, 0.08):\\n                p = solve(kernel[:n] + penalty * np.eye(n), rhs, assume_a='pos')\\n                beta = np.linalg.solve(train.T @ p[:, 1:], train.T @ p[:, 0])\\n                predictions.append(trend[n:] @ beta + kernel[n:] @ (p[:, 0] - p[:, 1:] @ beta))\\n    return np.mean(predictions, axis=0)\\n\\n\\n''' + s[e:]\\np.write_text(s)\\nPY\\ncat > /tmp/verify_final01.py <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nroot = '/holdout_task/'\\nzero = load('zero', root + '_frozen_nodes/node_00.py')\\none = load('one', root + 'node_01.py')\\ns = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\nx = zero.run_node({'__input__': s})['x_tr']\\nb = one._panel_coordinates(s['panel_b'], x)\\ny, z = s['train']['y'], s['train']['traj']\\nix = np.arange(len(x))\\nfolds = [*np.array_split(ix, 4), np.argsort(np.max(abs(x), axis=1))[-16:], np.argsort(np.linalg.norm(b, axis=1))[-16:]]\\nmetrics = []\\nfor te in folds:\\n    tr = np.setdiff1d(ix, te)\\n    part = copy.deepcopy(s)\\n    part['train'] = {k: s['train'][k][tr] for k in ('x', 'y', 'traj')}\\n    part['train']['summary'] = np.array([y[tr].mean(), y[tr].std(), z[tr,-1].mean(), z[tr,-1].std()])\\n    part['test'] = {'x': s['train']['x'][te]}\\n    out = one.run_node({'__input__': part, 'node_00': zero.run_node({'__input__': part})})\\n    trajectory = abs(out['state_pred'] - z[te])\\n    metrics.append((np.mean(abs(out['y_hat'] - y[te])), trajectory.mean(), trajectory.mean(axis=0).max()))\\nm = np.array(metrics)\\nprint('End-to-end slices (scalar, trajectory, worst horizon MAE):', m, flush=True)\\nassert np.isfinite(m).all() and m[:4, 0].max() < .038 and np.all(m[4:, 0] < [.057402, .058667]) and m[:, 2].max() < .038\\nPY\\nif python3 -I /holdout_task/test_dag_candidate.py && python3 -I /tmp/verify_final01.py; then\\n  echo 'Promoted link ensemble.'\\nelse\\n  cp /tmp/node01_verified_baseline.py /holdout_task/node_01.py\\n  python3 -I /holdout_task/test_dag_candidate.py\\n  echo 'Restored the previously stress-tested baseline.'\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single Panel B residual kernel → averaged bounded scalar links; prototype public scalar MAE improved from 0.03077 to 0.02211 and worst amplitude-slice MAE from 0.05867 to 0.05143.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add raw-coordinate amplitude terms to the ensemble\",\n      \"rejected_reason\": \"They slightly improved the public split but worsened the worst amplitude slice and added complexity.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler ensemble because it improved every measured scalar slice. Verify the exact saved file against the official evaluator and end-to-end stress slices; restore the verified baseline if either check fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "db3f08f8c5f57ed08db70d9eabdd54ff3a7c422a385dd12637a53bf6c8b26231",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39912.05,
+      "usage_known": true,
+      "prompt_tokens": 36215,
+      "cached_tokens": 9344,
+      "completion_tokens": 1529
+    }
+  ]
+}

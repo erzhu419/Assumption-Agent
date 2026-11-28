@@ -1,0 +1,123 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_a04_batch_01_fa436dc64421",
+    "source_hash": "fa436dc64421c8cb225654b61a86794331429bbb4c1da56a602a86a72e7c2804",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_a04_batch_01__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/panel_probe.py",
+        "archived_relpath": "producers/tmp__panel_probe.py",
+        "bytes": 1898,
+        "sha256": "adac6e33d6cb77d9328ebdc82c6fab872f45fd9373d9bc6752acfcf15731d32a"
+      },
+      {
+        "container_path": "/tmp/v2_link_probe.py",
+        "archived_relpath": "producers/tmp__v2_link_probe.py",
+        "bytes": 1777,
+        "sha256": "b9a5b3f8838988d7074187e1f36650885b3eceff888840c20360afc89716053c"
+      },
+      {
+        "container_path": "/tmp/v2_probe.py",
+        "archived_relpath": "producers/tmp__v2_probe.py",
+        "bytes": 1789,
+        "sha256": "b3d9d7d90a4e3b1fc1b9457fe23ae50020c520c9defa37087d26f824554cf317"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_a04_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_a04_batch_00_solver.py",
+        "bytes": 2224,
+        "sha256": "4c9d9105343a8f57f93b12b4f85544c8c59813ef46e032bcdc13bb0ca372ad2e"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json _frozen_nodes/node_00.py _frozen_nodes/node_03.py test_dag_candidate.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef scan(x,p='',depth=0):\n if isinstance(x,dict):\n  for k,v in x.items(): scan(v,p+'/'+str(k),depth+1)\n elif isinstance(x,(list,tuple)):\n  print(p,type(x).__name__,len(x));\n  if x and depth<3: scan(x[0],p+'/0',depth+1)\n elif isinstance(x,np.ndarray): print(p,x.shape,x.dtype,x.reshape(-1)[:6])\n else: print(p,type(x).__name__,str(x)[:120])\nscan(d)\nPY",
+      "cd /holdout_task && sed -n '1,85p' test_dag_candidate.py && cat >/tmp/panel_probe.py <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['panel_c']; x=c['u']; t=np.c_[c['v1'],c['v2']]\nD={}\nfor i in range(4): D[str(i)]=x[:,i]\nfor k in (2,3):\n for p in combinations_with_replacement(range(4),k): D['*'.join(map(str,p))]=np.prod(x[:,p],axis=1)\nfor i in range(4):\n for j in range(i+1,4):\n  for a in [-2,-1,-.5,.5,1,2]: D[f'{i}+{a:g}*{j}']=x[:,i]+a*x[:,j]\nA=np.c_[np.ones(len(x)),x]; B=np.c_[np.o",
+      "cd /holdout_task && cat >node_01.py <<'PY'\nimport numpy as np\n\n\ndef _basis(x):\n    return np.column_stack((np.ones(len(x)), x, *(x[:, i]*x[:, j] for i in range(x.shape[1]) for j in range(i,x.shape[1]))))\n\n\ndef run_node(inputs: dict) -> dict:\n    panel = inputs['node_00']\n    coef = np.linalg.lstsq(_basis(panel['u']), np.arcsinh(panel['v1']), rcond=None)[0]\n    return {'b': np.sinh(_basis(panel['x']) @ coef)}\nPY\ncat >node_02.py <<'PY'\nimport numpy as np\n\n\ndef _basis(x):\n    return np.column_stack((np.ones(len(x)), x, *(x[:, i]*x[:, j] for i in range(x.shape[1]) for j in range(i,x.shape[1]))))\n\n",
+      "cd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\ncat >node_01.py <<'PY'\nimport numpy as np\n\n\ndef _basis(x):\n    return np.column_stack((np.ones(len(x)), *(x[:, i]*x[:, j] for i in range(x.shape[1]) for j in range(i + 1, x.shape[1]))))\n\n\ndef run_node(inputs: dict) -> dict:\n    panel = inputs['node_00']\n    coef = np.linalg.lstsq(_basis(panel['u']), panel['v1'], rcond=None)[0]\n    return {'b': _basis(panel['x']) @ coef}\nPY\npython3 -I test_dag_candidate.py\ncat >/tmp/v2_probe.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.p",
+      "export OPENBLAS_NUM_THREADS=1\ncat >/tmp/v2_link_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nx=s['panel_c']['u']; y=s['panel_c']['v2']; u=np.arange(len(x)); v=s['panel_c']['v1']\np=np.column_stack([np.ones(len(x))]+[x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)])\nprint('v1 fit noise',np.sqrt(np.mean((p@np.linalg.lstsq(p,v,rcond=None)[0]-v)**2)))\nlinks={\n 'log1p':lambda x,a:np.log1p(a*x*x)/a,\n 'sqrt':lambda x,a:x*x/(1+np.sqrt(1+a*x*x)),\n 'logcosh':lambda x,a:np.log(np.cos",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\ncat >node_02.py <<'PY'\nimport numpy as np\n\n\ndef _basis(x, scale):\n    even = np.logaddexp(scale * x, -scale * x) - np.log(2.0)\n    return np.column_stack((np.ones(len(x)), x, even))\n\n\ndef _fit(u, v):\n    # Profile out the linear coefficients; all channels share one scale.\n    def fit_at(scale):\n        basis = _basis(u, scale)\n        coef = np.linalg.lstsq(basis, v, rcond=None)[0]\n        return np.sum((basis @ coef - v)**2), coef\n\n    grid = np.geomspace(0.1, 4.0, 17)\n    i = min(range(len(grid)), key=lambda j: fit_at(grid[j])[0])\n    lo,"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_a04_batch_00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_a04_batch_00_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 350,
+        "sha256": "3a429e7f39c801b3746be5ef66fc874a86e98300b9e067ee21b75ff6f53eb499",
+        "content_addressed_ref": "content_addressed_blobs/3a429e7f39c801b3746be5ef66fc874a86e98300b9e067ee21b75ff6f53eb499.py"
+      },
+      {
+        "declared_root": "/holdout_task/node_02.py",
+        "filename": "node_02.py",
+        "bytes": 979,
+        "sha256": "bb07f5a38e12d013ae60f6290d429b3be535834da073fc8a54b3a0c6f64452d7",
+        "content_addressed_ref": "content_addressed_blobs/bb07f5a38e12d013ae60f6290d429b3be535834da073fc8a54b3a0c6f64452d7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py",
+      "/holdout_task/node_02.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "fa436dc64421c8cb225654b61a86794331429bbb4c1da56a602a86a72e7c2804",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\ncat >node_02.py <<'PY'\nimport numpy as np\n\n\ndef _basis(x, scale):\n    even = np.logaddexp(scale * x, -scale * x) - np.log(2.0)\n    return np.column_stack((np.ones(len(x)), x, even))\n\n\nde",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "fa436dc64421c8cb225654b61a86794331429bbb4c1da56a602a86a72e7c2804",
+        "expected_candidate_sha256": "fa436dc64421c8cb225654b61a86794331429bbb4c1da56a602a86a72e7c2804",
+        "computed_candidate_sha256": "fa436dc64421c8cb225654b61a86794331429bbb4c1da56a602a86a72e7c2804",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 350
+          },
+          {
+            "path": "/holdout_task/node_02.py",
+            "bytes": 979
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_fa436dc6"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

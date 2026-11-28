@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c83bc43e2fb24b398f6a60ccd6d1abe2",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:59.122352+00:00",
+  "ended_at_utc": "2026-11-28T09:16:33.504275+00:00",
+  "request_sha256": "b20a2ea5dbecf4304fd261f5df01676fae40eedbac359a821d001198ad2caa79",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63988,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36541,
+    "cached_tokens": 10880,
+    "completion_tokens": 1397
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _quadratic(x):\\n    pairs = combinations_with_replacement(range(x.shape[1]), 2)\\n    return np.column_stack([np.ones(len(x)), x] + [x[:, i] * x[:, j] for i, j in pairs])\\n\\n\\ndef _matern52(u, v):\\n    r = (np.sqrt(5.0) / 2.4) * np.linalg.norm(u[:, None, :] - v[None, :, :], axis=2)\\n    return (1.0 + r + r * r / 3.0) * np.exp(-r)\\n\\n\\ndef _predict(a, b, kernel, cross_kernel, target, regularization):\\n    # Fit the quadratic trend in the kernel metric, then predict its residual.\\n    w = np.linalg.solve(kernel + regularization * np.eye(len(a)), np.column_stack((a, target)))\\n    wa, wy = w[:, :a.shape[1]], w[:, a.shape[1]:]\\n    trend = np.linalg.solve(a.T @ wa, a.T @ wy)\\n    return b @ trend + cross_kernel @ (wy - wa @ trend)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, q = train['x'], study['test']['x']\\n    a, b = _quadratic(x), _quadratic(q)\\n    kernel, cross_kernel = _matern52(x, x), _matern52(q, x)\\n    y = _predict(a, b, kernel, cross_kernel, train['y'], 0.001)[:, 0]\\n    state = _predict(a, b, kernel, cross_kernel, train['traj'], 0.003)\\n    final = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), final.mean(), final.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root+'batch_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open(root+'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nt = s['train']; x = t['x']; n = len(x); rows = np.arange(n)\\nfolds = [('prescribed', rows[52:])]\\nfolds += [(f'random_{i}', v) for i, v in enumerate(np.array_split(np.random.default_rng(37).permutation(n), 4))]\\nfolds += [('high_radius', np.argsort(np.linalg.norm(x, axis=1))[-15:])]\\nfolds += [(f'axis_{i}_{sign:+d}', np.argsort(sign*x[:, i])[-12:]) for i in range(x.shape[1]) for sign in (-1, 1)]\\nscores = []\\nfor name, v in folds:\\n    fit = rows[:52] if name == 'prescribed' else np.setdiff1d(rows, v)\\n    out = mod.solve_batch(dict(s, train={k: t[k][fit] for k in ('x', 'y', 'traj')}, test={'x': x[v]}))\\n    yp, sp = out['y_hat'], out['state_pred']\\n    assert yp.shape == (len(v),) and sp.shape == (len(v), len(s['eval_times']))\\n    assert all(np.isfinite(a).all() for a in out.values())\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yp.mean(), yp.std(), sp[:, -1].mean(), sp[:, -1].std()])\\n    e = abs(sp - t['traj'][v]).mean(0)\\n    scores.append((abs(yp-t['y'][v]).mean(), e.mean(), e[-1], e.max()))\\n    print(name, np.round(scores[-1], 5))\\nprint('columns: y MAE, trajectory MAE, terminal MAE, worst-horizon MAE')\\nworst = np.max(scores, axis=0)\\nprint('worst all slices:', np.round(worst, 5))\\nassert worst[0] <= 0.038 and worst[3] < 0.04\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial-only prediction -> H2 quadratic trends with Matérn residuals; challenger worst directional MAEs were 0.03210 for y and 0.03587 for the worst trajectory horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the panel-based trajectory blend\",\n      \"rejected_reason\": \"Its worst directional horizon MAE was 0.08027, versus 0.03587 for the quadratic Matérn model.\"\n    }\n  ],\n  \"rationale\": \"Promote the model that improves the prescribed split and directional stress slices. Refit the exact deliverable on each split in an isolated process to catch implementation errors or regression in either output, and run the required public schema validator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "33389e62027a5dd5dea6cf88c390fb1b25cbdf4c6cf43770a8c823edb3cf08fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36983.05,
+      "usage_known": true,
+      "prompt_tokens": 36541,
+      "cached_tokens": 10880,
+      "completion_tokens": 1397
+    }
+  ]
+}

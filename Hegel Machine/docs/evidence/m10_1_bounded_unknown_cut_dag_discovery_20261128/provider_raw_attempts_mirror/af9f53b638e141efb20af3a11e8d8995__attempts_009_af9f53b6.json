@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af9f53b638e141efb20af3a11e8d8995",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Fixed_TwoStage_Modular_Online__conf_m101_a03_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:31:08.186910+00:00",
+  "ended_at_utc": "2026-11-28T09:31:32.746031+00:00",
+  "request_sha256": "9b8df2b04d46df6023705a8c37a3eb5f7d25d68d50c0943b38d8cf37f8eeeea8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 42307,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25765,
+    "cached_tokens": 9344,
+    "completion_tokens": 772
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, root + path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod.run_node\\n\\nupstream = load('candidate', 'node_00.py')\\nsink = load('sink', '_frozen_nodes/node_01.py')\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ntrain = study['train']\\npanel = study['panel_b']\\nrows = np.arange(len(train['x']))\\nworst = [(-1., None), (-1., None)]\\nn_cases = 0\\nfor drop in range(-1, len(panel['u'])):\\n    keep = np.arange(len(panel['u'])) != drop\\n    for start in (0, 26, len(rows) - 20):\\n        test = rows[start:start + 20]\\n        fit = np.setdiff1d(rows, test)\\n        case = dict(study, panel_b={k: v[keep] for k, v in panel.items()},\\n                    train={**train, **{k: train[k][fit] for k in ('x', 'y', 'traj')}},\\n                    test={'x': train['x'][test]})\\n        out = sink({'node_00': upstream({'__input__': case})})\\n        for i, (pred, truth) in enumerate([('y_hat', 'y'), ('state_pred', 'traj')]):\\n            expected = train[truth][test]\\n            assert out[pred].shape == expected.shape\\n            loss = float(np.mean(np.abs(out[pred] - expected)))\\n            assert np.isfinite(loss)\\n            if loss > worst[i][0]:\\n                worst[i] = (loss, (drop, start))\\n        n_cases += 1\\nprint(f'{n_cases} cases; worst (MAE, (omitted Panel B row, holdout start)): {dict(zip((\\\"scalar\\\", \\\"trajectory\\\"), worst))}')\\nassert max(x[0] for x in worst) <= 0.038\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine Panel B → shared sine correction before affine mixing; the isolated public validator passed with scalar MAE 0.011307 and trajectory MAE 0.011271.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The stress harness mistakenly indexed the four-element training summary as row-level data. Slice only x, y, and traj to test whether omitting any one Panel B row pushes either held-out prediction error above 0.038. If it does, inspect the failing omission before changing the candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "809385fbfd3f633aa9ed5cfb0fe7272d332640ca716ac7e7641a1f7775304c33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24516.54,
+      "usage_known": true,
+      "prompt_tokens": 25765,
+      "cached_tokens": 9344,
+      "completion_tokens": 772
+    }
+  ]
+}

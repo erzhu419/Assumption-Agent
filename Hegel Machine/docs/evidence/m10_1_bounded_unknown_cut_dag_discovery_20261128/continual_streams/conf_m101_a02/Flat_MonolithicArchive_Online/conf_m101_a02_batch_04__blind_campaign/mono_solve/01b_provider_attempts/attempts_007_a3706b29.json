@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3706b2996a14c3bb27c14e9632e90e8",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_04__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_04__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:27.792626+00:00",
+  "ended_at_utc": "2026-11-28T09:37:57.714262+00:00",
+  "request_sha256": "7a4c92bcc93e9034ca4c7fa26144435f7995ca16a9f7d56765c11a3cee1d5751",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48115,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29468,
+    "cached_tokens": 9344,
+    "completion_tokens": 1178
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,160p' /tmp/hegel_continual_archive/conf_m101_a02_batch_02_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'exponential relaxation variable projection' 2>&1 | head -12; cat >/tmp/compact.py <<'PY'\\nfrom calprobe import *\\n\\np=s['panel_b'];u,v=p['u'],p['v'];z=calibration(s['panel_a'])[2](x)\\nprint('times, telemetry',s['eval_times'],s['telemetry_vec'])\\nfs={\\n'exp': (lambda a,k:a*np.exp(-k*a*a),.99),\\n'sin': (lambda a,k:np.sin(k*a),2.82),\\n'rat': (lambda a,k:a/(1+k*a*a),.74),\\n 'tanh':(lambda a,k:np.tanh(k*a),1.37),\\n}\\nfor kind,(f,k0) in fs.items():\\n for split in ('untied','shared','by_input'):\\n  def design(a,q):\\n   k=np.exp(q[0]); h=f(a,k)\\n   return np.c_[aff(a),h] if split=='untied' else aff(a+q[1:]*h)\\n  def err(q):\\n   d=design(u,q);return (d@fit(d,v)-v).ravel()\\n  q0=np.r_[np.log(k0),[] if split=='untied' else np.full(1 if split=='shared' else 4,-.4 if kind=='sin' else -1.)]\\n  sol=least_squares(err,q0,bounds=(np.r_[-3,np.full(len(q0)-1,-5.)],np.r_[2,np.full(len(q0)-1,5.)]),max_nfev=300)\\n  d=design(u,sol.x);b=design(z,sol.x)@fit(d,v); a,g,h,j=b.T; D=aff(b)\\n  L=np.c_[D,a*h+g*j]; vy=Y[:,0]; tr=Y[:,1:]; e=vy-L@fit(L,vy)\\n  print(kind,split,np.r_[np.exp(sol.x[0]),sol.x[1:]],'panel rms',np.std(sol.fun),'CV y,state',np.mean(abs(vy[52:]-L[52:]@fit(L[:52],vy[:52]))),np.mean(abs(tr[52:]-D[52:]@fit(D[:52],tr[:52]))),'readout rms',np.std(e),'label coef',fit(L,vy))\\n  if kind=='exp' and split=='shared':\\n   t=s['eval_times'];\\n   def basis(q):return -np.expm1(-np.exp(q)[:,None]*t)\\n   def time_err(q):\\n    G=basis(q);return (tr[:52]@np.linalg.pinv(G)@G-tr[:52]).ravel()\\n   rates=least_squares(time_err,np.log([.4,1.8]),bounds=(-4,3)).x; G=basis(rates)\\n   print('rates',np.exp(rates),'time residual rms',np.std(time_err(rates)),'readout rms',np.std(tr-D@fit(D,tr)),'end errors',np.mean(abs(tr[52:,-1]-D[52:]@fit(D[:52],tr[:52]@np.linalg.pinv(G))@G[:,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: panel B has separable odd nonlinear terms -> H2: test a shared scalar warp before mixing; the best current 52/20 errors are 0.0092 label MAE and 0.0079 trajectory MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Finalize the untied harmonic map\",\n      \"rejected_reason\": \"The similar ratios between linear and sine coefficients suggest a simpler shared warp that may fit panel B more precisely.\"\n    }\n  ],\n  \"rationale\": \"Fit warp parameters on panel B alone and compare panel residuals before choosing the readout. A residual at the panel noise floor would justify the shared warp; persistent residuals would favor the validated untied model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "400186c3790ef258abd5b202d0576fc55dcc26fe5c57e342d69184abfb9aad71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32621.23,
+      "usage_known": true,
+      "prompt_tokens": 29468,
+      "cached_tokens": 9344,
+      "completion_tokens": 1178
+    }
+  ]
+}

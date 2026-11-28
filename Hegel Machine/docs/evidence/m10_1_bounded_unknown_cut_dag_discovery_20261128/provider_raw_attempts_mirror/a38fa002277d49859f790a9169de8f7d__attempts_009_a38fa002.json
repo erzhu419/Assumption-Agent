@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a38fa002277d49859f790a9169de8f7d",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a02_batch_06__dag_edit_rewire_edge__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign__rewire_edge",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:28.318967+00:00",
+  "ended_at_utc": "2026-11-28T09:45:39.711615+00:00",
+  "request_sha256": "be0977ec37d553800ecc80515b0942998a5237fd8fceefe87f18eaa4e3b4f539",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 64022,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36772,
+    "cached_tokens": 9344,
+    "completion_tokens": 2057
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_02.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _fit_predict(f, g, target, strength):\\n    mean = f.mean(axis=0)\\n    scale = np.maximum(f.std(axis=0), 0.01)\\n    a = (f - mean) / scale\\n    b = (g - mean) / scale\\n    center = target.mean(axis=0)\\n    return center + b @ np.linalg.solve(a.T @ a + strength * np.eye(a.shape[1]), a.T @ (target - center))\\n\\n\\ndef _features(x, z, panel_coef):\\n    mix = [x * np.roll(z, s, axis=1) for s in (0, 1, -1)]\\n    cos_x = np.cos(1.27 * x)\\n    j = np.column_stack((np.ones(len(x)), x, cos_x)) @ panel_coef\\n    common = np.column_stack((z, *mix, z*z, z*np.roll(z, -1, axis=1)))\\n    return np.column_stack((common, j)), common\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    cal, mixer = inputs['node_00'], inputs['node_01']\\n    u = study['panel_c']['u']\\n    panel_coef = np.linalg.lstsq(np.column_stack((np.ones(len(u)), u, np.cos(1.27*u))), study['panel_c']['v2'], rcond=None)[0]\\n    f, h = _features(cal['cal_tr'], mixer['z_tr'], panel_coef)\\n    g, k = _features(cal['cal_te'], mixer['z_te'], panel_coef)\\n    train = study['train']\\n    y = _fit_predict(f, g, train['y'], 0.012)\\n    state = _fit_predict(h, k, train['traj'], 0.03)\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\ncat >/tmp/compact.py <<'PY'\\nfrom probe import *\\nfrom sklearn.model_selection import KFold\\nfrom scipy.linalg import solve\\nV=x*np.roll(z,1,1); q=z@[-1,-1,1,1]; w=V.sum(1); base=np.c_[np.ones(len(x)),q,w]; F0=np.c_[np.ones(len(x)),z,V]; R=np.c_[y,T]; es=[]\\nfolds=[(np.arange(52),np.arange(52,72))]+list(KFold(4,shuffle=True,random_state=281).split(x)); a,b=folds[0]\\ndef test(F):\\n return np.array([np.abs(F[i]@np.linalg.lstsq(F[j],R[j],rcond=None)[0]-R[i]).mean(0) for j,i in folds])\\ndef report(F):\\n e=test(F);return np.r_[e[0,0],e[1:,0].mean(),e[1:,0].max(),e[0,1:].mean()]\\n# Temporal modes: distinguish common exponential-plus-forcing from horizon-specific noise.\\nfor B1 in [lambda k:np.c_[-np.expm1(-k*t),t],lambda k:np.c_[-np.expm1(-k*t),np.log1p(t)],lambda k:np.c_[-np.expm1(-k[0]*t),-np.expm1(-k[1]*t)],lambda k:np.c_[-np.expm1(-k*t),t,np.ones(len(t))]]:\\n def calc(p):\\n  f=B1(p if len(p)==2 else p[0]);return T@np.linalg.pinv(f.T)@f.T-T\\n try:\\n  r=least_squares(lambda p:calc(p).ravel(),[.6],bounds=(.01,6));print('timefit',r.x,np.mean(abs(r.fun)))\\n except IndexError:\\n  r=least_squares(lambda p:calc(p).ravel(),[.6,1.3],bounds=(.01,6));print('timefit',r.x,np.mean(abs(r.fun)))\\n# Scan bounded univariate corrections to the observed cyclic/contrast law.\\nsc={}\\nfor na,M in [('x',x),('z',z),('v',V),('diag',x*z),('next',x*np.roll(z,-1,1)),('opp',x*np.roll(z,2,1)),('xx',x*np.roll(x,1,1)),('zz',z*np.roll(z,1,1))]:\\n for k in range(4):sc[na+str(k)]=M[:,k]\\n for sg in itertools.product([-1,0,1],repeat=4):\\n  non=np.flatnonzero(sg)\\n  if len(non)>=2 and sg[non[0]]==1:sc[na+str(sg)]=M@sg\\nout=[]\\nfor bn,B in [('tied',base),('free',F0)]:\\n for name,v in sc.items():\\n  for form,h in [('lin',v),('square',v*v),('sin',np.sin(v)),('cos',np.cos(v)),('sat',np.tanh(v)),('wr',w/(1+v*v)),('qr',q/(1+v*v)),('qv',q*v),('wv',w*v)]:\\n   F=np.c_[B,h]; e=report(F);out.append((e,bn,name,form))\\nprint('corrections')\\nfor item in sorted(out,key=lambda it:it[0][1]+.9*it[0][2]+.3*it[0][0])[:25]:print(item)\\nfor bn,B in [('tied',base),('free',F0)]:\\n for pairs in [np.roll(z,2,1)[:,:2]*z[:,:2],z*z,np.cos(1.27*x),np.c_[x*x,z*z],np.c_[x*np.roll(z,-1,1),x*z],z/(1+z*z),x/(1+x*x)]:\\n  print('family',bn,report(np.c_[B,pairs]))\\n# Residual correlations reveal whether the omitted signal tracks trajectory amplitudes or input extremes.\\ncoef=np.linalg.lstsq(F0[a],R[a],rcond=None)[0]; residual=R-F0@coef\\nprint('resid',np.c_[q,w,residual[:,0],residual[:,-1]][np.argsort(residual[:,0])[[0,1,2,-3,-2,-1]]].round(4)); print('linear',coef[:,[0,-1]].round(4));print('joint',np.corrcoef(residual.T)[0].round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Broad polynomial sink → cyclic interactions with panel cosine features; current prescribed holdout probe is 0.0390 scalar MAE and 0.0127 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save the executable sink and run the official test now. The remaining scalar error is the bottleneck; probe compact corrections to the cyclic law, using several data splits to distinguish a real improvement from a gain on the prescribed split alone.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7ea90b47d2ab44d6b3fe8647df768c96125b88e872d337971ccb9ab4fb0d58f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 79136.51,
+      "usage_known": true,
+      "prompt_tokens": 36772,
+      "cached_tokens": 9344,
+      "completion_tokens": 2057
+    }
+  ]
+}

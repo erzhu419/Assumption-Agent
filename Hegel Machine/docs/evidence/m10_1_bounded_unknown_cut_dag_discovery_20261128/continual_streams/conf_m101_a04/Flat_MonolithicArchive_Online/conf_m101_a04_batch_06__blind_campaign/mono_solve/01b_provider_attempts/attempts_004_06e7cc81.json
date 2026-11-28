@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06e7cc81937643319c55cdfc837ba221",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:20.642004+00:00",
+  "ended_at_utc": "2026-11-28T09:44:41.246910+00:00",
+  "request_sha256": "04af0d6607fa89a6a1000f2ded58f8efa9c4a52e9f01807008ceec677dfab91b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30010,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22424,
+    "cached_tokens": 9344,
+    "completion_tokens": 591
+  },
+  "raw_response_text": "{\n  \"action_type\":\"execute_in_remote_docker\",\n  \"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m101_a04_batch_{03,04,05}_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport glob,importlib.util,pickle,numpy as n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];tr=s['train'];s['train']={k:a[:52] for k,a in tr.items()};s['test']={'x':tr['x'][52:]};\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n try:\\n  p=importlib.util.spec_from_file_location('m',f);m=importlib.util.module_from_spec(p);p.loader.exec_module(m);o=m.solve_batch(s); print(f[-12:],n.mean(abs(o['y_hat']-tr['y'][52:])),n.mean(abs(o['state_pred']-tr['traj'][52:])))\\n except Exception as e: print(f,e)\\np=s['panel_a'];x,y=p['u'],p['v'];\\nfor a in [n.c_[n.ones(len(x)),x],n.c_[n.ones(len(x)),x,x**3],n.c_[n.ones(len(x)),x,x*x,x**3]]:\\n w=n.ones(len(x));\\n for i in range(30):\\n  b=n.linalg.lstsq(a*w[:,None],y*w[:,None],rcond=None)[0];r=n.linalg.norm(y-a@b,axis=1);w=1/n.sqrt(1+(r/.025)**2)\\n print('cal',a.shape[1],n.round(n.sort(r),4)); print(n.round(b,4))\\nPY\",\n  \"final_answer\":null,\n  \"active_hypothesis_and_worst_slice_metric\":\"Robust calibration → quadratic and periodic operator branches; archived gate MAEs are 0.333317 for y and 0.210335 for trajectory.\",\n  \"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\":[],\n  \"rationale\":\"Test whether robust fitting recovers the calibration law and score archived compositions on the same 52/20 split to identify reusable stages.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "3240d7eeb33729736bb613841070f10bf82af1ac23445e9d2d4a4c1a2baf34c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20563.92,
+      "usage_known": true,
+      "prompt_tokens": 22424,
+      "cached_tokens": 9344,
+      "completion_tokens": 591
+    }
+  ]
+}

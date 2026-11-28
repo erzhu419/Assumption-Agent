@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3517a7742472488a862f124da4b68aba",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:00:45.141994+00:00",
+  "ended_at_utc": "2026-11-28T10:01:29.084298+00:00",
+  "request_sha256": "05a0c0e2704e56efffd317325e285957f2e57728ce401f79c90d7c7a08292350",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49488,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30322,
+    "cached_tokens": 9344,
+    "completion_tokens": 1838
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '55,90p' /holdout_task/test_dag_candidate.py; cat > /tmp/kernel8.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; z=np.load('/tmp/probe.npz')['u']; p=np.load('/tmp/struct6.npz'); n=len(z); t=s['train']['traj']; Y=np.column_stack((s['train']['y'],t@np.linalg.svd(t,full_matrices=False)[2][:2].T));\\ndef kernels(z,p):\\n D={}; grams=[]; names=[]\\n def add(k,h):\\n  h=np.asarray(h).reshape(len(z),-1); h=h-h.mean(0); sc=np.sqrt(np.mean(h*h,axis=0)); h=h/np.maximum(sc,1e-8); D[k]=h\\n def push(k,g): names.append(k); grams.append(g/np.mean(np.diag(g)))\\n for name,x in [('u',z),*p.items()]:\\n  add(name,x)\\n  for j,col in enumerate(x.T):\\n   for tag,f in [('sin',lambda q:np.sin(2.7*q)),('tanh',lambda q:np.tanh(2*q)),('even',lambda q:q*q),('cube',lambda q:q**3)]: add(name+str(j)+tag,f(col))\\n   for l in (.25,.55,1.):\\n    w=(col[:,None]-col)/max(np.std(col),.01); push(name+str(j)+'rbf'+str(l),np.exp(-.5*(w/l)**2))\\n  w=D[name]@D[name].T/x.shape[1]; push(name+'poly2',w**2); push(name+'poly3',w**3)\\n  for l in (.7,1.4,2.8):\\n   dd=np.diag(w); push(name+'rbf'+str(l),np.exp(-.5*np.maximum(dd[:,None]+dd-2*w,0)/(l*l)))\\n for a,b in combinations(['u',*p],2):\\n  x=D[a]; v=D[b]; push(a+'*'+b,(x@x.T)*(v@v.T)); add(a+'diag'+b,x*v)\\n for k,h in D.items():push(k,h@h.T)\\n return np.asarray(grams),np.asarray(names)\\nK,names=kernels(z,{k:p[k] for k in p.files});\\ndef fit(K,Y,tr,te,prior=.035):\\n U=Y[tr]; mean=U.mean(0); scale=U.std(0); U=(U-mean)/scale\\n B=K[:,tr][:,:,tr].copy(); shape=B.shape; B=B.reshape(len(B),-1).T.copy(); d=len(B.T); I=np.eye(len(tr)); one=np.ones_like(I); nt=U.shape[1]\\n def obj(v):\\n  w=np.exp(v); A=(B@w[:-1]).reshape(shape[1:])+w[-1]*I+one*3; C=cho_factor(A); a=cho_solve(C,U); ai=cho_solve(C,I); J=nt*ai-a@a.T; val=.5*np.sum(a*U)+nt*np.log(np.diag(C[0])).sum(); g=np.r_[B.T@J.ravel(),np.trace(J)]*.5*w; return val+prior*np.sum(w[:-1]),g+np.r_[prior*w[:-1],0.]\\n v=minimize(obj,np.r_[np.full(d,-5.),-5.],jac=True,method='L-BFGS-B',bounds=[(-17,5)]*d+[(-12,0)],options={'maxiter':240,'ftol':3e-7}).x; w=np.exp(v); g=np.einsum('i,ijk->jk',w[:-1],K)+3; a=cho_solve(cho_factor(g[np.ix_(tr,tr)]+I*w[-1]),U); return (g[np.ix_(te,tr)]@a)*scale+mean,w\\nif __name__=='__main__':\\n for tr,te in [(np.arange(52),np.arange(52,72)),(np.r_[0:18,36:72],np.arange(18,36)),(np.arange(18,72),np.arange(18))]:\\n  for split in (False,True):\\n   pp=[]\\n   for ids in ([slice(None)] if not split else [slice(j,j+1) for j in range(3)]):\\n    pred,w=fit(K,Y[:,ids],tr,te); pp.append(pred); sel=np.argsort(w[:-1])[-8:][::-1]; print('weights',round(w[-1],5),list(zip(names[sel],w[sel].round(3))))\\n   pred=np.column_stack(pp); state=pred[:,1:]@np.linalg.svd(t,full_matrices=False)[2][:2]; print('mae',tr[0],te[0],split,np.mean(abs(pred[:,0]-Y[te,0])),np.mean(abs(state-t[te])),np.mean(abs(pred-Y[te]),0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel8.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse fixed feature fusion → H2 structured kernel shrinkage across calibrated response channels; previous public MAEs were 0.08464 for y and 0.09124 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more terms to the greedy sparse model\",\"rejected_reason\":\"Sixteen terms still leave scalar MAE at 0.0604 and produce unstable dominant trajectory fits.\"}],\"rationale\":\"Fit feature-group weights using each training split only. Comparing shared and separate weights will show whether one upstream feature geometry can predict both outputs through the frozen ridge readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "417a7b7c73cdbc089498adcb24eb61b72edeffd05df127ed690209649d43cebb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46651.16,
+      "usage_known": true,
+      "prompt_tokens": 30322,
+      "cached_tokens": 9344,
+      "completion_tokens": 1838
+    }
+  ]
+}

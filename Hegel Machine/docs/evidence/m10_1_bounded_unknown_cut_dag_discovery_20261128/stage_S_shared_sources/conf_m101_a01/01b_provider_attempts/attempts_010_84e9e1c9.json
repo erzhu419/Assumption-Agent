@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84e9e1c9443948238728600353cb784f",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:28.350264+00:00",
+  "ended_at_utc": "2026-11-28T09:15:57.417524+00:00",
+  "request_sha256": "4f227b4e0222ba66d640a6a857bd493c9abd7d51d0226747a91ce36a8545c7d7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58554,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34508,
+    "cached_tokens": 10880,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/modal.py <<'PY'\\nfrom contextlib import redirect_stdout\\nfrom io import StringIO\\nwith redirect_stdout(StringIO()):\\n from solver_audit import *\\nfrom scipy.spatial.distance import cdist\\nF=m._poly(x,2); D=cdist(x,x,'sqeuclidean'); specs=[]\\nfor power in [0,1,2]:\\n for l in [.6,1.2,2.4,4.8]:\\n  for noise in [.0001,.003,.03]:\\n   specs.append(('gp',power,l,noise))\\nfor mode in ['sinh','atanh','identity']:\\n for scale in [1.05,1.4,2.0,3.0]:\\n  specs.append((mode,scale))\\ndef pred(it,iv,c):\\n if c[0]=='gp':\\n  _,p,l,nug=c; a=F[:,:{0:1,1:5,2:15}[p]]; r=(5*D)**.5/l; k=(1+r+r*r/3)*np.exp(-r); h=a[it]; w=np.linalg.solve(k[np.ix_(it,it)]+nug*np.eye(len(it)),np.c_[h,j[it]]); c0=np.linalg.solve(h.T@w[:,:h.shape[1]],h.T@w[:,h.shape[1]:]); return a[iv]@c0+k[np.ix_(iv,it)]@(w[:,h.shape[1]:]-w[:,:h.shape[1]]@c0)\\n _,_,vt=np.linalg.svd(j[it],full_matrices=False); V=vt[:2]; u=j[it]@V.T; kind,scale=c; scale*=abs(u[:,0]).max(); f, inv={'sinh':(np.sinh,np.arcsinh),'atanh':(np.arctanh,np.tanh),'identity':(lambda z:z,lambda z:z)}[kind]; u[:,0]=scale*f(u[:,0]/scale); z=m._ridge(F[it],F[iv],u,np.r_[0.,[.001]*4,[.1]*10]); z[:,0]=scale*inv(z[:,0]/scale); return z@V\\n\\ndef get(it,iv,c):\\n e=abs(pred(it,iv,c)-j[iv]); return e.mean(),e[:,-1].mean(),e.mean(axis=0).max()\\nsc=[]\\nfor c in specs:\\n a=np.array([get(np.setdiff1d(all_rows,iv),iv,c) for _,iv in folds]); sc.append((c,a))\\nfor c,a in sorted(sc,key=lambda z:.65*z[1][:6,2].max()+.35*z[1][6:,2].max())[:12]: print(c,'public',a[0].round(5),'original worst',a[:6].max(0).round(5),'axis worst',a[6:].max(0).round(5),'axis 2+',a[11].round(5))\\nprint('test extent vs train:',x.min(0),x.max(0),s['test']['x'].min(0),s['test']['x'].max(0)); print('public train summary',t['summary'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/modal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 one-rate relaxation -> H2 shared temporal modes with a nonlinear amplitude; the best one-rate fit has trajectory RMSE 0.01065, and the best validated trajectory variant has worst directional horizon MAE 0.08027.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the fitted rational relaxation law\",\"rejected_reason\":\"Even with each row’s entire measured trajectory available, its RMSE is 0.01065 versus roughly 0.0043 for two shared temporal modes.\"}],\"rationale\":\"Test whether a saturating amplitude or a different smooth trend reduces the positive-third-coordinate extrapolation error without worsening ordinary holdouts. If neither does, retain the validated projected blend and promote the Matérn scalar model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "77978a87610b9fe2919f283b2961270af23ce35fc99423400f4f58e9e9b30b22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31646.54,
+      "usage_known": true,
+      "prompt_tokens": 34508,
+      "cached_tokens": 10880,
+      "completion_tokens": 1070
+    }
+  ]
+}

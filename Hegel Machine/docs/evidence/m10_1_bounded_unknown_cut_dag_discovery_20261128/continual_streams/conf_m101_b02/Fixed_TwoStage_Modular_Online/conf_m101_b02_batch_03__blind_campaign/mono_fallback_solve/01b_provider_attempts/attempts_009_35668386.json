@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "356683862d7a44c8af00a4c5678c14f7",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:33.770344+00:00",
+  "ended_at_utc": "2026-11-28T09:46:10.538651+00:00",
+  "request_sha256": "abb8a163fb1971613710eaca245afd28677799d83cb90cca295cf67afa8f86f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55589,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33663,
+    "cached_tokens": 5504,
+    "completion_tokens": 1473
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/funcs={.tanh.:(/,$d' /tmp/index_probe.py >/tmp/dag_probe.py; cat >>/tmp/dag_probe.py <<'PY'\\nfrom itertools import combinations,combinations_with_replacement\\nfrom scipy.linalg import eigh\\nz,c,d=(cfg[n] for n in ['bai','cbai','dbai']); V=np.c_[z,c,d]; names=[p+str(i) for p in 'zcd' for i in range(4)]; feats={};\\ndef add(n,f):feats[n]=f\\nfor n,v in zip(names,V.T):\\n add(n,v);add(n+'^2',v*v);add(n+'^3',v**3);add('abs('+n+')',abs(v))\\nfor i,j in combinations(range(12),2):\\n a,b=V[:,i],V[:,j];ni,nj=names[i],names[j];add(ni+'*'+nj,a*b);add(ni+'^2*'+nj,a*a*b);add(ni+'*'+nj+'^2',a*b*b)\\nfor i,j,k in combinations(range(12),3):add('*'.join(names[q] for q in (i,j,k)),V[:,i]*V[:,j]*V[:,k])\\nfor i,j in combinations_with_replacement(range(12),2):\\n a,b=V[:,i],V[:,j];ni,nj=names[i],names[j]\\n for g in ([0.] if i==j else [-1.5,-1.,-.5,.5,1.,1.5]):\\n  v=a+g*b;n=ni if g==0 else f'({ni}{g:+g}*{nj})'\\n  for k in [.5,1.,1.5,2.]:\\n   for key,f in [('sin',np.sin),('cos',np.cos),('tanh',np.tanh),('odd',lambda q:-np.sign(q)*np.expm1(-abs(q))),('inv',lambda q:1/(1+q*q)),('rat',lambda q:q/(1+q*q))]:add(f'{key}({k:g}*{n})',f(k*v))\\n for k in [.3,.6,1.,1.6]:\\n  add(f'{ni}/(1+{k}*{nj}^2)',a/(1+k*b*b));add(f'{nj}/(1+{k}*{ni}^2)',b/(1+k*a*a))\\n  if i!=j:\\n   for l in range(12):\\n    if l in (i,j) or i//4==j//4: add(f'{ni}*{nj}/(1+{k}*{names[l]}^2)',a*b/(1+k*V[:,l]**2))\\nF=np.column_stack(list(feats.values())); keys=np.array(list(feats));\\ndef beam(Y,train,test,linear):\\n G=F-F[train].mean(0);G/=np.maximum(np.linalg.norm(G[train],axis=0),1e-12);B=np.c_[np.ones(len(V)),V] if linear else np.ones((len(V),1)); q=np.linalg.svd(B[train],full_matrices=False)[0];a=G[train]; A=a-q@(q.T@a); AA=np.einsum('ij,ij->j',A,A); h=Y[train]-q@(q.T@Y[train]); beam=[()]\\n for depth in range(1,9):\\n  nxt={}\\n  for idx in beam:\\n   if idx:\\n    q2=np.linalg.qr(A[:,idx],mode='reduced')[0];r=h-q2@(q2.T@h); proj=q2.T@A; norms=AA-np.einsum('ij,ij->j',proj,proj)\\n   else:r=h;norms=AA\\n   gains=np.divide((r@A)**2,norms,out=np.zeros_like(norms),where=norms>1e-6)\\n   for j in np.argpartition(gains,-24)[-24:]:\\n    if j not in idx:nxt[tuple(sorted((*idx,j)))]=r@r-gains[j]\\n  beam=sorted(nxt,key=nxt.get)[:24];idx=beam[0];M=np.c_[B,G[:,idx]];e=Y-M@ls(M[train],Y[train]);print(depth,np.round([abs(e[train]).mean(),abs(e[test]).mean()],5),list(keys[list(idx)]),flush=True)\\nfor j,yy in enumerate(np.c_[y,H].T):\\n for linear in [False,True]:\\n  print('TARGET',j,'linear',linear,flush=True);beam(yy,np.arange(52),np.arange(52,72),linear)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_probe.py | grep -E '^TARGET|^[1-8] '\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 uniform quadratic readout → H2 sparse nonlinear readout of inverse A → B → dual C; quadratic 52/20 MAE is 0.034 for y and 0.029 for trajectories, but worst 56/16 y MAE is 0.057.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use quadratic ridge as the final readout\",\"rejected_reason\":\"It passes the fixed scalar split but exceeds tolerance on other splits, so it is a fallback rather than the leading model.\"}],\"rationale\":\"The auxiliary composition is the only one approaching tolerance across outputs. A training-only sparse search tests whether explicit pairwise, triple-product, trigonometric, or rational terms can account for the residual without relying on extrapolation by a generic kernel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9d2fff9b9c145fc4e76668fe7c865bc49693f29f73bb0e5b42b221d70013dda0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39287.89,
+      "usage_known": true,
+      "prompt_tokens": 33663,
+      "cached_tokens": 5504,
+      "completion_tokens": 1473
+    }
+  ]
+}

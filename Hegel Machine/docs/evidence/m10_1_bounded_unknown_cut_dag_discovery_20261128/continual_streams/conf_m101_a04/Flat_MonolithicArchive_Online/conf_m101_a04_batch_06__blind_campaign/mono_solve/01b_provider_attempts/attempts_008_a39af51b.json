@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a39af51bb3ae4a6392f2a637df9c8ebd",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:23.350986+00:00",
+  "ended_at_utc": "2026-11-28T09:46:56.739895+00:00",
+  "request_sha256": "8218051fa5af9188186e5f5be314640a6f3af419cf5982043d5e7794e5687eb0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54496,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33562,
+    "cached_tokens": 9344,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/separate.py <<'PY'\\nfrom compose_probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import svd\\nprint('times',t,'telemetry',s['telemetry_vec']);print('summary match',y.mean(),y.std(),z[:,-1].mean(),z[:,-1].std());\\nfor lab,p in [('B',s['panel_b']),('C2',{'u':s['panel_c']['u'],'v':s['panel_c']['v2']})]:\\n u,v=p['u'],p['v'];\\n for typ,f in [('lin',lambda u:bias(u)),('bil',bil),('poly2',lambda u:poly(u,2)),('cos',lambda u:cos(u,2.4)),('sin',lambda u:bias(np.c_[u,np.sin(2.4*u)]))]:\\n  X=f(u); print(lab,typ,np.std(X@fit(X,v)-v))\\nmain={'x':x,'r':raw,'c':C(x),'d':D(x),'ox':np.cos(2.4*x),'or':np.cos(2.4*raw),'cr':C(raw),'dr':D(raw)}\\nfor k in list(main): main[k+'2']=poly(main[k],2)[:,5:]\\nF={k:bias(a) for k,a in main.items()};F.update({k+l:bias(np.c_[main[k],main[l]]) for k,l in combinations(main,2)});\\nfor k in ['cd','crdr','xd','rd']:\\n a,b=(main['cr'],main['dr']) if k=='crdr' else [main[j] for j in k];F[k+'prod']=bias(np.c_[a,b,(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)]);\\nza=z[:52];y0=y[:52];\\nfor target in [z,y,np.c_[y,z]]:\\n rows=[]\\n for k,a in F.items():\\n  yh=a@fit(a[:52],target[:52]); rr=yh-target; rows.append((np.std(rr[:52]),np.mean(abs(rr[52:])),k))\\n print('best spatial',sorted(rows)[:12]);\\nfor l,f in [('e',lambda k:-np.expm1(-k*t)),('r',lambda k:t/(1+k*t))]:\\n for k in [.4,.8,1.7,2.4]:\\n  h=f(k); Y=za@h/(h@h);E=za-Y[:,None]*h;print(l,k,'spatial amp',[(a,round(np.std(F[a][:52]@fit(F[a][:52],Y)-Y),4)) for a in ['x','r','c','d','cr','dr','cd','crdr']])\\nfrom itertools import product\\nE=lambda t,k:-np.expm1(-k*t); R=lambda t,k:t/(1+k*t)\\nfor key1,key2 in product(['c','d','cr','dr','cd','crdr','r2','x2','cdprod'],repeat=2):\\n a,b=F[key1],F[key2]\\n def run(p,all=False):\\n  H=np.c_[(a[:,None,:]*E(t,p[0])[None,:,None]).reshape(-1,a.shape[1]),(b[:,None,:]*R(t,p[1])[None,:,None]).reshape(-1,b.shape[1])];w=fit(H[:52*8],za.ravel());return (H@w).reshape(-1,8)-z if all else H[:52*8]@w-za.ravel()\\n p=least_squares(run,[1.7,.4],bounds=(.03,7),max_nfev=45).x;err=run(p,True)\\n if 'scores' not in globals():scores=[]\\n scores.append((np.std(err[:52]),np.mean(abs(err[52:])),key1,key2,p))\\nprint('time-space',sorted(scores)[:15]);print('Y~z',[(k,metrics(np.c_[F[k],z],y)) for k in ['c','d','cd','cr','dr','crdr','x','r']]);print('Y~z alone',metrics(bias(z),y));print('Y~z correlations',np.corrcoef(np.c_[y,z].T)[0]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/separate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Panel-C operators → test raw versus calibrated inputs and separate spatial amplitudes by time law; exploratory 52/20 MAEs are 0.24993 for y and 0.16805 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Continue expanding the unrestricted sparse dictionary\",\"rejected_reason\":\"The previous search reduced training residuals without comparable held-out gains.\"}],\"rationale\":\"Compare raw and calibrated operator inputs and fit separate spatial bases for the two leading time laws. This will show whether the error is in the operator input, the branch amplitudes, or the scalar readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a526eabd3b62610b4085c416b792f20f8b5769d9fe26fb4f1eb96f570b9a7048",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35928.17,
+      "usage_known": true,
+      "prompt_tokens": 33562,
+      "cached_tokens": 9344,
+      "completion_tokens": 1323
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4218fc9229044dabc49a6af16fabca4",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:24.800412+00:00",
+  "ended_at_utc": "2026-11-28T09:20:04.758274+00:00",
+  "request_sha256": "8248e5c6862b24cd30f66260ac07508043023d437f90137f1e4b526271234bed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26502,
+    "cached_tokens": 9344,
+    "completion_tokens": 1603
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/spatial_probe.py <<'PY'\\nfrom operators import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.special import erf\\nfrom sklearn.model_selection import KFold\\nT=S['train']; X=cal(np.vstack([T['x'],S['test']['x']])); Y=np.c_[T['y'],T['traj']]; times=S['eval_times']\\ndef model(pn,vn,kind):\\n u=S[pn]['u']; v=S[pn][vn]\\n if kind=='b':\\n  def d(x,k): return np.c_[aff(x),erf(k*x)]\\n  k=minimize_scalar(lambda k:metric(d(u,k),v)[1],bounds=(.5,2.5),method='bounded').x\\n elif kind=='c':\\n  def d(x,k): return np.c_[np.ones(len(x)),np.arctan(k*x)]\\n  k=minimize_scalar(lambda k:metric(d(u,k),v)[1],bounds=(.5,3),method='bounded').x\\n else:\\n  def d(x,k): return np.c_[aff(x),x*x]\\n  k=1\\n w=fit(d(u,k),v); print(kind,'scale',k,'operator coefficient',np.round(w,3)); return lambda x:d(x,k)@w\\nB=model('panel_b','v','b'); C=model('panel_c','v1','c'); D=model('panel_c','v2','d')\\ncoords={'raw':X,'B':B(X),'C':C(X),'D':D(X),'CB':C(B(X)),'DB':D(B(X)),'BC':B(C(X)),'BD':B(D(X)),'C+D':np.c_[C(X),D(X)],'CB+DB':np.c_[C(B(X)),D(B(X))],'B+X':np.c_[B(X),X],'C+X':np.c_[C(X),X],'D+X':np.c_[D(X),X]}\\nfor a in (.4,1.,2.):\\n for name in ['raw','B','C','D','CB','DB','BC','BD']:\\n  coords[f'{name}/tanh{a}']=np.tanh(a*coords[name]);coords[f'{name}/atan{a}']=np.arctan(a*coords[name])\\nsp=[(np.arange(52),np.arange(52,72)),*KFold(4,shuffle=True,random_state=91).split(Y)]\\ndef score(pred):\\n e=np.array([[np.mean(abs(v[:,0]-Y[j,0])),np.mean(abs(v[:,1:]-Y[j,1:]))] for v,(_,j) in zip(pred,sp)]); return np.r_[e[0],e[1:].mean(0),e[1:].max(0)]\\nrows=[]\\nfor name,x in coords.items():\\n for kind in ['aff','diag2','quad','cubic','rbf0.6','rbf1.2','rbf2.4','matern1.2']:\\n  if kind=='aff': f=aff(x)\\n  elif kind=='diag2': f=np.c_[aff(x),x*x]\\n  elif kind=='quad': f=poly(x,2)\\n  elif kind=='cubic': f=poly(x,3)\\n  else:\\n   dist=cdist(x,x)/np.sqrt(x.shape[1])/float(kind[-3:]);K=np.exp(-.5*dist**2) if kind.startswith('rbf') else (1+5**.5*dist+5/3*dist**2)*np.exp(-5**.5*dist)\\n  for lam in ([.0001,.01,.1] if kind!='aff' else [.0001]):\\n   pr=[]\\n   for i,j in sp:\\n    if kind.startswith(('rbf','matern')):\\n     avg=Y[i].mean(0);pr.append(avg+K[np.ix_(j,i)]@solve(K[np.ix_(i,i)]+lam*np.eye(len(i)),Y[i]-avg,assume_a='pos'))\\n    else:\\n     u=f[i]; pr.append(f[j]@solve(u.T@u+lam*np.eye(u.shape[1]),u.T@Y[i],assume_a='pos'))\\n   e=score(pr);rows.append((name,kind,lam,e))\\nfor col in (2,3):\\n print('BEST',col)\\n for a,b,c,d in sorted(rows,key=lambda row:row[3][col]+.4*row[3][col+2])[:20]:print(a,b,c,np.round(d,5))\\nprint('BASIC')\\nfor a,b,c,d in rows:\\n if '/' not in a and b in ('aff','diag2','quad') and c==.0001:print(a,b,np.round(d,5))\\nq=T['traj'][:52];\\ndef timefit(p):\\n a=-np.expm1(-np.exp(p[:,None])*times); return (q@np.linalg.pinv(a)@a-q).ravel()\\nr=least_squares(timefit,[-1,1]); print('time rates',np.exp(r.x),'rms',np.std(r.fun)); a=-np.expm1(-np.exp(r.x[:,None])*times); print('amplitude example',np.round((T['traj']@np.linalg.pinv(a))[:12],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/spatial_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear panels fitted independently) → H2 (identify which panel composition predicts each output); archived worst-output MAE is 0.300826.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the best isolated panel fit as the forward mechanism.\",\n      \"rejected_reason\": \"Panel fit alone cannot establish which outputs depend on that panel or where it enters the computation.\"\n    }\n  ],\n  \"rationale\": \"Compare calibrated coordinates, panel compositions, interaction terms, and smooth baselines on labeled splits. The separate scalar and trajectory errors will guide which branches to retain, while a two-mode time fit tests whether trajectory error is primarily spatial.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "492c3c582b8343dc9380d59cfe721e6a33f2b5a44674c30a2098bf606d8353a1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42609.39,
+      "usage_known": true,
+      "prompt_tokens": 26502,
+      "cached_tokens": 9344,
+      "completion_tokens": 1603
+    }
+  ]
+}

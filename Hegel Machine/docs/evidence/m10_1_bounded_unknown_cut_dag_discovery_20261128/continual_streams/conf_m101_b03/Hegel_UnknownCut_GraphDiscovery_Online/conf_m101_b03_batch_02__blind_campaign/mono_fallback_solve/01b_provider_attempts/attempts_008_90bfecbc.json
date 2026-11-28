@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "90bfecbcfaaf4fe0bbe252c0e9b6f883",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b03_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:10.802407+00:00",
+  "ended_at_utc": "2026-11-28T09:29:56.107996+00:00",
+  "request_sha256": "84a5dde29d159fe3345f166321aac98c13cbcaa26c6ed3f12c41ca3d37358e04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46987,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29466,
+    "cached_tokens": 9344,
+    "completion_tokens": 1895
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the inputs and recover a dual-operator response and relaxation model.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), 1)\\n    du, dv = u[i] - u[j], v[i] - v[j]\\n    slope = np.array([np.median(dv[du[:, k] != 0, k] / du[du[:, k] != 0, k])\\n                      for k in range(u.shape[1])])\\n    shift = np.median(v - u * slope, axis=0)\\n    error = np.linalg.norm(v - shift - u * slope, axis=1)\\n    keep = error <= 4 * np.median(error)\\n    design = np.stack((np.ones_like(u[keep]), u[keep]), axis=2)\\n    shift, slope = np.column_stack([_fit(design[:, k], v[keep, k])\\n                                    for k in range(u.shape[1])])\\n    return shift, slope\\n\\n\\ndef _panel_outputs(panel, z):\\n    u = panel['u']\\n\\n    def products(x):\\n        return np.column_stack((np.ones(len(x)), x * np.roll(x, 1, axis=1)))\\n\\n    a = products(z) @ _fit(products(u), panel['v1'])\\n    target = panel['v2']\\n\\n    def harmonic(x, p):\\n        frequency, weight = p\\n        return np.column_stack((np.ones(len(x)), x,\\n                                x*x - 2*weight*np.sin(frequency*x/2)**2))\\n\\n    def residual(p):\\n        f = harmonic(u, p)\\n        return (f @ _fit(f, target) - target).ravel()\\n\\n    fits = [least_squares(residual, (w, -.2), bounds=((.5, -1.), (5., 1.)))\\n            for w in (1.5, 2.5, 3.5)]\\n    p = min(fits, key=lambda fit: fit.cost).x\\n    c = harmonic(z, p) @ _fit(harmonic(u, p), target)\\n    return a, c\\n\\n\\ndef _relaxation(times, traj):\\n    def basis(log_rates):\\n        return -np.expm1(-times[:, None] * np.exp(log_rates))\\n\\n    def residual(log_rates):\\n        h = basis(log_rates)\\n        return (h @ _fit(h, traj.T) - traj.T).ravel()\\n\\n    rates = least_squares(residual, np.log([.4, 2.]), bounds=(-5., 3.)).x\\n    h = basis(np.sort(rates))\\n    return h, _fit(h, traj.T).T\\n\\n\\ndef _slow_mode(design, design_test, c, c_test, amplitude):\\n    scale = np.sqrt(np.mean(c*c, axis=0))\\n    c, c_test = c / scale, c_test / scale\\n\\n    def kernel(x, y):\\n        r = np.sqrt(5 / x.shape[1]) * cdist(x, y) / 1.25\\n        return (1 + r + r*r/3) * np.exp(-r)\\n\\n    cov = kernel(c, c)\\n    cov.flat[::len(c)+1] += .003\\n    factor = cho_factor(cov)\\n    inv_design = cho_solve(factor, design)\\n    inv_amp = cho_solve(factor, amplitude)\\n    trend = _fit(design.T @ inv_design, design.T @ inv_amp)\\n    return design_test @ trend + kernel(c_test, c) @ (inv_amp - inv_design @ trend)\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    shift, scale = _calibration(study['panel_a'])\\n    a, c = _panel_outputs(study['panel_c'], (x - shift) / scale)\\n    base = np.column_stack((np.ones(len(x)), a, c))\\n    paired = a*c\\n    response = np.column_stack((base, paired.sum(axis=1)))\\n    y_hat = response[n:] @ _fit(response[:n], train['y'])\\n\\n    design = np.column_stack((base, paired))\\n    h, amplitudes = _relaxation(study['eval_times'], train['traj'])\\n    fast = design[n:] @ _fit(design[:n], amplitudes[:, 1])\\n    slow = _slow_mode(design[:n], design[n:], c[:n], c[n:], amplitudes[:, 0])\\n    state_pred = np.column_stack((slow, fast)) @ h.T\\n    terminal = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), terminal.mean(), terminal.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 paired linear amplitudes → H2 paired readout with a smooth slow-mode residual; the pilot's worst trajectory MAE across seven splits was 0.01680, versus 0.02461 for H1.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the linear slow-mode readout\",\n      \"rejected_reason\": \"The panel-C residual model reduced trajectory error on both ordered splits and all five shuffled folds.\"\n    }\n  ],\n  \"rationale\": \"Implement the compact panel maps and the validated slow-mode correction independently of the scalar readout. The public validator will catch a schema error or an implementation change that breaks either 52/20 MAE gate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "38565316d4eb83582a8661caf908edaa043e34acc7b2ce075ad3a62c8d59c48f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47924.03,
+      "usage_known": true,
+      "prompt_tokens": 29466,
+      "cached_tokens": 9344,
+      "completion_tokens": 1895
+    }
+  ]
+}

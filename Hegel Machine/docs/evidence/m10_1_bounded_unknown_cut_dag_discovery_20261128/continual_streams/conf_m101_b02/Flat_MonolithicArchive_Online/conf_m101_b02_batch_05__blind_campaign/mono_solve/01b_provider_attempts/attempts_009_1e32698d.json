@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e32698d059b4eb7887d98eb3b60e683",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:45:05.331486+00:00",
+  "ended_at_utc": "2026-11-28T09:45:46.415518+00:00",
+  "request_sha256": "3548f75836a20ba3ecf93fcff552249e533eaadd91f921a81f7836d78e7bda72",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57320,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32903,
+    "cached_tokens": 9344,
+    "completion_tokens": 1790
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_batch05.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ntr = s['train']\\nx, y, obs = (tr[k] for k in ('x', 'y', 'traj'))\\nt = s['eval_times']\\nfit, D = m['_fit'], m['_design']\\na = m['_calibrate'](s['panel_a'], x)\\nb = m['_operator'](s['panel_b'], 'v', a, m['_threshold_power'])\\nc = m['_operator'](s['panel_c'], 'v1', b, m['_odd_saturation'])\\nc_no_a = m['_operator'](s['panel_c'], 'v1', m['_operator'](s['panel_b'], 'v', x, m['_threshold_power']), m['_odd_saturation'])\\nc_no_b = m['_operator'](s['panel_c'], 'v1', a, m['_odd_saturation'])\\n\\ndef designs(z, v):\\n    scalar = D(z, v, np.sum(z*v, axis=1))\\n    return scalar, np.column_stack((scalar, z[:,1]*v[:,0]))\\n\\nbase = designs(a,c)\\nno_a, no_b = designs(x,c_no_a), designs(a,c_no_b)\\nno_cross = (base[0][:,:-1], base[0][:,:-1])\\n\\ndef predict(ds, it, iv):\\n    gy, gs = ds\\n    py = gy[iv] @ fit(gy[it], y[it])\\n    def modes(r): return -np.expm1(-t[:,None]*r)\\n    def residual(r):\\n        h = modes(r)\\n        return (h @ fit(h, obs[it].T) - obs[it].T).ravel()\\n    h = modes(least_squares(residual, [.42,1.8], bounds=([.05,.95],[.95,5])).x)\\n    ps = gs[iv] @ fit(gs[it], obs[it]) @ (h @ np.linalg.pinv(h))\\n    return py, ps\\n\\n# Test missing pair symmetries and saturated quotients without using outer labels to select terms.\\nchallenges = {}\\ncoords = np.column_stack((a,c))\\nfor i in range(8):\\n    for j in range(i+1,8):\\n        for sign in [-1,1]:\\n            q = coords[:,i] + sign*coords[:,j]\\n            challenges[f'({i}{sign:+d}*{j})^2'] = q*q\\n            for rate in [.2,1.]:\\n                challenges[f'dot/(1+{rate}*({i}{sign:+d}*{j})^2)'] = base[0][:,-1]/(1+rate*q*q)\\nlabels = ['base',*challenges]\\nvariants = [base]+[tuple(np.column_stack((g,v)) for g in base) for v in challenges.values()]\\nids = np.arange(len(x))\\nrng = np.random.default_rng(706)\\np = np.argsort(np.linalg.norm(x,axis=1))\\nsplits = [('ordered-52/20',ids[:52],ids[52:]), ('high-norm',p[:52],p[52:])]\\nfor j in range(3):\\n    p = rng.permutation(ids)\\n    splits.append((f'random-{j}',p[:52],p[52:]))\\n\\ndef score(py, ps, iv):\\n    ds = abs(ps-obs[iv]); return np.array([abs(py-y[iv]).mean(), ds.mean(), ds.mean(0).max()])\\n\\nresults = []\\nfor name,it,iv in splits:\\n    inner = np.array_split(rng.permutation(it),4)\\n    def inner_metric(g, target):\\n        return np.mean([np.mean(abs(g[h] @ fit(g[np.setdiff1d(it,h)], target[np.setdiff1d(it,h)]) - target[h])) for h in inner])\\n    iy = min(range(len(variants)), key=lambda j:inner_metric(variants[j][0],y))\\n    iz = min(range(len(variants)), key=lambda j:inner_metric(variants[j][1],obs))\\n    fold = dict(s, train={k:tr[k][it] for k in ('x','y','traj')}, test={'x':x[iv]})\\n    pred = m['solve_batch'](fold)\\n    actual = score(pred['y_hat'],pred['state_pred'],iv)\\n    np.testing.assert_allclose(predict(base,it,iv)[0],pred['y_hat'],atol=1e-9)\\n    np.testing.assert_allclose(predict(base,it,iv)[1],pred['state_pred'],atol=1e-9)\\n    challenge = score(*predict((variants[iy][0],variants[iz][1]),it,iv),iv)\\n    results.append([actual,challenge,*[score(*predict(d,it,iv),iv) for d in [no_a,no_b,no_cross]]])\\n    print(name, 'base', actual.round(6), 'challenger', challenge.round(6), 'terms', labels[iy], '/', labels[iz])\\nfor label,row in zip(['base','nested challenger','omit A calibration','bypass B','omit interactions'],np.max(results,axis=0)):\\n    print('worst',label,row.round(6))\\nassert np.max(np.asarray(results)[:,0]) < .038\\nprint('study fields:', list(s), '; train fields:', list(tr))\\nprint('trajectory two-mode residual RMSE:', np.linalg.norm(np.linalg.svd(obs,compute_uv=False)[2:])/np.sqrt(obs.size))\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch05.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (missing spatial terms) -> H2 (compact calibrated cascade with two relaxation modes); pre-audit worst scalar, trajectory, and timestamp MAEs were 0.005399, 0.004548, and 0.006993.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a batch-offset or relay-switching model\",\n      \"rejected_reason\": \"The documented study has continuous outputs and no per-row batch labels or relay state; such a fit would not test an observed nuisance.\"\n    }\n  ],\n  \"rationale\": \"Use nested validation to see whether pairwise sums, differences, or rational terms improve held-out errors, and ablate A and B to test whether each measured operator matters downstream. Change the solver only if the audit reveals a meaningful worst-slice improvement or a contract failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5f37f0f808fa9278e203bdf789093014add895bfc6f9ac02a5b0c3cb2309bf80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46179.69,
+      "usage_known": true,
+      "prompt_tokens": 32903,
+      "cached_tokens": 9344,
+      "completion_tokens": 1790
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "469f27efe0ce4917bdc6a444c420678c",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:09.517961+00:00",
+  "ended_at_utc": "2026-11-28T09:30:33.727149+00:00",
+  "request_sha256": "4702264b4cbbd0d5e32377d02cbd6d08a8b9773dc1a5c1db86bdfa8f1a631d75",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31796,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22123,
+    "cached_tokens": 9344,
+    "completion_tokens": 770
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/panel_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nfit=lambda x,y: np.linalg.lstsq(x,y,rcond=None)[0]\\ndef poly(x,d):\\n idx=[p for k in range(d+1) for p in itertools.combinations_with_replacement(range(4),k)]\\n return np.array([np.prod(x[:,p],axis=1) for p in idx]).T,idx\\nfor panel,key in [('panel_a','v'),('panel_c','v1'),('panel_c','v2')]:\\n p=s[panel]; x,y=p['u'],p[key]; keep=np.ones(len(x),bool)\\n if panel=='panel_a':\\n  z,_=poly(x,1)\\n  for _ in range(3):\\n   r=np.linalg.norm(z@fit(z[keep],y[keep])-y,axis=1); keep=r<3*np.median(r)\\n print(panel,key,'kept',keep.sum())\\n for d in [1,2,3]:\\n  z,idx=poly(x,d); xx=z[keep]; yy=y[keep]; c=fit(xx,yy); e=xx@c-yy; h=np.sum(xx*np.linalg.pinv(xx).T,axis=1); print('degree',d,'rms',np.std(e),'LOO',np.std(e/np.maximum(1-h,.0001)[:,None]) if xx.shape[0]>xx.shape[1] else None)\\n  if panel=='panel_a' or (d==2 and key=='v2'):\\n   for j in range(4): print(j,[(idx[i],round(c[i,j],5)) for i in np.argsort(abs(c[:,j]))[-7:][::-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust affine calibration → sparse nonlinear calibration before graph fitting; the archived 56/16 scalar and trajectory MAEs are 0.198626 and 0.124845.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Sparse contamination alone explains the panel-A deviation from an affine calibration.\",\"empirical_witness\":\"Robust affine fitting isolates three row residuals above 11.99, but the other 45 residuals still range from 0.036 to 0.682.\",\"causal_blanket_diagnosis\":\"Outlier rejection removes the gross contamination but does not recover the clean calibration map; propagation through the affine inverse can distort both readouts.\",\"sublated_pivot\":\"Retain outlier rejection and test sparse polynomial expansions by panel leave-one-out residual.\",\"risk_kind\":\"Calibration basis misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Invert the robust affine map immediately\",\"rejected_reason\":\"The remaining panel residual is large enough to confound downstream feature identification.\"}],\"rationale\":\"Panel leave-one-out error distinguishes an identifiable calibration expansion from polynomial interpolation; its coefficient pattern determines which inverse to test in the prediction graph.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d84306a76613e51ddfed0022c8d77cfda228005a8ca4cb96fe99dc1eb6403b31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24176.59,
+      "usage_known": true,
+      "prompt_tokens": 22123,
+      "cached_tokens": 9344,
+      "completion_tokens": 770
+    }
+  ]
+}

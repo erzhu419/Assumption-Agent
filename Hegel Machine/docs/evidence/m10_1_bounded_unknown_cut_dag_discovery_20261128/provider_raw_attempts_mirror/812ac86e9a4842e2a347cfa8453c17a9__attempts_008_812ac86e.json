@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "812ac86e9a4842e2a347cfa8453c17a9",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:14:39.803387+00:00",
+  "ended_at_utc": "2026-11-28T09:15:15.688818+00:00",
+  "request_sha256": "07e8c3f9cb9895d6557ca620981ffe87ad0818fda7e903d3cf8eb7c204ee6ea4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61148,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36549,
+    "cached_tokens": 10880,
+    "completion_tokens": 1420
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/downstream.py <<'PY'\\nfrom compact import *\\nB,C,D,p=operators(s); f=B(x); c=C(f); d=D(f)\\n# Separate additive terms and pair interactions so their shrinkage need not match.\\ndef cross(a,b): return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef within(a):\\n i,j=np.triu_indices(a.shape[1],1); return a[:,i]*a[:,j]\\nh=np.sign(f)*(-np.expm1(-1.8*abs(f))); q=f*f/np.sqrt(1+p[2]*f*f)\\nblocks={'f':f,'c':c,'d':d,'m':cross(f,c),'hh':within(h),'fd':cross(f,d),'cd':cross(c,d),'ff':within(f),'qq':within(q),'hq':cross(h,q),'h3':h**3,'f3':f**3,'qf':cross(q,f),'sq':f*f,'f_sin':np.sin(2*f),'c_sin':np.sin(2*c),'d_sin':np.sin(2*d),'c_tanh':np.tanh(2*c),'h_sin':np.sin(2*h),'c_even':np.cos(2*c),'d_even':np.cos(2*d),'raw_sin':np.sin(2*x),'raw_tanh':np.tanh(2*x)}\\nbasic=['f','c','d','m']\\nprint('panel B',fit(design(s['panel_b']['u']),s['panel_b']['v'])); print('rank 2 temporal',np.linalg.svd(z,full_matrices=False)[2][:2]); print('fit residual baseline', np.std(Y[:52]-design(*(blocks[k] for k in basic))[:52]@fit(design(*(blocks[k] for k in basic))[:52],Y[:52]),axis=0))\\ndef predictor(tr,va,keys,lam,scale):\\n A=np.column_stack([blocks[k] * (scale if k not in basic else 1) for k in keys]); g=design(A); H=g[tr]; pen=np.full(g.shape[1],lam); pen[0]=0\\n return g[va]@np.linalg.solve(H.T@H+np.diag(pen),H.T@Y[tr])\\nconfigs=[]\\nfor add in [(),*((k,) for k in blocks if k not in basic),('hh','ff','hq','qf'),('c_sin','d_sin','c_even','d_even'),('f3','hh','qf'),('c_sin','f_sin','raw_sin')]:\\n for lam in (3e-5,.0003,.003):\\n  for scale in ((1,) if not add else (.3,1,3)):\\n   configs.append((basic+list(add),lam,scale))\\ndef scores(e): return np.array([e[:,0].mean(),e[:,1:].mean(),e[:,-1].mean()])\\nerrors=[]\\nfor cfg in configs:\\n ee=np.array([scores(abs(predictor(tr,va,*cfg)-Y[va])) for tr,va in folds]); errors.append(ee)\\nE=np.array(errors); names=[(','.join(cfg[0][4:]),cfg[1],cfg[2]) for cfg in configs]\\nfor j in (0,1):\\n score=E[:,1:6,j].mean(1)+.5*E[:,-1,j]\\n for k in np.argsort(score)[:8]: print('rank',j,names[k],E[k,0],E[k,1:6].mean(0),E[k,-1])\\n# Choose feature set inside each outer training set, including a radial inner slice.\\nfor oi,(tr,va) in enumerate(folds):\\n rng=np.random.RandomState(761+oi); subsets=np.array_split(rng.permutation(tr),3); rad=tr[np.argsort(np.linalg.norm(x[tr],axis=1))[-max(10,len(tr)//5):]]; inn=[(np.setdiff1d(tr,j),j) for j in [*subsets,rad]]\\n e=np.array([[scores(abs(predictor(t,k,*cfg)-Y[k])) for t,k in inn] for cfg in configs]); objective=e[:,:3].mean(1)+.5*e[:,-1]; ky=np.argmin(objective[:,0]); kz=np.argmin(objective[:,1]); kb=1\\n print('nested',oi,names[ky],names[kz],list(E[ky,oi,:1])+list(E[kz,oi,1:]),'base',E[kb,oi])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/downstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 compact panel maps alone → H2 readout terms that preserve saturation during extrapolation; compact maps give prescribed y MAE 0.02291 but high-amplitude y MAE 0.04967.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply a bounded link to the scalar output\",\"rejected_reason\":\"Every tested tanh and sine inverse link worsened high-amplitude scalar error.\"}],\"rationale\":\"The compact operators improved panel fidelity but did not reduce the extrapolation error. Test additive and interaction bases with separate shrinkage, selecting inside outer training folds; promote only if the scalar and trajectory errors improve without relying on the prescribed split for selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "62ec2f01f07c0bf6898ae88e957625d1e4b7bf5d560a41f87357d6f3999989ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38486.92,
+      "usage_known": true,
+      "prompt_tokens": 36549,
+      "cached_tokens": 10880,
+      "completion_tokens": 1420
+    }
+  ]
+}

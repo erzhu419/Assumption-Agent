@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "beb0301d9f3e4d66b613502d90a1fe71",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:03.806458+00:00",
+  "ended_at_utc": "2026-11-28T09:21:38.392422+00:00",
+  "request_sha256": "67cec5a8a7df4de6379ef431d085219e396670fe1a1c552a94bfe680829c97ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42416,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28666,
+    "cached_tokens": 9344,
+    "completion_tokens": 1338
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ard.py <<'PY'\\nexec(open('/tmp/operators.py').read().split('res=[]')[0])\\nfrom scipy.linalg import solve_triangular\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nz=B(A(x)); z=(z-z.mean(0))/z.std(0)\\nYt=Y[:,1:]; modes=np.linalg.svd(Yt,full_matrices=False)[2][:2]; YY=np.c_[Y[:,0],Yt@modes.T]\\nrng=np.random.default_rng(228); splits=[(np.arange(52),np.arange(52,72))]+[(p[:52],p[52:]) for p in (rng.permutation(72) for _ in range(8))]+[(p[:52],p[52:]) for p in (np.random.default_rng(1983).permutation(72) for _ in range(1))]\\n\\ndef fitK(z,a,b,tar,kind,poly,ard):\\n d=(z[:,None]-z[None,:])**2; q=(z@z.T/4+1)**2; p=aff(z); n=len(a); aa=np.ix_(a,a); ba=np.ix_(b,a)\\n def mats(h):\\n  g=np.exp(h[:4] if ard else np.repeat(h[0],4)); R=d@g\\n  if kind=='gauss': k=np.exp(-R); kd=-k\\n  else:\\n   r=np.sqrt(5*R); k=(1+r+r**2/3)*np.exp(-r); kd=-5/6*(1+r)*np.exp(-r)\\n  sg=np.exp(h[-1]); k+=poly*q\\n  return k,kd,g,sg\\n def obj(h,ret=False):\\n  k,kd,g,sg=mats(h); L=cho_factor(k[aa]+sg*np.eye(n)); pa=p[a]; ap=cho_solve(L,pa); pp=cho_factor(pa.T@ap); v=cho_solve(L,tar[a]); c=cho_solve(pp,pa.T@v); v-=ap@c\\n  if ret:return p[b]@c+k[ba]@v\\n  rss=np.sum(tar[a]*v); dof=n-pa.shape[1]; loss=dof*np.log(rss/dof)+2*np.log(L[0].diagonal()).sum()+2*np.log(pp[0].diagonal()).sum()+.35*np.sum((h[:(-1)]-np.log(.13))**2)\\n  H=cho_solve(L,np.eye(n))-ap@cho_solve(pp,ap.T); M=H-dof/rss*np.outer(v,v); gk=np.einsum('ij,ijk,ij,k->k',M,d[aa],kd[aa],g); return loss,np.r_[gk if ard else gk.sum(),sg*np.trace(M)]+np.r_[.7*(h[:-1]-np.log(.13)),0]\\n init=np.log([.13]*(4 if ard else 1)+[.003]); r=minimize(obj,init,jac=True,bounds=[(-5,1.5)]*(len(init)-1)+[(-12,-2)],method='L-BFGS-B');return obj(r.x,True),np.exp(r.x)\\nfor name,w in [('AB',z),('raw',(x-x.mean(0))/x.std(0))]:\\n for kind in ['gauss','matern']:\\n  for poly in [.0,.05,.3]:\\n   for ard in [False,True]:\\n    E=[]; E2=[]\\n    for a,b in splits:\\n     yp,h=fitK(w,a,b,YY[:,0],kind,poly,ard); E.append(abs(yp-YY[b,0]).mean());\\n     _,_,mh=np.linalg.svd(Yt[a],full_matrices=False); mh=mh[:2]; cp=Yt@mh.T; tp=np.column_stack([fitK(w,a,b,cp[:,i],kind,poly,ard)[0] for i in range(2)])@mh; E2.append(abs(tp-Yt[b]).mean());\\n     if len(E)==1: h0=h\\n    print(name,kind,poly,ard,np.round([E[0],np.mean(E),max(E),E2[0],np.mean(E2),max(E2)],5),np.round(h0,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ard.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Fixed isotropic kernel → fold-fitted directional smoothness; the current AB baseline scores 0.03537/0.01151 prescribed-split MAE and 0.04378/0.01677 worst-fold MAE for response/trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the fitted Panel C approximations as the forward law\",\"rejected_reason\":\"Several distinct functions reproduce Panel C's second output at comparable error, and the corresponding AD kernel has worse worst-fold response error.\"}],\"rationale\":\"Check whether learning directional smoothness entirely within each training fold improves the response margin and whether fitting two trajectory amplitudes improves state prediction independently. Retain the fixed AB kernel if the added flexibility does not help.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5e913d6eab18496499e123861261047f50529ced84b6e66cf5c19faff625a10c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37161.54,
+      "usage_known": true,
+      "prompt_tokens": 28666,
+      "cached_tokens": 9344,
+      "completion_tokens": 1338
+    }
+  ]
+}

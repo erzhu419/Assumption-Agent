@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b33948860dcb467c9115dc8e5343a5c4",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:43:45.654028+00:00",
+  "ended_at_utc": "2026-11-28T09:44:17.533173+00:00",
+  "request_sha256": "e2c77fe31c4efd053098ec2c0cc947713b4a8b964d91bcc2ac0172d7600fba86",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 44884,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28375,
+    "cached_tokens": 5504,
+    "completion_tokens": 1248
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/check_node01.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.linalg import cho_factor,cho_solve\\nD='/holdout_task/'\\ns=pickle.load(open(D+'public_batch.pkl','rb'))[0]['study']; d=runpy.run_path(D+'_frozen_nodes/node_00.py')['run_node']({'__input__':s}); node=runpy.run_path(D+'node_01.py')['run_node']; y=d['y']; T=d['traj']; z=d['z']; ids=np.arange(len(y))\\nfolds=[ids[52:],*np.array_split(np.random.default_rng(92).permutation(len(y)),5)]\\n# Candidate and comparison banks use only the fitting fold for scaling and weighting.\\nviews=('i2b','x2b','a2','ij','x','ib')\\ndef bank(i,j):\\n  x=z['x'][np.r_[i,j]]; x=(x-x[:len(i)].mean(0))/x[:len(i)].std(0); G=(1+x@x.T/4)**2\\n  n=len(i); I=np.eye(n); yc=y[i]-y[i].mean(); ans=[]\\n  for k in views:\\n    w=z[k][np.r_[i,j]]; w=(w-w[:n].mean(0))/w[:n].std(0); d=(w[:,None,:]-w[None,:,:])**2\\n    for l in (1.1,1.5,2.2,3.2):\\n      r=d.sum(2)/l**2; R=np.exp(-r/2); h=np.sqrt(5*r); M=(1+h+h*h/3)*np.exp(-h); A=np.exp(-d/(2*l*l)).mean(2)**2\\n      for C in (R,R*.5+A*.5,M):\\n        for a in (.3,1,2):\\n          K=G+a*C\\n          for e in (.0015,.008,.02):\\n            L=cho_factor(K[:n,:n]+e*I); b=cho_solve(L,yc); diag=cho_solve(L,I).diagonal(); loo=np.mean(abs(b/diag)); ml=np.log(yc@b/n)+2*np.log(np.diag(L[0])).sum()/n\\n            ans.append((loo,ml,y[i].mean()+K[n:,:n]@b))\\n  return ans\\nrows=[]\\nfor j in folds:\\n  i=np.setdiff1d(ids,j); zz={k:v[np.r_[i,j]] for k,v in z.items()}; out=node({'node_00':{'z':zz,'y':y[i],'traj':T[i]}})\\n  ans=bank(i,j); scores=np.array([(q[0],q[1]) for q in ans]); P=np.array([q[2] for q in ans]); pred=[out['y_hat']]\\n  for sc,temp in zip(scores.T,(.006,.07)):\\n    w=np.exp(-(sc-sc.min())/temp); pred.append(w@P/w.sum())\\n  pred += [(pred[1]+pred[2])/2,(pred[0]+pred[1])/2]\\n  rows.append([*[np.mean(abs(p-y[j])) for p in pred],np.mean(abs(out['state_pred']-T[j])),np.max(np.mean(abs(out['state_pred']-T[j]),axis=0))]);\\nprint('columns: current, LOO ensemble, ML ensemble, adaptive blend, current+LOO, trajectory, worst trajectory horizon'); print(np.round(rows,6)); print('worst',np.round(np.max(rows,axis=0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_node01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic trend plus one panel-view kernel → compare fold-adaptive pooling; the exact artifact passes official scalar MAE 0.033130 and trajectory MAE 0.011861.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reselect the kernel by the official tail alone\",\n      \"rejected_reason\": \"The current artifact already passes that tail; a replacement needs better performance on other held-out slices without losing acceptance.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the exact artifact on additional held-out folds and check trajectory horizons separately. Compare scalar pooling whose weights are estimated only within each fitting fold; keep the accepted artifact unless that comparison reveals a materially better worst-slice result.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b250dd64763daf54abbf5261bbb92679d05aaaded46193bd450fc57a6bba0763",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34444.04,
+      "usage_known": true,
+      "prompt_tokens": 28375,
+      "cached_tokens": 5504,
+      "completion_tokens": 1248
+    }
+  ]
+}

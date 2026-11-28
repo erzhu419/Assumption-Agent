@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "204ab5cdc2cf4c0b83b89f05cb050578",
+  "call_seq": 12,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:53.683633+00:00",
+  "ended_at_utc": "2026-11-28T09:25:28.142981+00:00",
+  "request_sha256": "af42ad00abae6a5703bb9cc323b01741dfb3159c1010bffa74011ef7fe4cc836",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41791,
+    "cached_tokens": 9344,
+    "completion_tokens": 1386
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/final_probe.py <<'PY'\\nfrom graph_probe import *\\nfrom sparse_graph import pred\\nfrom scipy.spatial.distance import cdist\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _smooth\\nrng=np.random.default_rng(1124)\\nss=splits.copy()\\nfor i in range(8):\\n p=rng.permutation(72); ss.append((p[:56],p[56:]))\\nconfigs=[]\\nfor warp in ('raw','quad+','quad-','tanh','sinh','joint','hessian'):\\n for ell in (.65,.8,1.,1.2,1.45):\\n  for nug in (1e-5,1e-4,5e-4):\\n   for trend in ('linear','latent','quadratic','latentquadratic'):\\n    configs.append((warp,ell,nug,trend))\\ncache={}\\nfor a,b in ss:\\n xp=x/x[a].std(0); zz=z.copy();zz[b]=_smooth(x[a],z[a],x[b],1.7,.0001).ravel();zn=zz/z[a].std();\\n coeff=np.linalg.lstsq(poly(xp[a],2),y[a],rcond=None)[0]; H=np.zeros((4,4));\\n for (i,j),c in zip(combinations_with_replacement(range(4),2),coeff[5:]):H[i,j]=H[j,i]=c/(1+(i!=j))\\n val,vec=np.linalg.eigh(H)\\n frames2={'raw':xp,'quad+':xp+.18*xp*xp,'quad-':xp-.18*xp*xp,'tanh':np.tanh(.52*xp)/.52,'sinh':np.sinh(.55*xp)/.55,'joint':np.c_[xp,.55*zn], 'hessian':(xp@vec)*np.sqrt(.6+.8*abs(val)/max(abs(val)))}\\n D1=poly(xp,1); D2=poly(xp,2); ds={k:cdist(h,h,'sqeuclidean')/4 for k,h in frames2.items()}; D={'linear':D1,'latent':np.c_[D1,zn],'quadratic':D2,'latentquadratic':np.c_[D2,zn]}\\n for w,l,n,t in configs:\\n  K=np.exp(-ds[w]/(2*l*l)); p,il,_=pred(K,D[t],y,a,b,n,True);cache.setdefault((w,l,n,t),[]).append((y[b]-p,il))\\ndef score(v):\\n m=np.array([abs(r).mean() for r in v]);return .35*m[0]+.3*m.mean()+.35*m.max(),np.round([m[0],m.mean(),m.max()],5)\\nfor k in sorted(cache,key=lambda k:score([r for r,_ in cache[k]])[0])[:16]: print(k,score([r for r,_ in cache[k]])[1])\\nfor n in (3,8,16):\\n print('nested LOO',n,score([np.mean([cache[k][i][0] for k in sorted(cache,key=lambda k:cache[k][i][1])[:n]],axis=0) for i in range(len(ss))])[1])\\nkeys=[('raw',1.,.0001,'latent'),('raw',1.,.0001,'linear')]; good=sorted(cache,key=lambda k:score([r for r,_ in cache[k]])[0]); keys+=good[:12]\\nout=[]\\nfor i,k in enumerate(keys):\\n for g in keys[i:]:\\n  for a in (.25,.5,.75):\\n   v=[(1-a)*r[0]+a*t[0] for r,t in zip(cache[k],cache[g])]; out.append((*score(v),k,g,a))\\nfor _,sc,k,g,a in sorted(out,key=lambda r:r[0])[:12]:print('blend',sc,k,g,a)\\nprint('by gate');\\nfor _,sc,k,g,a in sorted(out,key=lambda r:r[1][0])[:8]:print(sc,k,g,a)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/final_probe.py; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (fixed smoother) -> H2 (compare modest coordinate warps and trajectory-conditioned smoothing); the best scalar gate MAE is 0.04080, with a worst repeated-split MAE of 0.05818 for that model.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use inner leave-one-out selection from the larger dictionary\",\"rejected_reason\":\"Its best single-model selector produced 0.05187 MAE on the required split.\"}],\"rationale\":\"Check whether modest changes to distances or a blend reduce the required-split error without degrading the repeated splits. Run the official validator now so any interface failure can be fixed alongside the final model choice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "652c3fc1baf229ada5cc2cceb583f70b25879130891fb83b32d576eb03d10424",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36992.8,
+      "usage_known": true,
+      "prompt_tokens": 41791,
+      "cached_tokens": 9344,
+      "completion_tokens": 1386
+    }
+  ]
+}

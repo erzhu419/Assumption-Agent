@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb44e0111d594ae6896d3a0a19ef77b9",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:05.310474+00:00",
+  "ended_at_utc": "2026-11-28T09:26:33.488216+00:00",
+  "request_sha256": "e921ad62f16990de3e4c4a135980859269d6d759a6b0b64bfa9337123ecbda45",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26367,
+    "cached_tokens": 9344,
+    "completion_tokens": 1112
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout_probe.py <<'PY'\\nfrom probe import *\\nfrom sklearn.linear_model import Lasso, OrthogonalMatchingPursuit\\nfrom itertools import combinations\\nnp.set_printoptions(precision=4,suppress=True)\\nz,b,_,w=coords(T['x']); pc=S['panel_c']; uc=pc['u']; print('C1 rows', ['1']+[''.join(map(str,k)) for j in (1,2) for k in combinations_with_replacement(range(4),j)]); cfit=fit(aff(power(uc,2)),pc['v1']); print(cfit); c=aff(power(z,2))@cfit\\nH,A,r=modes(T['traj'][:52]); A=fit(H,T['traj'].T).T; Y=np.c_[T['y'],A]; print('mode rates/correlations',r,np.corrcoef(Y.T)); n=52\\n\\ndef polynames(p,d):return [''.join(str(i) for i in k) for j in range(1,d+1) for k in combinations_with_replacement(range(p),j)]\\ndef run(name,F,N,detail=False):\\n mean=F[:n].mean(0); std=np.maximum(1e-10,F[:n].std(0)); X=(F-mean)/std\\n for j in range(3):\\n  yt=Y[:,j]; pars=[.00025,.001,.003,.008,.02]; print(name,'output',j)\\n  for alpha in pars:\\n   model=Lasso(alpha=alpha*yt[:n].std(),max_iter=30000,tol=2e-6).fit(X[:n],yt[:n]); yh=model.predict(X); cc=model.coef_/std; inds=np.argsort(abs(model.coef_))[-9:][::-1]; print(alpha, np.round([np.mean(abs(yh[:n]-yt[:n])),np.mean(abs(yh[n:]-yt[n:]))],5),[(N[i],round(cc[i],4)) for i in inds] if detail and alpha in (.001,.008) else '')\\nrun('z cubic',power(z,3),polynames(4,3),True)\\nrun('z quartic',power(z,4),polynames(4,4),True)\\nrun('z+oracle modes',power(np.c_[z,A],2),polynames(6,2),True)\\nF=[power(z,3)]; N=polynames(4,3)\\ndef add(q,names): F.append(q);N.extend(names)\\nfor tag,q in [('B',b),('C',c),('W',w)]:\\n add(power(q,2),[tag+s for s in polynames(4,2)]);add((z[:,:,None]*q[:,None,:]).reshape(-1,16),[f'{i}{tag}{j}' for i in range(4) for j in range(4)])\\nfor tag,q in [('z',z),('b',b),('c',c),('w',w)]:\\n for k,fun in [('tanh',np.tanh),('sin',np.sin),('cos',np.cos),('rat',lambda x:x/(1+x*x))]:\\n  add(fun(q),[f'{k}({tag}{i})' for i in range(4)])\\nadd((c[:,:,None]*w[:,None,:]).reshape(-1,16),[f'C{i}W{j}' for i in range(4) for j in range(4)])\\nrun('operators',np.column_stack(F),N,True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 sparse latent polynomial → H2 sparse operator or trajectory-mediated readout; the 52/20 degree-four scalar MAE is 0.02972, and degree-three trajectory MAE is 0.03652.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship separate cubic and quartic regressors now\",\"rejected_reason\":\"They clear the mean-error threshold, but the trajectory margin is narrow and the active terms are not yet identified.\"}],\"rationale\":\"Compare sparse coefficients for calibrated polynomials, correctly reconstructed panels, and observed trajectory modes. If one dictionary produces a compact, low-residual fit, test that structure in end-to-end validation without observed test trajectories.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fa94d110a3a886357ef14a6a855d2040b6d689ab338625036406ff5b4af24fb4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30739.05,
+      "usage_known": true,
+      "prompt_tokens": 26367,
+      "cached_tokens": 9344,
+      "completion_tokens": 1112
+    }
+  ]
+}

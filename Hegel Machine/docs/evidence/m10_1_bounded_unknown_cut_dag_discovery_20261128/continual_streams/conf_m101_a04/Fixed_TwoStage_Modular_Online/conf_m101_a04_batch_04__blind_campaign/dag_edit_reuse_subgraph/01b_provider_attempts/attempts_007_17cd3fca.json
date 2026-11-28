@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17cd3fca4a7742bda64a5410ca5bb179",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:29.110243+00:00",
+  "ended_at_utc": "2026-11-28T09:37:57.832275+00:00",
+  "request_sha256": "bff4a6c0ee9e8cbe92a9b1348a6bce9790ea418a1f3d8d29ea1c2ddfbe30227a",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 39460,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25292,
+    "cached_tokens": 9344,
+    "completion_tokens": 1120
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '55,155p' /holdout_task/test_dag_candidate.py; cat > /tmp/probe_handoff.py <<'PY'\\nimport itertools as it\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnode = runpy.run_path('/holdout_task/node_00.py')\\nread = runpy.run_path('/holdout_task/_frozen_nodes/node_01.py')['_readout_basis']\\nout = node['run_node']({'__input__': s})\\nn = out['n_train']; h = out['h'][:n]; blocks = np.split(h, 4, axis=1)\\ny = np.column_stack((out['y'], out['traj']))\\np = s['panel_a']; a = node['_fit_a'](p); err = np.linalg.norm(p['v']-node['_affine'](p['u'])@a,axis=1)\\nprint('panel A sorted forward residuals',np.sort(err)[[0,23,40,44,45,46,47]],'cond',np.linalg.cond(a[1:]))\\nprint('target singular values',np.linalg.svd(y-y.mean(0),compute_uv=False))\\n\\ndef report(name, f, pen=1, fit=True):\\n k = f@f.T\\n scores=[]\\n for lam, Y in ((.0003,y[:,:1]),(.001,y[:,1:])):\\n  C=np.linalg.inv(k+pen*lam*np.eye(n)); e=(C@Y)/C.diagonal()[:,None]; g=np.abs(e)\\n  scores.extend((g.mean(), g.mean(0).max()))\\n if fit:\\n  coef=np.linalg.lstsq(f,y,rcond=1.e-8)[0]; rms=np.sqrt(np.mean((f@coef-y)**2,axis=0))\\n  print(name, f.shape[1],np.round(scores,5),'fit rms',np.round(rms[[0,1,-1]],5))\\n return scores\\n\\nfor m in range(1,5):\\n for inds in it.combinations(range(4),m):\\n  x=np.column_stack([blocks[i] for i in inds]); report(''.join('ub12'[i] for i in inds),read(x))\\nfor form,x in [('u+b+v1+v2',sum(blocks)),('b+v1+v2',sum(blocks[1:])),('v1+v2',sum(blocks[2:])),('linear-all',h),('primitive',np.c_[blocks[0],node['_v1_basis'](blocks[0])[:,1:],np.cos(2.4*blocks[0])])]:\\n report(form, np.c_[np.ones(n),x] if form=='linear-all' else read(x))\\nfor scale in (.03,.1,.25,.5,2.):\\n for main in (None,0,1,2,3):\\n  x=np.column_stack([b*(1. if i==main else scale) for i,b in enumerate(blocks)]); score=report('',read(x),fit=False)\\n  print('scale',scale,'main',main,np.round(score,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe_handoff.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unweighted concatenation) -> H2 (identify which calibrated blocks and interactions the frozen quadratic readout needs); public CV MAE is 0.174398 for y and 0.138759 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare calibration residuals, in-sample projection errors, and held-out prediction errors. Large calibration residuals would warrant revisiting the inversion; small projection errors paired with large held-out errors would instead point to excess readout interactions or poor feature scaling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "03604ffb4e9e794e1bf7ab179b2609272269e45b05de7788a6fa6486a9bd5dc5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31423.27,
+      "usage_known": true,
+      "prompt_tokens": 25292,
+      "cached_tokens": 9344,
+      "completion_tokens": 1120
+    }
+  ]
+}

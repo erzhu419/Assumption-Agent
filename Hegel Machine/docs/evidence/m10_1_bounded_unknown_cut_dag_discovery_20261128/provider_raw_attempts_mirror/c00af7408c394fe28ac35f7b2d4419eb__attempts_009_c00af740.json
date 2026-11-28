@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c00af7408c394fe28ac35f7b2d4419eb",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:50.239257+00:00",
+  "ended_at_utc": "2026-11-28T09:22:20.151449+00:00",
+  "request_sha256": "2e2537145aa2d4c2224a0e01abb00673e14160fdaae319f8636b8930d3d5ac83",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30471,
+    "cached_tokens": 9344,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/readout.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; rng=np.random.default_rng(311)\\nfolds=[(np.arange(52),np.arange(52,72))]\\nfor _ in range(5):\\n p=rng.permutation(72);folds.append((p[:52],p[52:]))\\n\\ndef poly(x,d):\\n return np.c_[np.ones(len(x)),*[np.prod(x[:,c],axis=1) for k in range(1,d+1) for c in combinations_with_replacement(range(4),k)]]\\ndef fit_predict(x,xt,y,degree,acts):\\n p,pt=poly(x,degree),poly(xt,degree); q=np.linalg.qr(p)[0]; resid=y-q@(q.T@y)\\n def hidden(x,z):\\n  a=np.c_[x,np.ones(len(x))]@z.reshape(-1,5).T\\n  return np.stack([f(a[:,j]) for j,f in enumerate(acts)],axis=1)\\n def fun(z,ret=False):\\n  h=hidden(x,z)\\n  if ret:\\n   a=np.c_[p,h]; c=np.linalg.lstsq(a,y,rcond=1e-9)[0]; return np.c_[pt,hidden(xt,z)]@c\\n  h-=q@(q.T@h); c=np.linalg.lstsq(h,resid,rcond=1e-9)[0]\\n  return np.r_[resid-h@c, .001*z]\\n starts=[np.r_[np.eye(4)[k],b] for k in range(4) for b in (0.,.6)]\\n rr=np.random.default_rng(773)\\n starts+=list(rr.normal(0,.75,(20,5)))\\n ini=[np.concatenate([starts[(k+7*j)%len(starts)] for j in range(len(acts))]) for k in range(len(starts))]\\n results=[least_squares(fun,a,bounds=(-4,4),max_nfev=105) for a in ini]\\n results=sorted(results,key=lambda r: np.linalg.norm(r.fun))\\n preds=np.array([fun(r.x,True) for r in results[:5]])\\n return preds[0],np.median(preds,axis=0),np.sqrt(np.mean(results[0].fun[:len(x)]**2)),results[0].x\\nacts={'tanh':np.tanh,'sin':np.sin,'atan':np.arctan,'rad':lambda z:1/(1+z*z),'rat':lambda z:z/(1+z*z),'cos':np.cos}\\nfor degree, names in [(1,('tanh',)),(1,('tanh','tanh')),(1,('sin','tanh')),(2,('tanh',)),(2,('sin',)),(2,('atan',)),(2,('rad',)),(2,('rat',)),(2,('cos',)),(2,('tanh','sin')),(2,('sin','sin')),(2,('tanh','tanh')),(2,('rad','sin'))]:\\n errors=[]; fits=[]\\n for i,j in folds:\\n  p,m,e,z=fit_predict(x[i],x[j],y[i],degree,[acts[k] for k in names]); errors.append([abs(p-y[j]).mean(),abs(m-y[j]).mean(),e]);fits.append(z)\\n e=np.array(errors); print(degree,names,'split',e[0].round(5),'mean',e.mean(0).round(5),'max',e.max(0).round(5),'coeffs',fits[0].round(2),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Calibrated kernels -> compact polynomial-plus-ridge readout if it generalizes; regularized Matérn on A gives scalar MAE 0.0386 on 52/20 and 0.0386 worst across six splits.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Force panel C into the scalar path\",\"rejected_reason\":\"The tested panel C compositions worsened held-out scalar predictions.\"}],\"rationale\":\"Fit ridge directions and coefficients inside each split. If compact nonlinear terms fail to improve on the kernel, use the kernel rather than claiming an identified readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0ee737b2fa69881006b644896c2c8f4a672f8831ea640c0c16e4e9de4d53e2a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32529.22,
+      "usage_known": true,
+      "prompt_tokens": 30471,
+      "cached_tokens": 9344,
+      "completion_tokens": 1186
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7dc1812d75a45ad816f75ee51e52217",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:54.051093+00:00",
+  "ended_at_utc": "2026-11-28T09:11:39.319250+00:00",
+  "request_sha256": "c3f2f1e16474dc748f5b423f1c0e278614c2c84bf097632db02aabcfcba4bc6f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21591,
+    "cached_tokens": 10880,
+    "completion_tokens": 1814
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/structure.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; y=tr['y']; z=tr['traj']; t=s['eval_times']; np.set_printoptions(precision=6,suppress=True,linewidth=130)\\nL=lambda x: np.c_[np.ones(len(x)),x]\\nix=list(combinations_with_replacement(range(4),2)); Q=lambda x: np.column_stack([x[:,i]*x[:,j] for i,j in ix]); A=lambda x: np.c_[L(x),Q(x)]\\ndef fit(a,b): return np.linalg.lstsq(a,b,rcond=None)[0]\\ndef hessian(c):\\n H=np.zeros((4,4));\\n for (i,j),v in zip(ix,c[5:]): H[i,j]=H[j,i]=v/(1+(i!=j))\\n return H\\nfor k in [52,72]:\\n c=fit(A(x[:k]),y[:k]); H=hessian(c); print('y',k,'resid std',np.std(y[:k]-A(x[:k])@c),'linear',c[:5],'quad',H,'eigh',np.linalg.eigh(H),sep='\\\\n')\\n print('traj residual std, linear vs quadratic',np.std(z[:k]-L(x[:k])@fit(L(x[:k]),z[:k])),np.std(z[:k]-A(x[:k])@fit(A(x[:k]),z[:k])))\\n C=fit(L(x[:k]),z[:k]); print('time basis',np.linalg.svd(C)[1:]); print('increments',np.diff(C,axis=1))\\nprint('calibrated panel coordinates:')\\np=s['panel_a']; u=p['u']; v=p['v']; good=np.max(abs(v-u),axis=1)<1; bias,scale=np.array([fit(np.c_[np.ones(good.sum()),a[good]],b[good]) for a,b in zip(u.T,v.T)]).T\\nb=s['panel_b']; B=fit(L(b['u']),b['v']); print('M B',B); print('quadratic in raw, A, invA, B, A->B, invA->B');\\nfor az in (x,x*scale+bias,(x-bias)/scale):\\n for zz in (az,L(az)@B):\\n  c=fit(A(zz),y); print('linear',c[:5], 'quadratic',c[5:]);\\ndef reduced_y(sel, xnew,r):\\n x0=x[sel]; y0=y[sel]; a=L(x0); H=hessian(fit(A(x0),y0)); d,U=np.linalg.eigh(H); inds=np.argsort(abs(d))[-r:]; signs=np.sign(d[inds]); F=U[:,inds]*np.sqrt(abs(d[inds]));\\n def shift(p): return np.sum((x0@p.reshape(4,r))**2*signs,axis=1)\\n def err(p):\\n  res=y0-shift(p); return res-a@fit(a,res)\\n F=least_squares(err,F.ravel()).x.reshape(4,r); return L(xnew)@fit(a,y0-shift(F.ravel()))+np.sum((xnew@F)**2*signs,axis=1)\\ndef traj(sel,xnew,kind):\\n a=L(x[sel]); C=fit(a,z[sel]);\\n if kind=='rank2':\\n  u,d,v=np.linalg.svd(a@C,full_matrices=False); C=(C@v[:2].T)@v[:2]\\n elif kind!='linear':\\n  def basis(p):\\n   if kind=='2exp': return np.vstack([-np.expm1(-np.exp(v)*t) for v in p]);\\n   if kind=='cascade':\\n    k,j=np.exp(p); a=-np.expm1(-k*t); b=a-k*t*np.exp(-k*t) if abs(k-j)<1e-6 else 1-(j*np.exp(-k*t)-k*np.exp(-j*t))/(j-k); return np.vstack((a,b))\\n   if kind=='explin': return np.vstack((-np.expm1(-np.exp(p[0])*t),t))\\n   if kind=='exppulse': return np.vstack((-np.expm1(-np.exp(p[0])*t),t*np.exp(-np.exp(p[1])*t)))\\n  def err(p):\\n   g=basis(p); return (a@(C-C@np.linalg.pinv(g)@g)).ravel()\\n  opt=least_squares(err,[-.3] if kind=='explin' else [-.3,.5],bounds=(-5,4)); g=basis(opt.x); C=C@np.linalg.pinv(g)@g\\n  if len(sel)==52 and sel[0]==0 and sel[-1]==51: print(kind,np.exp(opt.x),np.std(err(opt.x)))\\n return L(xnew)@C\\nmodels=['linear','rank2','2exp','cascade','explin','exppulse']; rng=np.random.default_rng(190)\\nsplits=[(np.arange(52),np.arange(52,72))]; splits += [(np.setdiff1d(np.arange(72),va),va) for va in np.array_split(rng.permutation(72),4)]\\nfor sel,va in splits:\\n print('Y MAE',np.mean(abs(y[va]-A(x[va])@fit(A(x[sel]),y[sel]))),[(r,round(np.mean(abs(y[va]-reduced_y(sel,x[va],r))),6)) for r in (1,2,3)])\\n print('T MAE (mean,max horizon)',[(k,np.round([np.mean(e),np.max(np.mean(e,axis=0))],6)) for k in models for e in [abs(z[va]-traj(sel,x[va],k))]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine in raw inputs) -> H2 (quadratic label and rank-two affine trajectory); fixed-split MAEs are 0.0055 for the quadratic label and 0.0045 for the affine trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine raw-input basis is sufficient for the scalar label.\",\n    \"empirical_witness\": \"Fixed-split label MAE drops from 0.0567 to 0.0055 when quadratic terms are added.\",\n    \"causal_blanket_diagnosis\": \"Affine calibration and mixing alone cannot capture the scalar label's observed input curvature; trajectory errors are already small with affine input dependence.\",\n    \"sublated_pivot\": \"Measure quadratic rank in the panel coordinates and test separate low-rank time models for the trajectory.\",\n    \"risk_kind\": \"omitted quadratic interactions\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a shared nonlinear regressor for both outputs\",\n      \"rejected_reason\": \"Quadratic terms improve the label but worsen fixed-split trajectory MAE relative to affine regression; the outputs need separate models.\"\n    }\n  ],\n  \"rationale\": \"The public split establishes ample margin. Quadratic rank and temporal-basis tests will show whether a smaller model improves validation across additional folds and individual horizons without forcing inactive panels into the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "b2100e3432582b5e44e457f784c9c29d763c53a55fb1393b552b358d1878ae0b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50517.7,
+      "usage_known": true,
+      "prompt_tokens": 21591,
+      "cached_tokens": 10880,
+      "completion_tokens": 1814
+    }
+  ]
+}

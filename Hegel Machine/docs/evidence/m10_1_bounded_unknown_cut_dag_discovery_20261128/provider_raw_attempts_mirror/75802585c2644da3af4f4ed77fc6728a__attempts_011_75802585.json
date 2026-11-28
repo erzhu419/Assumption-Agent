@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "75802585c2644da3af4f4ed77fc6728a",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:11.302248+00:00",
+  "ended_at_utc": "2026-11-28T09:23:53.336667+00:00",
+  "request_sha256": "1ddea881358b0439740d9e4675998fc1d2ab73d602451f34c5ee140b12a3fd62",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73212,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40537,
+    "cached_tokens": 9344,
+    "completion_tokens": 1529
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations_with_replacement\\\\nimport numpy as np', 'import numpy as np\\\\nfrom scipy.optimize import least_squares')\\nb = s.index('def _polynomial')\\ne = s.index('def solve_batch', b)\\ns = s[:b] + '''def _readout(w, a, y):\\n    \\\"\\\"\\\"Fit the affine saturation index, profiling out linear coefficients.\\\"\\\"\\\"\\n    n = len(y)\\n    pair = np.column_stack((w[:, 0] * w[:, 2], w[:, 1] * w[:, 3]))\\n\\n    def design(affine, products, index_coefs):\\n        index = affine @ index_coefs\\n        inv_den = 1 / (1 + index**2)\\n        return np.column_stack((affine, inv_den, index * inv_den,\\n                                products, products * inv_den[:, None]))\\n\\n    a_train, p_train = a[:n], pair[:n]\\n\\n    def residual(index_coefs):\\n        f = design(a_train, p_train, index_coefs)\\n        return f @ _fit(f, y) - y\\n\\n    initial = .2 * _fit(a_train, y)\\n    index_coefs = least_squares(residual, initial, max_nfev=100).x\\n    f = design(a, pair, index_coefs)\\n    return f[n:] @ _fit(f[:n], y)\\n\\n\\n''' + s[e:]\\nb = s.index('    index = a @ _fit', s.index('def solve_batch'))\\ne = s.index('    end =', b)\\ns = s[:b] + \\\"    y_hat = _readout(w, a, train['y'])\\\\n\\\" + s[e:]\\np.write_text(s)\\nPY\\ncat > /tmp/verify_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('batch_solver', path)\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nt = s['train']\\nn = len(t['y'])\\nw = mod._coordinates(s, t['x'])\\n\\ndef checked(study):\\n    p = mod.solve_batch(study)\\n    k, nt = len(study['test']['x']), len(study['eval_times'])\\n    y, z, d = (p[name] for name in ('y_hat', 'state_pred', 'diagnostics_vec'))\\n    for value, shape in ((y, (k,)), (z, (k, nt)), (d, (4,))):\\n        assert isinstance(value, np.ndarray) and value.shape == shape and np.isfinite(value).all()\\n    np.testing.assert_allclose(d, [y.mean(), y.std(), z[:, -1].mean(), z[:, -1].std()], atol=1e-12, rtol=0)\\n    return y, z\\n\\nchecked(s)\\n\\ndef score(i, j):\\n    sub = dict(s, train={key: t[key][i] for key in ('x', 'y', 'traj')} | {'summary': t['summary']}, test={'x': t['x'][j]})\\n    y, z = checked(sub)\\n    return np.abs(y - t['y'][j]).mean(), np.abs(z - t['traj'][j]).mean(axis=0).max()\\n\\nrng = np.random.default_rng(179)\\ngroups = {\\n    'required_52_20': [np.arange(n)],\\n    'archive_56_16': [np.arange(n)],\\n    'random_52_20': [rng.permutation(n) for _ in range(24)],\\n    'directional_52_20': [np.argsort(sign * w[:, k]) for k in range(w.shape[1]) for sign in (-1, 1)],\\n}\\nfor label, orders in groups.items():\\n    k = 56 if label == 'archive_56_16' else 52\\n    scores = np.array([score(q[:k], q[k:]) for q in orders])\\n    ym, zm = scores.max(axis=0)\\n    print(f'{label}: worst scalar MAE {ym:.6f}; worst timestamp state MAE {zm:.6f}', flush=True)\\n    assert ym <= .038, (label, ym)\\n    assert zm < .008, (label, zm)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: normalized cubic readout → H2: two Panel B products with a shared squared-index denominator; exploratory scalar MAE is 0.00920 on 52/20 and 0.01655 on the worst directional split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the normalized cubic\",\n      \"rejected_reason\": \"Its worst directional scalar MAE is 0.15687, versus 0.01655 for the sparse shared-denominator model.\"\n    }\n  ],\n  \"rationale\": \"Promote the compact readout for its directional improvement and retain the accurate affine trajectory. Test the exact artifact in an isolated process on the required split, fresh random splits, and directional splits; run the public validator to catch interface regressions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "004d5d6b4b753fd6deae036a8ce5e52649722a6c6a3b8413025990699c2e5e47",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44603.06,
+      "usage_known": true,
+      "prompt_tokens": 40537,
+      "cached_tokens": 9344,
+      "completion_tokens": 1529
+    }
+  ]
+}

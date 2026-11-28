@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a492db8ffefb42fab79d25bcc3025abd",
+  "call_seq": 13,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:57:03.405998+00:00",
+  "ended_at_utc": "2026-11-28T09:57:33.086327+00:00",
+  "request_sha256": "416889e1d1825ed9c7ab129f2a3596d9bb32d5e68cb7203a2b1223ef8f9a2f98",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80806,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41733,
+    "cached_tokens": 9344,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /holdout_task\\ncp batch_solver.py /tmp/verified_sparse6.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py'); s=p.read_text(); start=s.index('def _scalar_design('); s=s[:start]+'''def solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    x, b, c = _branches(study, np.r_[train['x'], study['test']['x']])\\n    # The shared cyclic interaction is read out independently for y and each time.\\n    design = np.c_[_affine(x), b, c, x * np.roll(c, 1, axis=1)]\\n    pred = design[n:] @ _fit(design[:n], np.c_[train['y'], train['traj']])\\n    y, state = pred[:, 0], pred[:, 1:]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\n'''; s=s.replace('from sklearn.linear_model import lars_path\\\\n',''); i=s.index('from scipy.linalg import cho_factor'); j=s.index('def _branches',i); s=s[:i]+s[j:]; i=s.index('    def c2design'); j=s.index('def solve_batch',i); s=s[:i]+\\\"    return x, b, c1design(b) @ _fit(c1design(c['u']), c['v1'])\\\\n\\\\n\\\\n\\\"+s[j:]; p.write_text(s)\\nPY\\nif ! (python3 validate_public_schema.py && python3 -I validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; tr=s['train']; ids=np.arange(len(tr['x']))\\nsplits=[(ids[:52],ids[52:])]+[(np.setdiff1d(ids,j),j) for j in np.array_split(np.random.default_rng(611).permutation(ids),4)]\\ndef measure(path):\\n    spec=importlib.util.spec_from_file_location('solver',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\n    res=[]\\n    for i,j in splits:\\n        out=mod.solve_batch({**s,'train':{k:tr[k][i] for k in ('x','y','traj')},'test':{'x':tr['x'][j]}})\\n        e=np.abs(out['state_pred']-tr['traj'][j]); res.append([np.abs(out['y_hat']-tr['y'][j]).mean(),e.mean(),e.mean(0).max()])\\n    return np.asarray(res)\\na=measure('batch_solver.py'); b=measure('/tmp/verified_sparse6.py'); print('Compact 52/20 [scalar, state, worst time]:',a[0]); print('Alternate folds worst, compact:',a[1:].max(0),'sparse:',b[1:].max(0)); assert np.all(a[0,:2]<=.038) and np.all(a[1:].max(0)<b[1:].max(0))\\nPY\\n); then\\n  cp /tmp/verified_sparse6.py batch_solver.py\\n  echo 'Retained the previously verified sparse solver.'\\n  python3 validate_public_schema.py\\n  python3 -I validate_public_schema.py\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (sparse quadratic readout) -> H2 (compact cyclic interaction with separate output coefficients); compact scalar MAE was 0.02742 on 52/20 and 0.02491 on the worst inner fold, versus 0.16059 for the sparse model on that fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the sparse model solely for its lower prescribed-split scalar MAE\",\n      \"rejected_reason\": \"Its alternate-fold worst scalar MAE was 0.13521; the compact readout warrants promotion if it passes both output gates and improves alternate-fold performance.\"\n    }\n  ],\n  \"rationale\": \"The cyclic interaction sharply improves inner-fold stability while keeping scalar error below tolerance. Verify the full trajectory and scalar outputs in the exact standalone artifact; retain the verified baseline if the compact model fails either gate or worsens any alternate-fold bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "47509cfaa01240fb4328d9f639aa06c52b802794e6cb2e788e29631bd2319ef8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32263.04,
+      "usage_known": true,
+      "prompt_tokens": 41733,
+      "cached_tokens": 9344,
+      "completion_tokens": 1172
+    }
+  ]
+}

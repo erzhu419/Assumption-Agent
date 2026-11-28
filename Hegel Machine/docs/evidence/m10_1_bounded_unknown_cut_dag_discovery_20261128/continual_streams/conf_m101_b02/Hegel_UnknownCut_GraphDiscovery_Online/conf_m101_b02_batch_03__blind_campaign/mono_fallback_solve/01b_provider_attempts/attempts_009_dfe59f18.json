@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfe59f18dae54fa0b99829e2a7619554",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:46:45.116529+00:00",
+  "ended_at_utc": "2026-11-28T09:47:20.651915+00:00",
+  "request_sha256": "20058213f7e7b9521a889bb7bfd93b195efc2325df00ff309a64e5e8de71095d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61497,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35221,
+    "cached_tokens": 9344,
+    "completion_tokens": 1428
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | grep -A5 -E '^panel|^LEADER 4|^LEADER 5'; OPENBLAS_NUM_THREADS=1 python3 /tmp/cubic.py | head -6; cat > /tmp/sparse_read.py <<'PY'\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom sklearn.linear_model import ARDRegression, lars_path\\nfrom sklearn.model_selection import KFold\\nz=np.load('/tmp/latent.npz'); f,c,d,o,e=[z[k] for k in ('f','c','d','o','e')]; T=z['T']; t=z['times']; h=-np.expm1(-t[:,None]*[1.82,.417]); Y=np.c_[T[:,0], np.linalg.lstsq(h,T[:,1:].T,rcond=None)[0].T]; x=z['x']\\nfolds=[(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72)),*KFold(4,shuffle=True,random_state=123).split(x)]\\ndef dictionary(blocks, degree):\\n import itertools\\n xx=np.concatenate(blocks,axis=1); n=xx.shape[1]; rows=[]; names=[]\\n for k in range(1,degree+1):\\n  for j in itertools.combinations_with_replacement(range(n),k):\\n   rows.append(np.prod(xx[:,j],axis=1)); names.append(j)\\n return np.column_stack(rows),names\\nA={}\\nfor key,blocks in [('mixed',[f,c,d]),('native',[f,o,e]),('rawmixed',[x,c,d])]:\\n A[key]=dictionary(blocks,2)\\nfor k in [-1,0,1,2]:\\n blocks=[f,c,d]; A[f'aligned{k}']=(np.column_stack([*blocks,*(a*np.roll(b,k,axis=1) for a in blocks for b in blocks)]),[])\\nA['elementary']=(np.c_[f,o,e,f*o,f*e,o*e,f**2,o**2,e**2],[])\\nA['mixed_cubic']=dictionary([f,c,d],3)\\nA['broad']=(np.c_[A['mixed'][0],np.sin(f),np.cos(f),np.sin(c),np.cos(c),np.sin(d),np.cos(d)],[])\\ndef regress(g,i,j,method,v):\\n a=g[i]; mu=a.mean(0); std=np.maximum(a.std(0),1e-10); a=(a-mu)/std; b=(g[j]-mu)/std; yy=Y[i]; ymu=yy.mean(0); yy=yy-ymu\\n if method=='ridge':\\n  yp=b@a.T@solve(a@a.T+v*len(a)*np.eye(len(a)),yy,assume_a='pos')\\n elif method=='ard':\\n  yp=np.column_stack([ARDRegression(threshold_lambda=v).fit(a,q).predict(b) for q in yy.T])\\n else:\\n  out=[]\\n  for q in yy.T:\\n   _,_,w=lars_path(a,q,method='lasso',max_iter=v); active=np.flatnonzero(abs(w[:,-1])>1e-10); mat=a[:,active]; out.append(b[:,active]@np.linalg.lstsq(mat,q,rcond=None)[0])\\n  yp=np.column_stack(out)\\n yp+=ymu; return np.c_[yp[:,0],yp[:,1:]@h.T]\\nres=[]\\nfor key,(g,names) in A.items():\\n for method,vals in [('ridge',(1e-5,1e-4,3e-4,.001,.003,.01)),('ard',(100,1000,10000)),('lars',(5,10,15,20,30))]:\\n  if key=='mixed_cubic' and method=='ard':continue\\n  for v in vals:\\n   es=[]\\n   for i,j in folds:\\n    delta=abs(regress(g,i,j,method,v)-T[j]);es.append([delta[:,0].mean(),delta[:,1:].mean()])\\n   es=np.array(es);res.append((key,method,v,*np.round(es[0],5),*np.round(es[1],5),*np.round(es[2:].mean(0),5),*np.round(es[2:].max(0),5)))\\nfor k in (3,4,7,8,9,10):\\n print('metric',k);print(*sorted(res,key=lambda row:row[k])[:6],sep='\\\\n')\\nnp.savez('/tmp/approaches.npz',**{k:g for k,(g,_) in A.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONWARNINGS=ignore python3 /tmp/sparse_read.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated quadratic ridge → operator-coordinate sparse readouts and two shared temporal modes; 52/20 baseline MAEs are 0.03799 scalar and 0.03456 trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a scalar saturation transform\",\n      \"rejected_reason\": \"The tested inverse transforms increased scalar validation error over the raw response.\"\n    }\n  ],\n  \"rationale\": \"Compare sparse and dense fits on both prescribed splits and shuffled folds. If sparse fits improve the worst slices, retain the compact readout; otherwise keep the calibrated ridge baseline.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4158b1b729ac10e2c76c884b5aaec132eb939a6a4d0bbd65c371e95bd0da45ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38101.05,
+      "usage_known": true,
+      "prompt_tokens": 35221,
+      "cached_tokens": 9344,
+      "completion_tokens": 1428
+    }
+  ]
+}

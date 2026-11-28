@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89d0fb15c3004d7ab5855ec8cdae9fe8",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:18:29.137191+00:00",
+  "ended_at_utc": "2026-11-28T09:19:04.121126+00:00",
+  "request_sha256": "69acb1bc5e633cb431ae41286143393ce5465d9d1d76f14fbd33f0b22c3168b2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22547,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19396,
+    "cached_tokens": 9344,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust affine reference panel alignment IRLS; viscoelastic relaxation variable projection' 2>&1 | head -20; cat >/tmp/probe.py <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.linalg import svd\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; T=s['train']['traj']; n=len(x); Y=np.c_[y,T]; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\ndef aff(u): return np.c_[np.ones(len(u)),u]\\ndef ls(x,y): return np.linalg.lstsq(x,y,rcond=None)[0]\\ndef poly(x,d): return np.array([np.prod(x[:,p],axis=1) for k in range(d+1) for p in itertools.combinations_with_replacement(range(x.shape[1]),k)]).T\\na=s['panel_a']; U=aff(a['u']); V=a['v']; ids=np.arange(len(U));\\nfor _ in range(8):\\n A=ls(U[ids],V[ids]); ids=np.argsort(np.linalg.norm(V-U@A,axis=1))[:36]\\nprint('A',A,'A residual row norms',np.sort(np.linalg.norm(V-U@A,axis=1))); z=aff(x)@A\\nb=s['panel_b']; B=ls(aff(b['u']),b['v']); print('B singular values',svd(B[1:],compute_uv=False));\\nc=s['panel_c']; C=[]\\nfor k in ['v1','v2']:\\n for d in [1,2,3]:\\n  F=poly(c['u'],d); w=ls(F[:19],c[k][:19]); print(k,d,np.sqrt(np.mean((F[19:]@w-c[k][19:])**2)), 'coeff',w.T if d==2 else '')\\n C.append(ls(aff(c['u']),c[k]));\\nP=poly(z,2); w=ls(P[:52],Y[:52]); print('quadratic in calibrated coordinates',w[:,[0,8]].T,'residual sv',svd(Y[:52]-P[:52]@w,compute_uv=False));\\nprint('quadratic y residual by input:'); print(np.c_[z,y,y-P@w[:,0]][np.argsort(y-P@w[:,0])][::4]);\\nXs={'raw':x,'a':z,'b':aff(z)@B,'c1':aff(z)@C[0],'c2':aff(z)@C[1]};\\nsplits=[(np.arange(52),np.arange(52,72))]+[(np.setdiff1d(np.arange(72),j),j) for j in np.array_split(np.random.default_rng(13).permutation(72),4)]\\ndef score(F,pen):\\n # unpenalized quadratic trend, optionally regularized higher order or reduced-rank features\\n Q=poly(z,2); F=np.asarray(F,float); F=F/np.maximum(F.std(0),1e-8); K=F@F.T; E=[]\\n for i,j in splits:\\n  q,r=np.linalg.qr(Q[i],mode='complete'); N=q[:,Q.shape[1]:]; v=N@np.linalg.solve(N.T@K[np.ix_(i,i)]@N+pen*np.eye(N.shape[1]),N.T@Y[i]); beta=ls(Q[i],Y[i]-K[np.ix_(i,i)]@v); err=np.abs(Q[j]@beta+K[np.ix_(j,i)]@v-Y[j]); E.append([err[:,0].mean(),err[:,1:].mean(),err[:,-1].mean()]);\\n return np.array(E)\\nfor k,d in Xs.items():\\n for label,F in [('diag3',d**3),('diag34',np.c_[d**3,d**4]),('poly4',poly(d,4)[:,15:]),('trig',np.c_[np.sin(d),np.cos(d),np.sin(1.8*d),np.cos(1.8*d)]),('pairs',np.c_[*[np.sin(d[:,i,None]+d[:,j,None]*np.array([-1,1])) for i,j in itertools.combinations(range(4),2)],*[np.cos(d[:,i,None]+d[:,j,None]*np.array([-1,1])) for i,j in itertools.combinations(range(4),2)]])]:\\n  out=[score(F,p) for p in [.001,.03,.3,3]]; print(k,label,[(a[0].round(4).tolist(),a[1:].max(0).round(4).tolist()) for a in out]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archive readout -> test calibrated-coordinate nonlinear terms; the 52/20 MAEs are 0.051373 for response and 0.016532 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase raw polynomial degree\",\"rejected_reason\":\"The unrestricted cubic already worsened held-out response MAE to 0.0697; test structured terms in the panel coordinates first.\"}],\"rationale\":\"Separate sparse contamination from panel A’s calibration map and test whether its coordinates or an auxiliary panel’s coordinates support a smaller nonlinear readout. Compare response and trajectory errors independently across the required split and four additional folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c8346141f80c6b75179576893d8bd2236091dec8d106df9a78fe7ec5faa63b65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37598.1,
+      "usage_known": true,
+      "prompt_tokens": 19396,
+      "cached_tokens": 9344,
+      "completion_tokens": 1401
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e976629274a04e5b959375d847b76152",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:10:04.628646+00:00",
+  "ended_at_utc": "2026-11-28T09:10:27.264588+00:00",
+  "request_sha256": "6ea7bf8cba34bc8ee414eb4a920818bd38be2d0dcab77f3eaaf5259d80222a42",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 3283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13534,
+    "cached_tokens": 10880,
+    "completion_tokens": 511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat public_asset_index.json validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True,linewidth=155)\\nfor k,v in s.items():\\n for j,a in (v.items() if isinstance(v,dict) else [('',v)]):\\n  a=np.asarray(a); print(k,j,a.shape,'mean',a.mean(0),'std',a.std(0)); print(a[:8] if a.ndim else a)\\nfor p in ('panel_a','panel_b','panel_c'):\\n d=s[p]; u=d['u']; X=np.c_[u,np.ones(len(u))];\\n for k in d:\\n  if k=='u':continue\\n  z=d[k]; b=np.linalg.lstsq(X,z,rcond=None)[0]; e=z-X@b;print(p,k,'affine',b,'sorted residual norms',np.sort(np.linalg.norm(e,axis=1)))\\nprint('traj temporal sv',np.linalg.svd(s['train']['traj'],compute_uv=False))\\nprint('y vs traj linear residual',np.linalg.svd(np.c_[s['train']['traj'],s['train']['y']],compute_uv=False))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 raw input regression -> H2 panel-conditioned computation graph; held-out MAE has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Inspect the contract and measure panel residuals and trajectory rank. These checks determine whether to fit an affine or nonlinear panel model and whether trajectory prediction can use a low-dimensional temporal basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "6c47a1729d9ba2875ea1ecc9ee5da342d0fdc92b8d872aa379ae69bf638104ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22588.38,
+      "usage_known": true,
+      "prompt_tokens": 13534,
+      "cached_tokens": 10880,
+      "completion_tokens": 511
+    }
+  ]
+}

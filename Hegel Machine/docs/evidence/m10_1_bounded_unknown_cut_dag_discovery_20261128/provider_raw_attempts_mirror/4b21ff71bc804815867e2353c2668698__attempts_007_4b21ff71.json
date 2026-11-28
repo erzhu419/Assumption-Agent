@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4b21ff71bc804815867e2353c2668698",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:46.281953+00:00",
+  "ended_at_utc": "2026-11-28T09:56:17.412836+00:00",
+  "request_sha256": "f63ed8bf6c2d3396227404f7381bfec7d55f8cd7476af5438d39d4326433509c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53766,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32583,
+    "cached_tokens": 9344,
+    "completion_tokens": 1203
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/forward_probe.py <<'PY'\\nfrom campaign_probe import *\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\np=s['panel_a']; u,v=p['u'],p['v']; a=aff(u); k=np.argsort(np.linalg.norm(v-a@fit(a,v),axis=1))[:-3]; j=np.arange(4); h=(j+1)%4\\nfor label in ('product','square'):\\n q=u[:,h]; ds=np.stack((np.ones_like(u),u,q,u*q if label=='product' else q*q,u**3),axis=-1); print(label,np.array([fit(ds[k,i],v[k,i]) for i in j]))\\np=s['panel_b']; u,v=p['u'],p['v']; print('B models')\\nfor label,fn,init in [('gaussian',lambda u,p:u*(1-p[4]*np.exp(-p[:4]*u*u)),[1]*4+[1.1]),('gaussian+lin',lambda u,p:np.c_[u,u*np.exp(-p*u*u)],[1]*4),('tanh',lambda u,p:np.c_[u,np.tanh(p*u)],[2]*4),('rational',lambda u,p:np.c_[u,u/(1+p*u*u)],[1]*4),('sin',lambda u,p:np.c_[u,np.sin(p*u)],[2]*4),('sinonly',lambda u,p:np.sin(p*u),[2]*4)]:\\n def r(q):\\n  a=aff(fn(u,q));return (a@fit(a,v)-v).ravel()\\n z=least_squares(r,init,bounds=(.03,8),gtol=1e-13); print(label,np.std(r(z.x)),z.x)\\n print(fit(aff(fn(u,z.x)),v).T)\\nprint('time',times)\\nU,S,V=np.linalg.svd(tr['traj'],full_matrices=False)\\nfor name,f in [('log',lambda p:np.log1p(p*times)),('exp',lambda p:-np.expm1(-p*times)),('power',lambda p:times**p),('sqrt',lambda p:np.sqrt(1+p*times)-1)]:\\n for num in (1,2):\\n  def fun(p):\\n   a=np.column_stack([f(p)]+([np.ones_like(times)] if num==2 else []));return np.linalg.norm(V[0]-a@fit(a,V[0]))\\n  z=minimize_scalar(fun,bounds=(.001,15),method='bounded'); print(name,num,z.x,z.fun)\\nz,b,c,d=old._coords(s); n=52; Q=np.c_[aff(z[:n]),b[:n],c[:n],d[:n]]; T=tr['traj'][:n]; y=tr['y'][:n]; res=T-Q@fit(Q,T); print('state residual svd',np.linalg.svd(res,compute_uv=False)); print('time residual',np.linalg.svd(res,full_matrices=False)[2][:2]);\\namp=old._shared_amplitude(times,T,Q); print('linear contrast',np.std(y-amp-Q@fit(Q,y-amp)), 'linear state',np.std(res));\\nF=np.c_[aff(z),b,(z[:,:,None]*b[:,None,:]).reshape(len(z),-1)]; A=fit(F[:n],np.c_[tr['y'][:n],T]); print('bilinear coeffs y / final state'); print(A[9:,[0,-1]].reshape(4,4,2)); print('train bilinear',np.std(F[:n]@A-np.c_[tr['y'][:n],T],axis=0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/forward_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: infer the forward coordinate map separately from the reference map -> H2: fit a bilinear readout with shared temporal structure; archived-coordinate bilinear target MAE is 0.05828 on 52/20.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the archived-coordinate bilinear fit unchanged\",\"rejected_reason\":\"It improves target MAE but still misses the 0.038 threshold.\"}],\"rationale\":\"Compare panel response families, calibration coefficients, and trajectory residual modes to identify which terms to profile jointly before fitting a final readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3442f8c5d1bc217ac277caf85af10bfd9619f893a64dab01c9e334ab363dcb1e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33742.67,
+      "usage_known": true,
+      "prompt_tokens": 32583,
+      "cached_tokens": 9344,
+      "completion_tokens": 1203
+    }
+  ]
+}

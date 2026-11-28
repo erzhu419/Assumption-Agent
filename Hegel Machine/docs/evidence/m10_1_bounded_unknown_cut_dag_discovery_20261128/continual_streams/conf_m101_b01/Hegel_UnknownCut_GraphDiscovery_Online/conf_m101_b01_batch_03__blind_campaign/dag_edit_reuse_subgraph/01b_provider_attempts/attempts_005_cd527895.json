@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd52789531224cd0b721695f6ac13b27",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b01_batch_03__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_03__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:31:41.797007+00:00",
+  "ended_at_utc": "2026-11-28T09:32:07.259353+00:00",
+  "request_sha256": "fbbc62cb4a143ab69904d7aea76f33e3d5f1b728eef9205b3b5bfec2487cb45e",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 40812,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26778,
+    "cached_tokens": 9344,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 -I -B - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nn0 = load('node_00', '/holdout_task/node_00.py')\\nn1 = load('node_01', '/holdout_task/_frozen_nodes/node_01.py')\\nn2 = load('node_02', '/holdout_task/_frozen_nodes/node_02.py')\\nwith open('public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\npanel = study['panel_a']\\nu, v = panel['u'], panel['v']\\nparams = n0._fit_forward(panel)\\nresiduals = np.linalg.norm(n0._forward(u, params) - v, axis=1)\\ninliers = np.argsort(residuals)[:-3]\\nloo = []\\nfor k in inliers:\\n    keep = np.arange(len(u)) != k\\n    p = n0._fit_forward({'u': u[keep], 'v': v[keep]})\\n    loo.append(np.max(np.abs(n0._forward(u[k], p) - v[k])))\\nobserved = np.concatenate((study['train']['x'], study['test']['x']))\\nmiddle = n0.run_node({'__input__': study})\\nclosure = np.max(np.abs(n0._forward(middle['calibrated_x'], params) - observed))\\nprint('clean_panel_loo_max_abs', max(loo), 'observed_inverse_closure_max_abs', closure)\\nassert max(loo) < 0.001 and closure < 1e-8\\ntrain = study['train']\\norder = np.argsort(np.linalg.norm(train['x'], axis=1))\\nfor label, val in [('central', order[:20]), ('outer', order[-20:])]:\\n    tr = np.setdiff1d(np.arange(len(order)), val)\\n    y, traj = train['y'][tr], train['traj'][tr]\\n    fold = dict(study, train={'x': train['x'][tr], 'y': y, 'traj': traj, 'summary': np.array([y.mean(), y.std(), traj[:, -1].mean(), traj[:, -1].std()])}, test={'x': train['x'][val]})\\n    out = n2.run_node({'__input__': fold, 'node_01': n1.run_node({'node_00': n0.run_node({'__input__': fold})})})\\n    print(label, 'y_mae', np.mean(np.abs(out['y_hat'] - train['y'][val])), 'traj_mae', np.mean(np.abs(out['state_pred'] - train['traj'][val])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Pairwise-only calibration -> shared cyclic bilinear-plus-cubic calibration; official holdout MAE is 0.009786 for y and 0.008258 for trajectories against 0.038 limits.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The official test passed. Check whether the exact artifact misses an inverse root on real inputs or loses accuracy at the observed range extremes; if it does, distinguish an inversion failure from frozen-sink extrapolation before changing the node.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e5a08d371a9099a0c79a5d0597f75fd0eb60c36f86db2e05367807fe643a2cca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28086.78,
+      "usage_known": true,
+      "prompt_tokens": 26778,
+      "cached_tokens": 9344,
+      "completion_tokens": 943
+    }
+  ]
+}

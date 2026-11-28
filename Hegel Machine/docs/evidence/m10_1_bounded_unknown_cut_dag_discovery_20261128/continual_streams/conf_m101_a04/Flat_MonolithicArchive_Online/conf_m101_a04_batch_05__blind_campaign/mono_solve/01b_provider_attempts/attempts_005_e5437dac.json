@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5437dac9ff448b0917e542947babccf",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:04.983715+00:00",
+  "ended_at_utc": "2026-11-28T09:40:47.467742+00:00",
+  "request_sha256": "9972db97989340ae6e5f94f2503122a564d79c53acdd01c98956c3cedc0dea00",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41217,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25960,
+    "cached_tokens": 9344,
+    "completion_tokens": 1702
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph.py <<'PY'\\nimport pickle,itertools as it\\nimport numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; t=s['eval_times']; n=52\\nfit=lambda f,y: np.linalg.lstsq(f,y,rcond=1e-9)[0]\\nrms=lambda z:np.sqrt(np.mean(z*z)); mae=lambda z:np.mean(abs(z))\\nbias=lambda z:np.c_[np.ones(len(z)),z]\\np=s['panel_a']; a=bias(p['u']); v=p['v']; mask=np.ones(len(a),bool)\\nfor _ in range(8):\\n W=fit(a[mask],v[mask]); err=np.linalg.norm(a@W-v,axis=1); mask=err<max(.001,4*np.median(err))\\nprint('A affine',W,'errors',np.sort(err)); raw=tr['x']; x=(raw-W[0])@np.linalg.inv(W[1:]); print('X ranges',x.min(0),x.max(0))\\nbp=s['panel_b']; wb=fit(bias(bp['u']),bp['v']); b=bias(x)@wb; bi=(x-wb[0])@np.linalg.inv(wb[1:]); print('B orthogonality',wb[1:]@wb[1:].T)\\ncp=s['panel_c']; u=cp['u'];\\ndef bil(z):\\n a,b,c,d=z.T; return bias(np.c_[a*b,a*d,b*c,c*d])\\nwc=fit(bil(u),cp['v1']); print('C coefficients',wc)\\ndef cb(z): return bil(z)@wc\\ndef cbi(z): return np.linalg.lstsq(wc[1:].T,(z-wc[0]).T,rcond=None)[0].T\\nv=cp['v2']\\ndef cos(z,w):return bias(np.c_[z,np.cos(w*z)])\\ndef v2_err(w):\\n f=cos(u,w);return rms(f@fit(f,v)-v)\\nfreq=minimize_scalar(v2_err,bounds=(.7,1.8),method='bounded').x; wd=fit(cos(u,freq),v); print('D coefficients',freq,wd)\\ndef cb2(z):return cos(z,freq)@wd\\nY=tr['y']; T=tr['traj']; tb=np.c_[-np.expm1(-1.8312*t), t/(1+.40745*t)]; amp=fit(tb,T[:n].T).T\\n\\ndef cross(a,b):return (a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\\ndef matched(a,b):return (a*b).sum(1,keepdims=True)\\ndef poly(a):return np.column_stack([a[:,i]*a[:,j] for i,j in it.combinations_with_replacement(range(a.shape[1]),2)])\\nbase={'X':x,'B':b,'Binv':bi,'C(X)':cb(x),'D(X)':cb2(x),'C(B)':cb(b),'D(B)':cb2(b),'C(Binv)':cb(bi),'D(Binv)':cb2(bi)}\\nprint('individual bases: name, scalar val, traj val, scalar fit, fast amp fit, slow amp fit')\\nrows=[]\\ndef check(name,f):\\n f=bias(f); y=Y-f@fit(f[:n],Y[:n]); yy=T-f@fit(f[:n],T[:n]); ae=amp-f[:n]@fit(f[:n],amp)\\n rows.append((name,mae(y[n:]),mae(yy[n:]),mae(y[:n]),mae(ae[:,0]),mae(ae[:,1])))\\nfor k,z in base.items():check(k,z);check(k+'+quad',np.c_[z,poly(z)])\\nfor k,l in it.combinations(base,2):\\n if k in ('X','B','Binv') and l in ('X','B','Binv'):continue\\n a,d=base[k],base[l]; label=k+' '+l\\n check(label,np.c_[a,d]);check(label+' dot',np.c_[a,d,matched(a,d)]);check(label+' dot+01',np.c_[a,d,matched(a,d),a[:,0]*d[:,1]]);check(label+' cross',np.c_[a,d,cross(a,d)])\\nfor j in range(1,6):\\n print('rank',j)\\n for r in sorted(rows,key=lambda r:r[j])[:8]:print(r[0],np.round(r[1:],6))\\nfor k in ('X','B','Binv'):\\n z=base[k]; c,d=cb(z),cb2(z); dot=matched(c,d); cr=c[:,0]*d[:,1]; f=bias(np.c_[c,d,dot]); yhat=f@fit(f[:n],Y[:n]); g=bias(np.c_[c,dot]); h=bias(np.c_[d,cr]);\\n def mat(r):return np.concatenate((g[:,None,:]*(-np.expm1(-r[0]*t))[None,:,None],h[:,None,:]*(t/(1+r[1]*t))[None,:,None]),axis=2).reshape(len(z)*len(t),-1)\\n def resid(r):\\n  a=mat(r)[:n*len(t)]; q=T[:n].ravel(); return a@fit(a,q)-q\\n opt=least_squares(resid,[1.8,.4],bounds=([.05,.001],[6,2])); a=mat(opt.x); state=(a@fit(a[:n*len(t)],T[:n].ravel())).reshape(T.shape)\\n print('arch form',k,opt.x,'fit',mae(yhat[:n]-Y[:n]),mae(state[:n]-T[:n]),'val',mae(yhat[n:]-Y[n:]),mae(state[n:]-T[n:]),'y coef',fit(f[:n],Y[:n]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (diagonal calibration) → H2 (full affine calibration with panel-C branches before or after panel B); the diagonal model’s best archived holdout MAEs were 0.283 for y and 0.192 for trajectory.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the regression basis under diagonal calibration\",\"rejected_reason\":\"Large residuals on apparently clean calibration rows suggest a coordinate error; fix or rule that out before expanding the readout.\"}],\"rationale\":\"Test whether robust full affine calibration explains panel A’s inlier residuals. Then compare panel orderings and sparse interactions on the prescribed split to distinguish a coordinate error from a missing readout term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e9e5f4766a7c3bdff23ed50bc139ee0e2dc5c5f8397cf01fcb1708f41eb387f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45147.55,
+      "usage_known": true,
+      "prompt_tokens": 25960,
+      "cached_tokens": 9344,
+      "completion_tokens": 1702
+    }
+  ]
+}

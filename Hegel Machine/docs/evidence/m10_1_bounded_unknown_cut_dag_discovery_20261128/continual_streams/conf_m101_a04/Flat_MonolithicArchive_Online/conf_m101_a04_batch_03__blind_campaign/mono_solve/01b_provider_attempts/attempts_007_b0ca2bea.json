@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0ca2beaf2904470852847b9d0be2071",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:30:15.763613+00:00",
+  "ended_at_utc": "2026-11-28T09:30:55.717901+00:00",
+  "request_sha256": "e079811dead5fb3c1bc268a6324dcfe6cac46cb8b4389c472ec1accf85304d38",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31158,
+    "cached_tokens": 9344,
+    "completion_tokens": 1607
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom graph_probe import s,fit\\nz=np.load('/tmp/refined_sin+soft.npz'); x,c,d,Y=(z[k] for k in ('x','c','d','Y')); n=len(Y)\\n\\ndef base(x):return np.c_[np.ones(len(x)),x]\\ndef report(name,F,Y):\\n errors=[]\\n for i in range(10):\\n  p=np.random.default_rng(i).permutation(n) if i>1 else np.arange(n); a,b=p[:52 if i==0 else 56],p[52 if i==0 else 56:]; E=np.abs(F[b]@fit(F[a],Y[a])-Y[b]);errors.append([E.mean(),E[:,-1].mean() if E.ndim==2 else E.max()]);\\n print(name,np.round(errors[0],6),np.round(np.max(errors,axis=0),6),np.round(np.mean(errors,axis=0),6))\\n\\nh=(c*d).sum(1); q=c[:,0]*d[:,1]; cross=(c[:,:,None]*d[:,None,:]).reshape(-1,16)\\nfor name,F in [('sum',np.c_[c,d,h]),('sum const',np.c_[base(c),d,h]),('sum cross',np.c_[c,d,h,q]),('sum cross const',np.c_[base(c),d,h,q]),('diag cross const',np.c_[base(c),d,c*d,q]),('full cross',np.c_[base(c),d,cross])]:report('scalar '+name,F,Y[:,0])\\nfor name,F in [('sum',np.c_[c.sum(1),d,h,q]),('sum const',np.c_[np.ones(len(c)),c.sum(1),d,h,q]),('full c',np.c_[base(c),d,h,q]),('full diag',np.c_[base(c),d,c*d,q]),('full cross',np.c_[base(c),d,cross])]:\\n report('traj '+name,F,Y[:,1:]);\\n if name in ('sum','full c'):\\n  C=fit(F[:52],Y[:52,1:]); print(np.round(C,4)); print('subspace sv',np.linalg.svd(C,compute_uv=False))\\n# Fit candidate operator libraries to panel measurements only.\\np=s['panel_c']; u=p['u']\\nfor key, models in [('v1',[\\n ('soft',lambda a,f:np.c_[base(a),a/(1+f[0]*abs(a))],[.8],([.05],[5])),\\n ('soft+sine',lambda a,f:np.c_[base(a),a/(1+f[0]*abs(a)),np.sin(f[1]*a)],[.8,4.5],([.05,.1],[5,9])),\\n ('soft+cube',lambda a,f:np.c_[base(a),a/(1+f[0]*abs(a)),a**3],[.8],([.05],[5])),\\n ('soft+soft',lambda a,f:np.c_[base(a),a/(1+f[0]*abs(a)),a/(1+f[1]*a*a)],[.8,1.],([.05,.05],[5,5])),\\n ('soft+tanh',lambda a,f:np.c_[base(a),a/(1+f[0]*abs(a)),np.tanh(f[1]*a)],[.8,1.5],([.05,.05],[5,8]))]),('v2',[\\n ('cos+square',lambda a,f:np.c_[base(a),np.cos(f[0]*a),a*a],[2.49],([.5],[5])),\\n ('cos+cos',lambda a,f:np.c_[base(a),np.cos(f[0]*a),np.cos(f[1]*a)],[1.1,3.9],([.3,1.5],[2,8]))])]:\\n v=p[key]\\n for name,D,f,bounds in models:\\n  def model(a,b):\\n   def residual(f):\\n    A=D(a,f);return (A@fit(A,b)-b).ravel()\\n   opt=least_squares(residual,f,bounds=bounds,gtol=1e-12,ftol=1e-12,xtol=1e-12); A=D(a,opt.x);return opt.x,fit(A,b),np.std(opt.fun)\\n  w,B,r=model(u,v); E=[]\\n  for i in range(len(u)):\\n   m=np.arange(len(u))!=i; w1,B1,_=model(u[m],v[m]);E.extend((D(u[i:i+1],w1)@B1-v[i]).ravel())\\n  print(key,name,np.round(w,5),round(r,7),round(np.std(E),7));print(np.round(B,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full cross-branch regression -> shared diagonal term plus a distinct trajectory interaction; latest 52/20 scalar and trajectory MAEs are 0.00579 and 0.00606.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use only matched branch products for trajectories\",\n      \"rejected_reason\": \"The diagonal-only model had trajectory MAE 0.02564, and the coefficient fit identifies a large off-diagonal term.\"\n    }\n  ],\n  \"rationale\": \"Compare compact readouts across splits to see whether the observed coefficient symmetry generalizes. Refit panel operators inside leave-one-row-out folds so an extra basis term is retained only if it improves prediction of unseen panel measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3046a8c8ac5ddd2a6aff26004264643178928855d5afa76b13e60fd03badcb3f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42577.97,
+      "usage_known": true,
+      "prompt_tokens": 31158,
+      "cached_tokens": 9344,
+      "completion_tokens": 1607
+    }
+  ]
+}

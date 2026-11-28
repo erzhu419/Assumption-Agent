@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3cc4fec739d420da2f40ec57ba6edcd",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:15:00.308193+00:00",
+  "ended_at_utc": "2026-11-28T09:15:29.194942+00:00",
+  "request_sha256": "28af04a222d124e8650e57261cd4a96b77cd5af7b0e0f9cefdf50a1b5691031c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56416,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34303,
+    "cached_tokens": 10880,
+    "completion_tokens": 985
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/time_structure.py <<'PY'\\nfrom contextlib import redirect_stdout\\nfrom io import StringIO\\nwith redirect_stdout(StringIO()):\\n from cvprobe import *\\nfrom scipy.optimize import least_squares\\nfor name in ('exp','log','rational'):\\n def h(rate):\\n  z=rate*t\\n  return {'exp':lambda:-np.expm1(-z),'log':lambda:np.log1p(z),'rational':lambda:z/(1+z)}[name]()\\n params=[]; residual=[]\\n for row in j:\\n  def fun(r):\\n   a=h(r[0]);return row-a*(a@row)/(a@a)\\n  r=least_squares(fun,[1.],bounds=(.005,20.)).x[0]; a=h(r)\\n  params.append([a@row/(a@a),r]);residual.append(fun([r]))\\n p=np.array(params); w=abs(j[:,-1])>.35\\n print(name,'temporal RMSE',np.mean(np.array(residual)**2)**.5,'rates on strong rows',np.quantile(p[w,1],[0,.1,.5,.9,1]))\\n print('rate r2 strong rows',[(i, round(1-np.sum((poly(x[w],i)@ls(poly(x[w],i),p[w,1])-p[w,1])**2)/np.sum((p[w,1]-p[w,1].mean())**2),4)) for i in [1,2]])\\nprint('times',t)\\nU,S,vt=np.linalg.svd(j,full_matrices=False)\\nfor label,T in [('dominant',j@vt[0]),('secondary',j@vt[1])]:\\n print(label,'MAE per mode')\\n for key,z in Z.items():\\n  for deg in (2,3):\\n   F=poly(z,deg); a=[]\\n   for it,iv in folds:\\n    a.append(np.mean(abs(F[iv]@ls(F[it],T[it])-T[iv])))\\n   if key=='x': print(deg,np.round(a,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/time_structure.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection viscoelastic relaxation' | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent polynomial time columns -> H2 shared relaxation dynamics; the Matérn scalar model achieves 0.00885 prescribed-split MAE and 0.03210 worst directional MAE, while the best tested trajectory variant still reaches 0.08027 at the worst directional horizon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the projected trajectory blend immediately\",\n      \"rejected_reason\": \"It improves the worst directional terminal error, but that error remains 0.08027. Testing whether amplitude and rate explain the two temporal modes could materially improve extrapolation.\"\n    }\n  ],\n  \"rationale\": \"The scalar challenger improves the prescribed and directional splits. For trajectories, profile amplitude out of three one-rate laws and check the strong-signal rows: if temporal residuals approach the noise floor and rate is predictable, validate a joint forward model; otherwise retain the independently validated trajectory features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3ac0c22211260bf720eef6a41bfd4a7ec80281bca9909a1ba559e8c9afd2c1f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28851.3,
+      "usage_known": true,
+      "prompt_tokens": 34303,
+      "cached_tokens": 10880,
+      "completion_tokens": 985
+    }
+  ]
+}

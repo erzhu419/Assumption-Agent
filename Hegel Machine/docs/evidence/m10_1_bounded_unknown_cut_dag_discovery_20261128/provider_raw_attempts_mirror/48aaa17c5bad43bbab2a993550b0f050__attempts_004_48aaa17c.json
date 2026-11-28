@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48aaa17c5bad43bbab2a993550b0f050",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:11:40.896333+00:00",
+  "ended_at_utc": "2026-11-28T09:12:15.490176+00:00",
+  "request_sha256": "3fb3516365d1b212f1ffdcdf939fd2fdccaeca1df7474d5d0e0586652402d44f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35765,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26803,
+    "cached_tokens": 10880,
+    "completion_tokens": 1369
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/panel_models.py <<'PY'\\nimport itertools\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nx, y, z = (s['train'][k] for k in ('x', 'y', 'traj'))\\nt = s['eval_times']\\ndef fit(a, b):\\n    return np.linalg.lstsq(a, b, rcond=None)[0]\\ndef lin(a):\\n    return np.column_stack((np.ones(len(a)), a))\\npa = s['panel_a']; u, v = pa['u'], pa['v']\\nbias, gain = [], []\\nfor a, b in zip(u.T, v.T):\\n    keep = np.arange(len(a))\\n    design = lin(a)\\n    for _ in range(3):\\n        c = fit(design[keep], b[keep])\\n        keep = np.argsort(abs(b-design@c))[:len(a)*3//4]\\n    r = abs(b-design@c)\\n    keep = r < 8*np.median(r)\\n    c = fit(design[keep], b[keep]); bias.append(c[0]); gain.append(c[1])\\nbias, gain = np.array(bias), np.array(gain)\\npb = s['panel_b']; B = fit(lin(pb['u']), pb['v'])\\nraw, inv, forward = x, (x-bias)/gain, x*gain+bias\\nu = lin(inv)@B\\nmodels = {'raw_quad':np.c_[lin(x), *[x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)]]}\\nfor name, a in [('B', raw), ('invA_B', inv), ('A_B', forward)]:\\n    b = lin(a)@B\\n    models[name+'_shared'] = np.c_[lin(b), b[:,0]*b[:,2]+b[:,1]*b[:,3]]\\n    models[name+'_separate'] = np.c_[lin(b), b[:,0]*b[:,2], b[:,1]*b[:,3]]\\n\\ndef time_model(a, z, at):\\n    c = fit(a, z)\\n    def basis(p):\\n        return -np.expm1(-np.exp(p)[:,None]*t)\\n    def res(p):\\n        g = basis(p)\\n        return (a@(c-fit(g.T,c.T).T@g)).ravel()\\n    p = least_squares(res, np.log([.4,1.8]), bounds=(-4,3)).x\\n    g = basis(p)\\n    w = fit(g.T,c.T).T\\n    return at@w@g, np.exp(p), w\\nrng = np.random.default_rng(190)\\norder = rng.permutation(len(x)); allrows = np.arange(len(x))\\nsplits = [('fixed',allrows[52:]), *[(f'fold{i}',v) for i,v in enumerate(np.array_split(order,4))],('outer input',np.argsort(np.linalg.norm(x,axis=1))[-18:])]\\nfor name, va in splits:\\n    tr = np.setdiff1d(allrows, va)\\n    print(name, {key:round(np.mean(abs(y[va]-m[va]@fit(m[tr],y[tr]))),6) for key,m in models.items()})\\n    a = lin(u); p, rates, w = time_model(a[tr],z[tr],a[va]); e = abs(p-z[va]); print('state mean/worst horizon',e.mean(),e.mean(0).max(),'rates',rates)\\n    if name=='fixed':\\n        print('calibration',bias,gain,'test extent',s['test']['x'].min(0),s['test']['x'].max(0))\\n        print('label coeffs and residual std',[(k,fit(m[tr],y[tr]).round(5).tolist(),round(np.std(y[tr]-m[tr]@fit(m[tr],y[tr])),6)) for k,m in models.items() if k.endswith('separate')]); print('temporal amplitudes, mixed coordinates',w.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/panel_models.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted raw-input quadratic and affine trajectory) -> H2 (two calibrated cross-products and two shared time rates); existing validation MAEs peak at 0.00549 for the label and 0.00590 across horizons for the two-rate trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Force a rank-one or rank-two label quadratic\",\n      \"rejected_reason\": \"All four quadratic eigenvalues are substantial, and rank-one and rank-two models exceed 0.06 MAE on the fixed split.\"\n    }\n  ],\n  \"rationale\": \"Inverse calibration followed by panel B concentrates the curvature in two cross-products. Compare tied and untied coefficients against the full quadratic on held-out rows, including the largest input norms. If the restriction fails there, retain the full quadratic. Check shared time rates at each horizon before selecting the trajectory model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "11f7f5a5b6eb5524efd3eb24440a04d33cf4e8f395ab77b2282e61a39f99cf90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37210.35,
+      "usage_known": true,
+      "prompt_tokens": 26803,
+      "cached_tokens": 10880,
+      "completion_tokens": 1369
+    }
+  ]
+}

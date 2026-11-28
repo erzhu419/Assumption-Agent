@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c5c83f31feb74f4a955e5d437d85dc0d",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_03__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:25:36.351036+00:00",
+  "ended_at_utc": "2026-11-28T09:25:56.886188+00:00",
+  "request_sha256": "349a11b0f6cf7cf9fc87bf6e3fa6eb917213bebe31f9b1f1a15a3c2a411f5661",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15298,
+    "cached_tokens": 9344,
+    "completion_tokens": 612
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/*_solver.py; sed -n '1,180p' validate_public_schema.py; python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=5,suppress=True)\\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec'],'summary',s['train']['summary'])\\nfor k in ('panel_a','panel_b','panel_c'):\\n p=s[k]; a=np.c_[np.ones(len(p['u'])),p['u']]\\n for j in p:\\n  if j=='u':continue\\n  c=np.linalg.lstsq(a,p[j],rcond=None)[0]; e=np.linalg.norm(a@c-p[j],axis=1); print(k,j,'coefs',c,'residual quantiles',np.quantile(e,[0,.25,.5,.75,.9,1]))\\nfor k,v in s['train'].items(): print(k,v[:8], 'min/max',np.min(v,axis=0),np.max(v,axis=0))\\nt=s['train']['traj'];print('traj singular',np.linalg.svd(t,compute_uv=False));print('y/terminal corr',np.corrcoef(s['train']['y'],t[:,-1])[0,1]);print('test range',s['test']['x'].min(axis=0),s['test']['x'].max(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived graph → H2 campaign-specific panel and trajectory structure; inherited gate MAEs are 0.050396 for y and 0.073207 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse an archived solver unchanged\",\n      \"rejected_reason\": \"The inherited candidate missed both public gate metrics; inspect the actual panel laws and trajectory structure before deciding which components to reuse.\"\n    }\n  ],\n  \"rationale\": \"Affine residual quantiles will distinguish clean calibration, sparse outliers, and systematic nonlinearities. Trajectory singular values and terminal correlation will determine whether to test a shared temporal basis or a separate output model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "c0ed171c770158f2c6b54e00dc6bd8aaedbf81d069568927c04b12f9c40904e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20491.85,
+      "usage_known": true,
+      "prompt_tokens": 15298,
+      "cached_tokens": 9344,
+      "completion_tokens": 612
+    }
+  ]
+}

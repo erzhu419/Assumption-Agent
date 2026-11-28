@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ab8e820f2804897b937e4d12ebba2d4",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b04_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:06.223075+00:00",
+  "ended_at_utc": "2026-11-28T09:54:32.285622+00:00",
+  "request_sha256": "9a18737872f341cf0ba9a20f96583515531d296a759b14aa5532093174e88e49",
+  "system_prompt_chars": 5312,
+  "stdin_payload_chars": 43560,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28128,
+    "cached_tokens": 5504,
+    "completion_tokens": 805
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/_frozen_nodes/node_00.py /holdout_task/_frozen_nodes/node_03.py; cat >/tmp/stress.py <<'PY'\\nimport copy,pickle,runpy,numpy as np\\nroot='/holdout_task/'\\nfns=[runpy.run_path(root+('_frozen_nodes/' if i in (0,3) else '')+f'node_{i:02d}.py')['run_node'] for i in range(4)]\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; n=len(x); N=np.arange(n)\\nrng=np.random.default_rng(427); splits=[(f'random-{j}',v) for j,v in enumerate(np.array_split(rng.permutation(n),4))]; splits += [('outer-radius',np.argsort(np.linalg.norm(x,axis=1))[-12:])]\\nfor label,v in splits:\\n t=np.setdiff1d(N,v); study=copy.deepcopy(s)\\n for key in ('x','y','traj'): study['train'][key]=s['train'][key][t]\\n study['train']['summary']=np.array([study['train']['y'].mean(),study['train']['y'].std(),study['train']['traj'][:,-1].mean(),study['train']['traj'][:,-1].std()]); study['test']['x']=x[v]\\n shared=fns[0]({'__input__':study}); a=fns[1]({'__input__':study,'node_00':shared}); b=fns[2]({'node_00':shared}); out=fns[3]({'node_01':a,'node_02':b})\\n err=abs(out['state_pred']-s['train']['traj'][v]); print(label,round(abs(out['y_hat']-s['train']['y'][v]).mean(),6),round(err.mean(),6),round(err.mean(0).max(),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic trend → H2 quadratic trend with a smooth residual; the installed nodes pass official CV at 0.034247 scalar MAE and 0.018353 trajectory MAE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the scalar kernel with a single saturating, oscillatory, or rational projection\",\"rejected_reason\":\"The strongest such scalar alternatives had worse worst-fold error than the mixed kernel.\"}],\"rationale\":\"Run the exact installed nodes in isolated Python on fresh folds and on the largest-radius inputs. If scalar error rises materially at the edge, use the frozen coordinate conventions to test a more extrapolative basis; measure trajectory error separately by horizon.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "13c9c2b90b38f51e5e7f0b3d79c1a95683ff8c2740feb9ba80504ae4e4be4d1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26017.89,
+      "usage_known": true,
+      "prompt_tokens": 28128,
+      "cached_tokens": 5504,
+      "completion_tokens": 805
+    }
+  ]
+}

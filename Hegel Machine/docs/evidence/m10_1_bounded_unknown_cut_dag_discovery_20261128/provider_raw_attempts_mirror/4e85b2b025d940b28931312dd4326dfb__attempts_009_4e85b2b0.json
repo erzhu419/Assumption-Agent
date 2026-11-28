@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e85b2b025d940b28931312dd4326dfb",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:21:56.885904+00:00",
+  "ended_at_utc": "2026-11-28T09:22:40.027828+00:00",
+  "request_sha256": "122445a01a2934b392f1cfd467e2622be2ae7507d7e7cc886c6cf820e3b9733f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55458,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33807,
+    "cached_tokens": 9344,
+    "completion_tokens": 1886
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the response and trajectory from the calibrated panel operators.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\ndef _affine_reference(panel):\\n    u, v = panel['u'], panel['v']\\n    coeffs = []\\n    for j in range(u.shape[1]):\\n        design = np.column_stack((np.ones(len(u)), u[:, j]))\\n        coeff = np.linalg.lstsq(design, v[:, j], rcond=None)[0]\\n        for _ in range(8):\\n            keep = np.argsort(np.abs(design @ coeff - v[:, j]))[:int(0.80 * len(u))]\\n            coeff = np.linalg.lstsq(design[keep], v[keep, j], rcond=None)[0]\\n        coeffs.append(coeff)\\n    return np.asarray(coeffs).T\\n\\n\\ndef _shrink(x):\\n    return np.sign(x) * np.maximum(np.abs(x) - 0.35, 0.0)**1.5\\n\\n\\ndef _odd(x):\\n    return -np.sign(x) * np.expm1(-1.8 * np.abs(x))\\n\\n\\ndef _nodes(study, x):\\n    offset, scale = _affine_reference(study['panel_a'])\\n    a = (x - offset) / scale\\n    p = study['panel_b']\\n    z, v = _shrink(p['u']), p['v']\\n    z0, v0 = z.mean(axis=0), v.mean(axis=0)\\n    zc = z - z0\\n    left, singular, right = np.linalg.svd(zc.T @ (v - v0))\\n    mixing = (left @ right) * (singular.sum() / np.sum(zc**2))\\n    b = (_shrink(a) - z0) @ mixing + v0\\n    p = study['panel_c']\\n    coeff = np.linalg.lstsq(np.column_stack((np.ones(len(p['u'])), _odd(p['u']))), p['v1'], rcond=None)[0]\\n    c = _odd(b) @ coeff[1:] + coeff[0]\\n    return a, b, c\\n\\n\\ndef _features(a, c):\\n    z = np.column_stack((a, c))\\n    i, j = np.triu_indices(z.shape[1])\\n    return np.column_stack((z, z[:, i] * z[:, j]))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x = np.concatenate((train['x'], study['test']['x']))\\n    a, _, c = _nodes(study, x)\\n    g = _features(a, c)\\n    n = len(train['x'])\\n    sd = g[:n].std(axis=0)\\n    z = (g - g[:n].mean(axis=0)) / np.where(sd > 1e-9, sd, 1.0)\\n    targets = np.column_stack((train['y'], train['traj']))\\n    mean = targets.mean(axis=0)\\n    basis = z[:n]\\n    weights = np.linalg.solve(basis.T @ basis + 0.015 * np.eye(basis.shape[1]), basis.T @ (targets - mean))\\n    pred = z[n:] @ weights + mean\\n    y, state = pred[:, 0], pred[:, 1:]\\n    end = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), end.mean(), end.std()])}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\ncat > /tmp/audit9.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _nodes,_features,solve_batch\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];p=s['train'];x=p['x']; y=p['y'];t=p['traj'];Y=np.c_[y,t]\\ndef ls(g,v):return np.linalg.lstsq(g,v,rcond=None)[0]\\na,b,c=_nodes(s,x); G=_features(a,c)\\nprint('trajectory singular values',np.linalg.svd(t,compute_uv=False))\\nprint('coeff full diagnostic only: intercept, 8 linear nodes, then quadratic upper triangle')\\nprint(np.round(ls(np.c_[np.ones(len(x)),G],Y)[:,[0,1,4,8]],3))\\nfor label,g in [('linear',np.c_[a,c]),('linear+b',np.c_[a,b,c]),('linear+diag',np.c_[a,c,a*c]),('linear+xprod',np.c_[a,c,(a[:,:,None]*c[:,None]).reshape(len(a),-1)]),('quadratic',G)]:\\n print(label,end=' ')\\n for ix,iv in [(np.arange(52),np.arange(52,72)),(np.arange(56),np.arange(56,72))]:\\n  z=np.c_[np.ones(len(g)),g];e=abs(z[iv]@ls(z[ix],Y[ix])-Y[iv]);print(np.round([e[:,0].mean(),e[:,1:].mean()],5),end=' ')\\n print()\\npa=s['panel_a'];u,v=pa['u'],pa['v'];z=np.c_[np.ones(len(u)),u];k=ls(z,v)\\nfor _ in range(12):\\n ids=np.argsort(np.linalg.norm(v-z@k,axis=1))[:38];k=ls(z[ids],v[ids]);\\nprint('A full estimate',np.round(k,5),'res quantiles',np.quantile(np.linalg.norm(v-z@k,axis=1),[.4,.6,.8,.9]))\\nfor k,v in [('v1',s['panel_c']['v1']),('v2',s['panel_c']['v2'])]:\\n u=s['panel_c']['u']; f=(lambda r:-np.sign(u)*np.expm1(-r*abs(u))) if k=='v1' else (lambda r:np.logaddexp(0,r*u))\\n def obj(r):\\n  z=np.c_[np.ones(len(u)),f(r)];return np.mean((z@ls(z,v)-v)**2)\\n opt=minimize_scalar(obj,bounds=(.2,5),method='bounded'); print(k,opt.x,np.sqrt(opt.fun),np.sqrt(obj(1.8 if k=='v1' else 2.2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit9.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 smooth auxiliary approximation → H2 inverse affine calibration, signed dead-zone mixing, and an odd branch with a quadratic readout; 52/20 MAEs are 0.00861 for y and 0.01262 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain Panel C’s second output in the readout\",\n      \"rejected_reason\": \"The odd-branch-only readout scored better on both prescribed splits.\"\n    }\n  ],\n  \"rationale\": \"Save the passing candidate, then check whether calibration cross-talk or redundant quadratic terms account for its remaining error. Those results will determine whether to test a smaller readout on independent folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2a45f8228f3d6ad6468f474b8eec4bcbc72992f8673dbf64de463705882f2675",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48383.08,
+      "usage_known": true,
+      "prompt_tokens": 33807,
+      "cached_tokens": 9344,
+      "completion_tokens": 1886
+    }
+  ]
+}

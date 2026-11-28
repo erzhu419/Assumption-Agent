@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e1dbc2565e945389ec0805a5323203c",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a04_batch_06__dag_edit_merge_nodes__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_06__blind_campaign__merge_nodes",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:37:35.933615+00:00",
+  "ended_at_utc": "2026-11-28T09:38:24.195445+00:00",
+  "request_sha256": "1a5564acbfa9c391f4ab8aa30cf7d6a930c5fa52f172420d02c0eeb43c851725",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58798,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35593,
+    "cached_tokens": 9344,
+    "completion_tokens": 1997
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/node_03.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _cosine_basis(x):\\n    return np.column_stack((np.ones(len(x)), np.cos(2.4*x)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    panel = inputs['node_00']\\n    x = panel['x']\\n    b = inputs['node_01']['b']\\n    c = _cosine_basis(x) @ np.linalg.lstsq(_cosine_basis(panel['u']), panel['v2'], rcond=None)[0]\\n    n = len(study['train']['y'])\\n    a = np.column_stack((np.ones(len(x)), b, c))\\n    targets = np.column_stack((study['train']['y'], study['train']['traj']))\\n    pred = a[n:] @ np.linalg.lstsq(a[:n], targets, rcond=None)[0]\\n    y, state = pred[:, 0], pred[:, 1:]\\n    return {'y_hat': y, 'state_pred': state, 'diagnostics_vec': np.array([\\n        y.mean(), y.std(), state[:, -1].mean(), state[:, -1].std()])}\\nPY\\ncat > /tmp/dag_families.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('np.set_printoptions')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import qr\\nfrom itertools import combinations_with_replacement as cwr\\ncb=lambda q:np.c_[np.ones(len(q)),np.cos(2.4*q)]\\nc=(cb(x)@np.linalg.lstsq(cb(u),p['v2'],rcond=None)[0])[:n]; x=x[:n];b=b[:n]; Y=np.c_[y,tr]; k=52\\nfit=lambda a,y:np.linalg.lstsq(a,y,rcond=1e-9)[0]\\ndef ev(A,verbose=True):\\n A=np.c_[np.ones(n),A]; res=Y-A@fit(A[:k],Y[:k]); E=np.abs(res); return np.round([E[:k,0].mean(),E[k:,0].mean(),E[:k,1:].mean(),E[k:,1:].mean()],5), np.round(np.linalg.svd(res[:k],compute_uv=False)[:4],4)\\nprint('keys B',list(s['panel_b']), 'keys study',list(s));\\nB=np.c_[b,c]; C=np.cos(2.4*x); Z=np.c_[x,b,c]; a=np.c_[np.ones(n),B]\\nD={}\\nfor g in [.5,1,1.5,2,2.4,3,4]:\\n for nm,q in [('b',b),('c',c),('b+c',b+c),('b-c',b-c),('bc',b*c),('bxc',b[:,:,None]*c[:,None,:]),('cp',C),('cp*2',C**2)]:\\n  q=q.reshape(n,-1)\\n  for f in [np.sin,np.cos,np.tanh,lambda z: z/(1+z*z)]: D[f'{f.__name__} {g} {nm}']=f(g*q)\\n for nm,aa,bb in [('cb',c,b),('bc',b,c),('bb',b,b),('cc',c,c),('xc',x,c),('cx',c,x),('xb',x,b),('bx',b,x)]:\\n  D[f'rat {g} {nm}']=aa/(1+g*bb**2)\\n  D[f'ratall {g} {nm}']=(aa[:,:,None]/(1+g*bb[:,None,:]**2)).reshape(n,-1)\\n  D[f'gate {g} {nm}']=aa*np.tanh(g*bb)\\n  D[f'gateall {g} {nm}']=(aa[:,:,None]*np.tanh(g*bb[:,None,:])).reshape(n,-1)\\nfor nm,q in [('b',b),('c',c),('bc',B),('x',x),('Z',Z)]:\\n for deg in [2,3,4]:\\n  ix=list(cwr(range(q.shape[1]),deg));D[f'poly{deg} {nm}']=np.prod(q[:,ix],axis=2)\\nD['elem b*c']=b*c;D['elem x*c']=x*c;D['elem x*b']=x*b\\nfor name in sorted(D,key=lambda nm:sum(ev(np.c_[B,D[nm]])[0][[1,3]]))[:24]:print(name,ev(np.c_[B,D[name]]))\\n# Fit multiple shared ridge functions with variable projection; a product of\\n# affine projections is included as a separate family.\\nQ=qr(a[:k],mode='economic')[0]; Y0=Y[:k]-Q@(Q.T@Y[:k]); rng=np.random.default_rng(21)\\nfor nm,P in [('bc',B),('b and c separately',B),('x and bc',Z)]:\\n W=P/P[:k].std(axis=0); W0=W[:k]; d=W.shape[1]\\n for funs in [(np.tanh,np.tanh,np.tanh),(np.sin,np.sin,np.sin),(np.tanh,np.sin,np.cos)]:\\n  def F(z,W):\\n   H=W@z[:,:d].T+z[:,d];return np.column_stack([f(h) for f,h in zip(funs,H.T)])\\n  def obj(z):\\n   H=F(z.reshape(3,d+1),W0); H-=Q@(Q.T@H);return (Y0-H@fit(H,Y0)).ravel()\\n  best=None\\n  for i in range(12):\\n   ini=rng.normal(0,.4,(3,d+1));r=least_squares(obj,ini.ravel(),max_nfev=85); sc=np.linalg.norm(r.fun)\\n   if best is None or sc<best[0]:best=sc,r.x.reshape(3,d+1)\\n  print('multiridge',nm,[f.__name__ for f in funs],round(best[0],4),ev(np.c_[B,F(best[1],W)])[0],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_families.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cosine v2 plus affine readout → shared nonlinear terms across scalar and trajectory; the affine readout’s public-split MAEs are 0.467 and 0.307.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Use a single nonlinear projection\",\"rejected_reason\":\"The tested single projections did not approach either public error threshold.\"}],\"rationale\":\"Save the calibrated cosine branch and complete sink interface now. Compare structured interaction families and multiple shared nonlinear projections to identify what the readout is missing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "85dddf825ae5bba60fcbcd97195de0bc6e1f87b9d08ea83a115ed52bf230bfbc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50853.62,
+      "usage_known": true,
+      "prompt_tokens": 35593,
+      "cached_tokens": 9344,
+      "completion_tokens": 1997
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef7952a41a3841ef98a71ef6137ef312",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:53:57.490035+00:00",
+  "ended_at_utc": "2026-11-28T09:54:38.479809+00:00",
+  "request_sha256": "d25556944c9bdd3e6fb7b93fdb40db34966a1b37cc56299759d50ae6a8a2e012",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34903,
+    "cached_tokens": 9344,
+    "completion_tokens": 1798
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/validate_public_schema.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; cat >/tmp/read6.py <<'PY'\\nfrom panel6 import *\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom itertools import combinations_with_replacement\\nimport importlib.util\\nsp=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/conf_m101_b01_batch_05_solver.py'); old=importlib.util.module_from_spec(sp);sp.loader.exec_module(old)\\nx=old._inverse_calibration(tr['x'],old._calibration(a)); u=b['u']; v=b['v']\\ndef bd(x):return af(x**3/np.sqrt(1+.70020846*x**4)-.08899942*x)\\nB=lambda x:bd(x)@ls(bd(u),v)\\ndef c1d(x):return af(cross(x)[:,[0,2,3,5]])\\nC1=lambda x:c1d(x)@ls(c1d(c['u']),c['v1'])\\ndef c2d(x):return np.c_[af(x),np.cos(1.28247*x)]\\nC2=lambda x:c2d(x)@ls(c2d(c['u']),c['v2'])\\nz=B(x); z0=old._operator_b(b,x); q=C1(z); r=C2(z); bx=bd(x)[:,1:]; print('traj mean',Y[:52,1:].mean(0),'scalar stats',np.quantile(Y[:52,0],[0,.1,.5,.9,1])); print('rank modes',np.linalg.svd(Y[:52]-Y[:52].mean(0),full_matrices=False)[2][:2]); print('corr y/state',np.corrcoef(Y[:52].T)[0]);print('summary',s['train']['summary'])\\nfolds=[(np.setdiff1d(np.arange(52),i),i) for i in np.array_split(np.random.default_rng(624).permutation(52),4)]; final=(np.arange(52),np.arange(52,72));\\ndef st(x):return x/np.maximum(np.sqrt(np.mean(x[:52]**2,0)),1e-8)\\ndef gram(x):return x@x.T/max(1,x.shape[1])\\ndef unary(x):\\n x=st(x);return np.c_[np.tanh(x), np.tanh(2*x), np.sin(x),np.cos(x),x/(1+x*x),1/(1+x*x),np.abs(x),x*np.abs(x), x*x, x**3, x/(1+.25*x*x),x*x/(1+x*x)]\\ndef pair(x):\\n x=st(x); i,j=np.triu_indices(x.shape[1],1);return np.c_[x[:,i]*x[:,j], (x[:,i]+x[:,j])*.7071, (x[:,i]-x[:,j])*.7071, x[:,i]/(1+x[:,j]**2),x[:,j]/(1+x[:,i]**2)]\\ndef examine(G):\\n def fit(i,j,n):\\n  m=Y[i].mean(0);return abs(G[np.ix_(j,i)]@solve(G[np.ix_(i,i)]+n*np.eye(len(i)),Y[i]-m,assume_a='pos')+m-Y[j]);\\n for n in [1e-5,.00015,.002,.02]:\\n  E=np.concatenate([fit(i,j,n) for i,j in folds]); e=fit(*final,n); yield n,[E[:,0].mean(),E[:,1:].mean(),e[:,0].mean(),e[:,1:].mean()]\\nres=[]\\nfor name,Q in {'x':x,'B':z,'B0':z0,'C1':q,'C2':r,'B+C1':np.c_[z,q],'B+C2':np.c_[z,r],'B+C':np.c_[z,q,r],'x+B+C':np.c_[x,z,q,r],'cube+B+C':np.c_[bx,z,q,r],'x+cube+B+C':np.c_[x,bx,z,q,r],'C(x)+B+C':np.c_[x,C1(x),C2(x),z,q,r],'BC1(x)+BC2(x)+B+C':np.c_[x,B(C1(x)),B(C2(x)),z,q,r],'Bmean+C':np.c_[z,q,r,(z+z0)*.5]}.items():\\n Q=st(Q); G=gram(Q); U=gram(st(unary(Q))); P=gram(st(pair(Q))); D=cdist(Q,Q,'sqeuclidean')/Q.shape[1]; D/=2\\n for k,K in {'poly2':(1+G)**2,'poly3':(1+G)**3,'poly4':(1+G)**4,'unary':G+U,'unarypair':G+U+P,'unarypair2':G+U+P+gram(st(unary(pair(Q)))),'poly+unary':(1+G)**2+U+P,'mixed':(1+G+U+P)**2,'rbf':G*.3+np.exp(-D/2.25),'rational':G*.3+1/(1+D/5)}.items():\\n  for n,e in examine(K):res.append((name,k,n,*e))\\nfor j in [3,4]:\\n print('best',j);print(*sorted(res,key=lambda r:r[j])[:12],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/read6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (linear and quadratic panel readouts) -> H2 (nonlinear interactions across calibrated branches); the leading internal kernel candidate has 52/20 MAEs of 0.05043 for y and 0.04116 for state.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select an operator solely by its small panel B residual advantage\",\"rejected_reason\":\"Several odd gates have nearly indistinguishable residuals; downstream validation is needed to distinguish useful compositions.\"}],\"rationale\":\"The kernel result shows that interactions improve both outputs, but it misses the scalar gate. Compare explicit pairwise and rational feature bases by internal CV; if they do not improve on the kernel, use the trajectory modes and scalar residual structure to constrain the next fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a5839ee8101570014d691311b7d83b90d1bdf1545092aeea39938d57db33d74b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46291.26,
+      "usage_known": true,
+      "prompt_tokens": 34903,
+      "cached_tokens": 9344,
+      "completion_tokens": 1798
+    }
+  ]
+}

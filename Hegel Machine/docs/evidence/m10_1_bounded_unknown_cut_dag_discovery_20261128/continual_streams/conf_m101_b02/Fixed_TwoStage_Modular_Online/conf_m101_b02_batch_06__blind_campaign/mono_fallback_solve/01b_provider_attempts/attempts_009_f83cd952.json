@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f83cd9525349484abf9ec9baccf4a778",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_06__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:18:18.263174+00:00",
+  "ended_at_utc": "2026-11-28T10:18:57.105325+00:00",
+  "request_sha256": "9dfec8555d21544532a59cd2afc589cfd1ca7ff15c259f04037eb2413e943a4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65210,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38002,
+    "cached_tokens": 9344,
+    "completion_tokens": 1670
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Recover latent coordinates and fit scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares, root\\nfrom scipy.special import erf\\n\\n\\ndef _ls(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _design(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _calibration(x):\\n    i, j = np.triu_indices(4)\\n    return _design(x, x[:, i] * x[:, j], x**3)\\n\\n\\ndef _latent(panel, x):\\n    z, v = _calibration(panel['u']), panel['v']\\n    keep = np.arange(len(z))\\n    for _ in range(8):\\n        w = _ls(z[keep], v[keep])\\n        keep = np.argsort(np.linalg.norm(z @ w - v, axis=1))[:45]\\n    w = _ls(z[keep], v[keep])\\n    return np.array([root(lambda p: _calibration(p[None])[0] @ w - row, row).x\\n                     for row in x])\\n\\n\\ndef _bridge(panel, x, kind):\\n    u, v = panel['u'], panel['v']\\n    def design(z, p):\\n        if kind == 'gaussian':\\n            zz = z + p[2:]\\n            return _design(zz * (1 - p[1] * np.exp(-(p[0] * zz)**2)))\\n        return _design(z - p[1] * erf(p[0] * z), z*z)\\n\\n    def residual(p):\\n        z = design(u, p)\\n        return (z @ _ls(z, v) - v).ravel()\\n\\n    init = [1., 1.08, 0., 0., 0., 0.] if kind == 'gaussian' else [1.45, .65]\\n    p = least_squares(residual, init).x\\n    return design(x, p) @ _ls(design(u, p), v)\\n\\n\\ndef _pairs(x):\\n    return _design(x[:, 0]*x[:, 1], x[:, 0]*x[:, 3],\\n                   x[:, 1]*x[:, 2], x[:, 2]*x[:, 3])\\n\\n\\ndef _features(study, x):\\n    a = _latent(study['panel_a'], x)\\n    pc = study['panel_c']\\n    w = _ls(_pairs(pc['u']), pc['v1'])\\n    for kind in ('gaussian', 'erf'):\\n        c = _pairs(_bridge(study['panel_b'], a, kind)) @ w\\n        yield np.column_stack((a, c, (a[:, :, None] * c[:, None, :]).reshape(len(a), 16)))\\n\\n\\ndef _readout(x, y, n, ridge):\\n    mean = x[:n].mean(axis=0)\\n    scale = np.maximum(x[:n].std(axis=0), 1e-5)\\n    z = (x - mean) / scale\\n    u, s, vt = np.linalg.svd(z[:n], full_matrices=False)\\n    center = y.mean(axis=0)\\n    return center + ((z[n:] @ vt.T) * (s / (s*s + ridge))) @ (u.T @ (y - center))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    n = len(train['x'])\\n    targets = np.column_stack((train['y'], train['traj']))\\n    x = np.vstack((train['x'], study['test']['x']))\\n    pred = np.mean([_readout(f, targets, n, .001) for f in _features(study, x)], axis=0)\\n    y_hat, state_pred = pred[:, 0], pred[:, 1:]\\n    last = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\ncat > /tmp/validate9.py <<'PY'\\nimport pickle, runpy, numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; m=runpy.run_path('/holdout_task/batch_solver.py'); sol=m['solve_batch']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; allrows=np.arange(len(x))\\nsplits=[('52/20',allrows[:52],allrows[52:]),('56/16',allrows[:56],allrows[56:])]\\nfor i,te in enumerate(np.array_split(np.random.default_rng(35).permutation(52),4)):\\n splits.append(('inner'+str(i),np.setdiff1d(allrows[:52],te),te))\\nfor name,tr,te in splits:\\n out=sol(dict(s,train=dict(s['train'],x=x[tr],y=y[tr],traj=t[tr]),test={'x':x[te]})); e=np.abs(out['y_hat']-y[te]); et=np.abs(out['state_pred']-t[te]); print(name, 'MAE',e.mean(),et.mean(),'per-time',np.round(et.mean(0),5),'max row',te[e.argmax()],e.max())\\n if name=='52/20': assert e.mean() <= .038\\nPY\\nexport OPENBLAS_NUM_THREADS=1; python3 -I /tmp/validate9.py && python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 interaction kernel → H2 inverse calibration and a B→C readout with latent skip interactions; the compact probe reached 52/20 MAEs of 0.01711 for y and 0.00900 for trajectory, with worst inner-fold MAEs of 0.04541 and 0.02317.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\"option\": \"Use the general interaction kernel\", \"rejected_reason\": \"Its best 52/20 scalar MAE was 0.04634, above the 0.038 gate.\"}\n  ],\n  \"rationale\": \"Build the solver around the compact panel chain and average two similarly performing bridge fits. Re-run the actual artifact on the required split, the archive split, and the inner folds; horizon-wise errors will show whether the trajectory readout has a time-specific weakness.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c09bdb5bc2d5a3499d113aa96cdd378b14ed0aaa8e3d6b21e314bc4c3248c0a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44304.3,
+      "usage_known": true,
+      "prompt_tokens": 38002,
+      "cached_tokens": 9344,
+      "completion_tokens": 1670
+    }
+  ]
+}

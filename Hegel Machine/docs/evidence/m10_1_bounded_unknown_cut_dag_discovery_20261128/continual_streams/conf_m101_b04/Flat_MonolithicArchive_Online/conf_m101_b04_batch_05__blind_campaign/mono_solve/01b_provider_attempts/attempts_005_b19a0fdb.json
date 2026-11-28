@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b19a0fdbd6f0410f9ed3445acbd6291c",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:44.190971+00:00",
+  "ended_at_utc": "2026-11-28T09:40:19.148049+00:00",
+  "request_sha256": "14d1377490f99cfa382e0d34fb9a365400c4d18578fe02bafbbd811a8a157729",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26264,
+    "cached_tokens": 9344,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/b05_probe.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport conf_m101_b04_batch_04_solver as old\\nfrom scipy.linalg import qr\\nfrom scipy.optimize import least_squares\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=S['train']; n=len(tr['y']); za=old._calibrate(S['panel_a'],np.r_[tr['x'],S['test']['x']]);\\ndef fit(X,Y):return np.linalg.lstsq(X,Y,rcond=None)[0]\\ndef poly(x,d):\\n idx=[i for j in range(d+1) for i in itertools.combinations_with_replacement(range(x.shape[1]),j)]\\n return np.column_stack([np.prod(x[:,i],axis=1) for i in idx]),idx\\ndef cvfit(X,Y):\\n r=Y-X@fit(X,Y); q=qr(X,mode='economic')[0];return np.sqrt(np.mean((r/(1-(q*q).sum(1))[:,None])**2))\\ndef pa(t):\\n return np.column_stack((np.ones(len(t)),t,np.sin(t),t**3))\\nops={}\\nif __name__=='__main__':\\n for k in ['panel_b','panel_c']:\\n  d=S[k];u=d['u']; A=poly(u,1)[0];Q=poly(u,2)[0];C=np.c_[Q,u**3];H=np.c_[A,np.sin(1.7*u),np.cos(1.7*u)]\\n  for name,v in d.items():\\n   if name=='u':continue\\n   print(k,name,'LOO feature errors',[(lbl,round(cvfit(p,v),6)) for lbl,p in [('affine',A),('quadratic',Q),('quadratic+cube',C),('harmonic',H),('linear+cube',np.c_[A,u**3])]])\\n   for kind in ('tanh','sine','cubic','rational'):\\n    def pred(par,x):\\n     w=np.c_[np.ones(len(x)),x]@par[:20].reshape(5,4);a=np.exp(par[20:24]);b=par[24:];return b+a*({'tanh':np.tanh,'sine':np.sin,'cubic':lambda z:z+z**3,'rational':lambda z:z/np.sqrt(1+z*z)}[kind])(w)\\n    ini=np.r_[fit(A,v).ravel(),np.zeros(8)];p=least_squares(lambda p:(pred(p,u)-v).ravel(),ini,max_nfev=100).x\\n    err=np.sqrt(np.mean((pred(p,u)-v)**2));print(kind,round(err,6),np.round(np.exp(p[20:24]),3))\\n def sgn(z):return np.sign(z)*np.sqrt(abs(z))\\n basis=old._time_basis(S['eval_times'],tr['traj'][:52]); Y=np.c_[tr['y'],tr['traj']@basis]; print('time basis',basis.T)\\n for zz,name in [(za,'inverse'),(np.r_[tr['x'],S['test']['x']],'observed')]:\\n  P,idx=poly(zz,3); b=fit(P[:52],Y[:52]); print(name,'dominant cubic terms',[[ (idx[j],round(b[j,k],4)) for j in np.argsort(abs(b[:,k]))[-12:][::-1]] for k in range(3)])\\n  for d in (1,2,3,4,5,6,7):\\n   X,_=poly(zz,d); X=X/X[:52].std(0).clip(.1); eye=np.eye(len(X[0]));eye[0,0]=0\\n   for p in (.00001,.001,.02,.1,1.):\\n    X0=X[:52]; XX=X0@X0.T; c=np.linalg.solve(XX+p*np.eye(52),Y[:52]); q=X[52:n]@X0.T@c; print(name,d,p,np.round(np.mean(abs(q-Y[52:]),axis=0),4),round(np.mean(abs(q[:,1:]@basis.T-tr['traj'][52:])),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/b05_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated quadratic readouts (52/20 MAE 0.20969 scalar, 0.27968 trajectory) -> H2 higher-order or auxiliary-operator composition; calibrated cubic reduces these MAEs to 0.07640 and 0.10518.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The inverted reference calibration followed by quadratic readouts is sufficient.\",\n    \"empirical_witness\": \"The cyclic calibration fits 45 retained reference rows at about 0.0001 RMS per channel, but the quadratic scalar MAE is 0.20969 on the prescribed split. Adding cubic terms reduces it to 0.07640, still above the 0.038 gate.\",\n    \"causal_blanket_diagnosis\": \"The reference panel supports the inverse calibration; the remaining error comes from an incomplete downstream basis.\",\n    \"sublated_pivot\": \"Retain the calibrated coordinates and test higher-order terms and nonlinear auxiliary operators separately.\",\n    \"risk_kind\": \"downstream_basis_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave-one-row-out panel residuals will distinguish transferable operator bases from panel interpolants. The regularized polynomial sweep establishes how much of the remaining error can be recovered without an auxiliary operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "34220e62c96904e16a9190eb3b82195df65619a349318877d1e82acbf96190d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37588.18,
+      "usage_known": true,
+      "prompt_tokens": 26264,
+      "cached_tokens": 9344,
+      "completion_tokens": 1425
+    }
+  ]
+}

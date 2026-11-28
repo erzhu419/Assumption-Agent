@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0df7b50eaf254831832f5aa46830b871",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_b02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:05:29.685739+00:00",
+  "ended_at_utc": "2026-11-28T10:06:08.876424+00:00",
+  "request_sha256": "d6d23a2860ee6eb85c1225ace456055a4c6e27d3ca83d1fbcfb1f70684938492",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41335,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28384,
+    "cached_tokens": 9344,
+    "completion_tokens": 1677
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation shared exponential time basis variable projection' 2>/dev/null || true\\ncat >/tmp/readout.py <<'PY'\\nfrom probe import *\\nfrom scipy.linalg import svd\\nrng=np.random.default_rng(78)\\ndef fit(a,y):return np.linalg.lstsq(a,y,rcond=1e-9)[0]\\ndef cv(a,Y):\\n a=np.c_[np.ones(len(a)),a]; out=[]\\n for seq in [np.arange(72),rng_perm]:\\n  e=[]\\n  for idx in np.array_split(seq,4):\\n   m=np.ones(72,bool);m[idx]=False;e.append(np.mean(abs(a[idx]@fit(a[m],Y[m])-Y[idx]),axis=0))\\n  out.append(np.max(e,axis=0))\\n return out\\nrng_perm=rng.permutation(72)\\ndef c1f(x):return np.c_[x[:,0]*x[:,1],x[:,1]*x[:,2],x[:,2]*x[:,3],x[:,3]*x[:,0]]\\ndef c2f(x):return np.c_[x,x*x]\\nc=lambda x: np.c_[np.ones(len(x)),c1f(x)]@fit(np.c_[np.ones(len(u)),c1f(u)],v1)\\nd=lambda x: np.c_[np.ones(len(x)),c2f(x)]@fit(np.c_[np.ones(len(u)),c2f(u)],v2)\\nnp.set_printoptions(precision=4,suppress=True)\\nU,S,V=svd(tr,full_matrices=False);print('S',S,'V',V[:3]); print('mean',tr.mean(0))\\nfor name,F in {'z':z,'zb':np.c_[z,b], 'zbc':np.c_[z,b,c(z)],'zbcd':np.c_[z,b,c(z),d(z)],'zbCb':np.c_[z,b,c(b)],'zbCbDb':np.c_[z,b,c(b),d(b)],'zbczCb':np.c_[z,b,c(z),c(b)],'zbc+nonlin':np.c_[z,b,c(z),np.tanh(2*b),np.tanh(2*c(z))], 'zbcd+nonlin':np.c_[z,b,c(z),d(z),np.tanh(2*b),np.tanh(2*c(z)),np.tanh(2*d(z))]}.items():\\n Y=np.c_[y,U[:,:3]*S[:3]];f=np.c_[np.ones(len(z)),F];r=Y-f@fit(f,Y);print(name,'fit',np.mean(abs(r),0),'cv',cv(F,Y)[0]);\\n if name in ('zbcd','zbCbDb'):print('coeff pca',fit(f,Y))\\n# Identify shared time modes by fitting the matrix, not independently estimating a rate per noisy row.\\nfor name,fun,p0,lo,hi in [\\n ('exp',lambda k:np.c_[-np.expm1(-k[0]*t)],[.6],[.02],[5]),\\n ('exp + const',lambda k:np.c_[-np.expm1(-k[0]*t),np.ones(len(t))],[.6],[.02],[5]),\\n ('exp + drift',lambda k:np.c_[-np.expm1(-k[0]*t),t],[.6],[.02],[5]),\\n ('exp + exp',lambda k:np.c_[-np.expm1(-k[0]*t),-np.expm1(-k[1]*t)],[.4,1.6],[.02,.02],[8,8]),\\n ('exp + sin',lambda k:np.c_[-np.expm1(-k[0]*t),np.sin(k[1]*t)],[.6,.9],[.02,.02],[5,4]),\\n ('exp + drift + const',lambda k:np.c_[-np.expm1(-k[0]*t),t,np.ones(len(t))],[.6],[.02],[5]),\\n ('exp + exp + const',lambda k:np.c_[-np.expm1(-k[0]*t),-np.expm1(-k[1]*t),np.ones(len(t))],[.4,1.6],[.02,.02],[8,8]),\\n ('exp + exp + drift',lambda k:np.c_[-np.expm1(-k[0]*t),-np.expm1(-k[1]*t),t],[.4,1.6],[.02,.02],[8,8]),\\n ('exp + sin + drift',lambda k:np.c_[-np.expm1(-k[0]*t),np.sin(k[1]*t),t],[.6,.9],[.02,.02],[5,4]),\\n ('exp + sin + cos',lambda k:np.c_[-np.expm1(-k[0]*t),np.sin(k[1]*t),np.cos(k[1]*t)-1],[.6,.9],[.02,.02],[5,4])]:\\n def res(k):\\n  h=fun(k);return (h@fit(h,tr.T)-tr.T).ravel()\\n k=least_squares(res,p0,bounds=(lo,hi)).x;H=fun(k);co=fit(H,tr.T).T\\n print(name,k,np.sqrt(np.mean(res(k)**2)), 'amp corr y',np.corrcoef(np.c_[y,co].T)[0,1:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic v1 calibration → H2 four cyclic products and distinct v2 calibration; worst unrestricted v1 calibration RMSE is 0.00007, but greedy trajectory endpoint validation MAE remains 0.135.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more terms to the greedy readout\",\n      \"rejected_reason\": \"Training error fell while held-out scalar and trajectory errors remained far above tolerance.\"\n    }\n  ],\n  \"rationale\": \"Test whether Panel C consumes z or b and isolate the trajectory time modes. A coordinate choice that improves held-out fits or a time basis that reaches the noise floor will narrow the readout search.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6f84069e605de13881e735dccadceb4b0bc5b63328ddf5cf2914007963869cc2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44550.34,
+      "usage_known": true,
+      "prompt_tokens": 28384,
+      "cached_tokens": 9344,
+      "completion_tokens": 1677
+    }
+  ]
+}

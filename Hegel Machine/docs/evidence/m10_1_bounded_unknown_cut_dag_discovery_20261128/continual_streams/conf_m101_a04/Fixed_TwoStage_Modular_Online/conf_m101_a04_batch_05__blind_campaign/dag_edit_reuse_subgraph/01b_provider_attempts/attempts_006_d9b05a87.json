@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9b05a872d454f7c9b8d99f663185f27",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Fixed_TwoStage_Modular_Online__conf_m101_a04_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:31.680953+00:00",
+  "ended_at_utc": "2026-11-28T09:43:08.860279+00:00",
+  "request_sha256": "e68438d4179f121cebee13913b5a73708c22d363b7398dd24cc17f34bbe1bbd9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 46740,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29396,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _frozen_nodes/node_01.py && python3 - <<'PY'\\nimport json\\np=json.load(open('public_asset_index.json')); print(str(p)[:2200])\\nPY\\ncat > /tmp/handoff_probe.py <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path[:0] = ['/holdout_task', '/holdout_task/_frozen_nodes']\\nimport node_00 as m, node_01 as f\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nz,b,c1,c2 = m._features(s)\\np = s['panel_c']; u,v = p['u'],p['v2']\\ndef smooth(x,a):\\n    return x*x/(np.sqrt(1+a*x*x)+1)\\ndef fit(d,y):\\n    val = minimize_scalar(lambda a: np.mean((m._design(d,smooth(d,a)) @ m._fit(m._design(d,smooth(d,a)),y)-y)**2),bounds=(.01,3),method='bounded').x\\n    return val,m._fit(m._design(d,smooth(d,val)),y)\\nerr=[]\\nfor i in range(len(u)):\\n    mask=np.arange(len(u))!=i; a,c=fit(u[mask],v[mask]); err.append((m._design(u[i:i+1],smooth(u[i:i+1],a))@c-v[i])[0])\\na,c=fit(u,v); improved=m._design(z,smooth(z,a))@c\\nprint('v2 nested LOO RMSE by output',np.sqrt(np.mean(np.array(err)**2,axis=0)),'shape',a)\\nt=s['train']; y,st=t['y'],t['traj']; n=len(y); ix=np.arange(n)\\nblocks=[ix[-20:]]\\nfor seed in (52,931,1901): blocks.extend(np.array_split(np.random.default_rng(seed).permutation(n),5))\\nblocks.extend(np.array_split(ix[np.linalg.norm(z[:n],axis=1).argsort()],5))\\ndef score(h):\\n    out=[]; worst_time=[]\\n    for te in blocks:\\n        tr=np.setdiff1d(ix,te)\\n        pred=f.run_node({'node_00': {'h':np.r_[h[tr],h[te]],'n_train':np.asarray(len(tr)),'y':y[tr],'traj':st[tr]}})\\n        e=np.abs(pred['state_pred']-st[te]); out.append((np.mean(abs(pred['y_hat']-y[te])),np.mean(e))); worst_time.append(e.mean(0).max())\\n    out=np.asarray(out); return np.round(out[0],6),np.round(out.max(0),6),np.round(out[1:16].mean(0),6),np.round(out[16:].max(0),6),round(max(worst_time),6)\\nfor name, h in [('original',np.c_[z,b,c1,c2]),('c-only cosine',np.c_[c1,c2]),('c-only sqrt',np.c_[c1,improved])]+[(f'b-scale {w}',np.c_[w*b,c1,improved]) for w in (.03,.1,.2,.35,.5,1)]+[(f'z+b scale {w}',np.c_[w*z,w*b,c1,improved]) for w in (.05,.12,.25,.5)]:\\n    print(name, score(h))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 python3 /tmp/handoff_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unweighted handoff of all calibrated features) -> H2 (panel C features dominate the frozen readout): the pilot split bank's worst y/trajectory MAEs fell from 0.07090/0.04551 to 0.02135/0.01444 when the affine feature blocks were omitted.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop both affine blocks immediately\",\n      \"rejected_reason\": \"First check whether retaining them at a smaller scale preserves the reference handoff without sacrificing validation margins.\"\n    }\n  ],\n  \"rationale\": \"Run the frozen consumer on unseen split seeds and a high-radius slice to detect extrapolation failure that the public split might miss. Refit the v2 shape inside each calibration fold to test whether its apparent improvement survives shape selection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5557b2f3b913a1596d2f1a85fdc04cf32abaac9e42f19304368fe3e44a413390",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37141.1,
+      "usage_known": true,
+      "prompt_tokens": 29396,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

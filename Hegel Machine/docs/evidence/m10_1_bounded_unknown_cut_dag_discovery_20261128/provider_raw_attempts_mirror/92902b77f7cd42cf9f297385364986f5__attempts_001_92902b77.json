@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "92902b77f7cd42cf9f297385364986f5",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__init_decomp_conf_m101_b03_batch_06",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:18.782526+00:00",
+  "ended_at_utc": "2026-11-28T09:55:56.680793+00:00",
+  "request_sha256": "b58115a87d04038c5c34ba52002507a329d39ad49a5d563b1e41bff2ddd7d683",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 5869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13537,
+    "cached_tokens": 9856,
+    "completion_tokens": 1541
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The solver has two distinct stages: it calibrates and inverts panel A, then uses panels B and C to build a design matrix; a separate ridge readout predicts responses and trajectories. The largest changes in the panel summaries are in panel A and panel C v1, so grouping feature construction in node_00 lets both be investigated without changing the readout in node_01. The split preserves the original computations and row order. Source-batch equivalence has not been run.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"__input__\", \"node_01\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import least_squares, minimize_scalar\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=1e-10)[0]\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    bases = [_affine(np.column_stack((x, z, x*z, x**3)))\\n             for x, z in zip(u.T, np.roll(u, -1, axis=1).T)]\\n    ids = np.arange(len(u))\\n    for _ in range(8):\\n        coef = np.column_stack([_fit(f[ids], v[ids, j]) for j, f in enumerate(bases)])\\n        err = np.linalg.norm(np.column_stack([f @ coef[:, j] for j, f in enumerate(bases)])-v, axis=1)\\n        new_ids = np.flatnonzero(err < max(.002, 4*np.median(err)))\\n        if np.array_equal(ids, new_ids):\\n            break\\n        ids = new_ids\\n    return coef\\n\\n\\ndef _invert(x, coef):\\n    c0, c1, c2, c3, c4 = coef\\n    def residual(z, observed):\\n        zn = np.roll(z, -1)\\n        return c0 + c1*z + c2*zn + c3*z*zn + c4*z**3 - observed\\n    def jac(z, observed):\\n        d = np.diag(c1 + c3*np.roll(z, -1) + 3*c4*z*z)\\n        d[np.arange(4), np.roll(np.arange(4), -1)] = c2+c3*z\\n        return d\\n    return np.array([least_squares(residual, (row-c0)/c1, jac=jac, args=(row,),\\n                                   gtol=1e-12, ftol=1e-12, xtol=1e-12).x for row in x])\\n\\n\\ndef _views(study, z):\\n    pb, pc = study['panel_b'], study['panel_c']\\n    b = _affine(z) @ _fit(_affine(pb['u']), pb['v'])\\n    u, v = pc['u'], pc['v1']\\n    def soft(x, k):\\n        w = k[0]*x + k[1]\\n        return _affine(w/(1+np.abs(w)) + k[2]*x)\\n    def res(k):\\n        f = soft(u, k)\\n        return (f @ _fit(f, v)-v).ravel()\\n    k = least_squares(res, [1.5, 0., 0.], bounds=([.15, -4, -4], [7., 4, 4]), max_nfev=100).x\\n    p = soft(z, k) @ _fit(soft(u, k), v)\\n    def cosine(x, freq):\\n        return _affine(np.cos(freq*x))\\n    def loss(freq):\\n        f = cosine(u, freq)\\n        return np.mean((f @ _fit(f, pc['v2']) - pc['v2'])**2)\\n    freq = minimize_scalar(loss, bounds=(2., 2.8), method='bounded').x\\n    q = cosine(z, freq) @ _fit(cosine(u, freq), pc['v2'])\\n    return b, p, q\\n\\n\\ndef _outer(u, v):\\n    return (u[:, :, None]*v[:, None, :]).reshape(len(u), -1)\\n\\n\\ndef _design(study, x):\\n    z = _invert(x, _calibrate(study['panel_a']))\\n    b, p, q = _views(study, z)\\n    return np.column_stack((z, p, q, _outer(b, p), _outer(p, q)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    x_train = study['train']['x']\\n    design = _design(study, np.vstack((x_train, study['test']['x'])))\\n    return {'design': design, 'n_train': len(x_train)}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _predict(design, values, train, test, penalty):\\n    a = design[train]\\n    center = a.mean(axis=0)\\n    scale = a.std(axis=0)\\n    f = (a-center)/scale\\n    offset = values[train].mean(axis=0)\\n    gram = f.T @ f + penalty*np.eye(f.shape[1])\\n    w = np.linalg.solve(gram, f.T @ (values[train]-offset))\\n    return (design[test]-center)/scale @ w + offset\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['__input__']['train']\\n    features = inputs['node_00']\\n    design, n = features['design'], features['n_train']\\n    y = _predict(design, data['y'], slice(n), slice(n, None), .003)\\n    state = _predict(design, data['traj'], slice(n), slice(n, None), .0001)\\n    terminal = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), terminal.mean(), terminal.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "1c70145db1d2222b947afe574ca09997094e1202f976afb1226945914006749f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40550.89,
+      "usage_known": true,
+      "prompt_tokens": 13537,
+      "cached_tokens": 9856,
+      "completion_tokens": 1541
+    }
+  ]
+}

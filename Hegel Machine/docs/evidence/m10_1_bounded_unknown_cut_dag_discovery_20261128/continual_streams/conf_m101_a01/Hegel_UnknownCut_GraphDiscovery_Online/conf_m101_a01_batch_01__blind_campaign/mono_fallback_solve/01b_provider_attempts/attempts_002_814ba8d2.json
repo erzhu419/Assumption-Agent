@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "814ba8d2960e489b9d4b49297a321233",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:18:14.277543+00:00",
+  "ended_at_utc": "2026-11-28T09:18:31.244961+00:00",
+  "request_sha256": "b2216cae0e076fd8491f334b2eac7a2f216590f534af61da85992a7311a68b2a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 12872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15166,
+    "cached_tokens": 9344,
+    "completion_tokens": 605
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/*solver.py; cat /holdout_task/validate_public_schema.py; cd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as n\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; n.set_printoptions(precision=5,suppress=True,linewidth=150)\\nprint('time, telem, summary',s['eval_times'],s['telemetry_vec'],s['train']['summary']);\\nfor name in ('panel_a','panel_b','panel_c'):\\n p=s[name]; u=p['u']; print(name,'u span',u.min(0),u.max(0)); D=n.c_[n.ones(len(u)),u];\\n for key in p:\\n  if key=='u':continue\\n  v=p[key]; A=n.linalg.lstsq(D,v,rcond=None)[0]; r=v-D@A; print(key,'coeff',A,'residual row rms sorted',n.sort(n.mean(r*r,axis=1)**.5),'first three',v[:3])\\np=s['train']; print('first ten x/y/traj',n.c_[p['x'],p['y'],p['traj']][:10]); print('traj singular values',n.linalg.svd(p['traj']-p['traj'].mean(0),compute_uv=False)); print('y from traj coeff/residual',n.linalg.lstsq(n.c_[n.ones(72),p['traj']],p['y'],rcond=None)[:2]); print('x train/test ranges',p['x'].min(0),p['x'].max(0),s['test']['x'].min(0),s['test']['x'].max(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archive transfer) -> H2 (identify current panel and trajectory structure); prior gate target/trajectory MAE was 0.060792/0.024955.\",\n  \"nogood_update\": {\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\n  \"considered_alternatives\": [{\"option\":\"Copy the archive solver unchanged\",\"rejected_reason\":\"The prior gate missed the target tolerance; current measurements can indicate which components to retain.\"}],\n  \"rationale\": \"Panel residuals distinguish affine calibration from nonlinear or contaminated operators. Trajectory rank and readout residuals show whether the two outputs can share a model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "5760e6c453e5620b5174c46c8c38d77fe491463dab5b31ce215dd28b9f8b4034",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19576.18,
+      "usage_known": true,
+      "prompt_tokens": 15166,
+      "cached_tokens": 9344,
+      "completion_tokens": 605
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b03_batch_06_088112a7a891",
+    "source_hash": "088112a7a891fc43738f3e8fbd5a333a6bf7b85a9b4a405e36a5155806954ffd",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_b03_batch_06__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compose.py",
+        "archived_relpath": "producers/tmp__compose.py",
+        "bytes": 1055,
+        "sha256": "8391e06fa185085f49547857514672c700b9ca7c8ebfb14113d6ef3e9d511600"
+      },
+      {
+        "container_path": "/tmp/interactions.py",
+        "archived_relpath": "producers/tmp__interactions.py",
+        "bytes": 1842,
+        "sha256": "ee5d1f956a046ebfcc8db03c1466a7f5e0252447d4cd07e58b11e65fd86c2eda"
+      },
+      {
+        "container_path": "/tmp/probe.py",
+        "archived_relpath": "producers/tmp__probe.py",
+        "bytes": 1878,
+        "sha256": "b885022f3d52db7f5797cb7f4fe220f681ef32f4b07e08a0a51d5da699340db3"
+      },
+      {
+        "container_path": "/tmp/v2_probe.py",
+        "archived_relpath": "producers/tmp__v2_probe.py",
+        "bytes": 1198,
+        "sha256": "740138d44d8b93642bc25693158007f9b7330f1cb538a4bda3929bb8237f5a42"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_00_solver.py",
+        "bytes": 2597,
+        "sha256": "a20eb65292c40ebe6a51afd3a889eddadcddac526aafaf7a82dc0aa854cda796"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_01_solver.py",
+        "bytes": 3879,
+        "sha256": "0f8c74df2866085a90d9b89c2931fb69fd111b9cd9c74677870e6846ce2fe008"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_02_solver.py",
+        "bytes": 2777,
+        "sha256": "ae20945c497587f13bc0a43268af81275bb387e8955132c6960846c61ade8582"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b03_batch_03_solver.py",
+        "bytes": 3249,
+        "sha256": "15ba01afaa8ad9f90e4b5cfe87cee3e74e292026140fc12e522b1e930dd74bed"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && cat _dag_spec.json && cat _frozen_nodes/node_01.py && cat test_dag_candidate.py && cat public_asset_index.json && printf '\\n--- Reference files ---\\n' && find /pretrain_task -maxdepth 3 -type f | head -80; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS affine calibration'",
+      "cd /holdout_task && sed -n '53,180p' test_dag_candidate.py; ls -la /pretrain_task; python3 - <<'PY'\nimport pickle, numpy as np\np=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print(type(p)); print(p.keys() if isinstance(p,dict) else len(p));\nif isinstance(p,dict): p=next(v for v in p.values() if isinstance(v,list))\nd=p[0]; print(d.keys()); print([(k, list(v) if isinstance(v,dict) else np.shape(v)) for k,v in d.items()]); np.set_printoptions(precision=4,suppress=True,linewidth=140)\nfor name in ['panel_a','panel_b','panel_c']:\n z=d[name]; u=z['u']; print(name, u.shape, u.min(axis=0),",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\nprint('times',s['eval_times'],'telemetry',s['telemetry_vec']); print('x range',s['train']['x'].min(0),s['train']['x'].max(0)); print('traj first rows',s['train']['traj'][:3]); print('traj centered singular values',np.linalg.svd(s['train']['traj']-s['train']['traj'].mean(0),compute_uv=False))\nfor name in ('panel_a','panel_b','panel_c'):\n d=s[name];u=d['u']; print(name,'u range',u.min(0),u.max(0)); print(np.column_st",
+      "cat > /tmp/probe.py <<'PY'\nimport itertools as it,pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task/_frozen_nodes')\nfrom node_01 import _predict\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nnp.set_printoptions(precision=3,suppress=True,linewidth=140)\ndef ls(a,b):return np.linalg.lstsq(a,b,rcond=None)[0]\ndef poly(u):return np.column_stack([np.ones(len(u)),u,*[u[:,i]*u[:,j] for i,j in it.combinations_with_replacement(range(4),2)]])\ndef loo(a,b):\n p=np.linalg.pinv(a);e=b-a@(p@b);return np.mean(abs(e/(1-(a*p.T).sum(1))[:,None]),0)\na=s['panel_a']; u=a['u']; A=np.c_[n",
+      "cat > /tmp/v2_probe.py <<'PY'\nfrom probe import *\nfrom scipy.optimize import minimize_scalar\n\ndef check(name,fun,bounds=None):\n if bounds:\n  vals=np.linspace(*bounds,151); f=lambda k: loo(fun(u,k),v2).mean(); i=np.argmin([f(k) for k in vals]); opt=minimize_scalar(f,bounds=(vals[max(0,i-1)],vals[min(len(vals)-1,i+1)]),method='bounded'); k=opt.x\n else:k=1.\n P=fun(u,k); Q=ls(P,v2); g=fun(z,k)@Q; print(name,round(k,6),'loo',loo(P,v2),'official/worst',ev(np.c_[f1,g])[0],ev(np.c_[f1,g]).max(0)); return k\nadd=lambda x,f:np.c_[np.ones(len(x)),f]\nfor name,fun,range_ in [ ('cos',lambda x,k:add(x,np.cos(",
+      "cat /holdout_task/_frozen_nodes/node_01.py; cat /holdout_task/public_asset_index.json; cat > /tmp/compose.py <<'PY'\nfrom probe import *\nb=s['panel_b']; W=ls(np.c_[np.ones(len(b['u'])),b['u']],b['v']); print('panel B singular values',np.linalg.svd(W[1:],compute_uv=False))\nfwd=lambda x:x@W[1:]+W[0]; inv=lambda x:np.linalg.solve(W[1:].T,(x-W[0]).T).T\nv1basis=lambda a:np.c_[np.ones(len(a)),a[:,0]*a[:,1],a[:,0]*a[:,3],a[:,1]*a[:,2],a[:,2]*a[:,3]]\nv2basis=lambda a:np.c_[np.ones(len(a)),np.cos(2.4*a)]\np1=ls(v1basis(u),v1);p2=ls(v2basis(u),v2)\nprint('panel LOO',loo(v1basis(u),v1),loo(v2basis(u),v2)); ",
+      "cat > /tmp/interactions.py <<'PY'\nfrom probe import *\nV1=lambda a:np.c_[np.ones(len(a)),a[:,0]*a[:,1],a[:,0]*a[:,3],a[:,1]*a[:,2],a[:,2]*a[:,3]]\nV2=lambda a:np.c_[np.ones(len(a)),np.cos(2.4*a)]\ng=V1(z)@ls(V1(u),v1); h=V2(z)@ls(V2(u),v2); F=np.c_[g,h]; N=len(F)\nprint('targets',[(k,np.shape(v),np.min(v),np.max(v)) for k,v in T.items()]); print('design spread',F.std(0));\nsq=lambda a: np.column_stack([a[:,i]*a[:,j] for i,j in it.combinations_with_replacement(range(a.shape[1]),2)])\ncross=lambda a,b:(a[:,:,None]*b[:,None,:]).reshape(len(a),-1)\ngroups={'gquad':sq(g),'hquad':sq(h),'cross':cross(g,h),'",
+      "cat > /holdout_task/node_00.py <<'PY'\nimport numpy as np\n\n\ndef _fit(design, values):\n    return np.linalg.lstsq(design, values, rcond=None)[0]\n\n\ndef _affine_calibration(panel):\n    u, v = panel['u'], panel['v']\n    design = np.column_stack((np.ones(len(u)), u))\n    coef = _fit(design, v)\n    # Fit in the forward direction so corrupted measurements are residuals,\n    # not high-leverage predictors. Trim the three identified outlier rows.\n    for _ in range(10):\n        residual = np.linalg.norm(v - design @ coef, axis=1)\n        weight = np.sqrt(np.minimum(1.0, 1.5 * max(np.median(residual), 1e"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__conf_m101_b03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_00.py",
+        "filename": "node_00.py",
+        "bytes": 1676,
+        "sha256": "721a49fd55da52d7eb722ffd542cc4d5e26c9bebb05612b461f903a8fd226f46",
+        "content_addressed_ref": "content_addressed_blobs/721a49fd55da52d7eb722ffd542cc4d5e26c9bebb05612b461f903a8fd226f46.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_00.py"
+    ],
+    "exported_pure_functions": [
+      "_calibrate",
+      "_fit",
+      "_affine",
+      "_cyclic",
+      "_views",
+      "_invert",
+      "_outer",
+      "_design"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "088112a7a891fc43738f3e8fbd5a333a6bf7b85a9b4a405e36a5155806954ffd",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /holdout_task/node_00.py <<'PY'\nimport numpy as np\n\n\ndef _fit(design, values):\n    return np.linalg.lstsq(design, values, rcond=None)[0]\n\n\ndef _affine_calibration(panel):\n    u, v = panel['u'], panel['v']\n    design = np.column_stack(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "088112a7a891fc43738f3e8fbd5a333a6bf7b85a9b4a405e36a5155806954ffd",
+        "expected_candidate_sha256": "088112a7a891fc43738f3e8fbd5a333a6bf7b85a9b4a405e36a5155806954ffd",
+        "computed_candidate_sha256": "088112a7a891fc43738f3e8fbd5a333a6bf7b85a9b4a405e36a5155806954ffd",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_00.py",
+            "bytes": 1676
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_088112a7"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(panel):\n    (u, v) = (panel['u'], panel['v'])\n    nxt = np.roll(u, -1, axis=1)\n    basis = [np.column_stack((np.ones(len(u)), x, z, x * z, x ** 3)) for (x, z) in zip(u.T, nxt.T)]\n    ids = np.arange(len(u))\n    for _ in range(8):\n        coef = np.column_stack([np.linalg.lstsq(f[ids], v[ids, j], rcond=None)[0] for (j, f) in enumerate(basis)])\n        residual = np.column_stack([f @ coef[:, j] for (j, f) in enumerate(basis)]) - v\n        ids = np.argsort(np.linalg.norm(residual, axis=1))[:len(u) - 3]\n    return coef"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(a, b):\n    return np.linalg.lstsq(a, b, rcond=1e-09)[0]"
+      },
+      {
+        "name": "_affine",
+        "code": "def _affine(x):\n    return np.c_[np.ones(len(x)), x]"
+      },
+      {
+        "name": "_cyclic",
+        "code": "def _cyclic(x):\n    return x * np.roll(x, -1, axis=1)"
+      },
+      {
+        "name": "_views",
+        "code": "def _views(study, z):\n    from scipy.optimize import minimize_scalar\n    c = study['panel_c']\n    u = c['u']\n    p = _affine(_cyclic(z)) @ _fit(_affine(_cyclic(u)), c['v1'])\n\n    def f(x, k):\n        return np.c_[_affine(x), np.log1p(k * x * x)]\n\n    def loss(k):\n        g = f(u, k)\n        return np.mean((g @ _fit(g, c['v2']) - c['v2']) ** 2)\n    k = minimize_scalar(loss, bounds=(0.05, 1.5), method='bounded').x\n    q = f(z, k) @ _fit(f(u, k), c['v2'])\n    return (p, q)"
+      },
+      {
+        "name": "_invert",
+        "code": "def _invert(x, coef):\n    from scipy.optimize import least_squares\n    (c0, c1, c2, c3, c4) = coef\n\n    def residual(z, observed):\n        zn = np.roll(z, -1)\n        return c0 + c1 * z + c2 * zn + c3 * z * zn + c4 * z ** 3 - observed\n\n    def jac(z, observed):\n        d = np.diag(c1 + c3 * np.roll(z, -1) + 3 * c4 * z * z)\n        d[np.arange(4), np.roll(np.arange(4), -1)] = c2 + c3 * z\n        return d\n    return np.array([least_squares(residual, (row - c0) / c1, jac=jac, args=(row,), gtol=1e-12, ftol=1e-12, xtol=1e-12).x for row in x])"
+      },
+      {
+        "name": "_outer",
+        "code": "def _outer(u, v):\n    return (u[:, :, None] * v[:, None, :]).reshape(len(u), -1)"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(study, x):\n    z = _invert(x, _calibrate(study['panel_a']))\n    (b, p, q) = _views(study, z)\n    return np.column_stack((z, p, q, _outer(b, p), _outer(p, q)))"
+      }
+    ]
+  }
+}

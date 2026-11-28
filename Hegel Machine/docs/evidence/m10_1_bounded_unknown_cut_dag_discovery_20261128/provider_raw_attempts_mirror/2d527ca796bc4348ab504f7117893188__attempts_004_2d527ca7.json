@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2d527ca796bc4348ab504f7117893188",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:38.143412+00:00",
+  "ended_at_utc": "2026-11-28T09:27:07.444839+00:00",
+  "request_sha256": "1d36ccf40e3e87caf4b6dad2fceac72b2749de9cfdbb20cbcabe1e5a0a4f7c4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31850,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22905,
+    "cached_tokens": 9344,
+    "completion_tokens": 1244
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated nonlinear readouts with a shared two-rate trajectory basis.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel):\\n    a, v = _linear(panel['u']), panel['v']\\n    initial = _fit(a, v)\\n    beta = least_squares(lambda b: (a @ b.reshape(initial.shape) - v).ravel(),\\n                         initial.ravel(), loss='cauchy', f_scale=.02).x.reshape(initial.shape)\\n    residual = np.linalg.norm(a @ beta - v, axis=1)\\n    keep = residual <= 10 * np.median(residual)\\n    return _fit(a[keep], v[keep])\\n\\n\\ndef _features(z):\\n    products = [z[:, i] * z[:, j]\\n                for i, j in combinations_with_replacement(range(z.shape[1]), 2)]\\n    return np.column_stack((_linear(z), *products, np.tanh(z)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train, t = study['train'], study['eval_times']\\n    a = _calibration(study['panel_a'])\\n    x = (train['x'] - a[0]) @ np.linalg.inv(a[1:])\\n    xt = (study['test']['x'] - a[0]) @ np.linalg.inv(a[1:])\\n    trajectories = train['traj'].T\\n\\n    def basis(rates):\\n        return -np.expm1(-t[:, None] * rates)\\n\\n    def residual(rates):\\n        b = basis(rates)\\n        return (b @ _fit(b, trajectories) - trajectories).ravel()\\n\\n    rates = least_squares(residual, [1.6, .3], bounds=([.58, .01], [5., 1.2])).x\\n    b = basis(rates)\\n    y_hat, *amplitude = (_features(xt) @ _fit(_features(x),\\n                          np.column_stack((train['y'], _fit(b, trajectories).T)))).T\\n    state = np.asarray(amplitude).T @ b.T\\n    return dict(y_hat=y_hat, state_pred=state,\\n                diagnostics_vec=np.array([y_hat.mean(), y_hat.std(), state[:, -1].mean(), state[:, -1].std()]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\ncat >/tmp/cv_b04.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=tr['x']; a=m._calibration(s['panel_a']); z=(x-a[0])@np.linalg.inv(a[1:]); print('calibration',np.round(a,6)); rng=np.random.default_rng(710)\\nfor label,idx in [('52/20',np.arange(72)),('56/16',np.arange(72)),*[(f'random {j}',rng.permutation(72)) for j in range(8)],*[(f'edge {j}',np.argsort(abs(z[:,j]))) for j in range(4)]]:\\n n=56 if label=='56/16' or label.startswith('random') else 52; i,v=idx[:n],idx[n:]; out=m.solve_batch(dict(s,train={k:tr[k][i] for k in ('x','y','traj')},test={'x':x[v]})); ey=abs(out['y_hat']-tr['y'][v]); et=abs(out['state_pred']-tr['traj'][v]); print(label,np.round([ey.mean(),et.mean(),et[:,-1].mean(),ey.max(),et.mean(axis=1).max()],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cv_b04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: raw-coordinate polynomial readout → H2: robust inverse calibration with quadratic and tanh terms plus two temporal modes; probe 52/20 MAEs are 0.01943 for y and 0.01688 for trajectories.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use raw-coordinate cubic regression\",\"rejected_reason\":\"It missed both public thresholds in the probe (0.06604 for y and 0.05054 for trajectories).\"}],\"rationale\":\"Implement the calibrated model that clears the prescribed split, then test shuffled and coordinate-edge slices to determine whether the model needs a more explicit operator basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a908091f3453ef2bba435dc061b362bce7169d927f6afb9ccc599881ae71b8ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34593.76,
+      "usage_known": true,
+      "prompt_tokens": 22905,
+      "cached_tokens": 9344,
+      "completion_tokens": 1244
+    }
+  ]
+}

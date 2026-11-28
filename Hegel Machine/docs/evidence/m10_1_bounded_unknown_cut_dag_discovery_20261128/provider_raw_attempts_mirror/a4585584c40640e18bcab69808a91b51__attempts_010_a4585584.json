@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a4585584c40640e18bcab69808a91b51",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:22.832104+00:00",
+  "ended_at_utc": "2026-11-28T09:24:06.370011+00:00",
+  "request_sha256": "b3b163d998966696deb49326b163af03a50ae0ae953f820c3be832d172b8778f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53716,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32710,
+    "cached_tokens": 9344,
+    "completion_tokens": 1802
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrated kernel readouts for scalar response and time trajectory.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.linalg import cho_factor, cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\n\\n\\ndef _linear(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _calibration(panel, robust=False):\\n    u = _linear(panel['u'])\\n    v = panel['v']\\n    keep = np.arange(len(u))\\n    if robust:\\n        for _ in range(8):\\n            c = np.linalg.lstsq(u[keep], v[keep], rcond=None)[0]\\n            err = np.linalg.norm(v - u @ c, axis=1)\\n            keep = np.argsort(err)[:len(u) - len(u)//5]\\n        keep = np.flatnonzero(err < 10*np.median(err))\\n    return np.linalg.lstsq(u[keep], v[keep], rcond=None)[0]\\n\\n\\ndef _kernel_predict(k, kt, target, noise):\\n    f = cho_factor(k + noise*np.eye(len(k)))\\n    return kt @ cho_solve(f, target)\\n\\n\\ndef _matern(z, zt, y):\\n    delta = (z[:, None] - z[None, :])**2\\n    dt = (zt[:, None] - z[None, :])**2\\n    p, pt = _linear(z), _linear(zt)\\n    eye = np.eye(len(z))\\n\\n    def kernel(d, theta):\\n        r = np.sqrt(5*(d @ np.exp(theta[:4])))\\n        return (1+r+r*r/3)*np.exp(-r)\\n\\n    def objective(theta, predict=False):\\n        f = cho_factor(kernel(delta, theta) + np.exp(theta[4])*eye)\\n        ip, iy = cho_solve(f, p), cho_solve(f, y)\\n        g = p.T @ ip\\n        beta = np.linalg.solve(g, p.T @ iy)\\n        alpha = iy - ip @ beta\\n        if predict:\\n            return pt @ beta + kernel(dt, theta) @ alpha\\n        return ((len(y)-p.shape[1])*np.log((y-p@beta) @ alpha)\\n                + 2*np.log(np.diag(f[0])).sum() + np.linalg.slogdet(g)[1]\\n                + 1.5*np.sum((theta[:4]+1.5)**2))\\n\\n    optimum = minimize(objective, [-1.5]*4+[-6.], method='L-BFGS-B',\\n                       bounds=[(-5, 2)]*4+[(-12, -2)])\\n    return objective(optimum.x, predict=True)\\n\\n\\ndef _trajectory(x, xt, z, zt, train):\\n    scale = np.sqrt(np.mean(x*x, axis=0))\\n    xs, xst = x/scale, xt/scale\\n    def kernel(a, b, c, d):\\n        return np.exp(-.2*cdist(c, d, 'sqeuclidean')) + (1+a@b.T/4)**2\\n    am = _kernel_predict(kernel(xs, xs, z, z), kernel(xst, xs, zt, z), train, .002)\\n    # The public trajectories are low rank; discard independent higher time modes.\\n    mean = train.mean(axis=0)\\n    modes = np.linalg.svd(train-mean, full_matrices=False)[2][:2]\\n    return mean + ((am-mean) @ modes.T) @ modes\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    x, xt = train['x'], study['test']['x']\\n    a = _calibration(study['panel_a'], robust=True)\\n    b = _calibration(study['panel_b'])\\n    xa, xat = _linear(x) @ a, _linear(xt) @ a\\n    xab, xabt = _linear(xa) @ b, _linear(xat) @ b\\n    def rbf(l, r):\\n        return np.exp(-.2*cdist(l, r, 'sqeuclidean'))\\n    y = train['y']\\n    y_hat = .55*_matern(xa, xat, y) + .45*_kernel_predict(rbf(xab, xab), rbf(xabt, xab), y, .002)\\n    ai, bi = np.linalg.inv(a[1:]), np.linalg.inv(b[1:])\\n    def inverse(z):\\n        return ((z-b[0]) @ bi-a[0]) @ ai\\n    state = _trajectory(x, xt, inverse(x), inverse(xt), train['traj'])\\n    last = state[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])}\\nPY\\ncat >/tmp/verify_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['train']['traj']; rng=np.random.default_rng(123)\\nfolds=[np.arange(72)]+[rng.permutation(72) for _ in range(11)]\\nfor k,f in enumerate(folds):\\n i,j=f[:52],f[52:]; o=m.solve_batch(dict(s,train=dict(x=x[i],y=y[i],traj=t[i]),test=dict(x=x[j]))); e=abs(o['y_hat']-y[j]); et=abs(o['state_pred']-t[j]); print(k,round(e.mean(),5),round(et.mean(),5),round(et[:,-1].mean(),5),round(e.max(),5));\\n if k==0: assert e.mean()<=.038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch.py; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Compact ridge readout -> calibrated Matérn/RBF blend and low-rank trajectory readout; the AB RBF component achieved 0.03138 scalar MAE on 52/20, with blend validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote a fitted nonlinear ridge readout\",\n      \"rejected_reason\": \"The best median ridge candidate had 0.05257 scalar MAE on the required split; kernels performed better.\"\n    }\n  ],\n  \"rationale\": \"Write the passing model family now, then test whether blending reduces split sensitivity and whether time-mode compression preserves terminal accuracy. Run the public validator on the deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6a175c5e9f3854295e7d57e040f6b9bee725fb1f88c5ff8996b8d3be61e95e07",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46111.48,
+      "usage_known": true,
+      "prompt_tokens": 32710,
+      "cached_tokens": 9344,
+      "completion_tokens": 1802
+    }
+  ]
+}

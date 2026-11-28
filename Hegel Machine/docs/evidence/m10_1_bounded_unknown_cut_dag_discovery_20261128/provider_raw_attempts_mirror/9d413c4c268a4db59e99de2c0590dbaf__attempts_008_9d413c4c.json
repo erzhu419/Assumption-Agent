@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9d413c4c268a4db59e99de2c0590dbaf",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_a03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:19.109540+00:00",
+  "ended_at_utc": "2026-11-28T09:13:57.296796+00:00",
+  "request_sha256": "b9e11c08f796f455942f49d7c731b3d67ea12117a07b5b2c66705f6a018fd529",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46064,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28818,
+    "cached_tokens": 10880,
+    "completion_tokens": 1497
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl', 'rb') as fh:\\n    s = pickle.load(fh)[0]['study']\\nt = s['train']; x, y, q = (t[k] for k in ('x','y','traj'))\\nrows = np.arange(len(x))\\nfolds = [('52/20',rows[52:])]\\nfolds += [(f'outer_x{k}',np.argsort(abs(x[:,k]-np.median(x[:,k])))[-18:]) for k in range(4)]\\nfolds += [('outer_norm',np.argsort(np.linalg.norm((x-x.mean(0))/x.std(0),axis=1))[-18:])]\\nfolds += [(f'random_{k}',j) for k,j in enumerate(np.array_split(np.random.default_rng(42).permutation(rows),4))]\\nb, g = m._calibration(s['panel_a'])\\nz = m._affine((x-b)/g) @ m._fit(m._affine(s['panel_b']['u']),s['panel_b']['v'])\\na = m._affine(z)\\npairs = np.array(list(combinations_with_replacement(range(4),2)))\\np = z[:,pairs[:,0]]*z[:,pairs[:,1]]\\nfull = np.column_stack((a,p))\\n# Quotient directions include each channel, the sum/difference of each pair,\\n# and the pooled interaction itself. Tune within each outer training set.\\ndirections = [z[:,k] for k in range(4)]\\ndirections += [z[:,i]+sgn*z[:,j] for i in range(4) for j in range(i+1,4) for sgn in (-1,1)]\\n\\ndef design(i):\\n    keep = np.argsort(abs(m._fit(full[i],y[i])[5:]))[-2:]\\n    return np.column_stack((a,p[:,keep].sum(1))), pairs[keep]\\n\\ndef rational(w, idx, direction, strength):\\n    v = (p@((np.arange(p.shape[1])[:,None]==np.array([2,6])).sum(1))) if direction == len(directions) else directions[direction]\\n    scale = np.mean(v[idx]**2)\\n    return w/(1+strength*v[:,None]**2/scale)\\n\\ndef mae(pred, j):\\n    return abs(pred-y[j]).mean()\\n\\nstats=[]\\nprint('fold | selected pairs | affine / full quad / solver / tuned quotient scalar MAE | solver worst horizon | quotient strength')\\nfor label,j in folds:\\n    i = np.setdiff1d(rows,j)\\n    subset = {'x':x[i],'y':y[i],'traj':q[i],'summary':np.array([y[i].mean(),y[i].std(),q[i,-1].mean(),q[i,-1].std()])}\\n    out = m.solve_batch(dict(s, train=subset, test={'x':x[j]}))\\n    w, terms = design(i)\\n    inner = [(np.setdiff1d(i,v),v) for v in np.array_split(np.random.default_rng(83).permutation(i),3)]\\n    inner = [(u,v,design(u)[0]) for u,v in inner]\\n    def inner_loss(direction,strength):\\n        res = []\\n        for u,v,base in inner:\\n            r = rational(base,u,direction,strength)\\n            res.extend(abs(r[v]@m._fit(r[u],y[u])-y[v]))\\n        return np.mean(res)\\n    options = [(0,0.)]+[(d,h) for d in range(len(directions)+1) for h in (0.0003,0.001,0.003,0.01,0.03,0.1)]\\n    direction,strength = min(options,key=lambda dh:inner_loss(*dh))\\n    r = rational(w,i,direction,strength)\\n    metric = [mae(a[j]@m._fit(a[i],y[i]),j),mae(full[j]@m._fit(full[i],y[i]),j),mae(out['y_hat'],j),mae(r[j]@m._fit(r[i],y[i]),j),abs(out['state_pred']-q[j]).mean(0).max()]\\n    stats.append(metric)\\n    print(label,tuple(map(tuple,terms)),*(round(v,6) for v in metric),strength)\\nprint('worst:',np.max(stats,axis=0))\\nprint('available training fields:',sorted(t),'telemetry shape:',s['telemetry_vec'].shape)\\nassert np.max(np.array(stats)[:,[2,4]]) < .038\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: pooled cross-products and two temporal modes → H2: retain them unless a nested rational challenger improves the worst slice; current worst scalar MAE is 0.007885 and worst-horizon trajectory MAE is 0.006405.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a drift PDE or relay modes, or do batch-centered classification\",\"rejected_reason\":\"The supplied study has continuous targets, one apparatus vector, and no observed relay state, batch labels, or spatial dynamics to validate those alternatives.\"}],\"rationale\":\"Test whether an omitted denominator improves extrapolation, choosing it inside each training fold. Compare the exact solver against its affine ablation to verify that the selected second-order terms resolve the omitted-basis failure. Pairwise sums and differences are tested as denominator directions; their squares already lie in the full quadratic numerator basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "398accba7f577db4af495692aef744a02268112a9f4d9a691c104932e1929326",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40755.26,
+      "usage_known": true,
+      "prompt_tokens": 28818,
+      "cached_tokens": 10880,
+      "completion_tokens": 1497
+    }
+  ]
+}

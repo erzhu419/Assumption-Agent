@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a48d3309d07443d68bde84cf823e8bcc",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:09.978142+00:00",
+  "ended_at_utc": "2026-11-28T09:52:45.268461+00:00",
+  "request_sha256": "3a91c3157327cd13cc81434c03356aec0c37974b9ccad9772e6be476787b9620",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46707,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28994,
+    "cached_tokens": 9344,
+    "completion_tokens": 1428
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 /tmp/panel6.py | head -10; cat >/tmp/dag6.py <<'PY'\\nfrom panel6 import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import expit\\nimport importlib.util\\nsp=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/conf_m101_b01_batch_05_solver.py'); old=importlib.util.module_from_spec(sp);sp.loader.exec_module(old)\\nw=old._calibration(a); ar=np.linalg.norm(np.einsum('nki,ki->nk',old._cal_design(a['u']),w)-a['v'],axis=1); print('calibration',w.round(5),'residual',np.quantile(ar,[0,.5,.9,.94,1]))\\ndx=old._inverse_calibration(tr['x'],w); print('inverse residual',np.max(abs(np.einsum('nki,ki->nk',old._cal_design(dx),w)-tr['x'])),'ranges',dx.min(0),dx.max(0))\\ndef fitop(p,k,F,bounds):\\n fn=lambda x,z:np.c_[af(x),F(z*x)]\\n z,e,w=fitfun(p,k,fn,*bounds);print('op',k,F.__name__,z,e);return lambda x:fn(x,z)@w\\nB=fitop(b,'v',erf,(.6,2.8)); C2=fitop(c,'v2',np.cos,(.6,2.8)); wc=ls(np.c_[np.ones(len(c['u'])),cross(c['u'])],c['v1']); mask=np.linalg.norm(wc[1:],axis=1)>.02; print('C1 terms',mask)\\ndef C1(x):return np.c_[np.ones(len(x)),cross(x)]@wc\\nops={'B':B,'C1':C1,'C2':C2}\\nfolds=[(np.setdiff1d(np.arange(52),i),i) for i in np.array_split(np.random.default_rng(624).permutation(52),4)]\\ndef rank(D):\\n E=np.concatenate([abs(D[j]@ls(D[i],Y[i])-Y[j]) for i,j in folds]); return np.array([E[:,0].mean(),E[:,1:].mean()])\\nres=[]\\ndef record(name,D):\\n if D.shape[1]<=25 and np.max(abs(D))<1e6: res.append((tuple(rank(D)),name,score(D)))\\nfor start,X in [('raw',tr['x']),('inv',dx),('fwd',np.einsum('nki,ki->nk',old._cal_design(tr['x']),w))]:\\n nodes={start:X}\\n for depth in range(3):\\n  for name,x in list(nodes.items()):\\n   if name.count('/')==depth:\\n    for op,f in ops.items():\\n     if op not in name: nodes[name+'/'+op]=f(x)\\n for name,x in nodes.items():\\n  pair=cross(x); sq=x*x\\n  for nm,D in [('aff',af(x)),('cross',af(pair)),('cycle',af(pair[:,mask])),('diagq',np.c_[af(x),sq]),('quad',np.c_[af(x),sq,pair]),('diagc',np.c_[af(x),sq,x**3]),('tanh',af(np.tanh(x))),('erf',af(erf(x))),('sin',af(np.sin(x))),('cos',af(np.cos(x))),('tanh+aff',np.c_[af(x),np.tanh(x)]),('sin+cos',np.c_[af(np.sin(x)),np.cos(x)])]:record(name+' '+nm,D)\\n  for op in ops:\\n   nxt=name+'/'+op\\n   if nxt in nodes:record(nxt+' skip',np.c_[af(x),nodes[nxt]])\\n  if name+'/C1' in nodes and name+'/C2' in nodes:\\n   v1,v2=nodes[name+'/C1'],nodes[name+'/C2']; record(name+' parallel',np.c_[af(v1),v2]);record(name+' parallel+input',np.c_[af(x),v1,v2]);record(name+' parallel+multiply',np.c_[af(v1),v2,v1*v2])\\nfor side in range(2):\\n print('rank output',side)\\n for e,n,sco in sorted(res,key=lambda r:r[0][side])[:17]: print(n,np.round(e,5),sco)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived calibration and sequential cycle readout) -> H2 (test calibrated serial and parallel panel graphs separately for each output); best measured 52/20 MAEs are 0.1180 for y and 0.0769 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume panel C's second output is inactive\",\n      \"rejected_reason\": \"Its affine-plus-cosine basis predicts held-out panel values at near-noise error; testing it as a separate branch can distinguish an active operator from a decoy.\"\n    }\n  ],\n  \"rationale\": \"Check whether the archived nonlinear calibration matches the current panel inliers and inverts the measured inputs. Rank a bounded set of graph and readout candidates using folds within the first 52 observations, then use the required 20-row holdout to assess the leading models for each output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "62cc079a636d9415a1bebe603dff59cc999587426b9f1b02f1a88dbb0c73aa6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37916.54,
+      "usage_known": true,
+      "prompt_tokens": 28994,
+      "cached_tokens": 9344,
+      "completion_tokens": 1428
+    }
+  ]
+}

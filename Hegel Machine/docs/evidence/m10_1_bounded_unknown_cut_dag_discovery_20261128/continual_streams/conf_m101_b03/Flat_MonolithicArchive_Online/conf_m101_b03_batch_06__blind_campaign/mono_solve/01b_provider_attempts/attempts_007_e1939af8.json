@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e1939af8deca43f2a35081e4b9cc3803",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:08.878820+00:00",
+  "ended_at_utc": "2026-11-28T09:47:38.171441+00:00",
+  "request_sha256": "c655965a41ae4e9f56865c98ee6da844498384cfd25d33b045b0ff2a550ce3cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47787,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29597,
+    "cached_tokens": 9344,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection exponential viscoelastic relaxation' | head -12\\ncat >/tmp/compact.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import _spatial,_fit,_time_basis,solve_batch\\nfrom probe import s,tr,t,np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.model_selection import KFold\\nx,y,traj=(tr[k] for k in ('x','y','traj')); a=_spatial(s,x); one,f,g=a[:,0],a[:,5:9],a[:,9:13]; dot=a[:,23:27].sum(1); cross=a[:,31]; dy=np.c_[one,f,g,dot]; slow=np.c_[one,g,cross]; fast=np.c_[dy,cross];\\norder=np.argsort(np.max(abs((x-np.median(x,axis=0))/x.std(0)),axis=1)); splits=[('52/20',np.arange(52),np.arange(52,72)),('56/16',np.arange(56),np.arange(56,72)),('boundary',order[:-16],order[-16:])]+[(f'fold{i}',j,k) for i,(j,k) in enumerate(KFold(5,shuffle=True,random_state=104).split(x))];\\nfor tag,j,k in splits:\\n h=_time_basis(t,traj[j]); m=_fit(h,traj[j].T).T\\n def pred(d,b):return d[k]@_fit(d[j],b)\\n yc=pred(dy,y[j]); st=np.c_[pred(slow,m[:,0]),pred(fast,m[:,1])]@h.T\\n # Jointly profile the readout under the compact amplitude subspaces.\\n def joint(r,test=False):\\n  h=-np.expm1(-t[:,None]*r)\\n  def design(j):return np.concatenate([d[j,None,:]*h[None,:,i,None] for i,d in enumerate((slow,fast))],axis=2).reshape(len(j)*len(t),-1)\\n  D=design(j); b=_fit(D,traj[j].ravel()); return (design(k)@b).reshape(len(k),-1) if test else D@b-traj[j].ravel()\\n rates=least_squares(joint,[.4,1.8],bounds=([.05,.65],[.9,6])).x; sj=joint(rates,True)\\n def err(p): e=abs(p-traj[k]); return np.round([e.mean(),e.mean(0).max()],6)\\n print(tag,'y',round(abs(yc-y[k]).mean(),6),'two-stage',err(st),'joint',err(sj),'rates',rates.round(4),'y columns',_fit(dy[j],y[j]).round(3) if tag=='52/20' else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (general cross-operator readout) -> H2 (a shared dot product and one directed interaction); current candidate worst-slice MAE is 0.01191 for y and 0.00701 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the verified 35-column readout unchanged\",\n      \"rejected_reason\": \"It clears the gate, but the near-equal diagonal coefficients suggest an exact dot product; test whether enforcing it reduces error on boundary inputs.\"\n    }\n  ],\n  \"rationale\": \"Compare the compact and current models on the same splits. Retain the existing artifact if compaction does not improve boundary performance or if constraining the two time-mode amplitudes harms trajectory predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "42183fc8462fda204a4a9403deebcd0f5358433aa79632c8275266da0c630fc8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29796.33,
+      "usage_known": true,
+      "prompt_tokens": 29597,
+      "cached_tokens": 9344,
+      "completion_tokens": 1009
+    }
+  ]
+}

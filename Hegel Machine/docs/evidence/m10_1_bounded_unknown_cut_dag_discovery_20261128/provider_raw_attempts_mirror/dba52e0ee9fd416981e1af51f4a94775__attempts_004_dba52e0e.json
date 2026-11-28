@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dba52e0ee9fd416981e1af51f4a94775",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Flat_MonolithicArchive_Online__conf_m101_b04_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:39:18.670067+00:00",
+  "ended_at_utc": "2026-11-28T09:39:42.760619+00:00",
+  "request_sha256": "3a9b792e8006ac30f8d0748041b22bb467860d99aaef8f2fe5ae5e13a1f796ef",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30131,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22712,
+    "cached_tokens": 9344,
+    "completion_tokens": 895
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive && cat conf_m101_b04_batch_01_solver.py conf_m101_b04_batch_03_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection' 2>&1 | head -5; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np,itertools\\nsys.path.insert(0,'/tmp/hegel_continual_archive');import conf_m101_b04_batch_04_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];p=s['panel_a'];u,v=p['u'],p['v'];a=m._affine(u);ids=np.arange(len(u));\\nfor _ in range(4):\\n r=np.linalg.norm(v-a@np.linalg.lstsq(a[ids],v[ids],rcond=None)[0],axis=1);ids=np.flatnonzero(r<5*np.median(r))\\nprint('Calibration retained',len(ids));\\nfor j in range(4):\\n for k in [(j+1)%4,(j-1)%4,(j+2)%4]:\\n  q=np.c_[a,u[:,j]*u[:,k],u[:,j]**3];c=np.linalg.lstsq(q[ids],v[ids,j],rcond=None)[0];print('a',j,k,np.sqrt(np.mean((v[ids,j]-q[ids]@c)**2)),np.round(c,4))\\nt=s['train'];n=52;s['test']={'x':t['x'][n:]};s['train']={k:(v[:n] if k!='summary' else v) for k,v in t.items()};z=m._calibrate(p,t['x']);print('calibrated ranges',z.min(0),z.max(0));f=m.solve_batch(s);print('archive04 split',np.mean(abs(f['y_hat']-t['y'][n:])),np.mean(abs(f['state_pred']-t['traj'][n:])));b=m._time_basis(s['eval_times'],t['traj'][:n]);Y=np.c_[t['y'],t['traj']@b];\\nfor x in [t['x'],z]:\\n for degree in [1,2,3]:\\n  X=np.column_stack([np.ones(len(x))]+[np.prod(x[:,ij],axis=1) for d in range(1,degree+1) for ij in itertools.combinations_with_replacement(range(4),d)]);P=X[n:]@np.linalg.lstsq(X[:n],Y[:n],rcond=None)[0];print('degree',degree,'MAE',np.mean(abs(P-Y[n:]),axis=0),'trajectory MAE',np.mean(abs(P[:,1:]@b.T-t['traj'][n:])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 trajectory-only readout (52/20 scalar MAE 0.23836) -> H2 invert the calibration and test separate scalar and relaxation readouts with operator features.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test whether the archived cyclic calibration actually fits the retained reference rows and improves held-out predictions. If calibration fits but the readouts fail, use the archived auxiliary operator equations to expand the input basis rather than adding polynomial degree indiscriminately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "24da3957b5e4ee515450d6aebc5320b9ce01469f38b133403baba7745f9a3485",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26720.0,
+      "usage_known": true,
+      "prompt_tokens": 22712,
+      "cached_tokens": 9344,
+      "completion_tokens": 895
+    }
+  ]
+}

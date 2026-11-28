@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "55f6c9ac307a47629856d059d3d02aa1",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T10:02:15.061632+00:00",
+  "ended_at_utc": "2026-11-28T10:02:43.666512+00:00",
+  "request_sha256": "d96988918686fb56ccc5aff455c7d4b41fabd099dd61707fc2b25452f7cd0f26",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 65394,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36225,
+    "cached_tokens": 9344,
+    "completion_tokens": 1107
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_00.py')\\ns = p.read_text()\\ns = s[:s.index('def run_node(')] + '''def run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    z = _invert(study['panel_a'], np.vstack((train['x'], study['test']['x'])))\\n    b, c, d = _responses(study, z)\\n    b_sat = np.tanh(2 * b)\\n    # Both branches contribute to the shared fit through all channel pairs.\\n    coupling = (b_sat[:, :, None] * c[:, None, :]).reshape(len(z), -1)\\n    g = np.column_stack((np.ones(len(z)), 0.22 * np.column_stack((z, b_sat, coupling))))\\n    fd = 0.03 * np.column_stack((b, b * z))\\n    cd = 0.03 * np.column_stack((c, d, c * d))\\n    return dict(g=g, fd=fd, cd=cd, y=train['y'], traj=train['traj'])\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\nfirst=runpy.run_path(root+'node_00.py')['run_node']\\nlast=runpy.run_path(root+'_frozen_nodes/node_01.py')['run_node']\\nwith open(root+'public_batch.pkl','rb') as fp:\\n    study=pickle.load(fp)[0]['study']\\ntrain=study['train']; rows=np.arange(len(train['y']))\\nfor label,blocks in [('contiguous',np.array_split(rows,4)),('shuffled',np.array_split(np.random.default_rng(41).permutation(rows),4))]:\\n    errors=[]\\n    for te in blocks:\\n        tr=np.setdiff1d(rows,te)\\n        case=copy.deepcopy(study)\\n        case['train']={k:train[k][tr] for k in ('x','y','traj')}\\n        case['test']={'x':train['x'][te]}\\n        out=last({'node_00':first({'__input__':case})})\\n        errors.append([np.mean(abs(out['y_hat']-train['y'][te])),np.mean(abs(out['state_pred']-train['traj'][te]))])\\n    print(label,'fold MAEs',np.round(errors,5).tolist(),'worst',np.round(np.max(errors,axis=0),5).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive and diagonal panel fusion → H2 full coupling between saturated panel B and panel C v1; across three real-data splits, the shared-fit prototype reached worst MAEs of 0.0271 for y and 0.0239 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Additive and same-channel products adequately represent the shared upstream features.\",\n    \"empirical_witness\": \"The diagonal-feature candidate failed official CV at 0.096445 scalar and 0.095671 trajectory MAE; the saturated full-product prototype reached 0.0255 and 0.0239 on that split.\",\n    \"causal_blanket_diagnosis\": \"Same-channel products omit off-diagonal couplings between saturated panel B responses and panel C v1.\",\n    \"sublated_pivot\": \"Put all 16 cross-channel products in the shared feature matrix and preserve the frozen sink.\",\n    \"risk_kind\": \"missing_cross_channel_basis\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Place the full coupling only in an optional branch\",\n      \"rejected_reason\": \"The frozen sink assigns half its prediction weight to the shared design alone.\"\n    }\n  ],\n  \"rationale\": \"Promote the feature block that improved both outcomes on all three tested splits. Run the official validator in isolation to detect integration failures, then check contiguous and shuffled folds for sensitivity to the published split before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c7547dc6bddf12584a8e5dbd9297d4be6abbbcb18803b9e14373110b923c078b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31293.91,
+      "usage_known": true,
+      "prompt_tokens": 36225,
+      "cached_tokens": 9344,
+      "completion_tokens": 1107
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9bc9245b4fe240e78caf7fadff376986",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:44:42.376821+00:00",
+  "ended_at_utc": "2026-11-28T09:45:27.128939+00:00",
+  "request_sha256": "298e482da24d33840bd8983eb9a58725650710cca95382455947f477d55762ec",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 58534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35817,
+    "cached_tokens": 9344,
+    "completion_tokens": 1837
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '65,155p' /holdout_task/test_dag_candidate.py; cat > /tmp/dag_modes.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/dag_sink_probe.py').read())\\nfrom scipy.spatial.distance import cdist\\nfrom scipy.linalg import solve\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nm=runpy.run_path('/holdout_task/_frozen_nodes/node_00.py'); pa=s['panel_a']; co,se=m['_fit_a'](pa['u'],pa['v']); ref=m['_invert_a'](s['train']['x'],co,se); raw=s['train']['x']; n=len(y); ii=np.arange(n); splits=[ii>=52]+[ii%5==i for i in range(5)]\\nca=ls(t1(u,k,True),c['v1']); cb=ls(t2(u),c['v2']); ca0=ls(t1(u,tel[0],False),c['v1']);\\ndef q(x): return stack(*[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(x.shape[1]),2)])\\ndef lin(x):return stack(one(x),x)\\n# Estimate shared response after removing affine terms; compare against an unconstrained time model.\\nfor W in [z,ref,stack(z,ref)]:\\n L=lin(W); R=Y-L@ls(L,Y); print('shared after affine',np.linalg.svd(R,full_matrices=False)[1][:4],ls(np.sqrt(t)[:,None],R[:,1:].T)@R[:,0]/(R[:,0]@R[:,0]));\\nT=np.sqrt(t); AA=tr@T/(T@T);\\nfor L in [lin(z),lin(ref),lin(stack(z,ref))]:\\n R=stack(AA,y)-L@ls(L,stack(AA,y)); print('amp/y slope and covariance',ls(R[:,:1],R[:,1]),np.corrcoef(R.T)[0,1],np.std(R,axis=0));\\nfor name,tf in [('log',lambda p:np.log1p(p*t)),('exp',lambda p:-np.expm1(-p*t)),('lin',lambda p:t),('rat',lambda p:t/(1+p*t))]:\\n opt=least_squares(lambda p:(tr-tr@np.linalg.pinv(stack(T,tf(p[0])).T)@stack(T,tf(p[0])).T).ravel(),[1.],bounds=(.00001,10)); print('fixed sqrt +',name,opt.x,np.std(opt.fun))\\nD={};\\nfor name,W in [('z',z),('ref',ref),('raw',raw)]:\\n P=t1(W,k,True)@ca; P0=t1(W,tel[0],False)@ca0; S=t2(W)@cb\\n for nm,F in [('q',q(W)),('A',P),('B',S),('AB',stack(P,S)),('Aq',q(P)),('Bq',q(S)),('ABq',q(stack(P,S))),('AB*',P*S),('same',stack(P*S,P*W,S*W)),('quart',q(W**2)),('tanhq',q(np.tanh(tel[0]*W))),('sigq',q(W/np.sqrt(1+W*W))),('logcos',np.logaddexp(W,-W)),('cos',np.cos(tel[0]*W))]: D[name+'-'+nm]=F\\n if name!='raw':\\n  for g in [0.2,0.5,1,1.7,3]:\\n   for fn,f in [('tan',np.tanh),('sin',np.sin),('exp',lambda a:a*np.exp(-a*a))]:\\n    J=f(g*W); D[name+fn+str(g)]=stack(J,q(J)); D[name+fn+'mix'+str(g)]=stack(J,q(stack(W,J)))\\nD['ref-zq']=q(stack(ref,z)); D['q-ref+z']=stack(q(ref),q(z)); D['joint-branches']=q(stack(A,B,t1(ref,k,True)@ca,t2(ref)@cb))\\nbase=lin(stack(z,ref));\\ndef err(F, mode, alpha):\\n out=[]\\n for h in splits:\\n  Z=base; G=F/np.maximum(F[~h].std(0),.001); G1=G[~h]; Z1=Z[~h]; C=ls(Z1,G1); G=G-Z@C; Ga=G[~h]; Zco=ls(Z1,Y[~h]); resid=Y[~h]-Z1@Zco\\n  if mode:\\n   U,S,V=np.linalg.svd(resid,full_matrices=False); v=V[0]; targets=resid@v\\n  else: targets=resid\\n  w=solve(Ga.T@Ga+alpha*np.eye(Ga.shape[1]),Ga.T@targets,assume_a='pos'); pred=G[h]@w\\n  if mode: pred=pred[:,None]*v\\n  E=abs(Z[h]@Zco+pred-Y[h]); out.append([E[:,0].mean(),E[:,1:].mean()])\\n return np.round(np.r_[out[0],np.mean(out[1:],0),np.max(out[1:],0)],5)\\nO=[]\\nfor nm,F in D.items():\\n for mode in (0,1):\\n  for al in (.0001,.01,.25,2): O.append((err(F,mode,al),nm,mode,al))\\nfor idx in (0,2,4):\\n print('rank by metric',idx)\\n for v in sorted(O,key=lambda p:p[0][idx])[:8]:print(v)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/dag_modes.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independent readouts from generic features → H2: model a shared square-root-time amplitude and an affine temporal component; prior worst five-fold MAEs are 0.0722 for y and 0.0478 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the scalar and each trajectory time independently\",\n      \"rejected_reason\": \"Removing affine terms leaves one dominant trajectory mode, consistent with a shared amplitude whose power-law exponent is near one half.\"\n    }\n  ],\n  \"rationale\": \"Measure whether the scalar shares the square-root amplitude after affine effects are removed. Compare channel-specific and shared fits on held-out rows; this determines whether to share the nonlinear response and which calibrated coordinate basis to use.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "fe58f8119382bd5e6e6c88495463ade89034d6f3467d7d837a1fbb98ab95d5cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47296.58,
+      "usage_known": true,
+      "prompt_tokens": 35817,
+      "cached_tokens": 9344,
+      "completion_tokens": 1837
+    }
+  ]
+}

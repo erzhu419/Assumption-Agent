@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e88aa8e709446ddbc7f6c3283e5795e",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:51:27.319610+00:00",
+  "ended_at_utc": "2026-11-28T09:52:02.399588+00:00",
+  "request_sha256": "2072da79580835d83684749d08d31b338d66887218e4ac59a1bbb09ae2c71458",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 50997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29571,
+    "cached_tokens": 9344,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/check_node00_handoff.py <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom scipy.optimize import least_squares\\nroot='/holdout_task/'\\ns=pickle.load(open(root+'public_batch.pkl','rb'))[0]['study']; n=runpy.run_path(root+'node_00.py'); f=runpy.run_path(root+'_frozen_nodes/node_01.py'); fit=n['_fit']; A=n['_affine']; inv=n['_inverse']; b=fit(A(s['panel_b']['u']),s['panel_b']['v']); a=n['_panel_a'](s['panel_a']); x=s['train']['x']; y=s['train']['y']; tr=s['train']['traj']; q=inv(x,a); ib=A(q)@b; p=s['panel_c']; u=p['u']; V=p['v1']\\n# Compare shared and channel-specific saturating bases, always refitting on the retained rows.\\ndef soft(x): return x/(1+np.abs(x))\\nfor name,op,start in [('softsign',soft,[.83,-7.3]),('asinh',np.arcsinh,[3.5,-2.75])]:\\n for separate in (False,True):\\n  def fit1(U,T):\\n   def design(W,t): return A(np.c_[W,op(t[0]*W)] if separate else W+t[1]*op(t[0]*W))\\n   def residual(t):\\n    d=design(U,t); return (d@fit(d,T)-T).ravel()\\n   r=least_squares(residual,start[:1] if separate else start,bounds=([.05] if separate else [.05,-30],[15] if separate else [15,30])); c=fit(design(U,r.x),T)\\n   return r.x,lambda W:design(W,r.x)@c\\n  pars,_=fit1(u,V); errs=[]\\n  for j in range(len(u)):\\n   k=np.arange(len(u))!=j; _,F=fit1(u[k],V[k]); errs.append(F(u[j:j+1])[0]-V[j])\\n  print('v1',name,separate,pars,'LOO RMSE',np.sqrt(np.mean(np.square(errs))))\\nwarp=lambda z: n['_logcosh'](1.1*z)/1.1\\nm=fit(A(u+warp(u)),p['v2']); print('v2 noise RMSE',np.sqrt(np.mean((A(u+warp(u))@m-p['v2'])**2)))\\nbase=s['panel_b']['v']; r=inv(q,b); fw=lambda z:A(z)@b; v2=lambda z:A(z+warp(z))@m; x2={'baseline':inv(ib+v2(ib),b),'B-minus-even':inv(ib-warp(r)@m[1:],b),'inverse-B-reflected-quarter':inv(r-.25*warp(r),b),'inverse-B-reflected-half':inv(r-.5*warp(r),b),'B-native-reflected':inv(ib-warp(ib)@m[1:],b),'latent-reflected':q-warp(q),'B-reflected':ib-warp(ib),'B-pure-warp':ib+warp(ib)}\\nrng=np.random.default_rng(36521); splits=[np.arange(len(y))]+[rng.permutation(len(y)) for _ in range(30)]; splits += [np.r_[np.argsort(x[:,j])[20:],np.argsort(x[:,j])[:20]] for j in range(4)]\\nfor name,w in x2.items():\\n err=[]\\n for ix in splits:\\n  a0,b0=ix[:52],ix[52:]; pred=f['_scalar']({'x':x[ix],'i2b':w[ix]},y[a0]); err.append(np.mean(np.abs(pred-y[b0])))\\n print(name,'official, fresh_mean, fresh_worst, boundary_worst',np.round([err[0],np.mean(err[1:31]),max(err[1:31]),max(err[31:])],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_node00_handoff.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (add the full v2 readout) -> H2 (isolate the calibrated v2 curvature in the sink coordinate system); the current candidate passes public CV at 0.032383 scalar and 0.010895 trajectory MAE, with worst additional scalar MAE 0.056339.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the Panel C v2 warp directly.\",\n      \"rejected_reason\": \"For every tested incoming coordinate system, most observed rows are outside the inverse domain.\"\n    },\n    {\n      \"option\": \"Select the best handoff from the reused splits.\",\n      \"rejected_reason\": \"Those splits were used to discover the challengers; use fresh splits and coordinate tails to check whether the gain persists.\"\n    }\n  ],\n  \"rationale\": \"Test whether the v1 softsign improvement survives a shared-basis comparison and whether a v2 curvature handoff improves the scalar bottleneck on fresh splits without losing the public acceptance margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f688adf081470c33430947c4fd0960c60863398a9f509aedc4420b5ae3c44325",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37608.57,
+      "usage_known": true,
+      "prompt_tokens": 29571,
+      "cached_tokens": 9344,
+      "completion_tokens": 1434
+    }
+  ]
+}

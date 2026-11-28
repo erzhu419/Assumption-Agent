@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28a6566b8ef7413c94289f00a18f57b8",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:51.205686+00:00",
+  "ended_at_utc": "2026-11-28T09:50:19.144104+00:00",
+  "request_sha256": "c3675138570800e6b668a4bbde22708facbfd0c4be4e7eba0b199fdae41057e4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28894,
+    "cached_tokens": 9344,
+    "completion_tokens": 1080
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/structure6.py <<'PY'\\nfrom readout6 import *\\nx=s['train']['x']; ns=dict(zip('abcd',nodes(x))); Y=np.c_[s['train']['y'],s['train']['traj']]; t=s['eval_times']; n=52\\nnp.set_printoptions(precision=5,suppress=True)\\nprint('t',t,'telemetry',s['telemetry_vec'])\\nfor r in ('a c ac','a c d ac','a b c d ac'):\\n g,names=design(ns,r); c=fit(g[:n],Y[:n]); e=Y-g@c\\n print(r,'RMSE',np.sqrt(np.mean(e[:n]**2,0)),np.sqrt(np.mean(e[n:]**2,0)),'sing residuals',np.linalg.svd(e[:n,1:],compute_uv=False))\\n if r=='a b c d ac':\\n  print('coefs'); print('\\\\n'.join(str((k,list(w))) for k,w in zip(names,c[:,[0,1,4,-1]].round(5))))\\n  ids=np.argsort(abs(e[n:,0]))[-5:]+n; print('worst',np.c_[x[ids],ns['a'][ids],Y[ids,0],e[ids,0],e[ids,-1]])\\nT=Y[:n,1:].T\\nfor mode in ('two','three','intercept','damped'):\\n def bas(q):\\n  if mode=='intercept': return np.column_stack((np.ones(len(t)),-np.expm1(-t[:,None]*q)))\\n  if mode=='damped': return np.column_stack((-np.expm1(-t[:,None]*q[:2]),np.exp(-q[2]*t)*np.sin(q[3]*t)))\\n  return -np.expm1(-t[:,None]*q)\\n def res(q):\\n  g=bas(q); return (g@fit(g,T)-T).ravel()\\n for q0 in {'two':[[.4,2]],'three':[[.4,1,2],[.05,.45,2],[.45,2,5]],'intercept':[[.4,2]],'damped':[[.4,2,.6,1.5],[.4,2,.6,3]]}[mode]:\\n  q=least_squares(res,q0,bounds=(.005,12),gtol=1e-11,max_nfev=400).x\\n  print(mode,q,np.std(res(q)), np.max(abs(res(q))))\\nprint('summary observed',s['train']['summary'],[Y[:,0].mean(),Y[:,0].std(),Y[:,-1].mean(),Y[:,-1].std()])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure6.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 projected dot-product readout → H2 individual calibrated-coordinate × quadratic-operator products; required-split MAE is 0.01304 for y and 0.01170 for trajectories, with six-split maxima of 0.01417 and 0.01170.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Contracting the calibrated coordinate and quadratic panel output to a single dot product preserves the relevant readout interaction.\",\"empirical_witness\":\"With the same four operator nodes, replacing dot-product features with individual a×c terms reduced required-split scalar MAE from 0.14695 to 0.01304 and trajectory MAE from 0.09357 to 0.01170.\",\"causal_blanket_diagnosis\":\"The dot product omits off-diagonal interactions and fixes all diagonal weights equal.\",\"sublated_pivot\":\"Keep individual products and diagnose the remaining spatial and temporal residuals before choosing the final readout.\",\"risk_kind\":\"omitted_asymmetric_products\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the passing linear readout immediately\",\"rejected_reason\":\"The remaining structured temporal residual is larger than the trailing singular-value scale, so testing a third mode could improve trajectories without sacrificing scalar accuracy.\"}],\"rationale\":\"Inspect coefficients and compare time bases using only the first 52 rows. Distinct temporal structure would support a mode-based trajectory model; unstable spatial coefficients would instead favor a smaller readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f3a09590175a9f471661b18ab9db5388bf9c48fc58cdb33677ad919e965a427d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30576.06,
+      "usage_known": true,
+      "prompt_tokens": 28894,
+      "cached_tokens": 9344,
+      "completion_tokens": 1080
+    }
+  ]
+}

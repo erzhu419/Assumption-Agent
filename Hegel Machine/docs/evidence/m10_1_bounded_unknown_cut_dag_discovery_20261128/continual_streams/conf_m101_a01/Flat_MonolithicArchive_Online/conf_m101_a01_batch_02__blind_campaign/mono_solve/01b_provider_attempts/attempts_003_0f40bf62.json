@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0f40bf6261b94ea6a757d7010c978603",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Flat_MonolithicArchive_Online__conf_m101_a01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:08.393150+00:00",
+  "ended_at_utc": "2026-11-28T09:28:42.099066+00:00",
+  "request_sha256": "56e699e83a99927b6db4b3e9fdce7fcf2f342b8dba8e027e544ef90f3e9554eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22388,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19271,
+    "cached_tokens": 9344,
+    "completion_tokens": 1231
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/operators.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nls=lambda x,y:np.linalg.lstsq(x,y,rcond=None)[0]\\naug=lambda x:np.c_[np.ones(len(x)),x]\\nrms=lambda x:np.mean(x*x)**.5\\nu=s['panel_a']['u'];v=s['panel_a']['v'];mask=np.linalg.norm(v-u,axis=1)<2\\nab=np.array([ls(aug(u[mask,j:j+1]),v[mask,j]) for j in range(4)])\\nb=s['panel_b']; bb=ls(aug(b['u']),b['v'])\\nc=s['panel_c']; u=c['u']; z=c['v1']; w=c['v2']; np.set_printoptions(precision=4,suppress=True)\\nfor name,fn,init in [('tanh',np.tanh,1.7),('sin',np.sin,1.3),('atan',np.arctan,2),('softsign',lambda x:x/(1+abs(x)),2)]:\\n for shift in [False,True]:\\n  for skip in [False,True]:\\n   def feat(x,p):\\n    a=fn(x*p[:4]+(p[4:] if shift else 0));return aug(np.c_[a,x] if skip else a)\\n   def run(mask):\\n    def res(p):\\n     a=feat(u[mask],p);return (a@ls(a,z[mask])-z[mask]).ravel()\\n    p=least_squares(res,np.r_[np.repeat(init,4),np.zeros(4) if shift else []],max_nfev=200).x\\n    a=feat(u[mask],p);return p,ls(a,z[mask]),rms(res(p))\\n   p,m,e=run(np.ones(24,bool)); mm=np.arange(24)<18; pp,mmc,ee=run(mm); ev=rms(feat(u[~mm],pp)@mmc-z[~mm]);print('v1',name,shift,skip,e,ev,p)\\n   if e<.001:print(m)\\nfor name,x in [('u',u),('v1',z),('tanh 1.7u',np.tanh(1.7*u)),('tanh 1.7v1',np.tanh(1.7*z)),('both',np.c_[u,z])]:\\n q=PolynomialFeatures(2).fit_transform(x); a=ls(q,w);print('v2',name,rms(q@a-w),rms(q[18:]@ls(q[:18],w[:18])-w[18:]));\\n if x.shape[1]==4:print('coefs',a)\\nX=s['train']['x'];Y=s['train']['y'];T=s['train']['traj']; tt=s['eval_times']; uu,ss,vv=np.linalg.svd(T,full_matrices=False); print('time',tt,'basis',vv[:2]); P=T@vv[:2].T\\nfor name,x in [('raw',X),('cal',X*ab[:,1]+ab[:,0]),('inverse',(X-ab[:,0])/ab[:,1])]:\\n bx=aug(x)@bb\\n for name2,d in [('x',x),('Bx',bx),('tanhx',np.tanh(1.7*x)),('tanhBx',np.tanh(1.7*bx)),('sinx',np.sin(1.7*x)),('sinBx',np.sin(1.7*bx))]:\\n  for degree in [1,2]:\\n   a=PolynomialFeatures(degree).fit_transform(d);e=a[52:]@ls(a[:52],np.c_[Y,P][:52])-np.c_[Y,P][52:];print(name,name2,degree,np.mean(abs(e),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/operators.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic quadratic regression -> H2 affine calibration and panel B followed by nonlinear operators and a rank-two trajectory; 52/20 raw quadratic y MAE is 0.0792.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a generic quadratic for panel C\",\n      \"rejected_reason\": \"Leave-one-row-out errors indicate missing structure, particularly for the first output.\"\n    }\n  ],\n  \"rationale\": \"Held-out panel predictions will distinguish nonlinear mixing from flexible interpolation. Testing forward and inverse calibration separately will show whether either helps predict y and both trajectory modes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "dd78105f180b6766fbfa4430f9450f2d4e0c12b4a16dcb0ef6130e255c4b7ebd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36363.1,
+      "usage_known": true,
+      "prompt_tokens": 19271,
+      "cached_tokens": 9344,
+      "completion_tokens": 1231
+    }
+  ]
+}

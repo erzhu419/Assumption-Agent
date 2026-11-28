@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd56e23ca553464084ffbad7e913b89f",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:48.408744+00:00",
+  "ended_at_utc": "2026-11-28T09:41:21.059584+00:00",
+  "request_sha256": "7fb52dd27335eab53c3a06aa65c85709f19b9551f2be368ae224f67740061232",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59067,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33088,
+    "cached_tokens": 5504,
+    "completion_tokens": 1271
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/axis01.py <<'PY'\\nexec(open('/tmp/profile01.py').read().split('ids=np.arange')[0])\\nids=np.arange(len(y)); splits=[(ids[:52],ids[52:])]+[(ids[~np.isin(ids,v)],v) for v in np.array_split(np.random.default_rng(24).permutation(len(y)),6)]\\ndef D(x,p,m):\\n h=p[0]+x@p[1:]; A=affine(x); B=base(x)\\n if m=='rational-linear': return np.column_stack([A,B/(1+h*h)[:,None]])\\n if m=='rational-interaction': return np.column_stack([A,A*h[:,None]/(1+h*h)[:,None],h*h/(1+h*h)])\\n if m=='rational-gate': return np.column_stack([B,A/(1+h*h)[:,None]])\\n if m=='polynomial-limit':\\n  h=x@p[1:]; h=h/max(np.linalg.norm(p[1:]),1e-12)\\n  return np.column_stack([B,x*h[:,None]**2,h**4])\\n if m=='atan-interaction': return np.column_stack([A,A*np.arctan(h)[:,None]])\\n if m=='tanh-interaction': return np.column_stack([A,A*np.tanh(h)[:,None]])\\n if m=='sin-interaction': return np.column_stack([A,A*np.sin(h)[:,None]])\\n if m=='log-gate': return np.column_stack([B,A*np.log1p(h*h)[:,None]])\\nfor m in ['rational-linear','rational-interaction','rational-gate','polynomial-limit','atan-interaction','tanh-interaction','sin-interaction','log-gate']:\\n es=[]; rm=[]\\n for t,v in splits:\\n  x=q[t]; yy=y[t]; cf=fit(base(x),yy); M=np.zeros((4,4))\\n  for k,(i,j) in enumerate(pairs): M[i,j]=M[j,i]=cf[k+5]/(1+(i!=j))\\n  e,V=np.linalg.eigh(M)\\n  starts=[np.r_[b,d*f] for b in [0.,.35] for d in [.45,1.3] for f in [V[:,0],V[:,-1]]]\\n  def resid(p):\\n   X=D(x,p,m);return X@fit(X,yy)-yy\\n  r=min((least_squares(resid,p,bounds=(-6,6),max_nfev=100,ftol=1e-7) for p in starts),key=lambda r:r.cost)\\n  X=D(q,r.x,m); es.append(np.mean(abs(X[v]@fit(X[t],yy)-y[v]))); rm.append(np.std(r.fun))\\n print(m,'folds',np.round(es,5),'worst',round(max(es),6),'fit rmse',np.round(rm,5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/axis01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether the fitted gate's alignment with a dominant quadratic direction supports a simpler interaction; the verified candidate has public response MAE 0.028746 and worst shuffled-fold MAE 0.051270.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the frozen affine panel map\",\n      \"rejected_reason\": \"Its leave-one-out MAE is about 0.000085, and nonlinear replacements did not improve the response folds.\"\n    }\n  ],\n  \"rationale\": \"The nearly flat tanh gate can produce ill-conditioned columns. Test its polynomial limit and compact gated interactions with fold-local initialization; keep the accepted artifact unless a challenger preserves the public margin and improves the worst fold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "162260269544d06998bc9584a85fcffd65a84e762083365b29a5e053c31f1278",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35245.12,
+      "usage_known": true,
+      "prompt_tokens": 33088,
+      "cached_tokens": 5504,
+      "completion_tokens": 1271
+    }
+  ]
+}

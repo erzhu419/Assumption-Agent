@@ -1,0 +1,151 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_conf_m101_b02_batch_04_e476ef460828",
+    "source_hash": "e476ef4608281ee5d0371d0de33af5f3a7ed1e036e3af8baa9583f8aa12c61f9",
+    "parent_ids": [],
+    "source_episode_id": "dag_edit_reuse_subgraph",
+    "task_id": "conf_m101_b02_batch_04__blind_campaign__reuse_subgraph",
+    "wormhole_family": "m101_blind_dag"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/explore.py",
+        "archived_relpath": "producers/tmp__explore.py",
+        "bytes": 2696,
+        "sha256": "dce9e3f7ca5309d681df48696f451cfaeae3781dd6b3a506f1333e88b41fc97c"
+      },
+      {
+        "container_path": "/tmp/probe5.py",
+        "archived_relpath": "producers/tmp__probe5.py",
+        "bytes": 3081,
+        "sha256": "58f24dadc67dc86714d3f2a43cdad1a56876163d66d60d9ae123aae3c89942f5"
+      },
+      {
+        "container_path": "/tmp/probe6.py",
+        "archived_relpath": "producers/tmp__probe6.py",
+        "bytes": 2277,
+        "sha256": "21555c5de1bd55d40ad86bd3c78d91397a428ce89153514e3e68a03b6c292ff0"
+      },
+      {
+        "container_path": "/tmp/refine9.py",
+        "archived_relpath": "producers/tmp__refine9.py",
+        "bytes": 2001,
+        "sha256": "81796bb06ea2f5e93ea4de73ecbc4a03f5ddd6d8c5eebf4508e26883fdc5ecbd"
+      },
+      {
+        "container_path": "/tmp/sink_challenger.py",
+        "archived_relpath": "producers/tmp__sink_challenger.py",
+        "bytes": 2088,
+        "sha256": "e3ae7610245774f0f1c1ea93196fde7bd6472479f7858a7ade6d4e16629a1ee8"
+      },
+      {
+        "container_path": "/tmp/sink_probe.py",
+        "archived_relpath": "producers/tmp__sink_probe.py",
+        "bytes": 3044,
+        "sha256": "553990dc90ecf4a29ac36e4a9c7369474c0d895b357b413a95ed56a76d1ca353"
+      },
+      {
+        "container_path": "/tmp/sink_verified.py",
+        "archived_relpath": "producers/tmp__sink_verified.py",
+        "bytes": 1884,
+        "sha256": "dc7b0dc3593f7a78a47183f20d6b47dc48f1f36334109662d0ae0880d1e3c356"
+      },
+      {
+        "container_path": "/tmp/stress_sink.py",
+        "archived_relpath": "producers/tmp__stress_sink.py",
+        "bytes": 978,
+        "sha256": "6efe7acace50fe7dec5876f83c89ca81bb8dc851fff8dfedb3d4553b4ebc9f26"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b02_batch_00_solver.py",
+        "bytes": 2417,
+        "sha256": "c54fa74b6eefd21ade55b363b62a9b0ce5743cb145ec9eb12239dde75f0e31cb"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/conf_m101_b02_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__conf_m101_b02_batch_03_solver.py",
+        "bytes": 3047,
+        "sha256": "2f57e21aea2b3d6957b94495a74ad507259b29cce319e4e2c62d519aeaadbb61"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat _dag_spec.json && cat _frozen_nodes/node_00.py && cat test_dag_candidate.py && cat validate_public_schema.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f:d=pickle.load(f)\ndef inspect(d,level=0):\n if isinstance(d,dict):\n  for k,v in d.items():\n   print('  '*level,k,end=': ');inspect(v,level+1)\n elif isinstance(d,(tuple,list)) and d and isinstance(d[0],dict):\n  print(type(d),len(d));inspect(d[0],level)\n else:\n  a=np.asarray(d);print(a.shape,a.dtype, a.ravel()[:10])\ninspect(d)\nPY",
+      "cd /holdout_task && sed -n '38,180p' test_dag_candidate.py && cat validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np,pickle,sys,itertools\nsys.path.insert(0,'_frozen_nodes');import node_00\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; d=node_00.run_node({'__input__':s});print('frozen error',d['calibration_error']);print('z,b ranges',[(v.min(),v.max()) for v in (d['z'],d['b'])]);u=s['panel_c']['u'];print('panel C',np.round(np.c_[u,s['panel_c']['v1'],s['panel_c']['v2']],4));a=np.ones((len(u),1));p=np.column_stack([u[:,i]*u[:,j] for i,j in itertools",
+      "cd /holdout_task; sed -n '83,150p' test_dag_candidate.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection exponential relaxation ridge profiling' 2>&1 | head -20; cat > /tmp/explore.py <<'PY'\nimport sys,pickle,itertools,numpy as np\nfrom scipy.optimize import minimize_scalar,least_squares\nfrom sklearn.model_selection import KFold,cross_val_predict\nsys.path.insert(0,'/holdout_task/_frozen_nodes');import node_00\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; f=node_00.run_node({'__input__':s}); z,b=f['z'],f['b']; u=s['panel_c']['u']; v=s['pa",
+      "cat > /tmp/sink_probe.py <<'PY'\nexec(open('/tmp/explore.py').read().split('funcs=')[0])\npairs=quad(z); c=design(pairs)@fit(design(quad(u)),s['panel_c']['v1']); d=design(z,np.sqrt(1+.93*z*z))@fit(design(u,np.sqrt(1+.93*u*u)),v)\nZ=design(z,b,c,d)[:n]; Z=(Z[:,1:]-Z[:,1:].mean(0))/Z[:,1:].std(0); X=design(Z)\nfolds=list(KFold(5,shuffle=True,random_state=13).split(y))+[(np.arange(n-20),np.arange(n-20,n))]\ndef profile(law):\n rec=[]\n for row in traj:\n  def err(k):\n   p=law(k); a=row@p/(p@p); return np.mean((row-a*p)**2),a\n  opt=minimize_scalar(lambda k:err(k)[0],bounds=(.0001,3),method='bounded'); e,a",
+      "cat > /tmp/probe5.py <<'PY'\nexec(open('/tmp/explore.py').read().split('funcs=')[0])\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom scipy.special import expit\nc=design(quad(z))@fit(design(quad(u)),s['panel_c']['v1']); d=design(z,np.sqrt(1+.93*z*z))@fit(design(u,np.sqrt(1+.93*u*u)),v)\nz,b,c,d=[x[:n] for x in (z,b,c,d)]; groups=dict(z=z,b=b,c=c,d=d); F=np.c_[z,b,c,d]; folds=list(KFold(5,shuffle=True,random_state=13).split(y))+[(np.arange(n-20),np.arange(n-20,n))]\nt=t[None,:]; Q=traj; T=t.ravel();\ndef prof(q):\n def fun(k):\n  g=T/(1+k*T); a=q@g/(g@g); return np.mean((q",
+      "cd /holdout_task; cat _frozen_nodes/node_00.py; cat > /tmp/probe6.py <<'PY'\nexec(open('/tmp/explore.py').read().split('funcs=')[0])\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nprint('times',t,'keys',list(s),list(f));print('A keys',[ (k,np.shape(x)) for k,x in s['panel_a'].items()])\nc=design(quad(z))@fit(design(quad(u)),s['panel_c']['v1']); d=design(z,np.sqrt(1+.93*z*z))@fit(design(u,np.sqrt(1+.93*u*u)),v)\nz,b,c,d=[x[:n] for x in (z,b,c,d)]; Y=np.c_[y,traj]; folds=list(KFold(5,shuffle=True,random_state=13).split(y))+[(np.arange(n-20),np.arange(n-20,n))]\n# Low-order i",
+      "cd /holdout_task; sed -n '1,85p' test_dag_candidate.py; cat validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nexec(open('/tmp/explore.py').read().split('funcs=')[0]);print('upstream', f['calibration_error']);print('summary', s['train']['summary']); print('y and trajectory range',y.min(),y.max(),traj.min(),traj.max()); print('telemetry',s['telemetry_vec'])\nPY\ncat > /holdout_task/node_01.py <<'PY'\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.spatial.distance import cdist\nfrom scipy.optimize import minimize_scal",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('node_01.py')\ns = p.read_text()\ns = s.replace('    return c, d, np.array([np.mean((a@p-v1)**2)**.5, np.mean(r2*r2)**.5])','    return c, d').replace('    _, q, r2 = profile(k)','    _, q, _ = profile(k)').replace('    c, d, error = _calibrate(s[\\'panel_c\\'], z)','    c, d = _calibrate(s[\\'panel_c\\'], z)').replace(\"    return {'y_hat': y, 'state_pred': traj, 'diagnostics_vec': np.r_[upstream['calibration_error'], error]}\",\"    diagnostics = np.array([y.mean(), y.std(), traj[:, -1].mean(), traj[:, -1].std()])\\n    return ",
+      "cat > /tmp/refine9.py <<'PY'\nexec(open('/tmp/explore.py').read().split('funcs=')[0])\nfrom scipy.spatial.distance import cdist\nfrom scipy.linalg import solve\nfrom scipy.optimize import differential_evolution\nns={};exec(open('/holdout_task/node_01.py').read(),ns)\nc,d=ns['_calibrate'](s['panel_c'],z)\nu0,v0=s['panel_b']['u'],s['panel_b']['v']\ndef warp(x,k,c):return x*(1-c*np.expm1(-(k*x)**2))\ndef prof(k):\n X=design(u0, u0*(-np.expm1(-(k*u0)**2))); p=fit(X,v0);return np.mean((X@p-v0)**2)**.5,p\nfor k0 in (.1,.4,.7,1.,1.5,2.,3.,5.):\n print('B profile',k0,prof(k0)[0]);\nq=minimize_scalar(lambda k:prof(",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncp /holdout_task/node_01.py /tmp/sink_verified.py\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/sink_verified.py').read_text()\np = p.replace('def _predict(features, target, length, nugget):', 'def _predict(features, target, length, nugget, polynomial=False):')\na = \"    k = np.exp(-cdist(z, z[:n], 'sqeuclidean')/(2*length**2*z.shape[1]))\\n    k += 1 + (z@z[:n].T)/z.shape[1]\"\nb = \"    g = (z @ z[:n].T) / z.shape[1]\\n    if polynomial:\\n        k = g + (1 + g / length)**3\\n    else:\\n        k = 1 + g + np.exp(-cdist(z, z[:n], 'sqeuclidean') / (2"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe5.py",
+      "primary_producer_container_path": "/tmp/probe5.py",
+      "selected_channels": [
+        "m101_blind_dag"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/node_01.py",
+        "filename": "node_01.py",
+        "bytes": 2088,
+        "sha256": "e3ae7610245774f0f1c1ea93196fde7bd6472479f7858a7ade6d4e16629a1ee8",
+        "content_addressed_ref": "content_addressed_blobs/e3ae7610245774f0f1c1ea93196fde7bd6472479f7858a7ade6d4e16629a1ee8.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/node_01.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m101_blind_dag",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e476ef4608281ee5d0371d0de33af5f3a7ed1e036e3af8baa9583f8aa12c61f9",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\ncp /holdout_task/node_01.py /tmp/sink_verified.py\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/sink_verified.py').read_text()\np = p.replace('def _predict(features, target, length, nugget):",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e476ef4608281ee5d0371d0de33af5f3a7ed1e036e3af8baa9583f8aa12c61f9",
+        "expected_candidate_sha256": "e476ef4608281ee5d0371d0de33af5f3a7ed1e036e3af8baa9583f8aa12c61f9",
+        "computed_candidate_sha256": "e476ef4608281ee5d0371d0de33af5f3a7ed1e036e3af8baa9583f8aa12c61f9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/node_01.py",
+            "bytes": 2088
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_e476ef46"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": []
+  }
+}

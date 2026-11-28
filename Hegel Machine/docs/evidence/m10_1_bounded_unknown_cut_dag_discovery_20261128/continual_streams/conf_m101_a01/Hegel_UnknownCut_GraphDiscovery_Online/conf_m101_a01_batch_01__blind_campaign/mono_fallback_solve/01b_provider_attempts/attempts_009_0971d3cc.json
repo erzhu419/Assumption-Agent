@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0971d3cc98064e9dbf7de6493bc9ad62",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_01__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:22:31.499698+00:00",
+  "ended_at_utc": "2026-11-28T09:22:58.324076+00:00",
+  "request_sha256": "78d0c71faf33f1598d6115dd1d84679123cbb659bea328858b7c3c4c92849099",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55201,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33487,
+    "cached_tokens": 9344,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rational_probe.py <<'PY'\\nfrom graph_probe import *\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import eigh\\nq=frames(x)['a-']; L=poly(q,1); P=poly(q,2); T=poly(q,3)\\ndef candidate(g,j,mode,a,b):\\n rng=np.random.default_rng(42); V=np.linalg.lstsq(P[a],g[a],rcond=None)[0]; H=np.zeros((4,4))\\n for (i,k),v in zip(combinations_with_replacement(range(4),2),V[5:]):H[i,k]=H[k,i]=v/(1+(i!=k))\\n _,ev=eigh(H); starts=[np.r_[0,w*f] for w in [ev[:,0],ev[:,-1],ev[:,0]+ev[:,-1],ev[:,0]-ev[:,-1],*np.eye(4)] for f in [.55,1.5]]+[rng.normal(0,.65,5) for _ in range(6)]\\n def design(w,i):\\n  v=L[i]@w; z=v*v\\n  if mode=='rat2':return P[i]/(1+z[:,None])\\n  if mode=='rat3':return T[i]/(1+z[:,None])\\n  if mode=='ratL':return np.c_[L[i],P[i]/(1+z[:,None])]\\n  if mode=='ratProd':return np.c_[L[i],L[i]*((1+z)**-1)[:,None]]\\n  if mode=='tanhProd':return np.c_[P[i],L[i]*np.tanh(v)[:,None]]\\n  if mode=='sinProd':return np.c_[P[i],L[i]*np.sin(v)[:,None]]\\n  if mode=='softProd':return np.c_[P[i],L[i]*np.logaddexp(v,-v)[:,None]]\\n  if mode=='ratSqProd':return np.c_[P[i],L[i]/(1+z[:,None])]\\n def get(w):\\n  d=design(w,a); c=np.linalg.solve(d.T@d+.00005*np.eye(d.shape[1]),d.T@g[a]);return d,c\\n def fun(w):\\n  d,c=get(w);return np.r_[d@c-g[a],.007071*c,.0003*w]\\n runs=[]\\n for w in starts:\\n  r=least_squares(fun,w,bounds=(-5,5),max_nfev=100); runs.append((r.cost,r.x))\\n r=min(runs,key=lambda b:b[0]); d,c=get(r[1]); pred=design(r[1],b)@c\\n return np.mean(abs(pred-g[b])),np.mean(abs(d@c-g[a])),r[1]\\nfor j in (0,1):\\n for mode in ('rat2','rat3','ratL','ratProd','tanhProd','sinProd','softProd','ratSqProd'):\\n  o=[candidate(Y[:,j],j,mode,a,b) for a,b in splits[:4]];print(j,mode,np.round([k[:2] for k in o],4).T,'arg',np.round(o[0][2],3),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rational_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (learned kernel metric) -> H2 (test rational and multiplicatively gated polynomial readouts); best scalar MAE remains 0.04416 on the required split and 0.05602 on the worst repeated split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use learned covariance as the final scalar model\",\"rejected_reason\":\"The best tested learned metric did not improve on the fixed kernel or meet the required gate.\"}],\"rationale\":\"A saturating or rational factor multiplying a linear or quadratic interaction is missing from the tested additive dictionary. Fit the factor direction within each fold and compare both outputs to see whether the improvement survives withheld measurements.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2ffef5182e0156e53d5eb32d4b2dccf659f259ba43b568257a6dc997f98ef997",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29408.85,
+      "usage_known": true,
+      "prompt_tokens": 33487,
+      "cached_tokens": 9344,
+      "completion_tokens": 1030
+    }
+  ]
+}

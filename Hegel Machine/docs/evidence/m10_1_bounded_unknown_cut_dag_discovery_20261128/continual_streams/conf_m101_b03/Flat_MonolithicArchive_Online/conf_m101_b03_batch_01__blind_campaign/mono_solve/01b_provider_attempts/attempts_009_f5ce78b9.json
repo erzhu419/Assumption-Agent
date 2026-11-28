@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5ce78b96d3e4fcb89437a12e37ec21e",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:02.789110+00:00",
+  "ended_at_utc": "2026-11-28T09:23:29.281421+00:00",
+  "request_sha256": "020b1fc909791d73311d289b7c943344afdc2e29a547fa0a4a017578ff0293db",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67073,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39206,
+    "cached_tokens": 9344,
+    "completion_tokens": 1020
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text().replace('from itertools import combinations\\\\n', '').replace('alpha=0.003', 'alpha=0.00045').replace('f = np.column_stack([_quadratic(q) for q in coords])', '# Include products between calibrated and auxiliary coordinates.\\\\n    f = _quadratic(np.column_stack(coords))')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom sklearn.model_selection import KFold\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nt=s['train']; n=len(t['x']); ids=np.arange(n)\\ndef verify(p,k):\\n    y,h,d=(p[name] for name in ('y_hat','state_pred','diagnostics_vec'))\\n    assert y.shape==(k,) and h.shape==(k,len(s['eval_times'])) and d.shape==(4,)\\n    assert all(isinstance(a,np.ndarray) and np.isfinite(a).all() for a in (y,h,d))\\n    np.testing.assert_allclose(d,[y.mean(),y.std(),h[:,-1].mean(),h[:,-1].std()])\\n    return y,h\\nsplits=[('52/20',ids[:52],ids[52:]),('56/16',ids[:56],ids[56:])]\\nfor seed in (27,123):\\n    splits.extend((f'shuffle_{seed}_{k}',a,b) for k,(a,b) in enumerate(KFold(4,shuffle=True,random_state=seed).split(ids)))\\nfor name,a,b in splits:\\n    cv=dict(s,train={**t,**{k:t[k][a] for k in ('x','y','traj')}},test={'x':t['x'][b]})\\n    y,h=verify(m.solve_batch(cv),len(b)); e=abs(h-t['traj'][b]); ym=abs(y-t['y'][b]).mean()\\n    print(f'{name}: response={ym:.6f} trajectory={e.mean():.6f} worst_time={e.mean(0).max():.6f} final_time={e[:,-1].mean():.6f}')\\n    assert max(ym,e.mean()) <= .038\\nverify(m.solve_batch(s),len(s['test']['x']))\\nprint('Isolated-process validation passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (separate quadratic readouts) -> H2 (joint quadratic in calibrated and panel C coordinates); the selected prototype's worst shuffled-fold MAEs are 0.0222 for response and 0.0141 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the weaker readout penalty of 0.00015\",\n      \"rejected_reason\": \"It lowers some shuffled-fold errors but raises the required 52/20 response MAE from 0.0166 to 0.0220, without materially changing trajectory error.\"\n    }\n  ],\n  \"rationale\": \"Promote the joint quadratic supported by the cross-term ablation. Verify the exact artifact in an isolated process: the ordered and shuffled splits can detect a regression from the prototype, and per-time errors can reveal a trajectory failure hidden by the aggregate MAE.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "adeadb2fa24c004882bd1444ffd20a41a456b725b4992f84b21fe4741234ba5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29039.06,
+      "usage_known": true,
+      "prompt_tokens": 39206,
+      "cached_tokens": 9344,
+      "completion_tokens": 1020
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e83235cc8a6241d287861a75d364b383",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:40:03.947959+00:00",
+  "ended_at_utc": "2026-11-28T09:40:37.184904+00:00",
+  "request_sha256": "24fc4dfe364e5f8d761e10e58c0ed6bc1d9a9a655a85fb6dcb40eb814d03ab26",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34808,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23492,
+    "cached_tokens": 9344,
+    "completion_tokens": 1208
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/graph05.py <<'PY'\\nexec(open('/tmp/probe05.py').read().split(\\\"c,keep=\\\")[0])\\nc,keep=a._calibration(s['panel_a']); z=(x-c[0])/np.diag(c[1:5]); b=a._operator_b(s['panel_b'],z)\\nrng=np.random.default_rng(81)\\np=s['panel_c']; u=p['u']; v=p['v1']\\ndef rational(w,par):\\n h=w*np.exp(par[:4])+par[4:]; return h/(1+h*h)\\ndef d(w,par):return np.c_[aff(w),rational(w,par)]\\ndef res(par):\\n g=d(u,par);return (g@fit(g,v)-v).ravel()\\nopts=[least_squares(res,p0,bounds=(-3,3),max_nfev=120) for p0 in [np.r_[np.full(4,-.15),np.zeros(4)]]+[rng.normal(0,.35,8) for _ in range(4)]]\\npar=min(opts,key=lambda r:r.cost).x; D=d(u,par); C=fit(D,v); print('C1 pars',np.round(par,3),'rms',np.std(res(par)),'coef',np.round(C,3));\\nQ=fit(np.c_[aff(u),prod(u)],p['v2']); print('C2 coef',np.round(Q,3),'rms',np.std(np.c_[aff(u),prod(u)]@Q-p['v2']))\\ndef c1(w):return d(w,par)@C\\ndef c2(w):return np.c_[aff(w),prod(w)]@Q\\nnodes={'z':z,'b':b,'c':c1(z),'q':c2(z),'bc':c1(b),'bq':c2(b),'cq':c2(c1(z)),'qc':c1(c2(z)),'bcq':c2(c1(b))}\\nF={}\\nfor k,w in nodes.items():\\n F[k]=aff(w); F[k+'2']=np.c_[aff(w),prod(w)]; F[k+'sat']=np.c_[aff(w),np.tanh(w),w/(1+w*w)]\\nfor k in ['b','c','q','bc','bq','cq','qc','bcq']:\\n for base in ['z','b','c','q']:\\n  if base==k:continue\\n  v,w=nodes[base],nodes[k]; F[base+'+'+k]=np.c_[aff(v),w];F[base+'*'+k]=np.c_[aff(v),w,(v[:,:,None]*w[:,None,:]).reshape(len(z),-1)]\\nY=np.c_[y,T]; splits=[(np.arange(n),np.arange(n,72))]+[(v[:56],v[56:]) for v in [rng.permutation(72) for _ in range(5)]]\\nrows=[]\\nfor name,f in F.items():\\n e=[]\\n for j,k in splits:\\n  p=f[k]@fit(f[j],Y[j]); e.append(abs(p-Y[k]).mean(axis=0))\\n e=np.array(e); rows.append((name,e[0,0],np.max(e[:,0]),e[0,1:].mean(),e[:,1:].mean(1).max()))\\nfor i in [2,4]:\\n print('best by',i);print(*[(r[0],*np.round(r[1:],5)) for r in sorted(rows,key=lambda r:r[i])[:16]],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/graph05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 panel-B-only graph -> H2 test panel C’s rational and quadratic branches as inputs to the scalar readout; the best tested simple panel-B readout has 52/20 MAE 0.075359.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or quadratic readout of panel B alone is sufficient for the public scalar gate.\",\"empirical_witness\":\"On the required 52/20 split the affine and quadratic B readouts had scalar MAEs 0.075359 and 0.078142 against a 0.038 limit.\",\"causal_blanket_diagnosis\":\"The trajectory is nearly rank one and already well predicted; the scalar requires a branch or readout term not present in those tested bases.\",\"sublated_pivot\":\"Fit panel C independently and compare explicit compositions and pairwise cross terms on held-out rows.\",\"risk_kind\":\"incomplete_readout_basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Expand the trajectory model first\",\"rejected_reason\":\"The current trajectory MAE is already near 0.0084; the scalar gate is the bottleneck.\"}],\"rationale\":\"Panel C’s first output favors a rational basis and its second favors a quadratic basis. Testing those calibrated operators separately and in composition can distinguish an omitted branch from an incomplete scalar readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d4ddd5df13536df94ebfa0c9cb8cbd2233d0104b9b816b01ad8a6810ec2706bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35897.55,
+      "usage_known": true,
+      "prompt_tokens": 23492,
+      "cached_tokens": 9344,
+      "completion_tokens": 1208
+    }
+  ]
+}

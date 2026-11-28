@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02848389451f4aca8468065d93b9ce20",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Fixed_TwoStage_Modular_Online__conf_m101_a01_batch_02__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:29:44.027565+00:00",
+  "ended_at_utc": "2026-11-28T09:30:17.822642+00:00",
+  "request_sha256": "06770d71f7b5d3827e6995e8ecf187494bcc8c567669247bac7453712f4e6c31",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 21253,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18536,
+    "cached_tokens": 9344,
+    "completion_tokens": 1344
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/conf_m101_a01_batch_01_solver.py; ls -l /tmp; cat > /tmp/probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'];T=s['train'];x=T['x'];y=T['y'];tr=T['traj'];t=s['eval_times']; np.set_printoptions(precision=5,suppress=True)\\ndef af(x):return np.c_[np.ones(len(x)),x]\\ndef poly(x,d):return np.column_stack([np.ones(len(x))]+[np.prod(x[:,c],axis=1) for i in range(1,d+1) for c in combinations_with_replacement(range(x.shape[1]),i)])\\ndef reg(u,v):return np.linalg.lstsq(u,v,rcond=None)[0]\\na=s['panel_a'];u=af(a['u']);v=a['v'];good=np.ones(len(u),bool)\\nfor i in range(10):\\n w=reg(u[good],v[good]);r=np.linalg.norm(u@w-v,axis=1);good=r < max(3*np.median(r),.001)\\nprint('A',w,'r sorted',np.sort(r)); print('A svd',np.linalg.svd(w[1:])[1]);\\nb=s['panel_b'];B=reg(af(b['u']),b['v']);print('B svd',np.linalg.svd(B[1:])[1]); c=s['panel_c'];\\nfor key in ['v1','v2']:\\n u=c['u'];v=c[key];print('C',key,'range',v.min(0),v.max(0))\\n for fun in [lambda v:v, np.arctanh,np.arcsin]:\\n  if np.max(abs(v))>=1 and fun!=np.arctanh and fun!=np.arcsin:pass\\n  elif np.max(abs(v))>=1:continue\\n  f=fun(v);print(fun,np.sqrt(np.mean((af(u)@reg(af(u),f)-f)**2)))\\n for d in [1,2,3]:\\n  rr=[np.mean(abs(poly(u,d)[i]@reg(np.delete(poly(u,d),i,0),np.delete(v,i,0))-v[i])) for i in range(len(u))];print(d,np.mean(rr))\\nU,S,V=np.linalg.svd(tr,full_matrices=False);print('raw traj svd',S,'basis',V[:3]);\\nfuns={'rise+sin':lambda p:np.stack([-np.expm1(-p[0]*t),np.exp(-p[1]*t)*np.sin(p[2]*t)]),'rise+dosc':lambda p:np.stack([-np.expm1(-p[0]*t),np.exp(-p[1]*t)*(1-np.cos(p[2]*t))]),'sin+dosc':lambda p:np.stack([np.exp(-p[0]*t)*np.sin(p[2]*t),np.exp(-p[1]*t)*(1-np.cos(p[2]*t))]),'rise+rise':lambda p:np.stack([-np.expm1(-p[0]*t),-np.expm1(-p[1]*t)]),'rise+tsin':lambda p:np.stack([-np.expm1(-p[0]*t),t*np.exp(-p[1]*t)*np.sin(p[2]*t)])}\\nfor k,f in funs.items():\\n def err(p):\\n  g=f(p);return (tr-reg(g.T,tr.T).T@g).ravel()\\n opt=least_squares(err,[1.7,.2,1.7],bounds=([.0001,0,.0001],[10,5,5]));print(k,opt.x,np.std(opt.fun),np.std(err([1.7,.2,1.7])))\\nfor name,z in [('raw',x),('A',af(x)@w),('Ai',(x-w[0])@np.linalg.inv(w[1:])),('AB',af(af(x)@w)@B),('AiB',af((x-w[0])@np.linalg.inv(w[1:]))@B),('B',af(x)@B)]:\\n print(name,'range',z.std(0));\\n for d in (1,2,3):\\n  F=poly(z,d); v=np.c_[y,U[:,:2]*S[:2]];e=F[52:]@reg(F[:52],v[:52])-v[52:];print(d,np.mean(abs(e),0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct scalar regression -> H2 recover a rank-two trajectory and test panel-conditioned scalar readouts; archived held-out y MAE is 0.070320.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Robust panel fitting tests whether calibration residuals come from sparse outliers, while the trajectory basis and held-out coordinate fits distinguish temporal structure from readout error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6e1a61276620958392c1511c54839fa548f7505ffe1567fa69fd1dce26e2d1b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36380.32,
+      "usage_known": true,
+      "prompt_tokens": 18536,
+      "cached_tokens": 9344,
+      "completion_tokens": 1344
+    }
+  ]
+}

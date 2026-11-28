@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "014c50ebf9ce4d83aa261f5dd9bcd022",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Flat_MonolithicArchive_Online__conf_m101_a03_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:51:33.722556+00:00",
+  "ended_at_utc": "2026-11-28T09:52:06.710392+00:00",
+  "request_sha256": "668854841b571f12bc4802f5ac0bb0378b950b38cf201abe1a460d4281db0ec4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41943,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28020,
+    "cached_tokens": 9344,
+    "completion_tokens": 1448
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/structure6.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import root,least_squares\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; u,v=a['u'],a['v']; x=s['train']['x']; y=s['train']['y']; traj=s['train']['traj']; n=52\\nfit=lambda a,b:np.linalg.lstsq(a,b,rcond=None)[0]\\naff=lambda z:np.c_[np.ones(len(z)),z]\\nidx=[i for k in (2,3) for i in cr(range(4),k)]\\ndef polys(z,indices): return np.c_[aff(z),*[np.prod(z[:,i],axis=1) for i in indices]]\\ngood=np.linalg.norm(v-u,axis=1)<4\\np=fit(polys(u[good],idx),v[good]); labs=['1','0','1','2','3']+[str(i) for i in idx]\\nfor j in range(4):print('A',j,[(l,round(c,6)) for l,c in zip(labs,p[:,j]) if abs(c)>.0002])\\np[abs(p)<.0002]=0\\nfor j in range(4):\\n k=p[:,j]!=0;p[k,j]=fit(polys(u[good],idx)[:,k],v[good,j]);\\nprint('sparse A rms',np.std(polys(u[good],idx)@p-v[good]))\\nb=fit(aff(s['panel_b']['u']),s['panel_b']['v'])\\nz=np.array([root(lambda r:(polys(r[None,:],idx)@p)[0]-row,row,tol=1e-10).x for row in x]); print('inverse error',np.max(abs(polys(z,idx)@p-x)))\\ndef metric(f):\\n w=fit(f[:n],y[:n]); e=abs(y-f@w);return np.array([e[:n].mean(),e[n:].mean()])\\nfor k,h in [('invA',z),('B',aff(z)@b)]:\\n q=polys(h,idx[:10]); f=polys(h,idx); c=fit(f[:n],y[:n]); print(k,'cubic coefficients',[(l,round(a,3)) for l,a in zip(labs,c)]); print('quadratic trajectory',fit(q[:n],traj[:n])[:,[0,-1]].T.round(3)); print('quad/cubic',metric(q),metric(f));\\n for cutoff in (.015,.03,.06,.1,.15):\\n  keep=np.r_[np.arange(15),np.flatnonzero(abs(c[15:])>=cutoff)+15];print('sparse-cubic',cutoff,metric(f[:,keep]))\\n candidates={}\\n for i in range(4):\\n  for j in range(i,4):\\n   for sign in ([0] if i==j else [1,-1]):\\n    h1=h[:,i]+sign*h[:,j]; name=f'{i},{j},{sign}';\\n    for w in (.5,1.,1.7,2.5,3.5):\\n     candidates['sin',name,w]=np.sin(w*h1); candidates['cos',name,w]=np.cos(w*h1); candidates['tanh',name,w]=np.tanh(w*h1);candidates['rat',name,w]=h1/(1+w*h1*h1)\\n for name,c0 in sorted(candidates.items(), key=lambda e:metric(np.c_[q,e[1]])[0])[:10]:print('best single fixed',name,metric(np.c_[q,c0]))\\n Q=np.linalg.qr(q[:n],mode='reduced')[0]; res=lambda a:a-Q@(Q.T@a); yr=res(y[:n]); ah=aff(h)\\n funcs={'tanh':np.tanh,'sin':np.sin,'cos':np.cos,'rat':lambda t:t/(1+t*t)}\\n for name,func in funcs.items():\\n  def loss(par):\\n   v=res(func(ah[:n]@par)); return yr-v*(v@yr)/(v@v+1e-16)\\n  rng=np.random.default_rng(51); starts=np.r_[np.eye(5),rng.normal(size=(32,5))]; opt=min((least_squares(loss,start,bounds=(-8,8),max_nfev=180) for start in starts),key=lambda r:r.cost); print('index',name,opt.x.round(3),metric(np.c_[q,func(ah@opt.x)]))\\nnp.savez('/tmp/struct6.npz',z=z,b=b,p=p,y=y,traj=traj)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure6.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: cubic inverse calibration gives held-out trajectory MAE 0.0042 with a quadratic readout, but the best scalar MAE is still 0.0575; test sparse and bounded scalar terms.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a dense quartic predictor\",\n      \"rejected_reason\": \"A complete quartic basis has 70 terms for 52 fit rows, while the trajectory already supports a much smaller model.\"\n    }\n  ],\n  \"rationale\": \"Extract the sparse calibration support from panel A and refit it at panel noise scale. Screen scalar terms using only the fit rows, then compare their held-out errors to see whether an interaction or a bounded one-dimensional term closes the remaining gap.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "286dd447930f12a1ce1dc6017e21790b004ce72ad9cc350734e24b996d2d9c98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38164.9,
+      "usage_known": true,
+      "prompt_tokens": 28020,
+      "cached_tokens": 9344,
+      "completion_tokens": 1448
+    }
+  ]
+}

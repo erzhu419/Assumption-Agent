@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da0ce015a1f84de48717b5b9f1cc44d5",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_05__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_05__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:43:17.497005+00:00",
+  "ended_at_utc": "2026-11-28T09:43:50.891030+00:00",
+  "request_sha256": "660e46ee768409d9d98a360de817000551a2bdc28962da73df78f9e1a7bf5997",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45225,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29154,
+    "cached_tokens": 9344,
+    "completion_tokens": 1309
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/calibrated.py <<'PY'\\nfrom discover import *\\nu,v=s['panel_a']['u'],s['panel_a']['v']\\ndef cal(z): return D(z,quad(z),z**3)\\nG=cal(u); rng=np.random.default_rng(672); best=(np.inf,None)\\nfor _ in range(250):\\n ix=rng.choice(len(u),21,replace=False); beta=fit(G[ix],v[ix])\\n for j in range(9):\\n  err=np.linalg.norm(G@beta-v,axis=1); ix=np.argsort(err)[:39]; beta=fit(G[ix],v[ix])\\n err=np.linalg.norm(G@beta-v,axis=1); loss=np.sum(np.sort(err)[:39]**2)\\n if loss<best[0]: best=(loss,beta)\\nbeta=best[1]; err=np.linalg.norm(G@beta-v,axis=1); keep=err<.003; beta=fit(G[keep],v[keep]); print('A inliers',sum(keep),'rmse',mse(G[keep]@beta-v[keep]),'outliers',np.sort(err[~keep]).round(4)); print('A coefficients\\\\n',beta.round(5))\\nbeta[np.abs(beta)<.001]=0\\nbeta=fit(G[keep],v[keep]) if not np.all(np.any(beta!=0,axis=0)) else np.column_stack([np.where(beta[:,j]!=0, np.linalg.pinv(G[keep]* (beta[:,j]!=0))@v[keep,j],0) for j in range(4)])\\na=np.array([least_squares(lambda z:cal(z[None,:])[0]@beta-row,np.linalg.solve(beta[1:5].T,row-beta[0]),gtol=1e-12).x for row in x]); print('inverse max',np.max(abs(cal(a)@beta-x)), 'latent range',a.min(),a.max())\\nif __name__=='__main__':\\n results=[[],[]]; b=B(a)\\n for cn,z in [('a',a),('b',b),('x',x)]:\\n  c,d=C(z),E(z); nodes=dict(a=a,b=b,c=c,d=d); pairs=['ac','ad','bc','bd','cd','ab']; dot={p:np.sum(nodes[p[0]]*nodes[p[1]],axis=1) for p in pairs}\\n  cross={p:(nodes[p[0]][:,:,None]*nodes[p[1]][:,None,:]).reshape(len(a),-1) for p in pairs}\\n  for nd in ['a','ab','ac','ad','abc','abd','acd','bcd','abcd']:\\n   g=np.column_stack([nodes[j] for j in nd]); extras={'lin':None,'dots':np.column_stack(list(dot.values())),'quad':quad(g),'ac+ad':np.column_stack([cross['ac'],cross['ad']])}\\n   extras.update(dot); extras.update({p+'full':cr for p,cr in cross.items()}); extras.update({p+'asym':np.column_stack([dot[p],nodes[p[0]][:,1]*nodes[p[1]][:,0]]) for p in pairs})\\n   for label,extra in extras.items():\\n    A=g if extra is None else np.column_stack([g,extra]);\\n    for lam in [1e-8,.0005,.02,.15]:\\n     sc=scores(A,lam); tag=(cn,nd,label,lam)\\n     for i in range(2): results[i].append((sc[:,i].max(),tag,sc[:,i]))\\n for i in range(2):\\n  print('BEST',i)\\n  for worst,tag,sc in sorted(results[i],key=lambda a:a[0])[:13]: print(tag,sc.round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/calibrated.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine A) -> H2 (invert a sparse cubic A before identifying the readouts); the current best worst-split MAEs are 0.0970 for y and 0.1224 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine calibration plus sparse outliers explains panel A.\",\n    \"empirical_witness\": \"For the fourth channel, adding coordinatewise cubics to the quadratic basis reduced trimmed inlier leave-one-out RMSE from 0.03759 to 0.0000681.\",\n    \"causal_blanket_diagnosis\": \"The affine fit confounds deterministic calibration curvature with corruption.\",\n    \"sublated_pivot\": \"Fit the nonlinear calibration with joint row trimming, invert it, and retest the active operators and readouts.\",\n    \"risk_kind\": \"calibration_basis_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the affine calibration and add downstream interactions\",\n      \"rejected_reason\": \"The cubic calibration explains panel A at the measurement-noise scale; downstream interactions would otherwise have to compensate for distorted inputs.\"\n    }\n  ],\n  \"rationale\": \"Check that the recovered calibration inverts across the actual train and test measurements. If it does, compare compact readouts on the corrected coordinates to see whether calibration, rather than readout complexity, was the bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7231607d8ca85556435eb445bfd8562b61c2b52fd88ae26329164d8ea5586e15",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35764.87,
+      "usage_known": true,
+      "prompt_tokens": 29154,
+      "cached_tokens": 9344,
+      "completion_tokens": 1309
+    }
+  ]
+}

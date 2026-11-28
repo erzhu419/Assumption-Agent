@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9c136bd636c451a822c7589e66c275b",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__init_decomp_conf_m101_b02_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:17:47.972838+00:00",
+  "ended_at_utc": "2026-11-28T09:18:21.892022+00:00",
+  "request_sha256": "5734f4bd970758dc9f1c1c894a8eeec73d401ef3843450edb13d2bc659100a97",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 5003,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13122,
+    "cached_tokens": 0,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action\": \"extract_module\",\n  \"rationale\": \"Extract the panel feature stage from the SVD and ridge readout. The clearest shift is in panel B: linear R² falls from 1.000 to 0.855 and quadratic gain rises from 0.000 to 0.145. That makes the panel B fit the first candidate for a target-batch edit in node_00, without changing the readout. This extraction preserves the source computations, including its omission of panel A; source-batch verification has not been run.\",\n  \"nodes\": [\"node_00\", \"node_01\"],\n  \"edges\": [[\"__input__\", \"node_00\"], [\"node_00\", \"node_01\"]],\n  \"sink_node_id\": \"node_01\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _design(*blocks):\\n    return np.column_stack((np.ones(len(blocks[0])), *blocks))\\n\\n\\ndef _least_squares(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _odd(x, rate):\\n    return _design(-np.sign(x) * np.expm1(-rate * np.abs(x)))\\n\\n\\ndef _even(x, rate):\\n    squared = x * x\\n    return _design(x, squared / np.sqrt(1 + rate * squared))\\n\\n\\ndef _fit_operator(u, v, design, bounds):\\n    def loss(rate):\\n        g = design(u, rate)\\n        return np.sum((g @ _least_squares(g, v) - v) ** 2)\\n    rate = minimize_scalar(loss, bounds=bounds, method='bounded').x\\n    coefficients = _least_squares(design(u, rate), v)\\n    return lambda x: design(x, rate) @ coefficients\\n\\n\\ndef _cross(a, b):\\n    return (a[:, :, None] * b[:, None, :]).reshape(len(a), 16)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train = study['train']\\n    x = np.vstack((train['x'], study['test']['x']))\\n    panel = study['panel_b']\\n    f = _design(x) @ _least_squares(_design(panel['u']), panel['v'])\\n    panel = study['panel_c']\\n    c = _fit_operator(panel['u'], panel['v1'], _odd, (.1, 5))(f)\\n    d = _fit_operator(panel['u'], panel['v2'], _even, (.0001, 2))(f)\\n    return {'g': _design(f, c, d, _cross(f, c)),\\n            'fd': .3 * _cross(f, d), 'cd': .3 * _cross(c, d),\\n            'y': train['y'], 'traj': train['traj']}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _ridge(g, target, penalty):\\n    n = len(target)\\n    training = g[:n]\\n    normal = training.T @ training + penalty * np.eye(g.shape[1])\\n    normal[0, 0] -= penalty\\n    return g[n:] @ np.linalg.solve(normal, training.T @ target)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_00']\\n    g, fd, cd = features['g'], features['fd'], features['cd']\\n    traj = features['traj']\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    target = np.column_stack((features['y'], traj @ basis.T))\\n    base = _ridge(g, target, .0003)\\n    prediction = .5 * base + (\\n        _ridge(np.column_stack((g, fd)), target, .003)\\n        + _ridge(np.column_stack((g, cd)), target, .0003)\\n        + _ridge(np.column_stack((g, fd, cd)), target, .001)\\n    ) / 6\\n    y_hat = prediction[:, 0]\\n    state_pred = prediction[:, 1:] @ basis\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "e8086287706d8eb3c66416f47bdc606ffb24a3d17965cace44c8a4c2054c1e99",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36597.03,
+      "usage_known": true,
+      "prompt_tokens": 13122,
+      "cached_tokens": 0,
+      "completion_tokens": 1366
+    }
+  ]
+}

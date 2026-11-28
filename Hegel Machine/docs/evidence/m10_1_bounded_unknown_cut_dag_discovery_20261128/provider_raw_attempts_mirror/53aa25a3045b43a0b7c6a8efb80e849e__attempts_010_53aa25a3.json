@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53aa25a3045b43a0b7c6a8efb80e849e",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:41:29.447429+00:00",
+  "ended_at_utc": "2026-11-28T09:41:59.614715+00:00",
+  "request_sha256": "6b1601265efb2068c711f10ea542fb30517c68bf853a554b6c6d325cc9b3e078",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 62147,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33930,
+    "cached_tokens": 9344,
+    "completion_tokens": 1302
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/node_01.py /tmp/node01_verified_gate.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/node_01.py')\\ns = p.read_text()\\ni = s.index('def _response_design')\\nj = s.index('def run_node', i)\\ns = s[:i] + '''def _response_design(x, direction):\\n    h = x @ (direction / max(np.linalg.norm(direction), 1e-12))\\n    h2 = h * h\\n    return np.column_stack((_quadratic(x), x * h2[:, None], h2 * h2))\\n\\n\\ndef _response(x, xt, y):\\n    quadratic = _fit(_quadratic(x), y)[1 + x.shape[1]:]\\n    matrix = np.zeros((x.shape[1], x.shape[1]))\\n    for c, (i, j) in zip(quadratic, zip(*np.triu_indices(x.shape[1]))):\\n        matrix[i, j] = matrix[j, i] = c if i == j else c / 2\\n    _, axes = np.linalg.eigh(matrix)\\n\\n    def residual(direction):\\n        a = _response_design(x, direction)\\n        return a @ _fit(a, y) - y\\n\\n    # Use the finite polynomial limit of the gate, without cancelling nearly\\n    # collinear columns or extrapolating from large fitted coefficients.\\n    starts = [scale * axis for scale in (0.45, 1.3) for axis in (axes[:, 0], axes[:, -1])]\\n    best = min((least_squares(residual, d, bounds=(-6, 6), max_nfev=100, ftol=1e-7)\\n                for d in starts), key=lambda r: r.cost)\\n    return _response_design(xt, best.x) @ _fit(_response_design(x, best.x), y)\\n\\n\\n''' + s[j:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nif python3 -I /holdout_task/test_dag_candidate.py && python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\nroot = '/holdout_task/'\\nfrozen = runpy.run_path(root + '_frozen_nodes/node_00.py')['run_node']\\nsink = runpy.run_path(root + 'node_01.py')['run_node']\\nstudy = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['study']\\nids = np.arange(len(study['train']['y']))\\nerrors = []\\nfor v in np.array_split(np.random.default_rng(24).permutation(len(ids)), 6):\\n    t = np.setdiff1d(ids, v)\\n    s = copy.deepcopy(study)\\n    s['train'] = {k: study['train'][k][t] for k in ('x', 'y', 'traj')}\\n    s['test'] = {'x': study['train']['x'][v]}\\n    out = sink({'__input__': s, 'node_00': frozen({'__input__': s})})\\n    yh, z = out['y_hat'], out['state_pred']\\n    assert yh.shape == (len(v),) and z.shape == (len(v), len(s['eval_times']))\\n    assert np.all(np.isfinite(yh)) and np.all(np.isfinite(z))\\n    np.testing.assert_allclose(out['diagnostics_vec'], [yh.mean(), yh.std(), z[:, -1].mean(), z[:, -1].std()])\\n    errors.append((np.mean(abs(yh-study['train']['y'][v])), np.mean(abs(z-study['train']['traj'][v]))))\\nworst = np.max(errors, axis=0)\\nprint('Six-fold worst MAE (response, trajectory):', worst)\\nassert worst[0] < 0.051270 and worst[1] <= 0.038\\nPY\\nthen\\n  echo 'Promoted factorized polynomial response'\\nelse\\n  cp /tmp/node01_verified_gate.py /holdout_task/node_01.py\\n  echo 'Restored the previously verified gated response'\\n  python3 -I /holdout_task/test_dag_candidate.py\\nfi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the nearly flat tanh gate with its factorized polynomial limit, which reduced exploratory worst-fold response MAE from 0.051270 to 0.042163 while retaining public MAE of 0.02893.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the rational gate\",\n      \"rejected_reason\": \"Its exploratory worst-fold MAE was nearly identical, but its public MAE of 0.03745 left much less margin below 0.038.\"\n    }\n  ],\n  \"rationale\": \"The factorized limit retains the calibrated interaction without near-collinear tanh columns. Promote it only if the exact artifact passes the isolated DAG test and improves the worst response fold without degrading trajectory accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a7a0cda6f7107cc611c3ecbb379a1512be0ba5ae28c34e889614bcd27c31b6d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35520.88,
+      "usage_known": true,
+      "prompt_tokens": 33930,
+      "cached_tokens": 9344,
+      "completion_tokens": 1302
+    }
+  ]
+}

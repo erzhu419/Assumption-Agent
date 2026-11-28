@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48ae78c79f564f6385eddca52ec39c5a",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Hegel_UnknownCut_GraphDiscovery_Online__init_decomp_conf_m101_a04_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:17:47.567288+00:00",
+  "ended_at_utc": "2026-11-28T09:18:23.851254+00:00",
+  "request_sha256": "cfc1eaedf071e3dffa74d179c946c0bf23382c7df465e7c0817a4c9230ddb068",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4756,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13064,
+    "cached_tokens": 0,
+    "completion_tokens": 1475
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The solver fits and inverts panel_a once, applies two independently fitted panel_c operators to the calibrated inputs, and combines their outputs in a quadratic ridge readout. panel_b is unused. The largest reported shift is in panel_c v1 (linear R² drops from 0.945482 to 0.122695), so its sine operator is isolated as the first candidate for target-batch revision. This split preserves the source computations without changing either operator or the readout.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\", \"node_03\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_03\"],\n    [\"node_00\", \"node_01\"],\n    [\"node_00\", \"node_02\"],\n    [\"node_01\", \"node_03\"],\n    [\"node_02\", \"node_03\"]\n  ],\n  \"sink_node_id\": \"node_03\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _calibrate(panel):\\n    u, v = panel['u'], panel['v']\\n    mask = np.ones(len(u), dtype=bool)\\n    for _ in range(8):\\n        a, b = u[mask], v[mask]\\n        ac, bc = a-a.mean(0), b-b.mean(0)\\n        scale = (ac*bc).sum(0)/(ac*ac).sum(0)\\n        shift = b.mean(0)-a.mean(0)*scale\\n        r = np.linalg.norm(u*scale+shift-v, axis=1)\\n        mask = r <= max(5*np.median(r), .0006)\\n    return shift, scale\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    offset, scale = _calibrate(study['panel_a'])\\n    raw = np.concatenate((study['train']['x'], study['test']['x']))\\n    x = (raw-offset)/scale\\n    c = study['panel_c']\\n    return {'x': x, 'u': c['u'], 'v1': c['v1'], 'v2': c['v2']}\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _basis(x, frequency):\\n    return np.column_stack([np.ones(len(x)), x, np.sin(frequency*x), np.sin(2*frequency*x)])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    u, v, x = p['u'], p['v1'], p['x']\\n\\n    def fit(frequency):\\n        f = _basis(u, frequency)\\n        coef = np.linalg.lstsq(f, v, rcond=None)[0]\\n        return f, coef\\n\\n    def residual(frequency):\\n        f, coef = fit(frequency)\\n        return np.mean((f@coef-v)**2)\\n\\n    frequency = minimize_scalar(residual, bounds=(2.7, 3.8), method='bounded').x\\n    _, coef = fit(frequency)\\n    return {'b': _basis(x, frequency)@coef}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"import numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\n\\ndef _basis(x, frequency):\\n    return np.column_stack([np.ones(len(x)), x, np.cos(frequency*x)])\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    p = inputs['node_00']\\n    u, v, x = p['u'], p['v2'], p['x']\\n\\n    def fit(frequency):\\n        f = _basis(u, frequency)\\n        coef = np.linalg.lstsq(f, v, rcond=None)[0]\\n        return f, coef\\n\\n    def residual(frequency):\\n        f, coef = fit(frequency)\\n        return np.mean((f@coef-v)**2)\\n\\n    frequency = minimize_scalar(residual, bounds=(1., 1.5), method='bounded').x\\n    _, coef = fit(frequency)\\n    return {'d': _basis(x, frequency)@coef}\\n\"\n    },\n    {\n      \"node_id\": \"node_03\",\n      \"code\": \"import numpy as np\\nfrom itertools import combinations_with_replacement\\n\\n\\ndef _readout_basis(x):\\n    mixed = np.column_stack([x[:, i]*x[:, j] for i, j in\\n                             combinations_with_replacement(range(x.shape[1]), 2)])\\n    return np.column_stack((np.ones(len(x)), x, .4*mixed))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    train = inputs['__input__']['train']\\n    b = inputs['node_01']['b']\\n    d = inputs['node_02']['d']\\n    f = _readout_basis(np.column_stack((b, d)))\\n    n = len(train['x'])\\n    a, xt = f[:n], f[n:]\\n    gram = a@a.T\\n    cross = xt@a.T\\n    eye = np.eye(n)\\n    yh = cross@np.linalg.solve(gram+.0003*eye, train['y'])\\n    state = cross@np.linalg.solve(gram+.001*eye, train['traj'])\\n    end = state[:, -1]\\n    return {'y_hat': yh, 'state_pred': state,\\n            'diagnostics_vec': np.array([yh.mean(), yh.std(), end.mean(), end.std()])}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "12c56efdb3f1045428845b61812251233eefc3e4ab56199a53761bec53506553",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38960.2,
+      "usage_known": true,
+      "prompt_tokens": 13064,
+      "cached_tokens": 0,
+      "completion_tokens": 1475
+    }
+  ]
+}

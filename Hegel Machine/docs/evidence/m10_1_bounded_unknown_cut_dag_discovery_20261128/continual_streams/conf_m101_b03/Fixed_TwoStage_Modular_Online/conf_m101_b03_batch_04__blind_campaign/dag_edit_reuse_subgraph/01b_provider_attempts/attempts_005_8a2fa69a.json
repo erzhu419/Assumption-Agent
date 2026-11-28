@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8a2fa69a7fd64229a3d3495103f53d11",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:49:06.976211+00:00",
+  "ended_at_utc": "2026-11-28T09:49:41.646137+00:00",
+  "request_sha256": "7ff7c8c1707fff2e408c8490db3071420c62ad989a4ebc89a67db654e383b86f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 37573,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27339,
+    "cached_tokens": 9344,
+    "completion_tokens": 1471
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'variable projection exponential relaxation' || true\\ncat > /tmp/probe5.py <<'PY'\\nfrom p import *\\nfrom scipy.optimize import minimize, minimize_scalar\\nfrom scipy.linalg import qr\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\nU,S,V=np.linalg.svd(T,full_matrices=False)\\nfor name,gen,start in [('step+t',lambda p:np.c_[-np.expm1(-p[0]*t),t],[1.]),('step+te',lambda p:np.c_[-np.expm1(-p[0]*t),t*np.exp(-p[0]*t)],[1.]),('two steps',lambda p:np.column_stack([-np.expm1(-q*t) for q in p]),[.3,1.4]),('step+sine',lambda p:np.c_[-np.expm1(-p[0]*t),np.sin(p[1]*t)],[1.,.7])]:\\n def loss(p):\\n  A=gen(p); return np.mean((T-T@np.linalg.pinv(A).T@A.T)**2)\\n opt=minimize(loss,start,method='Nelder-Mead',options={'xatol':1e-10}); A=gen(opt.x); print(name,opt.x,np.sqrt(opt.fun),A.T)\\n print('amplitudes ranges',np.ptp(T@np.linalg.pinv(A).T,axis=0))\\nprint('SVD basis',V[:2]); print('noise floor',np.sqrt(np.sum(S[2:]**2)/T.size))\\nZ=np.c_[y,U[:,:2]*S[:2]]\\nfor k in (1,2,3):\\n A=poly(k); E=Z-A@np.linalg.lstsq(A,Z,rcond=None)[0]; _,D,W=np.linalg.svd(E,full_matrices=False); print('residual basis',k,D,W)\\n if k==2:\\n  C=np.linalg.lstsq(A,Z@W.T,rcond=None)[0]; print('poly2 target rotated coefficients',C)\\nfor name in ('panel_b','panel_c'):\\n a=s[name]['u']; ids=[c for k in range(3) for c in combinations_with_replacement(range(4),k)]; A=np.column_stack([np.prod(a[:,c],axis=1) for c in ids]); print(name)\\n for key,b in s[name].items():\\n  if key=='u': continue\\n  C=np.linalg.lstsq(A,b,rcond=None)[0]; print(key,'quadratic coefficients\\\\n',C,'rmse',np.sqrt(np.mean((b-A@C)**2,axis=0)))\\n# See if a common rational divisor reduces cubic residuals without a large model.\\nfor kind in ('squares','quadratic','diagonal_affine'):\\n A=poly(3); aa=poly(2); B=x*x if kind=='squares' else aa[:,5:] if kind=='quadratic' else np.c_[x,x*x];\\n for scale in (0.,.01,.1):\\n  errs=[]\\n  for jj in [np.arange(52,72),*np.array_split(np.random.default_rng(39).permutation(72),6)]:\\n   ii=np.setdiff1d(np.arange(72),jj); F=A[ii]; q=np.linalg.qr(F,mode='reduced')[0]; yi=Z[ii]; H=(yi[:,:,None]*B[ii,None,:]).reshape(len(ii),-1); E=yi-q@(q.T@yi); H=(H-q@(q.T@H)).reshape(len(ii),3,-1); C=np.linalg.lstsq(np.vstack([H.reshape(-1,B.shape[1]),np.eye(B.shape[1])*scale]),np.r_[-E.ravel(),np.zeros(B.shape[1])],rcond=None)[0]; den=1+B@C; P=np.linalg.lstsq(F,yi*den[ii,None],rcond=None)[0]; pred=(A[jj]@P)/den[jj,None]; errs.append([np.mean(abs(pred[:,0]-y[jj])),np.mean(abs(pred[:,1:]@V[:2]-T[jj])),den.min()])\\n  print('rational',kind,scale,'tail',np.round(errs[0],4),'worst',np.max(errs,0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe5.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 regularized polynomial readout → H2 shared nonlinear spatial modes with a two-mode trajectory; current worst-fold MAEs are 0.05358 for response and 0.05942 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Ship the regularized polynomial baseline\",\n      \"rejected_reason\": \"It passes the public tail split, but other folds exceed tolerance and the trajectory has clear low-rank structure worth exploiting.\"\n    }\n  ],\n  \"rationale\": \"Compare temporal laws against the rank-two noise floor and test whether a common rational denominator actually improves held-out predictions. If it does not, focus on finding the shared spatial features rather than expanding the polynomial basis further.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5318a3f1252a2e083820e2512d56b6e7cd6832af33c80e0ed38408bbb4679501",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39925.92,
+      "usage_known": true,
+      "prompt_tokens": 27339,
+      "cached_tokens": 9344,
+      "completion_tokens": 1471
+    }
+  ]
+}

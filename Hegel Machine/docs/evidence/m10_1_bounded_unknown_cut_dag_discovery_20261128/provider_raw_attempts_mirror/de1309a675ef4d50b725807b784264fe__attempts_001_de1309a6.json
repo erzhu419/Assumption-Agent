@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de1309a675ef4d50b725807b784264fe",
+  "call_seq": 1,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__init_decomp_conf_m101_a03_batch_01",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:17:47.566722+00:00",
+  "ended_at_utc": "2026-11-28T09:18:23.283657+00:00",
+  "request_sha256": "cad03ee7428d932b26e280504276bc57598f2381b625871bd38c5731dffcdc0c",
+  "system_prompt_chars": 2229,
+  "stdin_payload_chars": 4755,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 13050,
+    "cached_tokens": 0,
+    "completion_tokens": 1398
+  },
+  "raw_response_text": "{\n  \"action\": \"split_node\",\n  \"rationale\": \"The verified solver fits and inverts panel_a calibration, applies a separately fitted panel_b affine operator, then fits the scalar and trajectory readouts in the resulting coordinates. The split preserves those computations and leaves panel_c unused, as in the source. The panel_a and panel_b linear-fit scores are unchanged, while the panel_c v2 summaries, training readout spread, and telemetry channel 2 shift. These observations make the readout a candidate for investigation but do not identify a failing stage. Verify source-batch parity in Docker before editing any node for the target.\",\n  \"nodes\": [\"node_00\", \"node_01\", \"node_02\"],\n  \"edges\": [\n    [\"__input__\", \"node_00\"],\n    [\"__input__\", \"node_01\"],\n    [\"node_00\", \"node_01\"],\n    [\"node_01\", \"node_02\"]\n  ],\n  \"sink_node_id\": \"node_02\",\n  \"node_modules\": [\n    {\n      \"node_id\": \"node_00\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    i, j = np.triu_indices(len(u), k=1)\\n    du = u[j] - u[i]\\n    dv = v[j] - v[i]\\n    gain = np.array([np.median(dv[du[:, k] != 0, k] / du[du[:, k] != 0, k])\\n                     for k in range(u.shape[1])])\\n    bias = np.median(v - u * gain, axis=0)\\n    error = np.linalg.norm(v - u * gain - bias, axis=1)\\n    center = np.median(error)\\n    inlier = error <= center + 8 * np.median(np.abs(error - center))\\n    bias, gain = np.array([_fit(_affine(u[inlier, k:k+1]), v[inlier, k])\\n                           for k in range(u.shape[1])]).T\\n    return bias, gain\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    bias, gain = _calibration(study['panel_a'])\\n    return {\\n        'x_tr_cal': (study['train']['x'] - bias) / gain,\\n        'x_te_cal': (study['test']['x'] - bias) / gain,\\n    }\\n\"\n    },\n    {\n      \"node_id\": \"node_01\",\n      \"code\": \"import numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    calibrated = inputs['node_00']\\n    panel_b = study['panel_b']\\n    operator = _fit(_affine(panel_b['u']), panel_b['v'])\\n    z = _affine(calibrated['x_tr_cal']) @ operator\\n    z_test = _affine(calibrated['x_te_cal']) @ operator\\n    train = study['train']\\n    return {'z_tr': z, 'z_te': z_test, 'y': train['y'], 'traj': train['traj']}\\n\"\n    },\n    {\n      \"node_id\": \"node_02\",\n      \"code\": \"from itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    features = inputs['node_01']\\n    z, z_test = features['z_tr'], features['z_te']\\n    a, a_test = _affine(z), _affine(z_test)\\n    y = features['y']\\n\\n    i, j = np.array(list(combinations_with_replacement(range(z.shape[1]), 2))).T\\n    products = z[:, i] * z[:, j]\\n    quadratic = _fit(np.column_stack((a, products)), y)[a.shape[1]:]\\n    keep = np.argsort(np.abs(quadratic))[-2:]\\n    pooled = products[:, keep].sum(axis=1)\\n    pooled_test = (z_test[:, i[keep]] * z_test[:, j[keep]]).sum(axis=1)\\n    y_hat = np.column_stack((a_test, pooled_test)) @ _fit(np.column_stack((a, pooled)), y)\\n\\n    traj = features['traj']\\n    modes = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    state_pred = (a_test @ _fit(a, traj @ modes.T)) @ modes\\n    last = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), last.mean(), last.std()])\\n    return {'y_hat': y_hat, 'state_pred': state_pred, 'diagnostics_vec': diagnostics}\\n\"\n    }\n  ]\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_001_att0.json",
+      "response_sha256": "bc21a8666012ed18c9355aacb0b3db39685edaef9fd5067e4362f7388acf13ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38392.46,
+      "usage_known": true,
+      "prompt_tokens": 13050,
+      "cached_tokens": 0,
+      "completion_tokens": 1398
+    }
+  ]
+}

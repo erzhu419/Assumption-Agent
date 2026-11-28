@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e07f95c3ee9841b2bbcde4c285a4c757",
+  "call_seq": 3,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:24:53.343542+00:00",
+  "ended_at_utc": "2026-11-28T09:25:18.220659+00:00",
+  "request_sha256": "2b00e49d9ae809ce45ead99d4902877d0390226d2b2b0b75302da1bc64be26da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22022,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18820,
+    "cached_tokens": 9344,
+    "completion_tokens": 957
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat /tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np, importlib.util\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; u=a['u']; v=a['v']; rng=np.random.default_rng(871)\\ndef design(x,d):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,c],axis=1) for k in range(1,d+1) for c in combinations_with_replacement(range(4),k)])\\nnp.set_printoptions(precision=5,suppress=True)\\nD=design(u,1); best=(np.inf,None)\\nfor _ in range(500):\\n i=rng.choice(len(u),5,False); c=np.linalg.lstsq(D[i],v[i],rcond=None)[0]; e=np.linalg.norm(D@c-v,axis=1); j=np.argsort(e)[:40]; score=np.mean(e[j]**2)\\n if score<best[0]:best=score,j\\nj=best[1]\\nfor d in (1,2,3):\\n D=design(u,d); i=j.copy()\\n for _ in range(10):\\n  c=np.linalg.lstsq(D[i],v[i],rcond=None)[0];e=np.linalg.norm(D@c-v,axis=1);i=np.argsort(e)[:40]\\n print('panel A degree',d,'residual order',np.sort(e)[::3]); print('coeff',c if d<3 else np.max(np.abs(c),axis=1))\\n p=np.diag(D[i]@np.linalg.pinv(D[i])); print('inlier LOO rms',np.sqrt(np.mean((e[i]/np.maximum(1-p,1e-10))**2)))\\nsp=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/conf_m101_b03_batch_01_solver.py');m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\nfor split in (52,56):\\n tr=s['train']; v={**s,'train':{k:w[:split] if k!='summary' else w for k,w in tr.items()},'test':{'x':tr['x'][split:]}}; p=m.solve_batch(v)\\n print('prior CV',split, np.mean(abs(p['y_hat']-tr['y'][split:])),np.mean(abs(p['state_pred']-tr['traj'][split:])), 'per horizon',np.mean(abs(p['state_pred']-tr['traj'][split:]),axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived quadratic readout -> H2 robustly calibrated low-order panel plus revised readout; reported public CV MAE is 0.064842 for y and 0.036226 for trajectories.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the scalar readout before inspecting calibration\",\n      \"rejected_reason\": \"Large panel A residuals could reflect sparse contamination or an omitted calibration term. Distinguishing those cases determines which features the readout should use.\"\n    }\n  ],\n  \"rationale\": \"Compare robust calibration orders using leave-one-out residuals so a cubic interpolant cannot win by fitting the retained rows. Reproduce the prior solver’s split errors to establish a direct baseline for both outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1b36c2b0052d7a84aa089103c9ca7996b4635362981af8255b9cbbc81e8fbbd6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27414.29,
+      "usage_known": true,
+      "prompt_tokens": 18820,
+      "cached_tokens": 9344,
+      "completion_tokens": 957
+    }
+  ]
+}

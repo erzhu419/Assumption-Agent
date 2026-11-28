@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8aa98b9c2f2d4682b1b68e43d4af83f3",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:27:48.351955+00:00",
+  "ended_at_utc": "2026-11-28T09:28:26.758204+00:00",
+  "request_sha256": "09e446cfb593e8d0981f0d0265354b3d4b0b9579f74b6679980a72bc353f7383",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61247,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35755,
+    "cached_tokens": 9344,
+    "completion_tokens": 1538
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the inputs, then fit the scalar and time-course readouts.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\ndef _affine(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(design, target):\\n    return np.linalg.lstsq(design, target, rcond=None)[0]\\n\\n\\ndef _calibration(panel):\\n    \\\"\\\"\\\"Estimate the four gains and offsets after trimming gross row outliers.\\\"\\\"\\\"\\n    u, v = panel['u'], panel['v']\\n    design = _affine(u)\\n    keep = np.ones(len(u), dtype=bool)\\n    for _ in range(4):\\n        coef = _fit(design[keep], v[keep])\\n        error = np.linalg.norm(v - design @ coef, axis=1)\\n        keep = error <= 4 * np.median(error)\\n    return np.array([_fit(_affine(uj[keep]), vj[keep])\\n                     for uj, vj in zip(u.T, v.T)]).T\\n\\n\\ndef _label_design(z, frequency):\\n    z0, z1, z2, z3 = z.T\\n    contrast = z0 + z1 - z2 - z3\\n    pair = z0 * z2 + z1 * z3\\n    return np.column_stack((_affine(z), pair, np.sin(frequency * contrast),\\n                            np.tanh(contrast), pair / (1 + contrast**2)))\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    offset, gain = _calibration(study['panel_a'])\\n    panel = study['panel_b']\\n    mixer = _fit(_affine(panel['u']), panel['v'])\\n    train = study['train']\\n    z = _affine((train['x'] - offset) / gain) @ mixer\\n    z_test = _affine((study['test']['x'] - offset) / gain) @ mixer\\n    frequency = study['telemetry_vec'][0]\\n    label_coef = _fit(_label_design(z, frequency), train['y'])\\n    y_hat = _label_design(z_test, frequency) @ label_coef\\n    state_pred = _affine(z_test) @ _fit(_affine(z), train['traj'])\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\ncd /holdout_task && python3 /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); solve=m['solve_batch']; s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['y']); all_rows=np.arange(n)\\no,g=m['_calibration'](s['panel_a']); p=s['panel_b']; z=m['_affine']((tr['x']-o)/g)@m['_fit'](m['_affine'](p['u']),p['v']); a,b,c,d=z.T\\nfolds=[('52/20',np.arange(52,72)),('56/16',np.arange(56,72))]\\nfor seed in (813, 2901):\\n    folds.extend((f'{seed}/{k}',v) for k,v in enumerate(np.array_split(np.random.default_rng(seed).permutation(n),5)))\\nfor name,number in [('large contrast',abs(a+b-c-d)),('large interaction',abs(a*c+b*d)),('distant input',np.linalg.norm(z,axis=1))]:\\n    folds.append((name, np.argsort(number)[-14:]))\\nfor name,j in folds:\\n    i=np.setdiff1d(all_rows,j); q={**s,'train':{**tr,**{k:tr[k][i] for k in ('x','y','traj')}},'test':{'x':tr['x'][j]}}; out=solve(q)\\n    e=np.abs(out['y_hat']-tr['y'][j]); et=np.abs(out['state_pred']-tr['traj'][j]); print(f'{name:18s} scalar={e.mean():.6f} trajectory={et.mean():.6f} worst_horizon={et.mean(axis=0).max():.6f}')\\n    assert e.mean()<=.038 and et.mean(axis=0).max()<.012\\nout=solve(s); y,t,diag=(out[k] for k in ('y_hat','state_pred','diagnostics_vec')); assert y.shape==(36,) and t.shape==(36,8) and diag.shape==(4,); assert all(np.isfinite(v).all() for v in out.values()); np.testing.assert_array_equal(diag,[y.mean(),y.std(),t[:,-1].mean(),t[:,-1].std()])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 paired-product readout → H2 signed contrast with sine, tanh, and a rationally gated pair; the compact model reached 0.006841 MAE on 52/20 and 0.009923 on its worst tested split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Fit a free rational-gate direction\",\"rejected_reason\":\"It added parameters and raised 52/20 MAE to 0.0121.\"}],\"rationale\":\"Implement the compact readout and retain the affine trajectory fit. The schema check tests the output contract; the isolated-process splits test whether either readout breaks when the largest contrasts, interactions, or input norms are excluded from fitting. If a slice fails, revise only the affected readout.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0034e774fb7192784b93da6297d4fd4ce6ae7a85a7ab7b5ea145dc44915ef24e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41039.16,
+      "usage_known": true,
+      "prompt_tokens": 35755,
+      "cached_tokens": 9344,
+      "completion_tokens": 1538
+    }
+  ]
+}

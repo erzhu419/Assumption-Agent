@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a656fa50651949b0b5b1565bd3d7f2b8",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:23:50.403926+00:00",
+  "ended_at_utc": "2026-11-28T09:24:24.749005+00:00",
+  "request_sha256": "2d7e2191f061dd7fa0f7d390c4af9dde6cbca1e5bbada401ce95626cc7e7b659",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35416,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23735,
+    "cached_tokens": 9344,
+    "completion_tokens": 1310
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/fitops.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import least_squares\\n\\ndef bas(u,w,k):\\n z=u*w\\n if k=='tanh': h=np.tanh(z)\\n if k=='rational': h=u/(1+w*u*u)\\n if k=='atan': h=np.arctan(z)\\n if k=='sin': h=np.sin(z)\\n if k=='sin2': h=np.c_[np.sin(z),np.sin(2*z)]\\n if k=='cos': h=np.cos(z)\\n if k=='erf':\\n  from scipy.special import erf\\n  h=erf(z)\\n return np.c_[aff(u),h]\\n\\ndef op(u,v,x,k,w0,mask=None,shared=False):\\n if mask is None: mask=np.ones(len(u),bool)\\n a,b=u[mask],v[mask]\\n def residual(w):\\n  f=bas(a,w,k); return (f@ls(f,b)-b).ravel()\\n fit=least_squares(residual,np.full(1 if shared else 4,w0),bounds=(.15,8),gtol=1e-12)\\n f=bas(a,fit.x,k)\\n return bas(x,fit.x,k)@ls(f,b),fit.x,np.std(fit.fun)\\n\\ndef features(s):\\n m,o,_=cal(s['panel_a']); X=np.r_[s['train']['x'],s['test']['x']]; x=(X-o)/np.diag(m)\\n p=s['panel_b']; b=aff(x)@ls(aff(p['u']),p['v']); pb=ls(aff(p['u']),p['v']); bx=(x-pb[0])@np.linalg.inv(pb[1:]); p=s['panel_c']; u=p['u']; c=op(u,p['v1'],x,'tanh',2.2)[0]; d=op(u,p['v2'],x,'cos',2.4,shared=True)[0]\\n return X,x,b,bx,c,d\\n\\nif __name__=='__main__':\\n p=s['panel_c']; u=p['u']; v=p['v1']; mask=np.arange(len(u))%4!=0\\n for k,w0 in [('tanh',2.2),('rational',1.9),('atan',2.2),('sin',3.4),('sin2',3),('erf',1.5)]:\\n  _,w,r=op(u,v,u,k,w0); yh,wcv,_=op(u,v,u,k,w0,mask); print(k,w,r,'cv',np.std(yh[~mask]-v[~mask]),wcv)\\n X,x,b,bx,c,d=features(s); n=len(s['train']['y']); T=np.c_[s['train']['y'],s['train']['traj']]; tr=np.arange(52); te=np.arange(52,n)\\n def score(f):\\n  w=ls(f[tr],T[tr]); e=abs(f[:n]@w-T); return np.round([e[tr,0].mean(),e[te,0].mean(),e[tr,1:].mean(),e[te,1:].mean()],5)\\n def quad(x):return np.c_[aff(x),*[x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(x.shape[1]),2)]]\\n for name,f in [('c',aff(c)),('d',aff(d)),('x',aff(x)),('cd',np.c_[aff(c),d]),('cdmatch',np.c_[aff(c),d,c*d]),('cdmatchsum',np.c_[aff(c),d,np.sum(c*d,axis=1)]),('quadcd',quad(np.c_[c,d])),('quadxc',quad(np.c_[x,c])),('quadxd',quad(np.c_[x,d])),('quadx',quad(x)),('crosscd',np.c_[aff(c),d,(c[:,:,None]*d[:,None,:]).reshape(len(c),16)]),('xcdb',np.c_[aff(c),d,x,c*d,b*d,b*c])]:print(name,score(f))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/fitops.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived frequencies and generic readout -> H2 recover a cosine branch near frequency 2.4 and a rank-two trajectory readout; baseline worst public MAE is 0.085336.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived panel basis and frequency ranges suffice for the current campaign.\",\"empirical_witness\":\"Panel C v2 is predicted on withheld panel rows at RMSE 0.000109 using cosine frequency 2.4, outside the archived ranges; v1's archived-style harmonic basis gives withheld RMSE 0.015145.\",\"causal_blanket_diagnosis\":\"The affine calibration survives trimming, but the nonlinear operator basis changed before the readout stage.\",\"sublated_pivot\":\"Retain diagonal calibration, fit current panel nonlinearities, and compare sparse cross-branch readouts.\",\"risk_kind\":\"operator grammar\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unconstrained polynomial directly to raw inputs\",\"rejected_reason\":\"It would discard the near-noise-floor panel operator and the observed rank-two temporal structure.\"}],\"rationale\":\"Withhold panel rows to distinguish operator families without using outcome labels, then check whether simple branch interactions explain both outcomes on the requested training split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "75663fbb772baa913c82b58b49a0b261f795ab7a649fc982479f773be0d3204e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36957.9,
+      "usage_known": true,
+      "prompt_tokens": 23735,
+      "cached_tokens": 9344,
+      "completion_tokens": 1310
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a35edf0c901e4ff993a8901820818d8a",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Fixed_TwoStage_Modular_Online__conf_m101_b02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:52:54.599767+00:00",
+  "ended_at_utc": "2026-11-28T09:53:31.067166+00:00",
+  "request_sha256": "9ce0e02cece68dcd3b4ed52027b73ab794bde1eea202a215922d1073ba16faae",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49621,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31079,
+    "cached_tokens": 9344,
+    "completion_tokens": 1454
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/kernel_diag.py <<'PY'\\nexec(open('/tmp/readout_diag.py').read().split('for keys in')[0])\\nfrom scipy.linalg import cho_factor,cho_solve\\nfrom scipy.optimize import minimize\\nfrom scipy.spatial.distance import cdist\\nfrom itertools import combinations_with_replacement\\nC=s['panel_c'];u=C['u']; Q=np.column_stack([u[:,i]*u[:,j] for i,j in combinations_with_replacement(range(4),2)]); P=m._cycle(u); print('C1 basis residuals',[(D.shape[1],np.sqrt(np.mean((D@m._fit(D,C['v1'])-C['v1'])**2))) for D in [m._affine(P),m._affine(u),np.c_[m._affine(u),P],np.c_[m._affine(u),Q]]]);print('A matrix',m._fit(m._affine(s['panel_a']['u']),s['panel_a']['v'])); print('times',s['eval_times']);\\n_,_,V=np.linalg.svd(tr,full_matrices=False); T=np.c_[y,tr@V[:2].T]; folds += [(np.argsort(z[:,j])[:-10],np.argsort(z[:,j])[-10:]) for j in range(4)]\\nsets={'z':z,'x':x,'b':b,'rb':rb,'d':c2,'c':c1,'zb':np.c_[z,b], 'xb':np.c_[x,rb]}\\ndef scores(pred,iv):return [np.mean(abs(pred[:,0]-y[iv])),np.mean(abs(pred[:,1:]@V[:2]-tr[iv]))]\\nfor name,A in sets.items():\\n A=(A-A.mean(0))/A.std(0); ds=(A[:,None,:]-A[None,:,:])**2; nfeat=A.shape[1]; I=np.eye(len(A)); af=m._affine(A); lin=af@af.T/nfeat\\n for kind in ['radial','add','mix','product']:\\n  out=[]; pars=[]\\n  for it,iv in folds:\\n   Y=T[it]; center=Y.mean(0); scale=Y.std(0); Y=(Y-center)/scale; p0=np.r_[np.full(nfeat,-1.7),-8.,-2.]; idx=np.ix_(it,it)\\n   def kern(p,grad=False):\\n    w=np.exp(p[:nfeat]); d=ds*w; E=np.exp(-d); r=np.exp(-d.sum(-1)); a=E.mean(-1); v=np.exp(p[-1]); noise=np.exp(p[-2]);\\n    if kind=='radial': K=r; G=-d*r[:,:,None]\\n    if kind=='add': K=a; G=-d*E/nfeat\\n    if kind=='mix': K=.5*(r+a); G=-.5*d*(r[:,:,None]+E/nfeat)\\n    if kind=='product': K=a*a; G=-2*d*E*a[:,:,None]/nfeat\\n    return (K+v*lin+noise*I,np.concatenate((G,(noise*I)[:,:,None],(v*lin)[:,:,None]),axis=2)) if grad else K+v*lin+noise*I\\n   def loss(p):\\n    K,G=kern(p,True); f=cho_factor(K[idx]); al=cho_solve(f,Y); inv=cho_solve(f,np.eye(len(it))); W=Y.shape[1]*inv-al@al.T; reg=.1*(p-p0); return .5*np.sum(al*Y)+Y.shape[1]*np.log(f[0].diagonal()).sum()+.05*np.sum((p-p0)**2), .5*np.einsum('ij,ijk->k',W,G[idx])+reg\\n   fit=minimize(loss,p0,jac=True,method='L-BFGS-B',bounds=[(-8,3)]*nfeat+[(-13,-2),(-8,3)],options={'maxiter':75}); K=kern(fit.x); P=K[np.ix_(iv,it)]@cho_solve(cho_factor(K[idx]),Y)*scale+center;out.append(scores(P,iv)); pars.append(fit.x)\\n  print(name,kind,'official',np.round(out[0],4),'random max',np.round(np.max(out[:5],0),4),'boundary max',np.round(np.max(out[5:],0),4),'p',np.round(pars[0],2),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/kernel_diag.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fixed isotropic similarity → fold-fitted anisotropic and additive similarities; the best reported isotropic z+B model has official MAE 0.0434/0.0320 and worst random-split MAE 0.0583/0.0390.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the best isotropic kernel\",\n      \"rejected_reason\": \"Its scalar error still exceeds the official threshold, and its worst random split is worse.\"\n    }\n  ],\n  \"rationale\": \"Check whether the current C v1 basis actually explains its panel measurements before preserving it. Fit kernel length scales using only each fold’s training labels; compare raw and aligned coordinates on both random and boundary holdouts before choosing a feature map for the frozen ridge.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8e481fb92cd0c6248f7ccdb6a10b9d44b2b25c29ae2235b31cef9927f874c593",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39067.53,
+      "usage_known": true,
+      "prompt_tokens": 31079,
+      "cached_tokens": 9344,
+      "completion_tokens": 1454
+    }
+  ]
+}

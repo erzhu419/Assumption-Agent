@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76453c96c255492eb804862e259a432f",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:59:18.490285+00:00",
+  "ended_at_utc": "2026-11-28T09:59:53.821778+00:00",
+  "request_sha256": "f4f47056802ff6734679372143b66ac31425449526e56d75a683915280ac2bc5",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 49551,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29825,
+    "cached_tokens": 9344,
+    "completion_tokens": 1429
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_00.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _fit(design, values):\\n    return np.linalg.lstsq(design, values, rcond=None)[0]\\n\\n\\ndef _affine_calibration(panel):\\n    u, v = panel['u'], panel['v']\\n    design = np.column_stack((np.ones(len(u)), u))\\n    coef = _fit(design, v)\\n    # Fit in the forward direction so corrupted measurements are residuals,\\n    # not high-leverage predictors. Trim the three identified outlier rows.\\n    for _ in range(10):\\n        residual = np.linalg.norm(v - design @ coef, axis=1)\\n        weight = np.sqrt(np.minimum(1.0, 1.5 * max(np.median(residual), 1e-15)\\n                                    / np.maximum(residual, 1e-15)))\\n        coef = _fit(design * weight[:, None], v * weight[:, None])\\n    residual = np.linalg.norm(v - design @ coef, axis=1)\\n    keep = np.argsort(residual)[:-3]\\n    return _fit(design[keep], v[keep])\\n\\n\\ndef _pair_basis(u):\\n    a, b, c, d = u.T\\n    return np.column_stack((np.ones(len(u)), a*b, a*d, b*c, c*d))\\n\\n\\ndef _cosine_basis(u):\\n    return np.column_stack((np.ones(len(u)), np.cos(2.4 * u)))\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    study = inputs['__input__']\\n    train, test = study['train']['x'], study['test']['x']\\n    x = np.concatenate((train, test), axis=0)\\n    affine = _affine_calibration(study['panel_a'])\\n    u = np.linalg.solve(affine[1:].T, (x - affine[0]).T).T\\n\\n    panel = study['panel_c']\\n    v1 = _pair_basis(u) @ _fit(_pair_basis(panel['u']), panel['v1'])\\n    v2 = _cosine_basis(u) @ _fit(_cosine_basis(panel['u']), panel['v2'])\\n    interaction = (v1[:, :, None] * v2[:, None, :]).reshape(len(u), -1)\\n    design = np.column_stack((v1, v2, interaction))\\n    return {'design': design, 'n_train': np.asarray(len(train))}\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom node_00 import run_node\\nsys.path.insert(0, '/holdout_task/_frozen_nodes')\\nfrom node_01 import run_node as sink\\ns = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nt = s['train']; x, y, traj = (t[k] for k in ('x', 'y', 'traj'))\\na = np.arange(len(x))\\nradius = np.linalg.norm(x - np.median(x, axis=0), axis=1)\\nfolds = [('largest-radius', np.argsort(radius)[-18:])]\\nfor seed in range(5):\\n    folds.extend((f'random-{seed}-{i}', b) for i,b in enumerate(np.array_split(np.random.default_rng(seed).permutation(a),4)))\\nrecords = []\\nfor label, b in folds:\\n    j = np.setdiff1d(a, b)\\n    q = dict(s, train=dict(x=x[j], y=y[j], traj=traj[j]), test=dict(x=x[b]))\\n    d = run_node({'__input__': q})\\n    assert d['design'].shape == (len(x), 24) and int(d['n_train']) == len(j)\\n    o = sink({'__input__': q, 'node_00': d})\\n    err = np.array([np.mean(abs(o['y_hat']-y[b])), np.mean(abs(o['state_pred']-traj[b]))])\\n    records.append(err)\\n    if label == 'largest-radius': print(label, err)\\nr = np.array(records)\\nprint('worst-fold MAE:', r.max(0), 'slices:', [folds[i][0] for i in r.argmax(0)])\\nassert np.all(r.max(0) <= 0.038), r.max(0)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: add the full bilinear interaction between the calibrated panel C readouts; the probe achieved worst-fold MAE of approximately 0.0067 for response and 0.006 for trajectory.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select a smaller subset of cross-products from the response labels\",\n      \"rejected_reason\": \"Fold-local selection missed important terms on some splits; the full bilinear block passes comfortably without label-dependent feature selection.\"\n    }\n  ],\n  \"rationale\": \"Implement only the measured calibration and interaction terms. Run the official grader to catch interface or acceptance failures, then hold out the largest-radius inputs to test extrapolation and use repeated folds to detect split sensitivity. A threshold failure would reopen the feature design before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0153ead771aee426db683a8a157724fd197a9499d58a7c8cfc5ae3b3aecb9c24",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37963.06,
+      "usage_known": true,
+      "prompt_tokens": 29825,
+      "cached_tokens": 9344,
+      "completion_tokens": 1429
+    }
+  ]
+}

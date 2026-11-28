@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ead180b8ecd4987858db40d1cbe9ee7",
+  "call_seq": 10,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_08__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_08__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:55:15.064046+00:00",
+  "ended_at_utc": "2026-11-28T09:55:54.085859+00:00",
+  "request_sha256": "a2e1b3f090401fc7dfb6b6934e6f57f777fff64b61a03b32e9892c7b4176bb9f",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 70456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40124,
+    "cached_tokens": 9344,
+    "completion_tokens": 1610
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\np='/holdout_task/node_01.py'\\ns=open(p).read();s=s[:s.index(\\\"    return {'y_hat':\\\")] + '''    y = _fit(label, np.asarray(tr['y']).reshape(-1), n, .001)\\n    state = _fit(trajectory, tr['traj'], n, 1e-6)\\n    last = state[:, -1]\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), last.mean(), last.std()])}\\n''';open(p,'w').write(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py || true\\ncat >/tmp/permutation_probe.py <<'PY'\\nexec(open('/tmp/readout_probe.py').read().split('np.set_printoptions')[0])\\nfrom scipy.optimize import minimize_scalar,least_squares\\nnp.set_printoptions(precision=4,suppress=True)\\nA=poly(z,1); B=s['panel_b']; k,g=m._fit_b(B['u'],B['v']); H=m._b_design(u,k)[:,5:]; Z=H@g[5:]; T=Y[:,0]; J=np.arange(4); perms=list(itertools.permutations(J));\\n# Every dominant mixed term in the earlier label search used a different channel on both sides.\\nresults=[]\\nfor name,q in [('z',z),('Z',Z),('H',H)]:\\n for basename,base in [('z',A),('z,u',np.c_[A,u]),('u',poly(u,1)),('z2',poly(z,2)),('z,u2',np.c_[A,poly(u,2)[:,1:]]),('z,Z,u',np.c_[A,Z,u])]:\\n  for form in range(6):\\n   def model(a,b):\\n    best=None\\n    for p in perms:\\n     w=u*q[:,p];w=[w,w**2,np.c_[w,w**2],np.c_[w,np.abs(w)], np.c_[w,np.tanh(2*w)],np.c_[w,np.sign(w)*abs(w)**1.5]][form]; d=np.c_[base,w]; Q=np.linalg.svd(d[a],full_matrices=False)[0]; r=(T[a]-Q@(Q.T@T[a]))/np.maximum(1-(Q*Q).sum(1),1e-10); loss=np.mean(r*r)\\n     if best is None or loss<best[0]:best=(loss,p,d)\\n    loss,p,d=best;c=np.linalg.lstsq(d[a],T[a],rcond=None)[0];return np.mean(abs(d[b]@c-T[b])),loss,p,c\\n   vals=[model(a,b) for a,b in fs];results.append((max(v[0] for v in vals),vals[0][0],name,basename,form,vals[0][2],vals[0][3],vals[0][1]))\\nfor row in sorted(results,key=lambda r:r[0])[:12]:print('best',row)\\n# Fit a common nonlinear scale to the four products while retaining their sparse pairing.\\nfor name,q in [('z',z),('Z',Z),('H',H)]:\\n w=u*q[:,[3,0,1,2]]\\n for bname,d0 in [('z',A),('z,u',np.c_[A,u]),('u',poly(u,1)),('z2',poly(z,2))]:\\n  for fname,fun in [('tanh',np.tanh),('sin',np.sin),('asinh',np.arcsinh),('rational',lambda x:x/(1+x*x)),('exp',lambda x:np.expm1(np.clip(x,-10,10)))]:\\n   errs=[]; ks=[]\\n   for a,b in fs:\\n    def pred(k,ii):\\n     d=np.c_[d0,fun(k*w)];c=np.linalg.lstsq(d[a],T[a],rcond=None)[0];return d[ii]@c\\n    opt=minimize_scalar(lambda k:np.mean((pred(k,a)-T[a])**2),bounds=(.005,4),method='bounded');ks.append(opt.x);errs.append(np.mean(abs(pred(opt.x,b)-T[b])))\\n   if max(errs)<.075 or errs[0]<.042:print('sparse nonlinear',name,bname,fname,np.round(errs,4),np.round(ks,3))\\n# Inspect stable full-design bilinear coefficients for both readouts.\\nfor q in [z,Z,H]:\\n d=np.c_[A,u,(u[:,:,None]*q[:,None,:]).reshape(len(u),16)];c=np.linalg.lstsq(d,Y,rcond=None)[0];print('bilinear y, trajectory endpoint',c[9:,0].reshape(4,4),c[9:,-1].reshape(4,4),np.std(Y-d@c,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/permutation_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Dense mixed terms → sparse channel-paired bilinear readout; the trajectory baseline reached 0.0165 worst-fold MAE, but the label baseline still missed 0.038.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep adding terms from the full dictionary\",\n      \"rejected_reason\": \"Earlier sparse additions improved some splits but did not transfer across folds.\"\n    }\n  ],\n  \"rationale\": \"Compute diagnostics from predictions as required, then test the strongest discrete clue: the first four selected mixed label terms form a one-to-one channel pairing. Select the pairing inside each training fold and compare both official and worst-fold errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6980d3f67ff82999a61a65dcde8b9abbd8d5458ac9adc3b195f959f5605c020d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41672.01,
+      "usage_known": true,
+      "prompt_tokens": 40124,
+      "cached_tokens": 9344,
+      "completion_tokens": 1610
+    }
+  ]
+}

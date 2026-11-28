@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86c4084375b54f0eb8aaa33910b25c3f",
+  "call_seq": 4,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:30.329726+00:00",
+  "ended_at_utc": "2026-11-28T09:27:03.141411+00:00",
+  "request_sha256": "14361f7be395ab7021f3dfb1d56a436e7749383580e9e1ff00735ebc2bc5f3e0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32542,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23276,
+    "cached_tokens": 9344,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Predict the scalar response and the two-mode trajectory from cubic features.\\\"\\\"\\\"\\nfrom itertools import combinations_with_replacement\\n\\nimport numpy as np\\n\\n\\ndef _design(x):\\n    return np.column_stack([np.ones(len(x))] + [\\n        x[:, term].prod(axis=1)\\n        for degree in (1, 2, 3)\\n        for term in combinations_with_replacement(range(x.shape[1]), degree)\\n    ])\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    train = study['train']\\n    traj = train['traj']\\n    basis = np.linalg.svd(traj, full_matrices=False)[2][:2]\\n    target = np.column_stack((train['y'], traj @ basis.T))\\n    coefficients = np.linalg.lstsq(_design(train['x']), target, rcond=None)[0]\\n    prediction = _design(study['test']['x']) @ coefficients\\n    y_hat = prediction[:, 0]\\n    state_pred = prediction[:, 1:] @ basis\\n    terminal = state_pred[:, -1]\\n    return {'y_hat': y_hat, 'state_pred': state_pred,\\n            'diagnostics_vec': np.array([y_hat.mean(), y_hat.std(),\\n                                         terminal.mean(), terminal.std()])}\\nPY\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 validate_public_schema.py\\npython3 - <<'PY'\\nimport pickle,numpy as np\\nfrom batch_solver import solve_batch,_design\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement as cr\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; x=s['train']['x']; y=s['train']['y']; t=s['eval_times']; r=s['train']['traj']; rng=np.random.default_rng(2027); np.set_printoptions(precision=4,suppress=True)\\nslices=[('tail20',np.arange(52),np.arange(52,72)),('tail16',np.arange(56),np.arange(56,72))]\\nfor i,v in enumerate(np.array_split(rng.permutation(72),4)): slices.append((str(i),np.setdiff1d(np.arange(72),v),v))\\nfor name,a,b in [('boundary',np.argsort(np.linalg.norm(x,axis=1))[:52],np.argsort(np.linalg.norm(x,axis=1))[52:])]+slices:\\n sc=dict(s,train=dict(x=x[a],y=y[a],traj=r[a]),test=dict(x=x[b])); out=solve_batch(sc)\\n print(name,'y / traj / worst horizon MAE:',np.mean(abs(out['y_hat']-y[b])),np.mean(abs(out['state_pred']-r[b])),np.max(np.mean(abs(out['state_pred']-r[b]),axis=0)))\\nf=_design(x); z=np.c_[y,r]; c=np.linalg.lstsq(f,z,rcond=None)[0]; print('full-fit rms',np.sqrt(np.mean((f@c-z)**2,0))); print('number of train vectors beyond radial maximum',sum(np.linalg.norm(s['test']['x'],axis=1)>np.linalg.norm(x,axis=1).max()))\\nfor name in ('v1','v2'):\\n p=s['panel_c']; u=p['u']; f=_design(u)[:,:15]; c=np.linalg.lstsq(f,p[name],rcond=None)[0]; print(name,'quadratic coefficients\\\\n',c)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (quadratic response) -> H2 (cubic response with two temporal modes): the raw cubic achieved 0.0079 scalar MAE and a worst-horizon trajectory MAE of 0.0114 on the 52/20 split.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A quadratic readout in input coordinates suffices.\",\n    \"empirical_witness\": \"On the same 52/20 split, adding cubic terms reduced scalar MAE from 0.1258 to 0.0079 and terminal-state MAE from 0.1171 to 0.0114.\",\n    \"causal_blanket_diagnosis\": \"The quadratic basis omits third-order input dependence; the residual is not explained by trajectory noise.\",\n    \"sublated_pivot\": \"Fit all cubic interactions and constrain trajectories to the two temporal modes supported by the training data.\",\n    \"risk_kind\": \"missing_cubic_interactions\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived nonlinear panel readout\",\n      \"rejected_reason\": \"It missed both gates, and the current panel C first output is quadratic rather than the archived odd-saturation operator.\"\n    },\n    {\n      \"option\": \"Fit two exponential rates explicitly\",\n      \"rejected_reason\": \"The task evaluates the supplied time grid, so the measured rank-two basis is enough unless held-out horizon errors show otherwise.\"\n    }\n  ],\n  \"rationale\": \"Build the candidate from the observed cubic and temporal structure. Check the required split, shuffled folds, and an outer-radius holdout to see whether boundary extrapolation warrants using the panel operators explicitly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4d883ca32d416fe341db425a2d42d8bff6a17afa3a70f489e642070ec16e3e83",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35422.48,
+      "usage_known": true,
+      "prompt_tokens": 23276,
+      "cached_tokens": 9344,
+      "completion_tokens": 1307
+    }
+  ]
+}

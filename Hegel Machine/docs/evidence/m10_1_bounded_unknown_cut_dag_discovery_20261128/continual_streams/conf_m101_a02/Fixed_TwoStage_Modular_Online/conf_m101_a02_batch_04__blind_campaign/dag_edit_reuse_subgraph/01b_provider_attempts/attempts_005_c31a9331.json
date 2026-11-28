@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c31a9331a13b4f878eb51079af1c9efa",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Fixed_TwoStage_Modular_Online__conf_m101_a02_batch_04__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_04__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:35:13.229845+00:00",
+  "ended_at_utc": "2026-11-28T09:35:58.212523+00:00",
+  "request_sha256": "b138a7970cb35a14432272465378f67ece212b4007d1137686a652af5899d9c9",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 41649,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27798,
+    "cached_tokens": 0,
+    "completion_tokens": 1867
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/search_cal.py <<'PY'\\nimport pickle, numpy as np, importlib.util, itertools\\nfrom scipy.optimize import least_squares, minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nspec=importlib.util.spec_from_file_location('sink','/holdout_task/_frozen_nodes/node_01.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nfit=lambda X,Y:np.linalg.lstsq(X,Y,rcond=None)[0]\\ndef aff(x):return np.c_[np.ones(len(x)),x]\\ndef gain(kind,x,k):\\n if kind=='rat':return x/(1+k*x*x)\\n if kind=='soft':return x/(1+k*abs(x))\\n if kind=='tanh':return np.tanh(k*x)\\n if kind=='sin':return np.sin(k*x)\\n if kind=='cube':return x**3\\n if kind=='asinh':return np.arcsinh(k*x)\\n if kind=='pow':return np.sign(x)*abs(x)**k\\ndef loo(d,y):\\n q=np.linalg.qr(d)[0];return np.linalg.norm(y-q@(q.T@y),axis=1)/(1-(q*q).sum(1))\\ndef make_gain(p,key):\\n u,v=p['u'],p[key];out={}; rows=[]\\n for kind in ('rat','soft','tanh','sin','asinh','pow','cube'):\\n  def ds(k,x):return np.c_[aff(x),gain(kind,x,k)]\\n  opt=minimize_scalar(lambda k: np.mean(loo(ds(k,u),v)**2),bounds=(1.05,5) if kind=='pow' else ((1.6,5) if kind=='sin' else (.05,4)),method='bounded'); k=opt.x\\n  err=loo(ds(k,u),v); c=fit(ds(k,u),v);rows.append((np.mean(err**2)**.5,max(err),kind,k));out[kind]=lambda x,kind=kind,k=k,c=c: np.c_[aff(x),gain(kind,x,k)]@c\\n  if kind in ('rat','soft'): print(key,kind,k,'linear and nonlinear',np.round(c,3),flush=True)\\n print(key,'gain LOO',sorted(rows),flush=True);return out\\nB=make_gain(s['panel_b'],'v');C=make_gain(s['panel_c'],'v1'); p=s['panel_c']; C2=lambda x: np.c_[aff(x),x*x]@fit(np.c_[aff(p['u']),p['u']**2],p['v2'])\\np=s['panel_a']; u,v=p['u'],p['v'];A={}\\ndef da(x,mode):\\n r=np.roll(x,-1,axis=1); t=x*r\\n if mode=='cyc':return np.c_[aff(x),t]\\n if mode=='fullq':return np.column_stack([aff(x)]+[x[:,i]*x[:,j] for i,j in itertools.combinations_with_replacement(range(4),2)])\\n if mode=='sinprod':return np.c_[aff(x),np.sin(t)]\\n if mode=='prodsin':return np.c_[aff(x),x*np.sin(r)]\\n if mode=='tanhprod':return np.c_[aff(x),np.tanh(t)]\\n if mode=='aff':return aff(x)\\nfor mode in ('cyc','fullq','sinprod','prodsin','tanhprod','aff'):\\n d=da(u,mode);w=np.ones(len(u))\\n for _ in range(40):\\n  c=fit(w[:,None]*d,w[:,None]*v); e=np.linalg.norm(v-d@c,axis=1);w=1/np.hypot(1,e/max(np.median(e),1e-7))\\n good=np.argsort(e)[:-3]; print('A',mode,'LOO clean',np.quantile(loo(d[good],v[good]),[.5,.9,1]),flush=True)\\n c=fit(d[good],v[good]); A[mode]=lambda x,mode=mode,c=c:da(x,mode)@c\\nxx=s['train']['x']; n=len(xx); tr=s['train']; results=[]\\ndef inv(f,p):\\n u,v=p['u'],p['v']; good=np.linalg.norm(v,axis=1)<4; c=fit(aff(v[good]),u[good]);\\n def inverse(x):\\n  out=[]\\n  for a,b in zip(x,aff(x)@c):out.append(least_squares(lambda z:f(z[None,:])[0]-a,b,max_nfev=80).x)\\n  return np.array(out)\\n return inverse\\nops={'I':lambda x:x,'C':C['soft'],'C2':C2}\\nfor mode in A:ops['A'+mode]=A[mode];ops['a'+mode]=inv(A[mode],s['panel_a'])\\nfor mode in ('rat','soft','tanh','cube','pow'):\\n ops['B'+mode]=B[mode];ops['b'+mode]=inv(B[mode],s['panel_b'])\\nfor first in ops:\\n if first.startswith('b'):continue\\n f=ops[first]; z=f(xx)\\n for second in ops:\\n  if first[0].lower()==second[0].lower() and second!='I':continue\\n  if second[0].lower()=='a' and first!='I':continue\\n  if second.startswith('b') and first not in ('I','acyc','afullq','asinprod'):continue\\n  zz=ops[second](z)\\n  em=[]\\n  for va in (np.arange(n-20,n),np.arange(0,n,4)):\\n   it=np.setdiff1d(np.arange(n),va); st={'eval_times':s['eval_times'],'train':{k:tr[k][it] for k in ('y','traj')}}\\n   try:\\n    o=m.run_node({'__input__':st,'node_00':{'z_tr':zz[it],'z_te':zz[va]}});em.append(tuple(np.mean(abs(o[k]-tr[t][va])) for k,t in [('y_hat','y'),('state_pred','traj')]))\\n   except (ValueError,np.linalg.LinAlgError):break\\n  if len(em)==2:results.append((max(np.ravel(em)),first,second,em))\\nprint('DAG comparisons:',*sorted(results)[:25],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/search_cal.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic polynomial correction → H2 compact panel-specific gains; panel B’s worst leave-one-out residual fell from 0.151 with coordinate cubes to 0.026 with a rational gain.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Commit to the best-fitting calibration basis immediately\",\n      \"rejected_reason\": \"Panel residuals identify plausible map shapes but do not establish the stage order or direction that preserves the frozen sink’s coordinate basis.\"\n    }\n  ],\n  \"rationale\": \"Test sparse cyclic interactions for panel A, profile compact gains for B and C, and compare plausible compositions through the frozen sink. The two held-out splits will distinguish a consistent coordinate handoff from a composition that only looks good on the official split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "344710114add1feb0919cc70c987ad9343335f1ff5975c5d99f14efe8e8ebac9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47622.6,
+      "usage_known": true,
+      "prompt_tokens": 27798,
+      "cached_tokens": 0,
+      "completion_tokens": 1867
+    }
+  ]
+}

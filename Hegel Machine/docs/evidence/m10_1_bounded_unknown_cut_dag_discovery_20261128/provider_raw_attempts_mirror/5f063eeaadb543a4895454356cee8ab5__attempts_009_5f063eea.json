@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f063eeaadb543a4895454356cee8ab5",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b02__Flat_MonolithicArchive_Online__conf_m101_b02_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b02_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:28:47.682843+00:00",
+  "ended_at_utc": "2026-11-28T09:29:13.619154+00:00",
+  "request_sha256": "5a02dcdea0cf0963e9be51f101a743cd76faa260fdb5fe5bd8fa31e1141be88b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45767,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26770,
+    "cached_tokens": 9344,
+    "completion_tokens": 975
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compact_batch.py <<'PY'\\nexec(open('/tmp/audit_batch.py').read().split('for name,a,b in folds:')[0])\\nterms=[k for degree in range(4) for k in combinations_with_replacement(range(4),degree)]\\ncubic=[k for k in terms if len(k)==3 and any(set(pair).issubset(k) for pair in support)]\\nu=forward_b(inverse_a(x)); ut=forward_b(inverse_a(s['test']['x']))\\ndef design(u,terms): return np.column_stack([u[:,k].prod(1) for k in terms])\\nbase=[k for k in terms if len(k)<2]; core=design(u,base+support+cubic); wide=design(u,[k for k in terms if len(k)<3]+cubic)\\n# Hold out rows nearest the actual test covariate extremes, using inputs only.\\nfarthest=np.argsort(np.max(abs((u-u.mean(0))/u.std(0)),axis=1)); folds.append(('latent_axes',farthest[:52],farthest[52:]))\\nfor name,a,b in folds:\\n print(name, 'raw',metric(pred(f,a,b),b).round(5),'wide',metric(pred(wide,a,b),b).round(5),'compact',metric(pred(core,a,b),b).round(5),'compact-exp',metric(pred(core,a,b,'exp'),b).round(5))\\nfor label,g,gt in [('compact',core,design(ut,base+support+cubic)),('wide',wide,design(ut,[k for k in terms if len(k)<3]+cubic)),('raw',f,m._design(s['test']['x']))]:\\n vh=np.linalg.norm(gt@np.linalg.pinv(g),axis=1); print(label,'test leverage median, max',np.median(vh),max(vh))\\np=s['panel_c']; d=m._design(p['u'])[:,:15]\\nfor k in ('v1','v2'):\\n co=ls(d,p[k]); print(k,'quadratic RMS',np.sqrt(np.mean((d@co-p[k])**2)), 'quadratic term norms',np.linalg.norm(co[5:],axis=1).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compact_batch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (panel-supported cubic with unrestricted quadratic terms) -> H2 (shared panel support at both degrees): the current panel challenger scores 0.00967 scalar MAE and 0.01780 worst-horizon trajectory MAE on the radial slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Shrink the unrestricted cubic terms toward the panel model\",\n      \"rejected_reason\": \"Shrinkage gave back part of the radial scalar gain without improving worst-horizon error.\"\n    }\n  ],\n  \"rationale\": \"The omitted quadratic coefficients are at the noise scale in calibrated coordinates. Test whether removing them improves generalization on both radial and latent-axis holdouts, and compare test leverage to detect unstable extrapolation before changing the deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c052646c5829782855418de20890747d8d210fcda5de437188e1f1a04a13b72c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28531.0,
+      "usage_known": true,
+      "prompt_tokens": 26770,
+      "cached_tokens": 9344,
+      "completion_tokens": 975
+    }
+  ]
+}

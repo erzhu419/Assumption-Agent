@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "14469b7504e34307a0575d6b3109bb14",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__stageS__conf_m101_b01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_00__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:13:22.756562+00:00",
+  "ended_at_utc": "2026-11-28T09:14:00.530384+00:00",
+  "request_sha256": "2da4c50ff91f31953540de92f74fb92f7a2357e9116327c4712c307436ea46bd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52387,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33985,
+    "cached_tokens": 10880,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/shape_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import hyp2f1\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; x=m._coordinates(s,tr['x']); y,z=tr['y'],tr['traj']; t=s['eval_times']; pair=np.triu_indices(4,1)\\n\\ndef features(p,kind):\\n    if kind.endswith('_shared'):\\n        a=x*np.exp(p[0])+p[1:5]; tail=p[5:]\\n    else:\\n        a=x*np.exp(p[:4])+p[4:8]; tail=p[8:]\\n    if kind.startswith('power'):\\n        h=a*hyp2f1(.5,tail[0],1.5,-a*a)\\n    elif kind.startswith('rootsat'):\\n        h=a/np.sqrt(1+a*a)\\n    elif kind.startswith('asinh'):\\n        h=np.arcsinh(a)\\n    elif kind.startswith('tanh'):\\n        h=np.tanh(a)\\n    else:\\n        h=np.arctan(a)\\n    base=np.c_[np.ones(len(x)),h,h*h]\\n    dp=h[:,pair[0]]*h[:,pair[1]]\\n    if '_nol' in kind:\\n        return np.c_[base,dp],base\\n    if '_rational' in kind:\\n        return np.c_[base,x,dp],np.c_[base,x]\\n    return np.c_[base,x,dp],np.c_[base,x,dp] if not '_compact' in kind else np.c_[base,x]\\n\\ndef evaluate(kind,i,j):\\n    b=m._time_fit(t,z[i]); q=z@np.linalg.pinv(b); targets=np.c_[y,q]; norm=targets[i].std(0)\\n    p0=np.r_[np.log(2.2),np.zeros(4)] if kind.endswith('_shared') else np.r_[np.full(4,np.log(2.2)),np.zeros(4)]\\n    k=len(p0)-4; lo=np.r_[np.full(k,-2.5),np.full(4,-1.5)]; hi=np.r_[np.full(k,1.8),np.full(4,1.5)]\\n    if kind.startswith('power'):\\n        p0=np.r_[p0,1.]; lo=np.r_[lo,.2]; hi=np.r_[hi,3.5]\\n    def predict(p):\\n        d,g=features(p,kind)\\n        return np.c_[d@np.linalg.lstsq(d[i],y[i],rcond=1e-9)[0],g@np.linalg.lstsq(g[i],q[i],rcond=1e-9)[0]]\\n    opt=least_squares(lambda p:((predict(p)[i]-targets[i])/norm).ravel(),p0,bounds=(lo,hi),max_nfev=100)\\n    p=predict(opt.x); errors=np.c_[abs(p[:,0]-y),abs(p[:,1:]@b-z)]\\n    return [errors[i,0].mean(),errors[i,1:].mean(0).max(),errors[j,0].mean(),errors[j,1:].mean(0).max()],opt.x\\n\\nrng=np.random.default_rng(912); splits=[np.arange(72),np.argsort(np.linalg.norm(x,axis=1))]+[rng.permutation(72) for _ in range(4)]\\nnp.set_printoptions(precision=5,suppress=True)\\nfor kind in ('atan','atan_compact','atan_compact_shared','atan_nol','atan_nol_shared','power','power_compact','power_compact_shared','power_nol','power_nol_shared','rootsat_compact','rootsat_nol','asinh_compact','tanh_compact'):\\n    results=[evaluate(kind,a[:52],a[52:]) for a in splits]; rows=np.array([r[0] for r in results]); print(kind,'ordered fit/val',rows[0],'radius val',rows[1,2:],'random avg/max',rows[2:,2:].mean(0),rows[2:,2:].max(0),'p',results[0][1],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shape_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine baseline → inverse calibration, panel-B coordinates, and nonlinear readout with two saturation modes; the solver gives 0.00957 scalar MAE on the required split and 0.01753 scalar / 0.01830 worst-horizon MAE on the high-radius split.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Add an unconstrained polynomial correction\",\"rejected_reason\":\"The fitted state cross terms are small; testing a simpler state basis and the saturation shape is more useful for extrapolation.\"}],\"rationale\":\"Keep the passing artifact unchanged while testing whether a shared saturation shape or fewer state interactions lower the high-radius error without worsening the required split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "966fe278e90ad6d703d708087313e32486294fda7d7ef56bc23e015df4276b0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40339.4,
+      "usage_known": true,
+      "prompt_tokens": 33985,
+      "cached_tokens": 10880,
+      "completion_tokens": 1418
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f38f63d312cd40e9bafdb0a035921dea",
+  "call_seq": 6,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b01__Flat_MonolithicArchive_Online__conf_m101_b01_batch_02__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b01_batch_02__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:26:58.177427+00:00",
+  "ended_at_utc": "2026-11-28T09:27:35.565175+00:00",
+  "request_sha256": "01f71d9f5010ee2228372151f9d1c3bb413d07efd377e0c9f6b1c180cb20fdaa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45320,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29640,
+    "cached_tokens": 9344,
+    "completion_tokens": 1534
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/from scipy.special import erf/,$d' /tmp/structure.py >/tmp/readout.py; cat >>/tmp/readout.py <<'PY'\\nfrom scipy.optimize import minimize_scalar\\nc=s['panel_c']; u=c['u']; v=c['v2']; i,j=np.array([(0,1),(0,3),(1,2),(2,3)]).T\\nmix=lambda a:a[:,i]*a[:,j]\\nz=coords['AB forward']; W=ls(aff(mix(u)),c['v1']); q=aff(mix(z))@W\\np=q[:,[0,1]]*q[:,[2,3]]\\nix=np.arange(72); order=np.argsort(np.linalg.norm(z,axis=1)); folds=[(ix[:52],ix[52:]),(order[:56],order[56:])]+[(np.setdiff1d(ix,b),b) for b in np.array_split(np.random.default_rng(234).permutation(72),5)]\\ndef score(name, design):\\n e=[]; w=[]\\n for a,b in folds:\\n  d=design(a); w.append(ls(d[a],y[a])); e.append(np.mean(abs(d[b]@w[-1]-y[b])))\\n d=design(ix); r=y-d@ls(d,y); print(name, '52/20, tail, worst random, fit',np.r_[e[:2],max(e[2:]),np.mean(abs(r))]); return r\\nr=score('full q quadratic',lambda a:poly(q,2)); print('y residual largest',np.sort(abs(r))[-10:]); rr=score('two q crosses',lambda a:np.c_[aff(q),p]); print('two-cross weights',ls(np.c_[aff(q),p],y)); print('two-cross residual largest',np.sort(abs(rr))[-10:]); print('correlation with q cubic',np.corrcoef(np.c_[rr,poly(q,3)[:,15:]].T)[0,1:]);\\nfor name,fun in [('cos',lambda x,k:np.cos(np.sqrt(k)*x)),('rational',lambda x,k:1/(1+k*x*x)),('exp',lambda x,k:np.exp(-k*x*x)),('sqrt',lambda x,k:(1+k*x*x)**-.5),('log',lambda x,k:np.log1p(k*x*x)),('quartic',lambda x,k:x*x+k*x**4)]:\\n def d(x,k): return np.c_[aff(x),fun(x,k)]\\n def cost(k):\\n  D=d(u,k); return np.mean((D@ls(D,v)-v)**2)\\n fit=minimize_scalar(cost,bounds=(.002,3),method='bounded'); k=fit.x; D=d(u,k); w=ls(D,v); print('c2',name,k,fit.fun**.5); g=d(z,k)@w; h=d(q,k)@w\\n for tag,F in [('q+v2(z)',np.c_[aff(q),g]),('q+p+v2(z)',np.c_[aff(q),p,g]),('q+p+v2(q)',np.c_[aff(q),p,h])]:\\n  score(tag,lambda a:F)\\nfor name,fun in [('sin',lambda x,k:np.sin(k*x)/k),('tanh',lambda x,k:np.tanh(k*x)/k),('rational',lambda x,k:x/(1+k*x*x)),('atan',lambda x,k:np.arctan(k*x)/k)]:\\n for mode in ('cross','main','both'):\\n  def design(a):\\n   def d(k):return np.c_[aff(q) if mode=='cross' else aff(fun(q,k)),p if mode=='main' else fun(p,k)]\\n   def loss(k):\\n    D=d(k)[a]; return np.mean((D@ls(D,y[a])-y[a])**2)\\n   return d(minimize_scalar(loss,bounds=(.001,1.6),method='bounded').x)\\n  score(name+' '+mode,design)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/readout.py | sed -n '/full q quadratic/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full quadratic scalar readout on C v1) -> H2 (two dominant cross terms, with C v2 retained only if it improves held-out error); current scalar MAE is 0.00606 on 52/20 and 0.00700 on the worst random fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add an unrestricted cubic readout\",\n      \"rejected_reason\": \"It reduced training error but raised worst random-fold scalar MAE from 0.00700 to 0.02547.\"\n    }\n  ],\n  \"rationale\": \"The scalar quadratic has two dominant cross terms. Test whether those terms suffice, whether a constrained saturation improves them, and whether the independently fitted C v2 operator explains residuals. Include a large-input holdout to check extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9e1d4df67711a3f280821f26679be8a298543c857e36f8a4d7d5aba68b9efac2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40024.25,
+      "usage_known": true,
+      "prompt_tokens": 29640,
+      "cached_tokens": 9344,
+      "completion_tokens": 1534
+    }
+  ]
+}

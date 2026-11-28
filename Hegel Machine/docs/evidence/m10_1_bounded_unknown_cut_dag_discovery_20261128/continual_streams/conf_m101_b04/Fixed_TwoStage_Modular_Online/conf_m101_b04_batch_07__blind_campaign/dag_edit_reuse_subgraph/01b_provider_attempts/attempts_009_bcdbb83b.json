@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcdbb83b9b2e40629af5f893b8cb49a2",
+  "call_seq": 9,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b04__Fixed_TwoStage_Modular_Online__conf_m101_b04_batch_07__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b04_batch_07__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:47:27.325458+00:00",
+  "ended_at_utc": "2026-11-28T09:48:03.322597+00:00",
+  "request_sha256": "0b9ca7334a1ae46e7687b87dd9b579d15bbd2b929cc93ee154adb4ff1284d6c8",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 63636,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36629,
+    "cached_tokens": 9344,
+    "completion_tokens": 1409
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/node_01.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _panel_operator(panel, z):\\n    u, v = panel['u'], panel['v']\\n\\n    def design(x, p):\\n        return np.column_stack((np.ones(len(x)), np.sin(p[0] * x) + p[1] * x))\\n\\n    def residual(p):\\n        a = design(u, p)\\n        return (a @ _fit(a, v) - v).ravel()\\n\\n    p = least_squares(residual, [2.8, -2.5], bounds=([1., -6.], [4.5, -.5])).x\\n    return design(z, p) @ _fit(design(u, p), v)\\n\\n\\ndef _scalar_readout(g, y):\\n    n = len(y)\\n    base = np.column_stack((np.ones(len(g)), g, g[:, 0] * g[:, 1] * g[:, 3]))\\n    q = np.linalg.qr(base[:n], mode='reduced')[0]\\n\\n    def project(a):\\n        return a - q @ (q.T @ a)\\n\\n    r = project(y)\\n\\n    def residual(p):\\n        a = project(np.sin(g[:n] @ p[:4] + p[4]))\\n        return a * (a @ r / max(a @ a, 1e-14)) - r\\n\\n    starts = np.random.default_rng(2).normal(size=(12, g.shape[1] + 1))\\n    fits = (least_squares(residual, start, max_nfev=200) for start in starts)\\n    p = min(fits, key=lambda result: result.cost).x\\n    a = np.column_stack((base, np.sin(g @ p[:4] + p[4])))\\n    return a[n:] @ _fit(a[:n], y)\\n\\n\\ndef run_node(inputs: dict) -> dict:\\n    data = inputs['node_00']\\n    y, traj = data['y'], data['traj']\\n    n = len(y)\\n    z = np.concatenate((data['z_tr'], data['z_te']), axis=0)\\n    g = _panel_operator(data['panel_b'], z)\\n    y_hat = _scalar_readout(g, y)\\n    a = np.column_stack((np.ones(len(z)), z, g))\\n    state_pred = a[n:] @ _fit(a[:n], traj)\\n    final = state_pred[:, -1]\\n    diagnostics = np.array([y_hat.mean(), y_hat.std(), final.mean(), final.std()])\\n    return dict(y_hat=y_hat, state_pred=state_pred, diagnostics_vec=diagnostics)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/test_dag_candidate.py\\nsed '/np.set_printoptions/,$d' /tmp/probe_dag.py > /tmp/stress_node.py\\ncat >> /tmp/stress_node.py <<'PY'\\nimport sys\\npath=sys.argv[1] if len(sys.argv)>1 else p+'node_01.py'\\nnode=runpy.run_path(path)['run_node']\\nn=len(z)\\nfolds=list(np.array_split(np.random.default_rng(17).permutation(n),5))+[np.arange(n-20,n), np.argsort(np.max(abs(z),axis=1))[-15:]]\\nfor i,h in enumerate(folds):\\n j=np.setdiff1d(np.arange(n),h)\\n d=node({'node_00':dict(a,z_tr=z[j],z_te=z[h],y=y[j],traj=T[j])})\\n e=np.abs(d['state_pred']-T[h]); f=d['y_hat']; end=d['state_pred'][:,-1]\\n np.testing.assert_allclose(d['diagnostics_vec'],[f.mean(),f.std(),end.mean(),end.std()]); assert np.isfinite(e).all() and np.isfinite(f).all()\\n print(f'slice {i}: scalar {np.mean(abs(f-y[h])):.6f}, trajectory {e.mean():.6f}, worst horizon {e.mean(axis=0).max():.6f}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_node.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single projected sinusoid -> H2 projected sinusoid plus a three-channel product; the probe reached 0.02891 official-split scalar MAE and 0.05205 worst-slice scalar MAE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit two projected sinusoids\",\n      \"rejected_reason\": \"The probe missed the official scalar threshold at 0.05408 MAE and showed near-canceling coefficients.\"\n    }\n  ],\n  \"rationale\": \"Save the best verified readout structure without changing the frozen node. Run the public test and refit the exact artifact across random and high-coordinate holdouts to detect implementation drift or a remaining scalar boundary error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "810e7cb397e6feb33143dc88c01260498cf0db923d415eb74e376ffbb06d84e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38610.81,
+      "usage_known": true,
+      "prompt_tokens": 36629,
+      "cached_tokens": 9344,
+      "completion_tokens": 1409
+    }
+  ]
+}

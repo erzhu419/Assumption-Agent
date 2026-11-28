@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8cf6d8cd1a9341f3a6109ae102e931c3",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Fixed_TwoStage_Modular_Online__conf_m101_b03_batch_03__mono_fallback_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_03__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:42:05.036619+00:00",
+  "ended_at_utc": "2026-11-28T09:42:35.996275+00:00",
+  "request_sha256": "cf24b2ad17dd4b0f84b0b9b17bae8d310794702c3309d70d2061cc87456e79bc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24396,
+    "cached_tokens": 9344,
+    "completion_tokens": 1190
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/conf_m101_b03_batch_02_solver.py; cat > /tmp/probe03.py <<'PY'\\nimport pickle,sys,importlib.util\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\nfrom scipy.spatial.distance import cdist\\nfrom sklearn.preprocessing import PolynomialFeatures\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; tr=s['train']; n=len(tr['x']); t=s['eval_times']; T=tr['traj']; y=tr['y']; x=tr['x']; a=np.arange(52); b=np.arange(52,72)\\ndef load(i):\\n p=f'/tmp/hegel_continual_archive/conf_m101_b03_batch_0{i}_solver.py'; sp=importlib.util.spec_from_file_location('arc',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); return m\\nm=load(1); c=m._calibrate(s['panel_a']); z=m._inverse(x,c); print('calibration',c.round(5)); X=np.c_[np.ones(n),z]; P=s['panel_b']; B=X@np.linalg.lstsq(np.c_[np.ones(len(P['u'])),P['u']],P['v'],rcond=None)[0];\\nfor k in (2,3,4):\\n def basis(r): return -np.expm1(-t[:,None]*r)\\n def res(r):\\n  h=basis(r); return (h@np.linalg.lstsq(h,T[a].T,rcond=None)[0]-T[a].T).ravel()\\n opt=least_squares(res,np.geomspace(.2,5,k),bounds=(.001,25),max_nfev=250); h=basis(opt.x); print('time',k,opt.x,np.sqrt(np.mean(res(opt.x)**2)),np.sqrt(np.mean((T[b]-T[b]@np.linalg.pinv(h.T)@h.T)**2)))\\nfor i in range(3):\\n try:\\n  q=s.copy();q['train']={k:v[:52] if k!='summary' else v for k,v in tr.items()};q['test']={'x':x[b]};out=load(i).solve_batch(q);print('archive',i,np.mean(abs(out['y_hat']-y[b])),np.mean(abs(out['state_pred']-T[b])))\\n except Exception as e:print('archive error',i,e)\\nfor name,F in [('raw',x),('latent',z),('B',B),('latent+B',np.c_[z,B])]:\\n F=(F-F[a].mean(0))/F[a].std(0); D=cdist(F,F,'sqeuclidean')/F.shape[1]; Y=np.c_[y,T]; results=[]\\n for label,K in [(f'p{d}',(1+F@F.T/F.shape[1])**d) for d in range(1,6)]+[(f'r{g}',np.exp(-g*D)) for g in (.05,.15,.4,1,2)]:\\n  for r in (1e-7,1e-4,.003,.03,.15):\\n   pred=Y[a].mean(0)+K[np.ix_(b,a)]@solve(K[np.ix_(a,a)]+r*np.eye(len(a)),Y[a]-Y[a].mean(0),assume_a='pos'); e=np.mean(abs(pred-Y[b]),axis=0); results.append((e[0],e[1:].mean(),label,r))\\n print(name,'y',sorted(results)[:3],'T',sorted(results,key=lambda p:p[1])[:3])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration → H2 invertible cyclic cubic calibration with separate readout and dynamics; structured calibration is supported, but the archived 56/16 y MAE remains 0.206015.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse an archived solver unchanged\",\n      \"rejected_reason\": \"Its operator assumptions must first be tested on this campaign's required split.\"\n    }\n  ],\n  \"rationale\": \"Fit temporal bases only on the first 52 rows to check whether the third mode improves held-out trajectories. Compare archived and calibrated-coordinate baselines to determine whether the remaining error requires new operator or readout terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ab1a60fc7833e4c515c3bf5ebc3752e59a15617d6ed4b3d3189d1323371d17ad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33581.89,
+      "usage_known": true,
+      "prompt_tokens": 24396,
+      "cached_tokens": 9344,
+      "completion_tokens": 1190
+    }
+  ]
+}

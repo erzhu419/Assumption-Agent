@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f81a8bbcd4634d7fb06c2e9415d2a245",
+  "call_seq": 2,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a01__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a01_batch_05__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a01_batch_05__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:36:13.505666+00:00",
+  "ended_at_utc": "2026-11-28T09:36:31.419255+00:00",
+  "request_sha256": "c2f8e9658b42e6a1832fb078f7687d51903b5f0d942ee8c5391851ab326146ac",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 12376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14874,
+    "cached_tokens": 9344,
+    "completion_tokens": 619
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '40,190p' test_dag_candidate.py && cat validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment robust IRLS' 2>&1 | head -20; cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np,sys\\nsys.path.insert(0,'/holdout_task/_frozen_nodes'); from node_00 import run_node\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; q=run_node({'__input__':s})\\nnp.set_printoptions(precision=4,suppress=True)\\nfor k,d in s.items():\\n if isinstance(d,dict):\\n  for key,a in d.items(): print(k,key,a.shape,'min',np.min(a,axis=0),'max',np.max(a,axis=0),'first',a[:2])\\n else: print(k,d)\\nfor k in ('panel_b','panel_c'):\\n d=s[k]; x=d['u']; lin=np.column_stack([np.ones(len(x)),x]); quad=np.column_stack([lin]+[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)])\\n for key,y in d.items():\\n  if key=='u': continue\\n  for X in (lin,quad):\\n   p=np.linalg.pinv(X); e=y-X@(p@y); print(k,key,X.shape[1],'loo',np.mean(abs(e/(1-np.sum(X*p.T,axis=1))[:,None]),axis=0),'coef', (p@y).T)\\nprint('q_tr',q['q_tr'][:4],q['q_tr'].std(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace the response-only feature basis with calibrated features while retaining the frozen trajectory inputs; reported baseline response CV MAE is 0.054975.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Read the evaluator to recover the fold and output contract. Panel leave-one-out residuals distinguish useful low-order calibration terms from interpolation artifacts and determine whether the response needs a nonlinear panel map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "0ece95f3cc7e584e2f2c0d5e0af4afaa56d651ad3b729d69410ec96e401ddadc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20504.63,
+      "usage_known": true,
+      "prompt_tokens": 14874,
+      "cached_tokens": 9344,
+      "completion_tokens": 619
+    }
+  ]
+}

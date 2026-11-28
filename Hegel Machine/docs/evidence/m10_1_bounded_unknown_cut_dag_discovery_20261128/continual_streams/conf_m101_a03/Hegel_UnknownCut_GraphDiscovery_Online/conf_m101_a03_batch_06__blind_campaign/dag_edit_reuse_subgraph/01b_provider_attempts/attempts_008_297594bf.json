@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "297594bf717b403f935e9e30c5d41ad2",
+  "call_seq": 8,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a03__Hegel_UnknownCut_GraphDiscovery_Online__conf_m101_a03_batch_06__dag_edit_reuse_subgraph__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a03_batch_06__blind_campaign__reuse_subgraph",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:51:19.403553+00:00",
+  "ended_at_utc": "2026-11-28T09:52:04.701883+00:00",
+  "request_sha256": "7b25d8b03a4f8338c19917e8ff85f21108f02912ab2d265060d104c16163629b",
+  "system_prompt_chars": 5284,
+  "stdin_payload_chars": 59693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32010,
+    "cached_tokens": 9344,
+    "completion_tokens": 1821
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/shared_index.py <<'PY'\\nimport sys,pickle,itertools as it\\nsys.path.insert(0,'/holdout_task')\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nimport node_00 as n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['panel_a']; u=n._invert(s['train']['x'],n._fit(a['u'],a['v'])); t=s['train']['traj']; y=s['train']['y']; d=u.shape[1]\\ndef aff(x): return np.c_[np.ones(len(x)),x]\\ndef terms(x,g): return np.column_stack([np.prod(x[:,p],axis=1) for p in it.combinations_with_replacement(range(d),g)])\\nA=aff(u); Q=terms(u,2); C=terms(u,3); D=np.c_[A,Q]; rng=np.random.default_rng(429)\\nsplits=[(np.arange(52),np.arange(52,72))]+[(j[:52],j[52:]) for j in [rng.permutation(len(u)) for _ in range(4)]]\\ndef pred(p,X,link):\\n q=X@p[:-3]; o,b,f=p[-3:]; return q+b*(np.tanh(f*q+o) if link=='tanh' else np.sin(f*q+o))\\nerrs={}\\nfor num,(tr,te) in enumerate(splits):\\n m=np.linalg.svd(t[tr],full_matrices=False)[2]; tc=np.linalg.lstsq(D[tr],t[tr]@m[:2].T,rcond=None)[0]; h=Q@tc[5:,0]; h/=np.std(h[tr]); S=D@tc[:,0]; S=(S-np.mean(S[tr]))/np.std(S[tr]); forms={'affine+h':np.c_[A,h], 'quad':D,'quad+h*u':np.c_[D,h[:,None]*u], 'quad+h*u+h2':np.c_[D,h[:,None]*u,h**2], 'quad+S*u+S2':np.c_[D,S[:,None]*u,S**2], 'quad+full_cubic':np.c_[D,C]}\\n for name,F in forms.items():\\n  for link in ['tanh','sin']:\\n   fits=[]; Ftr=F[tr]; yy=y[tr]; ini=np.linalg.lstsq(Ftr,yy,rcond=None)[0]\\n   for f in (.7,1.7,3.):\\n    for b in (.2,.45):\\n     fits.append(least_squares(lambda p:pred(p,Ftr,link)-yy,np.r_[ini,0,b,f],bounds=(np.r_[np.full(len(ini)+2,-np.inf),.12],np.r_[np.full(len(ini)+2,np.inf),4.]),max_nfev=150))\\n   p=min(fits,key=lambda f:f.cost).x; loss=np.mean(abs(pred(p,F[te],link)-y[te])); errs.setdefault((name,link),[]).append(loss)\\n   if num==0: print(name,link,'train,tail',round(np.mean(abs(pred(p,Ftr,link)-yy)),6),round(loss,6),'link params',np.round(p[-3:],4))\\n if num==0:\\n  print('regression residual per time',np.std(t[tr]-D[tr]@np.linalg.lstsq(D[tr],t[tr],rcond=None)[0],axis=0)); print('trajectory top two quadratic scores coefficients',np.round(tc[5:].T,4))\\nfor key,es in errs.items(): print(key,np.round(es,5),'worst',round(max(es),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -B /tmp/shared_index.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted quadratic readout index → H2 a shared quadratic trajectory factor generates higher-order readout interactions; the quadratic-index tail readout MAE is 0.048740.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use Panel C's second map as the coordinate correction\",\n      \"rejected_reason\": \"It gives a held-out trajectory MAE of 0.371307, so it does not explain the shared trajectory structure.\"\n    }\n  ],\n  \"rationale\": \"The trajectory’s quadratic coefficients are nearly rank one. If that factor is mixed into the latent coordinates, the frozen pair products generate factor-by-channel and squared-factor terms. Fit the factor and readout link inside each training fold and compare against unrestricted cubics before choosing a handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3a886f64f60f5888fcd7101d9abb9020a8044cbbeccc71e88b626afae4a1abfe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47818.85,
+      "usage_known": true,
+      "prompt_tokens": 32010,
+      "cached_tokens": 9344,
+      "completion_tokens": 1821
+    }
+  ]
+}

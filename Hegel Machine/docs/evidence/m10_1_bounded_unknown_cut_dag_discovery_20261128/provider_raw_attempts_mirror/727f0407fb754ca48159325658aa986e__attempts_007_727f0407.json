@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "727f0407fb754ca48159325658aa986e",
+  "call_seq": 7,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a04__Flat_MonolithicArchive_Online__conf_m101_a04_batch_08__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a04_batch_08__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:54:13.799742+00:00",
+  "ended_at_utc": "2026-11-28T09:54:34.076578+00:00",
+  "request_sha256": "9b95afeecb3091a5727ab0c34f587e4a2225138d506ce14ec00c0dd0899d89c1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30001,
+    "cached_tokens": 9344,
+    "completion_tokens": 573
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$f; grep -nE 'def .*(read|scalar|feature)|np\\\\.(sin|cos|log|exp|tanh)|fast =|slow =' \\\"$f\\\" | head -26; done; python3 - <<'PY'\\np='/tmp/hegel_continual_archive/conf_m101_a04_batch_06_solver.py'; s=open(p).read(); s=s.replace('return fit_cov(p,True)','print(\\\"kernel weights\\\",sorted(enumerate(p.round(2)),key=lambda a:-a[1])[:22]); return fit_cov(p,True)');open('/tmp/weights.py','w').write(s)\\nPY\\ncat >/tmp/weightcheck.py <<'PY'\\nimport numpy as np\\nimport weights,temporal as m\\nn=52;s=m.s; raw=m.raw[:72];x=m.x[:72];c=m.c[:72];d=m.d[:72];Y=np.c_[m.y,m.T];\\nfor desc,tar in [('joint',Y),('scalar',Y[:,:1]),('trajectory',np.c_[Y[:,1],Y[:,1:]])]:\\n p=weights._joint(s,raw,x,c,d,tar[:n]); print(desc,np.mean(abs(p-tar[n:]),0))\\nprint('t',m.tt)\\nPY\\npython3 /tmp/weightcheck.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shared residual kernel → H2: isolate the spatial terms and assess separate scalar and trajectory fits; archive 52/20 MAEs are 0.02350 and 0.03808.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Independent readout fits test whether a shared covariance is limiting the trajectory prediction. The fitted kernel weights will identify which algebraic families merit explicit follow-up.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e2582207c12555c1359b5f34c0224b96665935a86b39d6f93452c05dfc589926",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20233.73,
+      "usage_known": true,
+      "prompt_tokens": 30001,
+      "cached_tokens": 9344,
+      "completion_tokens": 573
+    }
+  ]
+}

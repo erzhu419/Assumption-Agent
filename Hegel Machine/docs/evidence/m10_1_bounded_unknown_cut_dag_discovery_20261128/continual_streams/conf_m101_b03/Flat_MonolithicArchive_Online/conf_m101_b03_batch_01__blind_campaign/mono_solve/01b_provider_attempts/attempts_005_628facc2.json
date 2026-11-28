@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "628facc24b4b44628409edd8db8d66f8",
+  "call_seq": 5,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_b03__Flat_MonolithicArchive_Online__conf_m101_b03_batch_01__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_b03_batch_01__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:19:37.113283+00:00",
+  "ended_at_utc": "2026-11-28T09:20:19.878875+00:00",
+  "request_sha256": "06a2c3aa2726dd06b289271f9a127d95c86094ea37117472224b962d4a82d1d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34777,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24559,
+    "cached_tokens": 9344,
+    "completion_tokens": 1839
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe101.py <<'PY'\\nimport pickle,numpy as np,itertools\\nfrom scipy.optimize import least_squares\\nfrom scipy.spatial.distance import cdist\\nS=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\ndef af(x):return np.c_[np.ones(len(x)),x]\\ndef fit(a,y):return np.linalg.lstsq(a,y,rcond=None)[0]\\ndef proj(a,y):return y-a@fit(a,y)\\ndef loo(a,y): return np.sqrt(np.mean((proj(a,y)/(1-(np.linalg.qr(a)[0]**2).sum(1))[:,None])**2))\\ndef cal(x):return np.c_[af(x),x*np.roll(x,-1,axis=1)]\\na=S['panel_a'];u,v=a['u'],a['v'];w=fit(af(u),v)\\nfor _ in range(25):\\n q=np.minimum(1,.05/np.maximum(np.linalg.norm(v-af(u)@w,axis=1),1e-12))**.5;w=fit(af(u)*q[:,None],v*q[:,None])\\nk=np.linalg.norm(v-af(u)@w,axis=1)<2;u,v=u[k],v[k]\\nfor i in range(4):\\n x,z=u[:,i],u[:,(i+1)%4];y=v[:,i:i+1]; p=np.c_[np.ones(len(x)),x,z,x*z];print('A',i,'base',loo(p,y),fit(p,y).ravel());\\n for name,q in [('squares',[x*x,z*z]),('cubes',[x**3,z**3]),('mixed',[x*x*z,x*z*z]),('all cubic',[x*x,z*z,x**3,z**3,x*x*z,x*z*z]),('sin',[np.sin(2*x),np.sin(2*z)]),('tanh',[np.tanh(2*x),np.tanh(2*z)]),('other coords',[u[:,(i+2)%4],u[:,(i+3)%4]])]:\\n  g=np.c_[p,np.array(q).T]; print(name,round(loo(g,y),6),fit(g,y).ravel().round(4))\\n for nm,design,init in [('sat',lambda a: np.c_[p,x*z/(1+a[0]*x*x)], [.3]),('selftanh',lambda a: np.c_[p,np.tanh(a[0]*x)], [1.]),('nexttanh',lambda a: np.c_[p,np.tanh(a[0]*z)], [1.]),('pairtanh',lambda a: np.c_[p,np.tanh(a[0]*x+a[1]*z)], [1.,1.]),('pairsin',lambda a: np.c_[p,np.sin(a[0]*x+a[1]*z)], [1.,1.])]:\\n  opt=least_squares(lambda a:proj(design(a),y).ravel(),init,max_nfev=150); print(nm,round(loo(design(opt.x),y),6),opt.x.round(4))\\nC=S['panel_c'];cu=C['u'];cv=C['v1']; cf=lambda q: np.c_[af(cu),np.tanh(q*cu)]; opt=least_squares(lambda q:proj(cf(q),cv).ravel(),[2.3]*4,bounds=(.1,8));print('C per-channel tanh',opt.x,loo(cf(opt.x),cv)); print(fit(cf(opt.x),cv).round(4))\\n# Compare candidate coordinates using an identical smooth interpolator and the same held-out rows.\\nx=S['train']['x']; n=len(x); B=fit(af(S['panel_b']['u']),S['panel_b']['v']); A=fit(cal(u),v); Al=fit(af(u),v); inv=fit(af(v),u); iv0=af(x)@inv; iv=least_squares(lambda z:(cal(z.reshape(-1,4))@A-x).ravel(),iv0.ravel(),max_nfev=60).x.reshape(-1,4); print('inverse max residual, range',np.max(np.abs(cal(iv)@A-x)),iv.min(0),iv.max(0)); C1=fit(cf(opt.x),cv); C2=fit(np.c_[af(cu),np.cos(1.27*cu)],C['v2']); Y=np.c_[S['train']['y'],S['train']['traj']]; X={}\\nfor nm,xx in [('raw',x),('A',cal(x)@A),('Ai',iv),('Ail',iv0)]:\\n X[nm]=xx; X[nm+'B']=af(xx)@B; X[nm+'C1']=np.c_[af(xx),np.tanh(opt.x*xx)]@C1; X[nm+'C2']=np.c_[af(xx),np.cos(1.27*xx)]@C2\\n X[nm+'BC1']=np.c_[af(X[nm+'B']),np.tanh(opt.x*X[nm+'B'])]@C1\\n X[nm+'BC2']=np.c_[af(X[nm+'B']),np.cos(1.27*X[nm+'B'])]@C2\\nfor nm,xx in X.items():\\n q=(xx-xx[:52].mean(0))/xx[:52].std(0); d=cdist(q,q,'sqeuclidean'); ps=[]\\n for L in [1,2,4,8]:\\n  r=np.sqrt(5*d)/L; K=(1+r+r*r/3)*np.exp(-r)+.1*(1+q@q.T); K.flat[::n+1]+=.0001\\n  p=K[52:,:52]@np.linalg.solve(K[:52,:52],Y[:52]); e=np.abs(p-Y[52:]);ps.append((round(e[:,0].mean(),4),round(e[:,1:].mean(),4)))\\n print(nm,ps)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe101.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (raw-coordinate regression) -> H2 (cyclic calibration and auxiliary-coordinate ablations); archived worst public MAE is 0.083359.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"After removing sparse outliers, panel A is adequately described by an affine map.\",\n    \"empirical_witness\": \"On the same 45 clean rows, leave-one-row-out RMSE falls from 0.2030 to 0.0630 when cyclic pair products are added; standalone squares and cubes do not improve the affine fit.\",\n    \"causal_blanket_diagnosis\": \"Outlier removal exposes a systematic interaction between neighbors rather than removing the calibration residual.\",\n    \"sublated_pivot\": \"Retain robust row selection and fit sparse cyclic interactions, then compare forward and inverse calibration coordinates on held-out training rows.\",\n    \"risk_kind\": \"Operator misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Assume all reconstructed panel operators are active\",\n      \"rejected_reason\": \"A low panel reconstruction error identifies the operator but does not show that it predicts either endpoint.\"\n    }\n  ],\n  \"rationale\": \"The cyclic probe tests which small basis completes calibration; the fixed-interpolator ablation tests whether using the panels, in either direction, improves held-out prediction before tuning the readout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9b70a4d3dfb4d7f66e88f189f510c70ddaa97d51d3334262c183f259115358f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46540.33,
+      "usage_known": true,
+      "prompt_tokens": 24559,
+      "cached_tokens": 9344,
+      "completion_tokens": 1839
+    }
+  ]
+}

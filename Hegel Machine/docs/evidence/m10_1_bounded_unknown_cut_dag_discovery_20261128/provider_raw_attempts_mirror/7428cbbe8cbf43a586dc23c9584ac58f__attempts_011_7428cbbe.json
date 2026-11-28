@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7428cbbe8cbf43a586dc23c9584ac58f",
+  "call_seq": 11,
+  "stage_subdir": "m101_confirmation_20261128T091002Z_116d3ab6__conf_m101_a02__Flat_MonolithicArchive_Online__conf_m101_a02_batch_06__mono_solve__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__conf_m101_a02_batch_06__blind_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T09:48:39.827282+00:00",
+  "ended_at_utc": "2026-11-28T09:49:29.507866+00:00",
+  "request_sha256": "6d73679aa2b695653b2fad2029ea15bc2d67b51da970a205ca999e9ea7421dc6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65501,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38538,
+    "cached_tokens": 9344,
+    "completion_tokens": 2091
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Fit panel operators and predict scalar and trajectory readouts.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import solve\\n\\n\\ndef _aff(x):\\n    return np.column_stack((np.ones(len(x)), x))\\n\\n\\ndef _fit(x, y):\\n    return np.linalg.lstsq(x, y, rcond=None)[0]\\n\\n\\ndef _calibrate(panel, x):\\n    u, v = panel['u'], panel['v']\\n    rough = _aff(u)\\n    keep = np.argsort(np.linalg.norm(v - rough @ _fit(rough, v), axis=1))[:-3]\\n    def design(z, j):\\n        p, q = z[:, j], z[:, (j+1)%4]\\n        return np.column_stack((np.ones(len(z)), p, q, p*q, p**3))\\n    coef = np.column_stack([_fit(design(u[keep], j), v[keep, j]) for j in range(4)])\\n    rough = _fit(rough[keep], v[keep])\\n    z = np.linalg.solve(rough[1:].T, (x-rough[0]).T).T\\n    for _ in range(10):\\n        p, q = z, np.roll(z, -1, axis=1)\\n        val = coef[0] + p*coef[1] + q*coef[2] + p*q*coef[3] + p**3*coef[4]\\n        jac = np.zeros((len(z), 4, 4))\\n        j = np.arange(4)\\n        jac[:, j, j] = coef[1] + q*coef[3] + 3*p*p*coef[4]\\n        jac[:, j, (j+1)%4] = coef[2] + p*coef[3]\\n        z -= np.linalg.solve(jac, (val-x)[..., None])[..., 0]\\n    return z\\n\\n\\ndef _panel(p, key, z, basis, init, bounds):\\n    u, v = p['u'], p[key]\\n    def residual(theta):\\n        a = basis(u, theta)\\n        return (a @ _fit(a, v) - v).ravel()\\n    theta = least_squares(residual, init, bounds=bounds, ftol=1e-11, xtol=1e-11, gtol=1e-11).x\\n    return basis(z, theta) @ _fit(basis(u, theta), v)\\n\\n\\ndef _coords(study):\\n    z = _calibrate(study['panel_a'], np.concatenate((study['train']['x'], study['test']['x'])))\\n    b = _panel(study['panel_b'], 'v', z, lambda x,p: _aff(x*(1-p[1]*np.exp(-p[0]*x*x))), [1,1.1], ([.1,.05],[5,4]))\\n    p = study['panel_c']\\n    c = _panel(p, 'v1', z, lambda x,p: np.c_[_aff(x),np.tanh(p[0]*x)], [2], (.2,5))\\n    d = _panel(p, 'v2', z, lambda x,p: np.c_[_aff(x),np.cos(p*x)], [1.27]*4, (.2,4))\\n    return z, b, c, d\\n\\n\\ndef _grams(coords, n):\\n    out = []\\n    for x in coords:\\n        a = (x-x[:n].mean(0))/x[:n].std(0)\\n        out.append(a @ a.T / a.shape[1])\\n    return out\\n\\n\\ndef _predict(k, y, reg):\\n    n = len(y)\\n    return k[n:, :n] @ solve(k[:n,:n]+reg*np.eye(n), y, assume_a='pos')\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    tr = study['train']\\n    z,b,c,d = _coords(study)\\n    Z,B,C,D = _grams((z,b,c,d), len(tr['y']))\\n    G = (Z+B)/2\\n    P = (Z**2+B**2)/2\\n    ky = 1 + G + P + G**2 + .1*(P*G+G**3)\\n    kt = 1 + B + .3*B**2 + .3*(Z+C+D) + 2*Z*B\\n    y = _predict(ky, tr['y'], .01)\\n    state = _predict(kt, tr['traj'], .001)\\n    return {'y_hat': y, 'state_pred': state,\\n            'diagnostics_vec': np.array([y.mean(), y.std(), state[:,-1].mean(), state[:,-1].std()])}\\nPY\\ncat >/tmp/core.py <<'PY'\\nfrom operators import *\\nfrom itertools import product\\nb,c,d=[ops[k](z) for k in 'BCD']; n=72\\nZ=aff(z); A=np.c_[Z,b,c,d]; I=np.arange(n); q=(b*b)@np.array([1,1,-1,-1]); print('qscale',q[:n].std(),np.corrcoef(q[:n],Y[:,0])[0,1]);\\nfor nm,base in [('z',Z),('b',aff(b)),('zb',np.c_[Z,b]),('zbc',np.c_[Z,b,c]),('zbd',np.c_[Z,b,d]),('all',A)]:\\n for fixed in (False,True):\\n  F=base if fixed else np.c_[base,q]; yy=Y[:,0]-fixed*q[:n]; ss=[]\\n  for i,j in folds: ss.append(np.mean(abs(F[j]@fit(F[i],yy[i])-yy[j])))\\n  print('CORE',nm,fixed,ss,'rstd',np.std(F[:n]@fit(F[:n],yy)-yy))\\n# Fit a signed quadratic spanning B and a small correction from C/D/z, preserving its signature.\\nfor hname,h in [('z',z),('c',c),('d',d),('zc',np.c_[z,c]),('zcd',np.c_[z,c,d])]:\\n for mode in ('common','diag','matrix'):\\n  for reg in (.03,.15,.6,2.):\\n   es=[]\\n   for i,j in folds:\\n    a=np.c_[Z,b,h]; P=np.linalg.qr(a[i])[0]; yy=Y[i,0]; sg=np.array([1,1,-1,-1]);\\n    if mode!='matrix' and h.shape[1]!=4:continue\\n    def qf(p):\\n     g=b+(h*p if mode in ('common','diag') else h@p.reshape(-1,4));return g*g@sg\\n    def res(p):\\n     r=qf(p)[i]-yy;return np.r_[r-P@(P.T@r),reg*p]\\n    p=least_squares(res,np.zeros(1 if mode=='common' else 4 if mode=='diag' else 4*h.shape[1])).x\\n    qq=qf(p);es.append(np.mean(abs(qq[j]+a[j]@fit(a[i],yy-qq[i])-Y[j,0])))\\n   if es:print('MIX',hname,mode,reg,np.round(es,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/core.py | grep -E 'CORE|qscale|MIX'; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (generic mixed readout) -> H2 (signed panel-B energy with coordinate corrections); the best prior worst-split label MAE was 0.0554.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Save the best available label and trajectory baselines now. Test whether the near-unit signed quadratic eigenvalues support a compact correction to the panel-B coordinates that beats the baseline on held-out rows.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f2c6fe34cba6ad0ff8901c8de2cc6d062b562525666361a95395fcb9717aca94",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52310.69,
+      "usage_known": true,
+      "prompt_tokens": 38538,
+      "cached_tokens": 9344,
+      "completion_tokens": 2091
+    }
+  ]
+}
