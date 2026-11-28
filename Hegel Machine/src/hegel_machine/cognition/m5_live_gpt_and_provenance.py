@@ -763,6 +763,45 @@ def _win_path_to_wsl(win_path: str) -> str:
 
 def discover_chatgpt_subscription_codex_cli() -> dict[str, Any]:
     """Locate official OpenAI Codex CLI signed in with a ChatGPT account (`auth_mode == 'chatgpt'`) and block `ruoli.dev`!"""
+    # 0. Prefer unified WSL multi-account router (`~/.codex-accounts/*` + native WSL `codex` shim)
+    #    so Hegel shares the isolated 3-account pool instead of burning the Windows Codex Desktop account.
+    if os.environ.get("CODEX_ROUTER_DISABLED", "").strip().lower() not in ("1", "true", "yes"):
+        accounts_root = Path(os.environ.get("CODEX_ACCOUNTS_ROOT") or str(Path.home() / ".codex-accounts")).expanduser()
+        native_bin = shutil.which("codex")
+        if native_bin and accounts_root.is_dir():
+            valid_pool_accounts = 0
+            for acct_dir in sorted(accounts_root.iterdir()):
+                if acct_dir.name.startswith(("_", ".")) or not acct_dir.is_dir():
+                    continue
+                auth_p = acct_dir / "auth.json"
+                if not auth_p.is_file():
+                    continue
+                try:
+                    auth_obj = json.loads(auth_p.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                if auth_obj.get("auth_mode") != "chatgpt":
+                    continue
+                cfg_p = acct_dir / "config.toml"
+                cfg_txt = cfg_p.read_text(encoding="utf-8", errors="replace") if cfg_p.is_file() else ""
+                active_lines = [ln for ln in cfg_txt.splitlines() if not ln.strip().startswith("#")]
+                if any("ruoli" in ln.lower() for ln in active_lines):
+                    raise RuntimeError(
+                        f"Blocked: isolated Codex config {cfg_p} points to ruoli; only official OpenAI ChatGPT subscription is allowed!"
+                    )
+                valid_pool_accounts += 1
+            if valid_pool_accounts > 0:
+                stg = Path.home() / ".cache" / "hegel_m5_codex_subscription_stage"
+                return {
+                    "available": True,
+                    "executable": native_bin,
+                    "is_windows_exe_under_wsl": False,
+                    "stage_root_wsl": stg,
+                    "stage_root_cli_str": str(stg),
+                    "auth_mode": "chatgpt",
+                    "provider_backend": "openai_chatgpt_subscription_codex_cli",
+                }
+
     # 1. Inspect `/mnt/c/Users/*/.codex/config.toml` & `auth.json` (WindowsApp directory disables glob, so read `CODEX_CLI_PATH`!)
     win_users_root = Path("/mnt/c/Users")
     if win_users_root.is_dir():
