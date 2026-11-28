@@ -1125,6 +1125,15 @@ def validate_public_witness(
         v_pub = verify_alpha_candidate_handoff_and_invariants(dataset=synth_ds, out=out, gt=None, require_gt_accuracy=False)
         errs.extend(v_pub["errors"])
         metrics.update(v_pub["metrics"])
+        if contract_kind == "alpha_unified_hereditary" and not errs:
+            t05_chk = check_alpha_public_time_kernel_and_derivative_consistency(
+                synth_ds,
+                out,
+                campaign_diagnostics=inp.get("_campaign_diagnostics") or inp.get("campaign_diagnostics"),
+            )
+            metrics["alpha_time_kernel_derivative_check"] = t05_chk["metrics"]
+            if not t05_chk["ok"]:
+                errs.extend(t05_chk["errors"])
         return {
             "ok": len(errs) == 0,
             "contract_kind": contract_kind,
@@ -1135,10 +1144,19 @@ def validate_public_witness(
             "metrics": metrics,
         }
 
-    # Beta Layer 2 (`0` private truth: structural & certificate self-consistency; exact `(S_tilde, r_y)` KKT checked if public/gt provided)
+    # Beta Layer 2 (`0` private truth: structural & certificate self-consistency + `T06` calibration-KKT perturbation check)
     v_b = verify_beta_candidate_handoff_and_kkt(study=inp, out=out, gt=None)
     errs.extend(v_b["errors"])
     metrics.update(v_b["metrics"])
+    if isinstance(out, dict) and isinstance(out.get("kkt_certificate"), dict):
+        t06_chk = compute_beta_calibration_kkt_uncertainty_bound(
+            inp,
+            out,
+            enforce_uncertainty_budget=bool(inp.get("_enforce_kkt_uncertainty_budget", False)),
+        )
+        metrics["beta_kkt_uncertainty_check"] = t06_chk["metrics"]
+        if not t06_chk["ok"]:
+            errs.extend(t06_chk["errors"])
     return {
         "ok": len(errs) == 0,
         "contract_kind": contract_kind,
@@ -1336,14 +1354,14 @@ def compute_beta_calibration_kkt_uncertainty_bound(
     *,
     cal_holdout_rmse: float | None = None,
     gap_tol: float = 2e-4,
+    enforce_uncertainty_budget: bool = False,
 ) -> dict[str, Any]:
-    """Compute public calibration-residual-to-KKT dual-lower-bound perturbation budget (`M10.0.1` `T06`).
+    """Compute public calibration-residual-to-KKT dual-lower-bound perturbation budget (`M10.0.1` `T06` + `M10.1.1` `U09`).
 
-    For a box-simplex QP `J(w) = 0.5 ||S_tilde w - r_y||_2^2 + 0.5 lam_w ||w||_2^2`, an upstream transducer
-    calibration error `delta_r` (`||delta_r||_2 <= sqrt(n_obs) * sigma_cal`) perturbs the optimal objective by up to
-    `Delta_J_cal = ||S_tilde w - r_hat||_2 * ||delta_r||_2 + 0.5 * ||delta_r||_2^2`.
-    When `dual_lower_bound` is computed strictly on approximate `r_hat` without reserving `Delta_J_cal`,
-    `dual_lower_bound` can exceed true `J_true(w)` by `O(Delta_J_cal)` even when `sigma_cal ~ 3e-4`!
+    Estimates out-of-sample `2/3–1/3` holdout calibration `sigma_cal` on `sensor_calibration_sweeps` (with 1.25x finite-sample
+    inflation factor when holdout is small) and bounds objective perturbation `Delta_J_cal`. When `enforce_uncertainty_budget=True`,
+    certificates whose `primal - (dual_lower_bound - Delta_J_cal)` exceeds `gap_tol` are actively rejected (`ok = False`) so
+    downstream solvers must either improve transducer calibration or report a conservative dual bound within tolerance.
     """
     cert = out.get("kkt_certificate") if isinstance(out, dict) else None
     if not isinstance(cert, dict):
@@ -1355,6 +1373,7 @@ def compute_beta_calibration_kkt_uncertainty_bound(
     y_raw = np.asarray(study.get("y_obs_raw", []), dtype=float).ravel()
     n_obs = max(1, int(y_raw.size))
     sigma_cal = float(cal_holdout_rmse) if (cal_holdout_rmse is not None and math.isfinite(float(cal_holdout_rmse))) else 0.0
+    sigma_source = "explicit_holdout_rmse" if sigma_cal > 0.0 else "none"
     if sigma_cal <= 0.0:
         sw = study.get("sensor_calibration_sweeps") or {}
         if "ref_rosette" in sw and "raw_rosette" in sw:
@@ -1370,9 +1389,18 @@ def compute_beta_calibration_kkt_uncertainty_bound(
                     res = np.linalg.norm(ref_r - aug @ coef, axis=1)
                     med = max(float(np.median(res)), 1e-9)
                     w_r = 1.0 / (1.0 + (res / (3.0 * med)) ** 2)
-                inliers = np.linalg.norm(ref_r - aug @ coef, axis=1) <= max(5.0 * float(np.median(np.linalg.norm(ref_r - aug @ coef, axis=1))), 1e-4)
-                if int(np.sum(inliers)) >= 6:
-                    sigma_cal = float(np.sqrt(np.mean((ref_r[inliers] - aug[inliers] @ coef) ** 2)))
+                full_res = np.linalg.norm(ref_r - aug @ coef, axis=1)
+                inliers = full_res <= max(5.0 * float(np.median(full_res)), 1e-4)
+                inl_idx = np.flatnonzero(inliers)
+                if inl_idx.size >= 9:
+                    n_tr = max(6, (2 * int(inl_idx.size)) // 3)
+                    tr_i, ho_i = inl_idx[:n_tr], inl_idx[n_tr:]
+                    coef_ho, *_ = np.linalg.lstsq(aug[tr_i], ref_r[tr_i], rcond=None)
+                    sigma_cal = 1.25 * float(np.sqrt(np.mean((ref_r[ho_i] - aug[ho_i] @ coef_ho) ** 2)))
+                    sigma_source = "inlier_2_3_holdout_split_x1_25"
+                elif inl_idx.size >= 6:
+                    sigma_cal = 1.25 * float(np.sqrt(np.mean((ref_r[inl_idx] - aug[inl_idx] @ coef) ** 2)))
+                    sigma_source = "inlier_training_x1_25"
     eps_r = math.sqrt(float(n_obs)) * max(sigma_cal, 0.0)
     res_norm_est = math.sqrt(max(2.0 * max(float(primal), 0.0), 0.0))
     delta_j_bound = res_norm_est * eps_r + 0.5 * (eps_r ** 2)
@@ -1384,11 +1412,16 @@ def compute_beta_calibration_kkt_uncertainty_bound(
         errs.append(f"kkt_reported_gap_exceeds_tol:{reported_slack:.8f}>{float(gap_tol):.8f}")
     recommended_safe_dual_lb = float(dual_lb) - delta_j_bound
     within_budget_if_safe = (float(primal) - recommended_safe_dual_lb) <= float(gap_tol)
+    if enforce_uncertainty_budget and not within_budget_if_safe:
+        errs.append(
+            f"kkt_uncertainty_budget_exceeded:conservative_gap={float(primal)-recommended_safe_dual_lb:.8f}>tol={float(gap_tol):.8f}"
+        )
     return {
         "ok": len(errs) == 0,
         "errors": errs,
         "metrics": {
             "n_obs": n_obs,
+            "sigma_source": sigma_source,
             "estimated_cal_sigma": round(sigma_cal, 8),
             "estimated_delta_r_l2": round(eps_r, 8),
             "estimated_kkt_objective_perturbation_bound": round(delta_j_bound, 8),
@@ -1396,6 +1429,7 @@ def compute_beta_calibration_kkt_uncertainty_bound(
             "calibration_perturbation_exceeds_unsound_tol_1e6": bool(delta_j_bound > 1e-6),
             "recommended_conservative_dual_lb": round(recommended_safe_dual_lb, 10),
             "conservative_lb_within_gap_tol": bool(within_budget_if_safe),
+            "enforce_uncertainty_budget": bool(enforce_uncertainty_budget),
         },
     }
 

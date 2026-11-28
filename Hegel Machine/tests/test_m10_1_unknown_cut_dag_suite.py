@@ -38,6 +38,7 @@ from hegel_machine.cognition.m10_1_unknown_cut_dag_discovery_world import (
     DEV_M101_WORLD_SPECS,
     ExecutableComputationDAG,
     ExecutableModuleNode,
+    M101WorldSpec,
     M101_OBSERVABLE_NAMES,
     REF_DEV_NODE_JOIN_READOUT_PY,
     build_m101_world_tasks,
@@ -143,33 +144,60 @@ def test_m101_gate1_three_way_external_probe_fk_on_cut_withdrawal(tmp_path: Path
     graph = PersistentMechanismGraph(forest=forest)
     pstore = ProbeReceiptStore(tmp_path / "probe_receipts", graph=graph)
 
+    old_shas = {"node_00": "sha_a0", "node_01": "sha_b0", "node_02": "sha_c0"}
+    new_shas = {"node_00": "sha_a0", "node_01": "sha_b0", "node_02": "sha_c0_coupled"}
     e1 = pstore.persist_probe_receipt(
         probe_id="p_prior_01",
-        receipt={"accepted": True, "execution_status": "completed"},
+        receipt={
+            "accepted": True,
+            "execution_status": "completed",
+            "failure_kind": "none",
+            "public_input_sha256": "pub_src_0001",
+            "dag_runtime_trace": {"dag_id": "dag_01", "node_code_shas": old_shas},
+        },
         probe_kind="joint_task_probe",
         executed_utc="2026-11-28T06:00:00+00:00",
+        metadata={"world_id": "dev_m101_c02", "arm": "Hegel_UnknownCut_GraphDiscovery_Online"},
     )
     e2 = pstore.persist_probe_receipt(
         probe_id="p_pres_02",
-        receipt={"healthy": True, "execution_status": "completed"},
+        receipt={"healthy": True, "accepted": False, "schema_valid": True, "execution_status": "completed"},
         probe_kind="direct_component_probe",
         executed_utc="2026-11-28T06:00:05+00:00",
+        metadata={"world_id": "dev_m101_c02", "arm": "Hegel_UnknownCut_GraphDiscovery_Online"},
     )
     e3 = pstore.persist_probe_receipt(
         probe_id="p_fail_03",
-        receipt={"accepted": False, "execution_status": "completed"},
+        receipt={
+            "accepted": False,
+            "schema_valid": True,
+            "execution_status": "completed",
+            "failure_kind": "scientific_or_numerical",
+            "public_input_sha256": "pub_target_0006",
+            "dag_runtime_trace": {"dag_id": "dag_01", "node_code_shas": old_shas},
+        },
         probe_kind="joint_task_probe",
         executed_utc="2026-11-28T06:00:10+00:00",
+        metadata={"world_id": "dev_m101_c02", "arm": "Hegel_UnknownCut_GraphDiscovery_Online"},
     )
     e4 = pstore.persist_probe_receipt(
         probe_id="p_new_04",
-        receipt={"accepted": True, "execution_status": "completed"},
+        receipt={
+            "accepted": True,
+            "schema_valid": True,
+            "execution_status": "completed",
+            "failure_kind": "none",
+            "public_input_sha256": "pub_target_0006",
+            "dag_runtime_trace": {"dag_id": "dag_02", "node_code_shas": new_shas},
+        },
         probe_kind="joint_task_probe",
         executed_utc="2026-11-28T06:00:20+00:00",
+        metadata={"world_id": "dev_m101_c02", "arm": "Hegel_UnknownCut_GraphDiscovery_Online"},
     )
     wd = CutWithdrawalMergeReceipt(
         receipt_id="",
         world_id="dev_m101_c02",
+        arm="Hegel_UnknownCut_GraphDiscovery_Online",
         old_dag_id="dag_01",
         new_dag_id="dag_02",
         action="merge_nodes",
@@ -183,15 +211,35 @@ def test_m101_gate1_three_way_external_probe_fk_on_cut_withdrawal(tmp_path: Path
         new_passing_receipt_sha256=e4["receipt_content_sha256"],
         preserved_old_dag_id="dag_01",
         expanded_guard_features=["obs_00_pa_lin_r2", "obs_14_tel_ch0"],
+        old_dag_node_code_shas=old_shas,
+        new_dag_node_code_shas=new_shas,
+        target_public_input_sha256="pub_target_0006",
     )
     wd.receipt_id = wd.compute_expected_receipt_id()
     assert verify_m101_cut_withdrawal_external_fk(wd, pstore)["verified"] is True
 
-    # Negative control: forged nonexistent prior_positive_probe_id MUST fail!
+    # Negative control 1: forged nonexistent prior_positive_probe_id MUST fail!
     wd_bad = CutWithdrawalMergeReceipt.from_dict({**wd.to_dict(), "prior_positive_probe_id": "audit_no_such_probe"})
     wd_bad.receipt_id = wd_bad.compute_expected_receipt_id()
     with pytest.raises((ValueError, FileNotFoundError)):
         verify_m101_cut_withdrawal_external_fk(wd_bad, pstore)
+
+    # Negative control 2 (`U03`): swapped world_id or reusing prior_positive as new_passing MUST fail!
+    wd_bad_world = CutWithdrawalMergeReceipt.from_dict({**wd.to_dict(), "world_id": "forged_world_99"})
+    wd_bad_world.receipt_id = wd_bad_world.compute_expected_receipt_id()
+    with pytest.raises(ValueError, match="world_id"):
+        verify_m101_cut_withdrawal_external_fk(wd_bad_world, pstore)
+
+    wd_reuse_prior = CutWithdrawalMergeReceipt.from_dict(
+        {
+            **wd.to_dict(),
+            "new_passing_probe_id": "p_prior_01",
+            "new_passing_receipt_sha256": e1["receipt_content_sha256"],
+        }
+    )
+    wd_reuse_prior.receipt_id = wd_reuse_prior.compute_expected_receipt_id()
+    with pytest.raises(ValueError, match="distinct"):
+        verify_m101_cut_withdrawal_external_fk(wd_reuse_prior, pstore)
 
 
 def test_m101_gate2_real_docker_chain_k3_diamond_k4_exec_count_1_and_anti_identity_shell() -> None:
@@ -276,8 +324,16 @@ def test_m101_gate2_real_docker_chain_k3_diamond_k4_exec_count_1_and_anti_identi
     pv_dia = grade_m101_candidate_in_container(task=tasks_dia[3], candidate_code=code_dia)
     assert pv_dia["strict_pass"] is True, pv_dia
 
-    # 3. Test Stratum B unseen subclasses: `conf_m101_b01` (K=4 depth-4 chain) and `conf_m101_b02` (K=4 skip-DAG fan-out=2)!
-    sp_k4 = [s for s in CONFIRMATION_M101_WORLD_SPECS if s.topology_class == "chain_k4_deep_cascade"][0]
+    # 3. Test unseen subclasses (`chain_k4_deep_cascade` & `asymmetric_skip_dag_k4`) on DEDICATED synthetic test seeds (`U01` — NEVER touching confirmation world specs!)
+    sp_k4 = M101WorldSpec(
+        world_id="unit_test_synth_k4",
+        cluster_id="unit_test_cluster_k4",
+        split="unit_test_synthetic",
+        stratum="stratum_b_unseen_topology",
+        topology_class="chain_k4_deep_cascade",
+        seed_base=7015000,
+        telemetry_channels=(0, 2, 3),
+    )
     s0_k4, _, _ = build_m101_world_tasks(sp_k4)
     k4_lib = {
         "nv_a0": ExecutableModuleNode("node_00", "nv_a0", build_ref_dev_node_pa_code("A0")),
@@ -301,7 +357,15 @@ def test_m101_gate2_real_docker_chain_k3_diamond_k4_exec_count_1_and_anti_identi
     pv_k4 = grade_m101_candidate_in_container(task=s0_k4, candidate_code=code_k4)
     assert pv_k4["strict_pass"] is True, pv_k4
 
-    sp_skip = [s for s in CONFIRMATION_M101_WORLD_SPECS if s.topology_class == "asymmetric_skip_dag_k4"][0]
+    sp_skip = M101WorldSpec(
+        world_id="unit_test_synth_skip",
+        cluster_id="unit_test_cluster_skip",
+        split="unit_test_synthetic",
+        stratum="stratum_b_unseen_topology",
+        topology_class="asymmetric_skip_dag_k4",
+        seed_base=7016000,
+        telemetry_channels=(2, 1, 0),
+    )
     s0_skip, _, _ = build_m101_world_tasks(sp_skip)
     dag_skip = ExecutableComputationDAG(
         dag_id="dag_skip_00",
@@ -462,11 +526,18 @@ def run_node(inputs: dict) -> dict:
                             return {"ok": True, "parsed": {"action": "reuse_subgraph", "rationale": "update node_02", "base_dag_id": base["dag_id"], "new_nodes": base["nodes"], "new_edges": base["edges"], "new_sink_node_id": "node_02", "reused_node_versions": [{"node_id": "node_00", "version_id": base["node_versions"]["node_00"]}, {"node_id": "node_01", "version_id": base["node_versions"]["node_01"]}], "editable_node_ids": ["node_02"]}}
                         if ep_sn.endswith("03"):
                             return {"ok": True, "parsed": {"action": "reuse_subgraph", "rationale": "update node_00", "base_dag_id": base["dag_id"], "new_nodes": base["nodes"], "new_edges": base["edges"], "new_sink_node_id": "node_02", "reused_node_versions": [{"node_id": "node_01", "version_id": base["node_versions"]["node_01"]}, {"node_id": "node_02", "version_id": base["node_versions"]["node_02"]}], "editable_node_ids": ["node_00"]}}
-                        # Step 06 interaction -> `rewire_edge` adding `node_00 -> node_02` while reusing A1 & B1!
+                        # Step 06 interaction -> `rewire_edge` adding `node_00 -> node_02` while withdrawing the `(A1, B1, C0)` 3-node DAG (`dag_05`)!
                         a1_v = sorted(v_by_n["node_00"])[-1]
                         b1_v = sorted(v_by_n["node_01"])[-1]
-                        rew_edges = list(base["edges"]) + [["node_00", "node_02"]]
-                        return {"ok": True, "parsed": {"action": "rewire_edge", "rationale": "add direct skip edge node_00 -> node_02 for interaction", "base_dag_id": base["dag_id"], "new_nodes": base["nodes"], "new_edges": rew_edges, "new_sink_node_id": "node_02", "reused_node_versions": [{"node_id": "node_00", "version_id": a1_v}, {"node_id": "node_01", "version_id": b1_v}], "editable_node_ids": ["node_02"]}}
+                        base_a1_b1 = [
+                            d
+                            for d in dags
+                            if len(d["nodes"]) == 3
+                            and d["node_versions"].get("node_00") == a1_v
+                            and d["node_versions"].get("node_01") == b1_v
+                        ][-1]
+                        rew_edges = list(base_a1_b1["edges"]) + [["node_00", "node_02"]]
+                        return {"ok": True, "parsed": {"action": "rewire_edge", "rationale": "add direct skip edge node_00 -> node_02 for interaction", "base_dag_id": base_a1_b1["dag_id"], "new_nodes": base_a1_b1["nodes"], "new_edges": rew_edges, "new_sink_node_id": "node_02", "reused_node_versions": [{"node_id": "node_00", "version_id": a1_v}, {"node_id": "node_01", "version_id": b1_v}], "editable_node_ids": ["node_02"]}}
                     return {"ok": False}
             return _Cli()
 

@@ -320,7 +320,7 @@ class ExecutableComputationDAG:
 
 @dataclass
 class CutWithdrawalMergeReceipt:
-    """Evidence-bound cut withdrawal & `merge_nodes`/`rewire_edge` receipt backed by 3-way external `ProbeReceiptStore` FK (`T01`)."""
+    """Evidence-bound cut withdrawal & `merge_nodes`/`rewire_edge` receipt backed by strict semantic 4-way `ProbeReceiptStore` FK (`T01/U03`)."""
 
     receipt_id: str
     world_id: str
@@ -338,6 +338,15 @@ class CutWithdrawalMergeReceipt:
     preserved_old_dag_id: str
     expanded_guard_features: list[str]
     verifier_version: str = SHARED_KERNEL_VERSION
+    arm: str = ""
+    old_dag_node_code_shas: dict[str, str] = field(default_factory=dict)
+    new_dag_node_code_shas: dict[str, str] = field(default_factory=dict)
+    target_public_input_sha256: str = ""
+    preserved_evidence_level: str = "runtime_interface_healthy"
+    prior_event_seq: int = 0
+    failing_event_seq: int = 0
+    new_passing_event_seq: int = 0
+    schema_version: str = "hegel_m10_1_1_cut_withdrawal_v2"
 
     def compute_expected_receipt_id(self) -> str:
         payload = {k: v for k, v in self.to_dict(include_id=False).items()}
@@ -361,12 +370,30 @@ class CutWithdrawalMergeReceipt:
             "expanded_guard_features": sorted(self.expanded_guard_features),
             "verifier_version": self.verifier_version,
         }
+        # Preserve exact v1 digest compatibility ONLY when legacy v1 ticket has no v2 semantic fields populated
+        if self.schema_version == "hegel_m10_1_1_cut_withdrawal_v2" and (
+            self.arm or self.old_dag_node_code_shas or self.new_dag_node_code_shas or self.target_public_input_sha256
+        ):
+            d.update(
+                {
+                    "schema_version": self.schema_version,
+                    "arm": self.arm,
+                    "old_dag_node_code_shas": dict(sorted(self.old_dag_node_code_shas.items())),
+                    "new_dag_node_code_shas": dict(sorted(self.new_dag_node_code_shas.items())),
+                    "target_public_input_sha256": self.target_public_input_sha256,
+                    "preserved_evidence_level": self.preserved_evidence_level,
+                    "prior_event_seq": int(self.prior_event_seq),
+                    "failing_event_seq": int(self.failing_event_seq),
+                    "new_passing_event_seq": int(self.new_passing_event_seq),
+                }
+            )
         if include_id:
             d["receipt_id"] = self.receipt_id
         return d
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CutWithdrawalMergeReceipt:
+        has_v2 = "schema_version" in d or "old_dag_node_code_shas" in d or "target_public_input_sha256" in d
         return cls(
             receipt_id=str(d["receipt_id"]),
             world_id=str(d["world_id"]),
@@ -384,18 +411,86 @@ class CutWithdrawalMergeReceipt:
             preserved_old_dag_id=str(d["preserved_old_dag_id"]),
             expanded_guard_features=[str(x) for x in d.get("expanded_guard_features") or []],
             verifier_version=str(d.get("verifier_version") or SHARED_KERNEL_VERSION),
+            arm=str(d.get("arm") or ""),
+            old_dag_node_code_shas={str(k): str(v) for k, v in (d.get("old_dag_node_code_shas") or {}).items()},
+            new_dag_node_code_shas={str(k): str(v) for k, v in (d.get("new_dag_node_code_shas") or {}).items()},
+            target_public_input_sha256=str(d.get("target_public_input_sha256") or ""),
+            preserved_evidence_level=str(d.get("preserved_evidence_level") or "runtime_interface_healthy"),
+            prior_event_seq=int(d.get("prior_event_seq", 0) or 0),
+            failing_event_seq=int(d.get("failing_event_seq", 0) or 0),
+            new_passing_event_seq=int(d.get("new_passing_event_seq", 0) or 0),
+            schema_version=str(d.get("schema_version") or ("hegel_m10_1_1_cut_withdrawal_v2" if has_v2 else "legacy_v1")),
         )
+
+
+def _extract_probe_Identity_fields(env: dict[str, Any]) -> dict[str, Any]:
+    rec = env.get("receipt") or {}
+    meta = env.get("metadata") or {}
+    tr = rec.get("dag_runtime_trace") or {}
+    node_shas = dict(tr.get("node_code_shas") or rec.get("node_code_shas") or {})
+    cand_sha = str(rec.get("candidate_sha256") or rec.get("compiled_sha256") or "")
+    pub_sha = str(rec.get("public_input_sha256") or meta.get("public_input_sha256") or "")
+    dag_id = str(tr.get("dag_id") or rec.get("dag_id") or meta.get("dag_id") or "")
+    return {
+        "world_id": str(meta.get("world_id") or rec.get("world_id") or ""),
+        "arm": str(meta.get("arm") or rec.get("arm") or ""),
+        "dag_id": dag_id,
+        "node_code_shas": node_shas,
+        "candidate_sha256": cand_sha,
+        "public_input_sha256": pub_sha,
+        "execution_status": str(rec.get("execution_status") or ("completed" if rec.get("schema_valid") is not None else "")),
+        "failure_kind": str(rec.get("failure_kind") or ("none" if rec.get("accepted") else ("scientific_or_numerical" if rec.get("schema_valid") else "schema_or_runtime"))),
+    }
 
 
 def verify_m101_cut_withdrawal_external_fk(
     receipt: CutWithdrawalMergeReceipt,
     probe_store: ProbeReceiptStore,
+    *,
+    allowed_guard_features: tuple[str, ...] | None = None,
+    known_dag_node_shas: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Verify ALL external `ProbeReceiptStore` links on a `CutWithdrawalMergeReceipt` (`T01` strict 3+1 FK!)."""
+    """Strictly verify ALL 4 external `ProbeReceiptStore` links AND cross-receipt semantic identity (`T01` + `M10.1.1` `U03/U04`).
+
+    Rejects:
+      - forged/swapped `world_id`, `arm`, `old_dag_id`, `new_dag_id`, `preserved_old_dag_id`, or `verifier_version`;
+      - illegal `expanded_guard_features` outside `allowed_guard_features`;
+      - reusing `prior_positive` as `new_passing` or `preserved_node`;
+      - code-version mismatches where `prior_positive` and `failing_joint` did NOT execute the exact same `old_dag` node code SHAs;
+      - non-scientific failures (`timeout`/`infra`/`schema_or_runtime`) treated as `failing_joint` counterexamples;
+      - input mismatches where `failing_joint` and `new_passing` did NOT run on the exact same `public_input_sha256`.
+    """
     if receipt.action not in {"merge_nodes", "rewire_edge"}:
-        raise ValueError(f"Invalid cut withdrawal action `{receipt.action}`")
+        raise ValueError(f"Invalid cut withdrawal action `{receipt.action}` (`U03`)")
     if receipt.receipt_id != receipt.compute_expected_receipt_id():
-        raise ValueError(f"Tampered CutWithdrawalMergeReceipt id `{receipt.receipt_id}`")
+        raise ValueError(f"Tampered CutWithdrawalMergeReceipt id `{receipt.receipt_id}` (`U03`)")
+    if receipt.verifier_version != SHARED_KERNEL_VERSION:
+        raise ValueError(f"Unsupported CutWithdrawal verifier_version `{receipt.verifier_version}` != `{SHARED_KERNEL_VERSION}` (`U03`)")
+    if not receipt.world_id or not receipt.old_dag_id or not receipt.new_dag_id:
+        raise ValueError("CutWithdrawal missing world_id / old_dag_id / new_dag_id (`U03`)")
+    if receipt.old_dag_id == receipt.new_dag_id:
+        raise ValueError(f"CutWithdrawal old_dag_id `{receipt.old_dag_id}` == new_dag_id (`U03`)")
+    if receipt.preserved_old_dag_id != receipt.old_dag_id:
+        raise ValueError(
+            f"CutWithdrawal preserved_old_dag_id `{receipt.preserved_old_dag_id}` != old_dag_id `{receipt.old_dag_id}` (`U03`)"
+        )
+    if receipt.preserved_evidence_level not in {"runtime_interface_healthy", "functional_contract_verified"}:
+        raise ValueError(f"Invalid preserved_evidence_level `{receipt.preserved_evidence_level}` (`U03`)")
+
+    valid_feats = set(allowed_guard_features) if allowed_guard_features is not None else set(M101_OBSERVABLE_NAMES)
+    if not receipt.expanded_guard_features or not (set(receipt.expanded_guard_features) <= valid_feats):
+        raise ValueError(
+            f"Illegal expanded_guard_features `{sorted(set(receipt.expanded_guard_features) - valid_feats)}` (`U03`)"
+        )
+
+    if len(
+        {
+            receipt.prior_positive_probe_id,
+            receipt.failing_joint_probe_id,
+            receipt.new_passing_probe_id,
+        }
+    ) != 3 or receipt.prior_positive_probe_id == receipt.preserved_node_probe_id:
+        raise ValueError("CutWithdrawal probe IDs must be distinct across prior_positive, failing_joint, and new_passing (`U03`)")
 
     e_prior = probe_store.load_probe_receipt(
         receipt.prior_positive_probe_id,
@@ -419,18 +514,88 @@ def verify_m101_cut_withdrawal_external_fk(
     )
 
     if e_prior["receipt"].get("accepted") is not True:
-        raise ValueError("CutWithdrawal prior_positive probe did not pass (`T01`)")
+        raise ValueError("CutWithdrawal prior_positive probe did not pass (`T01/U03`)")
     if e_pres["receipt"].get("healthy") is not True and e_pres["receipt"].get("accepted") is not True:
-        raise ValueError("CutWithdrawal preserved_node probe not verified healthy (`T01`)")
+        raise ValueError("CutWithdrawal preserved_node probe not verified healthy (`T01/U03`)")
     if e_fail["receipt"].get("accepted") is not False:
-        raise ValueError("CutWithdrawal failing_joint probe did not fail (`T01`)")
+        raise ValueError("CutWithdrawal failing_joint probe did not fail (`T01/U03`)")
     if e_new["receipt"].get("accepted") is not True:
-        raise ValueError("CutWithdrawal new_passing probe did not pass (`T01`)")
+        raise ValueError("CutWithdrawal new_passing probe did not pass (`T01/U03`)")
+
+    id_prior = _extract_probe_Identity_fields(e_prior)
+    id_pres = _extract_probe_Identity_fields(e_pres)
+    id_fail = _extract_probe_Identity_fields(e_fail)
+    id_new = _extract_probe_Identity_fields(e_new)
+
+    for lbl, inf in (("prior", id_prior), ("preserved", id_pres), ("failing", id_fail), ("new_passing", id_new)):
+        if inf["world_id"] != receipt.world_id:
+            raise ValueError(f"CutWithdrawal `{lbl}` world_id `{inf['world_id']}` != `{receipt.world_id}` (`U03`)")
+        if receipt.arm and inf["arm"] and inf["arm"] != receipt.arm:
+            raise ValueError(f"CutWithdrawal `{lbl}` arm `{inf['arm']}` != `{receipt.arm}` (`U03`)")
+
+    # Scientific failure check on failing_joint (`timeout`/`infra`/`schema_or_runtime` cannot justify cut withdrawal!)
+    if id_fail["execution_status"] != "completed" or id_fail["failure_kind"] != "scientific_or_numerical":
+        raise ValueError(
+            f"CutWithdrawal failing_joint is `{id_fail['execution_status']}/{id_fail['failure_kind']}`, not completed scientific rejection (`U03`)"
+        )
+
+    # Exact old-candidate code-identity match between `prior_positive` and `failing_joint` (`U03` core fix!)
+    prior_shas = id_prior["node_code_shas"]
+    fail_shas = id_fail["node_code_shas"]
+    if prior_shas and fail_shas:
+        if prior_shas != fail_shas:
+            raise ValueError(
+                f"CutWithdrawal code-version mismatch (`U03`): prior_positive node_code_shas `{prior_shas}` != failing_joint `{fail_shas}`"
+            )
+    elif id_prior["candidate_sha256"] and id_fail["candidate_sha256"]:
+        if id_prior["candidate_sha256"] != id_fail["candidate_sha256"]:
+            raise ValueError("CutWithdrawal candidate_sha256 mismatch between prior_positive and failing_joint (`U03`)")
+    else:
+        raise ValueError("CutWithdrawal prior_positive / failing_joint missing verifiable candidate/node code SHAs (`U03`)")
+
+    if receipt.old_dag_node_code_shas and prior_shas and receipt.old_dag_node_code_shas != prior_shas:
+        raise ValueError("CutWithdrawal old_dag_node_code_shas disagrees with prior_positive probe (`U03`)")
+    if known_dag_node_shas is not None:
+        if receipt.old_dag_id not in known_dag_node_shas:
+            raise ValueError(f"CutWithdrawal old_dag_id `{receipt.old_dag_id}` missing from DAG library (`U03`)")
+        if receipt.new_dag_id not in known_dag_node_shas:
+            raise ValueError(f"CutWithdrawal new_dag_id `{receipt.new_dag_id}` missing from DAG library (`U03`)")
+        if prior_shas and known_dag_node_shas[receipt.old_dag_id] != prior_shas:
+            raise ValueError(
+                f"CutWithdrawal declared old_dag_id `{receipt.old_dag_id}` code SHAs disagree with tested prior/fail candidate (`U03`)"
+            )
+        if id_new["node_code_shas"] and known_dag_node_shas[receipt.new_dag_id] != id_new["node_code_shas"]:
+            raise ValueError(
+                f"CutWithdrawal declared new_dag_id `{receipt.new_dag_id}` code SHAs disagree with new_passing probe (`U03`)"
+            )
+
+    if receipt.new_dag_node_code_shas and id_new["node_code_shas"] and receipt.new_dag_node_code_shas != id_new["node_code_shas"]:
+        raise ValueError("CutWithdrawal new_dag_node_code_shas disagrees with new_passing probe (`U03`)")
+
+    # Exact current-input match between `failing_joint` and `new_passing` (`U03`!)
+    if not id_fail["public_input_sha256"] or not id_new["public_input_sha256"]:
+        raise ValueError("CutWithdrawal failing_joint / new_passing missing `public_input_sha256` (`U03`)")
+    if id_fail["public_input_sha256"] != id_new["public_input_sha256"]:
+        raise ValueError(
+            f"CutWithdrawal input mismatch (`U03`): failing_joint input `{id_fail['public_input_sha256'][:16]}` != new_passing `{id_new['public_input_sha256'][:16]}`"
+        )
+    if receipt.target_public_input_sha256 and receipt.target_public_input_sha256 != id_new["public_input_sha256"]:
+        raise ValueError("CutWithdrawal target_public_input_sha256 disagrees with new_passing probe (`U03`)")
+    if id_prior["public_input_sha256"] and id_prior["public_input_sha256"] == id_new["public_input_sha256"]:
+        raise ValueError("CutWithdrawal prior_positive cannot come from the same input where old_dag failed (`U03`)")
+
+    if receipt.prior_event_seq > 0 and receipt.failing_event_seq > 0:
+        if not (receipt.prior_event_seq < receipt.failing_event_seq <= receipt.new_passing_event_seq):
+            raise ValueError(
+                f"CutWithdrawal causal sequence violation (`{receipt.prior_event_seq}, {receipt.failing_event_seq}, {receipt.new_passing_event_seq}`, `U04`)"
+            )
     if str(e_prior.get("executed_utc") or "") > str(e_fail.get("executed_utc") or ""):
-        raise ValueError("CutWithdrawal temporal ordering violation (`prior_utc > failing_utc`, `T01`)")
+        raise ValueError("CutWithdrawal temporal ordering violation (`prior_utc > failing_utc`, `T01/U04`)")
+
     return {
         "verified": True,
         "receipt_id": receipt.receipt_id,
+        "preserved_evidence_level": receipt.preserved_evidence_level,
         "verified_probe_ids": [
             receipt.prior_positive_probe_id,
             receipt.preserved_node_probe_id,
@@ -529,6 +694,57 @@ def compile_m101_dag_to_instrumented_solver_code(
         "    _feed(obj)",
         "    return h.hexdigest()",
         "",
+        "def _collect_numeric_leaf_digests(obj) -> set[str]:",
+        "    out = set()",
+        "    def _walk(v):",
+        "        if isinstance(v, bool) or v is None:",
+        "            return",
+        "        if isinstance(v, (int, float, np.integer, np.floating)):",
+        "            out.add(_canon_digest(v))",
+        "        elif isinstance(v, np.ndarray):",
+        "            if v.size > 0 and v.dtype.kind in ('f', 'i', 'u'):",
+        "                out.add(_canon_digest(v))",
+        "        elif isinstance(v, dict):",
+        "            for sub in v.values():",
+        "                _walk(sub)",
+        "        elif isinstance(v, (list, tuple)):",
+        "            for sub in v:",
+        "                _walk(sub)",
+        "    _walk(obj)",
+        "    return out",
+        "",
+        "def _collect_subtree_digests(obj) -> set[str]:",
+        "    out = {_canon_digest(obj)}",
+        "    if isinstance(obj, dict):",
+        "        for sub in obj.values():",
+        "            out.update(_collect_subtree_digests(sub))",
+        "    elif isinstance(obj, (list, tuple)):",
+        "        for sub in obj:",
+        "            out.update(_collect_subtree_digests(sub))",
+        "    return out",
+        "",
+        "class _TrackedPayloadDict(dict):",
+        "    def __init__(self, data: dict, src_id: str, consumed_set: set[str]):",
+        "        super().__init__(data)",
+        "        self._src_id = src_id",
+        "        self._consumed_set = consumed_set",
+        "    def __getitem__(self, key):",
+        "        val = super().__getitem__(key)",
+        "        self._consumed_set.add(self._src_id)",
+        "        return val",
+        "    def get(self, key, default=None):",
+        "        if super().__contains__(key):",
+        "            self._consumed_set.add(self._src_id)",
+        "        return super().get(key, default)",
+        "    def values(self):",
+        "        if len(self) > 0:",
+        "            self._consumed_set.add(self._src_id)",
+        "        return super().values()",
+        "    def items(self):",
+        "        if len(self) > 0:",
+        "            self._consumed_set.add(self._src_id)",
+        "        return super().items()",
+        "",
         "def _load_node_fn(nid: str, src: str):",
         "    ns = {'__name__': f'_hegel_node_{nid}'}",
         "    exec(compile(src, f'<dag_node_{nid}>', 'exec'), ns)",
@@ -541,30 +757,53 @@ def compile_m101_dag_to_instrumented_solver_code(
         "_SPEC_OBJ = json.loads(_DAG_SPEC)",
         "",
         "def solve_batch(study: dict) -> dict:",
-        "    outputs = {'__input__': deepcopy(study)}",
+        "    raw_input_copy = deepcopy(study)",
+        "    raw_input_dig = _canon_digest(raw_input_copy)",
+        "    outputs = {'__input__': raw_input_copy}",
         "    exec_counts = {nid: 0 for nid in _SPEC_OBJ['topo_order']}",
         "    non_identity_checks = {}",
+        "    edge_consumption_checks = {}",
+        "    is_multi_node = len(_SPEC_OBJ['topo_order']) > 1",
         "    for nid in _SPEC_OBJ['topo_order']:",
         "        srcs = _SPEC_OBJ['incoming'][nid]",
-        "        if len(_SPEC_OBJ['topo_order']) == 1 and srcs == ['__input__']:",
-        "            node_in = deepcopy(outputs['__input__'])",
+        "        consumed_srcs: set[str] = set()",
+        "        if not is_multi_node and srcs == ['__input__']:",
+        "            node_in = _TrackedPayloadDict(deepcopy(outputs['__input__']), '__input__', consumed_srcs)",
         "        else:",
-        "            node_in = {s: deepcopy(outputs[s]) for s in srcs}",
-        "        in_dig = _canon_digest(node_in)",
+        "            node_in = {",
+        "                s: (_TrackedPayloadDict(deepcopy(outputs[s]), s, consumed_srcs) if isinstance(outputs[s], dict) else deepcopy(outputs[s]))",
+        "                for s in srcs",
+        "            }",
+        "        in_dig = _canon_digest(outputs['__input__'] if (not is_multi_node and srcs == ['__input__']) else {s: outputs[s] for s in srcs})",
+        "        in_num_leaves = set()",
+        "        for s in srcs:",
+        "            in_num_leaves.update(_collect_numeric_leaf_digests(outputs[s]))",
+        "        consumed_srcs.clear()",
         "        out_v = _COMPILED_FNS[nid](node_in)",
         "        exec_counts[nid] += 1",
         "        if exec_counts[nid] != 1:",
         "            raise RuntimeError(f'DAG node {nid} executed {exec_counts[nid]} times != 1')",
         "        if not isinstance(out_v, dict) or not out_v:",
         "            raise RuntimeError(f'DAG node {nid} must return a non-empty dict')",
+        "        if is_multi_node:",
+        "            unused_srcs = sorted(set(srcs) - consumed_srcs)",
+        "            if unused_srcs:",
+        "                raise RuntimeError(f'DAG node {nid} left declared incoming edges unconsumed: {unused_srcs}')",
+        "            edge_consumption_checks[nid] = sorted(consumed_srcs)",
+        "        else:",
+        "            edge_consumption_checks[nid] = sorted(consumed_srcs) if consumed_srcs else list(srcs)",
         "        out_dig = _canon_digest(out_v)",
         "        if nid != _SPEC_OBJ['sink_node_id']:",
-        "            # Anti-identity-shell check: intermediate node cannot merely echo its raw predecessor dict",
-        "            echoed = (out_dig == in_dig) or any(out_dig == _canon_digest(outputs[s]) for s in srcs)",
-        "            if echoed:",
-        "                raise RuntimeError(f'DAG node {nid} failed anti-identity-shell check')",
+        "            # Strict anti-wrapper-shell & genuine numeric transformation check (`U06`):",
+        "            out_subtrees = _collect_subtree_digests(out_v)",
+        "            echoed = (out_dig == in_dig) or (raw_input_dig in out_subtrees) or any(out_dig == _canon_digest(outputs[s]) for s in srcs)",
+        "            out_num_leaves = _collect_numeric_leaf_digests(out_v)",
+        "            novel_num_leaves = out_num_leaves - in_num_leaves",
+        "            if echoed or not out_num_leaves or not novel_num_leaves:",
+        "                raise RuntimeError(f'DAG node {nid} failed anti-wrapper-shell / novel numeric transformation check')",
         "            non_identity_checks[nid] = True",
-        "        outputs[nid] = out_v",
+        "        # Convert any tracked dict views returned by user code into plain dicts before freezing in outputs",
+        "        outputs[nid] = {k: (dict(v) if isinstance(v, _TrackedPayloadDict) else v) for k, v in out_v.items()}",
         "    trace_fp = os.environ.get('HEGEL_M101_DAG_TRACE_PATH')",
         "    if trace_fp:",
         "        trace_obj = {",
@@ -577,6 +816,8 @@ def compile_m101_dag_to_instrumented_solver_code(
         "            'exec_counts': exec_counts,",
         "            'all_exec_count_eq_1': all(v == 1 for v in exec_counts.values()),",
         "            'non_identity_checks': non_identity_checks,",
+        "            'edge_consumption_checks': edge_consumption_checks,",
+        "            'all_declared_edges_consumed': all(set(edge_consumption_checks.get(n, [])) == set(_SPEC_OBJ['incoming'][n]) for n in _SPEC_OBJ['topo_order']) if is_multi_node else True,",
         "            'node_code_shas': _SPEC_OBJ['node_code_shas'],",
         "        }",
         "        open(trace_fp, 'w', encoding='utf-8').write(json.dumps(trace_obj, sort_keys=True))",
@@ -1572,7 +1813,12 @@ print(json.dumps({{
         lines = [ln.strip() for ln in (pr.get("stdout") or "").splitlines() if ln.strip()]
         if pr["exit_code"] != 0 or not lines:
             err_tail = (pr.get("stderr") or pr.get("stdout") or "").strip()[-280:]
-            is_shell_or_dag = "anti-identity-shell" in err_tail or "executed" in err_tail
+            is_shell_or_dag = (
+                "anti-identity-shell" in err_tail
+                or "anti-wrapper-shell" in err_tail
+                or "unconsumed" in err_tail
+                or "executed" in err_tail
+            )
             return {
                 "accepted": False,
                 "schema_valid": False,
@@ -1835,6 +2081,426 @@ def run_node(inputs: dict) -> dict:
 '''
 
 
+# ============================================================================
+# 5. `M10.1.1` Feasible-Domain Guard Satisfiability (`U02`), Public Candidate
+#    Comparison (`U05`), & Complete Online Prefix State Hydration (`U11`)
+# ============================================================================
+
+M10_1_1_VERIFIER_SCHEMA_VERSION = "hegel_m10_1_1_strict_contracts_v1"
+
+
+def _witness_obs_equal(w1: dict[str, float | None], w2: dict[str, float | None], tol: float = 1e-8) -> bool:
+    keys = sorted(set(w1.keys()) | set(w2.keys()))
+    for k in keys:
+        v1, v2 = w1.get(k), w2.get(k)
+        if v1 is None and v2 is None:
+            continue
+        if v1 is None or v2 is None or abs(float(v1) - float(v2)) > tol:
+            return False
+    return True
+
+
+def build_feasible_domain_negative_witnesses(
+    *,
+    branch_ids: list[str],
+    positive_witnesses_by_branch: dict[str, list[dict[str, float | None]]],
+    executed_negative_witnesses_by_branch: dict[str, list[dict[str, float | None]]] | None = None,
+    covered_branch_pairs: set[tuple[str, str]] | None = None,
+    include_non_overlapping_sibling_positives: bool = True,
+    tol: float = 1e-8,
+) -> dict[str, Any]:
+    """Construct each candidate's effective negative witness set WITHOUT turning verified overlapping positives
+    into unsatisfiable mutual-exclusion contradictions (`U02`).
+
+    Specifically:
+      - If candidate `b` and candidate `j` BOTH succeeded on witness `w` (`w in P_b and w in P_j`), `w` belongs to
+        the verified overlap `D_b ∩ D_j` and is NEVER added to `N_b` or `N_j`!
+      - Every executed scientific failure `w in N_b_exec` (that does not collide with `P_b`) IS added to `N_b`.
+      - When `include_non_overlapping_sibling_positives=True` and `(b, j)` is not in `covered_branch_pairs`,
+        sibling positives `w in P_j` that do NOT collide with any `p in P_b` are added as candidate negatives,
+        EXCEPT that any `w` which is geometrically inside `b`'s axis-aligned bounding box is flagged in the
+        0-LLM satisfiability pre-check rather than burning LLM retries!
+    """
+    cov = covered_branch_pairs or set()
+    exec_neg = executed_negative_witnesses_by_branch or {}
+    eff_neg: dict[str, list[dict[str, float | None]]] = {}
+    overlap_pairs: list[tuple[str, str]] = []
+    pos_neg_self_conflicts: list[str] = []
+
+    for i, b1 in enumerate(branch_ids):
+        p1 = positive_witnesses_by_branch.get(b1, [])
+        for b2 in branch_ids[i + 1 :]:
+            p2 = positive_witnesses_by_branch.get(b2, [])
+            if any(_witness_obs_equal(w1, w2, tol=tol) for w1 in p1 for w2 in p2):
+                overlap_pairs.append((b1, b2))
+
+    for bid in branch_ids:
+        pos_list = positive_witnesses_by_branch.get(bid, [])
+        cur_negs: list[dict[str, float | None]] = []
+        for wn in exec_neg.get(bid, []):
+            if any(_witness_obs_equal(wn, wp, tol=tol) for wp in pos_list):
+                pos_neg_self_conflicts.append(bid)
+                continue
+            if not any(_witness_obs_equal(wn, ex, tol=tol) for ex in cur_negs):
+                cur_negs.append(wn)
+        if include_non_overlapping_sibling_positives:
+            for other_bid in branch_ids:
+                if other_bid == bid or (bid, other_bid) in cov:
+                    continue
+                for ow in positive_witnesses_by_branch.get(other_bid, []):
+                    if any(_witness_obs_equal(ow, wp, tol=tol) for wp in pos_list):
+                        continue
+                    if not any(_witness_obs_equal(ow, ex, tol=tol) for ex in cur_negs):
+                        cur_negs.append(ow)
+        eff_neg[bid] = cur_negs
+
+    return {
+        "effective_negatives_by_branch": eff_neg,
+        "verified_overlap_pairs": overlap_pairs,
+        "pos_neg_self_conflicts": pos_neg_self_conflicts,
+    }
+
+
+def check_axis_aligned_all_of_guard_satisfiability(
+    *,
+    branch_ids: list[str],
+    feature_names: tuple[str, ...],
+    positive_witnesses_by_branch: dict[str, list[dict[str, float | None]]],
+    effective_negatives_by_branch: dict[str, list[dict[str, float | None]]],
+    min_clause_margin: float = 0.035,
+) -> dict[str, Any]:
+    """Exact `0`-LLM mathematical satisfiability pre-check for axis-aligned Kleene `all_of` guards (`U02`).
+
+    For branch `b` with positive bounding interval `[L_f, U_f]` on feature `f`, a single-threshold clause (`>=` or `<=`)
+    can accept all `p in P_b` with margin `>= m` AND reject negative witness `u` with margin `>= m` IF AND ONLY IF
+    `f` has global empirical spread `>= 2*m` AND (`L_f - u[f] >= 2*m` OR `u[f] - U_f >= 2*m`).
+    Returns per-branch satisfiability AND constructive max-margin `all_of` guards (`<= 4` clauses) when satisfiable!
+    """
+    all_wits: list[dict[str, float | None]] = []
+    for bid in branch_ids:
+        all_wits.extend(positive_witnesses_by_branch.get(bid, []))
+        all_wits.extend(effective_negatives_by_branch.get(bid, []))
+
+    min_spread = 2.0 * float(min_clause_margin)
+    feat_spread: dict[str, float] = {}
+    for fn in feature_names:
+        vals = [float(w[fn]) for w in all_wits if w.get(fn) is not None]
+        feat_spread[fn] = (max(vals) - min(vals)) if len(vals) >= 2 else 0.0
+
+    high_spread_feats = [fn for fn in feature_names if feat_spread.get(fn, 0.0) >= min_spread]
+    inseparable_branches: dict[str, list[int]] = {}
+    constructive_guards: dict[str, dict[str, Any]] = {}
+    any_nonempty_neg = False
+
+    for bid in branch_ids:
+        pos_l = positive_witnesses_by_branch.get(bid, [])
+        neg_l = effective_negatives_by_branch.get(bid, [])
+        if not neg_l:
+            constructive_guards[bid] = {"all_of": []}
+            continue
+        any_nonempty_neg = True
+        if not pos_l:
+            inseparable_branches[bid] = list(range(len(neg_l)))
+            continue
+
+        bounds_f: dict[str, tuple[float, float]] = {}
+        for fn in high_spread_feats:
+            pvals = [float(p[fn]) for p in pos_l if p.get(fn) is not None]
+            if len(pvals) == len(pos_l):
+                bounds_f[fn] = (min(pvals), max(pvals))
+
+        # Greedy set-cover over at most 4 max-margin separating clauses
+        uncovered = set(range(len(neg_l)))
+        chosen_clauses: list[dict[str, Any]] = []
+        while uncovered and len(chosen_clauses) < 4:
+            best_cl: dict[str, Any] | None = None
+            best_cov: set[int] = set()
+            best_margin = -1.0
+            for fn, (lo_p, hi_p) in bounds_f.items():
+                # Candidate `>=` clause rejecting `u[fn] <= lo_p - 2*m`
+                cov_ge = {
+                    ni
+                    for ni in uncovered
+                    if neg_l[ni].get(fn) is not None and (lo_p - float(neg_l[ni][fn])) >= min_spread + 1e-9
+                }
+                if cov_ge:
+                    max_neg_ge = max(float(neg_l[ni][fn]) for ni in cov_ge)
+                    margin_ge = 0.5 * (lo_p - max_neg_ge)
+                    thr_ge = round(0.5 * (lo_p + max_neg_ge), 6)
+                    if (len(cov_ge), margin_ge) > (len(best_cov), best_margin):
+                        best_cov = cov_ge
+                        best_margin = margin_ge
+                        best_cl = {"feature_name": fn, "op": ">=", "threshold": thr_ge}
+                # Candidate `<=` clause rejecting `u[fn] >= hi_p + 2*m`
+                cov_le = {
+                    ni
+                    for ni in uncovered
+                    if neg_l[ni].get(fn) is not None and (float(neg_l[ni][fn]) - hi_p) >= min_spread + 1e-9
+                }
+                if cov_le:
+                    min_neg_le = min(float(neg_l[ni][fn]) for ni in cov_le)
+                    margin_le = 0.5 * (min_neg_le - hi_p)
+                    thr_le = round(0.5 * (hi_p + min_neg_le), 6)
+                    if (len(cov_le), margin_le) > (len(best_cov), best_margin):
+                        best_cov = cov_le
+                        best_margin = margin_le
+                        best_cl = {"feature_name": fn, "op": "<=", "threshold": thr_le}
+            if best_cl is None or not best_cov:
+                break
+            chosen_clauses.append(best_cl)
+            uncovered -= best_cov
+
+        if uncovered:
+            inseparable_branches[bid] = sorted(uncovered)
+        else:
+            constructive_guards[bid] = {"all_of": chosen_clauses}
+
+    return {
+        "satisfiable": len(inseparable_branches) == 0,
+        "has_distinguishing_negatives": any_nonempty_neg,
+        "inseparable_branches": inseparable_branches,
+        "constructive_guards": constructive_guards,
+        "feature_spreads": feat_spread,
+    }
+
+
+def verify_m101_feasible_domain_guards(
+    *,
+    branch_guards: dict[str, dict[str, Any]],
+    positive_witnesses_by_branch: dict[str, list[dict[str, float | None]]],
+    effective_negatives_by_branch: dict[str, list[dict[str, float | None]]],
+    feature_spreads: dict[str, float],
+    min_clause_margin: float = 0.035,
+) -> dict[str, Any]:
+    """Verify per-candidate feasible-domain guards against own positives `P_b` and non-overlapping negatives `N_b` (`U02`)."""
+    min_spread = 2.0 * float(min_clause_margin)
+    reasons: list[str] = []
+
+    def _eval_clause(cl: dict[str, Any], w: dict[str, float | None]) -> tuple[bool, float]:
+        fn = str(cl["feature_name"])
+        op = str(cl["op"])
+        thr = float(cl["threshold"])
+        v = w.get(fn)
+        if v is None:
+            return False, 0.0
+        fv = float(v)
+        dist = abs(fv - thr)
+        if op == "<=":
+            ok = fv <= thr
+        elif op == "<":
+            ok = fv < thr
+        elif op == ">=":
+            ok = fv >= thr
+        elif op == ">":
+            ok = fv > thr
+        else:
+            ok = False
+        return ok, dist
+
+    for bid, g in sorted(branch_guards.items()):
+        clauses = list((g or {}).get("all_of") or [])
+        pos_l = positive_witnesses_by_branch.get(bid, [])
+        neg_l = effective_negatives_by_branch.get(bid, [])
+        if len(clauses) > 4:
+            reasons.append(f"too_many_clauses:{bid}:{len(clauses)}>4")
+        for cl in clauses:
+            fn = str(cl["feature_name"])
+            if feature_spreads.get(fn, 0.0) < min_spread:
+                reasons.append(f"low_spread_feature:{bid}:{fn}")
+            for wi, wp in enumerate(pos_l):
+                ok, dist = _eval_clause(cl, wp)
+                if not ok or dist < min_clause_margin:
+                    reasons.append(f"pos_rejected_or_low_margin:{bid}[{wi}]:{fn}")
+        for ni, wn in enumerate(neg_l):
+            if not clauses:
+                reasons.append(f"empty_guard_cannot_reject_negative:{bid}[{ni}]")
+                continue
+            falsified = False
+            for cl in clauses:
+                ok, dist = _eval_clause(cl, wn)
+                if (not ok) and dist >= min_clause_margin:
+                    falsified = True
+                    break
+            if not falsified:
+                reasons.append(f"neg_not_rejected_with_margin:{bid}[{ni}]")
+    return {"valid": len(reasons) == 0, "reasons": reasons}
+
+
+def select_feasible_candidates_ranked_by_public_evidence(
+    candidates: list[dict[str, Any]],
+    obs_now: dict[str, float | None],
+    positive_witnesses_by_id: dict[str, list[dict[str, float | None]]],
+    executed_negatives_by_id: dict[str, list[dict[str, float | None]]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return feasible candidate list (`applicable` or `unknown`, excluding explicitly falsified candidates) ranked by:
+      1. not having an exact executed negative match on `obs_now`,
+      2. Kleene guard applicability (`True` before empty/unconstrained `{}`),
+      3. minimum L1 distance in observable space to the candidate's verified positive witnesses (`U05` domain proximity!),
+      4. priority tiebreak (`-priority`, `id`).
+    Shared 100% symmetrically across Monolithic, Eager DAG, and Selective DAG arms!
+    """
+    neg_map = executed_negatives_by_id or {}
+    feasible: list[tuple[tuple[int, int, float, int, str], dict[str, Any]]] = []
+    rejected_fallback: list[tuple[tuple[float, int, str], dict[str, Any]]] = []
+
+    def _min_pos_dist(cid: str) -> float:
+        plist = positive_witnesses_by_id.get(cid) or []
+        if not plist:
+            return 999.0
+        best_d = 999.0
+        for pw in plist:
+            s = 0.0
+            cnt = 0
+            for k, v in obs_now.items():
+                pv = pw.get(k)
+                if v is not None and pv is not None:
+                    s += abs(float(v) - float(pv))
+                    cnt += 1
+            if cnt > 0:
+                best_d = min(best_d, s / cnt)
+        return round(best_d, 6)
+
+    for c in candidates:
+        cid = str(c["id"])
+        has_exact_neg = any(_witness_obs_equal(obs_now, nw) for nw in neg_map.get(cid, []))
+        g = c.get("guard") or {}
+        clauses = list(g.get("all_of") or [])
+        dist = _min_pos_dist(cid)
+        prio = int(c.get("priority", 0))
+        if not clauses:
+            g_ok = True
+            specificity = 0
+        else:
+            ev = evaluate_m96_autonomous_guard(g, obs_now, allow_open_feature_keys=True)
+            g_ok = (ev.get("state") == "TRUE") if isinstance(ev, dict) else bool(ev)
+            specificity = len(clauses)
+        if g_ok and not has_exact_neg:
+            # Prefer candidates that match non-empty specific guards OR have closer verified positive domain distance!
+            rank_key = (0, 0 if specificity > 0 else 1, dist, -prio, cid)
+            feasible.append((rank_key, c))
+        else:
+            rejected_fallback.append(((dist + (10.0 if has_exact_neg else 0.0), -prio, cid), c))
+
+    feasible.sort(key=lambda x: x[0])
+    rejected_fallback.sort(key=lambda x: x[0])
+    return [c for _, c in feasible] + [c for _, c in rejected_fallback]
+
+
+def persist_m101_full_prefix_state(
+    graph: PersistentMechanismGraph,
+    *,
+    world_id: str,
+    arm: str,
+    node_library: dict[str, ExecutableModuleNode],
+    dag_library: list[ExecutableComputationDAG],
+    withdrawals: list[CutWithdrawalMergeReceipt],
+    dag_pos_obs: dict[str, list[dict[str, float | None]]],
+    dag_neg_obs: dict[str, list[dict[str, float | None]]],
+    node_pos_obs: dict[str, list[dict[str, float | None]]],
+    dag_last_pos_probe: dict[str, tuple[str, str]],
+    candidate_input_verdicts: dict[str, dict[str, Any]],
+    attempted_decomp_from_dag_ids: set[str],
+    covered_dag_pairs: set[tuple[str, str]],
+    version_counter: int,
+    dag_counter: int,
+    event_seq: int,
+) -> dict[str, Any]:
+    """Persist COMPLETE online continual state (`U11`) so mid-stream cold restart resumes byte-identically."""
+    payload = {
+        "schema": "hegel_m10_1_1_full_prefix_state_v2",
+        "verifier_schema_version": M10_1_1_VERIFIER_SCHEMA_VERSION,
+        "shared_kernel_version": SHARED_KERNEL_VERSION,
+        "world_id": str(world_id),
+        "arm": str(arm),
+        "node_library": {k: v.to_dict() for k, v in sorted(node_library.items())},
+        "dag_library": [d.to_dict() for d in dag_library],
+        "cut_withdrawal_receipts": [w.to_dict() for w in withdrawals],
+        "dag_pos_obs": deepcopy(dag_pos_obs),
+        "dag_neg_obs": deepcopy(dag_neg_obs),
+        "node_pos_obs": deepcopy(node_pos_obs),
+        "dag_last_pos_probe": {k: [str(v[0]), str(v[1])] for k, v in sorted(dag_last_pos_probe.items())},
+        "candidate_input_verdicts": deepcopy(candidate_input_verdicts),
+        "attempted_decomp_from_dag_ids": sorted(attempted_decomp_from_dag_ids),
+        "covered_dag_pairs": sorted([list(p) for p in covered_dag_pairs]),
+        "version_counter": int(version_counter),
+        "dag_counter": int(dag_counter),
+        "event_seq": int(event_seq),
+    }
+    state_sha = _canonical_json_sha256(payload)
+    full_blob = {**payload, "state_sha256": state_sha}
+    graph.forest.questions[M101_DAG_LEDGER_FOREST_KEY] = full_blob
+    graph.sync_authoritative_state_to_forest()
+    return full_blob
+
+
+def hydrate_m101_full_prefix_state(
+    graph: PersistentMechanismGraph,
+    probe_store: ProbeReceiptStore,
+    *,
+    allowed_guard_features: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    """Cold-load and strictly verify `state_sha256`, `verifier_schema_version`, all indexed `ProbeReceiptStore` files,
+    every node's external probe receipt, and every `CutWithdrawalMergeReceipt`'s 4-way semantic FK (`U03 + U11`)!
+    """
+    blob = graph.forest.questions.get(M101_DAG_LEDGER_FOREST_KEY)
+    if not isinstance(blob, dict):
+        raise ValueError("Missing M10.1 DAG prefix state blob in checkpoint (`U11`)")
+    stored_sha = str(blob.get("state_sha256") or "")
+    core = {k: v for k, v in blob.items() if k != "state_sha256"}
+    if not stored_sha or stored_sha != _canonical_json_sha256(core):
+        raise ValueError("Tampered M10.1 DAG prefix `state_sha256` on cold hydration (`U11`)")
+    if blob.get("schema") == "hegel_m10_1_1_full_prefix_state_v2":
+        if blob.get("verifier_schema_version") != M10_1_1_VERIFIER_SCHEMA_VERSION:
+            raise ValueError(f"Incompatible verifier_schema_version `{blob.get('verifier_schema_version')}` (`U11`)")
+
+    probe_store.verify_all_indexed_receipts()
+
+    node_lib = {k: ExecutableModuleNode.from_dict(v) for k, v in (blob.get("node_library") or {}).items()}
+    for vid, mn in sorted(node_lib.items()):
+        if mn.probe_receipt_id:
+            probe_store.load_probe_receipt(
+                mn.probe_receipt_id,
+                expected_content_sha256=mn.probe_receipt_sha256,
+                verify_graph_index=True,
+            )
+
+    dag_lib = [ExecutableComputationDAG.from_dict(x) for x in (blob.get("dag_library") or [])]
+    known_dag_shas: dict[str, dict[str, str]] = {}
+    for d in dag_lib:
+        d.validate_topology()
+        known_dag_shas[d.dag_id] = {nid: node_lib[vid].code_sha256 for nid, vid in d.node_versions.items()}
+
+    withdrawals = [CutWithdrawalMergeReceipt.from_dict(x) for x in (blob.get("cut_withdrawal_receipts") or [])]
+    for w in withdrawals:
+        verify_m101_cut_withdrawal_external_fk(
+            w,
+            probe_store,
+            allowed_guard_features=allowed_guard_features,
+            known_dag_node_shas=known_dag_shas,
+        )
+
+    return {
+        "world_id": str(blob["world_id"]),
+        "arm": str(blob.get("arm") or ""),
+        "node_library": node_lib,
+        "dag_library": dag_lib,
+        "withdrawals": withdrawals,
+        "dag_pos_obs": deepcopy(blob.get("dag_pos_obs") or {}),
+        "dag_neg_obs": deepcopy(blob.get("dag_neg_obs") or {}),
+        "node_pos_obs": deepcopy(blob.get("node_pos_obs") or {}),
+        "dag_last_pos_probe": {
+            str(k): (str(v[0]), str(v[1])) for k, v in (blob.get("dag_last_pos_probe") or {}).items()
+        },
+        "candidate_input_verdicts": deepcopy(blob.get("candidate_input_verdicts") or {}),
+        "attempted_decomp_from_dag_ids": {str(x) for x in (blob.get("attempted_decomp_from_dag_ids") or [])},
+        "covered_dag_pairs": {(str(p[0]), str(p[1])) for p in (blob.get("covered_dag_pairs") or [])},
+        "version_counter": int(blob.get("version_counter", 1)),
+        "dag_counter": int(blob.get("dag_counter", 1)),
+        "event_seq": int(blob.get("event_seq", 0)),
+        "state_sha256": stored_sha,
+    }
+
+
 __all__ = [
     "BLIND_M101_INSTRUCTION_TEXT",
     "CONFIRMATION_M101_WORLD_SPECS",
@@ -1851,16 +2517,23 @@ __all__ = [
     "M101_MAX_FANOUT",
     "M101_OBSERVABLE_NAMES",
     "M101_OUTPUT_KEYS",
+    "M10_1_1_VERIFIER_SCHEMA_VERSION",
     "REF_DEV_NODE_JOIN_READOUT_PY",
+    "build_feasible_domain_negative_witnesses",
     "build_m101_world_tasks",
     "build_ref_dev_node_pa_code",
     "build_ref_dev_node_pb_code",
     "build_ref_dev_node_pc_code",
+    "check_axis_aligned_all_of_guard_satisfiability",
     "compile_m101_dag_to_instrumented_solver_code",
     "compute_m101_neutral_observables",
     "execute_m101_public_gate_in_container",
     "grade_m101_candidate_in_container",
+    "hydrate_m101_full_prefix_state",
     "m101_task_to_frontier_task",
     "materialize_m101_public_study_and_sha",
+    "persist_m101_full_prefix_state",
+    "select_feasible_candidates_ranked_by_public_evidence",
     "verify_m101_cut_withdrawal_external_fk",
+    "verify_m101_feasible_domain_guards",
 ]

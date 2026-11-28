@@ -2603,7 +2603,32 @@ class ProbeReceiptStore:
         env = {**env_core, "envelope_sha256": _canonical_json_sha256(env_core)}
         tmp_fp = self.root_dir / f".{fp.name}.{uuid.uuid4().hex[:8]}.tmp"
         tmp_fp.write_text(json.dumps(env, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
-        os.replace(tmp_fp, fp)
+        try:
+            try:
+                os.link(tmp_fp, fp)
+            except FileExistsError:
+                existing = json.loads(fp.read_text(encoding="utf-8"))
+                if existing.get("receipt_content_sha256") != content_sha:
+                    raise ValueError(
+                        f"Refusing to overwrite existing ProbeReceipt `{pid}` under concurrent write (`T01/U03`)"
+                    )
+                self._sync_index_entry(
+                    {
+                        "probe_id": pid,
+                        "filename": fp.name,
+                        "probe_kind": str(existing.get("probe_kind") or probe_kind),
+                        "executed_utc": str(existing.get("executed_utc") or ""),
+                        "receipt_content_sha256": str(existing["receipt_content_sha256"]),
+                        "envelope_sha256": str(existing["envelope_sha256"]),
+                    }
+                )
+                return existing
+        finally:
+            if tmp_fp.exists():
+                try:
+                    tmp_fp.unlink()
+                except OSError:
+                    pass
         self._sync_index_entry(
             {
                 "probe_id": pid,
@@ -2648,31 +2673,47 @@ class ProbeReceiptStore:
             )
         if verify_graph_index and self.graph is not None:
             blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY)
-            if isinstance(blob, dict) and blob.get("schema") == "hegel_m10_0_1_probe_receipt_index_v1":
-                entries = blob.get("entries") or {}
-                if str(blob.get("state_sha256") or "") != _canonical_json_sha256({"entries": entries}):
-                    raise ValueError("Tampered graph probe receipt index state_sha256 (`T01`)")
-                idx_entry = entries.get(pid)
-                if not isinstance(idx_entry, dict):
-                    raise ValueError(f"ProbeReceipt `{pid}` missing from graph probe receipt index (`T01`)")
-                if (
-                    idx_entry.get("receipt_content_sha256") != calc_content_sha
-                    or idx_entry.get("envelope_sha256") != stored_env_sha
-                ):
-                    raise ValueError(f"ProbeReceipt `{pid}` disagrees with graph probe receipt index (`T01`)")
+            if not isinstance(blob, dict) or blob.get("schema") != "hegel_m10_0_1_probe_receipt_index_v1":
+                raise ValueError(
+                    f"Missing or malformed graph probe receipt index when verifying `{pid}` (`T01/U03`)"
+                )
+            entries = blob.get("entries")
+            if not isinstance(entries, dict):
+                raise ValueError("Graph probe receipt index missing dict `entries` (`T01/U03`)")
+            if str(blob.get("state_sha256") or "") != _canonical_json_sha256({"entries": entries}):
+                raise ValueError("Tampered graph probe receipt index state_sha256 (`T01`)")
+            idx_entry = entries.get(pid)
+            if not isinstance(idx_entry, dict):
+                raise ValueError(f"ProbeReceipt `{pid}` missing from graph probe receipt index (`T01`)")
+            if (
+                idx_entry.get("receipt_content_sha256") != calc_content_sha
+                or idx_entry.get("envelope_sha256") != stored_env_sha
+            ):
+                raise ValueError(f"ProbeReceipt `{pid}` disagrees with graph probe receipt index (`T01`)")
         return env
 
     def verify_all_indexed_receipts(self) -> dict[str, Any]:
+        files = sorted(self.root_dir.glob("*.json")) if self.root_dir.is_dir() else []
         if self.graph is None:
-            files = sorted(self.root_dir.glob("*.json")) if self.root_dir.is_dir() else []
             verified = 0
             for fp in files:
                 env = json.loads(fp.read_text(encoding="utf-8"))
                 self.load_probe_receipt(str(env.get("probe_id") or ""), verify_graph_index=False)
                 verified += 1
             return {"ok": True, "verified_count": verified}
-        blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY) or {}
-        entries = blob.get("entries") or {}
+        blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY)
+        if not isinstance(blob, dict) or blob.get("schema") != "hegel_m10_0_1_probe_receipt_index_v1":
+            raise ValueError("Missing or malformed graph probe receipt index (`T01/U03`)")
+        entries = blob.get("entries")
+        if not isinstance(entries, dict):
+            raise ValueError("Malformed graph probe receipt index `entries` (`T01/U03`)")
+        if str(blob.get("state_sha256") or "") != _canonical_json_sha256({"entries": entries}):
+            raise ValueError("Tampered graph probe receipt index state_sha256 (`T01/U03`)")
+        disk_pids = {fp.stem for fp in files}
+        if disk_pids != set(entries.keys()):
+            raise ValueError(
+                f"Disk probe receipt files `{sorted(disk_pids - set(entries.keys()))}` / index `{sorted(set(entries.keys()) - disk_pids)}` mismatch (`T01/U03`)"
+            )
         for pid in sorted(entries.keys()):
             self.load_probe_receipt(pid, verify_graph_index=True)
         return {"ok": True, "verified_count": len(entries)}

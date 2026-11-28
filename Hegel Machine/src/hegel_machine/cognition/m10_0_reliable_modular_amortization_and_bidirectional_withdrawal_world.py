@@ -42,7 +42,11 @@ from . import m6_frontier_real_benchmarks as m6f
 from .m7_holdout_ood_blind_benchmark import HoldoutOODTask
 from .m9_4_1_shared_verification_kernel import (
     SHARED_KERNEL_VERSION,
+    calibrate_alpha_physical_stresses,
+    check_alpha_public_time_kernel_and_derivative_consistency,
+    compute_beta_calibration_kkt_uncertainty_bound,
     encode_pure_json_numerical_payload,
+    standardize_reference_coupon_panel,
     verify_alpha_pooled_ref_coupon_invariance,
 )
 from .m9_5_equal_tool_continual_attribution_world import (
@@ -1021,8 +1025,14 @@ print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_tau_rel_
 '''
     # Stage just the public behavioral check. The shared scientific kernel also contains private grading logic.
     schema_program = (
-        "from __future__ import annotations\nimport copy, importlib.util, json, os, pickle, sys\nimport numpy as np\n"
+        "from __future__ import annotations\nimport copy, importlib.util, json, math, os, pickle, sys\nfrom typing import Any\nimport numpy as np\n"
+        + inspect.getsource(standardize_reference_coupon_panel)
+        + "\n"
+        + inspect.getsource(calibrate_alpha_physical_stresses)
+        + "\n"
         + inspect.getsource(verify_alpha_pooled_ref_coupon_invariance)
+        + "\n"
+        + inspect.getsource(check_alpha_public_time_kernel_and_derivative_consistency)
         + """
 _d = os.path.dirname(os.path.abspath(__file__))
 cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_d, "batch_solver.py")
@@ -1030,12 +1040,15 @@ spec = importlib.util.spec_from_file_location("_cand", cand_p)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 with open(os.path.join(_d, "public_batch.pkl"), "rb") as fh:
-    ds = pickle.load(fh)[0]["dataset"]
+    _item = pickle.load(fh)[0]
+ds = _item["dataset"]
+diag = _item.get("campaign_diagnostics")
 out = mod.solve_batch(copy.deepcopy(ds))
 n_te = len(ds["test"]["lab_id"])
 k_t = len(ds["eval_times"])
 errs = []
 coupon = None
+t05_diag = None
 if not isinstance(out, dict):
     errs.append("not_dict")
 else:
@@ -1054,7 +1067,11 @@ else:
                 errs.append("pooled_reference_coupon_invariance_failed")
         except (KeyError, TypeError, ValueError, IndexError):
             errs.append("invalid_output_on_reference_exchange")
-print(json.dumps({"schema_valid": not errs, "errors": errs, "pooled_reference_check": coupon}, allow_nan=False))
+    if not errs:
+        t05_diag = check_alpha_public_time_kernel_and_derivative_consistency(ds, out, campaign_diagnostics=diag)
+        if not t05_diag["ok"]:
+            errs.extend(t05_diag["errors"])
+print(json.dumps({"schema_valid": not errs, "errors": errs, "pooled_reference_check": coupon, "t05_derivative_check": t05_diag}, allow_nan=False))
 sys.exit(1 if errs else 0)
 """
     )
@@ -1126,6 +1143,40 @@ el = time.monotonic() - t0
 sp = bool(valid and len(rows) == 2 and max_w_rel is not None and max_f_rel is not None and max_gap is not None and max_w_rel <= 1.5e-3 and max_f_rel <= 1.5e-3 and max_gap <= 2e-4 and el <= 25.0)
 print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2": (round(max_w_rel, 7) if max_w_rel is not None else None), "max_field_rel_l2": (round(max_f_rel, 7) if max_f_rel is not None else None), "max_kkt_gap": (round(max_gap, 9) if max_gap is not None else None), "student_elapsed_sec": round(el, 4), "instance_diagnostics": rows}, allow_nan=False))
 '''
+    beta_schema_py = (
+        "from __future__ import annotations\nimport copy, importlib.util, json, math, os, pickle, sys\nfrom typing import Any\nimport numpy as np\n"
+        + inspect.getsource(compute_beta_calibration_kkt_uncertainty_bound)
+        + """
+_d = os.path.dirname(os.path.abspath(__file__))
+cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_d, "batch_solver.py")
+spec = importlib.util.spec_from_file_location("_cand", cand_p)
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+item = pickle.load(open(os.path.join(_d, "public_batch.pkl"), "rb"))[0]
+st = item["study"]
+out = mod.solve_batch(copy.deepcopy(st))
+m_m = st["source_modes"].shape[0]; nx = int(st["nx"]); ny = int(st["ny"])
+errs = []
+t06_diag = None
+if not isinstance(out, dict):
+    errs.append("not_dict")
+else:
+    for k, shp in (("weights", (m_m,)), ("terminal_field", (nx, ny))):
+        if k not in out:
+            errs.append(f"missing:{k}")
+            continue
+        a = np.asarray(out[k], dtype=float)
+        if a.shape != shp or not np.all(np.isfinite(a)):
+            errs.append(f"bad:{k}:{a.shape}")
+    if not isinstance(out.get("kkt_certificate"), dict):
+        errs.append("missing_or_bad:kkt_certificate")
+    if not errs:
+        t06_diag = compute_beta_calibration_kkt_uncertainty_bound(st, out, enforce_uncertainty_budget=True)
+        if not t06_diag["ok"]:
+            errs.extend(t06_diag["errors"])
+print(json.dumps({"schema_valid": len(errs) == 0, "errors": errs, "t06_kkt_uncertainty_check": t06_diag}))
+sys.exit(0 if len(errs) == 0 else 1)
+"""
+    )
     pub_setup = (
         "import json, math, os, pickle, sys\nimport numpy as np\n"
         + _M100_BETA_GEN_PY
@@ -1133,26 +1184,7 @@ print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2
         'pub_diag = pub_st.pop("_campaign_diagnostics", None)\n'
         'with open("/holdout_task/public_batch.pkl", "wb") as fh:\n'
         '    pickle.dump([{"study": pub_st, "campaign_diagnostics": pub_diag}], fh)\n'
-        'open("/holdout_task/validate_public_schema.py", "w").write("""import copy, importlib.util, json, os, pickle, sys\nimport numpy as np\n'
-        '_d = os.path.dirname(os.path.abspath(__file__))\n'
-        'cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_d, "batch_solver.py")\n'
-        'spec = importlib.util.spec_from_file_location("_cand", cand_p)\n'
-        'mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n'
-        'item = pickle.load(open(os.path.join(_d, "public_batch.pkl"), "rb"))[0]\n'
-        'st = item["study"]\n'
-        'out = mod.solve_batch(copy.deepcopy(st))\n'
-        'm_m = st["source_modes"].shape[0]; nx = int(st["nx"]); ny = int(st["ny"])\n'
-        'errs = []\n'
-        'if not isinstance(out, dict): errs.append("not_dict")\n'
-        'else:\n'
-        '    for k, shp in (("weights", (m_m,)), ("terminal_field", (nx, ny))):\n'
-        '        if k not in out: errs.append(f"missing:{k}"); continue\n'
-        '        a = np.asarray(out[k], dtype=float)\n'
-        '        if a.shape != shp or not np.all(np.isfinite(a)): errs.append(f"bad:{k}:{a.shape}")\n'
-        '    if not isinstance(out.get("kkt_certificate"), dict): errs.append("missing_or_bad:kkt_certificate")\n'
-        'print(json.dumps({"schema_valid": len(errs) == 0, "errors": errs}))\n'
-        'sys.exit(0 if len(errs) == 0 else 1)\n'
-        '""")\n'
+        + f'open("/holdout_task/validate_public_schema.py", "w").write({beta_schema_py!r})\n'
     )
     priv_ver = (
         "import json, math, os, sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\n"

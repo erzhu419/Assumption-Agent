@@ -94,13 +94,18 @@ from hegel_machine.cognition.m10_1_unknown_cut_dag_discovery_world import (  # n
     ExecutableComputationDAG,
     ExecutableModuleNode,
     M101WorldSpec,
+    build_feasible_domain_negative_witnesses,
     build_m101_world_tasks,
+    check_axis_aligned_all_of_guard_satisfiability,
     compile_m101_dag_to_instrumented_solver_code,
     compute_m101_neutral_observables,
     execute_m101_public_gate_in_container,
     grade_m101_candidate_in_container,
+    hydrate_m101_full_prefix_state,
     m101_task_to_frontier_task,
     materialize_m101_public_study_and_sha,
+    persist_m101_full_prefix_state,
+    select_feasible_candidates_ranked_by_public_evidence,
     verify_m101_cut_withdrawal_external_fk,
 )
 
@@ -1162,17 +1167,51 @@ def _run_one_m101_world_arm_stream(
         existing_ids: list[str],
         pos_map: dict[str, list[dict[str, float | None]]],
         neg_map: dict[str, list[dict[str, float | None]]],
+        covered_pairs: set[tuple[str, str]] | None = None,
     ) -> dict[str, Any] | None:
         if not existing_ids:
             return None
+        all_bids = list(existing_ids) + [new_id]
+        feas = build_feasible_domain_negative_witnesses(
+            branch_ids=all_bids,
+            positive_witnesses_by_branch=pos_map,
+            executed_negative_witnesses_by_branch=neg_map,
+            covered_branch_pairs=covered_pairs,
+        )
+        sat = check_axis_aligned_all_of_guard_satisfiability(
+            branch_ids=all_bids,
+            feature_names=M101_OBSERVABLE_NAMES,
+            positive_witnesses_by_branch=pos_map,
+            effective_negatives_by_branch=feas["effective_negatives_by_branch"],
+            min_clause_margin=0.035,
+        )
+        if not sat["has_distinguishing_negatives"]:
+            return {
+                "accepted": False,
+                "skipped_zero_llm": True,
+                "reason": "overlapping_valid_domains_no_distinguishing_negatives",
+                "verified_overlap_pairs": [list(p) for p in feas["verified_overlap_pairs"]],
+            }
+        if not sat["satisfiable"]:
+            return {
+                "accepted": False,
+                "skipped_zero_llm": True,
+                "reason": "unidentifiable_from_current_observables",
+                "inseparable_branches": sat["inseparable_branches"],
+            }
         if mock_backend is not None and hasattr(mock_backend, "induce_guards"):
             return mock_backend.induce_guards(
                 new_id=new_id,
                 existing_ids=existing_ids,
                 pos_map=pos_map,
-                neg_map=neg_map,
+                neg_map=feas["effective_negatives_by_branch"],
                 feature_names=M101_OBSERVABLE_NAMES,
             )
+        # Merge verified overlap pairs into `covered_branch_pairs` so overlapping positives NEVER force impossible exclusion (`U02`!)
+        eff_cov: set[tuple[str, str]] = set(covered_pairs or set())
+        for b1, b2 in feas["verified_overlap_pairs"]:
+            eff_cov.add((b1, b2))
+            eff_cov.add((b2, b1))
         cli = _make_codex_client(ep_dir, "guard_induction", ep_sn)
         return propose_and_validate_m99_guard_partition(
             client=cli,
@@ -1182,7 +1221,8 @@ def _run_one_m101_world_arm_stream(
             existing_branch_ids=existing_ids,
             new_branch_id_placeholder=new_id,
             positive_witness_features_by_branch=pos_map,
-            negative_witness_features_by_branch=neg_map,
+            negative_witness_features_by_branch=feas["effective_negatives_by_branch"],
+            covered_branch_pairs=eff_cov,
             min_clause_margin=0.035,
             max_attempts=2,
         )
@@ -1773,33 +1813,84 @@ def _run_one_m101_world_arm_stream(
                                 for _nid, _vid in cand_dag.node_versions.items():
                                     node_pos_obs.setdefault(_vid, []).append(obs_now)
 
-                                # Issue 4-link external-FK `CutWithdrawalMergeReceipt` when `merge_nodes` / `rewire_edge` withdraws a cut!
+                                # Decouple candidate public adoption from cut-withdrawal proof issuance (`U03 + U04`!):
+                                # 1) Always adopt a valid public-passing `cand_dag` without discarding it over withdrawal metadata.
+                                # 2) Issue `CutWithdrawalMergeReceipt` ONLY when `old_d` existed prior to `step_i` (`origin_step < step_i`,
+                                #    NOT `first_decomposition_and_adaptation` on the very same step!) AND has an exact same-code
+                                #    scientific rejection on the current `pub_sha`!
                                 if act in {"merge_nodes", "rewire_edge"}:
+                                    dag_by_id = {d.dag_id: d for d in dag_library}
                                     old_d_id = str(ep_plan.get("base_dag_id") or chosen_dag.dag_id)
-                                    if old_d_id not in dag_last_pos_probe:
+                                    if old_d_id not in dag_by_id or old_d_id not in dag_last_pos_probe:
                                         old_d_id = ref_multi.dag_id
-                                    pr_pid, pr_psha = dag_last_pos_probe[old_d_id]
-                                    wd_rec = CutWithdrawalMergeReceipt(
-                                        receipt_id="",
-                                        world_id=wid,
-                                        old_dag_id=old_d_id,
-                                        new_dag_id=cand_dag.dag_id,
-                                        action=act,
-                                        prior_positive_probe_id=pr_pid,
-                                        prior_positive_receipt_sha256=pr_psha,
-                                        preserved_node_probe_id=health_pid,
-                                        preserved_node_receipt_sha256=health_psha,
-                                        failing_joint_probe_id=p1_id,
-                                        failing_joint_receipt_sha256=p1_sha,
-                                        new_passing_probe_id=pe_id,
-                                        new_passing_receipt_sha256=pe_sha,
-                                        preserved_old_dag_id=old_d_id,
-                                        expanded_guard_features=list(M101_OBSERVABLE_NAMES),
-                                    )
-                                    wd_rec.receipt_id = wd_rec.compute_expected_receipt_id()
-                                    verify_m101_cut_withdrawal_external_fk(wd_rec, probe_store)
-                                    withdrawals.append(wd_rec)
-                                    withdrawal_this_step = wd_rec.to_dict()
+                                    old_d_obj = dag_by_id.get(old_d_id)
+                                    if old_d_obj is not None and int(old_d_obj.origin_step) < int(step_i):
+                                        pr_pid, pr_psha = dag_last_pos_probe[old_d_id]
+                                        old_shas = {nid: node_library[vid].code_sha256 for nid, vid in old_d_obj.node_versions.items()}
+                                        new_shas = {nid: node_library[vid].code_sha256 for nid, vid in cand_dag.node_versions.items()}
+                                        # Ensure failing_joint probe actually executed `old_d_obj` on current `task` (`U03`!)
+                                        if chosen_dag.dag_id == old_d_id and (g1.get("dag_runtime_trace") or {}).get("node_code_shas") == old_shas:
+                                            fail_pid, fail_psha = p1_id, p1_sha
+                                        else:
+                                            old_c_code, _ = compile_m101_dag_to_instrumented_solver_code(old_d_obj, node_library)
+                                            g_old_fail = execute_m101_public_gate_in_container(
+                                                task=task, candidate_code=old_c_code, expect_dag_trace=True
+                                            )
+                                            fail_pid, fail_psha = _persist_m101_probe(
+                                                probe_store,
+                                                probe_kind="withdrawal_old_dag_current_failure_probe",
+                                                receipt=g_old_fail,
+                                                metadata={"world_id": wid, "arm": arm, "step": step_i, "dag_id": old_d_id},
+                                            )
+                                            post_probes_wall_ms += float(g_old_fail.get("wall_ms") or 0.0)
+                                        try:
+                                            tgt_in_sha = str(g_edit.get("public_input_sha256") or pub_sha)
+                                            wd_rec = CutWithdrawalMergeReceipt(
+                                                receipt_id="",
+                                                world_id=wid,
+                                                arm=arm,
+                                                old_dag_id=old_d_id,
+                                                new_dag_id=cand_dag.dag_id,
+                                                action=act,
+                                                prior_positive_probe_id=pr_pid,
+                                                prior_positive_receipt_sha256=pr_psha,
+                                                preserved_node_probe_id=health_pid,
+                                                preserved_node_receipt_sha256=health_psha,
+                                                failing_joint_probe_id=fail_pid,
+                                                failing_joint_receipt_sha256=fail_psha,
+                                                new_passing_probe_id=pe_id,
+                                                new_passing_receipt_sha256=pe_sha,
+                                                preserved_old_dag_id=old_d_id,
+                                                expanded_guard_features=list(M101_OBSERVABLE_NAMES),
+                                                old_dag_node_code_shas=old_shas,
+                                                new_dag_node_code_shas=new_shas,
+                                                target_public_input_sha256=tgt_in_sha,
+                                                preserved_evidence_level="runtime_interface_healthy",
+                                            )
+                                            wd_rec.receipt_id = wd_rec.compute_expected_receipt_id()
+                                            known_shas = {
+                                                **{
+                                                    d.dag_id: {n: node_library[v].code_sha256 for n, v in d.node_versions.items()}
+                                                    for d in dag_library
+                                                },
+                                                cand_dag.dag_id: new_shas,
+                                            }
+                                            verify_m101_cut_withdrawal_external_fk(
+                                                wd_rec, probe_store, known_dag_node_shas=known_shas
+                                            )
+                                            withdrawals.append(wd_rec)
+                                            withdrawal_this_step = wd_rec.to_dict()
+                                        except ValueError as wd_exc:
+                                            withdrawal_this_step = {
+                                                "withdrawal_status": "unproved_candidate_adopted",
+                                                "reason": str(wd_exc),
+                                                "adopted_dag_id": cand_dag.dag_id,
+                                            }
+                                    else:
+                                        withdrawal_this_step = {
+                                            "withdrawal_status": "first_decomposition_and_adaptation",
+                                            "adopted_dag_id": cand_dag.dag_id,
+                                        }
 
                                 ex_ids = [d.dag_id for d in dag_library]
                                 dag_pos_obs[cand_dag.dag_id] = [obs_now]
