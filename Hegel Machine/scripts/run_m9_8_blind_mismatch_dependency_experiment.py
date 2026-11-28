@@ -418,6 +418,7 @@ def _run_one_m98_world_arm_stream(
             dn_ctrl=dn_ctrl,
             graph=graph,
             registry=registry,
+            require_split_evidence=(arm == "Hegel_FactoredMechanismGraph"),
             readonly_dependencies=readonly_deps,
             expected_dependency_sha256=readonly_shas,
         )
@@ -729,7 +730,12 @@ def _run_one_m98_world_arm_stream(
 
             elif arm == "Hegel_FactoredMechanismGraph" and graph is not None and registry is not None and up_ctrl is not None and dn_ctrl is not None:
                 ev_sha = hashlib.sha256(json.dumps(pub_gate_post.get("scientific_probe_receipt") or {}, sort_keys=True).encode("utf-8")).hexdigest()
-                if is_hegel_upstream_synth:
+                witness_key = "upstream_tested_witness" if is_hegel_upstream_synth else "downstream_tested_witness"
+                witness = pre_trial.get(witness_key) or {}
+                if not (witness.get("result") == "failed" and witness.get("execution_status") == "completed"
+                        and witness.get("failure_kind") in {"scientific_or_numerical", "domain_precondition"}):
+                    ind_receipt = {"accepted": False, "attempts_used": 0, "status": "pending_scientific_counterexample"}
+                elif is_hegel_upstream_synth:
                     failed_up_id = str(pre_trial["selected_upstream_binding_id"])
                     ex_ups = sorted(
                         [b for b in registry.bindings.values() if b.chain_id == f"{fam}_up" and b.qualification_status == "verified"],
@@ -895,6 +901,8 @@ def _run_one_m98_world_arm_stream(
         ep_sum["strict_pass"] = bool(priv_ver.get("strict_pass"))
         ep_sum["reward"] = 1.0 if priv_ver.get("strict_pass") else 0.0
         ep_sum["pre_llm_probe_wall_ms"] = float(pre_trial.get("probe_wall_ms", 0.0))
+        ep_sum["localization_probe_wall_ms"] = float(pre_trial.get("localization_probe_wall_ms", 0.0))
+        ep_sum["localization_probes_used"] = int(pre_trial.get("localization_probes_used", 0))
         ep_sum["readonly_dependencies_sha256"] = readonly_shas
         ep_sum["public_qualification_status"] = "public_gate_verified" if pub_gate_post.get("accepted") else "public_gate_failed"
         ep_sum["calibration_update_receipt"] = cal_upd.get("graph_receipt")
@@ -938,6 +946,8 @@ def _run_one_m98_world_arm_stream(
         "zero_llm_episodes_total": sum(1 for r in episode_results if int(r.get("turns_used", 0) or 0) == 0),
         "zero_turn_passed_closures": sum(1 for r in episode_results if int(r.get("turns_used", 0) or 0) == 0 and r.get("strict_pass")),
         "total_turns_used": sum(int(r.get("turns_used", 0) or 0) for r in episode_results),
+        "total_localization_probe_wall_ms": round(sum(r.get("localization_probe_wall_ms", 0.0) for r in episode_results), 2),
+        "total_localization_probes": sum(r.get("localization_probes_used", 0) for r in episode_results),
         "total_pre_llm_probe_wall_ms": round(sum(float(r.get("pre_llm_probe_wall_ms", 0.0) or 0.0) for r in episode_results), 2),
         "total_coverage_probe_wall_ms": round(sum(float(c["total_cpu_probe_wall_ms"]) for c in coverage_receipts_log), 2),
         "guard_induction_events": guard_induction_events,
@@ -1443,6 +1453,8 @@ def main() -> None:
                 "strict_passes": sum(s["strict_passes"] for s in streams_out if s["arm"] == arm_nm),
                 "zero_llm_episodes": sum(s["zero_llm_episodes_total"] for s in streams_out if s["arm"] == arm_nm),
                 "zero_turn_passed_closures": sum(s["zero_turn_passed_closures"] for s in streams_out if s["arm"] == arm_nm),
+                "localization_probe_wall_ms": round(sum(s.get("total_localization_probe_wall_ms", 0.0) for s in streams_out if s["arm"] == arm_nm), 2),
+                "localization_probes": sum(s.get("total_localization_probes", 0) for s in streams_out if s["arm"] == arm_nm),
                 "pre_llm_probe_wall_ms": round(sum(s["total_pre_llm_probe_wall_ms"] for s in streams_out if s["arm"] == arm_nm), 2),
                 "coverage_probe_wall_ms": round(sum(s["total_coverage_probe_wall_ms"] for s in streams_out if s["arm"] == arm_nm), 2),
             }

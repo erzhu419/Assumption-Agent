@@ -1806,10 +1806,17 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             )
             sh_r = m6f.exec_container_bash(cid, "python3 -I -c " + shlex.quote(pub_shas_py), timeout_sec=15)
             pub_lines = [ln for ln in sh_r["stdout"].strip().splitlines() if ln.strip()]
-            pub_shas = json.loads(pub_lines[-1]) if (setup_ok and pub_lines) else {}
+            try:
+                pub_shas = json.loads(pub_lines[-1]) if setup_ok and sh_r["exit_code"] == 0 and pub_lines else {}
+            except ValueError:
+                pub_shas = {}
+            setup_ok = bool(setup_ok and isinstance(pub_shas, dict)
+                            and set(pub_shas) == set(ft.required_public_assets)
+                            and all(pub_shas.get(k) == v for k, v in ro_shas.items()))
             subprocess.run(["docker", "cp", str(td_p / "cand.py"), f"{cid}:{art_path}"], check=True, timeout=15)
 
         cand_bundle_sha = m6f.compute_declared_artifacts_digest(cid, ft.declared_artifacts)
+        setup_ok = bool(setup_ok and cand_bundle_sha)
         sch_r = (
             m6f.exec_container_bash(
                 cid,
@@ -1836,7 +1843,8 @@ def execute_single_pre_llm_public_gate_probe_in_container(
         sci_timed_out = bool(
             isinstance(sci_rec, dict)
             and (
-                bool(sci_rec.get("timed_out"))
+                sci_rec.get("execution_status") == "timeout"
+                or bool(sci_rec.get("timed_out"))
                 or "[timeout:" in str(sci_rec.get("worker_stderr") or "").lower()
                 or "timed out" in str(sci_rec.get("error") or "").lower()
             )
@@ -1854,6 +1862,7 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             "schema_stderr": sch_r["stderr"][-320:],
             "candidate_bundle_sha256": cand_bundle_sha,
             "candidate_raw_sha256": hashlib.sha256(candidate_code.encode("utf-8")).hexdigest(),
+            "setup_source_sha256": hashlib.sha256(task.public_setup_py.encode("utf-8")).hexdigest(),
             "readonly_dependencies_sha256": ro_shas,
             "public_setup_files_sha256": pub_shas,
             "scientific_probe_receipt": sci_rec,

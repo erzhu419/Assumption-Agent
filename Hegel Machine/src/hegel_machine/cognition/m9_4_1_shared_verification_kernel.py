@@ -25,6 +25,7 @@ Guarantees (`C01` + `C02` Closed):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from typing import Any
@@ -40,6 +41,69 @@ MAX_RPC_DEPTH = 5
 MAX_RPC_ELEMENTS = 2_000_000
 MAX_RPC_JSON_BYTES = 32_000_000
 MAX_RPC_CONTAINER_NODES = 250_000
+
+
+def compute_canonical_numeric_item_sha256(obj: Any) -> str:
+    """Pickle-protocol & NumPy-module-path independent canonical SHA-256 (`R12`: identical across NumPy 1.x and 2.x)."""
+    h = hashlib.sha256()
+
+    def _feed(v: Any) -> None:
+        if v is None:
+            h.update(b"N;")
+        elif isinstance(v, bool):
+            h.update(b"B1;" if v else b"B0;")
+        elif isinstance(v, (int, np.integer)):
+            h.update(f"I:{int(v)};".encode("utf-8"))
+        elif isinstance(v, (float, np.floating)):
+            fv = float(v)
+            if math.isnan(fv):
+                h.update(b"F:NaN;")
+            elif math.isinf(fv):
+                h.update(b"F:+Inf;" if fv > 0 else b"F:-Inf;")
+            else:
+                # Normalize -0.0 -> 0.0 and pack IEEE-754 float64 little-endian
+                fv = 0.0 if fv == 0.0 else fv
+                h.update(b"F:" + np.asarray([fv], dtype="<f8").tobytes() + b";")
+        elif isinstance(v, str):
+            eb = v.encode("utf-8")
+            h.update(f"S:{len(eb)}:".encode("utf-8") + eb + b";")
+        elif isinstance(v, bytes):
+            h.update(f"Y:{len(v)}:".encode("utf-8") + v + b";")
+        elif isinstance(v, np.ndarray):
+            h.update(f"A:{v.dtype.kind}:{v.shape}:".encode("utf-8"))
+            if v.dtype.kind == "f":
+                arr = np.asarray(v, dtype=np.float64)
+                nan_mask = np.isnan(arr)
+                clean = np.where(nan_mask, 0.0, arr)
+                clean = np.where(clean == 0.0, 0.0, clean).astype("<f8")
+                h.update(clean.tobytes("C"))
+                h.update(np.packbits(nan_mask.ravel()).tobytes())
+            elif v.dtype.kind in {"i", "u"}:
+                h.update(np.asarray(v, dtype="<i8").tobytes("C"))
+            elif v.dtype.kind == "b":
+                h.update(np.asarray(v, dtype=np.uint8).tobytes("C"))
+            else:
+                for elem in v.ravel().tolist():
+                    _feed(elem)
+            h.update(b";")
+        elif isinstance(v, dict):
+            h.update(f"D:{len(v)}:".encode("utf-8"))
+            for k in sorted(v.keys(), key=lambda x: str(x)):
+                _feed(str(k))
+                _feed(v[k])
+            h.update(b";")
+        elif isinstance(v, (list, tuple)):
+            tag = "L" if isinstance(v, list) else "T"
+            h.update(f"{tag}:{len(v)}:".encode("utf-8"))
+            for item in v:
+                _feed(item)
+            h.update(b";")
+        else:
+            eb = repr(v).encode("utf-8")
+            h.update(f"R:{len(eb)}:".encode("utf-8") + eb + b";")
+
+    _feed(obj)
+    return h.hexdigest()
 
 
 def encode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:

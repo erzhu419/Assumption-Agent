@@ -5208,7 +5208,7 @@ def execute_host_trusted_scientific_probe(
         "    sci_ok = bool(ver['ok'])\n"
         "    gauge_ok = bool(sci_ok and 'independent_box_simplex_kkt_certificate' in claims)\n"
         "scope_str = ','.join(sorted(set(claims))) if claims else ''\n"
-        "print(json.dumps({'ok': sci_ok, 'public_input_digest': pub_sha, 'verified_scope': scope_str, 'verified_claim_ids': sorted(set(claims)), 'errors': ver.get('errors', []), 'gauge_invariance_verified': gauge_ok, 'metrics': metrics, 'kernel_version': ver.get('kernel_version', '')}, sort_keys=True))\n"
+        "print(json.dumps({'ok': sci_ok, 'public_input_digest': pub_sha, 'canonical_numeric_sha256': kmod.compute_canonical_numeric_item_sha256(item0), 'verified_scope': scope_str, 'verified_claim_ids': sorted(set(claims)), 'errors': ver.get('errors', []), 'gauge_invariance_verified': gauge_ok, 'metrics': metrics, 'kernel_version': ver.get('kernel_version', '')}, sort_keys=True))\n"
     )
     # Build standalone `_shared_kernel.py` without relative imports so it executes inside `/tmp` in any container!
     standalone_kernel_py = kernel_src_fp.read_text(encoding="utf-8").replace(
@@ -5233,7 +5233,7 @@ def execute_host_trusted_scientific_probe(
         pr_run = exec_container_bash(
             agent_cid,
             f"OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I {remote_dir}/probe.py",
-            timeout_sec=50,
+            timeout_sec=115 if require_pooled_coupon_check else 50,
         )
     finally:
         exec_container_bash(agent_cid, f"rm -rf {remote_dir}", timeout_sec=10)
@@ -5246,7 +5246,8 @@ def execute_host_trusted_scientific_probe(
         if not retain_failed_probe:
             return None
         return dict(execution_status=status, scientific_invariants_verified=False,
-                    candidate_bundle_sha256=current_candidate_sha256, reason=reason, **details)
+                    candidate_bundle_sha256=current_candidate_sha256, public_setup_files_sha256=dict(public_setup_files_sha256),
+                    reason=reason, **details)
 
     if post_sha != current_candidate_sha256:
         return failed("infrastructure_error", "candidate_changed_during_probe")
@@ -5262,7 +5263,12 @@ def execute_host_trusted_scientific_probe(
     if not pr_json.get("ok") or not claim_ids:
         if pr_json.get("errors") and pr_json.get("kernel_version"):
             return failed("completed", "public_scientific_check_failed",
-                          errors=pr_json["errors"], measured_scientific_metrics=pr_json.get("metrics", {}))
+                          signed_by_host_probe_executor=True, receipt_kind="scientific_probe_receipt",
+                          probe_protocol_version="hegel_host_isolated_worker_json_rpc_probe_v5",
+                          canonical_numeric_sha256=pr_json["canonical_numeric_sha256"],
+                          errors=pr_json["errors"], measured_scientific_metrics=pr_json.get("metrics", {}),
+                          probe_code_digest=probe_code_sha, public_input_digest=pr_json.get("public_input_digest"),
+                          kernel_version=pr_json["kernel_version"])
         detail = str(pr_json.get("details", ""))
         return failed("timeout" if "timed out" in detail.lower() else "infrastructure_error",
                       pr_json.get("reason", "incomplete_verifier_result"), details=detail[:300])
@@ -5276,6 +5282,7 @@ def execute_host_trusted_scientific_probe(
         "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
         "probe_code_digest": probe_code_sha,
         "public_input_digest": str(pr_json.get("public_input_digest") or ""),
+        "canonical_numeric_sha256": pr_json["canonical_numeric_sha256"],
         "candidate_bundle_sha256": current_candidate_sha256,
         "public_setup_files_sha256": dict(public_setup_files_sha256),
         "verified_scope": str(pr_json.get("verified_scope") or ",".join(claim_ids)),

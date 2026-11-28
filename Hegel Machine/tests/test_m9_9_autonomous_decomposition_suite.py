@@ -130,7 +130,10 @@ def test_m99_separability_withdrawal_receipt_tamper_and_cold_hydration_contracts
         upstream_holdout_rmse=0.00012,
         downstream_binding_id="dn_b02",
         downstream_code_sha256=reg.bindings["dn_b02"].authoritative_executed_code_sha256(),
-        composed_candidate_sha256="c" * 64,
+        composed_candidate_sha256=hashlib.sha256(m98.compose_m98_two_stage_solver_code(
+            upstream_code=code, upstream_entrypoint="f", downstream_code=code, downstream_entrypoint="f",
+            param_payload=m98.assemble_m98_graph_diagonal_payload(spec.to_m98_compat_spec(), graph),
+        ).encode()).hexdigest(),
         counterexample_public_input_sha256="a" * 64,
         counterexample_canonical_numeric_sha256="b" * 64,
         joint_failure_kind="scientific_or_numerical",
@@ -169,8 +172,11 @@ def test_m99_separability_withdrawal_receipt_tamper_and_cold_hydration_contracts
         metric_value=0.00012,
         evidence_origin="direct_component_probe",
         probe_id="uprobe_1234",
+        canonical_numeric_sha256="b" * 64,
+        setup_source_sha256="d" * 64,
+        dependency_bundle_sha256=hashlib.sha256(b"{}").hexdigest(),
     )
-    dn_ctrl.record_tested_witness(
+    prior = dn_ctrl.record_tested_witness(
         binding=reg.bindings["dn_b02"],
         public_input_sha256="0" * 64,
         passed=True,
@@ -187,7 +193,27 @@ def test_m99_separability_withdrawal_receipt_tamper_and_cold_hydration_contracts
         features=dict(dn_feats),
         evidence_origin="joint_task_probe",
         probe_id="jprobe_neg_1",
+        canonical_numeric_sha256="b" * 64,
+        setup_source_sha256="d" * 64,
+        dependency_bundle_sha256=hashlib.sha256(b"{}").hexdigest(),
     )
+    rec.prior_witness_id = prior.witness_id
+    rec.joint_probe_id = "jprobe_neg_1"
+    bundle = hashlib.sha256(b"/holdout_task/batch_solver.py\0" + bytes.fromhex(rec.composed_candidate_sha256)).hexdigest()
+    assets = {"/holdout_task/public_batch.pkl": "a" * 64}
+    rec.joint_gate_receipt = {
+        "accepted": False, "schema_valid": True, "candidate_raw_sha256": rec.composed_candidate_sha256,
+        "setup_source_sha256": "d" * 64,
+        "readonly_dependencies_sha256": {}, "candidate_bundle_sha256": bundle, "public_setup_files_sha256": assets,
+        "scientific_probe_receipt": {
+            "receipt_kind": "scientific_probe_receipt", "probe_protocol_version": "test",
+            "execution_status": "completed", "signed_by_host_probe_executor": True, "scientific_invariants_verified": False,
+            "candidate_bundle_sha256": bundle, "errors": ["residual_exceeded"], "kernel_version": rec.verifier_version,
+            "public_input_digest": "a" * 64, "public_setup_files_sha256": assets, "canonical_numeric_sha256": "b" * 64,
+            "probe_code_digest": "e" * 64,
+        },
+    }
+    rec.receipt_id = rec.compute_expected_receipt_id()
     m99.persist_separability_withdrawals_to_graph(graph, spec.world_id, [rec])
     hyd = m99.hydrate_separability_withdrawals_from_graph(graph, reg, spec.world_id)
     assert len(hyd) == 1 and hyd[0].receipt_id == rec.receipt_id
@@ -210,9 +236,9 @@ def test_m99_docker_autonomous_decomposition_verifier_and_interaction_falsificat
         d2_sep_code = m99.build_m99_reference_dev_downstream_solver_code(fam, "solve_downstream", "D2")
         d2_cpl_code = m99.build_m99_reference_dev_downstream_solver_code(fam, "solve_downstream", "D2_coupled")
 
-        s0_pub, _ = m98.materialize_m98_public_item_and_sha(s_task)
+        s0_pub, _ = m99.materialize_m99_public_item_and_sha(s_task)
         e1_tk, e1_st = by_ev["E1_down"]
-        e1_pub, _ = m98.materialize_m98_public_item_and_sha(e1_tk)
+        e1_pub, _ = m99.materialize_m99_public_item_and_sha(e1_tk)
         e1_ro = {"/tmp/hegel_continual_archive/archive_apparatus_log.json": json.dumps(logs[: e1_st + 1], indent=2)}
         e1_sha = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in e1_ro.items()}
         v2_pay = {"gains": list(spec.v2_gains), "offsets": list(spec.v2_offsets)}
@@ -263,7 +289,7 @@ def test_m99_docker_autonomous_decomposition_verifier_and_interaction_falsificat
         # 3. `E5_coupled_break (U1, D2_coupled)`: naive `u1 o d2_sep` FAILS public gate (`0` false accepts!), while `u1` passes direct probe
         #    and `u1 o d2_coupled` PASSES public + private!
         e5_tk, _ = by_ev["E5_coupled_break"]
-        e5_pub, _ = m98.materialize_m98_public_item_and_sha(e5_tk)
+        e5_pub, _ = m99.materialize_m99_public_item_and_sha(e5_tk)
         up_chk = m98.diagnose_m98_factored_conflict_locus(fam, e5_pub, chosen_up_code=u1_code, force_direct_component_probe=True)
         assert up_chk["execution_status"] == "completed" and float(up_chk["chosen_up_holdout_rmse"]) <= 0.03
 
@@ -333,7 +359,7 @@ def test_m99_mocked_three_arm_equal_tool_streams_and_post_e5_cold_restart(tmp_pa
         )
 
     s0_mono = _mono_solver("U0", "D0")
-    s0_pub, s0_sha = m98.materialize_m98_public_item_and_sha(s_task)
+    s0_pub, s0_sha = m99.materialize_m99_public_item_and_sha(s_task)
     s0_ent = m95.make_continual_archive_entry(
         short_name=s_task.short_name,
         task_id=s_task.task_id,

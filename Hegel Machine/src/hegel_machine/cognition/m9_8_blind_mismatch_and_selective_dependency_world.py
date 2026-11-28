@@ -31,14 +31,17 @@ from __future__ import annotations
 import base64
 from copy import deepcopy
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 import json
 import math
 from pathlib import Path
 import pickle
+import subprocess
 import tempfile
 from time import monotonic
 from typing import Any
+import uuid
 
 import numpy as np
 
@@ -72,6 +75,8 @@ from .m9_6_autonomous_structure_continual_world import (
     EmpiricalCoverageReceipt,
     ImmutableBranchLineageController,
     classify_public_probe_failure,
+    joint_scientific_receipt_matches,
+    compute_canonical_numeric_item_sha256,
     evaluate_m96_autonomous_guard,
 )
 from .m9_7_non_nested_counterfactual_lineage_world import (
@@ -1146,6 +1151,28 @@ def _eval_beta_gen_via_container(call_expr: str) -> tuple[dict[str, Any], dict[s
     return eval(compile(call_expr, "<m98_beta_call>", "eval"), ns)
 
 
+@lru_cache(maxsize=16)
+def _sandbox_public_pickle(setup_code: str, filename: str) -> bytes:
+    """Materialize once in the same NumPy/SciPy environment as the public gates."""
+    if not filename or Path(filename).name != filename:
+        raise ValueError("Expected a public pickle filename inside /holdout_task")
+    with tempfile.TemporaryDirectory(prefix="hegel_public_input_") as td:
+        root = Path(td)
+        (root / "_public_setup.py").write_text(setup_code, encoding="utf-8")
+        subprocess.run(
+            ["docker", "run", "--rm", "--network", "none", "--cpus", "2", "-e", "OPENBLAS_NUM_THREADS=1",
+             "-e", "OMP_NUM_THREADS=1", "-e", "MKL_NUM_THREADS=1", "-v", f"{root}:/holdout_task",
+             CLEAN_SCIPY_SANDBOX_IMAGE, "python3", "-I", "/holdout_task/_public_setup.py"],
+            capture_output=True, check=True, timeout=120,
+        )
+        return (root / filename).read_bytes()
+
+
+def materialize_sandbox_public_item_and_sha(task: HoldoutOODTask) -> tuple[dict[str, Any], str]:
+    raw = _sandbox_public_pickle(task.public_setup_py, task.public_pickle_filename or "public_batch.pkl")
+    return pickle.loads(raw)[0], hashlib.sha256(raw).hexdigest()
+
+
 def materialize_m98_public_item_and_sha(task: HoldoutOODTask) -> tuple[dict[str, Any], str]:
     """Materialize `/holdout_task/public_batch.pkl` on the host using pure NumPy (`0` Docker overhead, exact byte SHA-256!)."""
     src_py = task.public_setup_py.split('open("/holdout_task/validate_public_schema.py"', 1)[0]
@@ -1499,8 +1526,12 @@ def update_m98_calibration_snapshot_and_graph(
                 for c in chs:
                     wa[f"g_ch{c}"] = float(est_g["gains"][int(c)])
                     wa[f"b_ch{c}"] = float(est_g["offsets"][int(c)])
+                history = graph.mechanism_lineage.setdefault(pid, [])
+                if not history or history[-1]["version"] != mech.version:
+                    history.append(mech.to_dict())
                 mech.shared_weights = wa
                 mech.version = int(mech.version) + 1
+                history.append(mech.to_dict())
                 registry.update_shared_parameter_epoch(
                     parameter_mechanism_id=pid,
                     new_version=int(mech.version),
@@ -1691,7 +1722,6 @@ def diagnose_m98_factored_conflict_locus(
        `chosen_up_holdout_rmse = None` (NEVER `999.0`!), blocking false scientific negative attribution (`R05`)!
     """
     import subprocess
-    import uuid
 
     up_obs = compute_m98_upstream_observables(family, public_item)
     r2_diag = float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0)
@@ -1780,12 +1810,12 @@ def diagnose_m98_factored_conflict_locus(
                 text=True,
                 timeout=30,
             )
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, OSError) as exc:
             el_ms = round((monotonic() - t0) * 1000.0, 2)
             return {
                 "locus": "unknown_infra",
                 "component_probe_executed": True,
-                "execution_status": "timeout",
+                "execution_status": "timeout" if isinstance(exc, subprocess.TimeoutExpired) else "infrastructure_error",
                 "evidence_origin": "direct_component_probe",
                 "failure_tier": "INFRA_FAILURE",
                 "failure_kind": "timeout_or_infra",
@@ -1897,10 +1927,14 @@ def diagnose_m98_factored_conflict_locus(
 
     try:
         parsed_j = json.loads(out_txt.splitlines()[-1])
-        raw_rmse = parsed_j.get("rmse")
-        all_fin = bool(parsed_j.get("all_finite", raw_rmse is not None))
+        raw_rmse = parsed_j["rmse"]
+        all_fin = parsed_j["all_finite"]
+        if not isinstance(all_fin, bool) or (all_fin and raw_rmse is None):
+            raise ValueError("No measured holdout residual")
+        if raw_rmse is not None and (isinstance(raw_rmse, bool) or not isinstance(raw_rmse, (int, float)) or raw_rmse < 0):
+            raise ValueError("Invalid holdout residual")
         rmse_opt = None if raw_rmse is None else float(raw_rmse)
-    except Exception:
+    except (ValueError, TypeError, IndexError, KeyError):
         return {
             "locus": "unknown_infra",
             "component_probe_executed": True,
@@ -2202,6 +2236,7 @@ def run_m98_equal_capability_pre_llm_trial(
     registry: M94BindingRegistry | None = None,
     readonly_dependencies: dict[str, str] | None = None,
     expected_dependency_sha256: dict[str, str] | None = None,
+    require_split_evidence: bool = False,
 ) -> dict[str, Any]:
     """Execute `1` isolated Docker pre-LLM probe (`max_pre_llm_probes = 1`) under identical public gate rules across all 3 arms!"""
     req_keys = expected_m98_public_output_keys(spec.family)
@@ -2339,7 +2374,26 @@ def run_m98_equal_capability_pre_llm_trial(
         task=task, candidate_code=cand_code, readonly_dependencies=readonly_dependencies, expected_dependency_sha256=expected_dependency_sha256
     )
     pr_ms = round((monotonic() - t0) * 1000.0, 2)
+    if require_split_evidence:
+        pr = {**pr, "probe_id": f"jprobe_{uuid.uuid4().hex[:16]}"}
     main_cls = classify_public_probe_failure(pr)
+    evidence_item = public_item
+    evidence_input_sha = public_input_sha256
+    numeric_sha = ""
+    input_wall_ms = 0.0
+    if require_split_evidence and main_cls["tier"] in {"SCIENTIFIC_FAILURE", "DOMAIN_REJECTION"}:
+        started_input = monotonic()
+        try:
+            evidence_item, evidence_input_sha = materialize_sandbox_public_item_and_sha(task)
+            numeric_sha = compute_canonical_numeric_item_sha256(evidence_item)
+            same_execution = joint_scientific_receipt_matches(
+                pr, hashlib.sha256(cand_code.encode()).hexdigest(), evidence_input_sha, numeric_sha,
+            )
+        except (OSError, subprocess.SubprocessError):
+            same_execution = False
+        input_wall_ms = (monotonic() - started_input) * 1000
+        if not same_execution:
+            main_cls = {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
     f_kind = main_cls["failure_kind"]
     setup_src_sha = hashlib.sha256(task.public_setup_py.encode("utf-8")).hexdigest()
     dep_bundle_sha = hashlib.sha256(
@@ -2400,13 +2454,20 @@ def run_m98_equal_capability_pre_llm_trial(
         }
         up_wit = None
         dn_wit = None
+    elif require_split_evidence and main_cls["tier"] == "SCHEMA_FAILURE":
+        locus_diag = {
+            "locus": "schema_or_interface", "evidence_origin": "joint_task_probe", "execution_status": "not_executed",
+            "component_probe_executed": False, "failure_tier": "SCHEMA_FAILURE", "failure_kind": f_kind,
+        }
+        up_wit = dn_wit = None
     else:
         locus_diag = diagnose_m98_factored_conflict_locus(
             spec.family,
-            public_item,
+            evidence_item,
             chosen_up_code=(chosen_up.canonical_algorithm_code or chosen_up.parameterized_closure_code),
             chosen_up_entrypoint=(chosen_up.canonical_entrypoint or chosen_up.parameterized_entrypoint),
             diag_payload=diag_pay,
+            force_direct_component_probe=require_split_evidence,
         )
         if locus_diag["locus"] == "unknown_infra":
             # `R05`: Localization container failed/timed out — NEVER attribute scientific failure to `chosen_up` or `chosen_dn`!
@@ -2416,7 +2477,8 @@ def run_m98_equal_capability_pre_llm_trial(
             if locus_diag.get("execution_status") == "completed" and locus_diag.get("evidence_origin") == "direct_component_probe":
                 up_wit = up_ctrl.record_tested_witness(
                     binding=chosen_up,
-                    public_input_sha256=public_input_sha256,
+                    public_input_sha256=evidence_input_sha,
+                    canonical_numeric_sha256=numeric_sha,
                     passed=False,
                     failure_kind=str(locus_diag.get("failure_kind") or "scientific_or_numerical"),
                     features=up_obs,
@@ -2437,7 +2499,8 @@ def run_m98_equal_capability_pre_llm_trial(
             if locus_diag.get("execution_status") == "completed" and locus_diag.get("evidence_origin") == "direct_component_probe":
                 up_wit = up_ctrl.record_tested_witness(
                     binding=chosen_up,
-                    public_input_sha256=public_input_sha256,
+                    public_input_sha256=evidence_input_sha,
+                    canonical_numeric_sha256=numeric_sha,
                     passed=True,
                     failure_kind="none",
                     features=up_obs,
@@ -2451,11 +2514,13 @@ def run_m98_equal_capability_pre_llm_trial(
                 )
                 dn_wit = dn_ctrl.record_tested_witness(
                     binding=chosen_dn,
-                    public_input_sha256=public_input_sha256,
+                    public_input_sha256=evidence_input_sha,
+                    canonical_numeric_sha256=numeric_sha,
                     passed=False,
                     failure_kind=f_kind,
                     features=dn_obs,
                     probe_wall_ms=pr_ms,
+                    probe_id=pr.get("probe_id", ""),
                     execution_status="completed",
                     evidence_origin="joint_task_probe",
                     setup_source_sha256=setup_src_sha,
@@ -2465,7 +2530,7 @@ def run_m98_equal_capability_pre_llm_trial(
                 up_wit = None
                 dn_wit = None
 
-    loc_wall_ms = round(float(locus_diag.get("probe_wall_ms") or 0.0), 2)
+    loc_wall_ms = round(float(locus_diag.get("probe_wall_ms") or 0.0) + input_wall_ms, 2)
     loc_used = 1 if locus_diag.get("component_probe_executed") else 0
     return {
         "arm": arm,
@@ -2474,6 +2539,7 @@ def run_m98_equal_capability_pre_llm_trial(
         "probe_wall_ms": pr_ms,
         "localization_probes_used": loc_used,
         "localization_probe_wall_ms": loc_wall_ms,
+        "localization_input_wall_ms": round(input_wall_ms, 2),
         "upstream_selection_mode": up_mode,
         "downstream_selection_mode": dn_mode,
         "selected_upstream_binding_id": chosen_up.binding_id,

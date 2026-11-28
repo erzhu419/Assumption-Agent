@@ -11,18 +11,18 @@
 
 | Finding | Priority | Audit Diagnosis | `M9.9.1` Code Fix, Container Back-Verification & Claim Calibration | Status |
 |---|---|---|---|---|
-| `Q01` | `P1` | `M9.9` decomposition executed only diagonal cells (`u0+d0 @ S`, `u0+d1 @ E`), passing `30` unexecuted cross constraints to `d0d1_gind` and writing `8` unexecuted `d0@E` `failed` witnesses in `Hegel`. | Upgraded `verify_m99_autonomous_decomposition_in_containers` to execute all `4` `2x2` cells (`matrix_2x2`); added `record_tested_witness_from_probe_receipt` requiring a completed `ProbeReceipt`; executed all **`30/30` historical cross-diagonal probes in Docker** (`0` passed, `30` scientific/domain rejected, `0` schema rejected, `0` infra/timeout) with explicit `supersedes_unexecuted_witness_id` links for all `8` original `Hegel` witnesses. | **CLOSED (`Code + 30 Docker Probes`)** |
-| `Q02` | `P1` | `alpha_m99_c02/E7` miss (`0.071267`) was misattributed to upstream cubic Newton extrapolation (`up_b01` RMSE was `1.4e-5`); real cause was `dn_b02` normalizing `test` on `test['ref_coupons']` alone with unweighted `NaN` mean. | Added `verify_alpha_pooled_ref_coupon_invariance` in `m9_4_1_shared_verification_kernel.py` (`0` private truth, cross-split per-lab `ref_coupons` swap check catching `c02/dn_b02` deterministically); corrected `docs/55_*` §8.1 (`0.071267 -> 0.004857` when using pooled `train+test` standardization + `(lab, stratum)` weighted imputation). | **CLOSED (`Code + Errata`)** |
-| `Q03` | `P1` | `alpha_m99_c04/E7` already had verified `bind_alpha_m99_c04_up_b02` (`RMSE = 7.65e-5`) in `step_06`, excluded by over-narrow `up_stat_03 > 1.289054` (`1.274262`) guard. | Executed `up_b02 + dn_b03` in Docker on `c04/E7` (`RMSE = 0.00007655`, public gate `accepted = True`, official `strict_pass = True` — strictly diagnostic, original `M9.9` cost/score untouched); symmetric `1`-candidate sibling fallback wired into `M10.0`. | **CLOSED (`Docker Verified + M10.0 Wired`)** |
-| `Q04` | `P1` | Deferred `E2_down` decomposition left `E1_down` (`D1`) monolithic solver non-callable on `c02/E4`; missing `d2_sep` propagated on `c03/E6`. | Corrected `docs/55_*` §8.1; symmetric executable monolithic fallback + lazy on-demand downstream residual projection (`100%` metered in `Scope-1`) implemented for `M10.0`. | **CLOSED (`Errata + M10.0 Wired`)** |
-| `Q05` | `P1` | `--finalize-existing` overwrote `run_id`, `wall_sec`, and `source_tree_sha256_at_start` (`be7190fb...` vs freeze `34b01d19...`). | Separated write-once `execution_manifest.json` from `finalization_manifest.json` in runner; reconstructed exact freeze tree SHA (`915f469dc3f50a05...`) and raw call envelopes (`3,718.765s` confirm, `2,259.938s` dev). | **CLOSED (`Code + Provenance Ledger`)** |
-| `Q06` | `P1` | Overstated `Hegel - Plain` (`p = 0.0625`) as statistically significant and `50/56` vs `54/56` (`p = 0.375`) as quality parity. | Calibrated `docs/55_*` & hub; sealed exact `x` sensitivity ladder (`p < 0.05` iff `x > 53,450`) and explicit non-inferiority gates for `M10.0`. | **CLOSED** |
-| `Q07` | `P1` | `hydrate_separability_withdrawals_from_graph` checked binding IDs + state SHA but not code SHAs, `probe_id`, or prior colliding positive / joint negative witnesses. | Enforced full 6-link foreign-key & temporal witness-ledger verification (`test_q07` rejects self-consistent synthetic forgeries and accepts all `7/7` real sealed `M9.9` receipts). | **CLOSED** |
+| `Q01` | `P1` | The original factorization inferred two off-diagonal outcomes. | Completed 30/30 historical probes. Scientific/domain rejections 30, old witnesses linked 8/8. Full matrix required for new joint guard evidence. | Retrospective replay |
+| `Q02` | `P1` | alpha c02/E7 failed. | Frozen downstream feature repair reduced MAE from 0.071267 to 0.004857. The public swap check tests one necessary pooling invariant. The frozen preprocessing counterfactual changes pooling and imputation together. | Component attribution |
+| `Q03` | `P1` | The guard omitted an available upstream solver in c04/E7. | Prefix pair up_b02 + dn_b03. Public acceptance True, official pass True. The prospective bounded fallback requires online evaluation. | Frozen candidate replay |
+| `Q04` | `P1` | Delayed factorization hid archived code. A missing separable branch was aliased to a coupled one in the ablation. | Prospective archive fallback and explicit missing-state accounting. Historical costs and grades are still reported under their original policy. | Engineering / future online test |
+| `Q05` | `P1` | `--finalize-existing` overwrote `run_id`, `wall_sec`, and `source_tree_sha256_at_start` (`be7190fb...` vs freeze `34b01d19...`). | Separated write-once `execution_manifest.json` from `finalization_manifest.json` in runner; reconstructed exact freeze tree SHA (`34b01d19ef125692...`) and raw call envelopes (`3,718.765s` confirm, `2,259.938s` dev). | **CLOSED (`Code + Provenance Ledger`)** |
+| `Q06` | `P1` | Eight paired clusters. | Hegel versus Monolithic quality p = 0.5, cost p = 0.765625. Versus Plain, cost p = 0.0625 at x = 0. The sensitivity table uses the same frozen eight pairs. | Inference corrected |
+| `Q07` | `P1` | A legacy withdrawal can be internally consistent while its original scientific receipt is missing. | Original joint scientific receipts 0/7. Matched negative probes in the separate replay 7/7. Typed evidence is required for prospective authority. | Historical and replay evidence reported separately |
 | `Q08` | `P2` | Legacy `v1` downgrade failed second `save -> reload` round-trip; `M9.8` `compatibility_inference` could write a downstream scientific negative. | Recomputes migrated `v2` `witness_content_sha256` & `unknown_requires_reverification` `receipt_id` (`snap_1 == snap_2` idempotent, `0` authority); blocked `compatibility_inference` from minting downstream scientific negatives. | **CLOSED** |
 | `Q09` | `P1` | Zero host-seeded source code described too broadly as zero host-seeded decomposition. | Scoped throughout `docs/55_*` & hub as **online module formation under a host-prescribed two-stage interface** (open DAG discovery deferred). | **CLOSED** |
-| `Q10` | `P1` | Fixed-separable `dn_obs`-only baseline & `step_05` ablation generalized to all plain registries. | Sealed `16/16` plain-dict `up+dn` candidate-SHA parity check and scoped `step_05` ablation to `dn_obs`-only vs selective `up+dn` condition expansion. | **CLOSED** |
-| `Q11` | `P1` | Ideal grid count written as an exact LLM cost law. | Replaced with conditional `N_{sep,unseen} = |(U x D) \ (R u X)|` and empirical quality-constrained `ΔC(K)` / `K*` protocol. | **CLOSED** |
-| `Q12` | `P2` | Cancelled pre-freeze dev diagnostic run omitted from numerical R&D sum. | Explicitly recorded as `unverifiable_cancelled_run = C_cancelled > 0` (`45,683,620 + x + C_cancelled` total physical `v2`). | **CLOSED** |
+| `Q10` | `P1` | The frozen ablation restricted features available to fixed selectors. | With the same host-reconstructed policy inputs, a plain dictionary reproduces 16/16 candidate hashes. Actual Docker public files are tracked separately. | Prefix replay |
+| `Q11` | `P1` | Ideal grid count written as an exact LLM cost law. | Replaced with conditional `N_{sep,unseen} = card((U x D) \ (R u X))` and empirical quality-constrained `ΔC(K)` / `K*` protocol. | **CLOSED** |
+| `Q12` | `P2` | Cancelled development cost was missing. | Recovered 333 calls and 8,220,922 known v2, with 6 unclosed calls. Total 53904542 + x + y. | Partial billing recovery |
 | `Q13` | `P2` | `E4/E5` `v2/v3` swap, `E1` `7/8, 6/8` vs cumulative `8/8, 7/8`, and elapsed wall-ms (`1.421x` total / `3.320x` coverage) vs CPU wording. | Fixed in `scripts/generate_m9_9_report_from_sealed_json.py`, `docs/55_*`, and hub. | **CLOSED** |
 | `Q14` | `P2` | `R01–R16` ID drift in `docs/55` §7 and broken `54b` link in reuse hub. | Restored exact original `R01–R16` IDs (retaining retired `R14` and open `R15`) and fixed `54b` link in `docs/hegel_machine_reuse_hub_20261006.md`. | **CLOSED** |
 
@@ -30,7 +30,7 @@
 
 ## 2. Real Docker Back-Verification of All `30` Historical Cross-Diagonal Decomposition Cells (`Q01`)
 
-- **Ledger**: `01_m99_q01_30_cross_diagonal_decomposition_probes.json` (`total_probe_wall_ms = 198,916.24 ms`, `0` paid LLM calls)
+- **Ledger**: `01_m99_q01_30_cross_diagonal_decomposition_probes.json` (`total_probe_wall_ms = 146,840.91 ms`, `0` paid LLM calls)
 - **Outcome Breakdown Across `30` Probes (`15` Accepted Decompositions × `2` Off-Diagonal Cells)**:
   - `accepted = True`: **`0/30`**
   - `scientific_or_domain` rejected (`completed`): **`30/30`**
@@ -40,49 +40,49 @@
 
 | Arm | Cluster (`Decomp Step`) | Cross-Diagonal Cell | `probe_id` | Status | Accepted | Failure Kind | Wall (`ms`) | Supersedes Unexecuted Witness |
 |---|---|---|---|---|---|---|---:|---|
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_0add1ca13ca24097` | `completed` | `False` | `scientific_or_numerical` | `6804.4` | — |
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_660905d1d0874005` | `completed` | `False` | `scientific_or_numerical` | `6804.6` | — |
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_9601f2bb2ec74795` | `completed` | `False` | `scientific_or_numerical` | `6707.6` | — |
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_d24659a3178241e1` | `completed` | `False` | `scientific_or_numerical` | `6783.5` | — |
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c04` (`s2`) | `u0_plus_d0_on_current_E` | `xprobe_58dca380e2cd49fc` | `completed` | `False` | `scientific_or_numerical` | `6899.5` | — |
-| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c04` (`s2`) | `u0_plus_d1_on_Stage_S` | `xprobe_c335eeca7c114268` | `completed` | `False` | `scientific_or_numerical` | `6799.4` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_9e43c86c78ce470b` | `completed` | `False` | `scientific_or_numerical` | `6274.5` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_4bc69683c58e45eb` | `completed` | `False` | `scientific_or_numerical` | `6257.1` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_e23ac84a895443df` | `completed` | `False` | `scientific_or_numerical` | `6432.1` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_bd41a5b78d324e17` | `completed` | `False` | `scientific_or_numerical` | `6711.5` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_d2cccfe762164390` | `completed` | `False` | `scientific_or_numerical` | `6422.2` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_b68f0a6bcdce4ced` | `completed` | `False` | `scientific_or_numerical` | `6332.1` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_dcd2c3efe94d43c7` | `completed` | `False` | `scientific_or_numerical` | `6150.6` | — |
-| `Flat_PlainModuleRegistry_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_d063352996064440` | `completed` | `False` | `scientific_or_numerical` | `6221.2` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_bcb66ea656944fa9` | `completed` | `False` | `scientific_or_numerical` | `6621.6` | `wit_0002_bind_alpha_m99_c01_dn_b00_5a38161b` |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_231ce31383604457` | `completed` | `False` | `scientific_or_numerical` | `6590.1` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c02` (`s2`) | `u0_plus_d0_on_current_E` | `xprobe_bbc23825e55a42c4` | `completed` | `False` | `scientific_or_numerical` | `6512.7` | `wit_0002_bind_alpha_m99_c02_dn_b00_ed77e0c2` |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c02` (`s2`) | `u0_plus_d1_on_Stage_S` | `xprobe_10fa95a6a4be4936` | `completed` | `False` | `scientific_or_numerical` | `6611.7` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_7dee6323006c405b` | `completed` | `False` | `scientific_or_numerical` | `6589.3` | `wit_0002_bind_alpha_m99_c03_dn_b00_03b4a8a3` |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_28c126ae49d4445b` | `completed` | `False` | `scientific_or_numerical` | `6774.5` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_77d4acd78740449e` | `completed` | `False` | `scientific_or_numerical` | `6791.2` | `wit_0002_bind_alpha_m99_c04_dn_b00_3b352674` |
-| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_080483c2d29f4a76` | `completed` | `False` | `scientific_or_numerical` | `6619.5` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_46a3596f507449a2` | `completed` | `False` | `scientific_or_numerical` | `6529.4` | `wit_0002_bind_beta_m99_c01_dn_b00_dc9859ed` |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_ec0c29b4ae0445ef` | `completed` | `False` | `scientific_or_numerical` | `6638.4` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_94606e0c92e54451` | `completed` | `False` | `scientific_or_numerical` | `7091.9` | `wit_0002_bind_beta_m99_c02_dn_b00_c95627f7` |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_0acbdf212bfd4d1f` | `completed` | `False` | `scientific_or_numerical` | `6786.9` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_45e352d518f346f6` | `completed` | `False` | `scientific_or_numerical` | `6783.1` | `wit_0002_bind_beta_m99_c03_dn_b00_83808d89` |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_0d3bdab1c2e240f9` | `completed` | `False` | `scientific_or_numerical` | `6858.0` | — |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_c867ac26ea5549f6` | `completed` | `False` | `scientific_or_numerical` | `6666.3` | `wit_0002_bind_beta_m99_c04_dn_b00_387320b1` |
-| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_b234458c7732465d` | `completed` | `False` | `scientific_or_numerical` | `6851.3` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_207e31f71a9a4bfd` | `completed` | `False` | `scientific_or_numerical` | `4952.0` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_ebe609a20564467c` | `completed` | `False` | `scientific_or_numerical` | `4904.9` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_284af950f9464dcf` | `completed` | `False` | `scientific_or_numerical` | `4964.0` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_c4dfb183d1714fca` | `completed` | `False` | `scientific_or_numerical` | `4963.1` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c04` (`s2`) | `u0_plus_d0_on_current_E` | `xprobe_1e633a14a73d49c4` | `completed` | `False` | `scientific_or_numerical` | `5029.2` | — |
+| `Flat_PlainModuleRegistry_Online` | `alpha_m99_c04` (`s2`) | `u0_plus_d1_on_Stage_S` | `xprobe_8c0458eeabb74ca8` | `completed` | `False` | `scientific_or_numerical` | `5432.3` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_7341a09e5b54400b` | `completed` | `False` | `scientific_or_numerical` | `4753.4` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_ca69051b451e46e5` | `completed` | `False` | `scientific_or_numerical` | `4766.6` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_54cfc758b4ff4a33` | `completed` | `False` | `scientific_or_numerical` | `4883.2` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_17979b37c7264b54` | `completed` | `False` | `scientific_or_numerical` | `4770.1` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_bd0601848b7c4811` | `completed` | `False` | `scientific_or_numerical` | `5085.5` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_c9c1a1f1d45a43fc` | `completed` | `False` | `scientific_or_numerical` | `5313.0` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_2da92e05d2564f54` | `completed` | `False` | `scientific_or_numerical` | `4771.7` | — |
+| `Flat_PlainModuleRegistry_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_2b4eba4007e3482d` | `completed` | `False` | `scientific_or_numerical` | `4807.3` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_b83f6acb78b74a3c` | `completed` | `False` | `scientific_or_numerical` | `4937.4` | `wit_0002_bind_alpha_m99_c01_dn_b00_5a38161b` |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_3ca15e58450842ca` | `completed` | `False` | `scientific_or_numerical` | `4966.2` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c02` (`s2`) | `u0_plus_d0_on_current_E` | `xprobe_34560cf5d69b460f` | `completed` | `False` | `scientific_or_numerical` | `5121.8` | `wit_0002_bind_alpha_m99_c02_dn_b00_ed77e0c2` |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c02` (`s2`) | `u0_plus_d1_on_Stage_S` | `xprobe_4b152e625ff045b5` | `completed` | `False` | `scientific_or_numerical` | `5079.4` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_30803ee5863a46b0` | `completed` | `False` | `scientific_or_numerical` | `4545.1` | `wit_0002_bind_alpha_m99_c03_dn_b00_03b4a8a3` |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_a039987d7dc64097` | `completed` | `False` | `scientific_or_numerical` | `4537.6` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_47532080a84b48fc` | `completed` | `False` | `scientific_or_numerical` | `5119.5` | `wit_0002_bind_alpha_m99_c04_dn_b00_3b352674` |
+| `Hegel_AutonomousInteractionGraph_Online` | `alpha_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_24384cd5773c41af` | `completed` | `False` | `scientific_or_numerical` | `5148.2` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_1cb070deb60e4a2e` | `completed` | `False` | `scientific_or_numerical` | `4623.3` | `wit_0002_bind_beta_m99_c01_dn_b00_dc9859ed` |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c01` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_be0d9b11609b4276` | `completed` | `False` | `scientific_or_numerical` | `4497.6` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_1375835636ba4d81` | `completed` | `False` | `scientific_or_numerical` | `5004.8` | `wit_0002_bind_beta_m99_c02_dn_b00_c95627f7` |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c02` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_5ea807d92f224f76` | `completed` | `False` | `scientific_or_numerical` | `4990.9` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_aa2aa8723a38492d` | `completed` | `False` | `scientific_or_numerical` | `4884.7` | `wit_0002_bind_beta_m99_c03_dn_b00_83808d89` |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c03` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_5664ada0fc764d48` | `completed` | `False` | `scientific_or_numerical` | `4955.8` | — |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d0_on_current_E` | `xprobe_bbf71289896548e7` | `completed` | `False` | `scientific_or_numerical` | `4529.1` | `wit_0002_bind_beta_m99_c04_dn_b00_387320b1` |
+| `Hegel_AutonomousInteractionGraph_Online` | `beta_m99_c04` (`s1`) | `u0_plus_d1_on_Stage_S` | `xprobe_c4d8b74456b443be` | `completed` | `False` | `scientific_or_numerical` | `4503.6` | — |
 
 ---
 
 ## 3. Provenance Reconciliation (`Q05`), Unknown `x` Sign-Flip Ladder (`Q06`), & `c04/E7` Container Check (`Q03`)
 
 1. **Git Tree & Timing Separation (`Q05`)**:
-   - Declared paid-run freeze commit `7624c43bf72d283e82442504eff35ff6ee02b40d` (`2700` `.py` files): `915f469dc3f50a05c84e5065f1b03e99cdd80cf661bf4826dab16ff8e98af2c0`
+   - Declared paid-run freeze commit `7624c43bf72d283e82442504eff35ff6ee02b40d` (`2700` `.py` files): `34b01d19ef12569240f013bd137e5818c449d68bdcb2ebb285697099c1234cdd`
    - Post-freeze finalizer tree recorded in `m9_9_continual_summary.json`: `be7190fbfab8df60c5da023c3133f59fa0f71c6dde95ebc967367de3fd9d40bc`
    - Raw mirrored call time envelope: Confirmation `3,718.765s` (`m99_confirmation_20261127T193020Z` vs finalizer `219.26s`); Dev `2,259.938s` (`m99_dev_20261127T183538Z`).
 2. **Container Verification of Prefix-Available `bind_alpha_m99_c04_up_b02` on `alpha_m99_c04 / E7` (`Q03`)**:
    - Direct `56/24` upstream component probe: `execution_status = completed`, **`chosen_up_holdout_rmse = 0.00007655`** (`<= 0.03`).
-   - Composed `(bind_alpha_m99_c04_up_b02 + bind_alpha_m99_c04_dn_b03)` 3-layer public gate: **`accepted = True`** (`6331.4 ms`).
-   - Official private verifier (diagnostic check only; original `M9.9` confirmation score/cost unchanged): **`strict_pass = True`** (`5192.31 ms`).
+   - Composed `(bind_alpha_m99_c04_up_b02 + bind_alpha_m99_c04_dn_b03)` 3-layer public gate: **`accepted = True`** (`4977.58 ms`).
+   - Official private verifier (diagnostic check only; original `M9.9` confirmation score/cost unchanged): **`strict_pass = True`** (`4227.89 ms`).
 3. **Exact Two-Sided Sign-Flip Sensitivity Ladder for Unknown Attempt `x` (`call_uuid = 0391d702b0c547a488608847b5dff224`)**:
 
 | Unknown `Plain` Attempt Cost `x` (`v2`) | Exact Two-Sided Sign-Flip `p` (`Hegel - Plain`) |

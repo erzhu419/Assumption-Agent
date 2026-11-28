@@ -13,7 +13,7 @@ Verifies every regression probe from `Hegel_M9_9_Audit`:
   3. `Q07` (`SeparabilityWithdrawalReceipt` Strong Foreign-Key Ledger Verification):
      - Rejects synthetic self-hash-consistent receipts with wrong `upstream_code_sha256` / `downstream_code_sha256`, missing
        `upstream_component_probe_id`, or `0` prior colliding downstream positive witnesses.
-     - Accepts all `7/7` real sealed `M9.9` confirmation checkpoints (`alpha_m99_c01, c02, c04` + `beta_m99_c01..c04`).
+     - Recovers archival lineage only from all `7/7` real sealed `M9.9` confirmation checkpoints (`alpha_m99_c01, c02, c04` + `beta_m99_c01..c04`).
   4. `Q08` (Legacy `v1` Migration Idempotent Round-Trip & `M9.8` `compatibility_inference` Isolation):
      - `load -> migrate -> save -> reload` succeeds idempotently twice on both legacy witnesses (`unverified_legacy`, `not_tested`)
        and legacy coverage receipts (`unknown_requires_reverification`), with `0` minting/coverage authority.
@@ -104,8 +104,8 @@ def _make_fixture(broken_upstream: bool = False):
 def test_q01_2x2_decomposition_identical_d0_d1_and_timeout_accounting() -> None:
     spec, g, r, u, d, uc, dc = _make_fixture()
     s_task, tasks, _, _ = m98.build_m98_world_tasks(spec)
-    pub, pub_sha = m98.materialize_m98_public_item_and_sha(s_task)
-    e1_pub, e1_sha = m98.materialize_m98_public_item_and_sha(tasks[0])
+    pub, pub_sha = m99.materialize_m99_public_item_and_sha(s_task)
+    e1_pub, e1_sha = m99.materialize_m99_public_item_and_sha(tasks[0])
     same_dn = d.canonical_algorithm_code
     public_calls: list[dict] = []
 
@@ -116,9 +116,28 @@ def test_q01_2x2_decomposition_identical_d0_d1_and_timeout_accounting() -> None:
                 "candidate_sha256": hashlib.sha256(kw["candidate_code"].encode("utf-8")).hexdigest(),
             }
         )
-        return {"accepted": True, "schema_valid": True, "timed_out": False}
+        task = kw["task"]
+        item, raw = (pub, pub_sha) if task == s_task else (e1_pub, e1_sha)
+        sha = public_calls[-1]["candidate_sha256"]
+        bundle = hashlib.sha256(b"/holdout_task/batch_solver.py\0" + bytes.fromhex(sha)).hexdigest()
+        assets = {"/holdout_task/public_batch.pkl": raw}
+        return {
+            "accepted": True, "schema_valid": True, "timed_out": False, "candidate_raw_sha256": sha,
+            "candidate_bundle_sha256": bundle, "public_setup_files_sha256": assets,
+            "scientific_probe_receipt": {
+                "execution_status": "completed", "signed_by_host_probe_executor": True,
+                "scientific_invariants_verified": True, "candidate_bundle_sha256": bundle,
+                "public_setup_files_sha256": assets, "public_input_digest": raw,
+                "canonical_numeric_sha256": m96.compute_canonical_numeric_item_sha256(item),
+                "receipt_kind": "scientific_probe_receipt", "probe_protocol_version": "test", "probe_code_digest": "e" * 64,
+            },
+        }
 
-    healthy = {"execution_status": "completed", "chosen_up_holdout_rmse": 0.0001, "probe_id": "uprobe_mock", "probe_wall_ms": 1.2, "failure_tier": "NONE"}
+    healthy = {
+        "execution_status": "completed", "component_probe_executed": True, "evidence_origin": "direct_component_probe",
+        "chosen_up_holdout_rmse": 0.0001, "probe_id": "uprobe_mock", "probe_wall_ms": 1.2,
+        "failure_tier": "NONE", "failure_kind": "none", "candidate_code_sha256": u.authoritative_executed_code_sha256(),
+    }
     nt_ok = json.dumps({"cal_identity_err": 0.0, "shape_ok": True, "transformed_signal": True})
     with patch.object(m99, "diagnose_m98_factored_conflict_locus", return_value=healthy), patch(
         "subprocess.run", return_value=subprocess.CompletedProcess(["docker"], 0, nt_ok, "")
@@ -247,7 +266,7 @@ def test_q08_legacy_roundtrip_idempotence_and_m98_inferred_isolation() -> None:
     assert rel_d.coverage_receipts[0].status == "unknown_requires_reverification"
 
 
-def test_q07_withdrawal_foreign_key_rejects_bad_and_accepts_all_7_sealed() -> None:
+def test_q07_distinguishes_archived_lineage_from_measured_host_receipts() -> None:
     spec, g, r, u, d, _, _ = _make_fixture()
     bad_rec = m99.SeparabilityWithdrawalReceipt(
         receipt_id="",
@@ -272,13 +291,14 @@ def test_q07_withdrawal_foreign_key_rejects_bad_and_accepts_all_7_sealed() -> No
         m99.hydrate_separability_withdrawals_from_graph(g, r, spec.world_id)
     assert m99.hydrate_separability_withdrawals_from_graph(g, r, spec.world_id, quarantine_unverified=True) == []
 
-    # Verify all `7/7` real sealed `M9.9` confirmation checkpoints pass full 6-link FK verification!
+    # All seven sealed graphs preserve lineage; their original host scientific-rejection receipts are absent.
     expected_7 = ["alpha_m99_c01", "alpha_m99_c02", "alpha_m99_c04", "beta_m99_c01", "beta_m99_c02", "beta_m99_c03", "beta_m99_c04"]
     for wid in expected_7:
         ck = M99_CONF_DIR / "continual_streams" / wid / "Hegel_AutonomousInteractionGraph_Online" / "graph_ckpt_after_step_05.json"
         g5 = m8p.PersistentMechanismGraph.load_checkpoint(ck)
         r5 = m94.M94BindingRegistry(g5)
-        sw = m99.hydrate_separability_withdrawals_from_graph(g5, r5, wid, strict_ledger_fk=True)
+        sw = m99.inspect_archived_withdrawal_lineage(g5, r5, wid)
+        assert not m99.hydrate_separability_withdrawals_from_graph(g5, r5, wid, quarantine_unverified=True)
         assert len(sw) == 1
 
 

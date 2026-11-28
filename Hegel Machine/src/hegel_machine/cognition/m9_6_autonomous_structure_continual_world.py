@@ -39,6 +39,8 @@ from typing import Any
 
 import numpy as np
 
+from .m9_4_1_shared_verification_kernel import compute_canonical_numeric_item_sha256
+
 from . import m6_frontier_real_benchmarks as m6f
 from .m7_autogenous_forest_pretraining import CLEAN_SCIPY_SANDBOX_IMAGE
 from .m7_holdout_ood_blind_benchmark import HoldoutOODTask
@@ -2353,6 +2355,33 @@ def {entrypoint}(dataset: dict) -> dict:
 M96_LINEAGE_FOREST_KEY = "__m9_6_immutable_branch_lineage__"
 
 
+def joint_scientific_receipt_matches(
+    gate: dict[str, Any], candidate_sha: str, input_sha: str, numeric_sha: str,
+) -> bool:
+    """Bind the signed M9.9 isolated-worker result to its actual solver and public input."""
+    diagnostic = gate.get("scientific_probe_receipt")
+    assets = gate.get("public_setup_files_sha256")
+    if not isinstance(diagnostic, dict) or not isinstance(assets, dict):
+        return False
+    try:
+        code_digest = bytes.fromhex(candidate_sha)
+    except (TypeError, ValueError):
+        return False
+    bundle = hashlib.sha256(b"/holdout_task/batch_solver.py\0" + code_digest).hexdigest()
+    return (
+        len(code_digest) == 32 and gate.get("candidate_raw_sha256") == candidate_sha
+        and gate.get("candidate_bundle_sha256") == diagnostic.get("candidate_bundle_sha256") == bundle
+        and bool(input_sha) and assets.get("/holdout_task/public_batch.pkl") == diagnostic.get("public_input_digest") == input_sha
+        and diagnostic.get("public_setup_files_sha256") == assets
+        and bool(numeric_sha) and diagnostic.get("canonical_numeric_sha256") == numeric_sha
+        and diagnostic.get("signed_by_host_probe_executor") is True
+        and diagnostic.get("execution_status") == "completed"
+        and diagnostic.get("receipt_kind") == "scientific_probe_receipt" and bool(diagnostic.get("probe_protocol_version"))
+        and bool(diagnostic.get("probe_code_digest"))
+        and isinstance(gate.get("accepted"), bool) and diagnostic.get("scientific_invariants_verified") is gate["accepted"]
+    )
+
+
 def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str]:
     """Strict 4-tier fail-closed failure classifier (`A09` / `C1.3`):
     Priority order:
@@ -2386,6 +2415,9 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
         return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
 
     if probe_result.get("accepted") is True:
+        if (probe_result.get("schema_valid") is not True or not isinstance(sci_rec, dict)
+                or sci_rec.get("scientific_invariants_verified") is not True):
+            return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
         return {"tier": "NONE", "failure_kind": "none"}
 
     # Explicit structured domain precondition rejection (checked before generic schema failure ONLY when no syntax/import/type crash!)
@@ -2436,67 +2468,7 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
     return {"tier": "SCIENTIFIC_FAILURE", "failure_kind": "scientific_or_numerical"}
 
 
-def compute_canonical_numeric_item_sha256(obj: Any) -> str:
-    """Pickle-protocol & NumPy-module-path independent canonical SHA-256 (`R12`: identical across NumPy 1.x and 2.x)."""
-    h = hashlib.sha256()
 
-    def _feed(v: Any) -> None:
-        if v is None:
-            h.update(b"N;")
-        elif isinstance(v, bool):
-            h.update(b"B1;" if v else b"B0;")
-        elif isinstance(v, (int, np.integer)):
-            h.update(f"I:{int(v)};".encode("utf-8"))
-        elif isinstance(v, (float, np.floating)):
-            fv = float(v)
-            if math.isnan(fv):
-                h.update(b"F:NaN;")
-            elif math.isinf(fv):
-                h.update(b"F:+Inf;" if fv > 0 else b"F:-Inf;")
-            else:
-                # Normalize -0.0 -> 0.0 and pack IEEE-754 float64 little-endian
-                fv = 0.0 if fv == 0.0 else fv
-                h.update(b"F:" + np.asarray([fv], dtype="<f8").tobytes() + b";")
-        elif isinstance(v, str):
-            eb = v.encode("utf-8")
-            h.update(f"S:{len(eb)}:".encode("utf-8") + eb + b";")
-        elif isinstance(v, bytes):
-            h.update(f"Y:{len(v)}:".encode("utf-8") + v + b";")
-        elif isinstance(v, np.ndarray):
-            h.update(f"A:{v.dtype.kind}:{v.shape}:".encode("utf-8"))
-            if v.dtype.kind == "f":
-                arr = np.asarray(v, dtype=np.float64)
-                nan_mask = np.isnan(arr)
-                clean = np.where(nan_mask, 0.0, arr)
-                clean = np.where(clean == 0.0, 0.0, clean).astype("<f8")
-                h.update(clean.tobytes("C"))
-                h.update(np.packbits(nan_mask.ravel()).tobytes())
-            elif v.dtype.kind in {"i", "u"}:
-                h.update(np.asarray(v, dtype="<i8").tobytes("C"))
-            elif v.dtype.kind == "b":
-                h.update(np.asarray(v, dtype=np.uint8).tobytes("C"))
-            else:
-                for elem in v.ravel().tolist():
-                    _feed(elem)
-            h.update(b";")
-        elif isinstance(v, dict):
-            h.update(f"D:{len(v)}:".encode("utf-8"))
-            for k in sorted(v.keys(), key=lambda x: str(x)):
-                _feed(str(k))
-                _feed(v[k])
-            h.update(b";")
-        elif isinstance(v, (list, tuple)):
-            tag = "L" if isinstance(v, list) else "T"
-            h.update(f"{tag}:{len(v)}:".encode("utf-8"))
-            for item in v:
-                _feed(item)
-            h.update(b";")
-        else:
-            eb = repr(v).encode("utf-8")
-            h.update(f"R:{len(eb)}:".encode("utf-8") + eb + b";")
-
-    _feed(obj)
-    return h.hexdigest()
 
 
 VALID_WITNESS_EXECUTION_STATUSES: frozenset[str] = frozenset(
@@ -2907,10 +2879,15 @@ class ImmutableBranchLineageController:
                 raise ValueError(f"Tampered lineage checkpoint state on `{self._lineage_store_key()}` (`R07/A10`)")
             loaded_w = [SolverEvaluationWitness.from_dict(x, require_content_sha256=True) for x in w_raw]
             for w in loaded_w:
-                self._verify_witness_foreign_key(w)
+                # Retain old identifiers even if that binding disappeared. Only downgraded,
+                # explicitly unexecuted rows can survive without an executable foreign key.
+                if not (w.verification_trust_state == "unverified_legacy" and w.result == "not_tested"
+                        and w.execution_status == "not_executed" and w.failure_kind == "unverified_legacy"):
+                    self._verify_witness_foreign_key(w)
             loaded_c = [EmpiricalCoverageReceipt.from_dict(x, allow_legacy_downgrade=False) for x in c_raw]
             for c in loaded_c:
-                if c.old_binding_id not in self.registry.bindings:
+                if c.old_binding_id not in self.registry.bindings and not (
+                        c.status == "unknown_requires_reverification" and c.passed_witness_count == 0):
                     raise ValueError(
                         f"EmpiricalCoverageReceipt `{c.receipt_id}` references unknown old_binding_id `{c.old_binding_id}` (`R07`)"
                     )
@@ -2921,32 +2898,11 @@ class ImmutableBranchLineageController:
 
         # Explicit legacy pre-M9.7.1 schema migration (`Q08` idempotent `load -> migrate -> save -> reload` round-trip):
         # Downgrades trust/coverage to non-authoritative states AND recomputes canonical digests so `sync_to_graph()` + subsequent reloads succeed cleanly!
-        migrated_w: list[SolverEvaluationWitness] = []
-        for x in w_raw:
-            bid = str(x.get("binding_id") or "")
-            if bid not in self.registry.bindings:
-                continue
-            w_leg = SolverEvaluationWitness.from_dict(
-                x, require_content_sha256=False, allow_legacy_unverified_downgrade=True
-            )
-            w_leg.verification_trust_state = "unverified_legacy"
-            w_leg.result = "not_tested"
-            w_leg.failure_kind = "unverified_legacy"
-            w_leg.execution_status = "not_executed"
-            w_leg.witness_schema_version = max(int(w_leg.witness_schema_version), 2)
-            w_leg.witness_content_sha256 = w_leg.compute_expected_content_sha256()
-            migrated_w.append(w_leg)
-        migrated_c: list[EmpiricalCoverageReceipt] = []
-        for x in c_raw:
-            if str(x.get("old_binding_id") or "") not in self.registry.bindings:
-                continue
-            c_leg = EmpiricalCoverageReceipt.from_dict(x, allow_legacy_downgrade=True)
-            c_leg.status = "unknown_requires_reverification"
-            c_leg.passed_witness_count = 0
-            c_leg.receipt_id = c_leg.compute_expected_receipt_id()
-            migrated_c.append(c_leg)
-        self.witness_ledger = migrated_w
-        self.coverage_receipts = migrated_c
+        self.witness_ledger = [
+            SolverEvaluationWitness.from_dict(row, require_content_sha256=False, allow_legacy_unverified_downgrade=True)
+            for row in w_raw
+        ]
+        self.coverage_receipts = [EmpiricalCoverageReceipt.from_dict(row, allow_legacy_downgrade=True) for row in c_raw]
         self._branch_seq = max(self._branch_seq, b_seq)
 
     def _serialize_stream(self) -> dict[str, Any]:
@@ -3089,6 +3045,11 @@ class ImmutableBranchLineageController:
                 or not receipt_numeric or (canonical_numeric_sha256 and receipt_numeric != canonical_numeric_sha256)):
             raise ValueError("Probe receipt and witness public input fingerprints disagree (Q01)")
         canonical_numeric_sha256 = receipt_numeric
+        for name, supplied in (("setup_source_sha256", setup_source_sha256), ("dependency_bundle_sha256", dependency_bundle_sha256)):
+            if supplied and probe_receipt.get(name) != supplied:
+                raise ValueError(f"Probe receipt and witness {name} disagree (Q01)")
+        setup_source_sha256 = probe_receipt.get("setup_source_sha256", "")
+        dependency_bundle_sha256 = probe_receipt.get("dependency_bundle_sha256", "")
         code_sha = binding.authoritative_executed_code_sha256()
         if evidence_origin == "direct_component_probe":
             if (probe_receipt.get("component_probe_executed") is not True
@@ -3118,6 +3079,10 @@ class ImmutableBranchLineageController:
                 raise ValueError("Joint probe receipt does not identify the executed binding and verdict (Q01)")
             cls = classify_public_probe_failure(probe_receipt)
             if cls["tier"] == "INFRA_FAILURE":
+                return None
+            if cls["tier"] != "SCHEMA_FAILURE" and not joint_scientific_receipt_matches(
+                probe_receipt, probe_receipt.get("candidate_sha256"), public_input_sha256, canonical_numeric_sha256,
+            ):
                 return None
             passed_b = bool(probe_receipt.get("accepted"))
             f_kind = "none" if passed_b else cls["failure_kind"]

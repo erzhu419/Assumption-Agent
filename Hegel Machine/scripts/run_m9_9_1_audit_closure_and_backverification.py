@@ -3,7 +3,7 @@
 and Forensic Provenance Ledger (`Q01–Q14` + Original `R01–R16` Crosswalk).
 
 Strictly read-only on `docs/evidence/m9_9_*` and `docs/evidence/m9_8_1_*` (`0` paid LLM calls!).
-Executes inside air-gapped `hegel-clean-scipy:m7v1` containers:
+Executes inside air-gapped `hegel_clean_scipy_sandbox:v1` containers:
   1. `01_m99_q01_30_cross_diagonal_decomposition_probes.json`:
      - Executes all `15 × 2 = 30` previously unexecuted off-diagonal public-gate checks (`u0+d0 @ E_decomp` and `u0+d1 @ Stage S`)
        across the `15` accepted `M9.9` confirmation decompositions (`8` `Hegel` + `7` `Plain`), recording candidate SHA, input SHA,
@@ -24,11 +24,11 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from datetime import datetime, timezone
+from functools import lru_cache
 import argparse
 import gzip
 import hashlib
 import io
-import tarfile
 from tempfile import NamedTemporaryFile
 from collections import Counter
 import json
@@ -96,16 +96,41 @@ def _sealed_container_public_sha(world_id: str, step: int) -> str:
         paths = (M99_CONF_DIR / "stage_S_sources" / world_id).glob("attempt_*/*/00_episode_summary.json")
     digests = set()
     for path in paths:
-        receipt = json.loads(path.read_bytes()).get("public_setup_receipt") or {}
-        digest = (receipt.get("files_sha256") or {}).get("/holdout_task/public_batch.pkl")
-        if digest:
-            digests.add(digest)
+        ep = json.loads(path.read_bytes())
+        setup = (ep.get("public_setup_receipt") or {}).get("files_sha256") or {}
+        trial = (ep.get("pre_llm_trial_receipt") or {}).get("probe_result") or {}
+        sci = trial.get("scientific_probe_receipt") or {}
+        signed_setup = (sci.get("public_setup_files_sha256") or {}) if sci.get("signed_by_host_probe_executor") else {}
+        for manifest in (setup, signed_setup):
+            digest = manifest.get("/holdout_task/public_batch.pkl")
+            if digest:
+                digests.add(digest)
     if len(digests) != 1:
         raise ValueError(f"Expected one sealed container input for {world_id} step {step}: {digests}")
     return digests.pop()
 
 
+@lru_cache(maxsize=1)
+def _sandbox_identity() -> dict:
+    image = m95.CLEAN_SCIPY_SANDBOX_IMAGE
+    digest = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", image], text=True).strip()
+    sealed = json.loads((M99_CONF_DIR / "m9_9_continual_summary.json").read_bytes())["sandbox_image_digest"]
+    if digest != sealed:
+        raise ValueError(f"Sandbox image differs from the sealed M9.9 image: {digest} != {sealed}")
+    return {"image": image, "image_id": digest, "sealed_image_id": sealed}
+
+
+def _bound_host_measurement(gate: dict, public_sha: str) -> bool:
+    sci = gate.get("scientific_probe_receipt") or {}
+    return (sci.get("signed_by_host_probe_executor") is True and sci.get("execution_status") == "completed"
+            and sci.get("public_input_digest") == public_sha
+            and sci.get("candidate_bundle_sha256") == gate.get("candidate_bundle_sha256")
+            and sci.get("public_setup_files_sha256") == gate.get("public_setup_files_sha256")
+            and bool(sci.get("kernel_version")) and bool(sci.get("measured_scientific_metrics")))
+
+
 def _run_30_cross_diagonal_probes() -> dict[str, Any]:
+    sandbox = _sandbox_identity()
     receipts = json.loads((M99_CONF_DIR / "all_provider_call_receipts.json").read_text(encoding="utf-8"))
     decomp_calls = [r for r in receipts if r["call_role"] == "autonomous_decomposition_induction"]
 
@@ -250,6 +275,9 @@ def _run_30_cross_diagonal_probes() -> dict[str, Any]:
                  and pr.get("readonly_dependencies_sha256") == jb["ro_shas"])
         if ex_st == "completed" and not bound:
             ex_st = "artifact_identity_error"
+        measurement_bound = _bound_host_measurement(pr, actual_sha)
+        if ex_st == "completed" and cls["tier"] in {"NONE", "SCIENTIFIC_FAILURE"} and not measurement_bound:
+            ex_st = "unverified_scientific_receipt"
         superseded = jb["supersedes_unexecuted_witness_id"] if ex_st == "completed" and cls["tier"] in {
             "NONE", "DOMAIN_REJECTION", "SCIENTIFIC_FAILURE"
         } else None
@@ -270,6 +298,7 @@ def _run_30_cross_diagonal_probes() -> dict[str, Any]:
             "host_public_pickle_sha256": jb["public_input_sha256"],
             "sealed_container_public_input_sha256": jb["sealed_container_sha256"],
             "artifact_identity_verified": bound,
+            "host_measurement_verified": measurement_bound,
             "public_gate_receipt": pr,
             "canonical_numeric_sha256": jb["canonical_numeric_sha256"],
             "parameter_payload": jb["param_payload"],
@@ -295,7 +324,7 @@ def _run_30_cross_diagonal_probes() -> dict[str, Any]:
 
     results.sort(key=lambda x: (x["arm"], x["world_id"], x["cell"]))
     return {
-        "schema": "hegel_m9_9_1_q01_30_cross_diagonal_backverification_v1",
+        "schema": "hegel_m9_9_1_q01_30_cross_diagonal_backverification_v2", "sandbox": sandbox,
         "executed_at_utc": datetime.now(timezone.utc).isoformat(),
         "paid_llm_calls": 0,
         "evidence_scope": "Post-hoc real Docker public-gate back-verification of the 30 off-diagonal cells across 15 accepted M9.9 decompositions; original sealed M9.9 scores/files untouched.",
@@ -359,7 +388,7 @@ def _run_c04_e7_existing_candidate_container_verification() -> dict[str, Any]:
     pv_ms = round((monotonic() - t_pv) * 1000.0, 2)
 
     return {
-        "schema": "hegel_m9_9_1_q03_c04_e7_fallback_container_verification_v1",
+        "schema": "hegel_m9_9_1_q03_c04_e7_fallback_container_verification_v2", "sandbox": _sandbox_identity(),
         "executed_at_utc": datetime.now(timezone.utc).isoformat(),
         "paid_llm_calls": 0,
         "evidence_scope": "Post-hoc container verification on exposed prefix checkpoint `graph_ckpt_after_step_06.json` (`alpha_m99_c04`); strictly diagnostic/regression evidence, does NOT alter sealed M9.9 confirmation score or cost.",
@@ -388,7 +417,212 @@ def _run_c04_e7_existing_candidate_container_verification() -> dict[str, Any]:
     }
 
 
-def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
+def _cancelled_campaign_ledger(stage_root: Path | None, sealed_ids: set[str], sealed_known_v2: int) -> dict:
+    prefix = "m99_dev_20261127T175948Z__"
+    archive = OUT_DIR / "04_m99_cancelled_dev_usage_receipts.jsonl.gz"
+    if not archive.is_file():
+        files = sorted(stage_root.glob(prefix + "*/attempts_*.json")) if stage_root else []
+        if not files:
+            raise FileNotFoundError("Provide --cancelled-stage-root to recover the cancelled development receipts")
+        # Archive only attribution and billing evidence. Source hashes bind each row to exact provider bytes.
+        with NamedTemporaryFile(dir=OUT_DIR, delete=False) as tmp:
+            temp_path = Path(tmp.name)
+        try:
+            with temp_path.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
+                for source in files:
+                    data = source.read_bytes()
+                    original = json.loads(data)
+                    row = {key: original[key] for key in ("stage_subdir", "call_uuid", "status", "call_seq", "attempt_count")}
+                    row["source_receipt_sha256"] = hashlib.sha256(data).hexdigest()
+                    row["attempts"] = [
+                        {key: attempt[key] for key in ("attempt_index", "usage_known", "prompt_tokens", "cached_tokens",
+                                                       "completion_tokens", "response_sha256", "timed_out")}
+                        for attempt in original["attempts"]
+                    ]
+                    if row["status"] != "completed":
+                        pending_response = source.parent / f"resp_{row['call_seq']:03d}_att{row['attempt_count']}.json"
+                        row["pending_response_bytes"] = pending_response.stat().st_size if pending_response.exists() else None
+                    compressed.write((json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode())
+            temp_path.replace(archive)
+        finally:
+            temp_path.unlink(missing_ok=True)
+    ids = set()
+    stages = set()
+    statuses = Counter()
+    unfinished = []
+    unknown_attempts = 0
+    known_attempts = 0
+    known_v2 = 0
+    with gzip.open(archive, "rt", encoding="utf-8") as receipts:
+        for line in receipts:
+            row = json.loads(line)
+            stage = row["stage_subdir"]
+            cid = row["call_uuid"]
+            if not stage.startswith(prefix) or "/" in stage or "\\" in stage or cid in ids or cid in sealed_ids:
+                raise ValueError(f"Unbound or repeated cancelled campaign receipt for {cid}")
+            if len(row["source_receipt_sha256"]) != 64 or len(row["attempts"]) != row["attempt_count"]:
+                raise ValueError(f"Incomplete cancelled campaign projection for {cid}")
+            ids.add(cid)
+            stages.add(stage)
+            statuses[row["status"]] += 1
+            if row["status"] != "completed":
+                unfinished.append({"call_uuid": cid, "stage_subdir": stage, "status": row["status"],
+                                   "pending_response_bytes": row["pending_response_bytes"]})
+            for attempt in row["attempts"]:
+                if attempt["usage_known"]:
+                    known_attempts += 1
+                    known_v2 += score_single_call_usage(
+                        prompt_tokens=attempt["prompt_tokens"], cached_tokens=attempt["cached_tokens"],
+                        completion_tokens=attempt["completion_tokens"],
+                    )["proxy_v2_u_010c_4o"]
+                else:
+                    unknown_attempts += 1
+    return {
+        "run_id": prefix[:-2], "status": "partially_recovered_raw_provider_receipts",
+        "archive": archive.name, "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "stage_directories": len(stages), "unique_logical_calls": len(ids), "status_counts": dict(statuses),
+        "known_physical_attempts": known_attempts, "known_physical_v2": known_v2,
+        "unclosed_call_count": len(unfinished), "unclosed_calls": unfinished,
+        "closed_attempts_with_unknown_usage": unknown_attempts,
+        "observed_campaign_total_v2_lower_bound": sealed_known_v2 + known_v2,
+        "total_rd_v2_formula": f"{sealed_known_v2 + known_v2} + x + y",
+        "y_definition": "Remaining unreported cancelled-run usage. In-progress zero placeholders supply no final cost.",
+        "confirmation_seeds_touched": len({name for name in stages if "_m99_c" in name}),
+    }
+
+
+def _historical_withdrawal_links(streams: list[dict]) -> list[dict]:
+    rows = []
+    for stream in streams:
+        receipts = stream["separability_withdrawal_receipts"]
+        if not receipts:
+            continue
+        root = M99_CONF_DIR / "continual_streams" / stream["world_id"] / stream["arm"]
+        for rec in receipts:
+            m99.SeparabilityWithdrawalReceipt.from_dict(rec)
+            matches = []
+            for ep_path in root.glob("*/00_episode_summary.json"):
+                ep = json.loads(ep_path.read_bytes())
+                trial = ep.get("pre_llm_trial_receipt") or {}
+                if (trial.get("separability_withdrawal_receipt") or {}).get("receipt_id") == rec["receipt_id"]:
+                    matches.append((ep_path, ep, trial))
+            if len(matches) != 1:
+                raise ValueError(f"Ambiguous historical withdrawal {rec['receipt_id']}")
+            path, ep, trial = matches[0]
+            step = int(ep["stream_step"])
+            before, after = [json.loads((root / f"graph_ckpt_after_step_{n:02d}.json").read_bytes())["questions"]
+                             for n in (step - 1, step)]
+            def witnesses(q):
+                return [w for lineage in q[m96.M96_LINEAGE_FOREST_KEY]["streams"].values() for w in lineage["witness_ledger"]]
+            bindings = after["__m9_4_mechanism_executable_bindings__"]["bindings"]
+            w_after = witnesses(after)
+            up = [w for w in w_after if w["probe_id"] == rec["upstream_component_probe_id"]
+                  and w["result"] == "passed" and w["binding_id"] == rec["upstream_binding_id"]
+                  and w["solver_code_sha256"] == rec["upstream_code_sha256"]
+                  and w["canonical_numeric_sha256"] == rec["counterexample_canonical_numeric_sha256"]
+                  and w["public_input_sha256"] == rec["counterexample_public_input_sha256"]]
+            neg = [w for w in w_after if w["result"] == "failed" and w["binding_id"] == rec["downstream_binding_id"]
+                   and w["public_input_sha256"] == rec["counterexample_public_input_sha256"]]
+            pos = [w for w in witnesses(before) if w["result"] == "passed" and w["binding_id"] == rec["downstream_binding_id"]]
+            def projection(w):
+                return tuple(w["public_structural_features"].get(k) for k in m99.M99_DOWNSTREAM_OBSERVABLE_NAMES)
+            diag = trial["conflict_locus_diagnosis"]
+            gate = trial["probe_result"]
+            checks = {
+                "receipt_equals_sealed_episode": rec == trial["separability_withdrawal_receipt"],
+                "upstream_ref": len(up) == 1 and diag["probe_id"] == rec["upstream_component_probe_id"]
+                    and diag["execution_status"] == "completed" and diag["candidate_code_sha256"] == rec["upstream_code_sha256"],
+                "registry_hashes_match": all(hashlib.sha256(bindings[rec[f"{component}_binding_id"]]["canonical_algorithm_code"].encode()).hexdigest()
+                                              == rec[f"{component}_code_sha256"] for component in ("upstream", "downstream")),
+                "recorded_joint_candidate_and_label_match": gate["candidate_raw_sha256"] == rec["composed_candidate_sha256"]
+                    and trial["failure_kind"] == rec["joint_failure_kind"] and gate.get("accepted") is False,
+                "downstream_collision": any(projection(a) == projection(b) for a in pos for b in neg),
+            }
+            rows.append({"world_id": stream["world_id"], "receipt_id": rec["receipt_id"], "episode": str(path.relative_to(M99_CONF_DIR)),
+                         "historical_signed_scientific_receipt": bool((gate.get("scientific_probe_receipt") or {}).get("signed_by_host_probe_executor")),
+                         "checks": checks, "matches": all(checks.values())})
+    return rows
+
+
+def _replay_historical_withdrawals() -> dict:
+    conf = json.loads((M99_CONF_DIR / "m9_9_continual_summary.json").read_bytes())
+    links = _historical_withdrawal_links(conf["streams"])
+    specs = {spec.world_id: spec for spec in m99.CONFIRMATION_M99_WORLD_SPECS}
+
+    def replay(link):
+        path = M99_CONF_DIR / link["episode"]
+        ep = json.loads(path.read_bytes())
+        step = int(ep["stream_step"])
+        hist = ep["pre_llm_trial_receipt"]
+        rec = hist["separability_withdrawal_receipt"]
+        spec = specs[link["world_id"]]
+        compat = spec.to_m98_compat_spec()
+        _, tasks, _, logs = m99.build_m99_world_tasks(spec)
+        public, host_sha = m98.materialize_m98_public_item_and_sha(tasks[step-1])
+        graph = m8p.PersistentMechanismGraph.load_checkpoint(path.parents[1] / f"graph_ckpt_after_step_{step-1:02d}.json")
+        registry = m94.M94BindingRegistry(graph)
+        m99.update_m99_calibration_snapshot_and_graph(spec=compat, episode_id="audit_current_observation",
+                                                      public_item=public, graph=graph, registry=registry)
+        up, dn = [registry.bindings[rec[f"{kind}_binding_id"]] for kind in ("upstream", "downstream")]
+        cand = m98.compose_m98_two_stage_solver_code(
+            upstream_code=up.canonical_algorithm_code, upstream_entrypoint=up.canonical_entrypoint,
+            downstream_code=dn.canonical_algorithm_code, downstream_entrypoint=dn.canonical_entrypoint,
+            param_payload=m98.assemble_m98_graph_diagonal_payload(compat, graph))
+        deps = {"/tmp/hegel_continual_archive/archive_apparatus_log.json": json.dumps(logs[:step+1], indent=2)}
+        dep_shas = {key: hashlib.sha256(value.encode()).hexdigest() for key, value in deps.items()}
+        cand_sha = hashlib.sha256(cand.encode()).hexdigest()
+        if (cand_sha != rec["composed_candidate_sha256"] or host_sha != rec["counterexample_public_input_sha256"]
+                or dep_shas != hist["probe_result"]["readonly_dependencies_sha256"]
+                or m96.compute_canonical_numeric_item_sha256(public) != rec["counterexample_canonical_numeric_sha256"]):
+            raise ValueError(f"Sealed withdrawal candidate, public data or dependencies disagree at {path}")
+        sealed_input = ep["public_setup_receipt"]["files_sha256"]["/holdout_task/public_batch.pkl"]
+        start = monotonic()
+        try:
+            gate = m95.execute_single_pre_llm_public_gate_probe_in_container(
+                task=tasks[step-1], candidate_code=cand, readonly_dependencies=deps, expected_dependency_sha256=dep_shas)
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            gate = {"setup_ok": False, "infrastructure_exception": str(exc)}
+        actual = (gate.get("public_setup_files_sha256") or {}).get("/holdout_task/public_batch.pkl")
+        typed = m96.classify_public_probe_failure(gate)
+        sci = gate.get("scientific_probe_receipt") or {}
+        bound = (actual == sealed_input and gate.get("candidate_raw_sha256") == cand_sha
+                 and gate.get("readonly_dependencies_sha256") == dep_shas
+                 and gate.get("candidate_bundle_sha256") == hist["probe_result"]["candidate_bundle_sha256"]
+                 and sci.get("candidate_bundle_sha256") == gate.get("candidate_bundle_sha256")
+                 and sci.get("public_input_digest") == actual)
+        return {"world_id": spec.world_id, "historical_receipt_id": rec["receipt_id"],
+                "sealed_episode": link["episode"], "sealed_episode_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "sealed_joint_scientific_receipt": hist["probe_result"].get("scientific_probe_receipt"),
+                "historical_joint_failure_kind": rec["joint_failure_kind"], "sealed_container_public_input_sha256": sealed_input,
+                "composed_candidate_sha256": cand_sha, "host_public_pickle_sha256": host_sha,
+                "replayed_failure_tier": typed["tier"], "artifact_identity_verified": bound,
+                "replayed_bound_scientific_negative": bool(bound and typed["tier"] == "SCIENTIFIC_FAILURE"
+                    and _bound_host_measurement(gate, actual) and sci.get("scientific_invariants_verified") is False),
+                "probe_wall_ms": round((monotonic()-start)*1000, 2), "public_gate_receipt": gate}
+
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        rows = list(pool.map(replay, links))
+    return {"schema": "hegel_m991_retrospective_e5_joint_withdrawal_replay_v2", "sandbox": _sandbox_identity(), "paid_llm_calls": 0,
+            "executed_at_utc": datetime.now(timezone.utc).isoformat(), "total_receipts": len(rows),
+            "historical_signed_scientific_receipts": sum(row["historical_signed_scientific_receipt"] for row in links),
+            "replayed_bound_scientific_negatives": sum(row["replayed_bound_scientific_negative"] for row in rows),
+            "rows": rows}
+
+
+def _select_plain_binding(rows: list[dict], chain: str, keys: list[str], features: dict) -> dict:
+    candidates = sorted(
+        (row for row in rows if row["chain_id"] == chain and row["qualification_status"] == "verified"
+         and sorted(row["output_schema_keys"]) == sorted(keys)),
+        key=lambda row: (-int(row["selection_priority"]), row["binding_id"]),
+    )
+    for row in candidates:
+        guard = row.get("applicability_guard") or row.get("precondition_guard")
+        if m96.evaluate_m96_autonomous_guard(guard, features, allow_open_feature_keys=True)["state"] == "TRUE":
+            return row
+    raise ValueError(f"No applicable verified plain row for {chain}")
+
+
+def _build_provenance_and_sensitivity_ledger(cancelled_stage_root: Path | None = None) -> dict[str, Any]:
     conf_calls = json.loads((M99_CONF_DIR / "all_provider_call_receipts.json").read_text(encoding="utf-8"))
     dev_calls = json.loads((M99_DEV_DIR / "all_provider_call_receipts.json").read_text(encoding="utf-8"))
     conf_sum = json.loads((M99_CONF_DIR / "m9_9_continual_summary.json").read_text(encoding="utf-8"))
@@ -410,7 +644,7 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
         }
 
     # Exact `x` sensitivity ladder for `Hegel - Plain` (`diffs = [35798, -68719, -938884, 217083 - x, -641537, -199431, -579431, -360562]`)
-    base_diffs = np.array([35798.0, -68719.0, -938884.0, 217083.0, -641537.0, -199431.0, -579431.0, -360562.0], dtype=float)
+    base_diffs = np.asarray(conf_sum["paired_cluster_inference"]["Hegel_minus_Flat_PlainModuleRegistry_Online"]["cluster_v2_diffs"], dtype=float)
     x_probe_points = [0, 17652, 17653, 53450, 53451, 148364, 148365, 184162, 184163, 217083, 217084, 252881, 252882]
     signs = np.array([[1.0 if ((mask >> j) & 1) else -1.0 for j in range(8)] for mask in range(256)], dtype=float)
     x_ladder = []
@@ -424,28 +658,20 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
     # Plain list/dict `16/16` parity check on `step_05` ablation
     abl = json.loads((M99_CONF_DIR / "m9_9_factorized_ceiling_ablation.json").read_text(encoding="utf-8"))
     hg_abl_rows = {(r["world_id"], r["event"]): r for r in abl["rows"] if r["policy"] == "hegel_selective_cross_factor_graph"}
-    plain_dict_matches = 0
+    parity_rows = []
     for spec in m99.CONFIRMATION_M99_WORLD_SPECS:
         wid = spec.world_id
         compat = spec.to_m98_compat_spec()
         _, tasks, manifest, logs = m99.build_m99_world_tasks(spec)
         ck5_raw = json.loads((M99_CONF_DIR / "continual_streams" / wid / "Hegel_AutonomousInteractionGraph_Online/graph_ckpt_after_step_05.json").read_text(encoding="utf-8"))
         b_dict = ck5_raw["questions"]["__m9_4_mechanism_executable_bindings__"]["bindings"]
-        sw_raw = ((ck5_raw["questions"].get(m99.M99_WITHDRAWAL_FOREST_KEY) or {}).get("worlds") or {}).get(wid, {}).get("receipts") or []
-        dn_rows = sorted(
-            [v for v in b_dict.values() if v["chain_id"] == f"{spec.family}_dn" and v["qualification_status"] == "verified"],
-            key=lambda v: (-int(v["selection_priority"]), v["binding_id"]),
-        )
-        up_rows = sorted(
-            [v for v in b_dict.values() if v["chain_id"] == f"{spec.family}_up" and v["qualification_status"] == "verified"],
-            key=lambda v: (-int(v["selection_priority"]), v["binding_id"]),
-        )
-        cross_set = {sw_raw[-1]["downstream_binding_id"], dn_rows[0]["binding_id"]} if sw_raw else set()
-        # Base flat snapshot at step 5
+        mechanisms = ck5_raw["questions"]["__m8_authoritative_persistent_state__"]["mechanisms"]
         flat_snap = {"gains": [1.0] * 4, "offsets": [0.0] * 4}
-        for s_i in range(5):
-            pi_s, _ = m98.materialize_m98_public_item_and_sha(tasks[s_i])
-            flat_snap = m99.update_m99_calibration_snapshot_and_graph(spec=compat, episode_id=f"{wid}_{s_i}", public_item=pi_s, flat_snapshot=flat_snap)["flat_snapshot"]
+        for node, channels in (("cal_node_p0", spec.channel_perm[:2]), ("cal_node_p1", spec.channel_perm[2:])):
+            weights = mechanisms[node]["shared_weights"]
+            for ch in channels:
+                flat_snap["gains"][ch] = float(weights[f"g_ch{ch}"])
+                flat_snap["offsets"][ch] = float(weights[f"b_ch{ch}"])
         for ev_nm in ("E6_separable_revisit", "E7_coupled_revisit"):
             idx = next(i for i, m in enumerate(manifest) if m["causal_event"] == ev_nm)
             pi, psha = m98.materialize_m98_public_item_and_sha(tasks[idx])
@@ -453,23 +679,9 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
             up_obs = m98.compute_m98_upstream_observables(spec.family, pi)
             dn_obs = m98.compute_m98_downstream_observables(logs[: idx + 2])
             comb_obs = {**up_obs, **dn_obs}
-            sel_u = next(
-                (r for r in up_rows if m96.evaluate_m96_autonomous_guard(r["applicability_guard"], up_obs, allow_open_feature_keys=True)["state"] == "TRUE"),
-                up_rows[0],
-            )
-            sel_d = next(
-                (
-                    r
-                    for r in dn_rows
-                    if m96.evaluate_m96_autonomous_guard(
-                        r["applicability_guard"],
-                        (comb_obs if (r["binding_id"] in cross_set or any(str(c.get("feature_name", "")).startswith("up_stat_") for c in (r["applicability_guard"].get("all_of") or []))) else dn_obs),
-                        allow_open_feature_keys=True,
-                    )["state"]
-                    == "TRUE"
-                ),
-                dn_rows[0],
-            )
+            sel_u = _select_plain_binding(list(b_dict.values()), f"{spec.family}_up", ["calibrated_input"], up_obs)
+            sel_d = _select_plain_binding(list(b_dict.values()), f"{spec.family}_dn",
+                                          m98.expected_m98_public_output_keys(spec.family), comb_obs)
             cand = m98.compose_m98_two_stage_solver_code(
                 upstream_code=sel_u["canonical_algorithm_code"],
                 upstream_entrypoint=sel_u["canonical_entrypoint"],
@@ -479,9 +691,25 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
             )
             csha = hashlib.sha256(cand.encode("utf-8")).hexdigest()
             ref = hg_abl_rows[(wid, ev_nm)]
-            if sel_u["binding_id"] == ref["selected_upstream"] and sel_d["binding_id"] == ref["selected_downstream"] and csha == ref["candidate_sha256"] and psha == ref["public_batch_pkl_sha256"]:
-                plain_dict_matches += 1
+            sealed_docker_sha = _sealed_container_public_sha(wid, idx + 1)
+            parity_rows.append({
+                "world_id": wid, "event": ev_nm, "selected_upstream": sel_u["binding_id"],
+                "selected_downstream": sel_d["binding_id"], "candidate_sha256": csha, "public_pickle_sha256": psha,
+                "policy_input_source": "historical_host_reconstruction",
+                "historical_docker_public_input_sha256": sealed_docker_sha,
+                "policy_input_matches_historical_docker_pickle": psha == sealed_docker_sha,
+                "matched": (sel_u["binding_id"] == ref["selected_upstream"]
+                            and sel_d["binding_id"] == ref["selected_downstream"]
+                            and csha == ref["candidate_sha256"] and psha == ref["public_batch_pkl_sha256"]),
+            })
 
+    dev_v2 = sum(row["proxy_v2_u_010c_4o"] for row in dev_calls)
+    conf_v2 = sum(row["proxy_v2_u_010c_4o"] for row in conf_calls)
+    cancelled = _cancelled_campaign_ledger(cancelled_stage_root, {row["call_uuid"] for row in dev_calls + conf_calls}, dev_v2 + conf_v2)
+    finalizer = _compute_commit_py_tree_sha256("d4b1cd7f0", omit_report_generator=True)
+    if finalizer["source_tree_sha256"] != conf_sum["source_tree_sha256_at_start"]:
+        raise ValueError("Reconstructed post-freeze finalizer differs from sealed tree")
+    withdrawal_rows = _historical_withdrawal_links(conf_sum["streams"])
     ot = conf_sum["arm_outcome_totals"]
     tot_agent_ms = {
         a: round(
@@ -504,6 +732,9 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
             "m99_summary_recorded_post_freeze_finalizer_tree_sha256": conf_sum["source_tree_sha256_at_start"],
             "seal_commit_669ccf0b2": _compute_commit_py_tree_sha256("669ccf0b2"),
             "doc_commit_d4b1cd7f0": _compute_commit_py_tree_sha256("d4b1cd7f0"),
+            "finalizer_reconstruction_excluding_later_report_generator": finalizer,
+            "finalizer_digest_matches_recorded": True,
+            "paid_start_worktree_state_independently_verified": False,
             "provenance_note": "Original paid confirmation run had no persisted start manifest; `be7190fb...` in `m9_9_continual_summary.json` measured the post-freeze finalizer tree (`--finalize-existing`), while git diff confirms 0 changes to paid online loop, world generator, or official verifier.",
         },
         "execution_vs_finalizer_timing_reconciliation": {
@@ -516,16 +747,15 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
         },
         "rd_cost_coverage_boundary": {
             "sealed_dev_plus_confirmation_logical_calls": len(dev_calls) + len(conf_calls),
-            "sealed_dev_physical_v2": 8409059,
-            "sealed_confirmation_physical_v2_known": 37274561,
-            "combined_sealed_physical_v2_formula": "45683620 + x",
-            "unarchived_pre_freeze_cancelled_dev_diagnostic_run": {
-                "status": "unverifiable_cancelled_run_not_archived",
-                "symbolic_term": "C_cancelled > 0 (unknown, never filled as 0)",
-                "total_rd_v2_formula": "45683620 + x + C_cancelled",
-                "confirmation_seeds_touched": 0,
-            },
+            "sealed_dev_physical_v2": dev_v2,
+            "sealed_confirmation_physical_v2_known": conf_v2,
+            "combined_sealed_physical_v2_formula": f"{dev_v2 + conf_v2} + x",
+            "cancelled_dev_diagnostic_run": cancelled,
         },
+        "historical_withdrawal_foreign_keys": {"matched_receipts": sum(r["matches"] for r in withdrawal_rows),
+                                              "total_receipts": len(withdrawal_rows),
+                                              "historical_typed_scientific_receipts": sum(r["historical_signed_scientific_receipt"] for r in withdrawal_rows),
+                                              "rows": withdrawal_rows},
         "unknown_x_exact_sign_flip_sensitivity_ladder": {
             "call_uuid": "0391d702b0c547a488608847b5dff224",
             "arm": "Flat_PlainModuleRegistry_Online",
@@ -534,9 +764,12 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
             "evaluated_points": x_ladder,
         },
         "plain_dict_same_joint_features_step05_replay": {
-            "matched_episodes": plain_dict_matches,
-            "total_episodes": 16,
-            "attribution_scope": "Selective condition-expansion policy (`dn_obs -> up_obs + dn_obs` after counterexample) is substrate-independent: a plain JSON dict/list given identical `up+dn` features and flat snapshot reproduces 16/16 selected branches, candidate SHAs, and public input SHAs.",
+            "matched_episodes": sum(row["matched"] for row in parity_rows),
+            "total_episodes": len(parity_rows),
+            "policy_inputs_compared_to_historical_docker": len(parity_rows),
+            "policy_inputs_matching_historical_docker": sum(row["policy_input_matches_historical_docker_pickle"] for row in parity_rows),
+            "rows": parity_rows,
+            "attribution_scope": "Post-hoc execution of frozen step-05 rows with all current joint features available to the plain downstream selector. The control isolates selection and composition conditional on the same learned bindings and parameters. Original online learning costs and discovery are outside this control.",
         },
         "non_llm_probe_elapsed_wall_ratios": {
             "total_agent_probe_elapsed_wall_ms": tot_agent_ms,
@@ -552,19 +785,76 @@ def _build_provenance_and_sensitivity_ledger() -> dict[str, Any]:
     }
 
 
+def _compare_public_materializations(q01: dict, withdrawals: dict) -> dict:
+    """Compare host and sandbox values on each unique public task behind the two replays."""
+    task_ids = {r["target_task_id"] for r in q01["probes"]}
+    task_ids.update(Path(r["sealed_episode"]).parent.name for r in withdrawals["rows"])
+    selected = []
+    for spec in m99.CONFIRMATION_M99_WORLD_SPECS:
+        source, tasks, _, _ = m99.build_m99_world_tasks(spec)
+        selected.extend(t for t in (source, *tasks) if t.task_id in task_ids)
+    if {task.task_id for task in selected} != task_ids:
+        raise ValueError("Unresolved public task in the historical replays")
+
+    def leaves(value, path=()):
+        if isinstance(value, (tuple, list, dict)):
+            items = value.items() if isinstance(value, dict) else enumerate(value)
+            for key, child in items:
+                yield from leaves(child, (*path, str(key)))
+        else:
+            yield path, np.asarray(value)
+
+    def compare(task):
+        host, host_sha = m98.materialize_m98_public_item_and_sha(task)
+        sandbox, sandbox_sha = m99.materialize_m99_public_item_and_sha(task)
+        a, b = dict(leaves(host)), dict(leaves(sandbox))
+        schema_diff = len(a.keys() ^ b.keys())
+        masks = discrete = 0
+        largest, location = 0.0, None
+        for key in sorted(a.keys() & b.keys()):
+            x, y = a[key], b[key]
+            if x.shape != y.shape or x.dtype != y.dtype:
+                schema_diff += 1
+            elif x.dtype.kind == "f":
+                finite = np.isfinite(x) & np.isfinite(y)
+                masks += int(any(not np.array_equal(mask(x), mask(y))
+                                 for mask in (np.isnan, np.isposinf, np.isneginf)))
+                if np.any(finite):
+                    diff = float(np.max(np.abs(x[finite] - y[finite])))
+                    if diff > largest:
+                        largest, location = diff, list(key)
+            elif not np.array_equal(x, y):
+                discrete += 1
+        return dict(task_id=task.task_id, host_pickle_sha256=host_sha,
+                    sandbox_pickle_sha256=sandbox_sha, schema_differences=schema_diff,
+                    nonfinite_mask_differences=masks, discrete_field_differences=discrete,
+                    max_abs_float_difference=largest, max_difference_path=location)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        rows = list(pool.map(compare, sorted(selected, key=lambda task: task.task_id)))
+    return dict(scope="Unique exposed public tasks used for Q01 and the seven E5 replays",
+                paid_llm_calls=0, distinct_tasks=len(rows), rows=rows)
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cancelled-stage-root", type=Path, help="Original provider stage root used only on first recovery")
+    parser.add_argument("--refresh-probes", action="store_true", help="Rerun Docker evidence and replace the M9.9.1 receipts")
+    args = parser.parse_args()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     p01 = OUT_DIR / "01_m99_q01_30_cross_diagonal_decomposition_probes.json"
-    if p01.exists() and "total_probes_attempted" in json.loads(p01.read_bytes()):
+    existing_q01 = json.loads(p01.read_bytes()) if p01.is_file() else {}
+    if (not args.refresh_probes and existing_q01.get("schema") == "hegel_m9_9_1_q01_30_cross_diagonal_backverification_v2"
+            and existing_q01.get("infra_or_timeout_count") == 0):
         print("[M9.9.1] 1/3 Reusing sealed 30 off-diagonal Docker public-gate back-verification probes (`Q01`)...", flush=True)
-        r01 = json.loads(p01.read_text(encoding="utf-8"))
+        r01 = existing_q01
     else:
         print("[M9.9.1] 1/3 Running 30 off-diagonal Docker public-gate back-verification probes (`Q01`)...", flush=True)
         r01 = _run_30_cross_diagonal_probes()
         p01.write_text(json.dumps(r01, indent=2) + "\n", encoding="utf-8")
 
     p02 = OUT_DIR / "02_m99_q03_c04_e7_existing_candidate_container_verification.json"
-    if p02.exists() and "sealed_container_public_input_sha256" in json.loads(p02.read_bytes()):
+    if not args.refresh_probes and p02.exists() and json.loads(p02.read_bytes()).get("schema") == "hegel_m9_9_1_q03_c04_e7_fallback_container_verification_v2":
         print("[M9.9.1] 2/3 Reusing sealed `alpha_m99_c04/E7` existing `up_b02` container verification (`Q03`)...", flush=True)
         r02 = json.loads(p02.read_text(encoding="utf-8"))
     else:
@@ -572,10 +862,56 @@ def main() -> None:
         r02 = _run_c04_e7_existing_candidate_container_verification()
         p02.write_text(json.dumps(r02, indent=2) + "\n", encoding="utf-8")
 
-    print("[M9.9.1] 3/3 Building provenance, `x` sensitivity, `C_cancelled`, and 16/16 plain-dict replay ledger...", flush=True)
-    r03 = _build_provenance_and_sensitivity_ledger()
-    assert r03["plain_dict_same_joint_features_step05_replay"]["matched_episodes"] == 16, r03["plain_dict_same_joint_features_step05_replay"]
+    print("[M9.9.1] 3/3 Building provenance, x sensitivity, cancelled-run usage and plain-dict replay ledger...", flush=True)
+    r03 = _build_provenance_and_sensitivity_ledger(args.cancelled_stage_root)
     (OUT_DIR / "03_m99_provenance_x_sensitivity_and_plain_dict_replay.json").write_text(json.dumps(r03, indent=2) + "\n", encoding="utf-8")
+
+    p06 = OUT_DIR / "06_m99_q04_original_withdrawal_joint_replay.json"
+    existing_q06 = json.loads(p06.read_bytes()) if p06.is_file() else {}
+    if args.refresh_probes or existing_q06.get("schema") != "hegel_m991_retrospective_e5_joint_withdrawal_replay_v2":
+        print("[M9.9.1] Replaying sealed withdrawal candidates on their original E5 public batches...", flush=True)
+        r06 = _replay_historical_withdrawals()
+        p06.write_text(json.dumps(r06, indent=2) + "\n")
+    else:
+        r06 = existing_q06
+
+    # Preserve both identities: host generation and the actual Docker batch can differ numerically.
+    for probe in r01["probes"]:
+        probe["host_canonical_numeric_sha256"] = probe["canonical_numeric_sha256"]
+        probe["executed_canonical_numeric_sha256"] = (probe["public_gate_receipt"].get("scientific_probe_receipt") or {}).get("canonical_numeric_sha256")
+    for row in r06["rows"]:
+        sealed_ep = json.loads((M99_CONF_DIR / row["sealed_episode"]).read_bytes())
+        rec = sealed_ep["pre_llm_trial_receipt"]["separability_withdrawal_receipt"]
+        row["host_canonical_numeric_sha256"] = rec["counterexample_canonical_numeric_sha256"]
+        row["executed_canonical_numeric_sha256"] = (row["public_gate_receipt"].get("scientific_probe_receipt") or {}).get("canonical_numeric_sha256")
+    for path, ledger, rows in ((p01, r01, r01["probes"]), (p06, r06, r06["rows"])):
+        measured = [row for row in rows if row["executed_canonical_numeric_sha256"]]
+        ledger["host_vs_executed_numeric_identity"] = {
+            "compared": len(measured),
+            "matched": sum(row["host_canonical_numeric_sha256"] == row["executed_canonical_numeric_sha256"] for row in measured),
+            "historical_execution_reference": "Sealed Docker public_setup_receipt.files_sha256 for the same public batch",
+        }
+        output = json.dumps(ledger, indent=2) + "\n"
+        if path.read_text() != output:
+            path.write_text(output)
+
+    corrected_ablation_path = OUT_DIR / "07_m99_missing_prefix_ablation.json"
+    if args.refresh_probes or not corrected_ablation_path.is_file():
+        import run_m9_9_autonomous_decomposition_experiment as runner
+
+        specs = runner.CONFIRMATION_M99_WORLD_SPECS
+        worlds = {spec.world_id: runner.build_m99_world_tasks(spec) for spec in specs}
+        ablation = runner.run_m99_factorized_ceiling_ablation_on_sealed_streams(
+            world_specs=specs, built_worlds=worlds, out_dir=M99_CONF_DIR)
+        ablation["evidence_scope"] = "Retrospective regrade with explicit missing-prefix abstention"
+        ablation["source_ablation_sha256"] = hashlib.sha256(
+            (M99_CONF_DIR / "m9_9_factorized_ceiling_ablation.json").read_bytes()).hexdigest()
+        corrected_ablation_path.write_text(json.dumps(ablation, indent=2) + "\n", encoding="utf-8")
+
+    comparison_path = OUT_DIR / "08_m99_host_sandbox_public_values.json"
+    if args.refresh_probes or not comparison_path.is_file():
+        comparison = _compare_public_materializations(r01, r06)
+        comparison_path.write_text(json.dumps(comparison, indent=2) + "\n", encoding="utf-8")
 
     sha_lines = []
     for fp in sorted(OUT_DIR.rglob("*")):
@@ -590,6 +926,8 @@ def main() -> None:
                 "q01_accepted": r01["accepted_count"],
                 "q01_scientific_rejected": r01["scientific_or_domain_rejected_count"],
                 "q01_schema_rejected": r01["schema_rejected_count"],
+                "q04_historical_typed_receipts": r06["historical_signed_scientific_receipts"],
+                "q04_replayed_bound_scientific_negatives": r06["replayed_bound_scientific_negatives"],
                 "q03_c04_e7_up_b02_rmse": r02["direct_upstream_component_probe"]["chosen_up_holdout_rmse"],
                 "q03_c04_e7_public_gate": r02["joint_three_layer_public_gate"]["accepted"],
                 "q03_c04_e7_private_strict_pass": r02["official_verifier_result"]["strict_pass"],

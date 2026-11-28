@@ -1,19 +1,9 @@
 #!/usr/bin/env python3
-"""End-to-End `32`-Way Parallel `gpt-6.2-sol` CLI Runner for `M9.9`:
-Equal-Tool Autonomous Two-Stage Decomposition Formation, Separable Cross-Factor Reuse (`E4_valid_comb`),
-and Counterexample-Scoped Non-Separable `U–D` Interaction Withdrawal (`E5_coupled_break`, `E6_separable_revisit`, `E7_coupled_revisit`).
+"""Run or finalize the M9.9 equal-tool continual benchmark.
 
-Strict Methodological & Audit Closure Guarantees (`R01–R16` Enforced):
-  1. `100%` Equal Tool/Skill/Probe Budget (`R03`): ALL 3 arms run with `enable_auto_skill_packaging = False`,
-     `allow_l1_primitives = False`, and the archived pre-LLM probe budget. New executions record the bounded recovery budget.
-  2. Zero Host-Seeded `u0` / `d0` (`R02`): `Stage S` is raw monolithic `solve_batch`. After `E1_down`, BOTH
-     `Flat_PlainModuleRegistry_Online` and `Hegel_AutonomousInteractionGraph_Online` call the exact same LLM refactoring
-     compiler (`propose_and_verify_m99_autonomous_two_stage_factorization`, counted in `Scope-1` cost!).
-  3. `100%` Equal Repair Prompts Across Modular Arms (`R02`): `Flat_PlainModuleRegistry_Online` and `Hegel` receive
-     byte-identical prompts & harnesses on `Stage S`, `E1_down`, `E2_down`, `E3_up`, and `E5_coupled_break`!
-  4. Complete Non-LLM Container Probe Ledger (`R11`): Every pre-LLM gate probe, post-LLM gate probe, direct upstream
-     component probe, autonomous decomposition probe, empirical coverage probe, and official private verifier run is metered!
-  5. Exact Call-UUID Cost Conservation (`CostPolicy`): `episodes == events == clusters == arm` (`0` unknown usage asserted!).
+Fresh runs record their public recovery budget, formation and repair calls,
+per-episode probe times, and paired source-cluster outcomes. Finalization
+retains the measurements and configuration from the recorded execution.
 """
 
 from __future__ import annotations
@@ -90,6 +80,7 @@ from hegel_machine.cognition.m9_9_autonomous_decomposition_and_interaction_withd
     CONFIRMATION_M99_WORLD_SPECS,
     DEV_M99_WORLD_SPECS,
     execute_single_pre_llm_public_gate_probe_in_container,
+    materialize_m99_public_item_and_sha,
     M99_ALL_OBSERVABLE_NAMES,
     M99_ARMS,
     M99_DOWNSTREAM_OBSERVABLE_NAMES,
@@ -99,6 +90,8 @@ from hegel_machine.cognition.m9_9_autonomous_decomposition_and_interaction_withd
     build_m99_downstream_canonical_synthesis_task,
     build_m99_world_tasks,
     check_witness_feature_collision,
+    issue_measured_withdrawal as _issue_measured_withdrawal,
+    inspect_archived_withdrawal_lineage,
     hydrate_separability_withdrawals_from_graph,
     m99_task_to_frontier_task,
     persist_separability_withdrawals_to_graph,
@@ -227,12 +220,13 @@ def _evaluate_empirical_coverage_m99(
 ) -> EmpiricalCoverageReceipt:
     t0 = monotonic()
     passed = 0
+    has_counterexample = False
     w_ids, w_inp_shas, w_setup_shas, w_num_shas, dep_shas, p_ids, p_vers, p_pay_shas = [], [], [], [], [], [], [], []
     new_sha = ""
     for wit_id, w_task, w_pay, ro_deps, ro_shas in old_witness_specs:
         cand_c, raw_new_sha = new_candidate_builder(w_task, w_pay)
         new_sha = raw_new_sha
-        w_item, w_pkl_sha = materialize_m98_public_item_and_sha(w_task)
+        w_item, w_pkl_sha = materialize_m99_public_item_and_sha(w_task)
         w_ids.append(wit_id)
         w_inp_shas.append(w_pkl_sha)
         w_setup_shas.append(hashlib.sha256(w_task.public_setup_py.encode("utf-8")).hexdigest())
@@ -248,9 +242,11 @@ def _evaluate_empirical_coverage_m99(
         )
         if pr["accepted"]:
             passed += 1
+        elif classify_public_probe_failure(pr)["tier"] != "INFRA_FAILURE":
+            has_counterexample = True
     el_ms = round((monotonic() - t0) * 1000.0, 2)
     n_ev = len(old_witness_specs)
-    status = "unknown" if n_ev == 0 else ("supported_on_witnesses" if passed == n_ev else "refuted")
+    status = "refuted" if has_counterexample else ("supported_on_witnesses" if n_ev and passed == n_ev else "unknown")
     rec = EmpiricalCoverageReceipt(
         receipt_id="",
         new_binding_id=new_id,
@@ -441,6 +437,7 @@ def _bounded_public_recovery(
                          "component_probe": direct})
         rmse = direct.get("chosen_up_holdout_rmse")
         if (direct.get("execution_status") == "completed" and direct.get("component_probe_executed")
+                and direct.get("candidate_code_sha256") == hashlib.sha256(code.encode()).hexdigest()
                 and direct.get("locus") == "downstream_constitutive" and rmse is not None
                 and np.isfinite(float(rmse)) and 0 <= float(rmse) <= 0.03):
             composed = compose_m98_two_stage_solver_code(
@@ -457,19 +454,59 @@ def _bounded_public_recovery(
             if classify_public_probe_failure(result)["tier"] == "INFRA_FAILURE":
                 return
 
-    entry = next((r for r in reversed(prior_entries)
-                  if r.get("module_projection_status") in {"unprojected", "verified_on_source_and_target"}
-                  and r["public_qualification_status"] == "public_gate_verified"
-                  and r["input_coordinate_contract"] == "raw_measured"
-                  and r["canonical_entrypoint"] == "solve_batch"
-                  and set(r["output_schema_keys"]) == set(schema)), None)
+    # Rank candidates by a public rule. Prefer an as-yet unrepresented source over
+    # rechecking a monolith whose decomposition is already available.
+    eligible = [r for r in reversed(prior_entries)
+                if r.get("module_projection_status") in {"unprojected", "verified_on_source_and_target", "decomposed"}
+                and r["public_qualification_status"] in {"public_gate_verified", "public_gate_failed"}
+                and r["input_coordinate_contract"] == "raw_measured"
+                and r["canonical_entrypoint"] == "solve_batch"
+                and set(r["output_schema_keys"]) == set(schema)
+                and (r["canonical_algorithm_code"] != primary_code or (
+                    selected_up and r["module_projection_status"] != "decomposed"
+                    and trial.get("conflict_locus_diagnosis", {}).get("locus") == "downstream_constitutive"))]
+    entry = min(eligible, key=lambda r: (r["module_projection_status"] == "decomposed",
+                                        r["public_qualification_status"] != "public_gate_verified"), default=None)
     if entry is None:
         trial["archive_recovery_status"] = "missing_eligible_public_solver"
         return
     source_id, archived = entry["task_id"], entry["canonical_algorithm_code"]
     if hashlib.sha256(archived.encode()).hexdigest() != entry["canonical_sha256"]:
         raise ValueError("Archived raw solver SHA-256 does not match its qualified identity")
+    trial["archive_source_public_status"] = entry["public_qualification_status"]
     trial["archive_recovery_status"] = "unknown_projection"
+    # A prior raw solver is only a hypothesis for the canonical downstream interface.
+    # Qualify its composition on its original witness as well as the current target.
+    source = archive_context.get(source_id)
+    direct = trial.get("conflict_locus_diagnosis", {})
+    can_project = bool(entry["module_projection_status"] != "decomposed" and source and source[1] != numeric_sha and selected_up and
+                       direct.get("component_probe_executed") and direct.get("execution_status") == "completed"
+                       and direct.get("locus") == "downstream_constitutive")
+
+    def projected(pay):
+        up_code, up_ep, up_binding = selected_up
+        return compose_m98_two_stage_solver_code(
+            upstream_code=up_code, upstream_entrypoint=up_ep, downstream_code=archived,
+            downstream_entrypoint="solve_batch", param_payload=pay,
+            upstream_binding=up_binding, graph=compose_options.get("graph"), registry=compose_options.get("registry"),
+        )
+
+    cached = entry.get("downstream_projection")
+    prior_code = projected(source[4]) if can_project else None
+    source_candidate_sha = hashlib.sha256(prior_code.encode()).hexdigest() if prior_code else None
+    qualified_source = bool(can_project and cached and cached["source_candidate_sha256"] == source_candidate_sha
+                            and cached["source_numeric_sha256"] == source[1]
+                            and cached["source_dependency_sha256"] == source[3])
+    if qualified_source:
+        proposal = projected(payload)
+        result = joint("archive_projection_target", source_id, proposal, current)
+        if result["accepted"]:
+            accept("archive_projection_target", result, proposal)
+            trial["archive_recovery_status"] = "verified_on_source_and_target"
+            trial["projection_source_receipt"] = cached
+            return
+        if classify_public_probe_failure(result)["tier"] == "INFRA_FAILURE":
+            return
     if archived != primary_code:
         result = joint("archive_raw", source_id, archived, current)
         if result["accepted"]:
@@ -478,28 +515,21 @@ def _bounded_public_recovery(
             return
         if classify_public_probe_failure(result)["tier"] == "INFRA_FAILURE":
             return
-    # A prior raw solver is only a hypothesis for the canonical downstream interface.
-    # Qualify its composition on its original witness as well as the current target.
-    source = archive_context.get(source_id)
-    direct = trial.get("conflict_locus_diagnosis", {})
-    if not (source and source[1] != numeric_sha and selected_up and
-            direct.get("component_probe_executed") and direct.get("execution_status") == "completed"
-            and direct.get("locus") == "downstream_constitutive"):
+    if not can_project or qualified_source:
         return
-    up_code, up_ep, up_binding = selected_up
-    def projected(pay):
-        return compose_m98_two_stage_solver_code(
-            upstream_code=up_code, upstream_entrypoint=up_ep, downstream_code=archived,
-            downstream_entrypoint="solve_batch", param_payload=pay,
-            upstream_binding=up_binding, graph=compose_options.get("graph"), registry=compose_options.get("registry"),
-        )
-    old_result = joint("archive_projection_source", source_id, projected(source[4]), source)
+    old_result = joint("archive_projection_source", source_id, prior_code, source)
     if old_result["accepted"]:
         proposal = projected(payload)
         result = joint("archive_projection_target", source_id, proposal, current)
         if result["accepted"]:
             accept("archive_projection_target", result, proposal)
             trial["archive_recovery_status"] = entry["module_projection_status"] = "verified_on_source_and_target"
+            trial["projection_source_receipt"] = entry["downstream_projection"] = {
+                "source_task_id": source_id, "source_numeric_sha256": source[1],
+                "source_candidate_sha256": source_candidate_sha, "source_dependency_sha256": dict(source[3]),
+                "downstream_source_sha256": entry["canonical_sha256"], "downstream_entrypoint": "solve_batch",
+                "qualifying_target_task_id": task.task_id, "source_gate_result": old_result,
+            }
 
 
 def _run_one_m99_world_arm_stream(
@@ -614,7 +644,9 @@ def _run_one_m99_world_arm_stream(
         readonly_deps = {"/tmp/hegel_continual_archive/archive_apparatus_log.json": json.dumps(prefix_logs, indent=2)}
         readonly_shas = {k: hashlib.sha256(v.encode("utf-8")).hexdigest() for k, v in readonly_deps.items()}
 
-        pub_item, pub_sha = materialize_m98_public_item_and_sha(task)
+        input_start = monotonic()
+        pub_item, pub_sha = materialize_m99_public_item_and_sha(task)
+        input_wall_ms = round((monotonic() - input_start) * 1000, 2)
         canon_num_sha = compute_canonical_numeric_item_sha256(pub_item)
         setup_src_sha = hashlib.sha256(task.public_setup_py.encode("utf-8")).hexdigest()
         dep_bundle_sha = hashlib.sha256(json.dumps(readonly_shas, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -893,9 +925,11 @@ def _run_one_m99_world_arm_stream(
                             canonical_numeric_sha256=canon_num_sha,
                             dependency_bundle_sha256=dep_bundle_sha,
                         )
+                        joint_probe_id = f"joint_{cand_sha}_{locus_diag['probe_id']}"
                         dn_ctrl.record_tested_witness(
                             binding=chosen_dn,
                             public_input_sha256=pub_sha,
+                            probe_id=joint_probe_id,
                             passed=False,
                             failure_kind=cls["failure_kind"],
                             features=(comb_obs_now if chosen_dn.binding_id in hegel_cross_scoped_dn_bids else dn_obs_now),
@@ -908,34 +942,13 @@ def _run_one_m99_world_arm_stream(
                         )
                         hegel_dn_joint_neg_obs.setdefault(chosen_dn.binding_id, []).append(comb_obs_now)
 
-                        # Detect non-separable `U–D` cross-factor interaction falsification (`E5_coupled_break`)!
-                        dn_pos_only = [
-                            {k: w.public_structural_features[k] for k in M99_DOWNSTREAM_OBSERVABLE_NAMES if k in w.public_structural_features}
-                            for w in dn_ctrl.positive_witnesses_for(chosen_dn.binding_id)
-                        ]
-                        if (dn_sel["selected"] is not None) and dn_pos_only and check_witness_feature_collision(
-                            {chosen_dn.binding_id: dn_pos_only, "__counterexample__": [dn_obs_now]}
-                        )["has_collision"]:
+                        sw_rec = _issue_measured_withdrawal(
+                            world_id=wid, family=fam, downstream_selected=dn_sel["selected"] is not None,
+                            upstream=chosen_up, downstream=chosen_dn, downstream_features=dn_obs_now,
+                            downstream_ledger=dn_ctrl.witness_ledger, direct=locus_diag, gate=pr, candidate_sha=cand_sha,
+                        )
+                        if sw_rec is not None:
                             locus_str = "cross_factor_interaction_withdrawal"
-                            sw_rec = SeparabilityWithdrawalReceipt(
-                                receipt_id="",
-                                world_id=wid,
-                                family=fam,
-                                upstream_binding_id=chosen_up.binding_id,
-                                upstream_code_sha256=chosen_up.authoritative_executed_code_sha256(),
-                                upstream_component_probe_id=str(locus_diag["probe_id"]),
-                                upstream_holdout_rmse=float(locus_diag["chosen_up_holdout_rmse"]),
-                                downstream_binding_id=chosen_dn.binding_id,
-                                downstream_code_sha256=chosen_dn.authoritative_executed_code_sha256(),
-                                composed_candidate_sha256=cand_sha,
-                                counterexample_public_input_sha256=pub_sha,
-                                counterexample_canonical_numeric_sha256=canon_num_sha,
-                                joint_failure_kind=cls["failure_kind"],
-                                verifier_version=SHARED_KERNEL_VERSION,
-                                expanded_feature_names=list(M99_ALL_OBSERVABLE_NAMES),
-                            )
-                            sw_rec.receipt_id = sw_rec.compute_expected_receipt_id()
-                            sw_rec.verify_integrity()
                             withdrawal_receipts.append(sw_rec)
                             persist_separability_withdrawals_to_graph(graph, wid, withdrawal_receipts)
                             hegel_cross_scoped_dn_bids.add(chosen_dn.binding_id)
@@ -1025,6 +1038,7 @@ def _run_one_m99_world_arm_stream(
                 "ended_by_finish": True,
                 "strict_pass": bool(priv_ver.get("strict_pass")),
                 "reward": 1.0 if priv_ver.get("strict_pass") else 0.0,
+                "input_materialization_wall_ms": input_wall_ms,
                 "pre_llm_probe_wall_ms": float(pre_trial.get("probe_wall_ms", 0.0)),
                 "post_llm_probe_wall_ms": 0.0,
                 "localization_probe_wall_ms": loc_wall_ms,
@@ -1289,6 +1303,7 @@ def _run_one_m99_world_arm_stream(
                         s0_task=s_task,
                         s0_public_item=source_pub_item,
                         s0_pay={"gains": [1.0] * 4, "offsets": [0.0] * 4},
+                        s0_ro_deps=s0_ro_deps, s0_ro_shas=s0_ro_shas,
                         e1_task=task,
                         e1_public_item=pub_item,
                         e1_pay=flat_snap,
@@ -1568,6 +1583,7 @@ def _run_one_m99_world_arm_stream(
                         s0_task=s_task,
                         s0_public_item=source_pub_item,
                         s0_pay={"gains": [1.0] * 4, "offsets": [0.0] * 4},
+                        s0_ro_deps=s0_ro_deps, s0_ro_shas=s0_ro_shas,
                         e1_task=task,
                         e1_public_item=pub_item,
                         e1_pay=diag_pay_now,
@@ -2031,6 +2047,7 @@ def _run_one_m99_world_arm_stream(
         ep_sum["execution_mode"] = f"llm_{repair_mode}"
         ep_sum["strict_pass"] = bool(priv_ver.get("strict_pass"))
         ep_sum["reward"] = 1.0 if priv_ver.get("strict_pass") else 0.0
+        ep_sum["input_materialization_wall_ms"] = input_wall_ms
         ep_sum["pre_llm_probe_wall_ms"] = float(pre_trial.get("probe_wall_ms", 0.0))
         ep_sum["post_llm_probe_wall_ms"] = post_pub_ms
         ep_sum["localization_probe_wall_ms"] = loc_wall_ms
@@ -2089,6 +2106,7 @@ def _run_one_m99_world_arm_stream(
         "zero_llm_episodes_total": sum(1 for r in episode_results if int(r.get("turns_used", 0) or 0) == 0),
         "zero_turn_passed_closures": sum(1 for r in episode_results if int(r.get("turns_used", 0) or 0) == 0 and r.get("strict_pass")),
         "total_turns_used": sum(int(r.get("turns_used", 0) or 0) for r in episode_results),
+        "total_input_materialization_wall_ms": round(sum(r["input_materialization_wall_ms"] for r in episode_results), 2),
         "total_pre_llm_probe_wall_ms": round(sum(float(r.get("pre_llm_probe_wall_ms", 0.0) or 0.0) for r in episode_results), 2),
         "total_post_llm_probe_wall_ms": round(sum(float(r.get("post_llm_probe_wall_ms", 0.0) or 0.0) for r in episode_results), 2),
         "total_localization_probe_wall_ms": round(sum(float(r.get("localization_probe_wall_ms", 0.0) or 0.0) for r in episode_results), 2),
@@ -2134,6 +2152,10 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
       3. `hegel_selective_cross_factor_graph`: routes using learned `up + dn` guards on `{d2_sep, d2_coupled}` (design-time ideal `100.0%`; observed `12/16 = 75.0%` on M9.9 confirmation).
     """
     rows = []
+    manifest_path = out_dir / "execution_manifest.json"
+    run_manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
+    historical_protocol = ((out_dir / "m9_9_continual_summary.json").is_file()
+                           and run_manifest.get("policy_public_input_source") != "sandbox_public_pickle")
     for spec in world_specs:
         wid = spec.world_id
         compat = spec.to_m98_compat_spec()
@@ -2144,7 +2166,18 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
         ck5 = out_dir / "continual_streams" / wid / "Hegel_AutonomousInteractionGraph_Online" / "graph_ckpt_after_step_05.json"
         g5_base = PersistentMechanismGraph.load_checkpoint(ck5)
         rg5_base = M94BindingRegistry(g5_base)
-        sw_list = hydrate_separability_withdrawals_from_graph(g5_base, rg5_base, wid)
+        sw_list = hydrate_separability_withdrawals_from_graph(g5_base, rg5_base, wid, quarantine_unverified=True)
+        basis = "measured_host_rejection" if sw_list else "absent"
+        if not sw_list:
+            archived = inspect_archived_withdrawal_lineage(g5_base, rg5_base, wid)
+            if archived and all(r.joint_gate_receipt is None and not r.joint_probe_id for r in archived):
+                sw_list = archived
+                basis = "historical_lineage_only"
+            elif archived:
+                basis = "pending_measured_host_rejection"
+        use_historical_input = historical_protocol or basis == "historical_lineage_only"
+        policy_input = "historical_host_reconstruction" if use_historical_input else "sandbox_public_pickle"
+        materialize = materialize_m98_public_item_and_sha if use_historical_input else materialize_m99_public_item_and_sha
         dn_all = sorted(
             [b for b in rg5_base.bindings.values() if b.chain_id == f"{spec.family}_dn" and b.qualification_status == "verified"],
             key=lambda b: (-int(b.selection_priority), b.binding_id),
@@ -2158,7 +2191,7 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
             pref_logs = logs[: s_idx + 2]
             ro_deps = {"/tmp/hegel_continual_archive/archive_apparatus_log.json": json.dumps(pref_logs, indent=2)}
             ro_shas = {k: hashlib.sha256(v.encode("utf-8")).hexdigest() for k, v in ro_deps.items()}
-            pub_item, pub_sha = materialize_m98_public_item_and_sha(tk)
+            pub_item, pub_sha = materialize(tk)
             g_step = deepcopy(g5_base)
             rg_step = M94BindingRegistry(g_step)
             update_m99_calibration_snapshot_and_graph(
@@ -2189,6 +2222,7 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
                 if c_up is None or b_dn is None:
                     rows.append({
                         "policy": pol_nm, "world_id": wid, "family": spec.family, "event": ev_nm,
+                        "withdrawal_evidence_basis": basis, "policy_input_source": policy_input,
                         "prefix_checkpoint": ck5.name, "public_batch_pkl_sha256": pub_sha,
                         "downstream_observables": dn_obs,
                         "selected_upstream": c_up.binding_id if c_up else None,
@@ -2215,6 +2249,7 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
                         "world_id": wid,
                         "family": spec.family,
                         "event": ev_nm,
+                        "withdrawal_evidence_basis": basis, "policy_input_source": policy_input,
                         "prefix_checkpoint": "graph_ckpt_after_step_05.json",
                         "public_batch_pkl_sha256": pub_sha,
                         "downstream_observables": dn_obs,
@@ -2300,7 +2335,7 @@ def main() -> None:
             "model": args.model, "reasoning_effort": args.reasoning_effort,
             "configured_max_codex_concurrency": args.max_codex_concurrency,
             "public_recovery_budget": {
-                "max_pre_llm_probes_all_arms": 5, "max_direct_component_probes_per_modular_arm": 2,
+                "max_pre_llm_probes_all_arms": 4, "max_direct_component_probes_per_modular_arm": 2,
                 "max_alternative_upstreams": 1, "max_archived_raw_solvers": 1,
                 "max_projection_source_target_pairs": 1,
             },
@@ -2309,6 +2344,7 @@ def main() -> None:
             "input_forest_sha256": hashlib.sha256(args.v7_bundle.read_bytes()).hexdigest(),
             "world_ids": [spec.world_id for spec in selected_specs],
             "code_commit_at_start": git_sha_start, "working_tree_dirty_at_start": bool(is_dirty_start),
+            "policy_public_input_source": "sandbox_public_pickle",
             "source_tree_sha256_at_start": src_tree_sha_start,
             "clock_domain": "monotonic_elapsed_plus_utc_iso8601",
             "utc_started_at": datetime.now(timezone.utc).isoformat(),
@@ -2379,6 +2415,9 @@ def main() -> None:
     built_worlds: dict[str, Any] = {spec.world_id: build_m99_world_tasks(spec) for spec in selected_specs}
 
     ablation_t0 = None
+    rebuilt_streams = set()
+    previous_path = out_dir / "m9_9_continual_summary.json"
+    previous = json.loads(previous_path.read_text()) if args.finalize_existing and previous_path.is_file() else {}
     if args.finalize_existing:
         wid_to_cid = {sp.world_id: sp.cluster_id for sp in selected_specs}
         rec_path = out_dir / "all_provider_call_receipts.json"
@@ -2436,6 +2475,11 @@ def main() -> None:
                     }
                 )
             all_receipts.sort(key=lambda x: (x["utc_start_epoch_sec"], x["call_uuid"]))
+        uuids = {row.get("call_uuid") for row in all_receipts}
+        expected_count = previous.get("total_logical_calls", len(all_receipts))
+        if not all_receipts or None in uuids or "" in uuids or len(uuids) != len(all_receipts) or len(uuids) != expected_count:
+            raise ValueError("Missing or duplicated provider receipts during finalization")
+        if not rec_path.exists():
             rec_path.write_text(json.dumps(all_receipts, indent=2) + "\n", encoding="utf-8")
 
         abl_path = out_dir / "m9_9_factorized_ceiling_ablation.json"
@@ -2494,6 +2538,8 @@ def main() -> None:
                     "zero_llm_episodes_total": sum(1 for r in ep_rows if int(r.get("turns_used", 0) or 0) == 0),
                     "zero_turn_passed_closures": sum(1 for r in ep_rows if int(r.get("turns_used", 0) or 0) == 0 and r.get("strict_pass")),
                     "total_turns_used": sum(int(r.get("turns_used", 0) or 0) for r in ep_rows),
+                    "total_input_materialization_wall_ms": (round(sum(r["input_materialization_wall_ms"] for r in ep_rows), 2)
+                        if all("input_materialization_wall_ms" in r for r in ep_rows) else None),
                     "total_pre_llm_probe_wall_ms": round(sum(float(r.get("pre_llm_probe_wall_ms", 0.0) or 0.0) for r in ep_rows), 2),
                     "total_post_llm_probe_wall_ms": round(sum(float(r.get("post_llm_probe_wall_ms", 0.0) or 0.0) for r in ep_rows), 2),
                     "total_localization_probe_wall_ms": round(sum(float(r.get("localization_probe_wall_ms", 0.0) or 0.0) for r in ep_rows), 2),
@@ -2522,7 +2568,7 @@ def main() -> None:
                         for r in ep_rows
                     ],
                 }
-                (st_dir / "00_stream_summary.json").write_text(json.dumps(st_sum, indent=2) + "\n", encoding="utf-8")
+                rebuilt_streams.add((wid, arm_nm))
                 stream_summaries.append(st_sum)
     else:
         # =========================================================================
@@ -2595,9 +2641,12 @@ def main() -> None:
                     else {"strict_pass": False}
                 )
                 (ep_d / "03_official_verifier_report.json").write_text(json.dumps(priv_s, indent=2) + "\n", encoding="utf-8")
+                if pub_g.get("accepted"):
+                    input_start = monotonic()
+                    pub_item_s, pub_sha_s = materialize_m99_public_item_and_sha(s_task)
+                    pub_g["input_materialization_wall_ms"] = round((monotonic() - input_start) * 1000, 2)
                 (ep_d / "stage_s_public_gate.json").write_text(json.dumps(pub_g, indent=2) + "\n")
                 if pub_g.get("accepted"):
-                    pub_item_s, pub_sha_s = materialize_m98_public_item_and_sha(s_task)
                     ent = make_continual_archive_entry(
                         short_name=s_task.short_name,
                         task_id=s_task.task_id,
@@ -2702,11 +2751,13 @@ def main() -> None:
     # Resolve zero-call episodes from provider receipts across all roles, including guard induction.
     billed_episodes = {(row["world_id"], row["arm"], row["episode_short_name"]) for row in all_receipts}
     for stream in stream_summaries:
-        def used_no_calls(episode):
-            return (stream["world_id"], stream["arm"], episode["short_name"]) not in billed_episodes
-        stream["zero_llm_episodes_total"] = sum(used_no_calls(ep) for ep in stream["episodes_meta"])
-        stream["zero_turn_passed_closures"] = sum(
-            used_no_calls(ep) and ep["strict_pass"] for ep in stream["episodes_meta"])
+        key = (stream["world_id"], stream["arm"])
+        zero_call_episodes = [ep for ep in stream["episodes_meta"] if (*key, ep["short_name"]) not in billed_episodes]
+        stream["zero_llm_episodes_total"] = len(zero_call_episodes)
+        stream["zero_turn_passed_closures"] = sum(bool(ep["strict_pass"]) for ep in zero_call_episodes)
+        if not args.finalize_existing or key in rebuilt_streams:
+            stream_file = out_dir.joinpath("continual_streams", *key, "00_stream_summary.json")
+            stream_file.write_text(json.dumps(stream, indent=2) + "\n", encoding="utf-8")
     for arm_nm in M99_ARMS:
         a_calls = [r for r in all_receipts if r["arm"] == arm_nm]
         tot_led = aggregate_call_usages(a_calls)
@@ -2752,6 +2803,8 @@ def main() -> None:
             "episode_count": sum(int(s["episode_count"]) for s in sts),
             "zero_turn_passed_closures": sum(int(s["zero_turn_passed_closures"]) for s in sts),
             "separability_withdrawals": sum(len(s["separability_withdrawal_receipts"]) for s in sts),
+            "input_materialization_wall_ms": (round(sum(s["total_input_materialization_wall_ms"] for s in sts), 2)
+                if all(s.get("total_input_materialization_wall_ms") is not None for s in sts) else None),
             "pre_llm_probe_wall_ms": round(sum(float(s["total_pre_llm_probe_wall_ms"]) for s in sts), 2),
             "post_llm_probe_wall_ms": round(sum(float(s["total_post_llm_probe_wall_ms"]) for s in sts), 2),
             "localization_probe_wall_ms": round(sum(float(s["total_localization_probe_wall_ms"]) for s in sts), 2),
@@ -2817,6 +2870,11 @@ def main() -> None:
         abl_manifest_path.write_text(json.dumps(ablation_manifest, indent=2)+"\n")
     ablation_provenance = (json.loads(abl_manifest_path.read_text()) if abl_manifest_path.is_file()
                            else dict(result_file=abl_path.name, code_commit=None, source_tree_sha256=None))
+    if abl_manifest_path.is_file():
+        if ablation_provenance.get("source_run_id") != execution["run_id"]:
+            raise ValueError("Ablation manifest belongs to a different execution")
+        if ablation_provenance.get("result_sha256") != hashlib.sha256(abl_path.read_bytes()).hexdigest():
+            raise ValueError("Ablation result no longer matches its manifest")
     fin_manifest = None
     if args.finalize_existing:
         fin_manifest = dict(finalization_run_id="finalize_"+run_id, finalization_commit=git_sha_end,
@@ -2827,8 +2885,6 @@ def main() -> None:
             ablation_manifest=abl_manifest_path.name if abl_manifest_path.is_file() else None,
             reused_ablation=ablation_t0 is None, call_receipts="all_provider_call_receipts.json")
         (out_dir / "finalization_manifest.json").write_text(json.dumps(fin_manifest, indent=2)+"\n")
-    previous_path = out_dir / "m9_9_continual_summary.json"
-    previous = json.loads(previous_path.read_text()) if args.finalize_existing and previous_path.is_file() else {}
     summary = {
         "schema": "hegel_m9_9_autonomous_decomposition_and_interaction_withdrawal_summary_v2",
         **execution,
@@ -2842,6 +2898,12 @@ def main() -> None:
             "modular_repair_prompt_parity_plain_vs_hegel": True,
         },
         "finalizer_provenance": fin_manifest,
+        "paid_llm_frozen_commit": previous.get("paid_llm_frozen_commit") or (
+            start.get("code_commit_at_start") if start.get("working_tree_dirty_at_start") is False else None),
+        **{field: execution["execution_provenance"].get(field) for field in (
+            "code_commit_at_start", "code_commit_at_end", "working_tree_dirty_at_start",
+            "source_tree_sha256_at_start", "source_tree_sha256_at_end")},
+        "source_tree_unchanged_during_run": end.get("source_tree_unchanged_during_execution"),
         "ablation_provenance": ablation_provenance,
         "configuration_source": "execution_manifest" if start else ("historical_summary" if previous else None),
         **{field: start.get(field, previous.get(field)) for field in ("sandbox_image_digest", "shared_kernel_version",
