@@ -1,0 +1,93 @@
+{
+  "schema": "hegel_m10_1_preregistered_analysis_protocol_v1",
+  "milestone": "M10.1",
+  "title": "Bounded Unknown-Cut Acyclic Computational DAG Discovery (1-4 Active Nodes, depth <= 4, fan-out <= 2, K = 1 Always Legal)",
+  "status": "frozen_pre_confirmation",
+  "design_principles": {
+    "zero_prescribed_split_boundaries": true,
+    "zero_role_labels_in_prompts_or_ids": true,
+    "k1_monolithic_always_legal": true,
+    "no_helper_ban_on_monolithic_baseline": true,
+    "all_costs_metered_in_scope1": [
+      "stream_solve",
+      "dag_structure_proposal",
+      "dag_compile_and_node_synthesis",
+      "dag_failed_search",
+      "dag_merge_withdrawal_repair",
+      "guard_induction"
+    ],
+    "probe_receipt_store_external_fk_required": true,
+    "runtime_exec_count_eq_1_enforced": true,
+    "anti_identity_shell_enforced": true
+  },
+  "arms": [
+    "Flat_MonolithicArchive_Online",
+    "Fixed_TwoStage_Modular_Online",
+    "Hegel_UnknownCut_GraphDiscovery_Online"
+  ],
+  "splits": {
+    "dev_calibration": {
+      "independent_clusters": 4,
+      "steps_per_cluster_after_stage_s": 8,
+      "total_arm_episodes_per_arm": 32,
+      "world_ids": [
+        "dev_m101_c01",
+        "dev_m101_c02",
+        "dev_m101_c03",
+        "dev_m101_c04"
+      ]
+    },
+    "confirmation_unexposed": {
+      "independent_clusters": 8,
+      "steps_per_cluster_after_stage_s": 8,
+      "total_arm_episodes_per_arm": 64,
+      "stratum_a_seen_topology": [
+        "conf_m101_a01",
+        "conf_m101_a02",
+        "conf_m101_a03",
+        "conf_m101_a04"
+      ],
+      "stratum_b_unseen_topology": [
+        "conf_m101_b01",
+        "conf_m101_b02",
+        "conf_m101_b03",
+        "conf_m101_b04"
+      ]
+    }
+  },
+  "primary_endpoints": {
+    "independent_unit": "source_cluster",
+    "primary_comparisons": [
+      "Hegel_UnknownCut_GraphDiscovery_Online_minus_Flat_MonolithicArchive_Online",
+      "Hegel_UnknownCut_GraphDiscovery_Online_minus_Fixed_TwoStage_Modular_Online"
+    ],
+    "primary_cost_metric": "scope1_in_stream_total.proxy_v2_u_010c_4o",
+    "primary_quality_metric": "strict_pass_rate_per_episode",
+    "preregistered_quality_noninferiority_margin_per_episode": -0.05,
+    "inference_methods": [
+      "exact_two_sided_paired_sign_flip_p",
+      "paired_bootstrap_95ci_unrounded_exact_and_cluster_level",
+      "paired_student_t_sensitivity_95ci"
+    ],
+    "mandatory_stratified_reporting": [
+      "pooled_all_8_clusters",
+      "stratum_a_seen_topology_n4",
+      "stratum_b_unseen_topology_n4",
+      "monolithic_negative_control_clusters",
+      "multi_node_non_monolithic_clusters"
+    ]
+  },
+  "empirical_break_even_definition": {
+    "symbol": "K*",
+    "horizon_steps": 8,
+    "pooled_definition": "Smallest K in 1..8 such that pooled cumulative Scope-1 cost delta (Hegel - Baseline) is strictly < 0 for all k in K..8 AND pooled pass-rate difference at K=8 >= -0.05; otherwise 'not_reached' (or 'unknown_partial_usage' if any unknown attempt > 0).",
+    "per_cluster_reporting_required": true
+  },
+  "structural_verification_gates": {
+    "monolithic_k1_non_fragmentation": "On monolithic_coupled clusters, Hegel must retain K=1 (keep_monolithic) without degrading quality or incurring runaway split overhead.",
+    "multi_stage_unknown_cut_discovery": "On K=3 and K=4 cascades, Hegel must autonomously discover K>=3 active nodes without prescribed split boundaries and realize 0-LLM compositional closures on unseen combinations.",
+    "shared_prefix_diamond_and_skip_exec_count_1": "On diamond_k4 and asymmetric_skip_dag_k4, Hegel must verify max_fanout == 2 and runtime exec_count[shared_node] == 1 in isolated Docker.",
+    "cut_withdrawal_and_old_domain_preservation": "On cross-branch interaction steps, rewire_edge / merge_nodes must issue a 4-link external ProbeReceiptStore FK CutWithdrawalMergeReceipt while preserving the old separable DAG for colliding revisits.",
+    "plain_dict_substrate_parity_ablation": "Post-run 0-LLM plain-dict routing parity check on frozen Step-06 checkpoints before the final 2 revisits, reported transparently."
+  }
+}
