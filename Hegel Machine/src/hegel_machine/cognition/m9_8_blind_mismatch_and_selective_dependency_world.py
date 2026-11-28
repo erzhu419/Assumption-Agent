@@ -1926,6 +1926,7 @@ def diagnose_m98_factored_conflict_locus(
             "evidence_origin": "direct_component_probe",
             "failure_tier": "SCIENTIFIC_FAILURE",
             "failure_kind": "scientific_or_numerical",
+            "nonfinite_component_output": True,
             "diagonal_ols_r2": r2_diag,
             "off_diagonal_corr_max": off_corr,
             "chosen_up_holdout_rmse": None,
@@ -1946,7 +1947,7 @@ def diagnose_m98_factored_conflict_locus(
         "failure_kind": ("scientific_or_numerical" if is_upstream else "none"),
         "diagonal_ols_r2": r2_diag,
         "off_diagonal_corr_max": off_corr,
-        "chosen_up_holdout_rmse": round(rmse_opt, 8),
+        "chosen_up_holdout_rmse": rmse_opt,
         "candidate_code_sha256": code_sha,
         "probe_id": probe_id,
         "probe_wall_ms": el_ms,
@@ -2431,7 +2432,8 @@ def run_m98_equal_capability_pre_llm_trial(
                 up_wit = None
             dn_wit = None
         else:
-            # `R04`: Record upstream `passed=True` ONLY when `chosen_up` was directly executed in the component probe!
+            # `R04 + Q08`: ONLY record upstream `passed=True` AND downstream `passed=False` when `chosen_up` was DIRECTLY executed
+            # in the component probe (`compatibility_inference` without direct execution NEVER authorizes a genuine downstream negative witness!)
             if locus_diag.get("execution_status") == "completed" and locus_diag.get("evidence_origin") == "direct_component_probe":
                 up_wit = up_ctrl.record_tested_witness(
                     binding=chosen_up,
@@ -2447,20 +2449,21 @@ def run_m98_equal_capability_pre_llm_trial(
                     setup_source_sha256=setup_src_sha,
                     dependency_bundle_sha256=dep_bundle_sha,
                 )
+                dn_wit = dn_ctrl.record_tested_witness(
+                    binding=chosen_dn,
+                    public_input_sha256=public_input_sha256,
+                    passed=False,
+                    failure_kind=f_kind,
+                    features=dn_obs,
+                    probe_wall_ms=pr_ms,
+                    execution_status="completed",
+                    evidence_origin="joint_task_probe",
+                    setup_source_sha256=setup_src_sha,
+                    dependency_bundle_sha256=dep_bundle_sha,
+                )
             else:
                 up_wit = None
-            dn_wit = dn_ctrl.record_tested_witness(
-                binding=chosen_dn,
-                public_input_sha256=public_input_sha256,
-                passed=False,
-                failure_kind=f_kind,
-                features=dn_obs,
-                probe_wall_ms=pr_ms,
-                execution_status="completed",
-                evidence_origin="joint_task_probe",
-                setup_source_sha256=setup_src_sha,
-                dependency_bundle_sha256=dep_bundle_sha,
-            )
+                dn_wit = None
 
     loc_wall_ms = round(float(locus_diag.get("probe_wall_ms") or 0.0), 2)
     loc_used = 1 if locus_diag.get("component_probe_executed") else 0

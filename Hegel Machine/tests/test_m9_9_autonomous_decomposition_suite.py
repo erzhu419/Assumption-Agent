@@ -151,7 +151,43 @@ def test_m99_separability_withdrawal_receipt_tamper_and_cold_hydration_contracts
     with pytest.raises(ValueError, match="genuine scientific/domain"):
         m99.SeparabilityWithdrawalReceipt.from_dict(bad_infra)
 
-    # Persist & hydrate cleanly, then verify missing `state_sha256` fails closed!
+    # Persist without witness-ledger foreign keys -> `Q07` strict_ledger_fk=True MUST fail closed!
+    m99.persist_separability_withdrawals_to_graph(graph, spec.world_id, [rec])
+    with pytest.raises(ValueError, match="Q07"):
+        m99.hydrate_separability_withdrawals_from_graph(graph, reg, spec.world_id)
+
+    # Record matching `up_ctrl` direct probe + `dn_ctrl` prior colliding positive + joint negative witnesses -> hydrates cleanly!
+    up_ctrl = m99.ImmutableBranchLineageController(world_id=f"{spec.world_id}_up", family="alpha_up", graph=graph, registry=reg)
+    dn_ctrl = m99.ImmutableBranchLineageController(world_id=f"{spec.world_id}_dn", family="alpha_dn", graph=graph, registry=reg)
+    dn_feats = {k: 0.25 for k in m99.M99_DOWNSTREAM_OBSERVABLE_NAMES}
+    up_ctrl.record_tested_witness(
+        binding=reg.bindings["up_b01"],
+        public_input_sha256="a" * 64,
+        passed=True,
+        failure_kind="none",
+        features={"up_stat_01_diagonal_ols_r2": 0.85},
+        metric_value=0.00012,
+        evidence_origin="direct_component_probe",
+        probe_id="uprobe_1234",
+    )
+    dn_ctrl.record_tested_witness(
+        binding=reg.bindings["dn_b02"],
+        public_input_sha256="0" * 64,
+        passed=True,
+        failure_kind="none",
+        features=dict(dn_feats),
+        evidence_origin="joint_task_probe",
+        probe_id="jprobe_pos_0",
+    )
+    dn_ctrl.record_tested_witness(
+        binding=reg.bindings["dn_b02"],
+        public_input_sha256="a" * 64,
+        passed=False,
+        failure_kind="scientific_or_numerical",
+        features=dict(dn_feats),
+        evidence_origin="joint_task_probe",
+        probe_id="jprobe_neg_1",
+    )
     m99.persist_separability_withdrawals_to_graph(graph, spec.world_id, [rec])
     hyd = m99.hydrate_separability_withdrawals_from_graph(graph, reg, spec.world_id)
     assert len(hyd) == 1 and hyd[0].receipt_id == rec.receipt_id

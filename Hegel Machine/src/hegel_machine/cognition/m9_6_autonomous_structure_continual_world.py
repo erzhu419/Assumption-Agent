@@ -2361,9 +2361,6 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
       3. `DOMAIN_REJECTION` -> `failure_kind = 'domain_precondition'` (explicit structured domain precondition rejection ONLY)
       4. `SCIENTIFIC_FAILURE` -> `failure_kind = 'scientific_or_numerical'` (schema valid, invariant/residual check failed)
     """
-    if bool(probe_result.get("accepted")):
-        return {"tier": "NONE", "failure_kind": "none"}
-
     sch_out = str(probe_result.get("schema_stdout") or "")
     sch_err = str(probe_result.get("schema_stderr") or "")
     sci_rec = probe_result.get("scientific_probe_receipt")
@@ -2379,12 +2376,17 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
         or "timed out" in blob_low
         or "timeoutexpired" in blob_low
     )
-    infra_signal = sch_rc in {124, 137, 139, 143} or (isinstance(sch_rc, int) and sch_rc < 0)
+    infra_signal = sch_rc in {124, 125, 126, 127, 137, 139, 143} or (isinstance(sch_rc, int) and sch_rc < 0)
     infra_exc = any(
         tok in blob for tok in ("MemoryError", "BrokenPipeError", "ConnectionResetError", "No space left on device")
     )
-    if timed_out or (setup_ok is False) or infra_signal or infra_exc:
+    scientific_status = sci_rec.get("execution_status") if isinstance(sci_rec, dict) else None
+    if (timed_out or (setup_ok is False) or infra_signal or infra_exc
+            or scientific_status not in {None, "completed"}):
         return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
+
+    if probe_result.get("accepted") is True:
+        return {"tier": "NONE", "failure_kind": "none"}
 
     # Explicit structured domain precondition rejection (checked before generic schema failure ONLY when no syntax/import/type crash!)
     has_code_bug = any(
@@ -2418,11 +2420,17 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
             "outside applicable",
         )
     )
+    if not isinstance(probe_result.get("schema_valid"), bool):
+        return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
     if not bool(probe_result.get("schema_valid")):
         if has_explicit_domain_rejection:
             return {"tier": "DOMAIN_REJECTION", "failure_kind": "domain_precondition"}
         return {"tier": "SCHEMA_FAILURE", "failure_kind": "schema_or_interface"}
 
+    if not isinstance(sci_rec, dict) or not (
+        sci_rec.get("scientific_invariants_verified") is False or sci_rec.get("ok") is False
+    ):
+        return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
     if has_explicit_domain_rejection:
         return {"tier": "DOMAIN_REJECTION", "failure_kind": "domain_precondition"}
     return {"tier": "SCIENTIFIC_FAILURE", "failure_kind": "scientific_or_numerical"}
@@ -2498,7 +2506,7 @@ VALID_WITNESS_EVIDENCE_ORIGINS: frozenset[str] = frozenset(
     {"direct_component_probe", "joint_task_probe", "compatibility_inference", "legacy_unspecified"}
 )
 CURRENT_LINEAGE_SCHEMAS: frozenset[str] = frozenset(
-    {"hegel_m9_7_1_lineage_state_v1", "hegel_m9_8_1_lineage_state_v2"}
+    {"hegel_m9_7_1_lineage_state_v1", "hegel_m9_8_1_lineage_state_v2", "hegel_m9_9_1_lineage_state_v3"}
 )
 
 
@@ -2658,6 +2666,7 @@ class SolverEvaluationWitness:
                 obj.result = "not_tested"
                 obj.failure_kind = "unverified_legacy"
                 obj.execution_status = "not_executed"
+                obj.witness_schema_version = max(int(obj.witness_schema_version), 2)
                 obj.witness_content_sha256 = obj.compute_expected_content_sha256()
                 return obj
             raise ValueError(f"Missing witness_content_sha256 on SolverEvaluationWitness `{obj.witness_id}` (`R07/A10`)")
@@ -2669,6 +2678,8 @@ class SolverEvaluationWitness:
             obj.result = "not_tested"
             obj.failure_kind = "unverified_legacy"
             obj.execution_status = "not_executed"
+            obj.witness_schema_version = max(int(obj.witness_schema_version), 2)
+            obj.witness_content_sha256 = obj.compute_expected_content_sha256()
         return obj
 
 
@@ -2727,11 +2738,13 @@ class EmpiricalCoverageReceipt:
         return "ecov_" + hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:24]
 
     def verify_integrity(self, *, allow_legacy_unverified: bool = False) -> None:
-        valid_statuses = {"supported_on_witnesses", "refuted", "unknown"}
-        if allow_legacy_unverified:
-            valid_statuses = valid_statuses | {"unknown_requires_reverification"}
+        valid_statuses = {"supported_on_witnesses", "refuted", "unknown", "unknown_requires_reverification"}
         if self.status not in valid_statuses:
             raise ValueError(f"Invalid EmpiricalCoverageReceipt status `{self.status}` (`R06/A08`)")
+        if self.status == "unknown_requires_reverification" and int(self.passed_witness_count) != 0:
+            raise ValueError(
+                f"EmpiricalCoverageReceipt `{self.receipt_id}` with unknown_requires_reverification must have passed_witness_count == 0 (`Q08`)"
+            )
         n_ev = int(self.evaluated_witness_count)
         n_pa = int(self.passed_witness_count)
         if n_ev < 0 or n_pa < 0 or n_pa > n_ev:
@@ -2827,13 +2840,11 @@ class EmpiricalCoverageReceipt:
             probe_ids=[str(x) for x in (d.get("probe_ids") or [])],
         )
         if allow_legacy_downgrade:
-            try:
-                obj.verify_integrity()
-            except ValueError:
-                obj.status = "unknown_requires_reverification"
-                obj.passed_witness_count = 0
-                obj.verify_integrity(allow_legacy_unverified=True)
-                return obj
+            obj.status = "unknown_requires_reverification"
+            obj.passed_witness_count = 0
+            obj.receipt_id = obj.compute_expected_receipt_id()
+            obj.verify_integrity()
+            return obj
         obj.verify_integrity()
         return obj
 
@@ -2908,7 +2919,8 @@ class ImmutableBranchLineageController:
             self._branch_seq = max(self._branch_seq, b_seq)
             return
 
-        # Explicit legacy pre-M9.7.1 schema migration: zero branch-minting or coverage authority (`unverified_legacy`)!
+        # Explicit legacy pre-M9.7.1 schema migration (`Q08` idempotent `load -> migrate -> save -> reload` round-trip):
+        # Downgrades trust/coverage to non-authoritative states AND recomputes canonical digests so `sync_to_graph()` + subsequent reloads succeed cleanly!
         migrated_w: list[SolverEvaluationWitness] = []
         for x in w_raw:
             bid = str(x.get("binding_id") or "")
@@ -2921,6 +2933,8 @@ class ImmutableBranchLineageController:
             w_leg.result = "not_tested"
             w_leg.failure_kind = "unverified_legacy"
             w_leg.execution_status = "not_executed"
+            w_leg.witness_schema_version = max(int(w_leg.witness_schema_version), 2)
+            w_leg.witness_content_sha256 = w_leg.compute_expected_content_sha256()
             migrated_w.append(w_leg)
         migrated_c: list[EmpiricalCoverageReceipt] = []
         for x in c_raw:
@@ -2929,16 +2943,13 @@ class ImmutableBranchLineageController:
             c_leg = EmpiricalCoverageReceipt.from_dict(x, allow_legacy_downgrade=True)
             c_leg.status = "unknown_requires_reverification"
             c_leg.passed_witness_count = 0
+            c_leg.receipt_id = c_leg.compute_expected_receipt_id()
             migrated_c.append(c_leg)
         self.witness_ledger = migrated_w
         self.coverage_receipts = migrated_c
         self._branch_seq = max(self._branch_seq, b_seq)
 
-    def sync_to_graph(self) -> None:
-        root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY)
-        if not isinstance(root_blob, dict) or root_blob.get("schema") not in CURRENT_LINEAGE_SCHEMAS:
-            root_blob = {"schema": "hegel_m9_8_1_lineage_state_v2", "streams": {}}
-        streams = dict(root_blob.get("streams") or {})
+    def _serialize_stream(self) -> dict[str, Any]:
         w_ser = [w.to_dict() for w in self.witness_ledger]
         c_ser = [c.to_dict() for c in self.coverage_receipts]
         for c_obj in self.coverage_receipts:
@@ -2946,7 +2957,7 @@ class ImmutableBranchLineageController:
         st_sha = hashlib.sha256(
             json.dumps({"branch_seq": int(self._branch_seq), "witness_ledger": w_ser, "coverage_receipts": c_ser}, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
-        streams[self._lineage_store_key()] = {
+        return {
             "world_id": self.world_id,
             "family": self.family,
             "branch_seq": int(self._branch_seq),
@@ -2954,8 +2965,24 @@ class ImmutableBranchLineageController:
             "coverage_receipts": c_ser,
             "state_sha256": st_sha,
         }
-        root_blob["streams"] = streams
-        self.graph.forest.questions[M96_LINEAGE_FOREST_KEY] = root_blob
+
+    def sync_to_graph(self) -> None:
+        root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY) or {}
+        streams = dict(root_blob.get("streams") or {})
+        key = self._lineage_store_key()
+        if root_blob.get("schema") not in CURRENT_LINEAGE_SCHEMAS:
+            # The schema applies to the whole root. Migrate siblings before publishing it.
+            for sibling_key in tuple(streams):
+                if sibling_key != key:
+                    wid, family = sibling_key.rsplit("::", 1)
+                    sibling = ImmutableBranchLineageController(
+                        world_id=wid, family=family, graph=self.graph, registry=self.registry
+                    )
+                    streams[sibling_key] = sibling._serialize_stream()
+        streams[key] = self._serialize_stream()
+        self.graph.forest.questions[M96_LINEAGE_FOREST_KEY] = {
+            **root_blob, "schema": "hegel_m9_8_1_lineage_state_v2", "streams": streams,
+        }
         self.graph.sync_authoritative_state_to_forest()
 
     def record_coverage_receipt(self, receipt: EmpiricalCoverageReceipt) -> EmpiricalCoverageReceipt:
@@ -3030,6 +3057,89 @@ class ImmutableBranchLineageController:
         self.witness_ledger.append(w)
         self.sync_to_graph()
         return w
+
+    def record_tested_witness_from_probe_receipt(
+        self,
+        *,
+        binding: MechanismExecutableBinding,
+        probe_receipt: dict[str, Any],
+        public_input_sha256: str,
+        features: dict[str, float | None],
+        evidence_origin: str,
+        setup_source_sha256: str = "",
+        canonical_numeric_sha256: str = "",
+        dependency_bundle_sha256: str = "",
+    ) -> SolverEvaluationWitness | None:
+        """Construct a `SolverEvaluationWitness` strictly from an executed `probe_receipt` (`Q01` — callers cannot pass bare `passed=False`!).
+        Returns `None` if `execution_status` is `'not_executed'`, `'timeout'`, or `'infrastructure_error'` so unexecuted/infra probes
+        never enter the tested scientific witness ledger.
+        """
+        if not isinstance(probe_receipt, dict):
+            raise TypeError("record_tested_witness_from_probe_receipt requires a dict `probe_receipt` (`Q01`)")
+        pid = str(probe_receipt.get("probe_id") or "")
+        exec_st = probe_receipt.get("execution_status")
+        if exec_st in {"not_executed", "timeout", "infrastructure_error"}:
+            return None
+        if exec_st != "completed":
+            raise ValueError("Probe receipt lacks an explicit completed execution status (Q01)")
+        if not pid:
+            raise ValueError("Executed `probe_receipt` must carry a non-empty `probe_id` (`Q01`)")
+        receipt_numeric = probe_receipt.get("canonical_numeric_sha256")
+        if (probe_receipt.get("public_input_sha256") != public_input_sha256
+                or not receipt_numeric or (canonical_numeric_sha256 and receipt_numeric != canonical_numeric_sha256)):
+            raise ValueError("Probe receipt and witness public input fingerprints disagree (Q01)")
+        canonical_numeric_sha256 = receipt_numeric
+        code_sha = binding.authoritative_executed_code_sha256()
+        if evidence_origin == "direct_component_probe":
+            if (probe_receipt.get("component_probe_executed") is not True
+                    or probe_receipt.get("evidence_origin") != evidence_origin
+                    or probe_receipt.get("candidate_code_sha256") != code_sha):
+                raise ValueError("Direct probe receipt does not identify the executed binding (Q01)")
+            rmse_v = probe_receipt.get("chosen_up_holdout_rmse")
+            m_val = None if rmse_v is None else float(rmse_v)
+            tier = probe_receipt.get("failure_tier")
+            f_kind = probe_receipt.get("failure_kind")
+            if tier == "SCHEMA_FAILURE" and f_kind == "schema_or_interface" and m_val is None:
+                passed_b = False
+            elif (probe_receipt.get("nonfinite_component_output") is True and m_val is None
+                    and (tier, f_kind) == ("SCIENTIFIC_FAILURE", "scientific_or_numerical")):
+                passed_b = False
+            elif m_val is not None and math.isfinite(m_val) and m_val >= 0:
+                passed_b = m_val <= 0.03
+                expected = ("NONE", "none") if passed_b else ("SCIENTIFIC_FAILURE", "scientific_or_numerical")
+                if (tier, f_kind) != expected:
+                    raise ValueError("Direct probe verdict disagrees with the measured holdout RMSE (Q01)")
+            else:
+                raise ValueError("Direct probe receipt lacks a valid measured outcome (Q01)")
+            w_ms = float(probe_receipt.get("probe_wall_ms") or probe_receipt.get("wall_ms") or 0.0)
+        elif evidence_origin == "joint_task_probe":
+            if (code_sha not in (probe_receipt.get("component_code_sha256s") or [])
+                    or not isinstance(probe_receipt.get("accepted"), bool)):
+                raise ValueError("Joint probe receipt does not identify the executed binding and verdict (Q01)")
+            cls = classify_public_probe_failure(probe_receipt)
+            if cls["tier"] == "INFRA_FAILURE":
+                return None
+            passed_b = bool(probe_receipt.get("accepted"))
+            f_kind = "none" if passed_b else cls["failure_kind"]
+            w_ms = float(probe_receipt.get("wall_ms") or probe_receipt.get("probe_wall_ms") or 0.0)
+            m_val = None
+        else:
+            raise ValueError(f"Unsupported `evidence_origin` `{evidence_origin}` for ProbeReceipt witness (`Q01`)")
+        return self.record_tested_witness(
+            binding=binding,
+            public_input_sha256=public_input_sha256,
+            passed=passed_b,
+            failure_kind=f_kind,
+            features=features,
+            probe_wall_ms=w_ms,
+            execution_status="completed",
+            evidence_origin=evidence_origin,
+            metric_value=m_val,
+            probe_id=pid,
+            setup_source_sha256=setup_source_sha256,
+            canonical_numeric_sha256=canonical_numeric_sha256,
+            dependency_bundle_sha256=dependency_bundle_sha256,
+        )
 
     def positive_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
         return [w for w in self.witness_ledger if w.binding_id == binding_id and w.is_verified_positive_witness()]

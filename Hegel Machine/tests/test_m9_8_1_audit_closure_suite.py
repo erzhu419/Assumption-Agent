@@ -263,7 +263,9 @@ def test_r04_high_r2_shortcut_never_claims_zero_rmse_or_tested_positive_witness(
     assert trial["upstream_tested_witness"] is None
     assert trial["inferred_upstream_compatibility"] is True
     assert uc.positive_witnesses_for("audit_up_b00") == []
-    assert len(dc.scientific_negative_witnesses_for(d.binding_id)) == 1
+    # `Q08` (`M9.9.1`): `compatibility_inference` (`unexecuted` upstream) must NOT mint a genuine downstream scientific negative!
+    assert len(dc.scientific_negative_witnesses_for(d.binding_id)) == 0
+    assert trial["downstream_tested_witness"] is None
 
 
 def test_r04_r05_main_probe_timeout_and_localization_infra_errors_never_pollute_witnesses():

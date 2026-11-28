@@ -194,6 +194,59 @@ def standardize_reference_coupon_panel(
     return x_std[:n_tr], x_std[n_tr:], complete_all[:n_tr], complete_all[n_tr:]
 
 
+def verify_alpha_pooled_ref_coupon_invariance(
+    solve_fn: Any,
+    dataset: dict[str, Any],
+    *,
+    base_out: dict[str, Any] | None = None,
+    tol: float = 1e-5,
+) -> dict[str, Any]:
+    """Test Alpha symmetry under exchanging reference rows within each lab across splits.
+
+    This public metamorphic check detects split-dependent prediction changes.
+    It does not establish the choice of imputation weights or the correctness of the predictions.
+    """
+    from copy import deepcopy
+
+    out0 = base_out if isinstance(base_out, dict) else solve_fn(deepcopy(dataset))
+    ds_swap = deepcopy(dataset)
+    tr_r = np.asarray(ds_swap["train"]["ref_coupons"], dtype=float).copy()
+    te_r = np.asarray(ds_swap["test"]["ref_coupons"], dtype=float).copy()
+    tr_l = np.asarray(ds_swap["train"]["lab_id"], dtype=int).ravel()
+    te_l = np.asarray(ds_swap["test"]["lab_id"], dtype=int).ravel()
+    swapped_rows = 0
+    for c in range(4):
+        idx_tr = np.flatnonzero(tr_l == c)
+        idx_te = np.flatnonzero(te_l == c)
+        k_sw = min(int(len(idx_tr)), int(len(idx_te)), 6)
+        if k_sw >= 1:
+            tmp = tr_r[idx_tr[:k_sw]].copy()
+            tr_r[idx_tr[:k_sw]] = te_r[idx_te[:k_sw]]
+            te_r[idx_te[:k_sw]] = tmp
+            swapped_rows += k_sw
+    ds_swap["train"]["ref_coupons"] = tr_r
+    ds_swap["test"]["ref_coupons"] = te_r
+    out1 = solve_fn(ds_swap)
+    def difference(key):
+        before = np.asarray(out0[key], dtype=float)
+        after = np.asarray(out1[key], dtype=float)
+        if before.size and before.shape == after.shape and np.all(np.isfinite(before)) and np.all(np.isfinite(after)):
+            return float(np.max(np.abs(after - before)))
+        return None
+
+    strain_diff = difference("predicted_strain")
+    rate_diff = (difference("initial_rate_pred") if "initial_rate_pred" in out0 and "initial_rate_pred" in out1
+                 else (None if "initial_rate_pred" in out0 or "initial_rate_pred" in out1 else 0.0))
+    return {
+        "valid": bool(swapped_rows and strain_diff is not None and rate_diff is not None
+                      and max(strain_diff, rate_diff) <= float(tol)),
+        "swapped_ref_rows_per_split": int(swapped_rows),
+        "ref_swap_strain_max_diff": round(strain_diff, 10) if strain_diff is not None else None,
+        "ref_swap_rate_max_diff": round(rate_diff, 10) if rate_diff is not None else None,
+        "tol": float(tol),
+    }
+
+
 def calibrate_alpha_physical_stresses(
     dataset: dict[str, Any],
     split_key: str,

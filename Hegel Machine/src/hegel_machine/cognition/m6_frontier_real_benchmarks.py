@@ -5067,6 +5067,8 @@ def execute_host_trusted_scientific_probe(
     task: FrontierBenchmarkTask,
     current_candidate_sha256: str,
     public_setup_files_sha256: dict[str, str],
+    retain_failed_probe: bool = False,
+    require_pooled_coupon_check: bool = False,
 ) -> dict[str, Any] | None:
     """Execute a host-authored isolated-worker scientific & full-handoff probe (`M9.4.1` `Gate A` / `C01` + `C02`).
 
@@ -5186,6 +5188,19 @@ def execute_host_trusted_scientific_probe(
         "                gauge_ok = True\n"
         "                claims.append('panel_affine_gauge_invariance')\n"
         "    sci_ok = bool(ver['ok'])\n"
+        f"    if sci_ok and {require_pooled_coupon_check!r}:\n"
+        "        def swapped_solver(item):\n"
+        "            ok, out = _run_isolated_worker(item)\n"
+        "            if not ok: raise RuntimeError(str(out))\n"
+        "            return out\n"
+        "        try:\n"
+        "            coupon = kmod.verify_alpha_pooled_ref_coupon_invariance(swapped_solver, pub_in, base_out=out_main)\n"
+        "        except Exception as exc:\n"
+        "            print(json.dumps({'ok': False, 'reason': 'coupon_worker_failed', 'details': str(exc)})); sys.exit(0)\n"
+        "        metrics['pooled_ref_coupon_check'] = coupon\n"
+        "        sci_ok = coupon['valid'] and coupon['swapped_ref_rows_per_split'] > 0\n"
+        "        if sci_ok: claims.append('pooled_reference_coupon_invariance')\n"
+        "        else: ver.setdefault('errors', []).append('pooled_reference_coupon_invariance_failed')\n"
         "else:\n"
         "    ver = kmod.verify_beta_candidate_handoff_and_kkt(study=pub_in, out=out_main, gt=pub_gt)\n"
         "    claims = list(ver['verified_claim_ids'])\n"
@@ -5224,17 +5239,36 @@ def execute_host_trusted_scientific_probe(
         exec_container_bash(agent_cid, f"rm -rf {remote_dir}", timeout_sec=10)
 
     post_sha = compute_declared_artifacts_digest(agent_cid, decl_arts)
-    if post_sha != current_candidate_sha256 or pr_run["exit_code"] != 0 or not pr_run["stdout"].strip():
-        return None
+    # Gate callers need the difference between a measured disagreement and a
+    # verifier which could not produce a measurement. The interactive science
+    # tool continues to issue its signed certificates only on success.
+    def failed(status, reason, **details):
+        if not retain_failed_probe:
+            return None
+        return dict(execution_status=status, scientific_invariants_verified=False,
+                    candidate_bundle_sha256=current_candidate_sha256, reason=reason, **details)
+
+    if post_sha != current_candidate_sha256:
+        return failed("infrastructure_error", "candidate_changed_during_probe")
+    if pr_run.get("timed_out") or pr_run["exit_code"] == 124:
+        return failed("timeout", "scientific_probe_timed_out")
+    if pr_run["exit_code"] != 0 or not pr_run["stdout"].strip():
+        return failed("infrastructure_error", "scientific_probe_did_not_complete")
     try:
         pr_json = json.loads(pr_run["stdout"].strip().splitlines()[-1])
-    except Exception:
-        return None
+    except (ValueError, IndexError):
+        return failed("infrastructure_error", "missing_verifier_result")
     claim_ids = [str(c) for c in (pr_json.get("verified_claim_ids") or []) if str(c).strip()]
     if not pr_json.get("ok") or not claim_ids:
-        return None
+        if pr_json.get("errors") and pr_json.get("kernel_version"):
+            return failed("completed", "public_scientific_check_failed",
+                          errors=pr_json["errors"], measured_scientific_metrics=pr_json.get("metrics", {}))
+        detail = str(pr_json.get("details", ""))
+        return failed("timeout" if "timed out" in detail.lower() else "infrastructure_error",
+                      pr_json.get("reason", "incomplete_verifier_result"), details=detail[:300])
     return {
         "signed_by_host_probe_executor": True,
+        "execution_status": "completed",
         "receipt_kind": "scientific_probe_receipt",
         "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
         "kernel_version": str(pr_json.get("kernel_version") or ""),

@@ -59,10 +59,16 @@ from .m9_4_continual_mechanism_binding_world import (
     M94BindingRegistry,
     MechanismExecutableBinding,
 )
+from functools import partial
+
 from .m9_5_equal_tool_continual_attribution_world import (
-    execute_single_pre_llm_public_gate_probe_in_container,
+    execute_single_pre_llm_public_gate_probe_in_container as _execute_public_gate,
     m95_task_to_frontier_task,
 )
+
+# Include Alpha's documented pooled-panel contract in every prospective M9.9 public gate.
+execute_single_pre_llm_public_gate_probe_in_container = partial(_execute_public_gate, require_pooled_coupon_check=True)
+
 from .m9_6_autonomous_structure_continual_world import (
     CURRENT_LINEAGE_SCHEMAS,
     ImmutableBranchLineageController,
@@ -1367,7 +1373,23 @@ def hydrate_separability_withdrawals_from_graph(
     graph: PersistentMechanismGraph,
     registry: M94BindingRegistry,
     world_id: str,
+    *,
+    strict_ledger_fk: bool = True,
+    quarantine_unverified: bool = False,
 ) -> list[SeparabilityWithdrawalReceipt]:
+    """Hydrate `SeparabilityWithdrawalReceipt`s from `graph` with full foreign-key & witness-ledger verification (`Q07` Closed):
+    Verifies for every receipt `r`:
+      1. `r.world_id == world_id` and both `upstream_binding_id`, `downstream_binding_id` exist in `registry.bindings`.
+      2. `r.upstream_code_sha256 == up_binding.authoritative_executed_code_sha256()` and
+         `r.downstream_code_sha256 == dn_binding.authoritative_executed_code_sha256()`.
+      3. When `strict_ledger_fk=True`, the persisted upstream witness ledger (`f"{world_id}_up::{r.family}_up"`) contains a
+         verified `completed` `direct_component_probe` `passed` witness on `r.upstream_binding_id` with `probe_id == r.upstream_component_probe_id`,
+         `public_input_sha256 == r.counterexample_public_input_sha256`, and `metric_value <= 0.03`.
+      4. The persisted downstream witness ledger (`f"{world_id}_dn::{r.family}_dn"`) contains BOTH a verified `completed`
+         `joint_task_probe` `failed` witness (`failure_kind == r.joint_failure_kind`) on `r.counterexample_public_input_sha256`
+         AND at least one **earlier** (`idx_pos < idx_neg`) verified `passed` witness on `r.downstream_binding_id` whose
+         8 downstream observable features collide (`max |f_pos - f_neg| <= 1e-8`) with the counterexample witness!
+    """
     blob = graph.forest.questions.get(M99_WITHDRAWAL_FOREST_KEY)
     if not isinstance(blob, dict):
         return []
@@ -1382,10 +1404,97 @@ def hydrate_separability_withdrawals_from_graph(
     if stored_sha != exp_sha:
         raise ValueError(f"Tampered separability withdrawal checkpoint `{world_id}`")
     loaded = [SeparabilityWithdrawalReceipt.from_dict(x) for x in raw_r]
+    verified_out: list[SeparabilityWithdrawalReceipt] = []
+
     for r in loaded:
+        def _fail(msg: str) -> None:
+            if quarantine_unverified:
+                return
+            raise ValueError(msg)
+
+        if r.world_id != world_id:
+            if quarantine_unverified:
+                continue
+            raise ValueError(f"SeparabilityWithdrawalReceipt `{r.receipt_id}` world_id `{r.world_id}` != `{world_id}` (`Q07`)")
         if r.upstream_binding_id not in registry.bindings or r.downstream_binding_id not in registry.bindings:
-            raise ValueError(f"SeparabilityWithdrawalReceipt `{r.receipt_id}` references missing binding foreign key")
-    return loaded
+            if quarantine_unverified:
+                continue
+            raise ValueError(f"SeparabilityWithdrawalReceipt `{r.receipt_id}` references missing binding foreign key (`Q07`)")
+        up_b = registry.bindings[r.upstream_binding_id]
+        dn_b = registry.bindings[r.downstream_binding_id]
+        if r.upstream_code_sha256 != up_b.authoritative_executed_code_sha256():
+            if quarantine_unverified:
+                continue
+            raise ValueError(
+                f"SeparabilityWithdrawalReceipt `{r.receipt_id}` upstream_code_sha256 `{r.upstream_code_sha256[:16]}` != "
+                f"registry `{up_b.authoritative_executed_code_sha256()[:16]}` (`Q07`)"
+            )
+        if r.downstream_code_sha256 != dn_b.authoritative_executed_code_sha256():
+            if quarantine_unverified:
+                continue
+            raise ValueError(
+                f"SeparabilityWithdrawalReceipt `{r.receipt_id}` downstream_code_sha256 `{r.downstream_code_sha256[:16]}` != "
+                f"registry `{dn_b.authoritative_executed_code_sha256()[:16]}` (`Q07`)"
+            )
+
+        if strict_ledger_fk:
+            up_ctrl = ImmutableBranchLineageController(world_id=f"{world_id}_up", family=f"{r.family}_up", graph=graph, registry=registry)
+            dn_ctrl = ImmutableBranchLineageController(world_id=f"{world_id}_dn", family=f"{r.family}_dn", graph=graph, registry=registry)
+            up_matches = [
+                w
+                for w in up_ctrl.witness_ledger
+                if w.binding_id == r.upstream_binding_id
+                and w.is_verified_positive_witness()
+                and w.evidence_origin == "direct_component_probe"
+                and w.probe_id == r.upstream_component_probe_id
+                and w.public_input_sha256 == r.counterexample_public_input_sha256
+                and w.metric_value is not None
+                and float(w.metric_value) <= 0.03
+                and abs(float(w.metric_value) - float(r.upstream_holdout_rmse)) <= 1e-6
+            ]
+            if not up_matches:
+                if quarantine_unverified:
+                    continue
+                raise ValueError(
+                    f"SeparabilityWithdrawalReceipt `{r.receipt_id}` missing verified upstream direct probe `{r.upstream_component_probe_id}` in ledger (`Q07`)"
+                )
+            neg_indices = [
+                idx
+                for idx, w in enumerate(dn_ctrl.witness_ledger)
+                if w.binding_id == r.downstream_binding_id
+                and w.is_genuine_scientific_counterexample()
+                and w.evidence_origin == "joint_task_probe"
+                and w.public_input_sha256 == r.counterexample_public_input_sha256
+                and w.failure_kind == r.joint_failure_kind
+            ]
+            if not neg_indices:
+                if quarantine_unverified:
+                    continue
+                raise ValueError(
+                    f"SeparabilityWithdrawalReceipt `{r.receipt_id}` missing verified downstream joint-negative witness in ledger (`Q07`)"
+                )
+            neg_idx = neg_indices[-1]
+            neg_w = dn_ctrl.witness_ledger[neg_idx]
+            prior_pos_colliding = []
+            for idx_p in range(neg_idx):
+                wp = dn_ctrl.witness_ledger[idx_p]
+                if wp.binding_id == r.downstream_binding_id and wp.is_verified_positive_witness():
+                    if all(
+                        (k in wp.public_structural_features and k in neg_w.public_structural_features)
+                        and wp.public_structural_features[k] is not None
+                        and neg_w.public_structural_features[k] is not None
+                        and abs(float(wp.public_structural_features[k]) - float(neg_w.public_structural_features[k])) <= 1e-8
+                        for k in M99_DOWNSTREAM_OBSERVABLE_NAMES
+                    ):
+                        prior_pos_colliding.append(wp)
+            if not prior_pos_colliding:
+                if quarantine_unverified:
+                    continue
+                raise ValueError(
+                    f"SeparabilityWithdrawalReceipt `{r.receipt_id}` missing prior colliding downstream positive witness before joint failure (`Q07`)"
+                )
+        verified_out.append(r)
+    return verified_out
 
 
 # ============================================================================
@@ -1467,16 +1576,33 @@ def verify_m99_autonomous_decomposition_in_containers(
     upstream_code: str,
     d0_code: str,
     d1_code: str,
+    s0_ro_deps: dict[str, str] | None = None,
+    s0_ro_shas: dict[str, str] | None = None,
+    verify_off_diagonal: bool = True,
 ) -> dict[str, Any]:
-    """Fail-closed Docker verification (`0` private peek, `R04/R05/R11` compliant) of an LLM-proposed `(u0, d0, d1)` decomposition:
+    """Fail-closed Docker verification (`0` private peek, `R04/R05/R11 + Q01` `2x2` matrix compliant) of an LLM-proposed `(u0, d0, d1)` decomposition:
     1. `upstream_code` (`calibrate_upstream(item, param_payload=None)`) passes `56/24` holdout check (`rmse <= 0.03`) on `E1_down`!
     2. Non-triviality check: when applied to `E1_down` (`v2_gains != 1`), `upstream_code(e1_item, e1_pay)` normalizes the calibration
        sweep table to identity (`max |bridge_raw - true_channel_loads| <= 0.05` / `max |raw_rosette - ref_rosette| <= 0.05`),
-       strictly rejecting `return item` identity wrappers!
-    3. `compose(upstream_code, d0_code, s0_pay)` passes `Stage S` full public scientific gate!
-    4. `compose(upstream_code, d1_code, e1_pay)` passes `E1_down` full public scientific gate!
+       strictly rejecting `return item` identity wrappers! (`Q08/R05`: timeout appends `probe_id` + `wall_ms` before returning!)
+    3. Diagonal positive requirements:
+       - `s0_d0`: `compose(upstream_code, d0_code, s0_pay)` passes `Stage S` full public scientific gate!
+       - `e1_d1`: `compose(upstream_code, d1_code, e1_pay)` passes `E1_down` full public scientific gate!
+    4. Off-diagonal empirical cross-verification (`Q01` — NEVER fabricate unexecuted cross-negatives!):
+       - `e1_d0`: `compose(upstream_code, d0_code, e1_pay)` executed on `E1_down` public gate!
+       - `s0_d1`: `compose(upstream_code, d1_code, s0_pay)` executed on `Stage S` public gate!
+       Returns typed `matrix_2x2` probe receipts (`probe_id`, `wall_ms`, `execution_status`, `accepted`, `failure_tier`, `failure_kind`,
+       `candidate_sha256`) so callers record ONLY genuine executed outcomes (sharing/covering if off-diagonals pass!).
     """
     probes: list[dict[str, Any]] = []
+
+    fingerprints = {}
+    for task, item in ((s0_task, s0_public_item), (e1_task, e1_public_item)):
+        materialized, raw_sha = materialize_m98_public_item_and_sha(task)
+        numeric_sha = compute_canonical_numeric_item_sha256(materialized)
+        if numeric_sha != compute_canonical_numeric_item_sha256(item):
+            raise ValueError(f"Public component input disagrees with joint task {task.task_id} (Q01)")
+        fingerprints[task.task_id] = {"public_input_sha256": raw_sha, "canonical_numeric_sha256": numeric_sha}
 
     # 1. Direct upstream component holdout probe on `E1_down`
     up_diag = diagnose_m98_factored_conflict_locus(
@@ -1487,11 +1613,21 @@ def verify_m99_autonomous_decomposition_in_containers(
         diag_payload=e1_pay,
         force_direct_component_probe=True,
     )
-    probes.append({"role": "decomp_upstream_holdout", "probe_id": up_diag.get("probe_id"), "wall_ms": up_diag.get("probe_wall_ms", 0.0)})
-    if up_diag.get("execution_status") != "completed" or up_diag.get("chosen_up_holdout_rmse") is None or float(up_diag["chosen_up_holdout_rmse"]) > 0.03:
-        return {"valid": False, "reason": f"upstream_holdout_failed:{up_diag}", "probes": probes}
+    up_diag = {**up_diag, **fingerprints[e1_task.task_id]}
+    probes.append(
+        {
+            "role": "decomp_upstream_holdout",
+            "probe_id": up_diag.get("probe_id"),
+            "wall_ms": up_diag.get("probe_wall_ms", 0.0),
+            "execution_status": up_diag.get("execution_status"),
+        }
+    )
+    rmse = up_diag.get("chosen_up_holdout_rmse")
+    if (up_diag.get("execution_status") != "completed" or rmse is None
+            or not 0.0 <= float(rmse) <= 0.03 or up_diag.get("failure_tier") != "NONE"):
+        return {"valid": False, "reason": f"upstream_holdout_failed:{up_diag}", "probes": probes, "upstream_probe_receipt": up_diag}
 
-    # 2. Non-trivial canonical normalization check (host-free inside container or isolated namespace? Run inside container for safety!)
+    # 2. Non-trivial canonical normalization check inside air-gapped container
     import subprocess
     from .m7_autogenous_forest_pretraining import CLEAN_SCIPY_SANDBOX_IMAGE
 
@@ -1533,49 +1669,100 @@ def verify_m99_autonomous_decomposition_in_containers(
                 timeout=25,
             )
         except subprocess.TimeoutExpired:
+            nt_ms = round((monotonic() - t_nt) * 1000.0, 2)
+            probes.append({"role": "decomp_canonical_interface_check", "probe_id": nt_pid, "wall_ms": nt_ms, "execution_status": "timeout"})
             return {"valid": False, "reason": "nontriviality_probe_timeout", "probes": probes}
     nt_ms = round((monotonic() - t_nt) * 1000.0, 2)
-    probes.append({"role": "decomp_canonical_interface_check", "probe_id": nt_pid, "wall_ms": nt_ms})
+    probes.append({"role": "decomp_canonical_interface_check", "probe_id": nt_pid, "wall_ms": nt_ms, "execution_status": "completed"})
     if proc.returncode != 0 or not proc.stdout.strip():
         return {"valid": False, "reason": f"nontriviality_probe_failed:{(proc.stderr or '')[-240:]}", "probes": probes}
-    nt_j = json.loads(proc.stdout.strip().splitlines()[-1])
-    if (not nt_j["shape_ok"]) or (not nt_j["transformed_signal"]) or float(nt_j["cal_identity_err"]) > 0.05:
+    try:
+        nt_j = json.loads(proc.stdout.strip().splitlines()[-1])
+    except Exception as exc_j:
+        return {"valid": False, "reason": f"nontriviality_probe_json_parse_error:{exc_j}", "probes": probes}
+    if (not nt_j.get("shape_ok")) or (not nt_j.get("transformed_signal")) or not 0.0 <= float(nt_j.get("cal_identity_err", 99.0)) <= 0.05:
         return {"valid": False, "reason": f"canonical_interface_violation:{nt_j}", "probes": probes}
 
-    # 3. Verify `compose(upstream_code, d0_code, s0_pay)` on `Stage S` public gate
-    c_s0 = compose_m98_two_stage_solver_code(
-        upstream_code=upstream_code,
-        upstream_entrypoint="calibrate_upstream",
-        downstream_code=d0_code,
-        downstream_entrypoint="solve_downstream",
-        param_payload=s0_pay,
-    )
-    t_s0 = monotonic()
-    pr_s0 = execute_single_pre_llm_public_gate_probe_in_container(task=s0_task, candidate_code=c_s0)
-    probes.append({"role": "decomp_s0_public_gate", "probe_id": f"dprobe_{uuid.uuid4().hex[:16]}", "wall_ms": round((monotonic() - t_s0) * 1000.0, 2)})
-    if not pr_s0["accepted"]:
-        return {"valid": False, "reason": f"composed_s0_rejected:{pr_s0.get('scientific_probe_receipt') or pr_s0.get('schema_stderr')}", "probes": probes}
+    def _run_gate_cell(
+        role_tag: str,
+        tk: HoldoutOODTask,
+        dn_src: str,
+        pay_d: dict[str, Any],
+        ro_d: dict[str, str] | None = None,
+        ro_s: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        cand_c = compose_m98_two_stage_solver_code(
+            upstream_code=upstream_code,
+            upstream_entrypoint="calibrate_upstream",
+            downstream_code=dn_src,
+            downstream_entrypoint="solve_downstream",
+            param_payload=pay_d,
+        )
+        cand_sha = hashlib.sha256(cand_c.encode("utf-8")).hexdigest()
+        pid_g = f"dprobe_{uuid.uuid4().hex[:16]}"
+        t_g = monotonic()
+        kw_g: dict[str, Any] = {"task": tk, "candidate_code": cand_c}
+        if ro_d:
+            kw_g["readonly_dependencies"] = ro_d
+        if ro_s:
+            kw_g["expected_dependency_sha256"] = ro_s
+        pr_g = execute_single_pre_llm_public_gate_probe_in_container(**kw_g)
+        w_ms = round((monotonic() - t_g) * 1000.0, 2)
+        cls_g = classify_public_probe_failure(pr_g)
+        ex_st = "timeout" if pr_g.get("timed_out") else ("infrastructure_error" if cls_g["tier"] == "INFRA_FAILURE" else "completed")
+        rec_g = {
+            **pr_g,
+            "role": role_tag,
+            "probe_id": pid_g,
+            "wall_ms": w_ms,
+            "probe_wall_ms": w_ms,
+            "candidate_sha256": cand_sha,
+            "component_code_sha256s": [hashlib.sha256(src.encode()).hexdigest() for src in (upstream_code, dn_src)],
+            **fingerprints[tk.task_id],
+            "execution_status": ex_st,
+            "failure_tier": cls_g["tier"],
+            "failure_kind": cls_g["failure_kind"],
+        }
+        probes.append({"role": role_tag, "probe_id": pid_g, "wall_ms": w_ms, "execution_status": ex_st, "accepted": bool(pr_g.get("accepted"))})
+        return rec_g
 
-    # 4. Verify `compose(upstream_code, d1_code, e1_pay)` on `E1_down` public gate
-    c_e1 = compose_m98_two_stage_solver_code(
-        upstream_code=upstream_code,
-        upstream_entrypoint="calibrate_upstream",
-        downstream_code=d1_code,
-        downstream_entrypoint="solve_downstream",
-        param_payload=e1_pay,
-    )
-    t_e1 = monotonic()
-    pr_e1 = execute_single_pre_llm_public_gate_probe_in_container(
-        task=e1_task, candidate_code=c_e1, readonly_dependencies=e1_ro_deps, expected_dependency_sha256=e1_ro_shas
-    )
-    probes.append({"role": "decomp_e1_public_gate", "probe_id": f"dprobe_{uuid.uuid4().hex[:16]}", "wall_ms": round((monotonic() - t_e1) * 1000.0, 2)})
-    if not pr_e1["accepted"]:
-        return {"valid": False, "reason": f"composed_e1_rejected:{pr_e1.get('scientific_probe_receipt') or pr_e1.get('schema_stderr')}", "probes": probes}
+    # 3. Verify `s0_d0`: `compose(upstream_code, d0_code, s0_pay)` on `Stage S` public gate
+    pr_s0_d0 = _run_gate_cell("decomp_s0_d0_public_gate", s0_task, d0_code, s0_pay, s0_ro_deps, s0_ro_shas)
+    if not pr_s0_d0["accepted"]:
+        return {
+            "valid": False,
+            "reason": f"composed_s0_rejected:{pr_s0_d0.get('scientific_probe_receipt') or pr_s0_d0.get('schema_stderr')}",
+            "probes": probes,
+        }
+
+    # 4. Verify `e1_d1`: `compose(upstream_code, d1_code, e1_pay)` on `E1_down` public gate
+    pr_e1_d1 = _run_gate_cell("decomp_e1_d1_public_gate", e1_task, d1_code, e1_pay, e1_ro_deps, e1_ro_shas)
+    if not pr_e1_d1["accepted"]:
+        return {
+            "valid": False,
+            "reason": f"composed_e1_rejected:{pr_e1_d1.get('scientific_probe_receipt') or pr_e1_d1.get('schema_stderr')}",
+            "probes": probes,
+        }
+
+    # 5. Off-diagonal `2x2` empirical verification (`Q01`: `e1_d0` and `s0_d1`!)
+    if verify_off_diagonal:
+        pr_e1_d0 = _run_gate_cell("decomp_e1_d0_cross_public_gate", e1_task, d0_code, e1_pay, e1_ro_deps, e1_ro_shas)
+        pr_s0_d1 = _run_gate_cell("decomp_s0_d1_cross_public_gate", s0_task, d1_code, s0_pay, s0_ro_deps, s0_ro_shas)
+    else:
+        pr_e1_d0 = {"accepted": False, "execution_status": "not_executed", "failure_tier": "NOT_EXECUTED", "failure_kind": "not_executed", "probe_id": "", "wall_ms": 0.0}
+        pr_s0_d1 = {"accepted": False, "execution_status": "not_executed", "failure_tier": "NOT_EXECUTED", "failure_kind": "not_executed", "probe_id": "", "wall_ms": 0.0}
 
     return {
         "valid": True,
         "upstream_holdout_rmse": up_diag["chosen_up_holdout_rmse"],
+        "upstream_probe_receipt": up_diag,
         "canonical_interface_check": nt_j,
+        "matrix_2x2": {
+            "s0_d0": pr_s0_d0,
+            "e1_d1": pr_e1_d1,
+            "e1_d0": pr_e1_d0,
+            "s0_d1": pr_s0_d1,
+        },
         "probes": probes,
         "total_probe_wall_ms": round(sum(float(p["wall_ms"]) for p in probes), 2),
     }
@@ -1692,6 +1879,8 @@ def propose_and_verify_m99_autonomous_two_stage_factorization(
                 "upstream_code": str(parsed["upstream_code"]),
                 "downstream_d0_code": str(parsed["downstream_d0_code"]),
                 "downstream_d1_code": str(parsed["downstream_d1_code"]),
+                "upstream_probe_receipt": ver.get("upstream_probe_receipt"),
+                "matrix_2x2": ver.get("matrix_2x2"),
                 "verification_probes": all_probes,
                 "total_probe_wall_ms": round(sum(float(p["wall_ms"]) for p in all_probes), 2),
                 "attempts_log": attempts_log,

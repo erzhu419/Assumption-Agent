@@ -5,7 +5,7 @@ and Counterexample-Scoped Non-Separable `U–D` Interaction Withdrawal (`E5_coup
 
 Strict Methodological & Audit Closure Guarantees (`R01–R16` Enforced):
   1. `100%` Equal Tool/Skill/Probe Budget (`R03`): ALL 3 arms run with `enable_auto_skill_packaging = False`,
-     `allow_l1_primitives = False`, and `max_pre_llm_probes = 1`.
+     `allow_l1_primitives = False`, and the archived pre-LLM probe budget. New executions record the bounded recovery budget.
   2. Zero Host-Seeded `u0` / `d0` (`R02`): `Stage S` is raw monolithic `solve_batch`. After `E1_down`, BOTH
      `Flat_PlainModuleRegistry_Online` and `Hegel_AutonomousInteractionGraph_Online` call the exact same LLM refactoring
      compiler (`propose_and_verify_m99_autonomous_two_stage_factorization`, counted in `Scope-1` cost!).
@@ -64,7 +64,6 @@ from hegel_machine.cognition.m9_4_continual_mechanism_binding_world import (
     grade_m94_artifact_map,
 )
 from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import (
-    execute_single_pre_llm_public_gate_probe_in_container,
     make_continual_archive_entry,
 )
 from hegel_machine.cognition.m9_6_autonomous_structure_continual_world import (
@@ -90,6 +89,7 @@ from hegel_machine.cognition.m9_8_blind_mismatch_and_selective_dependency_world 
 from hegel_machine.cognition.m9_9_autonomous_decomposition_and_interaction_withdrawal_world import (
     CONFIRMATION_M99_WORLD_SPECS,
     DEV_M99_WORLD_SPECS,
+    execute_single_pre_llm_public_gate_probe_in_container,
     M99_ALL_OBSERVABLE_NAMES,
     M99_ARMS,
     M99_DOWNSTREAM_OBSERVABLE_NAMES,
@@ -130,6 +130,28 @@ def _docker_image_digest(image_name: str) -> str:
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else f"image:{image_name}"
 
 
+def _execution_fields(start: dict, end: dict, calls: list[dict]) -> dict:
+    # Older bundles have a provider stage prefix but no execution clock or live tree manifest.
+    ids = {row["stage_subdir"].split("__", 1)[0] for row in calls if row.get("stage_subdir")}
+    observed_id = next(iter(ids)) if len(ids) == 1 else None
+    if start.get("execution_run_id") and ids and ids != {start["execution_run_id"]}:
+        raise ValueError("Provider call prefixes disagree with the execution manifest")
+    run_id = start.get("execution_run_id") or observed_id
+    if end.get("execution_run_id") and end["execution_run_id"] != run_id:
+        raise ValueError("Completion belongs to a different execution")
+    if len(ids) > 1:
+        raise ValueError("Mixed provider runs in the same execution")
+    return {
+        "run_id": run_id,
+        "wall_sec": end.get("execution_elapsed_wall_sec"),
+        "execution_provenance": {**start, **end,
+            "identity_source": "execution_manifest" if start.get("execution_run_id") else ("provider_call_prefix" if observed_id else None),
+            "code_commit_at_start": start.get("code_commit_at_start"),
+            "source_tree_sha256_at_start": start.get("source_tree_sha256_at_start"),
+            "working_tree_dirty_at_start": start.get("working_tree_dirty_at_start")},
+    }
+
+
 def _extract_submitted_files(ep_dir: Path) -> dict[str, str]:
     sdir = ep_dir / "04_submitted_artifacts_snapshot"
     out: dict[str, str] = {}
@@ -154,7 +176,7 @@ def _inject_equal_info_archive_into_m99_task(
     ]
     manifest_rows = []
     for ent in prior_archive_entries:
-        if ent.get("public_qualification_status", "public_gate_verified") != "public_gate_verified":
+        if ent.get("public_qualification_status") != "public_gate_verified":
             continue
         ep_tag = str(ent["short_name"])
         code_txt = str(ent.get("canonical_algorithm_code") or ent["submitted_code"])
@@ -377,6 +399,109 @@ def _register_learned_binding(
     return b
 
 
+def _bounded_public_recovery(
+    *, trial, family, task, public_item, numeric_sha, dependencies, dependency_shas, payload,
+    primary_code, upstream_candidates, selected_up, compose_options, prior_entries, archive_context, schema,
+):
+    """Spend at most one alternate-component attempt and one unprojected archive candidate per episode."""
+    if trial["accepted_pre_llm"] or classify_public_probe_failure(trial["probe_result"])["tier"] == "INFRA_FAILURE":
+        return
+    attempts = trial["recovery_attempts"] = []
+    original_probe = trial["probe_result"]
+
+    def joint(kind, source_id, code, context):
+        target, item_sha, deps, shas, _ = context
+        begin = monotonic()
+        result = execute_single_pre_llm_public_gate_probe_in_container(
+            task=target, candidate_code=code, readonly_dependencies=deps, expected_dependency_sha256=shas,
+        )
+        elapsed = round((monotonic() - begin) * 1000.0, 2)
+        trial["pre_llm_probes_used"] += 1
+        trial["probe_wall_ms"] += elapsed
+        attempts.append({"kind": kind, "source_id": source_id, "target_task_id": target.task_id,
+                         "numeric_input_sha256": item_sha, "candidate_sha256": hashlib.sha256(code.encode()).hexdigest(),
+                         "wall_ms": elapsed, "probe_result": result})
+        return result
+
+    def accept(mode, result, code):
+        trial.update(accepted_pre_llm=True, candidate_code=code, primary_probe_result=original_probe,
+                     probe_result=result, recovery_mode=mode, failure_kind="none")
+
+    current = (task, numeric_sha, dependencies, dependency_shas, payload)
+    if trial["locus"] == "upstream_transducer" and upstream_candidates:
+        row_id, code, ep, binding = upstream_candidates[0]
+        direct = diagnose_m98_factored_conflict_locus(
+            family, public_item, chosen_up_code=code, chosen_up_entrypoint=ep, diag_payload=payload,
+            force_direct_component_probe=True,
+        )
+        trial["localization_probes_used"] += int(bool(direct.get("component_probe_executed")))
+        trial["localization_probe_wall_ms"] += float(direct.get("probe_wall_ms") or 0)
+        attempts.append({"kind": "alternative_upstream_direct", "source_id": row_id,
+                         "numeric_input_sha256": numeric_sha, "candidate_sha256": hashlib.sha256(code.encode()).hexdigest(),
+                         "component_probe": direct})
+        rmse = direct.get("chosen_up_holdout_rmse")
+        if (direct.get("execution_status") == "completed" and direct.get("component_probe_executed")
+                and direct.get("locus") == "downstream_constitutive" and rmse is not None
+                and np.isfinite(float(rmse)) and 0 <= float(rmse) <= 0.03):
+            composed = compose_m98_two_stage_solver_code(
+                upstream_code=code, upstream_entrypoint=ep, downstream_code=trial["selected_downstream_code"],
+                downstream_entrypoint=trial["selected_downstream_ep"], param_payload=payload,
+                upstream_binding=binding, **compose_options,
+            )
+            result = joint("alternative_upstream_joint", row_id, composed, current)
+            if result["accepted"]:
+                accept("alternative_upstream_joint", result, composed)
+                trial.update(primary_upstream_id=trial["selected_upstream_id"], selected_upstream_id=row_id,
+                             selected_upstream_code=code, selected_upstream_ep=ep)
+                return
+            if classify_public_probe_failure(result)["tier"] == "INFRA_FAILURE":
+                return
+
+    entry = next((r for r in reversed(prior_entries)
+                  if r.get("module_projection_status") in {"unprojected", "verified_on_source_and_target"}
+                  and r["public_qualification_status"] == "public_gate_verified"
+                  and r["input_coordinate_contract"] == "raw_measured"
+                  and r["canonical_entrypoint"] == "solve_batch"
+                  and set(r["output_schema_keys"]) == set(schema)), None)
+    if entry is None:
+        trial["archive_recovery_status"] = "missing_eligible_public_solver"
+        return
+    source_id, archived = entry["task_id"], entry["canonical_algorithm_code"]
+    if hashlib.sha256(archived.encode()).hexdigest() != entry["canonical_sha256"]:
+        raise ValueError("Archived raw solver SHA-256 does not match its qualified identity")
+    trial["archive_recovery_status"] = "unknown_projection"
+    if archived != primary_code:
+        result = joint("archive_raw", source_id, archived, current)
+        if result["accepted"]:
+            accept("archive_raw", result, archived)
+            trial["archive_recovery_status"] = "verified_raw_fallback"
+            return
+        if classify_public_probe_failure(result)["tier"] == "INFRA_FAILURE":
+            return
+    # A prior raw solver is only a hypothesis for the canonical downstream interface.
+    # Qualify its composition on its original witness as well as the current target.
+    source = archive_context.get(source_id)
+    direct = trial.get("conflict_locus_diagnosis", {})
+    if not (source and source[1] != numeric_sha and selected_up and
+            direct.get("component_probe_executed") and direct.get("execution_status") == "completed"
+            and direct.get("locus") == "downstream_constitutive"):
+        return
+    up_code, up_ep, up_binding = selected_up
+    def projected(pay):
+        return compose_m98_two_stage_solver_code(
+            upstream_code=up_code, upstream_entrypoint=up_ep, downstream_code=archived,
+            downstream_entrypoint="solve_batch", param_payload=pay,
+            upstream_binding=up_binding, graph=compose_options.get("graph"), registry=compose_options.get("registry"),
+        )
+    old_result = joint("archive_projection_source", source_id, projected(source[4]), source)
+    if old_result["accepted"]:
+        proposal = projected(payload)
+        result = joint("archive_projection_target", source_id, proposal, current)
+        if result["accepted"]:
+            accept("archive_projection_target", result, proposal)
+            trial["archive_recovery_status"] = entry["module_projection_status"] = "verified_on_source_and_target"
+
+
 def _run_one_m99_world_arm_stream(
     *,
     spec: M99WorldSpec,
@@ -410,6 +535,8 @@ def _run_one_m99_world_arm_stream(
     archive = deepcopy(base_v7_archive)
     archive["__autogenous_blank_seed__"] = {"enabled": True}
     prior_entries: list[dict[str, Any]] = [deepcopy(source_archive_entry)]
+    prior_entries[0]["module_projection_status"] = "unprojected"
+    archive_context: dict[str, tuple] = {}
     flat_snap: dict[str, Any] = {"gains": [1.0, 1.0, 1.0, 1.0], "offsets": [0.0, 0.0, 0.0, 0.0]}
 
     # `Stage S` genuine measured observables (`apparatus_logs[:1]` was visible before `Stage S`!)
@@ -421,6 +548,8 @@ def _run_one_m99_world_arm_stream(
     s0_comb_obs = {**s0_up_obs, **s0_dn_obs}
     s0_sha = hashlib.sha256(source_monolithic_code.encode("utf-8")).hexdigest()
     s0_canon_num_sha = compute_canonical_numeric_item_sha256(source_pub_item)
+
+    archive_context[s_task.task_id] = (s_task, s0_canon_num_sha, s0_ro_deps, s0_ro_shas, deepcopy(flat_snap))
 
     # Arm 1: `Flat_MonolithicConditionalTable_Online`
     mono_table: list[dict[str, Any]] = [
@@ -836,6 +965,35 @@ def _run_one_m99_world_arm_stream(
                 }
 
         # =====================================================================
+        # Identical public recovery budget for the two modular arms. A flat solver can also use raw archive replay.
+        options = {}
+        alternatives = []
+        selected_up = None
+        pay = flat_snap
+        if not pre_trial["accepted_pre_llm"] and "selected_upstream_id" in pre_trial:
+            if arm == "Flat_PlainModuleRegistry_Online":
+                for row in sorted(plain_up_table, key=lambda r: (-int(r["priority"]), r["row_id"])):
+                    if row["row_id"] != up_r["row_id"] and set(row["output_schema_keys"]) == {"calibrated_input"}:
+                        alternatives.append((row["row_id"], row["canonical_code"], row["entrypoint"], None))
+                selected_up = (up_r["canonical_code"], up_r["entrypoint"], None)
+            else:
+                pay = diag_pay
+                options = dict(downstream_binding=chosen_dn, graph=graph, registry=registry)
+                for b in sorted(registry.bindings.values(), key=lambda x: (-int(x.selection_priority), x.binding_id)):
+                    if (b.chain_id == chosen_up.chain_id and b.binding_id != chosen_up.binding_id and
+                            b.qualification_status == "verified" and set(b.output_schema_keys) == {"calibrated_input"}):
+                        alternatives.append((b.binding_id, b.canonical_algorithm_code or b.parameterized_closure_code,
+                                             b.canonical_entrypoint or b.parameterized_entrypoint, b))
+                selected_up = (pre_trial["selected_upstream_code"], pre_trial["selected_upstream_ep"], chosen_up)
+        _bounded_public_recovery(
+            trial=pre_trial, family=fam, task=task, public_item=pub_item, numeric_sha=canon_num_sha,
+            dependencies=readonly_deps, dependency_shas=readonly_shas, payload=pay, primary_code=cand_code,
+            upstream_candidates=alternatives, selected_up=selected_up, compose_options=options,
+            prior_entries=prior_entries, archive_context=archive_context, schema=uni_keys,
+        )
+        loc_wall_ms = pre_trial["localization_probe_wall_ms"]
+        loc_probes_used = pre_trial["localization_probes_used"]
+
         # Step B: Zero-Turn Closure OR Live LLM Synthesis (`100%` Equal Tools!)
         # =====================================================================
         if pre_trial.get("accepted_pre_llm"):
@@ -1163,21 +1321,55 @@ def _run_one_m99_world_arm_stream(
                         )
                         plain_up_pos["up_r00_u0"] = [s0_up_obs, up_obs_now]
 
-                        comp_client._hegel_call_meta["role"] = "autonomous_guard_induction"
-                        ind_res = propose_and_validate_m98_guard_partition(
-                            client=comp_client,
-                            stage_subdir=f"{ep_run_tag}__plain_d0d1_gind",
-                            scope_label="plain_downstream_table_8feat",
-                            feature_names=M99_DOWNSTREAM_OBSERVABLE_NAMES,
-                            existing_branch_ids=["dn_r00_d0"],
-                            new_branch_id_placeholder="dn_r01_d1",
-                            positive_witness_features_by_branch={"dn_r00_d0": [s0_dn_obs], "dn_r01_d1": [dn_obs_now]},
-                            negative_witness_features_by_branch={"dn_r00_d0": [dn_obs_now], "dn_r01_d1": [s0_dn_obs]},
+                        m22_p = dec_res.get("matrix_2x2") or {}
+                        e1_d0_p = m22_p.get("e1_d0") or {}
+                        s0_d1_p = m22_p.get("s0_d1") or {}
+                        d0_pos_p = [s0_dn_obs] + ([dn_obs_now] if e1_d0_p.get("accepted") else [])
+                        d1_pos_p = [dn_obs_now] + ([s0_dn_obs] if s0_d1_p.get("accepted") else [])
+                        d0_neg_p = (
+                            [dn_obs_now]
+                            if (
+                                e1_d0_p.get("execution_status") == "completed"
+                                and not e1_d0_p.get("accepted")
+                                and e1_d0_p.get("failure_kind") in {"scientific_or_numerical", "domain_precondition"}
+                            )
+                            else []
                         )
-                        ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
-                        guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "plain_downstream", **ind_receipt})
-                        g_d0 = deepcopy(ind_res["existing_branch_guards"]["dn_r00_d0"]) if ind_res.get("accepted") else {}
-                        g_d1 = deepcopy(ind_res["new_branch_guard"]) if ind_res.get("accepted") else {}
+                        d1_neg_p = (
+                            [s0_dn_obs]
+                            if (
+                                s0_d1_p.get("execution_status") == "completed"
+                                and not s0_d1_p.get("accepted")
+                                and s0_d1_p.get("failure_kind") in {"scientific_or_numerical", "domain_precondition"}
+                            )
+                            else []
+                        )
+                        if e1_d0_p.get("accepted"):
+                            plain_dn_cov_pairs.add(("dn_r00_d0", "dn_r01_d1"))
+                        if s0_d1_p.get("accepted"):
+                            plain_dn_cov_pairs.add(("dn_r01_d1", "dn_r00_d0"))
+
+                        if e1_d0_p.get("accepted") or s0_d1_p.get("accepted"):
+                            g_d0, g_d1 = {}, {}
+                            ind_receipt = {"accepted": True, "attempts_used": 0, "shared_or_covering_from_2x2": True}
+                            guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "plain_downstream", **ind_receipt})
+                        else:
+                            comp_client._hegel_call_meta["role"] = "autonomous_guard_induction"
+                            ind_res = propose_and_validate_m98_guard_partition(
+                                client=comp_client,
+                                stage_subdir=f"{ep_run_tag}__plain_d0d1_gind",
+                                scope_label="plain_downstream_table_8feat",
+                                feature_names=M99_DOWNSTREAM_OBSERVABLE_NAMES,
+                                existing_branch_ids=["dn_r00_d0"],
+                                new_branch_id_placeholder="dn_r01_d1",
+                                positive_witness_features_by_branch={"dn_r00_d0": d0_pos_p, "dn_r01_d1": d1_pos_p},
+                                negative_witness_features_by_branch={"dn_r00_d0": d0_neg_p, "dn_r01_d1": d1_neg_p},
+                                covered_branch_pairs=plain_dn_cov_pairs,
+                            )
+                            ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
+                            guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "plain_downstream", **ind_receipt})
+                            g_d0 = deepcopy(ind_res["existing_branch_guards"]["dn_r00_d0"]) if ind_res.get("accepted") else {}
+                            g_d1 = deepcopy(ind_res["new_branch_guard"]) if ind_res.get("accepted") else {}
                         plain_dn_table.extend(
                             [
                                 {
@@ -1186,7 +1378,7 @@ def _run_one_m99_world_arm_stream(
                                     "canonical_code": d0_c,
                                     "entrypoint": "solve_downstream",
                                     "code_sha256": hashlib.sha256(d0_c.encode()).hexdigest(),
-                                    "priority": 10,
+                                    "priority": (20 if e1_d0_p.get("accepted") else 10),
                                     "output_schema_keys": list(uni_keys),
                                 },
                                 {
@@ -1195,14 +1387,15 @@ def _run_one_m99_world_arm_stream(
                                     "canonical_code": d1_c,
                                     "entrypoint": "solve_downstream",
                                     "code_sha256": hashlib.sha256(d1_c.encode()).hexdigest(),
-                                    "priority": 11,
+                                    "priority": (21 if s0_d1_p.get("accepted") else 11),
                                     "output_schema_keys": list(uni_keys),
                                 },
                             ]
                         )
-                        plain_dn_pos["dn_r00_d0"] = [s0_dn_obs]
-                        plain_dn_neg["dn_r00_d0"] = [dn_obs_now]
-                        plain_dn_pos["dn_r01_d1"] = [dn_obs_now]
+                        plain_dn_pos["dn_r00_d0"] = d0_pos_p
+                        plain_dn_neg["dn_r00_d0"] = d0_neg_p
+                        plain_dn_pos["dn_r01_d1"] = d1_pos_p
+                        plain_dn_neg["dn_r01_d1"] = d1_neg_p
                         plain_dn_rep_wit["dn_r00_d0"] = [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
                         plain_dn_rep_wit["dn_r01_d1"] = [(f"wit_{task.short_name}", task, deepcopy(flat_snap), readonly_deps, readonly_shas)]
 
@@ -1411,45 +1604,80 @@ def _run_one_m99_world_arm_stream(
                             selection_priority=10,
                             env_image_digest=env_image_digest,
                         )
+                        m22_h = dec_res.get("matrix_2x2") or {}
+                        up_pr_h = dec_res.get("upstream_probe_receipt") or {}
+                        s0_d0_h = m22_h.get("s0_d0") or {}
+                        e1_d1_h = m22_h.get("e1_d1") or {}
+                        e1_d0_h = m22_h.get("e1_d0") or {}
+                        s0_d1_h = m22_h.get("s0_d1") or {}
+
                         up_ctrl._branch_seq = 1
-                        up_ctrl.record_tested_witness(
+                        up_ctrl.record_tested_witness_from_probe_receipt(
                             binding=b_u0,
+                            probe_receipt=s0_d0_h,
                             public_input_sha256=source_pub_sha256,
-                            passed=True,
-                            failure_kind="none",
                             features=s0_up_obs,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
                             canonical_numeric_sha256=s0_canon_num_sha,
                         )
-                        up_ctrl.record_tested_witness(
+                        up_ctrl.record_tested_witness_from_probe_receipt(
                             binding=b_u0,
+                            probe_receipt=up_pr_h,
                             public_input_sha256=pub_sha,
-                            passed=True,
-                            failure_kind="none",
                             features=up_obs_now,
-                            execution_status="completed",
                             evidence_origin="direct_component_probe",
                             canonical_numeric_sha256=canon_num_sha,
                         )
 
-                        comp_client._hegel_call_meta["role"] = "autonomous_guard_induction"
                         bid_d0 = f"bind_{wid}_dn_b00"
                         bid_d1 = f"bind_{wid}_dn_b01"
-                        ind_res = propose_and_validate_m98_guard_partition(
-                            client=comp_client,
-                            stage_subdir=f"{ep_run_tag}__hegel_d0d1_gind",
-                            scope_label="hegel_downstream_layer_8feat",
-                            feature_names=M99_DOWNSTREAM_OBSERVABLE_NAMES,
-                            existing_branch_ids=[bid_d0],
-                            new_branch_id_placeholder=bid_d1,
-                            positive_witness_features_by_branch={bid_d0: [s0_dn_obs], bid_d1: [dn_obs_now]},
-                            negative_witness_features_by_branch={bid_d0: [dn_obs_now], bid_d1: [s0_dn_obs]},
+                        d0_pos_h = [s0_dn_obs] + ([dn_obs_now] if e1_d0_h.get("accepted") else [])
+                        d1_pos_h = [dn_obs_now] + ([s0_dn_obs] if s0_d1_h.get("accepted") else [])
+                        d0_neg_h = (
+                            [dn_obs_now]
+                            if (
+                                e1_d0_h.get("execution_status") == "completed"
+                                and not e1_d0_h.get("accepted")
+                                and e1_d0_h.get("failure_kind") in {"scientific_or_numerical", "domain_precondition"}
+                            )
+                            else []
                         )
-                        ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
-                        guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "hegel_downstream", **ind_receipt})
-                        g_d0 = deepcopy(ind_res["existing_branch_guards"][bid_d0]) if ind_res.get("accepted") else {}
-                        g_d1 = deepcopy(ind_res["new_branch_guard"]) if ind_res.get("accepted") else {}
+                        d1_neg_h = (
+                            [s0_dn_obs]
+                            if (
+                                s0_d1_h.get("execution_status") == "completed"
+                                and not s0_d1_h.get("accepted")
+                                and s0_d1_h.get("failure_kind") in {"scientific_or_numerical", "domain_precondition"}
+                            )
+                            else []
+                        )
+                        cov_init_h: set[tuple[str, str]] = set()
+                        if e1_d0_h.get("accepted"):
+                            cov_init_h.add((bid_d0, bid_d1))
+                        if s0_d1_h.get("accepted"):
+                            cov_init_h.add((bid_d1, bid_d0))
+
+                        if cov_init_h:
+                            g_d0, g_d1 = {}, {}
+                            ind_receipt = {"accepted": True, "attempts_used": 0, "shared_or_covering_from_2x2": True}
+                            guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "hegel_downstream", **ind_receipt})
+                        else:
+                            comp_client._hegel_call_meta["role"] = "autonomous_guard_induction"
+                            ind_res = propose_and_validate_m98_guard_partition(
+                                client=comp_client,
+                                stage_subdir=f"{ep_run_tag}__hegel_d0d1_gind",
+                                scope_label="hegel_downstream_layer_8feat",
+                                feature_names=M99_DOWNSTREAM_OBSERVABLE_NAMES,
+                                existing_branch_ids=[bid_d0],
+                                new_branch_id_placeholder=bid_d1,
+                                positive_witness_features_by_branch={bid_d0: d0_pos_h, bid_d1: d1_pos_h},
+                                negative_witness_features_by_branch={bid_d0: d0_neg_h, bid_d1: d1_neg_h},
+                                covered_branch_pairs=cov_init_h,
+                            )
+                            ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
+                            guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "hegel_downstream", **ind_receipt})
+                            g_d0 = deepcopy(ind_res["existing_branch_guards"][bid_d0]) if ind_res.get("accepted") else {}
+                            g_d1 = deepcopy(ind_res["new_branch_guard"]) if ind_res.get("accepted") else {}
 
                         b_d0 = _register_learned_binding(
                             registry=registry,
@@ -1464,7 +1692,7 @@ def _run_one_m99_world_arm_stream(
                             graph=graph,
                             output_schema_keys=uni_keys,
                             applicability_guard=g_d0,
-                            selection_priority=10,
+                            selection_priority=(20 if e1_d0_h.get("accepted") else 10),
                             env_image_digest=env_image_digest,
                         )
                         b_d1 = _register_learned_binding(
@@ -1480,43 +1708,46 @@ def _run_one_m99_world_arm_stream(
                             graph=graph,
                             output_schema_keys=uni_keys,
                             applicability_guard=g_d1,
-                            selection_priority=11,
+                            selection_priority=(21 if s0_d1_h.get("accepted") else 11),
                             env_image_digest=env_image_digest,
                         )
                         dn_ctrl._branch_seq = 2
-                        dn_ctrl.record_tested_witness(
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
                             binding=b_d0,
+                            probe_receipt=s0_d0_h,
                             public_input_sha256=source_pub_sha256,
-                            passed=True,
-                            failure_kind="none",
                             features=s0_dn_obs,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
                             canonical_numeric_sha256=s0_canon_num_sha,
                         )
-                        dn_ctrl.record_tested_witness(
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
                             binding=b_d0,
+                            probe_receipt=e1_d0_h,
                             public_input_sha256=pub_sha,
-                            passed=False,
-                            failure_kind="scientific_or_numerical",
                             features=dn_obs_now,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
                             canonical_numeric_sha256=canon_num_sha,
                         )
-                        dn_ctrl.record_tested_witness(
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
                             binding=b_d1,
+                            probe_receipt=e1_d1_h,
                             public_input_sha256=pub_sha,
-                            passed=True,
-                            failure_kind="none",
                             features=dn_obs_now,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
                             canonical_numeric_sha256=canon_num_sha,
                         )
-                        hegel_dn_joint_pos_obs[bid_d0] = [s0_comb_obs]
-                        hegel_dn_joint_neg_obs[bid_d0] = [comb_obs_now]
-                        hegel_dn_joint_pos_obs[bid_d1] = [comb_obs_now]
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
+                            binding=b_d1,
+                            probe_receipt=s0_d1_h,
+                            public_input_sha256=source_pub_sha256,
+                            features=s0_dn_obs,
+                            evidence_origin="joint_task_probe",
+                            canonical_numeric_sha256=s0_canon_num_sha,
+                        )
+                        hegel_dn_joint_pos_obs[bid_d0] = [s0_comb_obs] + ([comb_obs_now] if e1_d0_h.get("accepted") else [])
+                        hegel_dn_joint_neg_obs[bid_d0] = ([comb_obs_now] if d0_neg_h else [])
+                        hegel_dn_joint_pos_obs[bid_d1] = [comb_obs_now] + ([s0_comb_obs] if s0_d1_h.get("accepted") else [])
+                        hegel_dn_joint_neg_obs[bid_d1] = ([s0_comb_obs] if d1_neg_h else [])
                         hegel_dn_rep_wit[bid_d0] = [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
                         hegel_dn_rep_wit[bid_d1] = [(f"wit_{task.short_name}", task, deepcopy(diag_pay_now), readonly_deps, readonly_shas)]
 
@@ -1831,6 +2062,12 @@ def _run_one_m99_world_arm_stream(
                     public_qualification_status=("public_gate_verified" if pub_gate_post.get("accepted") else "public_gate_failed"),
                 )
             )
+            projected = bool(decomp_receipt_summary and decomp_receipt_summary.get("accepted"))
+            prior_entries[-1]["module_projection_status"] = "decomposed" if projected else "unprojected"
+            if projected:
+                prior_entries[0]["module_projection_status"] = "decomposed"
+            historical_payload = assemble_m98_graph_diagonal_payload(compat_spec, graph) if graph is not None else flat_snap
+            archive_context[task.task_id] = (task, canon_num_sha, readonly_deps, readonly_shas, deepcopy(historical_payload))
         if graph is not None:
             graph.save_checkpoint(stream_out_dir / f"graph_ckpt_after_step_{step_i:02d}.json")
         episode_results.append(ep_sum)
@@ -1890,11 +2127,11 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
     built_worlds: dict[str, Any],
     out_dir: Path,
 ) -> dict[str, Any]:
-    """Executed `0`-LLM Factorized-Ceiling vs Selective-Interaction-Graph Control across `(E6_separable_revisit, E7_coupled_revisit)`:
+    """Executed `0`-LLM Frozen-Library Constrained `dn`-Only vs Selective-Joint Routing Ablation (`Q10/Q13` scoped):
     Evaluates at frozen prefix checkpoint `graph_ckpt_after_step_05.json` (`0` future leakage!):
-      1. `factorized_fixed_D2_separable`: `u_selected o d2_sep` -> passes `E6`, fails `E7` (`50.0%`).
-      2. `factorized_fixed_D2_coupled`: `u_selected o d2_coupled` -> fails `E6`, passes `E7` (`50.0%`).
-      3. `hegel_selective_cross_factor_graph`: routes `(u0, d2_sep)` on `E6` and `(u1, d2_coupled)` on `E7` (`100.0%`)!
+      1. `factorized_fixed_D2_separable`: `u_selected o d2_sep` (design-time ideal `50.0%` when both `d2_sep, d2_coupled` exist; abstains when no separable branch is identified).
+      2. `factorized_fixed_D2_coupled`: `u_selected o d2_coupled` (design-time ideal `50.0%`).
+      3. `hegel_selective_cross_factor_graph`: routes using learned `up + dn` guards on `{d2_sep, d2_coupled}` (design-time ideal `100.0%`; observed `12/16 = 75.0%` on M9.9 confirmation).
     """
     rows = []
     for spec in world_specs:
@@ -1912,8 +2149,8 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
             [b for b in rg5_base.bindings.values() if b.chain_id == f"{spec.family}_dn" and b.qualification_status == "verified"],
             key=lambda b: (-int(b.selection_priority), b.binding_id),
         )
-        d2_cpl_bid = dn_all[0].binding_id
-        d2_sep_bid = sw_list[-1].downstream_binding_id if sw_list else d2_cpl_bid
+        d2_cpl_bid = dn_all[0].binding_id if dn_all else None
+        d2_sep_bid = sw_list[-1].downstream_binding_id if sw_list else None
         cross_bids = {d2_sep_bid, d2_cpl_bid} if sw_list else set()
 
         for ev_nm, s_idx in (("E6_separable_revisit", e6_idx), ("E7_coupled_revisit", e7_idx)):
@@ -1943,13 +2180,24 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
                     else dn_obs
                 ),
             )["selected"]
-            assert c_up is not None and c_dn_hg is not None
 
             for pol_nm, b_dn in (
-                ("factorized_fixed_D2_separable", rg_step.bindings[d2_sep_bid]),
-                ("factorized_fixed_D2_coupled", rg_step.bindings[d2_cpl_bid]),
+                ("factorized_fixed_D2_separable", rg_step.bindings.get(d2_sep_bid)),
+                ("factorized_fixed_D2_coupled", rg_step.bindings.get(d2_cpl_bid)),
                 ("hegel_selective_cross_factor_graph", c_dn_hg),
             ):
+                if c_up is None or b_dn is None:
+                    rows.append({
+                        "policy": pol_nm, "world_id": wid, "family": spec.family, "event": ev_nm,
+                        "prefix_checkpoint": ck5.name, "public_batch_pkl_sha256": pub_sha,
+                        "downstream_observables": dn_obs,
+                        "selected_upstream": c_up.binding_id if c_up else None,
+                        "selected_downstream": b_dn.binding_id if b_dn else None,
+                        "candidate_sha256": None, "private_strict_pass": None,
+                        "execution_status": "abstained_missing_prefix_binding",
+                        "verifier_wall_ms": 0.0, "official_verifier_receipt": None,
+                    })
+                    continue
                 cand = compose_m98_two_stage_solver_code(
                     upstream_code=(c_up.canonical_algorithm_code or c_up.parameterized_closure_code),
                     upstream_entrypoint=(c_up.canonical_entrypoint or c_up.parameterized_entrypoint),
@@ -1974,6 +2222,7 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
                         "selected_downstream": b_dn.binding_id,
                         "candidate_sha256": hashlib.sha256(cand.encode("utf-8")).hexdigest(),
                         "private_strict_pass": bool(ver.get("strict_pass")),
+                        "execution_status": "graded",
                         "verifier_wall_ms": round((monotonic() - t_v) * 1000.0, 2),
                         "official_verifier_receipt": ver,
                     }
@@ -1984,16 +2233,20 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
         sub = [r for r in rows if r["policy"] == pol]
         summary[pol] = {
             "total_episodes": len(sub),
+            "abstained_missing_prefix_binding": sum(r["private_strict_pass"] is None for r in sub),
             "strict_passes": sum(1 for r in sub if r["private_strict_pass"]),
             "e6_passes": sum(1 for r in sub if r["event"] == "E6_separable_revisit" and r["private_strict_pass"]),
             "e7_passes": sum(1 for r in sub if r["event"] == "E7_coupled_revisit" and r["private_strict_pass"]),
             "pass_rate_pct": round(100.0 * sum(1 for r in sub if r["private_strict_pass"]) / max(1, len(sub)), 2),
         }
     return {
-        "schema": "hegel_m9_9_factorized_ceiling_vs_selective_interaction_ablation_v1",
+        "schema": "hegel_m9_9_factorized_ceiling_vs_selective_interaction_ablation_v2",
         "paid_model_calls": 0,
         "evidence_provenance": "executed",
-        "dn_obs_byte_identical_across_E6_and_E7": True,
+        "dn_obs_byte_identical_across_E6_and_E7": all(
+            len({json.dumps(row["downstream_observables"], sort_keys=True)
+                 for row in rows if row["world_id"] == spec.world_id}) == 1 for spec in world_specs
+        ),
         "summary_by_policy": summary,
         "rows": rows,
     }
@@ -2025,14 +2278,44 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     raw_mirror_dir = out_dir / "provider_raw_attempts_mirror"
     raw_mirror_dir.mkdir(parents=True, exist_ok=True)
-
-    ensure_clean_scipy_sandbox_image()
-    m64.ensure_runtime_qualification_context(sandbox_cid=None)
-    env_img_digest = _docker_image_digest(m7a.CLEAN_SCIPY_SANDBOX_IMAGE)
-
-    codex_info = m6f.discover_chatgpt_subscription_codex_cli()
-    if not (codex_info.get("available") and codex_info.get("auth_mode") == "chatgpt"):
-        raise RuntimeError(f"Official ChatGPT Codex CLI unavailable: {codex_info}")
+    campaign_t0 = monotonic()
+    run_id = f"m99_{args.split}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    exec_manifest_path = out_dir / "execution_manifest.json"
+    end_path = out_dir / "execution_completion.json"
+    abl_path = out_dir / "m9_9_factorized_ceiling_ablation.json"
+    abl_manifest_path = out_dir / "ablation_manifest.json"
+    env_img_digest = None
+    if not args.finalize_existing or not abl_path.is_file():
+        ensure_clean_scipy_sandbox_image()
+        m64.ensure_runtime_qualification_context(sandbox_cid=None)
+        env_img_digest = _docker_image_digest(m7a.CLEAN_SCIPY_SANDBOX_IMAGE)
+    codex_info = {}
+    if not args.finalize_existing:
+        codex_info = m6f.discover_chatgpt_subscription_codex_cli()
+        if not (codex_info.get("available") and codex_info.get("auth_mode") == "chatgpt"):
+            raise RuntimeError(f"Official ChatGPT Codex CLI unavailable: {codex_info}")
+        exec_manifest_init = {
+            "schema": "hegel_execution_provenance_manifest_v1",
+            "execution_run_id": run_id, "split": args.split,
+            "model": args.model, "reasoning_effort": args.reasoning_effort,
+            "configured_max_codex_concurrency": args.max_codex_concurrency,
+            "public_recovery_budget": {
+                "max_pre_llm_probes_all_arms": 5, "max_direct_component_probes_per_modular_arm": 2,
+                "max_alternative_upstreams": 1, "max_archived_raw_solvers": 1,
+                "max_projection_source_target_pairs": 1,
+            },
+            "sandbox_image_digest": env_img_digest, "shared_kernel_version": SHARED_KERNEL_VERSION,
+            "cost_policy_version": COST_POLICY_VERSION, "max_turns": args.max_turns,
+            "input_forest_sha256": hashlib.sha256(args.v7_bundle.read_bytes()).hexdigest(),
+            "world_ids": [spec.world_id for spec in selected_specs],
+            "code_commit_at_start": git_sha_start, "working_tree_dirty_at_start": bool(is_dirty_start),
+            "source_tree_sha256_at_start": src_tree_sha_start,
+            "clock_domain": "monotonic_elapsed_plus_utc_iso8601",
+            "utc_started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with exec_manifest_path.open("x", encoding="utf-8") as stream:
+            json.dump(exec_manifest_init, stream, indent=2)
+            stream.write("\n")
 
     cli_sem = threading.BoundedSemaphore(max(1, int(args.max_codex_concurrency)))
     all_receipts: list[dict[str, Any]] = []
@@ -2048,8 +2331,8 @@ def main() -> None:
         cid = str(meta.get("cluster_id") or getattr(_CALL_CONTEXT, "cluster_id", "unknown"))
         arm = str(meta.get("arm") or getattr(_CALL_CONTEXT, "arm", "Stage_S_Shared_Source"))
         ep_sn = str(meta.get("episode_short_name") or getattr(_CALL_CONTEXT, "episode_short_name", "unknown"))
-        mono_t0 = monotonic()
         with cli_sem:
+            mono_t0 = monotonic()
             with receipts_lock:
                 active_counter["cur"] += 1
                 if active_counter["cur"] > active_counter["peak"]:
@@ -2088,15 +2371,14 @@ def main() -> None:
             all_receipts.append(rec_row)
         return res
 
-    m6f.FrontierCodexClient.call_structured = _wrapped_call_structured  # type: ignore[method-assign]
-    run_id = f"m99_{args.split}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
-    campaign_t0 = monotonic()
-
-    v7_forest, v7_archive, _, _ = m7a.load_autogenous_forest_bundle(args.v7_bundle.resolve())
-    source_nid = sorted(v7_forest.nodes.keys())[0]
+    if not args.finalize_existing:
+        m6f.FrontierCodexClient.call_structured = _wrapped_call_structured
+        v7_forest, v7_archive, _, _ = m7a.load_autogenous_forest_bundle(args.v7_bundle.resolve())
+        source_nid = sorted(v7_forest.nodes.keys())[0]
 
     built_worlds: dict[str, Any] = {spec.world_id: build_m99_world_tasks(spec) for spec in selected_specs}
 
+    ablation_t0 = None
     if args.finalize_existing:
         wid_to_cid = {sp.world_id: sp.cluster_id for sp in selected_specs}
         rec_path = out_dir / "all_provider_call_receipts.json"
@@ -2147,13 +2429,13 @@ def main() -> None:
                         "stage_subdir": ss,
                         "attempts_ledger_filename": att_fn,
                         "mirrored_raw_filename": mf.name,
-                        "monotonic_start_sec": round(t_s, 4),
-                        "monotonic_end_sec": round(t_e, 4),
+                        "utc_start_epoch_sec": round(t_s, 4),
+                        "utc_end_epoch_sec": round(t_e, 4),
                         "usage_unknown_attempt_count": int(rj.get("usage_unknown_attempt_count", 0) or 0),
                         **sc,
                     }
                 )
-            all_receipts.sort(key=lambda x: (x["monotonic_start_sec"], x["call_uuid"]))
+            all_receipts.sort(key=lambda x: (x["utc_start_epoch_sec"], x["call_uuid"]))
             rec_path.write_text(json.dumps(all_receipts, indent=2) + "\n", encoding="utf-8")
 
         abl_path = out_dir / "m9_9_factorized_ceiling_ablation.json"
@@ -2161,16 +2443,18 @@ def main() -> None:
             ceiling_ablation = json.loads(abl_path.read_text(encoding="utf-8"))
         else:
             print("[M9.9] Running 0-LLM Factorized-Ceiling vs Selective-Interaction-Graph Docker ablation...", flush=True)
+            ablation_t0 = monotonic()
             ceiling_ablation = run_m99_factorized_ceiling_ablation_on_sealed_streams(
                 world_specs=selected_specs, built_worlds=built_worlds, out_dir=out_dir
             )
+            ablation_wall_sec = monotonic() - ablation_t0
             abl_path.write_text(json.dumps(ceiling_ablation, indent=2) + "\n", encoding="utf-8")
 
         # Recompute exact peak active concurrency from recorded `[monotonic_start_sec, monotonic_end_sec]` intervals
         ev_pts: list[tuple[float, int]] = []
         for r in all_receipts:
-            ev_pts.append((float(r["monotonic_start_sec"]), 1))
-            ev_pts.append((float(r["monotonic_end_sec"]), -1))
+            ev_pts.append((float(r.get("monotonic_start_sec", r.get("utc_start_epoch_sec"))), 1))
+            ev_pts.append((float(r.get("monotonic_end_sec", r.get("utc_end_epoch_sec"))), -1))
         ev_pts.sort(key=lambda x: (x[0], x[1]))
         cur_c = 0
         for _, d_c in ev_pts:
@@ -2204,7 +2488,7 @@ def main() -> None:
                     "cluster_id": sp.cluster_id,
                     "family": sp.family,
                     "arm": arm_nm,
-                    "wall_sec": round(sum(float(r.get("wall_ms", 0.0) or 0.0) / 1000.0 for r in ep_rows), 2),
+                    "wall_sec": None,  # Original stream clock unavailable after recovery.
                     "strict_passes": sum(1 for r in ep_rows if r.get("strict_pass")),
                     "episode_count": len(ep_rows),
                     "zero_llm_episodes_total": sum(1 for r in ep_rows if int(r.get("turns_used", 0) or 0) == 0),
@@ -2311,7 +2595,8 @@ def main() -> None:
                     else {"strict_pass": False}
                 )
                 (ep_d / "03_official_verifier_report.json").write_text(json.dumps(priv_s, indent=2) + "\n", encoding="utf-8")
-                if pub_g.get("accepted") and priv_s.get("strict_pass"):
+                (ep_d / "stage_s_public_gate.json").write_text(json.dumps(pub_g, indent=2) + "\n")
+                if pub_g.get("accepted"):
                     pub_item_s, pub_sha_s = materialize_m98_public_item_and_sha(s_task)
                     ent = make_continual_archive_entry(
                         short_name=s_task.short_name,
@@ -2382,11 +2667,22 @@ def main() -> None:
         stream_order = {(sp.world_id, arm_nm): idx for idx, (sp, arm_nm) in enumerate(stream_jobs)}
         stream_summaries.sort(key=lambda s: stream_order[(s["world_id"], s["arm"])])
 
+        end_commit, end_dirty, end_tree = _git_and_source_tree_state()
+        completion = dict(execution_run_id=run_id, code_commit_at_end=end_commit,
+            working_tree_dirty_at_end=end_dirty, source_tree_sha256_at_end=end_tree,
+            source_tree_unchanged_during_execution=src_tree_sha_start == end_tree,
+            execution_elapsed_wall_sec=round(monotonic()-campaign_t0, 2),
+            utc_finished_at=datetime.now(timezone.utc).isoformat())
+        with end_path.open("x", encoding="utf-8") as stream:
+            json.dump(completion, stream, indent=2)
+            stream.write("\n")
         # Run `0`-LLM Factorized-Ceiling vs Selective-Interaction-Graph Control on `{E6, E7}`
         print("[M9.9] Running 0-LLM Factorized-Ceiling vs Selective-Interaction-Graph Docker ablation...", flush=True)
+        ablation_t0 = monotonic()
         ceiling_ablation = run_m99_factorized_ceiling_ablation_on_sealed_streams(
             world_specs=selected_specs, built_worlds=built_worlds, out_dir=out_dir
         )
+        ablation_wall_sec = monotonic() - ablation_t0
         (out_dir / "m9_9_factorized_ceiling_ablation.json").write_text(json.dumps(ceiling_ablation, indent=2) + "\n", encoding="utf-8")
         (out_dir / "all_provider_call_receipts.json").write_text(json.dumps(all_receipts, indent=2) + "\n", encoding="utf-8")
     total_unknown_attempts = sum(int(r.get("usage_unknown_attempt_count", 0) or 0) for r in all_receipts)
@@ -2403,6 +2699,14 @@ def main() -> None:
         for m in built_worlds[sp.world_id][2]
     }
 
+    # Resolve zero-call episodes from provider receipts across all roles, including guard induction.
+    billed_episodes = {(row["world_id"], row["arm"], row["episode_short_name"]) for row in all_receipts}
+    for stream in stream_summaries:
+        def used_no_calls(episode):
+            return (stream["world_id"], stream["arm"], episode["short_name"]) not in billed_episodes
+        stream["zero_llm_episodes_total"] = sum(used_no_calls(ep) for ep in stream["episodes_meta"])
+        stream["zero_turn_passed_closures"] = sum(
+            used_no_calls(ep) and ep["strict_pass"] for ep in stream["episodes_meta"])
     for arm_nm in M99_ARMS:
         a_calls = [r for r in all_receipts if r["arm"] == arm_nm]
         tot_led = aggregate_call_usages(a_calls)
@@ -2501,40 +2805,51 @@ def main() -> None:
             "zero_llm_two_sided_sign_flip_p": _exact_two_sided_sign_flip_p(zllm_diffs),
         }
 
-    git_sha_end, _, src_tree_sha_end = _git_and_source_tree_state()
+    git_sha_end, is_dirty_end, src_tree_sha_end = _git_and_source_tree_state()
+    start = json.loads(exec_manifest_path.read_text()) if exec_manifest_path.is_file() else {}
+    end = json.loads(end_path.read_text()) if end_path.is_file() else {}
+    execution = _execution_fields(start, end, all_receipts)
+    if ablation_t0 is not None:
+        ablation_manifest = dict(code_commit=git_sha_start, source_tree_sha256=src_tree_sha_start,
+            source_run_id=execution["run_id"], checkpoint_prefix="step_05",
+            result_file=abl_path.name, result_sha256=hashlib.sha256(abl_path.read_bytes()).hexdigest(),
+            sandbox_image_digest=env_img_digest, elapsed_wall_sec=ablation_wall_sec)
+        abl_manifest_path.write_text(json.dumps(ablation_manifest, indent=2)+"\n")
+    ablation_provenance = (json.loads(abl_manifest_path.read_text()) if abl_manifest_path.is_file()
+                           else dict(result_file=abl_path.name, code_commit=None, source_tree_sha256=None))
+    fin_manifest = None
+    if args.finalize_existing:
+        fin_manifest = dict(finalization_run_id="finalize_"+run_id, finalization_commit=git_sha_end,
+            finalization_source_tree_sha256=src_tree_sha_end, finalization_working_tree_dirty=is_dirty_end,
+            finalization_elapsed_wall_sec=round(monotonic()-campaign_t0, 2),
+            execution_manifest=exec_manifest_path.name if start else None,
+            execution_completion=end_path.name if end_path.is_file() else None,
+            ablation_manifest=abl_manifest_path.name if abl_manifest_path.is_file() else None,
+            reused_ablation=ablation_t0 is None, call_receipts="all_provider_call_receipts.json")
+        (out_dir / "finalization_manifest.json").write_text(json.dumps(fin_manifest, indent=2)+"\n")
+    previous_path = out_dir / "m9_9_continual_summary.json"
+    previous = json.loads(previous_path.read_text()) if args.finalize_existing and previous_path.is_file() else {}
     summary = {
-        "schema": "hegel_m9_9_autonomous_decomposition_and_interaction_withdrawal_summary_v1",
-        "run_id": run_id,
+        "schema": "hegel_m9_9_autonomous_decomposition_and_interaction_withdrawal_summary_v2",
+        **execution,
         "split": args.split,
-        "evidence_provenance": "executed",
+        "evidence_provenance": ("executed_with_post_finalization" if args.finalize_existing else "executed"),
         "equal_tool_contract": {
             "enable_auto_skill_packaging_all_arms": False,
             "allow_l1_primitives_all_arms": False,
-            "max_pre_llm_probes_all_arms": 1,
+            **(start.get("public_recovery_budget") or {"max_pre_llm_probes_all_arms": 1}),
             "host_seeded_u0_or_d0": False,
             "modular_repair_prompt_parity_plain_vs_hegel": True,
         },
-        "code_commit_at_start": git_sha_start,
-        "code_commit_at_end": git_sha_end,
-        "working_tree_dirty_at_start": (False if args.finalize_existing and args.split == "confirmation" else is_dirty_start),
-        "paid_llm_frozen_commit": git_sha_start,
-        "paid_llm_working_tree_dirty_at_start": False,
-        "paid_llm_source_tree_unchanged_during_run": True,
-        "zero_llm_post_ablation_finalize_mode": bool(args.finalize_existing),
-        "source_tree_sha256_at_start": src_tree_sha_start,
-        "source_tree_sha256_at_end": src_tree_sha_end,
-        "source_tree_unchanged_during_run": (src_tree_sha_start == src_tree_sha_end),
-        "sandbox_image_digest": env_img_digest,
-        "shared_kernel_version": SHARED_KERNEL_VERSION,
-        "cost_policy_version": COST_POLICY_VERSION,
-        "model": args.model,
-        "reasoning_effort": args.reasoning_effort,
-        "configured_max_codex_concurrency": int(args.max_codex_concurrency),
+        "finalizer_provenance": fin_manifest,
+        "ablation_provenance": ablation_provenance,
+        "configuration_source": "execution_manifest" if start else ("historical_summary" if previous else None),
+        **{field: start.get(field, previous.get(field)) for field in ("sandbox_image_digest", "shared_kernel_version",
+            "cost_policy_version", "model", "reasoning_effort", "configured_max_codex_concurrency")},
         "peak_active_codex_concurrency": int(active_counter["peak"]),
         "usage_completeness": ("complete" if total_unknown_attempts == 0 else "partial_unknown_usage"),
         "total_unknown_usage_attempts": total_unknown_attempts,
         "total_logical_calls": len(all_receipts),
-        "wall_sec": round(monotonic() - campaign_t0, 2),
         "stage_S_shared_ledger": stage_s_ledger,
         "arm_outcome_totals": arm_outcome_totals,
         "arm_cost_ledgers": arm_cost_ledgers,
@@ -2557,7 +2872,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "run_id": run_id,
+                "run_id": execution["run_id"],
                 "split": args.split,
                 "total_calls": len(all_receipts),
                 "peak_concurrency": active_counter["peak"],

@@ -1759,6 +1759,7 @@ def execute_single_pre_llm_public_gate_probe_in_container(
     candidate_code: str,
     readonly_dependencies: dict[str, str] | None = None,
     expected_dependency_sha256: dict[str, str] | None = None,
+    require_pooled_coupon_check: bool = False,
 ) -> dict[str, Any]:
     """Identical air-gapped public schema + pure-JSON isolated-worker `ScientificProbeReceipt` gate (`M9.5.1` `F02 + F06`)!
     - Stages ONLY prefix-locked `readonly_dependencies` (`0444`, SHA-256 verified) and masks unmanifested `/tmp/hegel_continual_archive/*`!
@@ -1826,6 +1827,8 @@ def execute_single_pre_llm_public_gate_probe_in_container(
                 task=ft,
                 current_candidate_sha256=cand_bundle_sha,
                 public_setup_files_sha256=pub_shas,
+                retain_failed_probe=True,
+                require_pooled_coupon_check=require_pooled_coupon_check,
             )
             if sch_ok
             else None
@@ -1852,6 +1855,7 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             "candidate_bundle_sha256": cand_bundle_sha,
             "candidate_raw_sha256": hashlib.sha256(candidate_code.encode("utf-8")).hexdigest(),
             "readonly_dependencies_sha256": ro_shas,
+            "public_setup_files_sha256": pub_shas,
             "scientific_probe_receipt": sci_rec,
         }
     finally:
