@@ -100,11 +100,24 @@ M100_ALL_OBSERVABLE_NAMES: tuple[str, ...] = M100_UPSTREAM_OBSERVABLE_NAMES + M1
 
 
 def hydrate_separability_withdrawals_from_graph(
-    graph, registry, world_id: str, *, strict_ledger_fk: bool = True, quarantine_unverified: bool = False,
+    graph,
+    registry,
+    world_id: str,
+    *,
+    strict_ledger_fk: bool = True,
+    quarantine_unverified: bool = False,
+    probe_receipt_store: Any = None,
+    require_external_probe_receipts: bool = False,
 ) -> list[SeparabilityWithdrawalReceipt]:
     return _hydrate_m99_withdrawals(
-        graph, registry, world_id, strict_ledger_fk=strict_ledger_fk, quarantine_unverified=quarantine_unverified,
+        graph,
+        registry,
+        world_id,
+        strict_ledger_fk=strict_ledger_fk,
+        quarantine_unverified=quarantine_unverified,
         expected_feature_names=M100_ALL_OBSERVABLE_NAMES,
+        probe_receipt_store=probe_receipt_store,
+        require_external_probe_receipts=require_external_probe_receipts,
     )
 
 
@@ -1084,7 +1097,7 @@ def _build_m100_beta_task(*, task_id: str, short_name: str, pub_call_expr: str, 
     host_gt_json = json.dumps(encode_pure_json_numerical_payload(pub_gt), allow_nan=False)
     priv_body = '''
 t0 = time.monotonic()
-valid = True; max_w_rel = 0.0; max_f_rel = 0.0; max_gap = 0.0; rows = []
+valid = True; max_w_rel = None; max_f_rel = None; max_gap = None; rows = []
 for sd, st, gt in cases:
     st.pop("_campaign_diagnostics", None)
     out = cand_mod.solve_batch(st)
@@ -1096,16 +1109,22 @@ for sd, st, gt in cases:
         valid = False; rows.append({"seed": sd, "error": "SHAPE_OR_CERT_TYPE"}); continue
     if not (np.all(np.isfinite(w)) and np.all(np.isfinite(tf))):
         valid = False; rows.append({"seed": sd, "error": "NON_FINITE"}); continue
-    chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"], gap_tol=2e-4)
-    if not chk["valid"] or float(np.max(np.abs(w - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-5:
-        valid = False; rows.append({"seed": sd, "error": f"KKT_INVALID:{chk.get('reason')}"}); continue
     w_rel = float(np.linalg.norm(w - gt["w_opt"]) / max(float(np.linalg.norm(gt["w_opt"])), 1e-12))
     f_rel = float(np.linalg.norm(tf - gt["terminal_field_A"]) / max(float(np.linalg.norm(gt["terminal_field_A"])), 1e-12))
-    max_w_rel = max(max_w_rel, w_rel); max_f_rel = max(max_f_rel, f_rel); max_gap = max(max_gap, float(chk["gap"]))
+    max_w_rel = w_rel if max_w_rel is None else max(max_w_rel, w_rel)
+    max_f_rel = f_rel if max_f_rel is None else max(max_f_rel, f_rel)
+    chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"], gap_tol=2e-4)
+    gap_v = float(chk["gap"]) if (isinstance(chk.get("gap"), (int, float)) and math.isfinite(float(chk["gap"]))) else None
+    if gap_v is not None:
+        max_gap = gap_v if max_gap is None else max(max_gap, gap_v)
+    if not chk["valid"] or float(np.max(np.abs(w - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-5:
+        valid = False
+        rows.append({"seed": sd, "error": f"KKT_INVALID:{chk.get('reason')}", "w_rel": round(w_rel, 7), "f_rel": round(f_rel, 7), "kkt_gap": (round(gap_v, 9) if gap_v is not None else None)})
+        continue
     rows.append({"seed": sd, "w_rel": round(w_rel, 7), "f_rel": round(f_rel, 7), "kkt_gap": round(float(chk["gap"]), 9)})
 el = time.monotonic() - t0
-sp = bool(valid and len(rows) == 2 and max_w_rel <= 1.5e-3 and max_f_rel <= 1.5e-3 and max_gap <= 2e-4 and el <= 25.0)
-print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2": round(max_w_rel, 7), "max_field_rel_l2": round(max_f_rel, 7), "max_kkt_gap": round(max_gap, 9), "student_elapsed_sec": round(el, 4), "instance_diagnostics": rows}, allow_nan=False))
+sp = bool(valid and len(rows) == 2 and max_w_rel is not None and max_f_rel is not None and max_gap is not None and max_w_rel <= 1.5e-3 and max_f_rel <= 1.5e-3 and max_gap <= 2e-4 and el <= 25.0)
+print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2": (round(max_w_rel, 7) if max_w_rel is not None else None), "max_field_rel_l2": (round(max_f_rel, 7) if max_f_rel is not None else None), "max_kkt_gap": (round(max_gap, 9) if max_gap is not None else None), "student_elapsed_sec": round(el, 4), "instance_diagnostics": rows}, allow_nan=False))
 '''
     pub_setup = (
         "import json, math, os, pickle, sys\nimport numpy as np\n"

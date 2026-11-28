@@ -1221,6 +1221,185 @@ def validate_truth_accuracy(
     return {"ok": len(errs) == 0, "contract_kind": contract_kind, "errors": errs, "metrics": metrics}
 
 
+def check_alpha_public_time_kernel_and_derivative_consistency(
+    dataset: dict[str, Any],
+    out: dict[str, Any],
+    *,
+    campaign_diagnostics: dict[str, Any] | None = None,
+    max_initial_slope_rel_err: float = 0.28,
+    max_pilot_rate_median_err: float = 0.045,
+) -> dict[str, Any]:
+    """Generic public Alpha time-kernel & near-`t -> 0+` derivative consistency check (`M10.0.1` `T05`).
+
+    Strictly ZERO private ground-truth access and ZERO hardcoded regime formulas (never mentions `log1p`,
+    `sqrt(1+t)`, etc.):
+      1. Extracts the candidate's own implied drift time-kernel `phi_cand(t)` from its `(predicted_strain,
+         initial_rate_pred, hereditary_weights, estimated_taus)` on `test`, and verifies via 2-point quadratic-
+         through-origin finite difference at `(t_0, t_1)` that `phi_cand'(0+)` is consistent with unit initial slope `1.0`.
+      2. When public `campaign_diagnostics` (in-batch pilot specimens with measured `strain_curves_obs` and
+         `instant_rate_obs`) is available, checks that the candidate's inferred `(taus, hw, phi_cand)` matches
+         the public pilot curves and initial rates under either hereditary or quenched memory.
+    """
+    errs: list[str] = []
+    metrics: dict[str, Any] = {}
+    if not isinstance(out, dict):
+        return {"ok": False, "errors": ["output_not_dict"], "metrics": {}}
+    if not {"estimated_taus", "hereditary_weights", "predicted_strain", "initial_rate_pred"} <= set(out.keys()):
+        return {"ok": True, "errors": [], "metrics": {"skipped": "non_hereditary_schema"}}
+    t_ev = np.asarray(dataset["eval_times"], dtype=float)
+    p_dt = np.asarray(dataset["past_dt"], dtype=float)
+    et = np.asarray(out["estimated_taus"], dtype=float)
+    hw = np.asarray(out["hereditary_weights"], dtype=float)
+    ps = np.asarray(out["predicted_strain"], dtype=float)
+    ir = np.asarray(out["initial_rate_pred"], dtype=float)
+    if et.shape != (2,) or hw.shape != (7,) or len(t_ev) < 2 or not (
+        np.all(np.isfinite(et)) and np.all(np.isfinite(hw)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir))
+    ):
+        return {"ok": False, "errors": ["invalid_or_nonfinite_alpha_arrays"], "metrics": {}}
+
+    te_ps, te_h0 = calibrate_alpha_physical_stresses(dataset, "test", gt=None)
+    s0_te = np.asarray(dataset["test"]["strain_0"], dtype=float)
+    init_m_te = dataset["test"].get("initial_memory_states")
+    z_te = np.zeros((len(te_h0), 2), dtype=float) if init_m_te is None else np.asarray(init_m_te, dtype=float).copy()
+    for s_i, dts in enumerate(p_dt):
+        dec = np.exp(-float(dts) / et)
+        z_te = z_te * dec[None, :] + (1.0 - dec[None, :]) * te_ps[:, s_i : s_i + 1]
+    gap_h = te_h0[:, None] - z_te
+    gap_q = np.broadcast_to(te_h0[:, None], gap_h.shape)
+
+    t0, t1 = float(t_ev[0]), float(t_ev[1])
+    best_slope_err = float("inf")
+    best_phi: np.ndarray | None = None
+    best_mem_mode = "hereditary"
+    for m_nm, g_c in (("hereditary", gap_h), ("quenched", gap_q)):
+        pr_c = hw[0] * g_c[:, 0:1] * (-np.expm1(-t_ev[None, :] / et[0])) + hw[1] * g_c[:, 1:2] * (-np.expm1(-t_ev[None, :] / et[1]))
+        rc_c = (ps - s0_te[:, None]) - pr_c
+        rr_c = ir - (hw[0] * g_c[:, 0] / et[0] + hw[1] * g_c[:, 1] / et[1])
+        denom = float(rr_c @ rr_c)
+        if denom <= 1e-8:
+            continue
+        phi_c = (rr_c @ rc_c) / denom
+        slope0 = (t1 * t1 * float(phi_c[0]) - t0 * t0 * float(phi_c[1])) / max(t0 * t1 * (t1 - t0), 1e-12)
+        s_err = abs(slope0 - 1.0)
+        if s_err < best_slope_err:
+            best_slope_err = s_err
+            best_phi = phi_c
+            best_mem_mode = m_nm
+
+    if best_phi is not None and math.isfinite(best_slope_err):
+        metrics["implied_phi_initial_slope_err"] = round(best_slope_err, 6)
+        metrics["implied_memory_mode"] = best_mem_mode
+        if best_slope_err > float(max_initial_slope_rel_err):
+            errs.append(f"alpha_initial_rate_derivative_inconsistent:{best_slope_err:.5f}")
+
+    # Optional public pilot curve + initial-rate check (strictly public `campaign_diagnostics`, zero private truth!)
+    pilot = campaign_diagnostics if isinstance(campaign_diagnostics, dict) else dataset.get("_campaign_diagnostics")
+    if (
+        isinstance(pilot, dict)
+        and best_phi is not None
+        and "instant_rate_obs" in pilot
+        and "strain_curves_obs" in pilot
+        and "lab_id" in pilot
+    ):
+        pil_ds = {**dataset, "test": pilot}
+        _, x_pi_std, _, pi_comp = standardize_reference_coupon_panel(dataset["train"], pilot)
+        pi_ps, pi_h0 = calibrate_alpha_physical_stresses(pil_ds, "test", gt=None)
+        z_pi = np.zeros((len(pi_h0), 2), dtype=float)
+        for s_i, dts in enumerate(p_dt):
+            dec = np.exp(-float(dts) / et)
+            z_pi = z_pi * dec[None, :] + (1.0 - dec[None, :]) * pi_ps[:, s_i : s_i + 1]
+        g_pi_h = pi_h0[:, None] - z_pi
+        g_pi_q = np.broadcast_to(pi_h0[:, None], g_pi_h.shape)
+        s0_pi = np.asarray(pilot["strain_0"], dtype=float)
+        obs_c_pi = np.asarray(pilot["strain_curves_obs"], dtype=float)
+        obs_r_pi = np.asarray(pilot["instant_rate_obs"], dtype=float)
+        dr_pi = hw[2] + x_pi_std @ hw[3:7]
+        best_pi_r = float("inf")
+        best_pi_c = float("inf")
+        mask_pi = pi_comp if int(np.sum(pi_comp)) >= 4 else np.ones(len(pi_h0), dtype=bool)
+        for g_pi in (g_pi_h, g_pi_q):
+            pr_pi = hw[0] * g_pi[:, 0:1] * (-np.expm1(-t_ev[None, :] / et[0])) + hw[1] * g_pi[:, 1:2] * (-np.expm1(-t_ev[None, :] / et[1]))
+            pred_c_pi = s0_pi[:, None] + pr_pi + dr_pi[:, None] * best_phi[None, :]
+            pred_r_pi = hw[0] * g_pi[:, 0] / et[0] + hw[1] * g_pi[:, 1] / et[1] + dr_pi
+            best_pi_c = min(best_pi_c, float(np.median(np.abs(pred_c_pi[mask_pi] - obs_c_pi[mask_pi]))))
+            best_pi_r = min(best_pi_r, float(np.median(np.abs(pred_r_pi[mask_pi] - obs_r_pi[mask_pi]))))
+        metrics["public_pilot_curve_median_err"] = round(best_pi_c, 6)
+        metrics["public_pilot_rate_median_err"] = round(best_pi_r, 6)
+        if best_pi_r > float(max_pilot_rate_median_err):
+            errs.append(f"alpha_public_pilot_rate_mismatch:{best_pi_r:.5f}")
+    return {"ok": len(errs) == 0, "errors": errs, "metrics": metrics}
+
+
+def compute_beta_calibration_kkt_uncertainty_bound(
+    study: dict[str, Any],
+    out: dict[str, Any],
+    *,
+    cal_holdout_rmse: float | None = None,
+    gap_tol: float = 2e-4,
+) -> dict[str, Any]:
+    """Compute public calibration-residual-to-KKT dual-lower-bound perturbation budget (`M10.0.1` `T06`).
+
+    For a box-simplex QP `J(w) = 0.5 ||S_tilde w - r_y||_2^2 + 0.5 lam_w ||w||_2^2`, an upstream transducer
+    calibration error `delta_r` (`||delta_r||_2 <= sqrt(n_obs) * sigma_cal`) perturbs the optimal objective by up to
+    `Delta_J_cal = ||S_tilde w - r_hat||_2 * ||delta_r||_2 + 0.5 * ||delta_r||_2^2`.
+    When `dual_lower_bound` is computed strictly on approximate `r_hat` without reserving `Delta_J_cal`,
+    `dual_lower_bound` can exceed true `J_true(w)` by `O(Delta_J_cal)` even when `sigma_cal ~ 3e-4`!
+    """
+    cert = out.get("kkt_certificate") if isinstance(out, dict) else None
+    if not isinstance(cert, dict):
+        return {"ok": False, "errors": ["missing_kkt_certificate"], "metrics": {}}
+    primal = cert.get("primal_objective")
+    dual_lb = cert.get("dual_lower_bound")
+    if not (isinstance(primal, (int, float)) and isinstance(dual_lb, (int, float)) and math.isfinite(primal) and math.isfinite(dual_lb)):
+        return {"ok": False, "errors": ["nonfinite_kkt_bounds"], "metrics": {}}
+    y_raw = np.asarray(study.get("y_obs_raw", []), dtype=float).ravel()
+    n_obs = max(1, int(y_raw.size))
+    sigma_cal = float(cal_holdout_rmse) if (cal_holdout_rmse is not None and math.isfinite(float(cal_holdout_rmse))) else 0.0
+    if sigma_cal <= 0.0:
+        sw = study.get("sensor_calibration_sweeps") or {}
+        if "ref_rosette" in sw and "raw_rosette" in sw:
+            ref_r = np.asarray(sw["ref_rosette"], dtype=float)
+            raw_r = np.asarray(sw["raw_rosette"], dtype=float)
+            if ref_r.ndim == 2 and raw_r.shape == ref_r.shape and len(ref_r) >= 12:
+                aug = np.column_stack([raw_r, np.ones(len(raw_r), dtype=float)])
+                w_r = np.ones(len(raw_r), dtype=float)
+                coef = np.zeros((aug.shape[1], ref_r.shape[1]), dtype=float)
+                for _ in range(6):
+                    sw_r = np.sqrt(w_r)[:, None]
+                    coef, *_ = np.linalg.lstsq(aug * sw_r, ref_r * sw_r, rcond=None)
+                    res = np.linalg.norm(ref_r - aug @ coef, axis=1)
+                    med = max(float(np.median(res)), 1e-9)
+                    w_r = 1.0 / (1.0 + (res / (3.0 * med)) ** 2)
+                inliers = np.linalg.norm(ref_r - aug @ coef, axis=1) <= max(5.0 * float(np.median(np.linalg.norm(ref_r - aug @ coef, axis=1))), 1e-4)
+                if int(np.sum(inliers)) >= 6:
+                    sigma_cal = float(np.sqrt(np.mean((ref_r[inliers] - aug[inliers] @ coef) ** 2)))
+    eps_r = math.sqrt(float(n_obs)) * max(sigma_cal, 0.0)
+    res_norm_est = math.sqrt(max(2.0 * max(float(primal), 0.0), 0.0))
+    delta_j_bound = res_norm_est * eps_r + 0.5 * (eps_r ** 2)
+    reported_slack = float(primal) - float(dual_lb)
+    errs: list[str] = []
+    if float(dual_lb) > float(primal) + 1e-6:
+        errs.append(f"kkt_self_unsound_dual_lower_bound:{float(dual_lb):.8f}>{float(primal):.8f}")
+    if reported_slack > float(gap_tol):
+        errs.append(f"kkt_reported_gap_exceeds_tol:{reported_slack:.8f}>{float(gap_tol):.8f}")
+    recommended_safe_dual_lb = float(dual_lb) - delta_j_bound
+    within_budget_if_safe = (float(primal) - recommended_safe_dual_lb) <= float(gap_tol)
+    return {
+        "ok": len(errs) == 0,
+        "errors": errs,
+        "metrics": {
+            "n_obs": n_obs,
+            "estimated_cal_sigma": round(sigma_cal, 8),
+            "estimated_delta_r_l2": round(eps_r, 8),
+            "estimated_kkt_objective_perturbation_bound": round(delta_j_bound, 8),
+            "reported_primal_minus_dual_slack": round(reported_slack, 10),
+            "calibration_perturbation_exceeds_unsound_tol_1e6": bool(delta_j_bound > 1e-6),
+            "recommended_conservative_dual_lb": round(recommended_safe_dual_lb, 10),
+            "conservative_lb_within_gap_tol": bool(within_budget_if_safe),
+        },
+    }
+
+
 def evaluate_three_layer_scientific_contract(
     *,
     family: str,

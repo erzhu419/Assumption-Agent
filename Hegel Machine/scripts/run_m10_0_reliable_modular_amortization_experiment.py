@@ -78,9 +78,10 @@ from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import 
 from hegel_machine.cognition.m9_6_autonomous_structure_continual_world import (  # noqa: E402
     EmpiricalCoverageReceipt,
     ImmutableBranchLineageController,
+    ProbeReceiptStore,
     classify_public_probe_failure,
-    joint_scientific_receipt_matches,
     compute_canonical_numeric_item_sha256,
+    enrich_joint_probe_receipt_for_persistence,
     evaluate_m96_autonomous_guard,
     joint_scientific_receipt_matches,
 )
@@ -337,15 +338,70 @@ def _execute_bound_gate(*, task, candidate_code, readonly_dependencies=None, exp
     return gate
 
 
-def _record_direct_execution(controller, binding, diagnostic, features, public_sha, numeric_sha, setup_sha, dependencies_sha):
+def _record_direct_execution(
+    controller,
+    binding,
+    diagnostic,
+    features,
+    public_sha,
+    numeric_sha,
+    setup_sha,
+    dependencies_sha,
+    probe_receipt_store=None,
+):
     return controller.record_tested_witness_from_probe_receipt(
-        binding=binding, probe_receipt={
-            **diagnostic, "public_input_sha256": public_sha, "canonical_numeric_sha256": numeric_sha,
-            "setup_source_sha256": setup_sha, "dependency_bundle_sha256": dependencies_sha,
+        binding=binding,
+        probe_receipt={
+            **diagnostic,
+            "public_input_sha256": public_sha,
+            "canonical_numeric_sha256": numeric_sha,
+            "setup_source_sha256": setup_sha,
+            "dependency_bundle_sha256": dependencies_sha,
         },
-        public_input_sha256=public_sha, features=features, evidence_origin="direct_component_probe",
-        canonical_numeric_sha256=numeric_sha, setup_source_sha256=setup_sha, dependency_bundle_sha256=dependencies_sha,
+        public_input_sha256=public_sha,
+        features=features,
+        evidence_origin="direct_component_probe",
+        canonical_numeric_sha256=numeric_sha,
+        setup_source_sha256=setup_sha,
+        dependency_bundle_sha256=dependencies_sha,
+        probe_receipt_store=probe_receipt_store,
     )
+
+
+def _persist_gate_receipt_if_store(
+    probe_store: ProbeReceiptStore | None,
+    *,
+    probe_id: str,
+    gate: dict[str, Any],
+    public_input_sha256: str,
+    canonical_numeric_sha256: str,
+    setup_source_sha256: str,
+    dependency_bundle_sha256: str,
+    candidate_sha256: str,
+    component_code_sha256s: list[str],
+    wall_ms: float,
+    probe_kind: str = "joint_task_probe",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    enriched = enrich_joint_probe_receipt_for_persistence(
+        gate,
+        probe_id=probe_id,
+        public_input_sha256=public_input_sha256,
+        canonical_numeric_sha256=canonical_numeric_sha256,
+        setup_source_sha256=setup_source_sha256,
+        dependency_bundle_sha256=dependency_bundle_sha256,
+        candidate_sha256=candidate_sha256,
+        component_code_sha256s=component_code_sha256s,
+        wall_ms=wall_ms,
+    )
+    if probe_store is not None:
+        probe_store.persist_probe_receipt(
+            probe_id=probe_id,
+            receipt=enriched,
+            probe_kind=probe_kind,
+            metadata=metadata,
+        )
+    return enriched
 
 
 def _evaluate_empirical_coverage_m100(
@@ -634,10 +690,10 @@ def _run_one_m100_world_arm_stream(
     s0_sha = hashlib.sha256(source_monolithic_code.encode("utf-8")).hexdigest()
     s0_canon_num_sha = compute_canonical_numeric_item_sha256(source_pub_item)
 
-    # Arm 1: `Flat_MonolithicConditionalTable_Online`
+    # Arm 1: `Flat_MonolithicConditionalTable_Online` (`T09`: neutral row IDs, zero causal_event semantics!)
     mono_table: list[dict[str, Any]] = [
         {
-            "row_id": "mono_r00_S",
+            "row_id": "mono_r00",
             "guard": {},
             "canonical_code": source_monolithic_code,
             "entrypoint": "solve_batch",
@@ -646,11 +702,11 @@ def _run_one_m100_world_arm_stream(
             "output_schema_keys": list(uni_keys),
         }
     ]
-    mono_pos_obs: dict[str, list[dict[str, float | None]]] = {"mono_r00_S": [s0_comb_obs]}
+    mono_pos_obs: dict[str, list[dict[str, float | None]]] = {"mono_r00": [s0_comb_obs]}
     mono_neg_obs: dict[str, list[dict[str, float | None]]] = {}
     mono_cov_pairs: set[tuple[str, str]] = set()
     mono_rep_wit: dict[str, list[tuple[str, Any, dict[str, Any], dict[str, str], dict[str, str]]]] = {
-        "mono_r00_S": [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
+        "mono_r00": [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
     }
 
     # Shared unfactored pre-decomposition monolithic fallback pool (`B3 / Q04`: symmetric across `Plain` and `Hegel`!)
@@ -679,10 +735,18 @@ def _run_one_m100_world_arm_stream(
     hegel_dn_joint_neg_obs: dict[str, list[dict[str, float | None]]] = {}
     hegel_dn_rep_wit: dict[str, list[tuple[str, Any, dict[str, Any], dict[str, str], dict[str, str]]]] = {}
 
+    # `T01`: Atomic external `ProbeReceiptStore` attached across ALL 3 arms!
+    probe_store = ProbeReceiptStore(stream_out_dir / "probe_receipts")
+
     if arm == "Hegel_SelectiveConditionExpansion_Online":
         graph, _, registry = initialize_m98_factored_mechanism_graph(spec=compat_spec, forest=forest)
-        up_ctrl = ImmutableBranchLineageController(world_id=f"{wid}_up", family=f"{fam}_up", graph=graph, registry=registry)
-        dn_ctrl = ImmutableBranchLineageController(world_id=f"{wid}_dn", family=f"{fam}_dn", graph=graph, registry=registry)
+        probe_store.graph = graph
+        up_ctrl = ImmutableBranchLineageController(
+            world_id=f"{wid}_up", family=f"{fam}_up", graph=graph, registry=registry, probe_receipt_store=probe_store
+        )
+        dn_ctrl = ImmutableBranchLineageController(
+            world_id=f"{wid}_dn", family=f"{fam}_dn", graph=graph, registry=registry, probe_receipt_store=probe_store
+        )
         graph.save_checkpoint(stream_out_dir / "graph_ckpt_after_step_00.json")
 
     episode_results: list[dict[str, Any]] = []
@@ -809,6 +873,8 @@ def _run_one_m100_world_arm_stream(
                 cls = classify_public_probe_failure(pr)
                 locus_str = "none"
                 locus_diag: dict[str, Any] = {}
+                primary_locus_diag: dict[str, Any] | None = None
+                alternate_locus_diag: dict[str, Any] | None = None
                 sibling_fb_used = False
 
                 if pr["accepted"]:
@@ -825,6 +891,14 @@ def _run_one_m100_world_arm_stream(
                         diag_payload=flat_snap,
                         force_direct_component_probe=True,
                     )
+                    primary_locus_diag = deepcopy(locus_diag)
+                    if locus_diag.get("probe_id"):
+                        probe_store.persist_probe_receipt(
+                            probe_id=str(locus_diag["probe_id"]),
+                            receipt={**locus_diag, "public_input_sha256": pub_sha, "canonical_numeric_sha256": canon_num_sha, "setup_source_sha256": setup_src_sha, "dependency_bundle_sha256": dep_bundle_sha},
+                            probe_kind="direct_component_probe",
+                            metadata={"arm": arm, "step": step_i, "role": "primary_localization"},
+                        )
                     loc_wall_ms += round(float(locus_diag.get("probe_wall_ms") or 0.0), 2)
                     loc_probes_used += 1 if locus_diag.get("component_probe_executed") else 0
                     locus_str = str(locus_diag["locus"])
@@ -841,6 +915,14 @@ def _run_one_m100_world_arm_stream(
                                 diag_payload=flat_snap,
                                 force_direct_component_probe=True,
                             )
+                            alternate_locus_diag = deepcopy(alt_diag)
+                            if alt_diag.get("probe_id"):
+                                probe_store.persist_probe_receipt(
+                                    probe_id=str(alt_diag["probe_id"]),
+                                    receipt={**alt_diag, "public_input_sha256": pub_sha, "canonical_numeric_sha256": canon_num_sha, "setup_source_sha256": setup_src_sha, "dependency_bundle_sha256": dep_bundle_sha},
+                                    probe_kind="direct_component_probe",
+                                    metadata={"arm": arm, "step": step_i, "role": "b2_alternate_localization"},
+                                )
                             loc_wall_ms += round(float(alt_diag.get("probe_wall_ms") or 0.0), 2)
                             loc_probes_used += 1 if alt_diag.get("component_probe_executed") else 0
                             alt_rmse = alt_diag.get("chosen_up_holdout_rmse")
@@ -937,7 +1019,7 @@ def _run_one_m100_world_arm_stream(
                             if proj_res.get("accepted"):
                                 matched_mono["projected"] = True
                                 dn_proj_c = str(proj_res["downstream_code"])
-                                new_did = f"dn_r_proj_{matched_mono['short_name']}"
+                                new_did = f"plain_dn_proj_r{step_i:02d}"
                                 plain_dn_table.append(
                                     {
                                         "row_id": new_did,
@@ -976,6 +1058,8 @@ def _run_one_m100_world_arm_stream(
                     "selected_downstream_code": dn_r["canonical_code"],
                     "selected_downstream_ep": dn_r["entrypoint"],
                     "conflict_locus_diagnosis": locus_diag,
+                    "primary_conflict_locus_diagnosis": primary_locus_diag,
+                    "alternate_conflict_locus_diagnosis": alternate_locus_diag,
                     "failure_kind": cls["failure_kind"],
                     "candidate_code": (cand_code if pr["accepted"] else None),
                     "probe_result": pr,
@@ -1060,38 +1144,50 @@ def _run_one_m100_world_arm_stream(
                 pr_ms = round((monotonic() - t_p0) * 1000.0, 2)
                 pre_probes_used = 1
                 cls = classify_public_probe_failure(pr)
+                pr_main_enriched = _persist_gate_receipt_if_store(
+                    probe_store,
+                    probe_id=pid_main,
+                    gate=pr,
+                    public_input_sha256=pub_sha,
+                    canonical_numeric_sha256=canon_num_sha,
+                    setup_source_sha256=setup_src_sha,
+                    dependency_bundle_sha256=dep_bundle_sha,
+                    candidate_sha256=cand_sha,
+                    component_code_sha256s=[
+                        chosen_up.authoritative_executed_code_sha256(),
+                        chosen_dn.authoritative_executed_code_sha256(),
+                    ],
+                    wall_ms=pr_ms,
+                    metadata={"arm": arm, "step": step_i, "role": "pre_llm_joint_probe"},
+                )
                 locus_str = "none"
                 locus_diag = {}
+                primary_locus_diag_h: dict[str, Any] | None = None
+                alternate_locus_diag_h: dict[str, Any] | None = None
                 sibling_fb_used = False
 
                 if pr["accepted"]:
-                    up_ctrl.record_tested_witness(
+                    up_ctrl.record_tested_witness_from_probe_receipt(
                         binding=chosen_up,
+                        probe_receipt=pr_main_enriched,
                         public_input_sha256=pub_sha,
-                        passed=True,
-                        failure_kind="none",
                         features=up_obs_now,
-                        probe_wall_ms=pr_ms,
-                        execution_status="completed",
                         evidence_origin="joint_task_probe",
-                        probe_id=pid_main,
                         setup_source_sha256=setup_src_sha,
                         canonical_numeric_sha256=canon_num_sha,
                         dependency_bundle_sha256=dep_bundle_sha,
+                        probe_receipt_store=probe_store,
                     )
-                    dn_ctrl.record_tested_witness(
+                    dn_ctrl.record_tested_witness_from_probe_receipt(
                         binding=chosen_dn,
+                        probe_receipt=pr_main_enriched,
                         public_input_sha256=pub_sha,
-                        passed=True,
-                        failure_kind="none",
                         features=(comb_obs_now if chosen_dn.binding_id in hegel_cross_scoped_dn_bids else dn_obs_now),
-                        probe_wall_ms=pr_ms,
-                        execution_status="completed",
                         evidence_origin="joint_task_probe",
-                        probe_id=pid_main,
                         setup_source_sha256=setup_src_sha,
                         canonical_numeric_sha256=canon_num_sha,
                         dependency_bundle_sha256=dep_bundle_sha,
+                        probe_receipt_store=probe_store,
                     )
                     hegel_dn_joint_pos_obs.setdefault(chosen_dn.binding_id, []).append(comb_obs_now)
                 elif cls["tier"] == "INFRA_FAILURE":
@@ -1105,12 +1201,14 @@ def _run_one_m100_world_arm_stream(
                         diag_payload=diag_pay,
                         force_direct_component_probe=True,
                     )
+                    primary_locus_diag_h = deepcopy(locus_diag)
                     loc_wall_ms += round(float(locus_diag.get("probe_wall_ms") or 0.0), 2)
                     loc_probes_used += 1 if locus_diag.get("component_probe_executed") else 0
                     locus_str = str(locus_diag["locus"])
                     if locus_str == "upstream_transducer" and locus_diag.get("execution_status") == "completed":
                         _record_direct_execution(
                             up_ctrl, chosen_up, locus_diag, up_obs_now, pub_sha, canon_num_sha, setup_src_sha, dep_bundle_sha,
+                            probe_receipt_store=probe_store,
                         )
                         # `B2` (`Q03` Symmetric `1`-Alternative Verified-Sibling Upstream Fallback):
                         if alt_up_bindings:
@@ -1123,6 +1221,7 @@ def _run_one_m100_world_arm_stream(
                                 diag_payload=diag_pay,
                                 force_direct_component_probe=True,
                             )
+                            alternate_locus_diag_h = deepcopy(alt_diag)
                             loc_wall_ms += round(float(alt_diag.get("probe_wall_ms") or 0.0), 2)
                             loc_probes_used += 1 if alt_diag.get("component_probe_executed") else 0
                             alt_rmse = alt_diag.get("chosen_up_holdout_rmse")
@@ -1133,6 +1232,7 @@ def _run_one_m100_world_arm_stream(
                             ):
                                 _record_direct_execution(
                                     up_ctrl, alt_ub, alt_diag, up_obs_now, pub_sha, canon_num_sha, setup_src_sha, dep_bundle_sha,
+                                    probe_receipt_store=probe_store,
                                 )
                                 alt_cand = compose_m98_two_stage_solver_code(
                                     upstream_code=(alt_ub.canonical_algorithm_code or alt_ub.parameterized_closure_code),
@@ -1161,28 +1261,43 @@ def _run_one_m100_world_arm_stream(
                                 up_mode = "sibling_1alt_fallback"
                                 sibling_fb_used = True
                                 cand_sha = hashlib.sha256(alt_cand.encode("utf-8")).hexdigest()
+                                pr_alt_enriched = _persist_gate_receipt_if_store(
+                                    probe_store,
+                                    probe_id=pid_alt,
+                                    gate=pr_alt,
+                                    public_input_sha256=pub_sha,
+                                    canonical_numeric_sha256=canon_num_sha,
+                                    setup_source_sha256=setup_src_sha,
+                                    dependency_bundle_sha256=dep_bundle_sha,
+                                    candidate_sha256=cand_sha,
+                                    component_code_sha256s=[
+                                        alt_ub.authoritative_executed_code_sha256(),
+                                        chosen_dn.authoritative_executed_code_sha256(),
+                                    ],
+                                    wall_ms=w_alt_ms,
+                                    metadata={"arm": arm, "step": step_i, "role": "b2_alternate_joint_probe"},
+                                )
                                 if pr_alt["accepted"]:
                                     pr = pr_alt
+                                    pr_main_enriched = pr_alt_enriched
                                     cand_code = alt_cand
                                     locus_str = "none"
-                                    dn_ctrl.record_tested_witness(
+                                    dn_ctrl.record_tested_witness_from_probe_receipt(
                                         binding=chosen_dn,
+                                        probe_receipt=pr_alt_enriched,
                                         public_input_sha256=pub_sha,
-                                        passed=True,
-                                        failure_kind="none",
                                         features=(comb_obs_now if chosen_dn.binding_id in hegel_cross_scoped_dn_bids else dn_obs_now),
-                                        probe_wall_ms=w_alt_ms,
-                                        execution_status="completed",
                                         evidence_origin="joint_task_probe",
-                                        probe_id=pid_alt,
                                         setup_source_sha256=setup_src_sha,
                                         canonical_numeric_sha256=canon_num_sha,
                                         dependency_bundle_sha256=dep_bundle_sha,
+                                        probe_receipt_store=probe_store,
                                     )
                                     hegel_dn_joint_pos_obs.setdefault(chosen_dn.binding_id, []).append(comb_obs_now)
                                 else:
                                     cls_alt = classify_public_probe_failure(pr_alt)
                                     pr = pr_alt
+                                    pr_main_enriched = pr_alt_enriched
                                     cls = cls_alt
                                     pid_main = pid_alt
                                     locus_diag = alt_diag
@@ -1190,26 +1305,25 @@ def _run_one_m100_world_arm_stream(
                             elif alt_diag.get("execution_status") == "completed":
                                 _record_direct_execution(
                                     up_ctrl, alt_ub, alt_diag, up_obs_now, pub_sha, canon_num_sha, setup_src_sha, dep_bundle_sha,
+                                    probe_receipt_store=probe_store,
                                 )
 
                     if locus_str == "downstream_constitutive" and locus_diag.get("execution_status") == "completed":
                         if not sibling_fb_used:
                             _record_direct_execution(
                                 up_ctrl, chosen_up, locus_diag, up_obs_now, pub_sha, canon_num_sha, setup_src_sha, dep_bundle_sha,
+                                probe_receipt_store=probe_store,
                             )
-                        dn_ctrl.record_tested_witness(
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
                             binding=chosen_dn,
+                            probe_receipt=pr_main_enriched,
                             public_input_sha256=pub_sha,
-                            passed=False,
-                            failure_kind=cls["failure_kind"],
                             features=(comb_obs_now if chosen_dn.binding_id in hegel_cross_scoped_dn_bids else dn_obs_now),
-                            probe_wall_ms=pr_ms,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
-                            probe_id=pid_main,
                             setup_source_sha256=setup_src_sha,
                             canonical_numeric_sha256=canon_num_sha,
                             dependency_bundle_sha256=dep_bundle_sha,
+                            probe_receipt_store=probe_store,
                         )
                         if cls["tier"] in {"SCIENTIFIC_FAILURE", "DOMAIN_REJECTION"}:
                             hegel_dn_joint_neg_obs.setdefault(chosen_dn.binding_id, []).append(comb_obs_now)
@@ -1219,6 +1333,7 @@ def _run_one_m100_world_arm_stream(
                             upstream=chosen_up, downstream=chosen_dn, downstream_features=dn_obs_now,
                             downstream_ledger=dn_ctrl.witness_ledger, direct=locus_diag, gate=pr,
                             candidate_sha=cand_sha, expanded_feature_names=M100_ALL_OBSERVABLE_NAMES,
+                            probe_receipt_store=probe_store, require_external_probe_receipts=True,
                         )
                         if sw_rec is not None:
                             locus_str = "cross_factor_interaction_withdrawal"
@@ -1336,6 +1451,8 @@ def _run_one_m100_world_arm_stream(
                     "selected_downstream_code": (chosen_dn.canonical_algorithm_code or chosen_dn.parameterized_closure_code),
                     "selected_downstream_ep": (chosen_dn.canonical_entrypoint or chosen_dn.parameterized_entrypoint),
                     "conflict_locus_diagnosis": locus_diag,
+                    "primary_conflict_locus_diagnosis": primary_locus_diag_h,
+                    "alternate_conflict_locus_diagnosis": alternate_locus_diag_h,
                     "separability_withdrawal_receipt": withdrawal_this_step,
                     "failure_kind": cls["failure_kind"],
                     "candidate_code": (cand_code if pr["accepted"] else None),
@@ -1510,6 +1627,28 @@ def _run_one_m100_world_arm_stream(
             else {"accepted": False}
         )
         post_pub_ms = round((monotonic() - t_pg) * 1000.0, 2)
+        graded_cand_sha = hashlib.sha256(graded_cand_txt.encode("utf-8")).hexdigest() if graded_cand_txt else ""
+        post_comp_shas = [graded_cand_sha] if graded_cand_sha else []
+        if repair_mode == "upstream_module_solve" and up_mod_txt:
+            post_comp_shas.append(hashlib.sha256(up_mod_txt.encode("utf-8")).hexdigest())
+        elif repair_mode == "downstream_module_solve" and dn_mod_txt:
+            post_comp_shas.append(hashlib.sha256(dn_mod_txt.encode("utf-8")).hexdigest())
+        pub_gate_post_enriched = _persist_gate_receipt_if_store(
+            probe_store,
+            probe_id=pid_post,
+            gate=pub_gate_post,
+            public_input_sha256=pub_sha,
+            canonical_numeric_sha256=canon_num_sha,
+            setup_source_sha256=setup_src_sha,
+            dependency_bundle_sha256=dep_bundle_sha,
+            candidate_sha256=graded_cand_sha,
+            component_code_sha256s=post_comp_shas,
+            wall_ms=post_pub_ms,
+            metadata={"arm": arm, "step": step_i, "repair_mode": repair_mode, "role": "post_llm_joint_probe"},
+        )
+        (ep_dir / "post_llm_public_gate_receipt.json").write_text(
+            json.dumps(pub_gate_post_enriched, indent=2) + "\n", encoding="utf-8"
+        )
 
         t_v0 = monotonic()
         priv_ver = (
@@ -1547,7 +1686,7 @@ def _run_one_m100_world_arm_stream(
                     "arm": arm,
                     "episode_short_name": task.short_name,
                 }
-                new_rid = f"mono_r{step_i:02d}_{m_info['causal_event']}"
+                new_rid = f"mono_r{step_i:02d}"
                 new_sha = hashlib.sha256(batch_mod_txt.encode("utf-8")).hexdigest()
                 all_cov = True
                 for old_r in mono_table:
@@ -1686,7 +1825,7 @@ def _run_one_m100_world_arm_stream(
                         plain_is_factored = True
                         plain_up_table.append(
                             {
-                                "row_id": "up_r00_u0",
+                                "row_id": "plain_up_r00",
                                 "guard": {},
                                 "canonical_code": u0_c,
                                 "entrypoint": "calibrate_upstream",
@@ -1695,7 +1834,7 @@ def _run_one_m100_world_arm_stream(
                                 "output_schema_keys": ["calibrated_input"],
                             }
                         )
-                        plain_up_pos["up_r00_u0"] = [s0_up_obs, up_obs_now]
+                        plain_up_pos["plain_up_r00"] = [s0_up_obs, up_obs_now]
 
                         m22_p = dec_res.get("matrix_2x2") or {}
                         e1_d0_p = m22_p.get("e1_d0") or {}
@@ -1721,9 +1860,9 @@ def _run_one_m100_world_arm_stream(
                             else []
                         )
                         if e1_d0_p.get("accepted"):
-                            plain_dn_cov_pairs.add(("dn_r00_d0", "dn_r01_d1"))
+                            plain_dn_cov_pairs.add(("plain_dn_r00", "plain_dn_r01"))
                         if s0_d1_p.get("accepted"):
-                            plain_dn_cov_pairs.add(("dn_r01_d1", "dn_r00_d0"))
+                            plain_dn_cov_pairs.add(("plain_dn_r01", "plain_dn_r00"))
 
                         if e1_d0_p.get("accepted") or s0_d1_p.get("accepted"):
                             g_d0, g_d1 = {}, {}
@@ -1736,21 +1875,21 @@ def _run_one_m100_world_arm_stream(
                                 stage_subdir=f"{ep_run_tag}__plain_d0d1_gind",
                                 scope_label="plain_downstream_table_8feat",
                                 feature_names=M100_DOWNSTREAM_OBSERVABLE_NAMES,
-                                existing_branch_ids=["dn_r00_d0"],
-                                new_branch_id_placeholder="dn_r01_d1",
-                                positive_witness_features_by_branch={"dn_r00_d0": d0_pos_p, "dn_r01_d1": d1_pos_p},
-                                negative_witness_features_by_branch={"dn_r00_d0": d0_neg_p, "dn_r01_d1": d1_neg_p},
+                                existing_branch_ids=["plain_dn_r00"],
+                                new_branch_id_placeholder="plain_dn_r01",
+                                positive_witness_features_by_branch={"plain_dn_r00": d0_pos_p, "plain_dn_r01": d1_pos_p},
+                                negative_witness_features_by_branch={"plain_dn_r00": d0_neg_p, "plain_dn_r01": d1_neg_p},
                                 covered_branch_pairs=plain_dn_cov_pairs,
                             )
                             ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
                             guard_induction_events.append({"step": step_i, "event": m_info["causal_event"], "layer": "plain_downstream", **ind_receipt})
-                            g_d0 = deepcopy(ind_res["existing_branch_guards"]["dn_r00_d0"]) if ind_res.get("accepted") else {}
+                            g_d0 = deepcopy(ind_res["existing_branch_guards"]["plain_dn_r00"]) if ind_res.get("accepted") else {}
                             g_d1 = deepcopy(ind_res["new_branch_guard"]) if ind_res.get("accepted") else {}
 
                         plain_dn_table.extend(
                             [
                                 {
-                                    "row_id": "dn_r00_d0",
+                                    "row_id": "plain_dn_r00",
                                     "guard": g_d0,
                                     "canonical_code": d0_c,
                                     "entrypoint": "solve_downstream",
@@ -1759,7 +1898,7 @@ def _run_one_m100_world_arm_stream(
                                     "output_schema_keys": list(uni_keys),
                                 },
                                 {
-                                    "row_id": "dn_r01_d1",
+                                    "row_id": "plain_dn_r01",
                                     "guard": g_d1,
                                     "canonical_code": d1_c,
                                     "entrypoint": "solve_downstream",
@@ -1769,12 +1908,12 @@ def _run_one_m100_world_arm_stream(
                                 },
                             ]
                         )
-                        plain_dn_pos["dn_r00_d0"] = d0_pos_p
-                        plain_dn_neg["dn_r00_d0"] = d0_neg_p
-                        plain_dn_pos["dn_r01_d1"] = d1_pos_p
-                        plain_dn_neg["dn_r01_d1"] = d1_neg_p
-                        plain_dn_rep_wit["dn_r00_d0"] = [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
-                        plain_dn_rep_wit["dn_r01_d1"] = [(f"wit_{task.short_name}", task, deepcopy(flat_snap), readonly_deps, readonly_shas)]
+                        plain_dn_pos["plain_dn_r00"] = d0_pos_p
+                        plain_dn_neg["plain_dn_r00"] = d0_neg_p
+                        plain_dn_pos["plain_dn_r01"] = d1_pos_p
+                        plain_dn_neg["plain_dn_r01"] = d1_neg_p
+                        plain_dn_rep_wit["plain_dn_r00"] = [("wit_S", s_task, {"gains": [1.0] * 4, "offsets": [0.0] * 4}, s0_ro_deps, s0_ro_shas)]
+                        plain_dn_rep_wit["plain_dn_r01"] = [(f"wit_{task.short_name}", task, deepcopy(flat_snap), readonly_deps, readonly_shas)]
 
                 elif repair_mode == "upstream_module_solve" and up_mod_txt:
                     comp_client._hegel_call_meta = {
@@ -1784,7 +1923,7 @@ def _run_one_m100_world_arm_stream(
                         "arm": arm,
                         "episode_short_name": task.short_name,
                     }
-                    new_uid = f"up_r{step_i:02d}_{m_info['causal_event']}"
+                    new_uid = f"plain_up_r{step_i:02d}"
                     ex_uids = [r["row_id"] for r in plain_up_table]
                     pos_u = {rid: list(plain_up_pos.get(rid, [])) for rid in ex_uids}
                     pos_u[new_uid] = [up_obs_now]
@@ -1837,7 +1976,7 @@ def _run_one_m100_world_arm_stream(
                         "arm": arm,
                         "episode_short_name": task.short_name,
                     }
-                    new_did = f"dn_r{step_i:02d}_{m_info['causal_event']}"
+                    new_did = f"plain_dn_r{step_i:02d}"
                     new_dsha = hashlib.sha256(dn_mod_txt.encode("utf-8")).hexdigest()
                     u_cur_code = str(pre_trial["selected_upstream_code"])
                     all_cov = True
@@ -1999,7 +2138,7 @@ def _run_one_m100_world_arm_stream(
                             world_id=wid,
                             binding_id=f"bind_{wid}_up_b00",
                             chain_id=f"{fam}_up",
-                            branch_tag="U0_learned",
+                            branch_tag="up_branch_00",
                             forest_node_id=source_forest_nid,
                             code_txt=u0_c,
                             entrypoint="calibrate_upstream",
@@ -2090,7 +2229,7 @@ def _run_one_m100_world_arm_stream(
                             world_id=wid,
                             binding_id=bid_d0,
                             chain_id=f"{fam}_dn",
-                            branch_tag="D0_learned",
+                            branch_tag="dn_branch_00",
                             forest_node_id=source_forest_nid,
                             code_txt=d0_c,
                             entrypoint="solve_downstream",
@@ -2106,7 +2245,7 @@ def _run_one_m100_world_arm_stream(
                             world_id=wid,
                             binding_id=bid_d1,
                             chain_id=f"{fam}_dn",
-                            branch_tag="D1_learned",
+                            branch_tag="dn_branch_01",
                             forest_node_id=source_forest_nid,
                             code_txt=d1_c,
                             entrypoint="solve_downstream",
@@ -2213,19 +2352,16 @@ def _run_one_m100_world_arm_stream(
                                 registry.bindings[ex_bid].applicability_guard = deepcopy(ex_g)
                                 registry.bindings[ex_bid].precondition_guard = deepcopy(ex_g)
                         registry.sync_to_graph()
-                    up_ctrl.record_tested_witness(
+                    up_ctrl.record_tested_witness_from_probe_receipt(
                         binding=new_u,
+                        probe_receipt=pub_gate_post_enriched,
                         public_input_sha256=pub_sha,
-                        passed=True,
-                        failure_kind="none",
                         features=up_obs_now,
-                        probe_wall_ms=post_pub_ms,
-                        execution_status="completed",
                         evidence_origin="joint_task_probe",
-                        probe_id=pid_post,
                         setup_source_sha256=setup_src_sha,
                         canonical_numeric_sha256=canon_num_sha,
                         dependency_bundle_sha256=dep_bundle_sha,
+                        probe_receipt_store=probe_store,
                     )
 
                 elif repair_mode == "downstream_module_solve" and dn_mod_txt:
@@ -2333,19 +2469,16 @@ def _run_one_m100_world_arm_stream(
                                         if m_id in graph.mechanisms:
                                             graph.mechanisms[m_id].parent_ids = tuple(cur_pids)
                             registry.sync_to_graph()
-                            dn_ctrl.record_tested_witness(
+                            dn_ctrl.record_tested_witness_from_probe_receipt(
                                 binding=new_d,
+                                probe_receipt=pub_gate_post_enriched,
                                 public_input_sha256=pub_sha,
-                                passed=True,
-                                failure_kind="none",
                                 features=comb_obs_now,
-                                probe_wall_ms=post_pub_ms,
-                                execution_status="completed",
                                 evidence_origin="joint_task_probe",
-                                probe_id=pid_post,
                                 setup_source_sha256=setup_src_sha,
                                 canonical_numeric_sha256=canon_num_sha,
                                 dependency_bundle_sha256=dep_bundle_sha,
+                                probe_receipt_store=probe_store,
                             )
                             hegel_dn_joint_pos_obs[new_d.binding_id] = [comb_obs_now]
                             hegel_dn_rep_wit[new_d.binding_id] = [
@@ -2368,19 +2501,16 @@ def _run_one_m100_world_arm_stream(
                             environment_digest=env_image_digest,
                             evidence_digest=ev_sha,
                         )
-                        dn_ctrl.record_tested_witness(
+                        dn_ctrl.record_tested_witness_from_probe_receipt(
                             binding=new_d,
+                            probe_receipt=pub_gate_post_enriched,
                             public_input_sha256=pub_sha,
-                            passed=True,
-                            failure_kind="none",
                             features=dn_obs_now,
-                            probe_wall_ms=post_pub_ms,
-                            execution_status="completed",
                             evidence_origin="joint_task_probe",
-                            probe_id=pid_post,
                             setup_source_sha256=setup_src_sha,
                             canonical_numeric_sha256=canon_num_sha,
                             dependency_bundle_sha256=dep_bundle_sha,
+                            probe_receipt_store=probe_store,
                         )
                         hegel_dn_joint_pos_obs[new_d.binding_id] = [comb_obs_now]
                         hegel_dn_rep_wit[new_d.binding_id] = [
@@ -2440,19 +2570,16 @@ def _run_one_m100_world_arm_stream(
                                     if _guard_uses_upstream_features(ex_g):
                                         hegel_cross_scoped_dn_bids.add(ex_bid)
                             registry.sync_to_graph()
-                            dn_ctrl.record_tested_witness(
+                            dn_ctrl.record_tested_witness_from_probe_receipt(
                                 binding=new_d,
+                                probe_receipt=pub_gate_post_enriched,
                                 public_input_sha256=pub_sha,
-                                passed=True,
-                                failure_kind="none",
                                 features=(comb_obs_now if new_d.binding_id in hegel_cross_scoped_dn_bids else dn_obs_now),
-                                probe_wall_ms=post_pub_ms,
-                                execution_status="completed",
                                 evidence_origin="joint_task_probe",
-                                probe_id=pid_post,
                                 setup_source_sha256=setup_src_sha,
                                 canonical_numeric_sha256=canon_num_sha,
                                 dependency_bundle_sha256=dep_bundle_sha,
+                                probe_receipt_store=probe_store,
                             )
                             hegel_dn_joint_pos_obs[new_d.binding_id] = [comb_obs_now]
                             hegel_dn_rep_wit[new_d.binding_id] = [
@@ -2479,6 +2606,8 @@ def _run_one_m100_world_arm_stream(
         ep_sum["official_verifier_wall_ms"] = priv_ms
         ep_sum["readonly_dependencies_sha256"] = readonly_shas
         ep_sum["public_qualification_status"] = "public_gate_verified" if pub_gate_post.get("accepted") else "public_gate_failed"
+        ep_sum["post_llm_public_gate_probe_id"] = pid_post
+        ep_sum["post_llm_public_gate_receipt"] = pub_gate_post_enriched
         ep_sum["calibration_update_receipt"] = cal_upd.get("graph_receipt")
         ep_sum["empirical_coverage_receipts"] = cov_this_step
         ep_sum["guard_induction_receipt"] = ind_receipt
@@ -2588,7 +2717,16 @@ def run_m100_step08_constrained_routing_and_plain_dict_ablation(
             continue
         g8_base = PersistentMechanismGraph.load_checkpoint(ck8)
         rg8_base = M94BindingRegistry(g8_base)
-        sw_list = hydrate_separability_withdrawals_from_graph(g8_base, rg8_base, wid, strict_ledger_fk=True)
+        pr_dir_8 = ck8.parent / "probe_receipts"
+        pstore_8 = ProbeReceiptStore(pr_dir_8, graph=g8_base) if pr_dir_8.is_dir() else None
+        sw_list = hydrate_separability_withdrawals_from_graph(
+            g8_base,
+            rg8_base,
+            wid,
+            strict_ledger_fk=True,
+            probe_receipt_store=pstore_8,
+            require_external_probe_receipts=bool(pstore_8 is not None),
+        )
         dn_all = sorted(
             [b for b in rg8_base.bindings.values() if b.chain_id == f"{spec.family}_dn" and b.qualification_status == "verified"],
             key=lambda b: (-int(b.selection_priority), b.binding_id),
@@ -2960,6 +3098,7 @@ def _main() -> None:
         arm = str(meta.get("arm") or getattr(_CALL_CONTEXT, "arm", "Stage_S_Shared_Source"))
         ep_sn = str(meta.get("episode_short_name") or getattr(_CALL_CONTEXT, "episode_short_name", "unknown"))
         mono_t0 = monotonic()
+        utc_t0 = datetime.now(timezone.utc).isoformat()
         with cli_sem:
             with receipts_lock:
                 active_counter["cur"] += 1
@@ -2971,6 +3110,7 @@ def _main() -> None:
                 with receipts_lock:
                     active_counter["cur"] -= 1
         mono_t1 = monotonic()
+        utc_t1 = datetime.now(timezone.utc).isoformat()
         sc = score_single_call_usage(
             prompt_tokens=int(res.get("prompt_tokens", 0) or 0),
             cached_tokens=int(res.get("cached_tokens", 0) or 0),
@@ -2990,8 +3130,11 @@ def _main() -> None:
             "stage_subdir": str(c_kwargs.get("stage_subdir") or ""),
             "attempts_ledger_filename": att_fn,
             "mirrored_raw_filename": f"{cu_uuid}__{att_fn}",
+            "utc_started_at": utc_t0,
+            "utc_ended_at": utc_t1,
             "monotonic_start_sec": round(mono_t0, 4),
             "monotonic_end_sec": round(mono_t1, 4),
+            "monotonic_elapsed_sec": round(mono_t1 - mono_t0, 4),
             "usage_unknown_attempt_count": unk_cnt,
             **sc,
         }
@@ -3081,7 +3224,9 @@ def _main() -> None:
         exec_done = {
             "execution_run_id": run_id,
             "utc_ended_at": datetime.now(timezone.utc).isoformat(),
+            "monotonic_elapsed_sec": round(monotonic() - campaign_t0, 2),
             "execution_elapsed_wall_sec": round(monotonic() - campaign_t0, 2),
+            "clock_domain": "monotonic_elapsed_plus_utc_iso8601",
             "peak_active_codex_concurrency": int(active_counter["peak"]),
             "code_commit_at_end": git_sha_end,
             "working_tree_dirty_at_end": bool(is_dirty_end),

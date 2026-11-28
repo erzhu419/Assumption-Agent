@@ -302,7 +302,7 @@ def test_m100_gate2_mocked_bidirectional_streams_b2_fallback_b3_lazy_proj_and_co
                 "failure_tier": ("NONE" if ok_u else "SCIENTIFIC_FAILURE"),
                 "failure_kind": ("none" if ok_u else "scientific_or_numerical"),
                 "chosen_up_holdout_rmse": (0.0001 if ok_u else 0.095),
-                "probe_id": f"uprobe_mock_{hashlib.sha256((chosen_up_code or '').encode()).hexdigest()[:12]}",
+                "probe_id": f"uprobe_mock_{hashlib.sha256((chosen_up_code or '').encode()).hexdigest()[:6]}_{__import__('uuid').uuid4().hex[:8]}",
                 "probe_wall_ms": 2.5,
             }
 
@@ -492,7 +492,7 @@ def test_m100_b2_sibling_upstream_fallback_and_b3_deferred_lazy_projection(tmp_p
         ns: dict[str, Any] = {}
         exec(compile(chosen_up_code or "", "<uc>", "exec"), ns)
         ok_u = ns["calibrate_upstream"]({}).get("_up_tag") == true_u
-        return {"candidate_code_sha256": hashlib.sha256(chosen_up_code.encode()).hexdigest(), "locus": ("downstream_constitutive" if ok_u else "upstream_transducer"), "component_probe_executed": True, "execution_status": "completed", "evidence_origin": "direct_component_probe", "failure_tier": ("NONE" if ok_u else "SCIENTIFIC_FAILURE"), "failure_kind": ("none" if ok_u else "scientific_or_numerical"), "chosen_up_holdout_rmse": (0.00008 if ok_u else 0.55), "probe_id": f"uprobe_{hashlib.sha256((chosen_up_code or '').encode()).hexdigest()[:10]}", "probe_wall_ms": 1.5}
+        return {"candidate_code_sha256": hashlib.sha256(chosen_up_code.encode()).hexdigest(), "locus": ("downstream_constitutive" if ok_u else "upstream_transducer"), "component_probe_executed": True, "execution_status": "completed", "evidence_origin": "direct_component_probe", "failure_tier": ("NONE" if ok_u else "SCIENTIFIC_FAILURE"), "failure_kind": ("none" if ok_u else "scientific_or_numerical"), "chosen_up_holdout_rmse": (0.00008 if ok_u else 0.55), "probe_id": f"uprobe_{hashlib.sha256((chosen_up_code or '').encode()).hexdigest()[:6]}_{__import__('uuid').uuid4().hex[:8]}", "probe_wall_ms": 1.5}
 
     def _mock_ep(ft: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
         sdir = kwargs["episode_out_dir"] / "04_submitted_artifacts_snapshot"

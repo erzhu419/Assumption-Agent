@@ -32,10 +32,12 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 from typing import Any
+import uuid
 
 import numpy as np
 
@@ -2477,14 +2479,246 @@ VALID_WITNESS_EXECUTION_STATUSES: frozenset[str] = frozenset(
 VALID_WITNESS_EVIDENCE_ORIGINS: frozenset[str] = frozenset(
     {"direct_component_probe", "joint_task_probe", "compatibility_inference", "legacy_unspecified"}
 )
-CURRENT_LINEAGE_SCHEMAS: frozenset[str] = frozenset(
-    {"hegel_m9_7_1_lineage_state_v1", "hegel_m9_8_1_lineage_state_v2", "hegel_m9_9_1_lineage_state_v3"}
+VALID_RAW_MEASUREMENT_STATUSES: frozenset[str] = frozenset(
+    {"", "persisted_raw_receipt", "recorded_without_raw_measurement", "backfilled_posthoc_replay"}
 )
+CURRENT_LINEAGE_SCHEMAS: frozenset[str] = frozenset(
+    {
+        "hegel_m9_7_1_lineage_state_v1",
+        "hegel_m9_8_1_lineage_state_v2",
+        "hegel_m9_9_1_lineage_state_v3",
+        "hegel_m10_0_1_lineage_state_v4",
+    }
+)
+M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY = "__m10_0_1_probe_receipt_index__"
+
+
+def _canonical_json_sha256(payload: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _sanitize_probe_id_filename(probe_id: str) -> str:
+    clean = "".join(ch if (ch.isalnum() or ch in {"_", "-", "."}) else "_" for ch in str(probe_id).strip())
+    if not clean or clean in {".", ".."} or "/" in clean or "\\" in clean:
+        raise ValueError(f"Invalid probe_id `{probe_id}` for ProbeReceiptStore (`T01`)")
+    return f"{clean}.json"
+
+
+class ProbeReceiptStore:
+    """Atomic, write-once, content-addressed store for full raw `ProbeReceipt` JSON artifacts (`M10.0.1` `T01`).
+
+    Every executed scientific probe (pre-LLM, post-LLM, direct localization primary/alternate, decomposition,
+    lazy projection, coverage) is persisted under `<root_dir>/<probe_id>.json` with canonical SHA-256 digests
+    BEFORE any `SolverEvaluationWitness` or `SeparabilityWithdrawalReceipt` references `probe_id`.
+    """
+
+    def __init__(self, root_dir: Path | str, *, graph: PersistentMechanismGraph | None = None) -> None:
+        self.root_dir = Path(root_dir)
+        self.graph = graph
+
+    def receipt_path(self, probe_id: str) -> Path:
+        return self.root_dir / _sanitize_probe_id_filename(probe_id)
+
+    def has_probe_receipt(self, probe_id: str) -> bool:
+        if not probe_id:
+            return False
+        try:
+            return self.receipt_path(probe_id).is_file()
+        except ValueError:
+            return False
+
+    def _sync_index_entry(self, entry: dict[str, Any]) -> None:
+        if self.graph is None:
+            return
+        blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY)
+        if not isinstance(blob, dict) or blob.get("schema") != "hegel_m10_0_1_probe_receipt_index_v1":
+            blob = {"schema": "hegel_m10_0_1_probe_receipt_index_v1", "entries": {}}
+        entries = dict(blob.get("entries") or {})
+        pid = str(entry["probe_id"])
+        existing = entries.get(pid)
+        if existing is not None and existing.get("receipt_content_sha256") != entry.get("receipt_content_sha256"):
+            raise ValueError(
+                f"Refusing to overwrite immutable ProbeReceipt index entry `{pid}` with conflicting content SHA (`T01`)"
+            )
+        entries[pid] = dict(entry)
+        state_sha = _canonical_json_sha256({"entries": entries})
+        self.graph.forest.questions[M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY] = {
+            "schema": "hegel_m10_0_1_probe_receipt_index_v1",
+            "entries": entries,
+            "state_sha256": state_sha,
+        }
+        self.graph.sync_authoritative_state_to_forest()
+
+    def persist_probe_receipt(
+        self,
+        *,
+        probe_id: str,
+        receipt: dict[str, Any],
+        probe_kind: str,
+        executed_utc: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not isinstance(receipt, dict):
+            raise TypeError("ProbeReceiptStore.persist_probe_receipt requires a dict receipt (`T01`)")
+        pid = str(probe_id or "").strip()
+        if not pid:
+            raise ValueError("ProbeReceiptStore.persist_probe_receipt requires a non-empty probe_id (`T01`)")
+        self.root_dir.mkdir(parents=True, exist_ok=True)
+        fp = self.receipt_path(pid)
+        receipt_copy = deepcopy(receipt)
+        receipt_copy.setdefault("probe_id", pid)
+        content_sha = _canonical_json_sha256(receipt_copy)
+        if fp.is_file():
+            existing = json.loads(fp.read_text(encoding="utf-8"))
+            if existing.get("receipt_content_sha256") != content_sha:
+                raise ValueError(
+                    f"Refusing to overwrite existing ProbeReceipt `{pid}` with different content (`T01`)"
+                )
+            self._sync_index_entry(
+                {
+                    "probe_id": pid,
+                    "filename": fp.name,
+                    "probe_kind": str(existing.get("probe_kind") or probe_kind),
+                    "executed_utc": str(existing.get("executed_utc") or ""),
+                    "receipt_content_sha256": str(existing["receipt_content_sha256"]),
+                    "envelope_sha256": str(existing["envelope_sha256"]),
+                }
+            )
+            return existing
+
+        from datetime import datetime, timezone
+
+        ts_utc = executed_utc or datetime.now(timezone.utc).isoformat()
+        env_core = {
+            "schema": "hegel_m10_0_1_probe_receipt_v1",
+            "probe_id": pid,
+            "probe_kind": str(probe_kind),
+            "executed_utc": ts_utc,
+            "metadata": deepcopy(metadata or {}),
+            "receipt": receipt_copy,
+            "receipt_content_sha256": content_sha,
+        }
+        env = {**env_core, "envelope_sha256": _canonical_json_sha256(env_core)}
+        tmp_fp = self.root_dir / f".{fp.name}.{uuid.uuid4().hex[:8]}.tmp"
+        tmp_fp.write_text(json.dumps(env, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+        os.replace(tmp_fp, fp)
+        self._sync_index_entry(
+            {
+                "probe_id": pid,
+                "filename": fp.name,
+                "probe_kind": str(probe_kind),
+                "executed_utc": ts_utc,
+                "receipt_content_sha256": content_sha,
+                "envelope_sha256": str(env["envelope_sha256"]),
+            }
+        )
+        return env
+
+    def load_probe_receipt(
+        self,
+        probe_id: str,
+        *,
+        expected_content_sha256: str = "",
+        verify_graph_index: bool = True,
+    ) -> dict[str, Any]:
+        pid = str(probe_id or "").strip()
+        if not pid:
+            raise ValueError("Cannot load ProbeReceipt with empty probe_id (`T01`)")
+        fp = self.receipt_path(pid)
+        if not fp.is_file():
+            raise FileNotFoundError(f"Missing external ProbeReceipt file for probe_id `{pid}` at `{fp}` (`T01`)")
+        env = json.loads(fp.read_text(encoding="utf-8"))
+        if env.get("schema") != "hegel_m10_0_1_probe_receipt_v1" or env.get("probe_id") != pid:
+            raise ValueError(f"Malformed or mismatched ProbeReceipt envelope for `{pid}` (`T01`)")
+        stored_env_sha = str(env.get("envelope_sha256") or "")
+        env_core = {k: v for k, v in env.items() if k != "envelope_sha256"}
+        if stored_env_sha != _canonical_json_sha256(env_core):
+            raise ValueError(f"Tampered ProbeReceipt envelope digest for `{pid}` (`T01`)")
+        receipt = env.get("receipt")
+        if not isinstance(receipt, dict):
+            raise ValueError(f"ProbeReceipt `{pid}` missing dict payload (`T01`)")
+        calc_content_sha = _canonical_json_sha256(receipt)
+        if str(env.get("receipt_content_sha256") or "") != calc_content_sha:
+            raise ValueError(f"Tampered ProbeReceipt content digest for `{pid}` (`T01`)")
+        if expected_content_sha256 and calc_content_sha != expected_content_sha256:
+            raise ValueError(
+                f"ProbeReceipt `{pid}` content SHA `{calc_content_sha[:16]}` != expected `{expected_content_sha256[:16]}` (`T01`)"
+            )
+        if verify_graph_index and self.graph is not None:
+            blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY)
+            if isinstance(blob, dict) and blob.get("schema") == "hegel_m10_0_1_probe_receipt_index_v1":
+                entries = blob.get("entries") or {}
+                if str(blob.get("state_sha256") or "") != _canonical_json_sha256({"entries": entries}):
+                    raise ValueError("Tampered graph probe receipt index state_sha256 (`T01`)")
+                idx_entry = entries.get(pid)
+                if not isinstance(idx_entry, dict):
+                    raise ValueError(f"ProbeReceipt `{pid}` missing from graph probe receipt index (`T01`)")
+                if (
+                    idx_entry.get("receipt_content_sha256") != calc_content_sha
+                    or idx_entry.get("envelope_sha256") != stored_env_sha
+                ):
+                    raise ValueError(f"ProbeReceipt `{pid}` disagrees with graph probe receipt index (`T01`)")
+        return env
+
+    def verify_all_indexed_receipts(self) -> dict[str, Any]:
+        if self.graph is None:
+            files = sorted(self.root_dir.glob("*.json")) if self.root_dir.is_dir() else []
+            verified = 0
+            for fp in files:
+                env = json.loads(fp.read_text(encoding="utf-8"))
+                self.load_probe_receipt(str(env.get("probe_id") or ""), verify_graph_index=False)
+                verified += 1
+            return {"ok": True, "verified_count": verified}
+        blob = self.graph.forest.questions.get(M10_0_1_PROBE_RECEIPT_INDEX_FOREST_KEY) or {}
+        entries = blob.get("entries") or {}
+        for pid in sorted(entries.keys()):
+            self.load_probe_receipt(pid, verify_graph_index=True)
+        return {"ok": True, "verified_count": len(entries)}
+
+
+def enrich_joint_probe_receipt_for_persistence(
+    gate_receipt: dict[str, Any],
+    *,
+    probe_id: str,
+    public_input_sha256: str,
+    canonical_numeric_sha256: str,
+    setup_source_sha256: str,
+    dependency_bundle_sha256: str,
+    candidate_sha256: str,
+    component_code_sha256s: list[str],
+    wall_ms: float,
+    execution_status: str | None = None,
+) -> dict[str, Any]:
+    """Attach canonical binding & execution fields to a host public-gate receipt prior to atomic persistence (`T01`)."""
+    cls = classify_public_probe_failure(gate_receipt)
+    eff_status = execution_status or (
+        "timeout"
+        if gate_receipt.get("timed_out")
+        else ("infrastructure_error" if cls["tier"] == "INFRA_FAILURE" else "completed")
+    )
+    out = deepcopy(gate_receipt)
+    out.update(
+        {
+            "probe_id": str(probe_id),
+            "execution_status": eff_status,
+            "evidence_origin": "joint_task_probe",
+            "public_input_sha256": str(public_input_sha256),
+            "canonical_numeric_sha256": str(canonical_numeric_sha256),
+            "setup_source_sha256": str(setup_source_sha256),
+            "dependency_bundle_sha256": str(dependency_bundle_sha256),
+            "candidate_sha256": str(candidate_sha256),
+            "component_code_sha256s": sorted({str(s) for s in component_code_sha256s if s}),
+            "wall_ms": round(float(wall_ms), 2),
+        }
+    )
+    return out
 
 
 @dataclass
 class SolverEvaluationWitness:
-    """Evidence-bound evaluation witness (`M9.6.1` `N07` + `M9.7.1` `A09/A10` + `M9.8.1` `R04/R05/R07/R12`)."""
+    """Evidence-bound evaluation witness (`M9.6.1` `N07` + `M9.7.1` `A09/A10` + `M9.8.1` `R04/R05/R07/R12` + `M10.0.1` `T01`)."""
 
     witness_id: str
     binding_id: str
@@ -2506,6 +2740,8 @@ class SolverEvaluationWitness:
     dependency_bundle_sha256: str = ""
     verification_trust_state: str = "verified"  # 'verified' | 'unverified_legacy'
     witness_schema_version: int = 1
+    probe_receipt_sha256: str = ""
+    raw_measurement_status: str = ""
 
     def compute_expected_content_sha256(self) -> str:
         payload: dict[str, Any] = {
@@ -2534,6 +2770,13 @@ class SolverEvaluationWitness:
                     "canonical_numeric_sha256": self.canonical_numeric_sha256,
                     "dependency_bundle_sha256": self.dependency_bundle_sha256,
                     "verification_trust_state": self.verification_trust_state,
+                }
+            )
+        if int(self.witness_schema_version) >= 3:
+            payload.update(
+                {
+                    "probe_receipt_sha256": self.probe_receipt_sha256,
+                    "raw_measurement_status": self.raw_measurement_status,
                 }
             )
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -2584,6 +2827,13 @@ class SolverEvaluationWitness:
                     "verification_trust_state": self.verification_trust_state,
                 }
             )
+        if int(self.witness_schema_version) >= 3:
+            out.update(
+                {
+                    "probe_receipt_sha256": self.probe_receipt_sha256,
+                    "raw_measurement_status": self.raw_measurement_status,
+                }
+            )
         return out
 
     @classmethod
@@ -2602,6 +2852,9 @@ class SolverEvaluationWitness:
             raise ValueError(f"Invalid execution_status `{exec_st}` on witness `{d.get('witness_id')}` (`R04/R05`)")
         if ev_orig not in VALID_WITNESS_EVIDENCE_ORIGINS:
             raise ValueError(f"Invalid evidence_origin `{ev_orig}` on witness `{d.get('witness_id')}` (`R04`)")
+        raw_ms = str(d.get("raw_measurement_status") or "")
+        if raw_ms not in VALID_RAW_MEASUREMENT_STATUSES:
+            raise ValueError(f"Invalid raw_measurement_status `{raw_ms}` on witness `{d.get('witness_id')}` (`T01`)")
         raw_mv = d.get("metric_value")
         mv = None if raw_mv is None else float(raw_mv)
         if mv is not None and not math.isfinite(mv):
@@ -2631,6 +2884,8 @@ class SolverEvaluationWitness:
             dependency_bundle_sha256=str(d.get("dependency_bundle_sha256") or ""),
             verification_trust_state=str(d.get("verification_trust_state") or "verified"),
             witness_schema_version=schema_v,
+            probe_receipt_sha256=str(d.get("probe_receipt_sha256") or ""),
+            raw_measurement_status=raw_ms,
         )
         if not stored_sha:
             if allow_legacy_unverified_downgrade and not require_content_sha256:
@@ -2824,11 +3079,20 @@ class EmpiricalCoverageReceipt:
 class ImmutableBranchLineageController:
     """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05` + `M9.7.1` `A10` + `M9.8.1` `R04–R07`)."""
 
-    def __init__(self, *, world_id: str, family: str, graph: PersistentMechanismGraph, registry: M94BindingRegistry) -> None:
+    def __init__(
+        self,
+        *,
+        world_id: str,
+        family: str,
+        graph: PersistentMechanismGraph,
+        registry: M94BindingRegistry,
+        probe_receipt_store: ProbeReceiptStore | None = None,
+    ) -> None:
         self.world_id = world_id
         self.family = family
         self.graph = graph
         self.registry = registry
+        self.probe_receipt_store = probe_receipt_store
         self.witness_ledger: list[SolverEvaluationWitness] = []
         self.coverage_receipts: list[EmpiricalCoverageReceipt] = []
         self._branch_seq = len([b for b in registry.bindings.values() if b.chain_id == family])
@@ -2967,6 +3231,8 @@ class ImmutableBranchLineageController:
         canonical_numeric_sha256: str = "",
         dependency_bundle_sha256: str = "",
         witness_schema_version: int = 2,
+        probe_receipt_sha256: str = "",
+        raw_measurement_status: str = "",
     ) -> SolverEvaluationWitness:
         if execution_status not in VALID_WITNESS_EXECUTION_STATUSES:
             raise ValueError(f"Invalid execution_status `{execution_status}` (`R04/R05`)")
@@ -2984,6 +3250,10 @@ class ImmutableBranchLineageController:
             )
         if metric_value is not None and not math.isfinite(float(metric_value)):
             raise ValueError(f"Non-finite metric_value `{metric_value}` rejected (`R05`)")
+        if raw_measurement_status not in VALID_RAW_MEASUREMENT_STATUSES:
+            raise ValueError(f"Invalid raw_measurement_status `{raw_measurement_status}` (`T01`)")
+        eff_schema_v = max(int(witness_schema_version), 3) if (probe_receipt_sha256 or raw_measurement_status) else int(witness_schema_version)
+        eff_raw_status = raw_measurement_status or ("persisted_raw_receipt" if probe_receipt_sha256 else "")
         wid = f"wit_{len(self.witness_ledger) + 1:04d}_{binding.binding_id}_{public_input_sha256[:8]}"
         eff_res = "not_tested" if execution_status in {"timeout", "infrastructure_error"} else ("passed" if passed else "failed")
         eff_fk = "timeout_or_infra" if execution_status in {"timeout", "infrastructure_error"} else ("none" if passed else failure_kind)
@@ -3006,7 +3276,9 @@ class ImmutableBranchLineageController:
             canonical_numeric_sha256=canonical_numeric_sha256,
             dependency_bundle_sha256=dependency_bundle_sha256,
             verification_trust_state="verified",
-            witness_schema_version=witness_schema_version,
+            witness_schema_version=eff_schema_v,
+            probe_receipt_sha256=probe_receipt_sha256,
+            raw_measurement_status=eff_raw_status,
         )
         w.witness_content_sha256 = w.compute_expected_content_sha256()
         self._verify_witness_foreign_key(w)
@@ -3025,10 +3297,11 @@ class ImmutableBranchLineageController:
         setup_source_sha256: str = "",
         canonical_numeric_sha256: str = "",
         dependency_bundle_sha256: str = "",
+        probe_receipt_store: ProbeReceiptStore | None = None,
     ) -> SolverEvaluationWitness | None:
-        """Construct a `SolverEvaluationWitness` strictly from an executed `probe_receipt` (`Q01` — callers cannot pass bare `passed=False`!).
-        Returns `None` if `execution_status` is `'not_executed'`, `'timeout'`, or `'infrastructure_error'` so unexecuted/infra probes
-        never enter the tested scientific witness ledger.
+        """Construct a `SolverEvaluationWitness` strictly from an executed `probe_receipt` (`Q01` + `T01`).
+        When a `ProbeReceiptStore` is attached, persists the full raw receipt atomically BEFORE recording the witness
+        and binds `probe_receipt_sha256` into schema v3 witness content digest!
         """
         if not isinstance(probe_receipt, dict):
             raise TypeError("record_tested_witness_from_probe_receipt requires a dict `probe_receipt` (`Q01`)")
@@ -3074,14 +3347,16 @@ class ImmutableBranchLineageController:
                 raise ValueError("Direct probe receipt lacks a valid measured outcome (Q01)")
             w_ms = float(probe_receipt.get("probe_wall_ms") or probe_receipt.get("wall_ms") or 0.0)
         elif evidence_origin == "joint_task_probe":
-            if (code_sha not in (probe_receipt.get("component_code_sha256s") or [])
+            comp_shas = list(probe_receipt.get("component_code_sha256s") or [])
+            cand_sha_in_rec = str(probe_receipt.get("candidate_sha256") or probe_receipt.get("candidate_raw_sha256") or "")
+            if ((code_sha not in comp_shas and cand_sha_in_rec != code_sha)
                     or not isinstance(probe_receipt.get("accepted"), bool)):
                 raise ValueError("Joint probe receipt does not identify the executed binding and verdict (Q01)")
             cls = classify_public_probe_failure(probe_receipt)
             if cls["tier"] == "INFRA_FAILURE":
                 return None
             if cls["tier"] != "SCHEMA_FAILURE" and not joint_scientific_receipt_matches(
-                probe_receipt, probe_receipt.get("candidate_sha256"), public_input_sha256, canonical_numeric_sha256,
+                probe_receipt, cand_sha_in_rec, public_input_sha256, canonical_numeric_sha256,
             ):
                 return None
             passed_b = bool(probe_receipt.get("accepted"))
@@ -3090,6 +3365,25 @@ class ImmutableBranchLineageController:
             m_val = None
         else:
             raise ValueError(f"Unsupported `evidence_origin` `{evidence_origin}` for ProbeReceipt witness (`Q01`)")
+
+        eff_store = probe_receipt_store or self.probe_receipt_store
+        persisted_sha = ""
+        raw_status = ""
+        if eff_store is not None:
+            env = eff_store.persist_probe_receipt(
+                probe_id=pid,
+                receipt=probe_receipt,
+                probe_kind=evidence_origin,
+                metadata={
+                    "world_id": self.world_id,
+                    "family": self.family,
+                    "binding_id": binding.binding_id,
+                    "public_input_sha256": public_input_sha256,
+                },
+            )
+            persisted_sha = str(env["receipt_content_sha256"])
+            raw_status = "persisted_raw_receipt"
+
         return self.record_tested_witness(
             binding=binding,
             public_input_sha256=public_input_sha256,
@@ -3104,6 +3398,8 @@ class ImmutableBranchLineageController:
             setup_source_sha256=setup_source_sha256,
             canonical_numeric_sha256=canonical_numeric_sha256,
             dependency_bundle_sha256=dependency_bundle_sha256,
+            probe_receipt_sha256=persisted_sha,
+            raw_measurement_status=raw_status,
         )
 
     def positive_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:

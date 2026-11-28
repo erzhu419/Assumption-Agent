@@ -1441,12 +1441,79 @@ def withdrawal_has_measured_joint_rejection(receipt: SeparabilityWithdrawalRecei
     )
 
 
+def _verify_external_probe_receipt_for_witness(
+    probe_receipt_store: Any,
+    witness: SolverEvaluationWitness,
+    *,
+    expected_kind: str,
+    expected_passed: bool | None = None,
+    expected_code_sha: str = "",
+    expected_rmse: float | None = None,
+    expected_composed_sha: str = "",
+) -> dict[str, Any]:
+    """Verify that `witness.probe_id` resolves to an untampered external `ProbeReceiptStore` file matching all
+    content, input, setup, dependency, code, and outcome fingerprints (`M10.0.1` `T01` 3-way external FK).
+    """
+    if probe_receipt_store is None:
+        raise ValueError("External ProbeReceiptStore is required for strict 3-way withdrawal FK (`T01`)")
+    if not witness.probe_id:
+        raise ValueError(f"Witness `{witness.witness_id}` has empty probe_id (`T01`)")
+    env = probe_receipt_store.load_probe_receipt(
+        witness.probe_id,
+        expected_content_sha256=witness.probe_receipt_sha256,
+        verify_graph_index=True,
+    )
+    rec = env["receipt"]
+    if rec.get("execution_status") != "completed":
+        raise ValueError(f"External ProbeReceipt `{witness.probe_id}` execution_status != completed (`T01`)")
+    if rec.get("public_input_sha256") != witness.public_input_sha256:
+        raise ValueError(f"External ProbeReceipt `{witness.probe_id}` public_input_sha256 mismatch (`T01`)")
+    if witness.canonical_numeric_sha256 and rec.get("canonical_numeric_sha256") != witness.canonical_numeric_sha256:
+        raise ValueError(f"External ProbeReceipt `{witness.probe_id}` canonical_numeric_sha256 mismatch (`T01`)")
+    if witness.setup_source_sha256 and rec.get("setup_source_sha256") != witness.setup_source_sha256:
+        raise ValueError(f"External ProbeReceipt `{witness.probe_id}` setup_source_sha256 mismatch (`T01`)")
+    if witness.dependency_bundle_sha256 and rec.get("dependency_bundle_sha256") != witness.dependency_bundle_sha256:
+        raise ValueError(f"External ProbeReceipt `{witness.probe_id}` dependency_bundle_sha256 mismatch (`T01`)")
+
+    if expected_kind == "direct_component_probe":
+        if rec.get("component_probe_executed") is not True or rec.get("evidence_origin") != "direct_component_probe":
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` is not a direct_component_probe (`T01`)")
+        if expected_code_sha and rec.get("candidate_code_sha256") != expected_code_sha:
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` candidate_code_sha256 mismatch (`T01`)")
+        rmse = rec.get("chosen_up_holdout_rmse")
+        if not isinstance(rmse, (int, float)) or not (0.0 <= float(rmse) <= 0.03):
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` holdout RMSE invalid (`T01`)")
+        if expected_rmse is not None and round(float(rmse), 8) != round(float(expected_rmse), 8):
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` holdout RMSE mismatch (`T01`)")
+    elif expected_kind == "joint_task_probe":
+        if expected_passed is not None and rec.get("accepted") is not expected_passed:
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` accepted != {expected_passed} (`T01`)")
+        cand_sha = str(rec.get("candidate_sha256") or rec.get("candidate_raw_sha256") or "")
+        if expected_composed_sha and cand_sha != expected_composed_sha:
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` composed candidate SHA mismatch (`T01`)")
+        comp_shas = list(rec.get("component_code_sha256s") or [])
+        if expected_code_sha and expected_code_sha not in comp_shas and cand_sha != expected_code_sha:
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` does not cover binding code SHA (`T01`)")
+        sci = rec.get("scientific_probe_receipt")
+        if not isinstance(sci, dict) or sci.get("kernel_version") != witness.verifier_version:
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` verifier kernel_version mismatch (`T01`)")
+        if not joint_scientific_receipt_matches(
+            rec, cand_sha, witness.public_input_sha256, witness.canonical_numeric_sha256
+        ):
+            raise ValueError(f"External ProbeReceipt `{witness.probe_id}` fails joint scientific receipt binding (`T01`)")
+    else:
+        raise ValueError(f"Unsupported expected_kind `{expected_kind}` (`T01`)")
+    return env
+
+
 def issue_measured_withdrawal(
     *, world_id: str, family: str, downstream_selected: bool,
     upstream: MechanismExecutableBinding, downstream: MechanismExecutableBinding,
     downstream_features: dict[str, float | None], downstream_ledger: list[SolverEvaluationWitness],
     direct: dict[str, Any], gate: dict[str, Any], candidate_sha: str,
     expanded_feature_names: tuple[str, ...] = M99_ALL_OBSERVABLE_NAMES,
+    probe_receipt_store: Any = None,
+    require_external_probe_receipts: bool = False,
 ) -> SeparabilityWithdrawalReceipt | None:
     """Issue a withdrawal after a healthy component and its failed joint execution contradict a prior routing witness."""
     classification = classify_public_probe_failure(gate)
@@ -1467,6 +1534,39 @@ def issue_measured_withdrawal(
     )
     if prior is None:
         return None
+    if probe_receipt_store is not None or require_external_probe_receipts:
+        try:
+            prior_env = _verify_external_probe_receipt_for_witness(
+                probe_receipt_store,
+                prior,
+                expected_kind="joint_task_probe",
+                expected_passed=True,
+                expected_code_sha=downstream.authoritative_executed_code_sha256(),
+            )
+            neg_env = _verify_external_probe_receipt_for_witness(
+                probe_receipt_store,
+                negative,
+                expected_kind="joint_task_probe",
+                expected_passed=False,
+                expected_code_sha=downstream.authoritative_executed_code_sha256(),
+                expected_composed_sha=candidate_sha,
+            )
+            direct_env = probe_receipt_store.load_probe_receipt(str(direct["probe_id"]), verify_graph_index=True)
+            d_rec = direct_env["receipt"]
+            if (
+                d_rec.get("execution_status") != "completed"
+                or d_rec.get("component_probe_executed") is not True
+                or d_rec.get("candidate_code_sha256") != upstream.authoritative_executed_code_sha256()
+                or round(float(d_rec.get("chosen_up_holdout_rmse", -1.0)), 8) != round(float(rmse), 8)
+            ):
+                return None
+            p_utc = str(prior_env.get("executed_utc") or "")
+            n_utc = str(neg_env.get("executed_utc") or "")
+            if p_utc and n_utc and p_utc > n_utc:
+                return None
+        except (ValueError, FileNotFoundError, KeyError, TypeError):
+            direct["withdrawal_status"] = "rejected_missing_or_invalid_external_probe_receipt"
+            return None
     receipt = SeparabilityWithdrawalReceipt(
         receipt_id="", world_id=world_id, family=family, upstream_binding_id=upstream.binding_id,
         upstream_code_sha256=upstream.authoritative_executed_code_sha256(),
@@ -1500,19 +1600,27 @@ def hydrate_separability_withdrawals_from_graph(
     strict_ledger_fk: bool = True,
     quarantine_unverified: bool = False,
     expected_feature_names: tuple[str, ...] = M99_ALL_OBSERVABLE_NAMES,
+    probe_receipt_store: Any = None,
+    require_external_probe_receipts: bool = False,
 ) -> list[SeparabilityWithdrawalReceipt]:
-    """Return withdrawals supported by both cold graph lineage and the measured host gate."""
+    """Return withdrawals supported by both cold graph lineage, the measured host gate, and (when attached/required)
+    3-way external `ProbeReceiptStore` verification (`Q07` + `T01`).
+    """
     if not strict_ledger_fk:
         raise ValueError("Hydration of authoritative withdrawals requires ledger verification (Q07)")
     return _load_m99_withdrawals(
         graph, registry, world_id, quarantine_unverified=quarantine_unverified,
         require_measurement=True, expected_feature_names=expected_feature_names,
+        probe_receipt_store=probe_receipt_store,
+        require_external_probe_receipts=require_external_probe_receipts,
     )
 
 
 def _load_m99_withdrawals(
     graph: PersistentMechanismGraph, registry: M94BindingRegistry, world_id: str,
     *, quarantine_unverified: bool, require_measurement: bool, expected_feature_names: tuple[str, ...] = M99_ALL_OBSERVABLE_NAMES,
+    probe_receipt_store: Any = None,
+    require_external_probe_receipts: bool = False,
 ) -> list[SeparabilityWithdrawalReceipt]:
     blob = graph.forest.questions.get(M99_WITHDRAWAL_FOREST_KEY)
     if not isinstance(blob, dict):
@@ -1612,10 +1720,11 @@ def _load_m99_withdrawals(
             )
         neg_idx = neg_indices[0]
         neg_w = dn_ctrl.witness_ledger[neg_idx]
-        if find_prior_withdrawal_witness(
+        prior_w = find_prior_withdrawal_witness(
             dn_ctrl.witness_ledger[:neg_idx], r.downstream_binding_id, neg_w.parent_parameter_versions,
             neg_w.public_structural_features, r.verifier_version, r.prior_witness_id,
-        ) is None:
+        )
+        if prior_w is None:
             if quarantine_unverified:
                 continue
             raise ValueError(
@@ -1625,6 +1734,42 @@ def _load_m99_withdrawals(
             if quarantine_unverified:
                 continue
             raise ValueError(f"Withdrawal {r.receipt_id} lacks a bound, measured host rejection (Q07)")
+        if probe_receipt_store is not None or require_external_probe_receipts:
+            try:
+                prior_env = _verify_external_probe_receipt_for_witness(
+                    probe_receipt_store,
+                    prior_w,
+                    expected_kind="joint_task_probe",
+                    expected_passed=True,
+                    expected_code_sha=r.downstream_code_sha256,
+                )
+                _verify_external_probe_receipt_for_witness(
+                    probe_receipt_store,
+                    up_w,
+                    expected_kind="direct_component_probe",
+                    expected_code_sha=r.upstream_code_sha256,
+                    expected_rmse=r.upstream_holdout_rmse,
+                )
+                neg_env = _verify_external_probe_receipt_for_witness(
+                    probe_receipt_store,
+                    neg_w,
+                    expected_kind="joint_task_probe",
+                    expected_passed=False,
+                    expected_code_sha=r.downstream_code_sha256,
+                    expected_composed_sha=r.composed_candidate_sha256,
+                )
+                p_utc = str(prior_env.get("executed_utc") or "")
+                n_utc = str(neg_env.get("executed_utc") or "")
+                if p_utc and n_utc and p_utc > n_utc:
+                    raise ValueError(
+                        f"Withdrawal `{r.receipt_id}` prior receipt UTC `{p_utc}` > negative receipt UTC `{n_utc}` (`T01`)"
+                    )
+            except (ValueError, FileNotFoundError, KeyError, TypeError) as exc:
+                if quarantine_unverified:
+                    continue
+                raise ValueError(
+                    f"Withdrawal `{r.receipt_id}` failed strict 3-way external ProbeReceiptStore verification (`T01`): {exc}"
+                ) from exc
         verified_out.append(r)
     return verified_out
 
